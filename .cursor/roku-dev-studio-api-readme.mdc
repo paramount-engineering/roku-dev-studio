@@ -1,0 +1,21 @@
+---
+description: Keep packages/roku-dev-studio-api README in sync when the package API changes
+globs: packages/roku-dev-studio-api/**/*
+alwaysApply: false
+---
+
+# roku-dev-studio-api — README must follow the package
+
+When editing anything under **`packages/roku-dev-studio-api/`** (including `index.js`, `ecp.js`, `relay-client.js`, or `lib/**`):
+
+1. **Update `packages/roku-dev-studio-api/README.md` in the same PR/change** if you:
+   - add, remove, or rename **exports** from `index.js`
+   - change **signatures**, defaults, or **return shapes** of public functions
+   - add or change **relay client** methods on `createRelayClient`
+   - change **requirements** (Node version, curl, relay behavior)
+
+2. The README should list **all public APIs** (grouped like Discovery, Device info, ECP, Relay client, etc.) and keep the **Direct** and **Relay** example sections consistent with real usage.
+
+3. Do **not** skip README updates for “small” API tweaks — consumers rely on this file when the package is published or vendored.
+
+If the change is **README-only** (docs typo, formatting), no extra step.

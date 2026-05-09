@@ -1,0 +1,218 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'  # Triggers on version tags like v1.0.0, v2.1.3, etc.
+  workflow_dispatch:  # Allows manual trigger from GitHub UI
+    inputs:
+      version:
+        description: 'Release version (e.g., 1.0.0)'
+        required: true
+        default: '1.0.0'
+
+jobs:
+  # ============================================
+  # Build for macOS
+  # ============================================
+  build-mac:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build macOS app
+        run: npm run build:mac -- --publish never
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload macOS artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: mac-builds
+          path: |
+            apps/roku-dev-studio/dist/mac/**/*.dmg
+            apps/roku-dev-studio/dist/*.dmg
+          retention-days: 5
+
+  # ============================================
+  # Build for Windows
+  # ============================================
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Windows app
+        run: npm run build:win -- --publish never
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload Windows artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-builds
+          path: |
+            apps/roku-dev-studio/dist/win/**/*.exe
+            apps/roku-dev-studio/dist/*.exe
+          retention-days: 5
+
+  # ============================================
+  # Build for Linux
+  # ============================================
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Linux app
+        run: npm run build:linux -- --publish never
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload Linux artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-builds
+          path: |
+            apps/roku-dev-studio/dist/linux/**/*.deb
+            apps/roku-dev-studio/dist/linux/**/*.AppImage
+            apps/roku-dev-studio/dist/*.deb
+            apps/roku-dev-studio/dist/*.AppImage
+          retention-days: 5
+
+  # ============================================
+  # Create GitHub Release
+  # ============================================
+  release:
+    needs: [build-mac, build-windows, build-linux]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download macOS artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: mac-builds
+          path: ./artifacts/mac
+
+      - name: Download Windows artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-builds
+          path: ./artifacts/windows
+
+      - name: Download Linux artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: linux-builds
+          path: ./artifacts/linux
+
+      - name: Display downloaded files
+        run: |
+          echo "=== macOS builds ==="
+          find ./artifacts/mac -type f -name "*.dmg" -exec ls -lh {} \; || echo "No mac artifacts"
+          echo ""
+          echo "=== Windows builds ==="
+          find ./artifacts/windows -type f -name "*.exe" -exec ls -lh {} \; || echo "No windows artifacts"
+          echo ""
+          echo "=== Linux builds ==="
+          find ./artifacts/linux -type f \( -name "*.deb" -o -name "*.AppImage" \) -exec ls -lh {} \; || echo "No linux artifacts"
+
+      - name: Get version from tag
+        id: get_version
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "VERSION=${{ github.event.inputs.version }}" >> "$GITHUB_OUTPUT"
+            echo "TAG_NAME=v${{ github.event.inputs.version }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "VERSION=${GITHUB_REF#refs/tags/v}" >> "$GITHUB_OUTPUT"
+            echo "TAG_NAME=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.get_version.outputs.TAG_NAME }}
+          name: Roku Dev Studio v${{ steps.get_version.outputs.VERSION }}
+          body: |
+            ## Roku Dev Studio v${{ steps.get_version.outputs.VERSION }}
+            
+            ### Downloads
+            
+            | Platform | Intel/x64 | ARM64/Apple Silicon |
+            |----------|-----------|----------------------|
+            | **macOS** | Roku Dev Studio-${{ steps.get_version.outputs.VERSION }}.dmg | Roku Dev Studio-${{ steps.get_version.outputs.VERSION }}-arm64.dmg |
+            | **Windows** | Roku Dev Studio Setup ${{ steps.get_version.outputs.VERSION }}.exe, Roku Dev Studio ${{ steps.get_version.outputs.VERSION }}.exe (portable) | - |
+            | **Linux** | roku-dev-studio_${{ steps.get_version.outputs.VERSION }}_amd64.deb, Roku Dev Studio-${{ steps.get_version.outputs.VERSION }}-x86_64.AppImage | roku-dev-studio_${{ steps.get_version.outputs.VERSION }}_arm64.deb, Roku Dev Studio-${{ steps.get_version.outputs.VERSION }}-arm64.AppImage |
+            
+            ### What's New
+            - See commit history for changes
+            
+            ### Installation
+            
+            **macOS**
+            1. Download the appropriate `.dmg` file for your Mac
+            2. Open the disk image
+            3. Drag the app to your Applications folder
+            4. **IMPORTANT - Before first launch:**
+              - Use Terminal: `xattr -cr "/Applications/Roku Dev Studio.app"`
+              - Then open the app.
+            
+            **Note for macOS:** The app is not code-signed. macOS Gatekeeper will block it. The command above removes quarantine attributes.
+            
+            **Windows**
+            1. Download the Setup `.exe` file
+            2. Run the installer
+            3. If you see "Windows protected your PC":
+              - Click "More info"
+              - Click "Run anyway"
+            4. Follow the installation wizard
+            
+            **Note for Windows:** The app is not code-signed. Windows SmartScreen will show a warning initially.
+            
+            **Linux**
+            - **Debian/Ubuntu:** Download the `.deb` file and install with `sudo dpkg -i filename.deb`
+            - **Other distros:** Download the `.AppImage` file, make it executable (`chmod +x filename.AppImage`), and run it
+          draft: false
+          prerelease: false
+          files: |
+            ./artifacts/mac/**/*.dmg
+            ./artifacts/windows/**/*.exe
+            ./artifacts/linux/**/*.deb
+            ./artifacts/linux/**/*.AppImage
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+

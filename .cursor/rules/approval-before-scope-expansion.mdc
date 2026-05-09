@@ -1,0 +1,23 @@
+---
+description: Confirm with user before new features or major design changes
+alwaysApply: true
+---
+
+# Scope and design approval
+
+## Before you implement
+
+**Stop and ask the user first** (briefly: intent, options, tradeoffs) before:
+
+- **New functionality** — new commands, APIs, UI behaviors, integrations, or features that go beyond the current task.
+- **Major design changes** — protocol or data-shape changes, new architecture, broad refactors, or anything that would surprise a reviewer in a large diff.
+
+## When you may proceed without asking
+
+- **Small fixes** in files already in scope: typos, obvious bugs, linter issues, matching existing patterns.
+- **Edits the user explicitly requested** in the current message.
+- **Clarifying questions** in chat are fine; this rule is about **not landing unrequested scope** in code.
+
+## If unsure
+
+Treat it as **ask first**. A one-sentence check (“I’m about to add X; OK?”) is enough.

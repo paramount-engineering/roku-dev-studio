@@ -1,0 +1,16 @@
+# NOTE: keep `title` in sync with FIDDLE_CHANNEL_TITLE in
+# apps/roku-dev-studio/main/ipc/bs-fiddle-handlers.ts. That handler matches
+# this string against Roku's /query/apps response to confirm a sideloaded
+# dev channel is ours before deleting it on Stop / window-close.
+title=Roku Dev Studio Fiddle
+major_version=1
+minor_version=0
+build_version=0
+ui_resolutions=fhd
+mm_icon_focus_hd=pkg:/images/channel_icon_hd.png
+mm_icon_focus_sd=pkg:/images/channel_icon_hd.png
+mm_icon_focus_fhd=pkg:/images/channel_icon_fhd.png
+splash_screen_hd=pkg:/images/channel_icon_hd.png
+splash_screen_fhd=pkg:/images/channel_icon_fhd.png
+splash_color=#0a0a12
+run_as_process=1

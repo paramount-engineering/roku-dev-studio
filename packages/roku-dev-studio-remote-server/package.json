@@ -1,0 +1,37 @@
+{
+  "name": "roku-dev-studio-remote-server",
+  "version": "1.0.0",
+  "description": "Remote server for Roku Dev Studio - enables remote device control and telnet debug console streaming",
+  "main": "roku-remote-server.js",
+  "files": [
+    "roku-remote-server.js",
+    "swagger.json",
+    "swagger-ui.html"
+  ],
+  "scripts": {
+    "build": "node build.mjs",
+    "prepare": "node -e \"require('fs').existsSync('roku-remote-server.js') || require('child_process').execSync('node build.mjs', { stdio: 'inherit' })\"",
+    "start": "node roku-remote-server.js",
+    "start:port": "node roku-remote-server.js 4951",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [
+    "roku",
+    "remote",
+    "ecp",
+    "ssdp"
+  ],
+  "author": "Hareendra Donapati",
+  "license": "MIT",
+  "engines": {
+    "node": ">=14.0.0"
+  },
+  "dependencies": {
+    "roku-dev-studio-api": "file:../roku-dev-studio-api"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "esbuild": "^0.25.0",
+    "typescript": "^5.7.3"
+  }
+}

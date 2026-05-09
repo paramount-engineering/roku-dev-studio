@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.roku-dev-studio.remote-server</string>
+    
+    <key>ProgramArguments</key>
+    <array>
+        <!-- Update this path to your Node.js installation -->
+        <string>/usr/local/bin/node</string>
+        <!-- Update this path to where you placed the server -->
+        <string>/Users/YOUR_USERNAME/remote-server/roku-remote-server.js</string>
+        <!-- Server port (default 4951) -->
+        <string>4951</string>
+    </array>
+    
+    <!-- Start automatically when user logs in -->
+    <key>RunAtLoad</key>
+    <true/>
+    
+    <!-- Restart automatically if it crashes -->
+    <key>KeepAlive</key>
+    <true/>
+    
+    <!-- Log files -->
+    <key>StandardOutPath</key>
+    <string>/tmp/roku-remote.log</string>
+    <key>StandardErrorPath</key>
+    <string>/tmp/roku-remote.error.log</string>
+    
+    <!-- Working directory -->
+    <key>WorkingDirectory</key>
+    <string>/Users/YOUR_USERNAME/remote-server</string>
+    
+    <!-- Environment variables (optional) -->
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/usr/local/bin:/usr/bin:/bin</string>
+    </dict>
+</dict>
+</plist>

@@ -1,0 +1,27 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "noEmit": true,
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "skipLibCheck": true,
+    "noImplicitAny": false
+  },
+  "include": [
+    "shared/mcp-bridge-state.ts",
+    "renderer/renderer-globals.d.ts",
+    "renderer/types/**/*.ts",
+    "renderer/app.ts",
+    "renderer/modules/**/*.ts",
+    "renderer/components/queries/**/*.ts",
+    "renderer/components/action-scripts/**/*.ts",
+    "renderer/components/inspector/**/*.ts",
+    "renderer/components/dev-app/**/*.ts",
+    "renderer/components/modals/**/*.ts",
+    "renderer/components/fiddle/**/*.ts",
+    "renderer/vendor/modern-screenshot.d.ts",
+    "renderer/vendor/tanstack-virtual-core.d.ts"
+  ]
+}

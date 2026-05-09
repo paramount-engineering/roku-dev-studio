@@ -1,0 +1,197 @@
+{
+  "name": "roku-dev-studio",
+  "version": "1.0.0",
+  "description": "Roku Dev Studio - Control your Roku device over the local network",
+  "homepage": "https://github.com/paramount-engineering/roku-dev-studio",
+  "main": "main.bundled.cjs",
+  "private": true,
+  "scripts": {
+    "start": "tsx scripts/sync-path-safe.ts && tsx scripts/build/index.ts && tsx scripts/run-electron.ts",
+    "renderer:solid:build": "vite build",
+    "renderer:solid:dev": "vite --host 127.0.0.1",
+    "renderer:solid:typecheck": "tsc --noEmit -p tsconfig.json",
+    "typecheck:electron": "tsc --noEmit -p tsconfig.electron.json",
+    "pretypecheck:renderer": "tsx scripts/build/ensure-modern-screenshot-vendor.ts && tsx scripts/build/ensure-tanstack-virtual-vendor.ts",
+    "typecheck:renderer": "tsc --noEmit -p tsconfig.renderer.json",
+    "verify:structured-pills": "tsx scripts/verify-structured-pills.ts",
+    "typecheck:scripts": "tsc --noEmit -p tsconfig.scripts.json",
+    "dev:solid": "tsx scripts/sync-path-safe.ts && tsx scripts/build/index.ts && concurrently -k \"npm run renderer:solid:dev\" \"wait-on tcp:127.0.0.1:5173 && cross-env RDS_SOLID_RENDERER=1 tsx scripts/run-electron.ts\"",
+    "build:desktop": "tsx scripts/build/index.ts",
+    "build:preload": "tsx scripts/build/index.ts",
+    "prepare": "tsx scripts/sync-path-safe.ts && tsx scripts/build/index.ts",
+    "prebuild": "tsx scripts/sync-path-safe.ts && tsx scripts/cleanup-old-builds.ts && tsx scripts/build/index.ts",
+    "clean:dist": "tsx scripts/cleanup-old-builds.ts",
+    "build": "tsx scripts/cleanup-old-builds.ts && electron-builder",
+    "build:mac": "tsx scripts/cleanup-old-builds.ts && electron-builder --mac",
+    "build:win": "tsx scripts/cleanup-old-builds.ts && electron-builder --win",
+    "build:linux": "tsx scripts/cleanup-old-builds.ts && electron-builder --linux",
+    "build:all": "npm run clean:dist && concurrently --names mac,linux,win --prefix-colors cyan,green,magenta \"electron-builder --mac\" \"electron-builder --linux\" \"electron-builder --win\""
+  },
+  "author": {
+    "name": "Hareendra Donapati",
+    "email": "hareendra.donapati@paramount.com",
+    "url": "https://github.com/hdonapati"
+  },
+  "company": "Paramount Streaming",
+  "license": "MIT",
+  "dependencies": {
+    "@tanstack/virtual-core": "^3.14.0",
+    "brighterscript": "^0.68.5",
+    "form-data": "^4.0.0",
+    "modern-screenshot": "^4.6.8",
+    "monaco-editor": "^0.52.2",
+    "pdf-lib": "^1.17.1",
+    "roku-dev-studio-api": "file:../../packages/roku-dev-studio-api",
+    "roku-dev-studio-mcp": "file:../../packages/roku-dev-studio-mcp",
+    "solid-js": "^1.9.5",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@electron/notarize": "^2.2.1",
+    "@types/jsdom": "^21.1.7",
+    "@types/node": "^22.10.0",
+    "@types/ws": "^8.18.1",
+    "concurrently": "^9.1.2",
+    "cross-env": "^7.0.3",
+    "electron": "33.4.11",
+    "electron-builder": "^24.9.1",
+    "esbuild": "^0.25.0",
+    "jsdom": "^24.1.0",
+    "sharp": "^0.34.5",
+    "tsx": "^4.21.0",
+    "typescript": "^5.7.3",
+    "vite": "^6.2.0",
+    "vite-plugin-solid": "^2.11.6",
+    "wait-on": "^8.0.1"
+  },
+  "build": {
+    "appId": "com.paramount.vtg.roku-dev-studio",
+    "productName": "Roku Dev Studio",
+    "directories": {
+      "output": "dist"
+    },
+    "afterSign": "./scripts/notarize.cjs",
+    "afterAllArtifactBuild": "./scripts/build-hooks-entry.cjs",
+    "files": [
+      "**/*",
+      "!**/node_modules/*/{CHANGELOG.md,README.md,README,readme.md,readme}",
+      "!**/node_modules/*/{test,__tests__,tests,powered-test,example,examples}",
+      "!**/node_modules/*.d.ts",
+      "!**/node_modules/.bin",
+      "!**/*.{iml,o,hprof,orig,pyc,pyo,rbc,swp,csproj,sln,xproj}",
+      "!.editorconfig",
+      "!**/._*",
+      "!**/{.DS_Store,.git,.hg,.svn,CVS,RCS,SCCS,.gitignore,.gitattributes}",
+      "!**/{__pycache__,thumbs.db,.flowconfig,.idea,.vs,.nyc_output}",
+      "!**/{appveyor.yml,.travis.yml,circle.yml}",
+      "!**/{npm-debug.log,yarn.lock,.yarn-integrity,.yarn-metadata.json}",
+      "!dist/**",
+      "!scripts/**",
+      "!*.md"
+    ],
+    "asarUnpack": [],
+    "compression": "maximum",
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ],
+      "icon": "assets/icon.icns",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "notarize": false,
+      "signIgnore": [
+        "node_modules"
+      ],
+      "entitlements": "entitlements.mac.plist",
+      "entitlementsInherit": "entitlements.mac.plist",
+      "extendInfo": {
+        "NSLocalNetworkUsageDescription": "This app needs to discover and communicate with Roku devices on your local network.",
+        "NSBonjourServices": [
+          "_ssdp._udp",
+          "_roku._tcp"
+        ],
+        "NSAppleEventsUsageDescription": "This app needs to communicate with other apps on your system."
+      },
+      "electronLanguages": [
+        "en",
+        "en_GB"
+      ]
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "assets/icon.ico"
+    },
+    "linux": {
+      "target": [
+        {
+          "target": "deb",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        },
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ],
+      "category": "Development",
+      "icon": "assets/ico-parts",
+      "synopsis": "Roku development and debugging tool",
+      "description": "Roku Dev Studio - Control your Roku device over the local network"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    },
+    "dmg": {
+      "writeUpdateInfo": false
+    },
+    "deb": {
+      "depends": [
+        "libgtk-3-0",
+        "libnotify4",
+        "libnss3",
+        "libxss1",
+        "libxtst6",
+        "xdg-utils",
+        "libatspi2.0-0",
+        "libuuid1"
+      ],
+      "packageCategory": "devel"
+    },
+    "appImage": {
+      "artifactName": "${productName}-${version}-${arch}.${ext}"
+    }
+  }
+}

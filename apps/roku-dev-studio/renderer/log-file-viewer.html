@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Logs</title>
+  <link rel="stylesheet" href="log-file-viewer.css" />
+</head>
+<body class="log-file-viewer-page">
+  <svg xmlns="http://www.w3.org/2000/svg" style="display: none" aria-hidden="true">
+    <symbol id="icon-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M18 6 6 18" />
+      <path d="m6 6 12 12" />
+    </symbol>
+    <symbol id="icon-chevron-up" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="m18 15-6-6-6 6" />
+    </symbol>
+    <symbol id="icon-chevron-down" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="m6 9 6 6 6-6" />
+    </symbol>
+  </svg>
+  <header id="logViewerHeader" class="log-viewer-header">
+    <div class="log-viewer-header-primary">
+      <h1 id="logViewerTitle" class="log-viewer-title">Log file</h1>
+      <p id="logViewerStatus" class="log-viewer-status"></p>
+    </div>
+    <div id="logViewerFindHost" class="log-viewer-find-host" hidden>
+      <div class="telnet-find-bar">
+        <select class="telnet-mode-select" aria-label="Find or filter mode">
+          <option value="find">Find</option>
+          <option value="filter">Filter</option>
+        </select>
+        <div class="telnet-find-input-wrapper">
+          <input type="text" class="telnet-find-input" placeholder="Find..." spellcheck="false" />
+          <div class="telnet-find-options">
+            <button type="button" class="telnet-option-btn" data-option="case" title="Match Case">Aa</button>
+            <button type="button" class="telnet-option-btn" data-option="word" title="Match Whole Word">ab</button>
+            <button type="button" class="telnet-option-btn" data-option="regex" title="Use Regular Expression">.*</button>
+          </div>
+        </div>
+        <span class="telnet-find-count" aria-live="polite"></span>
+        <button type="button" class="btn btn-icon telnet-find-prev" title="Previous (Shift+Enter)">
+          <span class="icon icon-xs"><svg><use href="#icon-chevron-up" /></svg></span>
+        </button>
+        <button type="button" class="btn btn-icon telnet-find-next" title="Next (Enter)">
+          <span class="icon icon-xs"><svg><use href="#icon-chevron-down" /></svg></span>
+        </button>
+        <button type="button" class="btn btn-icon telnet-find-clear" title="Clear">
+          <span class="icon icon-xs"><svg><use href="#icon-x" /></svg></span>
+        </button>
+      </div>
+    </div>
+  </header>
+  <main class="log-viewer-main">
+    <div class="telnet-output-container log-viewer-output-wrap">
+      <div id="logViewerOutput" class="telnet-output"></div>
+    </div>
+  </main>
+  <script type="module" src="./dist/components/log-file-viewer/log-file-viewer.js"></script>
+</body>
+</html>

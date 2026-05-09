@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!--
+    CSP notes:
+      - `script-src 'self' blob:` — Monaco spawns its language workers from
+        blob URLs generated at runtime (see fiddle-monaco-env.js). We never
+        rely on `'unsafe-inline'`; every <script> here has a `src=` attribute.
+      - `worker-src 'self' blob:` — matches the script-src worker source.
+      - `style-src 'unsafe-inline'` — Monaco injects inline styles on load
+        and Google Fonts emits inline font-face rules.
+      - `font-src` / `img-src` — Google Fonts and Roku device icons live off
+        the renderer's `self` origin (`file://`).
+  -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' blob:; worker-src 'self' blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: http: https:;" />
+  <title>BrightScript Fiddle</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" />
+  <link rel="stylesheet" href="fiddle.css" />
+  <link rel="stylesheet" data-name="vs/editor/editor.main" href="./dist/vendor/monaco/vs/editor/editor.main.css" />
+</head>
+<body class="fiddle-page">
+  <svg xmlns="http://www.w3.org/2000/svg" style="display: none" aria-hidden="true">
+    <symbol id="icon-play" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M8 5v14l11-7z" />
+    </symbol>
+    <symbol id="icon-stop" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <rect x="6" y="6" width="12" height="12" rx="1.5" />
+    </symbol>
+    <symbol id="icon-refresh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M23 4v6h-6" />
+      <path d="M1 20v-6h6" />
+      <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10" />
+      <path d="M20.49 15a9 9 0 0 1-14.85 3.36L1 14" />
+    </symbol>
+    <symbol id="icon-trash" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="3 6 5 6 21 6" />
+      <path d="M19 6l-2 14a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L5 6" />
+      <path d="M10 11v6" />
+      <path d="M14 11v6" />
+    </symbol>
+    <symbol id="icon-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M18 6 6 18" />
+      <path d="m6 6 12 12" />
+    </symbol>
+    <symbol id="icon-code" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="16 18 22 12 16 6" />
+      <polyline points="8 6 2 12 8 18" />
+    </symbol>
+    <symbol id="icon-terminal" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="4 17 10 11 4 5" />
+      <line x1="12" y1="19" x2="20" y2="19" />
+    </symbol>
+    <symbol id="icon-lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="3" y="11" width="18" height="11" rx="2" />
+      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+    </symbol>
+    <symbol id="icon-reset" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M3 12a9 9 0 1 0 3-6.7" />
+      <path d="M3 3v6h6" />
+    </symbol>
+  </svg>
+
+  <header class="fiddle-header">
+    <div class="fiddle-header-left">
+      <div class="fiddle-brand">
+        <span class="fiddle-brand-badge"><span class="icon icon-sm"><svg><use href="#icon-code"/></svg></span></span>
+        <div class="fiddle-brand-copy">
+          <h1>BrightScript Fiddle</h1>
+          <p class="fiddle-subtitle">Run a quick BrightScript snippet on any connected device.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="fiddle-header-center">
+      <label class="fiddle-device-picker">
+        <span class="fiddle-picker-label">Device</span>
+        <div class="fiddle-picker-row">
+          <select id="fiddleDeviceSelect" aria-label="Select a device"></select>
+          <button
+            type="button"
+            id="fiddleRefreshBtn"
+            class="fiddle-picker-refresh"
+            title="Scan for devices"
+            aria-label="Scan for devices"
+          >
+            <span class="icon icon-sm"><svg><use href="#icon-refresh"/></svg></span>
+          </button>
+        </div>
+      </label>
+    </div>
+
+    <div class="fiddle-header-right">
+      <button type="button" id="fiddleRunBtn" class="btn btn-primary" disabled title="Run (⌘/Ctrl+Enter)">
+        <span class="icon icon-sm"><svg><use href="#icon-play"/></svg></span>
+        <span>Run</span>
+      </button>
+      <button type="button" id="fiddleStopBtn" class="btn btn-danger" disabled title="Uninstall fiddle channel">
+        <span class="icon icon-sm"><svg><use href="#icon-stop"/></svg></span>
+        <span>Stop</span>
+      </button>
+    </div>
+  </header>
+
+  <div class="fiddle-status-row">
+    <span id="fiddleStatus" class="fiddle-status">Ready.</span>
+    <span id="fiddleDiagStatus" class="fiddle-diag-status clean"></span>
+    <span class="fiddle-caption">Run replaces the currently sideloaded channel on the selected device.</span>
+  </div>
+
+  <main class="fiddle-main">
+    <section class="fiddle-pane fiddle-editor-pane">
+      <div class="fiddle-pane-header">
+        <span class="fiddle-pane-label">
+          <span class="icon icon-sm icon-accent"><svg><use href="#icon-code"/></svg></span>
+          Code
+        </span>
+        <span class="fiddle-pane-spacer"></span>
+        <button type="button" id="fiddleClearCodeBtn" class="btn btn-ghost btn-icon" title="Reset to default snippet" aria-label="Reset editor to default snippet">
+          <span class="icon icon-sm"><svg><use href="#icon-reset"/></svg></span>
+        </button>
+      </div>
+      <div id="fiddleEditor" class="fiddle-editor"></div>
+    </section>
+
+    <div class="fiddle-split-divider" aria-hidden="true"></div>
+
+    <section class="fiddle-pane fiddle-terminal-pane">
+      <div class="fiddle-pane-header">
+        <span class="fiddle-pane-label">
+          <span class="icon icon-sm icon-cyan"><svg><use href="#icon-terminal"/></svg></span>
+          Terminal
+        </span>
+        <span class="fiddle-pane-spacer"></span>
+        <button type="button" id="fiddleClearBtn" class="btn btn-ghost btn-icon" title="Clear terminal" aria-label="Clear terminal">
+          <span class="icon icon-sm"><svg><use href="#icon-trash"/></svg></span>
+        </button>
+      </div>
+      <div id="fiddleTerminal" class="fiddle-terminal" role="log" aria-live="polite"></div>
+    </section>
+  </main>
+
+  <div id="fiddlePasswordModal" class="modal-overlay active fiddle-modal-overlay" hidden aria-hidden="true">
+    <div class="modal fiddle-modal" role="dialog" aria-modal="true" aria-labelledby="fiddlePasswordTitle">
+      <div class="modal-header">
+        <div class="modal-title-row">
+          <span class="icon icon-md icon-accent"><svg><use href="#icon-lock"/></svg></span>
+          <span id="fiddlePasswordTitle" class="modal-title">Developer Password Required</span>
+        </div>
+        <button type="button" class="modal-close" id="fiddlePasswordCancel" aria-label="Close">
+          <span class="icon icon-sm"><svg><use href="#icon-x"/></svg></span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <p id="fiddlePasswordDeviceLabel" class="fiddle-modal-device"></p>
+        <p class="fiddle-modal-hint">
+          Sideloading requires the device's developer password&mdash;the one you set when enabling Developer Mode.
+        </p>
+        <label class="fiddle-field">
+          <span>Password</span>
+          <input type="password" id="fiddlePasswordInput" autocomplete="off" spellcheck="false" placeholder="Enter developer password" />
+        </label>
+        <p class="fiddle-modal-hint fiddle-modal-hint-muted">
+          This password is used only for this session. To save it for future use, verify Developer Mode in the main window.
+        </p>
+        <p id="fiddlePasswordError" class="fiddle-modal-error" hidden></p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" id="fiddlePasswordCancelBtn">Cancel</button>
+        <button type="button" class="btn btn-primary" id="fiddlePasswordSubmitBtn">
+          <span class="icon icon-sm"><svg><use href="#icon-play"/></svg></span>
+          <span>Save &amp; Run</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Monaco AMD loader + app entry. `fiddle-monaco-env.js` MUST load before
+       the AMD loader so `self.MonacoEnvironment.getWorkerUrl` is set before
+       Monaco spawns a worker. -->
+  <script src="./fiddle-monaco-env.js"></script>
+  <script src="./dist/vendor/monaco/vs/loader.js"></script>
+  <script type="module" src="./dist/components/fiddle/fiddle.js"></script>
+</body>
+</html>

@@ -1,0 +1,57 @@
+{
+  "name": "roku-dev-studio-api",
+  "version": "1.0.0",
+  "description": "Roku Dev Studio API — discovery, ECP, device info, sideload, screenshot (Node.js)",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "rds": "./dist/cli.js"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/paramount-engineering/roku-dev-studio"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  },
+  "keywords": [
+    "roku",
+    "ecp",
+    "ssdp",
+    "discovery",
+    "sideload"
+  ],
+  "scripts": {
+    "build": "node build.mjs && tsc --emitDeclarationOnly",
+    "typecheck": "tsc --noEmit",
+    "prepare": "node -e \"require('fs').existsSync('dist/index.js') || require('child_process').execSync('npm run build', { stdio: 'inherit' })\"",
+    "example:direct": "node dist/examples/direct-sample.js",
+    "example:relay": "node dist/examples/relay-sample.js",
+    "rds": "node dist/cli.js",
+    "test": "tsx --test test/*.test.ts"
+  },
+  "dependencies": {
+    "archiver": "^5.3.2",
+    "commander": "^9.5.0"
+  },
+  "devDependencies": {
+    "@types/archiver": "^5.3.4",
+    "@types/node": "^22.10.0",
+    "esbuild": "^0.25.0",
+    "typescript": "^5.7.3"
+  },
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./lib/*": {
+      "types": "./dist/lib/*.d.ts",
+      "default": "./dist/lib/*.js"
+    }
+  }
+}

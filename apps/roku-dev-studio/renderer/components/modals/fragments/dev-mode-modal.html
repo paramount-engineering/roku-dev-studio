@@ -1,0 +1,44 @@
+  <!-- Dev Mode Instructions Modal -->
+  <div class="modal-overlay" id="devModeModal">
+    <div class="modal">
+      <div class="modal-header">
+        <span class="modal-title"><span class="icon icon-md icon-amber"><svg><use href="#icon-zap"/></svg></span> Enable Developer Mode on Roku</span>
+        <button class="modal-close" id="devModeModalClose"><span class="icon icon-sm"><svg><use href="#icon-x"/></svg></span></button>
+      </div>
+      <div class="modal-body">
+        <div class="help-section">
+          <h3><span class="icon icon-sm"><svg><use href="#icon-info"/></svg></span> What is Developer Mode?</h3>
+          <p>Developer Mode allows you to sideload and test your own Roku channels directly on your device. It's free to enable and gives you access to powerful development tools.</p>
+        </div>
+        
+        <div class="help-section">
+          <h3><span class="icon icon-sm"><svg><use href="#icon-list"/></svg></span> Steps to Enable Developer Mode</h3>
+          <ol style="margin-left: 20px; line-height: 2;">
+            <li>On your Roku remote, press: <span class="help-kbd">Home</span> <span class="help-kbd">Home</span> <span class="help-kbd">Home</span> <span class="help-kbd">Up</span> <span class="help-kbd">Up</span> <span class="help-kbd">Right</span> <span class="help-kbd">Left</span> <span class="help-kbd">Right</span> <span class="help-kbd">Left</span> <span class="help-kbd">Right</span></li>
+            <li>A Developer Settings dialog will appear on your TV</li>
+            <li>Select <strong>"Enable installer and restart"</strong></li>
+            <li>Accept the Developer SDK License Agreement</li>
+            <li>Set a <strong>Web Server Password</strong> (you'll need this for sideloading)</li>
+            <li>Your Roku will restart with Developer Mode enabled</li>
+          </ol>
+        </div>
+        
+        <div class="help-section">
+          <h3><span class="icon icon-sm"><svg><use href="#icon-link"/></svg></span> After Enabling</h3>
+          <p>Once Developer Mode is enabled:</p>
+          <ul>
+            <li>Your device will show a <span class="dev-badge enabled" style="font-size: 11px;"><span class="icon icon-xs"><svg><use href="#icon-wrench"/></svg></span> Dev</span> badge in the device list</li>
+            <li>You can sideload .zip channel packages via the <strong>Dev App</strong> tab</li>
+            <li>Use the <strong>App Connector</strong> to communicate with your channel code</li>
+            <li>Access additional ECP queries in the <strong>Query</strong> tab</li>
+          </ul>
+        </div>
+        
+        <div class="help-section">
+          <h3><span class="icon icon-sm"><svg><use href="#icon-book"/></svg></span> More Information</h3>
+          <p>For detailed documentation, visit the official Roku Developer documentation:</p>
+          <p><a href="https://developer.roku.com/docs/developer-program/getting-started/developer-setup.md" target="_blank" style="color: var(--accent-purple);">developer.roku.com/docs/developer-program/getting-started/developer-setup.md</a></p>
+        </div>
+      </div>
+    </div>
+  </div>

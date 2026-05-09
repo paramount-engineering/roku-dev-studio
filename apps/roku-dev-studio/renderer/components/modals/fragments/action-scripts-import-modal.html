@@ -1,0 +1,45 @@
+  <!-- Import / Update Action Script Modal (global, outside template so it's in document) -->
+  <div class="modal-overlay action-scripts-import-modal" id="actionScriptsImportModal" aria-hidden="true">
+    <div class="modal action-scripts-import-modal-box">
+      <div class="modal-header">
+        <span class="modal-title action-scripts-import-modal-title">Import Action Script</span>
+        <button type="button" class="modal-close action-scripts-import-modal-close" aria-label="Close"><span class="icon icon-sm"><svg><use href="#icon-x"/></svg></span></button>
+      </div>
+      <div class="modal-body">
+        <div class="action-scripts-import-upload-row">
+          <label class="action-scripts-import-label">Upload JSON</label>
+          <input type="file" class="action-scripts-import-file-input" accept=".json,application/json" style="display: none;">
+          <button type="button" class="btn btn-secondary action-scripts-import-upload-btn">Choose file</button>
+        </div>
+              <div class="action-scripts-import-paste-group">
+                <div class="action-scripts-import-paste-header">
+                  <label class="action-scripts-import-label">Paste or edit JSON</label>
+                  <button type="button" class="btn btn-secondary btn-sm action-scripts-import-clear-btn">Clear</button>
+                </div>
+                <textarea class="action-scripts-import-textarea" placeholder='{"version":"1","steps":[{"type":"keypress","key":"Home"}]}' rows="10"></textarea>
+                <div class="action-scripts-import-error" role="alert"></div>
+              </div>
+              <div class="action-scripts-import-output-folder">
+                <div class="action-scripts-import-output-folder-row">
+                  <label class="action-scripts-import-label">Output folder</label>
+                  <span class="action-scripts-import-output-folder-path">No folder selected</span>
+                  <button type="button" class="btn btn-secondary action-scripts-import-choose-folder-btn">Choose folder</button>
+                </div>
+                <p class="action-scripts-import-output-warning">If no folder is selected, artifacts (e.g. screenshots) will not be saved when you run the script.</p>
+              </div>
+              <div class="action-scripts-import-dev-password" style="display: none;">
+                <p class="action-scripts-import-dev-password-required-msg" style="display: none;">This script requires a developer password. Enter it below.</p>
+                <label class="action-scripts-import-label" for="action-scripts-import-dev-password-input">Developer password</label>
+                <input type="password" id="action-scripts-import-dev-password-input" class="action-scripts-import-dev-password-input" placeholder="Enter developer password for screenshot / sideload steps" autocomplete="off">
+                <div class="action-scripts-import-remember-row">
+                  <input type="checkbox" id="action-scripts-import-remember-password" class="action-scripts-import-remember-password" title="Save password for this device (same as Dev App password storage)">
+                  <label for="action-scripts-import-remember-password" class="action-scripts-import-remember-label">Remember password for this device</label>
+                </div>
+                <p class="action-scripts-import-dev-password-hint">Required when the script has screenshot or sideload steps and does not include a <code>devPassword</code> field.</p>
+              </div>
+              <div class="action-scripts-import-actions">
+                <button type="button" class="btn btn-primary action-scripts-import-validate-btn">Validate and Import</button>
+              </div>
+      </div>
+    </div>
+  </div>
