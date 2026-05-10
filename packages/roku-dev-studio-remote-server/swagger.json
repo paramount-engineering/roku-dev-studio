@@ -1,0 +1,1508 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Roku Remote Server API",
+    "description": "REST API for controlling Roku devices remotely via the Roku Dev Studio remote server. This server runs on a Mac Mini (or any computer) at a remote location and exposes Roku ECP (External Control Protocol) functionality over HTTP, along with telnet debug console streaming via WebSocket.",
+    "version": "1.0.0",
+    "contact": {
+      "name": "Roku Dev Studio"
+    },
+    "license": {
+      "name": "MIT"
+    }
+  },
+  "servers": [
+    {
+      "url": "http://localhost:4951",
+      "description": "Local development server"
+    },
+    {
+      "url": "http://{host}:{port}",
+      "description": "Custom server",
+      "variables": {
+        "host": {
+          "default": "localhost",
+          "description": "Server hostname or IP"
+        },
+        "port": {
+          "default": "4951",
+          "description": "Server port"
+        }
+      }
+    }
+  ],
+  "tags": [
+    {
+      "name": "Health",
+      "description": "Server health and status endpoints"
+    },
+    {
+      "name": "Capabilities",
+      "description": "Server capabilities and feature discovery"
+    },
+    {
+      "name": "Discovery",
+      "description": "Roku device discovery endpoints"
+    },
+    {
+      "name": "Device Info",
+      "description": "Get information about Roku devices"
+    },
+    {
+      "name": "Remote Control",
+      "description": "Send remote control commands to Roku devices"
+    },
+    {
+      "name": "Apps",
+      "description": "Launch and manage apps on Roku devices"
+    },
+    {
+      "name": "Query",
+      "description": "Query Roku ECP endpoints"
+    },
+    {
+      "name": "Developer",
+      "description": "Developer mode features (sideload, screenshot, etc.)"
+    },
+    {
+      "name": "RALE",
+      "description": "RALE/TrackerTask connection for App Connector"
+    },
+    {
+      "name": "Console",
+      "description": "BrightScript debug console (telnet port 8085) streaming"
+    }
+  ],
+  "paths": {
+    "/health": {
+      "get": {
+        "tags": ["Health"],
+        "summary": "Health check",
+        "description": "Check server health and get basic status information",
+        "operationId": "getHealth",
+        "responses": {
+          "200": {
+            "description": "Server is healthy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                },
+                "example": {
+                  "success": true,
+                  "status": "ok",
+                  "hostname": "mac-mini.local",
+                  "platform": "darwin",
+                  "uptime": 3600.5,
+                  "deviceCount": 3
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/capabilities": {
+      "get": {
+        "tags": ["Capabilities"],
+        "summary": "Get server capabilities",
+        "description": "Get the list of features/capabilities supported by this remote server. Use this to determine which tabs/features to show in the client application.",
+        "operationId": "getCapabilities",
+        "responses": {
+          "200": {
+            "description": "Server capabilities",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CapabilitiesResponse"
+                },
+                "example": {
+                  "success": true,
+                  "version": "1.0.0",
+                  "capabilities": {
+                    "remote": true,
+                    "apps": true,
+                    "query": true,
+                    "devApp": true,
+                    "screenshot": true,
+                    "console": true,
+                    "appConnector": true,
+                    "deepLink": true
+                  },
+                  "serverInfo": {
+                    "hostname": "mac-mini.local",
+                    "platform": "darwin",
+                    "nodeVersion": "v20.10.0"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/devices": {
+      "get": {
+        "tags": ["Discovery"],
+        "summary": "Discover Roku devices",
+        "description": "Scan the local network for Roku devices using SSDP and subnet scanning. This performs a full discovery which may take several seconds.",
+        "operationId": "discoverDevices",
+        "responses": {
+          "200": {
+            "description": "Discovery completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeviceListResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/devices/cached": {
+      "get": {
+        "tags": ["Discovery"],
+        "summary": "Get cached devices",
+        "description": "Get the list of previously discovered Roku devices from cache. This is faster than a full discovery.",
+        "operationId": "getCachedDevices",
+        "responses": {
+          "200": {
+            "description": "Cached device list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeviceListResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/device/{ip}/info": {
+      "get": {
+        "tags": ["Device Info"],
+        "summary": "Get device info",
+        "description": "Get detailed information about a specific Roku device",
+        "operationId": "getDeviceInfo",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/DeviceIP"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Device information",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeviceInfoResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Failed to get device info",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/device/{ip}/keypress/{key}": {
+      "post": {
+        "tags": ["Remote Control"],
+        "summary": "Send key press",
+        "description": "Send a remote control key press to the Roku device",
+        "operationId": "sendKeypress",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/DeviceIP"
+          },
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "description": "The key to press",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "Home", "Rev", "Fwd", "Play", "Select", "Left", "Right", "Down", "Up",
+                "Back", "InstantReplay", "Info", "Backspace", "Search", "Enter",
+                "VolumeDown", "VolumeMute", "VolumeUp", "PowerOff", "Power",
+                "ChannelUp", "ChannelDown", "InputTuner", "InputHDMI1", "InputHDMI2",
+                "InputHDMI3", "InputHDMI4", "InputAV1"
+              ]
+            },
+            "examples": {
+              "home": { "value": "Home", "summary": "Go to home screen" },
+              "select": { "value": "Select", "summary": "Select/OK button" },
+              "play": { "value": "Play", "summary": "Play/Pause" },
+              "up": { "value": "Up", "summary": "Navigate up" }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Key press sent",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/device/{ip}/launch/{appId}": {
+      "post": {
+        "tags": ["Apps"],
+        "summary": "Launch an app",
+        "description": "Launch an app on the Roku device by its ID",
+        "operationId": "launchApp",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/DeviceIP"
+          },
+          {
+            "name": "appId",
+            "in": "path",
+            "required": true,
+            "description": "The app ID to launch",
+            "schema": {
+              "type": "string"
+            },
+            "examples": {
+              "netflix": { "value": "12", "summary": "Netflix" },
+              "youtube": { "value": "837", "summary": "YouTube" },
+              "dev": { "value": "dev", "summary": "Sideloaded dev channel" }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "App launched",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/device/{ip}/query/device-info": {
+      "get": {
+        "tags": ["Query"],
+        "summary": "Query device info (XML)",
+        "description": "Get raw device info XML from the Roku ECP endpoint",
+        "operationId": "queryDeviceInfo",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/DeviceIP"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Device info XML",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QueryResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/device/{ip}/query/apps": {
+      "get": {
+        "tags": ["Query"],
+        "summary": "Query installed apps",
+        "description": "Get list of installed apps on the Roku device",
+        "operationId": "queryApps",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/DeviceIP"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Apps list XML",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QueryResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/device/{ip}/query/active-app": {
+      "get": {
+        "tags": ["Query"],
+        "summary": "Query active app",
+        "description": "Get the currently active app on the Roku device",
+        "operationId": "queryActiveApp",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/DeviceIP"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Active app XML",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QueryResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/device/{ip}/query/media-player": {
+      "get": {
+        "tags": ["Query"],
+        "summary": "Query media player",
+        "description": "Get media player state and playback information",
+        "operationId": "queryMediaPlayer",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/DeviceIP"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Media player XML",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QueryResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/device/{ip}/query/sgnodes/all": {
+      "get": {
+        "tags": ["Query"],
+        "summary": "Query all SceneGraph nodes",
+        "description": "Get all SceneGraph nodes (developer feature)",
+        "operationId": "querySgNodesAll",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/DeviceIP"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "SceneGraph nodes",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QueryResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/device/{ip}/query/chanperf": {
+      "get": {
+        "tags": ["Query"],
+        "summary": "Query channel performance",
+        "description": "Get channel performance metrics (developer feature)",
+        "operationId": "queryChanperf",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/DeviceIP"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Channel performance data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QueryResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/device/{ip}/post/sgrendezvous/track": {
+      "post": {
+        "tags": ["Query"],
+        "summary": "Enable SG Rendezvous tracking",
+        "description": "Enable SceneGraph Rendezvous tracking for debugging",
+        "operationId": "sgRendezvousTrack",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/DeviceIP"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Tracking enabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/device/{ip}/post/sgrendezvous/untrack": {
+      "post": {
+        "tags": ["Query"],
+        "summary": "Disable SG Rendezvous tracking",
+        "description": "Disable SceneGraph Rendezvous tracking",
+        "operationId": "sgRendezvousUntrack",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/DeviceIP"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Tracking disabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/device/{ip}/input-text": {
+      "post": {
+        "tags": ["Remote Control"],
+        "summary": "Send text input",
+        "description": "Send a string of text to the Roku device (one character at a time)",
+        "operationId": "inputText",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/DeviceIP"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["text"],
+                "properties": {
+                  "text": {
+                    "type": "string",
+                    "description": "Text to send to the device"
+                  }
+                }
+              },
+              "example": {
+                "text": "Hello World"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Text sent",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/device/{ip}/deeplink": {
+      "post": {
+        "tags": ["Apps"],
+        "summary": "Deep link to content",
+        "description": "Launch an app with deep link parameters to specific content",
+        "operationId": "deeplink",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/DeviceIP"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["appId"],
+                "properties": {
+                  "appId": {
+                    "type": "string",
+                    "description": "The app ID to launch"
+                  },
+                  "contentId": {
+                    "type": "string",
+                    "description": "Content ID to deep link to"
+                  },
+                  "mediaType": {
+                    "type": "string",
+                    "enum": ["movie", "series", "episode", "live"],
+                    "description": "Type of media content"
+                  }
+                }
+              },
+              "example": {
+                "appId": "12",
+                "contentId": "70143836",
+                "mediaType": "movie"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Deep link launched",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/device/{ip}/icon/{appId}": {
+      "get": {
+        "tags": ["Apps"],
+        "summary": "Get app icon",
+        "description": "Get the icon for an installed app as a base64 data URL",
+        "operationId": "getAppIcon",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/DeviceIP"
+          },
+          {
+            "name": "appId",
+            "in": "path",
+            "required": true,
+            "description": "The app ID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "App icon",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "dataUrl": {
+                      "type": "string",
+                      "description": "Base64 encoded data URL of the icon"
+                    }
+                  }
+                },
+                "example": {
+                  "success": true,
+                  "dataUrl": "data:image/png;base64,iVBORw0KGgo..."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/device/{ip}/sideload": {
+      "post": {
+        "tags": ["Developer"],
+        "summary": "Sideload a channel",
+        "description": "Install a development channel package (.zip or .pkg) on the Roku device. Upload the file directly or provide a server file path.",
+        "operationId": "sideload",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/DeviceIP"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": ["file", "password"],
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "The .zip or .pkg channel package file to install"
+                  },
+                  "password": {
+                    "type": "string",
+                    "format": "password",
+                    "description": "Roku developer password"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Sideload result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/device/{ip}/delete-sideload": {
+      "post": {
+        "tags": ["Developer"],
+        "summary": "Delete sideloaded channel",
+        "description": "Remove the sideloaded development channel from the Roku device",
+        "operationId": "deleteSideload",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/DeviceIP"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "type": "object",
+                "required": ["password"],
+                "properties": {
+                  "password": {
+                    "type": "string",
+                    "format": "password",
+                    "description": "Roku developer password"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Delete result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/device/{ip}/screenshot": {
+      "post": {
+        "tags": ["Developer"],
+        "summary": "Take screenshot",
+        "description": "Capture a screenshot from the Roku device (requires sideloaded channel to be running)",
+        "operationId": "screenshot",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/DeviceIP"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "type": "object",
+                "required": ["password"],
+                "properties": {
+                  "password": {
+                    "type": "string",
+                    "format": "password",
+                    "description": "Roku developer password"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Screenshot captured",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "url": {
+                      "type": "string",
+                      "description": "Base64 data URL of the screenshot"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/device/{ip}/rale/wake": {
+      "post": {
+        "tags": ["RALE"],
+        "summary": "Wake TrackerTask",
+        "description": "Send ECP input to wake up the TrackerTask in the sideloaded channel",
+        "operationId": "raleWake",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/DeviceIP"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "port": {
+                    "type": "integer",
+                    "default": 49200,
+                    "description": "TrackerTask port"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Wake command sent",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/device/{ip}/rale/connect": {
+      "post": {
+        "tags": ["RALE"],
+        "summary": "Connect to TrackerTask",
+        "description": "Establish a TCP socket connection to the TrackerTask",
+        "operationId": "raleConnect",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/DeviceIP"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "port": {
+                    "type": "integer",
+                    "default": 49200,
+                    "description": "TrackerTask port"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Connection established",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "connectionId": {
+                      "type": "string",
+                      "description": "Connection ID for subsequent commands"
+                    }
+                  }
+                },
+                "example": {
+                  "success": true,
+                  "connectionId": "192.168.1.100:49200"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/device/{ip}/rale/command": {
+      "post": {
+        "tags": ["RALE"],
+        "summary": "Send RALE command",
+        "description": "Send a command to the TrackerTask and get the response",
+        "operationId": "raleCommand",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/DeviceIP"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["connectionId", "command"],
+                "properties": {
+                  "connectionId": {
+                    "type": "string",
+                    "description": "Connection ID from raleConnect"
+                  },
+                  "command": {
+                    "type": "string",
+                    "description": "Command name to execute",
+                    "enum": ["init", "getExternalControlFunctions", "executeExternalControlFunction"]
+                  },
+                  "args": {
+                    "type": "object",
+                    "description": "Command arguments"
+                  }
+                }
+              },
+              "examples": {
+                "init": {
+                  "value": {
+                    "connectionId": "192.168.1.100:49200",
+                    "command": "init",
+                    "args": {}
+                  }
+                },
+                "getFunctions": {
+                  "value": {
+                    "connectionId": "192.168.1.100:49200",
+                    "command": "getExternalControlFunctions",
+                    "args": {}
+                  }
+                },
+                "executeFunction": {
+                  "value": {
+                    "connectionId": "192.168.1.100:49200",
+                    "command": "executeExternalControlFunction",
+                    "args": {
+                      "functionName": "PlayContent",
+                      "functionParams": ["content123", true]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Command response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "object",
+                      "description": "Response data from the TrackerTask"
+                    },
+                    "uuid": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/device/{ip}/rale/disconnect": {
+      "post": {
+        "tags": ["RALE"],
+        "summary": "Disconnect from TrackerTask",
+        "description": "Close the TCP connection to the TrackerTask",
+        "operationId": "raleDisconnect",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/DeviceIP"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["connectionId"],
+                "properties": {
+                  "connectionId": {
+                    "type": "string",
+                    "description": "Connection ID to disconnect"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Disconnected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/device/{ip}/telnet/connect": {
+      "post": {
+        "tags": ["Console"],
+        "summary": "Connect to BrightScript console",
+        "description": "Establish a telnet connection to port 8085 on the Roku device for BrightScript debug output. Returns a session ID to use with WebSocket streaming.",
+        "operationId": "telnetConnect",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/DeviceIP"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Telnet session created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TelnetConnectResponse"
+                },
+                "example": {
+                  "success": true,
+                  "sessionId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Connection failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/device/{ip}/telnet/disconnect": {
+      "post": {
+        "tags": ["Console"],
+        "summary": "Disconnect telnet session",
+        "description": "Close the telnet connection for the specified device",
+        "operationId": "telnetDisconnect",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/DeviceIP"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Session disconnected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/telnet/sessions": {
+      "get": {
+        "tags": ["Console"],
+        "summary": "List active telnet sessions",
+        "description": "Get all active telnet debug sessions with their status",
+        "operationId": "telnetSessions",
+        "responses": {
+          "200": {
+            "description": "List of active sessions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "sessions": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/TelnetSession"
+                      }
+                    }
+                  }
+                },
+                "example": {
+                  "success": true,
+                  "sessions": [
+                    {
+                      "sessionId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+                      "deviceIP": "192.168.1.100",
+                      "connectedClients": 1,
+                      "lastActivity": "2024-01-15T10:30:00.000Z"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/telnet/status/{sessionId}": {
+      "get": {
+        "tags": ["Console"],
+        "summary": "Get telnet session status",
+        "description": "Get the status of a specific telnet session by session ID",
+        "operationId": "telnetStatus",
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "description": "Session ID returned from telnet connect",
+            "schema": {
+              "type": "string"
+            },
+            "example": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Session status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "exists": {
+                      "type": "boolean",
+                      "description": "Whether the session exists"
+                    },
+                    "deviceIP": {
+                      "type": "string",
+                      "description": "IP address of the connected device"
+                    },
+                    "connectedClients": {
+                      "type": "integer",
+                      "description": "Number of WebSocket clients streaming logs"
+                    },
+                    "lastActivity": {
+                      "type": "string",
+                      "format": "date-time",
+                      "description": "Timestamp of last activity"
+                    }
+                  }
+                },
+                "example": {
+                  "success": true,
+                  "exists": true,
+                  "deviceIP": "192.168.1.100",
+                  "connectedClients": 1,
+                  "lastActivity": "2024-01-15T10:30:00.000Z"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "parameters": {
+      "DeviceIP": {
+        "name": "ip",
+        "in": "path",
+        "required": true,
+        "description": "IP address of the Roku device",
+        "schema": {
+          "type": "string",
+          "format": "ipv4"
+        },
+        "example": "192.168.1.100"
+      }
+    },
+    "schemas": {
+      "SuccessResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "example": true
+          },
+          "status": {
+            "type": "integer",
+            "example": 200
+          }
+        }
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "example": false
+          },
+          "error": {
+            "type": "string",
+            "example": "Connection refused"
+          }
+        }
+      },
+      "MessageResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "message": {
+            "type": "string"
+          }
+        }
+      },
+      "QueryResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "data": {
+            "type": "string",
+            "description": "Raw XML response from the Roku ECP endpoint"
+          },
+          "status": {
+            "type": "integer"
+          }
+        }
+      },
+      "HealthResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "example": true
+          },
+          "status": {
+            "type": "string",
+            "example": "ok"
+          },
+          "hostname": {
+            "type": "string",
+            "example": "mac-mini.local"
+          },
+          "platform": {
+            "type": "string",
+            "example": "darwin"
+          },
+          "uptime": {
+            "type": "number",
+            "description": "Server uptime in seconds",
+            "example": 3600.5
+          },
+          "deviceCount": {
+            "type": "integer",
+            "description": "Number of cached Roku devices",
+            "example": 3
+          },
+          "telnetSessions": {
+            "type": "integer",
+            "description": "Number of active telnet sessions",
+            "example": 1
+          }
+        }
+      },
+      "CapabilitiesResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "example": true
+          },
+          "version": {
+            "type": "string",
+            "description": "Server API version",
+            "example": "1.0.0"
+          },
+          "capabilities": {
+            "type": "object",
+            "description": "Map of feature names to enabled status",
+            "properties": {
+              "remote": {
+                "type": "boolean",
+                "description": "Remote control (keypress, text input)"
+              },
+              "apps": {
+                "type": "boolean",
+                "description": "App listing and launching"
+              },
+              "query": {
+                "type": "boolean",
+                "description": "Device queries (info, apps, media-player, etc.)"
+              },
+              "devApp": {
+                "type": "boolean",
+                "description": "Dev app sideloading"
+              },
+              "screenshot": {
+                "type": "boolean",
+                "description": "Screenshot capture"
+              },
+              "console": {
+                "type": "boolean",
+                "description": "Telnet debug console (port 8085)"
+              },
+              "appConnector": {
+                "type": "boolean",
+                "description": "RALE App Connector / Inspector"
+              },
+              "deepLink": {
+                "type": "boolean",
+                "description": "Deep linking support"
+              }
+            }
+          },
+          "serverInfo": {
+            "type": "object",
+            "properties": {
+              "hostname": {
+                "type": "string"
+              },
+              "platform": {
+                "type": "string"
+              },
+              "nodeVersion": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "TelnetConnectResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "sessionId": {
+            "type": "string",
+            "description": "Unique session ID for WebSocket streaming"
+          }
+        }
+      },
+      "TelnetSession": {
+        "type": "object",
+        "properties": {
+          "sessionId": {
+            "type": "string"
+          },
+          "deviceIP": {
+            "type": "string",
+            "format": "ipv4"
+          },
+          "connectedClients": {
+            "type": "integer",
+            "description": "Number of WebSocket clients receiving logs"
+          },
+          "lastActivity": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "DeviceInfo": {
+        "type": "object",
+        "properties": {
+          "ip": {
+            "type": "string",
+            "example": "192.168.1.100"
+          },
+          "port": {
+            "type": "string",
+            "example": "8060"
+          },
+          "deviceName": {
+            "type": "string",
+            "example": "Living Room Roku"
+          },
+          "modelName": {
+            "type": "string",
+            "example": "Roku Ultra"
+          },
+          "modelNumber": {
+            "type": "string",
+            "example": "4800X"
+          },
+          "serialNumber": {
+            "type": "string",
+            "example": "X01000ABCD12"
+          },
+          "softwareVersion": {
+            "type": "string",
+            "example": "15.0.4"
+          },
+          "softwareBuild": {
+            "type": "string",
+            "example": "5534"
+          },
+          "wifiMac": {
+            "type": "string",
+            "example": "aa:bb:cc:dd:ee:76"
+          },
+          "ethernetMac": {
+            "type": "string",
+            "example": "aa:bb:cc:dd:ee:77"
+          },
+          "networkType": {
+            "type": "string",
+            "enum": ["wifi", "ethernet"],
+            "example": "wifi"
+          },
+          "vendorName": {
+            "type": "string",
+            "example": "Roku"
+          },
+          "deviceId": {
+            "type": "string"
+          },
+          "screenSize": {
+            "type": "string"
+          },
+          "supportsSuspend": {
+            "type": "string"
+          },
+          "supportsPrivateListening": {
+            "type": "string"
+          },
+          "headphonesConnected": {
+            "type": "string"
+          },
+          "powerMode": {
+            "type": "string",
+            "enum": ["PowerOn", "Suspend", "DisplayOff"],
+            "example": "PowerOn"
+          },
+          "developerEnabled": {
+            "type": "boolean",
+            "example": true
+          },
+          "keyedDeveloperId": {
+            "type": "string"
+          },
+          "isTv": {
+            "type": "boolean",
+            "example": false
+          }
+        }
+      },
+      "DeviceListResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "example": true
+          },
+          "devices": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DeviceInfo"
+            }
+          }
+        }
+      },
+      "DeviceInfoResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "deviceInfo": {
+            "$ref": "#/components/schemas/DeviceInfo"
+          }
+        }
+      }
+    }
+  }
+}
+

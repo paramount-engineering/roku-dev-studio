@@ -1,0 +1,26 @@
+{
+  "name": "roku-dev-studio-mcp",
+  "version": "1.0.0",
+  "description": "MCP server exposing Roku Dev Studio Action Scripts to AI agents",
+  "main": "dist/index.cjs",
+  "bin": {
+    "roku-dev-studio-mcp": "dist/index.cjs"
+  },
+  "private": true,
+  "scripts": {
+    "build": "node build.mjs",
+    "typecheck": "tsc --noEmit"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "roku-dev-studio-api": "file:../roku-dev-studio-api"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "esbuild": "^0.25.0",
+    "typescript": "^5.7.3"
+  },
+  "files": [
+    "dist"
+  ]
+}

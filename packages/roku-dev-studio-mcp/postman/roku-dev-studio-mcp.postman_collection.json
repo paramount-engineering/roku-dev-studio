@@ -1,0 +1,478 @@
+{
+  "info": {
+    "_postman_id": "rds-mcp-bridge-v1",
+    "name": "Roku Dev Studio — MCP Bridge",
+    "description": "## Roku Dev Studio MCP Bridge\n\nDirect HTTP probes against the loopback bridge that the bundled MCP server (`roku-dev-studio-mcp`) uses for live tools. Useful for **debugging the bridge** without going through Claude / Cursor / VS Code.\n\nThe bridge is **localhost-only** and **per-launch token-authenticated**. Both values are written to the bridge descriptor when Roku Dev Studio starts.\n\n### Setup\n\n1. Start Roku Dev Studio. The main-process console logs:\n\n    `[mcp-bridge] bridge descriptor at /Users/<you>/Library/Application Support/Roku Dev Studio/mcp-bridge.json (port NNNN)`\n\n2. Read that file:\n\n    ```bash\n    cat \"$HOME/Library/Application Support/Roku Dev Studio/mcp-bridge.json\"\n    ```\n\n    On Windows: `%APPDATA%\\Roku Dev Studio\\mcp-bridge.json`. On Linux: `~/.config/Roku Dev Studio/mcp-bridge.json`.\n\n3. In Postman, set the collection variables:\n    - `bridgePort` → the `port` field from the descriptor\n    - `bridgeToken` → the `token` field from the descriptor\n\n4. Run **Health Check** first to confirm the connection.\n\n### Notes\n\n- The token rotates every Roku Dev Studio launch — re-read the descriptor after every restart.\n- All requests authenticate with `Authorization: Bearer {{bridgeToken}}` (collection-level auth).\n- The bridge binds to `127.0.0.1` only. Requests from other machines will fail to connect.\n- The MCP **stdio** server (the thing Claude actually launches) is separate from this bridge — see the **Reference: MCP Stdio Protocol** folder for its JSON-RPC shapes.\n",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{bridgeToken}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "bridgeBaseUrl",
+      "value": "http://127.0.0.1:{{bridgePort}}",
+      "type": "string",
+      "description": "Loopback URL to the Roku Dev Studio MCP bridge."
+    },
+    {
+      "key": "bridgePort",
+      "value": "",
+      "type": "string",
+      "description": "Port from <userData>/mcp-bridge.json. Re-read after every Dev Studio restart."
+    },
+    {
+      "key": "bridgeToken",
+      "value": "",
+      "type": "string",
+      "description": "Bearer token from <userData>/mcp-bridge.json. Re-read after every Dev Studio restart."
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Health & State",
+      "description": "Read-only probes that should always work as long as the bridge is up and the user has at least one device tab open.",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{bridgeBaseUrl}}/health",
+              "protocol": "http",
+              "host": ["127", "0", "0", "1"],
+              "port": "{{bridgePort}}",
+              "path": ["health"]
+            },
+            "description": "Confirms the bridge is up and the token is correct. Returns `{ ok: true, pid }`. **Run this first.**"
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "originalRequest": {
+                "method": "GET",
+                "header": [],
+                "url": "{{bridgeBaseUrl}}/health"
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [{ "key": "Content-Type", "value": "application/json; charset=utf-8" }],
+              "body": "{\n  \"ok\": true,\n  \"pid\": 12345\n}"
+            },
+            {
+              "name": "401 Unauthorized",
+              "originalRequest": {
+                "method": "GET",
+                "header": [],
+                "url": "{{bridgeBaseUrl}}/health"
+              },
+              "status": "Unauthorized",
+              "code": 401,
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"error\": \"Unauthorized\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Get Selected Device",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{bridgeBaseUrl}}/selected-device",
+              "protocol": "http",
+              "host": ["127", "0", "0", "1"],
+              "port": "{{bridgePort}}",
+              "path": ["selected-device"]
+            },
+            "description": "Returns the most recently focused device's snapshot (`ip`, `serial`, `modelName`, `friendlyDeviceName`, `softwareVersion`, `observedAt`).\n\n**404** if no device tab has been opened in this Dev Studio session yet."
+          },
+          "response": [
+            {
+              "name": "200 OK — connected",
+              "originalRequest": {
+                "method": "GET",
+                "header": [],
+                "url": "{{bridgeBaseUrl}}/selected-device"
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"ip\": \"192.168.1.42\",\n  \"serial\": \"X00000000000\",\n  \"modelName\": \"Roku Ultra\",\n  \"modelNumber\": \"4800X\",\n  \"friendlyDeviceName\": \"Living Room Ultra\",\n  \"softwareVersion\": \"13.0.0\",\n  \"observedAt\": \"2026-04-27T19:42:11.000Z\"\n}"
+            },
+            {
+              "name": "404 — no device selected",
+              "originalRequest": {
+                "method": "GET",
+                "header": [],
+                "url": "{{bridgeBaseUrl}}/selected-device"
+              },
+              "status": "Not Found",
+              "code": 404,
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"error\": \"No device is currently selected in Dev Studio.\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "List Connected Devices",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{bridgeBaseUrl}}/devices",
+              "protocol": "http",
+              "host": ["127", "0", "0", "1"],
+              "port": "{{bridgePort}}",
+              "path": ["devices"]
+            },
+            "description": "Returns every device with an open tab in Dev Studio (local + remote). Each entry includes `ip`, `serial`, `modelName`, `modelNumber`, `friendlyDeviceName`, `softwareVersion`, `source` (`local` | `remote`), `remoteLocationId`, and `isFocused` for the currently focused one. Backed by the `list_devices` MCP tool."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "originalRequest": {
+                "method": "GET",
+                "header": [],
+                "url": "{{bridgeBaseUrl}}/devices"
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"devices\": [\n    {\n      \"ip\": \"192.168.1.154\",\n      \"serial\": \"X00046N6S6F\",\n      \"modelName\": \"Roku Express\",\n      \"modelNumber\": \"3930X\",\n      \"friendlyDeviceName\": null,\n      \"softwareVersion\": \"15.2.4\",\n      \"source\": \"local\",\n      \"remoteLocationId\": null,\n      \"isFocused\": true\n    },\n    {\n      \"ip\": \"192.168.1.182\",\n      \"serial\": \"X019D0N3KJX9\",\n      \"modelName\": \"Roku Ultra\",\n      \"modelNumber\": \"4800X\",\n      \"friendlyDeviceName\": null,\n      \"softwareVersion\": \"15.1.4\",\n      \"source\": \"local\",\n      \"remoteLocationId\": null,\n      \"isFocused\": false\n    }\n  ],\n  \"observedAt\": \"2026-04-27T19:55:00.000Z\",\n  \"selectedSerial\": \"X00046N6S6F\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Get App Connector Functions",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{bridgeBaseUrl}}/app-connector/functions",
+              "protocol": "http",
+              "host": ["127", "0", "0", "1"],
+              "port": "{{bridgePort}}",
+              "path": ["app-connector", "functions"]
+            },
+            "description": "Returns the function list the active channel registered via `getExternalControlFunctions`.\n\n`status` is one of:\n- `connected` — App Connector session live, list reflects the channel.\n- `available-not-connected` — channel could connect, currently isn't.\n- `not-applicable` — channel doesn't expose functions.\n- `unknown` — renderer hasn't pushed state yet."
+          },
+          "response": [
+            {
+              "name": "200 OK — connected",
+              "originalRequest": {
+                "method": "GET",
+                "header": [],
+                "url": "{{bridgeBaseUrl}}/app-connector/functions"
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"status\": \"connected\",\n  \"functions\": [\n    {\n      \"name\": \"playEpisode\",\n      \"params\": [\n        { \"name\": \"episodeId\", \"type\": \"string\" }\n      ]\n    }\n  ],\n  \"fetchedAt\": \"2026-04-27T19:42:11.000Z\"\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "2. Live Tools",
+      "description": "Read-only operations the MCP server exposes via the bridge. Calls hit the device through `roku-dev-studio-api` (ECP) or the renderer's App Connector session (RALE).",
+      "item": [
+        {
+          "name": "ECP Query — /query/active-app",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"endpoint\": \"/query/active-app\"\n}"
+            },
+            "url": {
+              "raw": "{{bridgeBaseUrl}}/ecp-query",
+              "protocol": "http",
+              "host": ["127", "0", "0", "1"],
+              "port": "{{bridgePort}}",
+              "path": ["ecp-query"]
+            },
+            "description": "Runs an ECP GET against the cached selected-device IP. Read-only.\n\nResponses:\n- **200** — `{ ip, endpoint, result }` where `result` is the raw ECP response.\n- **400** — missing `endpoint`.\n- **409** — no device currently selected (open a device tab first).\n- **502** — device returned an error or is unreachable."
+          }
+        },
+        {
+          "name": "ECP Query — /query/media-player",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"endpoint\": \"/query/media-player\"\n}"
+            },
+            "url": {
+              "raw": "{{bridgeBaseUrl}}/ecp-query",
+              "protocol": "http",
+              "host": ["127", "0", "0", "1"],
+              "port": "{{bridgePort}}",
+              "path": ["ecp-query"]
+            },
+            "description": "Read media-player state (Play / Pause / Buffer / etc.). Useful for grounding `wait` conditions."
+          }
+        },
+        {
+          "name": "ECP Query — /query/device-info",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"endpoint\": \"/query/device-info\"\n}"
+            },
+            "url": {
+              "raw": "{{bridgeBaseUrl}}/ecp-query",
+              "protocol": "http",
+              "host": ["127", "0", "0", "1"],
+              "port": "{{bridgePort}}",
+              "path": ["ecp-query"]
+            },
+            "description": "Full device-info response — model, OS version, network, etc."
+          }
+        },
+        {
+          "name": "RALE — getNodeById",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"path\": [],\n  \"id\": \"yourNodeId\"\n}"
+            },
+            "url": {
+              "raw": "{{bridgeBaseUrl}}/rale/get-node-by-id",
+              "protocol": "http",
+              "host": ["127", "0", "0", "1"],
+              "port": "{{bridgePort}}",
+              "path": ["rale", "get-node-by-id"]
+            },
+            "description": "Read-only `getNodeById` against the active App Connector session. The renderer's allowlist restricts this endpoint to `getNodeById`, `getNodeByName`, `getRegistrySections` — anything destructive is rejected.\n\n**Replace `yourNodeId`** with a real id from your channel's SceneGraph (use the Inspector to discover ids).\n\nResponses:\n- **200** — full node payload including `fieldlist`.\n- **400** — missing `id`.\n- **502** — App Connector not connected, no live session, or RALE error.\n\nUse the `path` array to scope the search (e.g. `[0, 'mainScene']`); `[]` searches from the scene root."
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Send Script to Builder",
+      "description": "The bridge endpoint that gives an external agent a way to put a generated script in front of the user — without ever running it. Validates server-side first; the renderer also re-validates before staging.",
+      "item": [
+        {
+          "name": "Drop a minimal valid script",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"script\": {\n    \"version\": \"1\",\n    \"steps\": [\n      { \"type\": \"keypress\", \"key\": \"Home\" },\n      { \"type\": \"wait\", \"delayMs\": 500 },\n      { \"type\": \"screenshot\", \"label\": \"home-screen\" }\n    ]\n  }\n}"
+            },
+            "url": {
+              "raw": "{{bridgeBaseUrl}}/builder/drop-script",
+              "protocol": "http",
+              "host": ["127", "0", "0", "1"],
+              "port": "{{bridgePort}}",
+              "path": ["builder", "drop-script"]
+            },
+            "description": "Drops the script into the Builder of the most recently active device tab. Returns `{ delivered: true }` on success.\n\nWatch the Dev Studio window — the Action Scripts tab should switch to Builder and you should see a toast `\"AI agent loaded a script into the Builder\"`.\n\nResponses:\n- **200** — delivered.\n- **400** — no script in body.\n- **502** — no active device tab, or renderer ack timed out (15s)."
+          }
+        },
+        {
+          "name": "Drop a v2 script with `if`",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"script\": {\n    \"version\": \"2\",\n    \"steps\": [\n      { \"type\": \"launch\", \"appId\": \"837\" },\n      {\n        \"type\": \"wait\",\n        \"timeoutMs\": 15000,\n        \"pollIntervalMs\": 500,\n        \"condition\": { \"source\": \"media-player\", \"state\": \"play\" }\n      },\n      {\n        \"type\": \"if\",\n        \"condition\": { \"source\": \"active-app\", \"attribute\": \"id\", \"value\": \"837\" },\n        \"then\": [{ \"type\": \"screenshot\", \"label\": \"playing\" }],\n        \"else\": [{ \"type\": \"screenshot\", \"label\": \"not-playing\" }]\n      }\n    ]\n  }\n}"
+            },
+            "url": {
+              "raw": "{{bridgeBaseUrl}}/builder/drop-script",
+              "protocol": "http",
+              "host": ["127", "0", "0", "1"],
+              "port": "{{bridgePort}}",
+              "path": ["builder", "drop-script"]
+            },
+            "description": "Demonstrates a richer script: launch YouTube, wait for media-player to reach `play`, then branch on the active app and screenshot accordingly. Note the required `version: \"2\"` because of the `if` step."
+          }
+        },
+        {
+          "name": "Reject an invalid script",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"script\": {\n    \"steps\": [\n      { \"type\": \"keypress\", \"key\": \"NotARealKey\" }\n    ]\n  }\n}"
+            },
+            "url": {
+              "raw": "{{bridgeBaseUrl}}/builder/drop-script",
+              "protocol": "http",
+              "host": ["127", "0", "0", "1"],
+              "port": "{{bridgePort}}",
+              "path": ["builder", "drop-script"]
+            },
+            "description": "The MCP server validates before posting; if you bypass the server and post directly here, the Builder still re-validates and rejects.\n\nUse this to prove the validator path. Expect a 502 with the renderer's error message in the body."
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. Reference: MCP Stdio Protocol",
+      "description": "**These are not HTTP endpoints.** The bundled MCP server speaks JSON-RPC 2.0 over stdio (one line of JSON per message). Postman can't drive a stdio process directly.\n\nRequests in this folder document the on-the-wire payload shapes for reference. To exercise them locally, pipe them into the built CJS bundle:\n\n```bash\ncd packages/roku-dev-studio-mcp\nnode dist/index.cjs\n# then paste a JSON-RPC line and press enter\n```\n\nOr in one shot:\n\n```bash\n(echo '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{}}'; \\\n echo '{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}') \\\n | node dist/index.cjs\n```\n\nThe URL field on each request below is intentionally bogus — Postman just needs a target to render the body. Don't click Send.",
+      "item": [
+        {
+          "name": "stdio • initialize",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 1,\n  \"method\": \"initialize\",\n  \"params\": {\n    \"protocolVersion\": \"2024-11-05\",\n    \"clientInfo\": { \"name\": \"my-client\", \"version\": \"0.0.1\" },\n    \"capabilities\": {}\n  }\n}"
+            },
+            "url": {
+              "raw": "stdio://roku-dev-studio-mcp",
+              "host": ["stdio"]
+            },
+            "description": "First message any client sends. Server replies with its `serverInfo`, `protocolVersion`, `capabilities`, and a top-level `instructions` string."
+          }
+        },
+        {
+          "name": "stdio • tools/list",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 2,\n  \"method\": \"tools/list\",\n  \"params\": {}\n}"
+            },
+            "url": {
+              "raw": "stdio://roku-dev-studio-mcp",
+              "host": ["stdio"]
+            },
+            "description": "Returns all 19 tools with name, title, description, and JSON Schema for inputs."
+          }
+        },
+        {
+          "name": "stdio • tools/call list_action_types",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 3,\n  \"method\": \"tools/call\",\n  \"params\": {\n    \"name\": \"list_action_types\",\n    \"arguments\": {}\n  }\n}"
+            },
+            "url": {
+              "raw": "stdio://roku-dev-studio-mcp",
+              "host": ["stdio"]
+            },
+            "description": "All 13 step types with required/optional fields. Static — no Dev Studio required."
+          }
+        },
+        {
+          "name": "stdio • tools/call get_capability_bundle",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 4,\n  \"method\": \"tools/call\",\n  \"params\": {\n    \"name\": \"get_capability_bundle\",\n    \"arguments\": {}\n  }\n}"
+            },
+            "url": {
+              "raw": "stdio://roku-dev-studio-mcp",
+              "host": ["stdio"]
+            },
+            "description": "One-shot context: actions + vocabularies + RALE built-ins + presets + authoring rules. The thing you'd inject into a system prompt."
+          }
+        },
+        {
+          "name": "stdio • tools/call validate_script",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 5,\n  \"method\": \"tools/call\",\n  \"params\": {\n    \"name\": \"validate_script\",\n    \"arguments\": {\n      \"script\": {\n        \"version\": \"2\",\n        \"steps\": [\n          { \"type\": \"keypress\", \"key\": \"Home\" },\n          {\n            \"type\": \"if\",\n            \"condition\": { \"source\": \"media-player\", \"state\": \"play\" },\n            \"then\": [{ \"type\": \"screenshot\" }],\n            \"else\": []\n          }\n        ]\n      }\n    }\n  }\n}"
+            },
+            "url": {
+              "raw": "stdio://roku-dev-studio-mcp",
+              "host": ["stdio"]
+            },
+            "description": "Returns `{ ok, errors[], stepCounts }`. Errors include JSON-pointer-ish `path`, `code`, `message`, and (when relevant) `expected` — designed for agent self-correction."
+          }
+        },
+        {
+          "name": "stdio • tools/call probe_bridge",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 6,\n  \"method\": \"tools/call\",\n  \"params\": {\n    \"name\": \"probe_bridge\",\n    \"arguments\": {}\n  }\n}"
+            },
+            "url": {
+              "raw": "stdio://roku-dev-studio-mcp",
+              "host": ["stdio"]
+            },
+            "description": "Tells the agent whether Dev Studio is running. Returns `{ live: true, pid, port, startedAt }` or `{ live: false, reason }`."
+          }
+        },
+        {
+          "name": "stdio • tools/call send_script_to_builder",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 7,\n  \"method\": \"tools/call\",\n  \"params\": {\n    \"name\": \"send_script_to_builder\",\n    \"arguments\": {\n      \"script\": {\n        \"version\": \"1\",\n        \"steps\": [\n          { \"type\": \"keypress\", \"key\": \"Home\" }\n        ]\n      }\n    }\n  }\n}"
+            },
+            "url": {
+              "raw": "stdio://roku-dev-studio-mcp",
+              "host": ["stdio"]
+            },
+            "description": "Validates the script, then asks the bridge to drop it into the Builder. Equivalent to **3. Send Script to Builder → Drop a minimal valid script** in this collection — that one bypasses the server's own validator and goes straight to the renderer."
+          }
+        }
+      ]
+    }
+  ]
+}

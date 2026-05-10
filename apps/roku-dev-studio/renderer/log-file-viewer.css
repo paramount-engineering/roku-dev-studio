@@ -1,0 +1,757 @@
+/* Log file viewer window — Console-style log rendering (subset aligned with index.html telnet console). */
+
+:root {
+  --bg-deep: #0a0a12;
+  --bg-primary: #12121f;
+  --bg-secondary: #1a1a2e;
+  --bg-tertiary: #252538;
+  --bg-elevated: #2a2a40;
+  --bg-hover: #2f2f48;
+  --border: #2d2d44;
+  --text-primary: #e8e8f0;
+  --text-secondary: #a0a0b8;
+  --text-muted: #6b6b80;
+  --accent: #a855f7;
+  --accent-purple: #a855f7;
+  --accent-purple-dim: rgba(168, 85, 247, 0.15);
+  --accent-cyan: #22d3ee;
+  --accent-green: #4ade80;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: var(--bg-deep);
+  color: var(--text-primary);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+.log-file-viewer-page {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+}
+
+.log-viewer-header {
+  flex-shrink: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px 16px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-primary);
+}
+
+.log-viewer-header-primary {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.log-viewer-find-host {
+  flex: 1 1 260px;
+  max-width: 560px;
+  min-width: 180px;
+  align-self: center;
+}
+
+.log-viewer-find-host .telnet-find-bar {
+  max-width: none;
+  width: 100%;
+}
+
+.log-viewer-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.log-viewer-status {
+  margin: 6px 0 0 0;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.log-viewer-status--error {
+  color: #f87171;
+}
+
+.log-viewer-main {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.log-viewer-output-wrap {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow: hidden;
+  position: relative;
+}
+
+.telnet-output {
+  position: absolute;
+  inset: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 12px 16px;
+  background: #0a0a0f;
+  font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+  font-size: 12px;
+  line-height: 1.6;
+  color: #e0e0e0;
+}
+
+.telnet-output::-webkit-scrollbar {
+  width: 8px;
+}
+.telnet-output::-webkit-scrollbar-track {
+  background: #1a1a2e;
+}
+.telnet-output::-webkit-scrollbar-thumb {
+  background: #4a4a6a;
+  border-radius: 4px;
+}
+.telnet-output::-webkit-scrollbar-thumb:hover {
+  background: #5a5a7a;
+}
+
+.telnet-log-line {
+  margin: 0;
+  padding: 1px 0;
+  display: flex;
+  align-items: flex-start;
+}
+.telnet-log-line.error {
+  color: #ff6b6b;
+}
+.telnet-log-line.warning {
+  color: #ffa94d;
+}
+.telnet-log-line.info {
+  color: #74c0fc;
+}
+.telnet-log-line.debug {
+  color: #8b8b8b;
+}
+
+.telnet-log-line.filtered-out {
+  display: none;
+}
+.telnet-log-line.crash {
+  color: #ff4757;
+  font-weight: bold;
+  background: rgba(255, 71, 87, 0.1);
+  padding: 2px 4px;
+  border-radius: 2px;
+}
+.telnet-log-line.backtrace {
+  color: #ff9ff3;
+}
+
+.telnet-log-timestamp {
+  color: #666;
+  margin-right: 8px;
+  font-size: 10px;
+  user-select: none;
+  pointer-events: none;
+  flex-shrink: 0;
+  min-width: 85px;
+}
+
+.telnet-log-content {
+  flex: 1;
+  min-width: 0;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.telnet-log-line.has-structured .telnet-log-content {
+  cursor: pointer;
+}
+.telnet-log-line.has-structured .telnet-log-content:hover {
+  text-decoration: underline dotted;
+  text-decoration-color: rgba(192, 132, 252, 0.9);
+  text-underline-offset: 3px;
+}
+
+.telnet-structured-view-pills {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 0;
+  margin-left: 8px;
+  flex-shrink: 0;
+  /*
+   * Long lines (especially XML responses) wrap to many visual rows, so the
+   * pill that anchors them at the top would otherwise scroll out of view as
+   * the user reads down. Sticky-pin to the top of the scroll viewport while
+   * any part of the line is visible — the pill rides along, then slides out
+   * naturally when the line's bottom reaches the viewport top. `z-index` keeps
+   * it above the find / JSON+ inline highlights.
+   */
+  position: sticky;
+  top: 4px;
+  align-self: flex-start;
+  z-index: 4;
+}
+.telnet-structured-view-pill + .telnet-structured-view-pill {
+  margin-left: 4px;
+}
+
+.telnet-structured-view-pill {
+  flex-shrink: 0;
+  margin-left: 0;
+  padding: 2px 8px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  border-radius: 4px;
+  border: 1px solid var(--accent-purple);
+  background: rgba(168, 85, 247, 0.12);
+  color: #c084fc;
+  cursor: pointer;
+  align-self: flex-start;
+  margin-top: 1px;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.telnet-structured-view-pill:hover {
+  background: rgba(168, 85, 247, 0.22);
+}
+
+.telnet-structured-view-pill--nested {
+  border-color: rgba(125, 211, 252, 0.65);
+  background: rgba(56, 189, 248, 0.1);
+  color: #7dd3fc;
+}
+.telnet-structured-view-pill--nested:hover {
+  background: rgba(56, 189, 248, 0.18);
+}
+
+.telnet-log-url {
+  color: var(--accent-cyan);
+  cursor: pointer;
+  text-decoration: none;
+  word-break: break-all;
+}
+.telnet-log-url:hover {
+  text-decoration: underline;
+}
+
+/* Modal shell (telnet JSON/XML + URL viewers) */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  backdrop-filter: blur(4px);
+}
+.modal-overlay.active {
+  display: flex;
+}
+
+.modal {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  width: 90%;
+  max-width: 700px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+
+.modal-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.modal-title {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.modal-close {
+  width: 28px;
+  height: 28px;
+  background: var(--bg-tertiary);
+  border: none;
+  border-radius: 6px;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.modal-close:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.modal-body {
+  padding: 20px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.btn {
+  padding: 8px 14px;
+  border-radius: 8px;
+  border: none;
+  font-family: inherit;
+  font-weight: 600;
+  font-size: 12px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.btn-secondary {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+}
+.btn-secondary:hover:not(:disabled) {
+  background: var(--accent-purple-dim);
+  border-color: var(--accent-purple);
+}
+
+.telnet-structured-view-modal {
+  max-width: 920px;
+  width: 92vw;
+  min-height: 0;
+}
+.telnet-structured-view-modal-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.telnet-structured-view-body {
+  box-sizing: border-box;
+  flex: 1 1 0%;
+  min-height: 0;
+  max-height: 70vh;
+}
+
+/*
+ * Dark-themed scrollbar for the JSON / XML preview pane and the URL-modal
+ * params pane. Mirrors `.telnet-output`'s scrollbar styling so the modal
+ * doesn't paint the OS-default white track on a dark surface.
+ */
+.telnet-structured-view-body::-webkit-scrollbar,
+.telnet-url-view-params::-webkit-scrollbar {
+  width: 8px;
+}
+.telnet-structured-view-body::-webkit-scrollbar-track,
+.telnet-url-view-params::-webkit-scrollbar-track {
+  background: var(--bg-secondary);
+}
+.telnet-structured-view-body::-webkit-scrollbar-thumb,
+.telnet-url-view-params::-webkit-scrollbar-thumb {
+  background: #4a4a6a;
+  border-radius: 4px;
+}
+.telnet-structured-view-body::-webkit-scrollbar-thumb:hover,
+.telnet-url-view-params::-webkit-scrollbar-thumb:hover {
+  background: #5a5a7a;
+}
+.telnet-structured-view-body::-webkit-scrollbar-corner,
+.telnet-url-view-params::-webkit-scrollbar-corner {
+  background: var(--bg-secondary);
+}
+.telnet-structured-view-pre {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-primary);
+}
+
+.telnet-hl-json-punct {
+  color: var(--text-muted);
+}
+.telnet-hl-json-key {
+  color: #d8b4fe;
+}
+.telnet-hl-json-string {
+  color: #86efac;
+}
+.telnet-hl-json-number {
+  color: #67e8f9;
+}
+.telnet-hl-json-literal {
+  color: #fcd34d;
+}
+
+.telnet-hl-xml-punct {
+  color: #94a3b8;
+}
+.telnet-hl-xml-tagname {
+  color: #c4b5fd;
+  font-weight: 600;
+}
+.telnet-hl-xml-attr-name {
+  color: #7dd3fc;
+}
+.telnet-hl-xml-attr-value {
+  color: #86efac;
+}
+.telnet-hl-xml-text {
+  color: var(--text-secondary);
+}
+.telnet-hl-xml-decl {
+  color: #f9a8d4;
+}
+.telnet-hl-xml-comment {
+  color: #64748b;
+  font-style: italic;
+}
+
+.telnet-url-view-modal {
+  max-width: 920px;
+  width: 92vw;
+}
+.telnet-url-view-modal-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.telnet-url-view-modal .modal-body.telnet-url-view-body {
+  min-height: 100px;
+  max-height: 70vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  flex: 1;
+  min-height: 0;
+}
+.telnet-url-view-full-url {
+  flex-shrink: 0;
+  padding: 12px 14px;
+  margin: 0 0 16px 0;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg-tertiary);
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 12px;
+  line-height: 1.55;
+  word-break: break-all;
+  white-space: pre-wrap;
+  color: var(--text-primary);
+  max-height: min(240px, 38vh);
+  overflow-y: auto;
+}
+.telnet-url-view-params {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 4px;
+}
+/*
+ * iOS-style stacked sticky headers: the "Parameter set N" label is sticky at
+ * top: 0 of the scrolling .telnet-url-view-params container, and the table thead
+ * stacks immediately below it via --param-set-label-h. Each .telnet-url-view-param-set
+ * is its own sticky context, so scrolling between sets pushes one label out as the
+ * next slides in. --param-set-label-h defaults to 0 and is bumped only when the set
+ * actually rendered a label (single-set queries skip the label, so thead stays at top:0).
+ */
+.telnet-url-view-param-set {
+  --param-set-label-h: 0px;
+}
+.telnet-url-view-param-set:has(> .telnet-url-view-param-set-label) {
+  /* 32px = full label sticky-box height (line-height 16 + padding 4+12). The
+   * label's bg extends down past its text so when stuck it covers everything
+   * up to where the thead sticks at top: var(--param-set-label-h). Earlier
+   * iterations used a transparent 8px gap to keep the rounded thead corners
+   * looking like a "card on a dark surface", but rows scrolling past would
+   * bleed through that gap — see screenshot 2026-05-08T15:58. The thead's
+   * rounded corners still show --bg-secondary in their outside-corner cut-outs
+   * (the table itself has no bg), so the "rounded card" composition is
+   * preserved without any transparent gap. */
+  --param-set-label-h: 32px;
+}
+.telnet-url-view-param-set-label {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  /* Background must match the scrolling container (modal body = .modal which uses
+     --bg-secondary) so the label is visually invisible when not pinned, and opaque
+     enough to hide rows scrolling behind it once it sticks. */
+  background: var(--bg-secondary);
+  /* Padding (not margin) is part of the sticky box, so 4 + 16 + 12 = 32px
+     covers the full --param-set-label-h. No margin-bottom — the thead sits
+     flush against the label's bg, no transparent strip for rows to leak through. */
+  line-height: 16px;
+  padding: 4px 0 12px;
+  margin: 0;
+}
+/* No overflow:hidden on the table — it breaks position:sticky on thead vs .telnet-url-view-params scroll. */
+.telnet-url-view-param-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 12px;
+  line-height: 1.45;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.telnet-url-view-param-table thead tr:first-child th:first-child {
+  border-top-left-radius: 5px;
+}
+
+.telnet-url-view-param-table thead tr:first-child th:last-child {
+  border-top-right-radius: 5px;
+}
+
+.telnet-url-view-param-table tbody tr:last-child td:first-child {
+  border-bottom-left-radius: 5px;
+}
+
+.telnet-url-view-param-table tbody tr:last-child td:last-child {
+  border-bottom-right-radius: 5px;
+}
+
+.telnet-url-view-param-table th,
+.telnet-url-view-param-table td {
+  padding: 8px 10px;
+  text-align: left;
+  vertical-align: top;
+  border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+
+.telnet-url-view-param-table tr th:last-child,
+.telnet-url-view-param-table tr td:last-child {
+  border-right: none;
+}
+
+.telnet-url-view-param-table tbody tr:last-child th,
+.telnet-url-view-param-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.telnet-url-view-param-table thead th {
+  position: sticky;
+  top: var(--param-set-label-h, 0px);
+  z-index: 2;
+  width: 28%;
+  min-width: 120px;
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  font-weight: 600;
+  box-shadow: inset 0 -1px 0 var(--border);
+}
+
+.telnet-url-view-param-table tbody td:first-child {
+  width: 28%;
+  min-width: 120px;
+}
+.telnet-url-view-value-cell {
+  word-break: break-word;
+  color: var(--text-primary);
+}
+.telnet-url-view-no-params {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.icon {
+  display: inline-flex;
+  width: 1em;
+  height: 1em;
+  vertical-align: -0.125em;
+}
+.icon-sm {
+  font-size: 14px;
+}
+.icon-xs {
+  font-size: 12px;
+}
+.icon svg {
+  width: 1em;
+  height: 1em;
+}
+
+/* Find bar (same behavior as device Console telnet toolbar) */
+.telnet-find-bar {
+  display: flex;
+  align-items: center;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 2px;
+  gap: 4px;
+}
+
+.telnet-find-bar:focus-within {
+  border-color: var(--accent);
+}
+
+.telnet-mode-select {
+  background: var(--bg-tertiary);
+  border: none;
+  border-radius: 4px;
+  padding: 6px 12px 6px 8px;
+  font-size: 11px;
+  color: var(--text-primary);
+  cursor: pointer;
+  outline: none;
+}
+
+.telnet-mode-select:hover {
+  background: var(--bg-hover);
+}
+
+.telnet-find-input-wrapper {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.telnet-find-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  padding: 6px 8px;
+  font-size: 12px;
+  color: var(--text-primary);
+  min-width: 0;
+  outline: none;
+}
+
+.telnet-find-input::placeholder {
+  color: var(--text-muted);
+}
+
+.telnet-find-options {
+  display: flex;
+  gap: 2px;
+  padding-right: 4px;
+}
+
+.telnet-option-btn {
+  padding: 3px 6px;
+  font-size: 11px;
+  font-weight: 500;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+.telnet-option-btn:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.telnet-option-btn.active {
+  background: var(--accent-purple-dim);
+  color: var(--accent-purple);
+  border-color: var(--accent-purple);
+}
+
+.telnet-find-count {
+  font-size: 11px;
+  color: var(--text-muted);
+  padding: 0 8px;
+  white-space: nowrap;
+}
+
+.telnet-find-count:empty {
+  display: none;
+}
+
+.telnet-find-bar.filter-mode .telnet-find-prev,
+.telnet-find-bar.filter-mode .telnet-find-next,
+.telnet-find-bar.filter-mode .telnet-find-count {
+  display: none;
+}
+
+.telnet-find-bar.no-results .telnet-find-prev,
+.telnet-find-bar.no-results .telnet-find-next {
+  opacity: 0.3;
+  pointer-events: none;
+}
+
+.btn.btn-icon {
+  padding: 4px 8px;
+  min-width: auto;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn.btn-icon:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+/*
+ * Find-match painting via the CSS Custom Highlight API. Highlights are kept on
+ * `Range` objects in `CSS.highlights` (see `telnet-output-find-bar.ts`), so the
+ * underlying DOM — including `.telnet-log-url` spans and structured-payload pills —
+ * is never mutated by the find bar. Background-only properties paint cleanly across
+ * arbitrary nested elements.
+ */
+::highlight(telnet-find) {
+  background-color: rgba(255, 213, 0, 0.3);
+}
+
+::highlight(telnet-find-current) {
+  background-color: rgba(255, 213, 0, 0.7);
+}
+
+/*
+ * Inline tint for nested JSON+ regions, painted via the CSS Custom Highlight API
+ * (see `telnet-json-plus-highlight.ts`). Same exact colour as
+ * `.telnet-structured-view-pill--nested`'s background so the pill and the in-line
+ * region read as one thing. (Sky-400, not cyan-400 — `var(--accent-cyan)` would
+ * be the wrong hue here.) Kept at 0.10 because nested JSON+ regions can span
+ * almost the entire line (response bodies embedded as quoted strings); higher
+ * opacity floods the row.
+ */
+::highlight(telnet-json-plus) {
+  background-color: rgba(56, 189, 248, 0.1);
+}

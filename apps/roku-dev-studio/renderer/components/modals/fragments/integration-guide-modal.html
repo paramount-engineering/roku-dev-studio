@@ -1,0 +1,261 @@
+<!-- App Connector Integration Guide Modal -->
+<div class="modal-overlay integration-guide-modal" id="integrationGuideModal" aria-hidden="true">
+  <div class="modal integration-guide-modal-box">
+    <div class="modal-header">
+      <span class="modal-title"><span class="icon icon-md"><svg>
+            <use href="#icon-book" />
+          </svg></span> Integration Guide</span>
+      <button type="button" class="modal-close integration-guide-modal-close" aria-label="Close"><span
+          class="icon icon-sm"><svg>
+            <use href="#icon-x" />
+          </svg></span></button>
+    </div>
+    <div class="modal-body">
+      <div class="guide-body">
+
+        <!-- Section: What is TrackerTask -->
+        <div class="guide-section">
+          <h4 class="guide-section-title"><span class="icon icon-sm"><svg>
+                <use href="#icon-info" />
+              </svg></span> What is TrackerTask?</h4>
+          <p>
+            <strong>TrackerTask</strong> is a BrightScript component originally created for <strong>RALE (Roku Advanced
+              Layout Editor)</strong> -
+            Roku's official developer tool for inspecting and debugging SceneGraph applications in real-time.
+          </p>
+          <p>
+            The TrackerTask establishes a socket connection between your Roku app and external tools, enabling:
+          </p>
+          <ul>
+            <li>Real-time node inspection and modification</li>
+            <li>Live view of UI element boundaries</li>
+            <li>Registry management</li>
+            <li>Logging and debugging</li>
+          </ul>
+          <p>
+            The App Connector extends this functionality with two custom functions that allow you to expose and execute
+            your app's custom BrightScript functions from this desktop tool.
+          </p>
+        </div>
+
+        <!-- Section: Custom Functions Added -->
+        <div class="guide-section">
+          <h4 class="guide-section-title"><span class="icon icon-sm"><svg>
+                <use href="#icon-zap" />
+              </svg></span> Custom Functions for App Connector</h4>
+          <p>Two functions have been added to the TrackerTask to enable the App Connector Functionality:</p>
+
+          <div class="guide-code-block">
+            <div class="guide-code-header">
+              <span class="guide-code-filename">UIThread_getExternalControlFunctions</span>
+              <span class="guide-code-lang">BrightScript</span>
+            </div>
+            <div class="guide-code-content"><span class="comment">' Retrieves list of available functions from your app's Scene</span>
+<span class="keyword">Function</span> <span class="function">UIThread_getExternalControlFunctions</span>(args) <span class="keyword">as</span> <span class="type">Object</span>
+    root = m.top.getScene()
+    <span class="keyword">if</span> (root &lt;&gt; invalid) <span class="keyword">then</span>
+        funcList = root.callFunc(<span class="string">"GetExternalControlFunctions"</span>, invalid)
+        <span class="keyword">if</span> (funcList &lt;&gt; invalid <span class="keyword">and</span> type(funcList) = <span class="string">"roArray"</span>) <span class="keyword">then</span>
+            <span class="keyword">return</span> { success: <span class="keyword">true</span>, functions: funcList }
+        <span class="keyword">end if</span>
+    <span class="keyword">end if</span>
+    <span class="keyword">return</span> { success: <span class="keyword">false</span> }
+<span class="keyword">End Function</span></div>
+          </div>
+
+          <div class="guide-code-block">
+            <div class="guide-code-header">
+              <span class="guide-code-filename">UIThread_executeExternalControlFunction</span>
+              <span class="guide-code-lang">BrightScript</span>
+            </div>
+            <div class="guide-code-content"><span class="comment">' Executes a function on your app's Scene with provided parameters</span>
+<span class="keyword">Function</span> <span class="function">UIThread_executeExternalControlFunction</span>(args) <span class="keyword">as</span> <span class="type">Object</span>
+    opResult = { success: <span class="keyword">false</span> }
+    <span class="keyword">if</span> ((GetInterface(args, <span class="string">"ifAssociativeArray"</span>) &lt;&gt; invalid) <span class="keyword">and</span> (<span class="keyword">not</span> args.IsEmpty())) <span class="keyword">then</span>
+        <span class="keyword">if</span> FW_IsString(args.functionName) <span class="keyword">then</span>
+            root = m.top.getScene()
+            <span class="keyword">if</span> (root &lt;&gt; invalid) <span class="keyword">then</span>
+                funcResult = root.callFunc(<span class="string">"ExecuteFunction"</span>, args.functionName, args.functionParams)
+                opResult = { success: <span class="keyword">true</span>, result: funcResult }
+            <span class="keyword">end if</span>
+        <span class="keyword">end if</span>
+    <span class="keyword">end if</span>
+    <span class="keyword">return</span> opResult
+<span class="keyword">End Function</span></div>
+          </div>
+        </div>
+
+        <!-- Section: Implementing in Your Scene -->
+        <div class="guide-section">
+          <h4 class="guide-section-title"><span class="icon icon-sm"><svg>
+                <use href="#icon-code" />
+              </svg></span> Implementing in Your Scene</h4>
+          <p>
+            Your app's <strong>MainScene.xml</strong> must declare two interface functions that the TrackerTask will
+            call:
+          </p>
+
+          <div class="guide-code-block">
+            <div class="guide-code-header">
+              <span class="guide-code-filename">MainScene.xml</span>
+              <span class="guide-code-lang">XML</span>
+            </div>
+            <div class="guide-code-content"><span class="keyword">&lt;component</span> name=<span class="string">"MainScene"</span> extends=<span class="string">"Scene"</span><span class="keyword">&gt;</span>
+    <span class="keyword">&lt;interface&gt;</span>
+        <span class="comment">&lt;!-- Required for App Connector --&gt;</span>
+        <span class="keyword">&lt;function</span> name=<span class="string">"GetExternalControlFunctions"</span> <span class="keyword">/&gt;</span>
+        <span class="keyword">&lt;function</span> name=<span class="string">"ExecuteFunction"</span> <span class="keyword">/&gt;</span>
+    <span class="keyword">&lt;/interface&gt;</span>
+    <span class="keyword">&lt;script</span> type=<span class="string">"text/brightscript"</span> uri=<span class="string">"MainScene.brs"</span> <span class="keyword">/&gt;</span>
+<span class="keyword">&lt;/component&gt;</span></div>
+          </div>
+        </div>
+
+        <!-- Section: GetExternalControlFunctions -->
+        <div class="guide-section">
+          <h4 class="guide-section-title"><span class="icon icon-sm"><svg>
+                <use href="#icon-upload" />
+              </svg></span> GetExternalControlFunctions Implementation</h4>
+          <p>
+            This function must return an <strong>roArray</strong> of associative arrays, where each item describes a
+            function:
+          </p>
+
+          <div class="guide-code-block">
+            <div class="guide-code-header">
+              <span class="guide-code-filename">MainScene.brs</span>
+              <span class="guide-code-lang">BrightScript</span>
+            </div>
+            <div class="guide-code-content"><span class="keyword">Function</span> <span class="function">GetExternalControlFunctions</span>(args) <span class="keyword">as</span> <span class="type">Object</span>
+    <span class="keyword">return</span> [
+        {
+            name: <span class="string">"PlayContent"</span>,
+            description: <span class="string">"Plays video content by ID"</span>,
+            params: [
+                { name: <span class="string">"contentId"</span>, type: <span class="string">"String"</span> },
+                { name: <span class="string">"autoPlay"</span>, type: <span class="string">"Boolean"</span> }
+            ]
+        },
+        {
+            name: <span class="string">"SetUserPreferences"</span>,
+            description: <span class="string">"Updates user preferences"</span>,
+            params: [
+                { name: <span class="string">"preferences"</span>, type: <span class="string">"roAssociativeArray"</span> }
+            ]
+        },
+        {
+            name: <span class="string">"GetAppState"</span>,
+            description: <span class="string">"Returns current application state"</span>,
+            params: []
+        },
+        {
+            name: <span class="string">"NavigateToScreen"</span>,
+            description: <span class="string">"Navigate to a specific screen"</span>,
+            params: [
+                { name: <span class="string">"screenName"</span>, type: <span class="string">"String"</span> },
+                { name: <span class="string">"screenParams"</span>, type: <span class="string">"roAssociativeArray"</span> }
+            ]
+        }
+    ]
+<span class="keyword">End Function</span></div>
+          </div>
+
+          <div class="guide-note">
+            <div class="guide-note-title">📝 Supported Parameter Types</div>
+            <p>
+              <strong>Boolean</strong> · <strong>Integer</strong> · <strong>LongInteger</strong> ·
+              <strong>Float</strong> ·
+              <strong>Double</strong> · <strong>String</strong> · <strong>roAssociativeArray</strong> ·
+              <strong>roArray</strong> · <strong>roList</strong>
+            </p>
+          </div>
+        </div>
+
+        <!-- Section: ExecuteFunction -->
+        <div class="guide-section">
+          <h4 class="guide-section-title"><span class="icon icon-sm"><svg>
+                <use href="#icon-play" />
+              </svg></span> ExecuteFunction Implementation</h4>
+          <p>
+            This function receives the function name and parameters array, then routes to the appropriate handler:
+          </p>
+
+          <div class="guide-code-block">
+            <div class="guide-code-header">
+              <span class="guide-code-filename">MainScene.brs</span>
+              <span class="guide-code-lang">BrightScript</span>
+            </div>
+            <div class="guide-code-content"><span class="keyword">Function</span> <span class="function">ExecuteFunction</span>(functionName <span class="keyword">as</span> <span class="type">String</span>, params <span class="keyword">as</span> <span class="type">Object</span>) <span class="keyword">as</span> <span class="type">Object</span>
+    result = invalid
+
+    <span class="keyword">if</span> functionName = <span class="string">"PlayContent"</span> <span class="keyword">then</span>
+        contentId = params[<span class="number">0</span>] <span class="comment">' String</span>
+        autoPlay = params[<span class="number">1</span>] <span class="comment">' Boolean</span>
+        result = PlayContent(contentId, autoPlay)
+    <span class="keyword">else if</span> functionName = <span class="string">"SetUserPreferences"</span> <span class="keyword">then</span>
+        preferences = params[<span class="number">0</span>] <span class="comment">' roAssociativeArray</span>
+        result = SetUserPreferences(preferences)
+    <span class="keyword">else if</span> functionName = <span class="string">"GetAppState"</span> <span class="keyword">then</span>
+        result = GetAppState()
+    <span class="keyword">else if</span> functionName = <span class="string">"NavigateToScreen"</span> <span class="keyword">then</span>
+        screenName = params[<span class="number">0</span>] <span class="comment">' String</span>
+        screenParams = params[<span class="number">1</span>] <span class="comment">' roAssociativeArray</span>
+        result = NavigateToScreen(screenName, screenParams)
+    <span class="keyword">end if</span>
+
+    <span class="keyword">return</span> result
+<span class="keyword">End Function</span>
+
+<span class="comment">' Example handler implementations</span>
+<span class="keyword">Function</span> <span class="function">PlayContent</span>(contentId <span class="keyword">as</span> <span class="type">String</span>, autoPlay <span class="keyword">as</span> <span class="type">Boolean</span>) <span class="keyword">as</span> <span class="type">Object</span>
+    <span class="comment">' Your implementation here</span>
+    <span class="keyword">return</span> { success: <span class="keyword">true</span>, message: <span class="string">"Playing: "</span> + contentId }
+<span class="keyword">End Function</span></div>
+          </div>
+        </div>
+
+        <!-- Section: TrackerTask Setup -->
+        <div class="guide-section">
+          <h4 class="guide-section-title"><span class="icon icon-sm"><svg>
+                <use href="#icon-settings" />
+              </svg></span> TrackerTask Setup</h4>
+          <p>
+            Add the TrackerTask component to your project and create an instance in your MainScene:
+          </p>
+
+          <div class="guide-code-block">
+            <div class="guide-code-header">
+              <span class="guide-code-filename">MainScene.brs (init)</span>
+              <span class="guide-code-lang">BrightScript</span>
+            </div>
+            <div class="guide-code-content"><span class="keyword">Sub</span> <span class="function">init</span>()
+    <span class="comment">' Initialize TrackerTask for App Connector</span>
+    m.trackerTask = CreateObject(<span class="string">"roSGNode"</span>, <span class="string">"TrackerTask"</span>)
+    m.trackerTask.control = <span class="string">"run"</span>
+
+    <span class="comment">' Your other initialization code...</span>
+<span class="keyword">End Sub</span></div>
+          </div>
+
+          <p>
+            Place the <code>TrackerTask.xml</code> file in your App's <code>components/</code> directory.
+          </p>
+        </div>
+
+        <!-- Actions -->
+        <div class="guide-actions">
+          <button class="btn btn-primary guide-save-btn">
+            <span class="icon icon-sm"><svg>
+                <use href="#icon-save" />
+              </svg></span> Save TrackerTask.xml
+          </button>
+          <button class="btn btn-secondary guide-copy-btn">
+            <span class="icon icon-sm"><svg>
+                <use href="#icon-copy" />
+              </svg></span> Copy Integration Info
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

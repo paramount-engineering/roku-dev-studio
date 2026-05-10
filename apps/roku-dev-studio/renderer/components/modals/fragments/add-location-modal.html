@@ -1,0 +1,28 @@
+  <!-- Add Remote Location Modal -->
+  <div class="add-location-modal" id="addLocationModal">
+    <div class="add-location-form">
+      <h3>🌐 Add Remote Location</h3>
+      <p style="font-size: 12px; color: var(--text-secondary); margin-bottom: 16px; line-height: 1.5;">
+        Connect to Roku devices at a remote location via the Roku Relay Server running on a Mac Mini or other computer.
+      </p>
+      <div class="form-group">
+        <label for="locationName">Location Name</label>
+        <input type="text" id="locationName" placeholder="e.g., Office Lab, Studio B">
+        <div class="form-hint">A friendly name to identify this location</div>
+      </div>
+      <div class="form-group">
+        <label for="locationHost">Server Address</label>
+        <input type="text" id="locationHost" placeholder="192.168.1.50 or mac-mini.local">
+        <div class="form-hint">IP address or hostname of the relay server</div>
+      </div>
+      <div class="form-group">
+        <label for="locationPort">Port</label>
+        <input type="number" id="locationPort" value="4951" placeholder="4951">
+        <div class="form-hint">Default port is 4951</div>
+      </div>
+      <div class="form-actions">
+        <button class="btn btn-secondary" id="cancelAddLocation">Cancel</button>
+        <button class="btn btn-primary" id="confirmAddLocation">Add Location</button>
+      </div>
+    </div>
+  </div>

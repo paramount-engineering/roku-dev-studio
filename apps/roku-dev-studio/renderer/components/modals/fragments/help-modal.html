@@ -1,0 +1,243 @@
+  <!-- Help Modal -->
+  <div class="modal-overlay help-modal" id="helpModal">
+    <div class="modal help-modal-box">
+      <div class="modal-header">
+        <span class="modal-title"><span class="icon icon-md"><svg><use href="#icon-book"/></svg></span> Help & User Guide</span>
+        <button class="modal-close" id="helpModalClose"><span class="icon icon-sm"><svg><use href="#icon-x"/></svg></span></button>
+      </div>
+      <div class="modal-body help-modal-body">
+        <nav class="help-nav" id="helpNav" aria-label="Help sections">
+          <button type="button" class="help-nav-item active" data-target="help-section-device-discovery"><span class="icon icon-sm icon-accent"><svg><use href="#icon-radar"/></svg></span><span class="help-nav-label">Device Discovery</span></button>
+          <button type="button" class="help-nav-item" data-target="help-section-remote-control"><span class="icon icon-sm icon-green"><svg><use href="#icon-gamepad"/></svg></span><span class="help-nav-label">Remote Control</span></button>
+          <button type="button" class="help-nav-item" data-target="help-section-apps"><span class="icon icon-sm icon-indigo"><svg><use href="#icon-grid"/></svg></span><span class="help-nav-label">Apps</span></button>
+          <button type="button" class="help-nav-item" data-target="help-section-query"><span class="icon icon-sm icon-pink"><svg><use href="#icon-database"/></svg></span><span class="help-nav-label">Query</span></button>
+          <button type="button" class="help-nav-item" data-target="help-section-dev-app"><span class="icon icon-sm icon-amber"><svg><use href="#icon-zap"/></svg></span><span class="help-nav-label">Dev App</span></button>
+          <button type="button" class="help-nav-item" data-target="help-section-console"><span class="icon icon-sm icon-red"><svg><use href="#icon-terminal"/></svg></span><span class="help-nav-label">Console</span></button>
+          <button type="button" class="help-nav-item" data-target="help-section-app-connector"><span class="icon icon-sm icon-teal"><svg><use href="#icon-plug"/></svg></span><span class="help-nav-label">App Connector</span></button>
+          <button type="button" class="help-nav-item" data-target="help-section-action-scripts"><span class="icon icon-sm icon-blue"><svg><use href="#icon-code"/></svg></span><span class="help-nav-label">Action Scripts</span></button>
+          <button type="button" class="help-nav-item" data-target="help-section-device-performance"><span class="icon icon-sm icon-accent"><svg><use href="#icon-cpu"/></svg></span><span class="help-nav-label">Device Performance</span></button>
+          <button type="button" class="help-nav-item" data-target="help-section-ai-agents"><span class="icon icon-sm icon-orange"><svg><use href="#icon-bot"/></svg></span><span class="help-nav-label">AI Agents (MCP)</span></button>
+          <button type="button" class="help-nav-item" data-target="help-section-fiddle"><span class="icon icon-sm icon-pink"><svg><use href="#icon-edit-3"/></svg></span><span class="help-nav-label">BrightScript Fiddle</span></button>
+          <button type="button" class="help-nav-item" data-target="help-section-log-viewer"><span class="icon icon-sm icon-green"><svg><use href="#icon-file-text"/></svg></span><span class="help-nav-label">Log File Viewer</span></button>
+          <button type="button" class="help-nav-item" data-target="help-section-secret-screens"><span class="icon icon-sm icon-indigo"><svg><use href="#icon-key"/></svg></span><span class="help-nav-label">Secret Screens</span></button>
+          <button type="button" class="help-nav-item" data-target="help-section-settings"><span class="icon icon-sm icon-red"><svg><use href="#icon-settings"/></svg></span><span class="help-nav-label">Settings</span></button>
+          <button type="button" class="help-nav-item" data-target="help-section-remote-locations"><span class="icon icon-sm icon-cyan"><svg><use href="#icon-globe"/></svg></span><span class="help-nav-label">Remote Locations</span></button>
+          <button type="button" class="help-nav-item" data-target="help-section-tips"><span class="icon icon-sm icon-amber"><svg><use href="#icon-info"/></svg></span><span class="help-nav-label">Tips</span></button>
+        </nav>
+        <div class="help-content" id="helpContent">
+        <div class="help-section" id="help-section-device-discovery">
+          <h3><span class="icon icon-sm icon-accent"><svg><use href="#icon-radar"/></svg></span> Device Discovery</h3>
+          <p>Click <strong>Scan</strong> to automatically discover Roku devices on your network. Devices with Developer Mode enabled will show a green "Dev" badge.</p>
+          <p>You can also manually connect by entering an IP address in the "Manual Connect" section at the bottom of the sidebar.</p>
+        </div>
+        
+        <div class="help-section" id="help-section-remote-control">
+          <h3><span class="icon icon-sm icon-green"><svg><use href="#icon-gamepad"/></svg></span> Remote Control</h3>
+          <p>Use the virtual remote to control your Roku. Optional keyboard shortcuts are available when you turn on <strong>Settings → General → Roku Remote - Use Keyboard </strong> (off by default). They apply on the <strong>Remote</strong> tab (solo or device-performance quad layout) or the <strong>Dev App</strong> tab, only for the device tab you have open — not in other sections, text fields, or modals.</p>
+          <table class="help-shortcuts">
+            <tbody>
+              <tr>
+                <td><span class="help-kbd">↑</span> <span class="help-kbd">↓</span> <span class="help-kbd">←</span> <span class="help-kbd">→</span></td><td>Navigation</td>
+                <td><span class="help-kbd">l</span></td><td>Forward</td>
+              </tr>
+              <tr>
+                <td><span class="help-kbd">Enter</span></td><td>Select / OK</td>
+                <td><span class="help-kbd">j</span></td><td>Rewind</td>
+              </tr>
+              <tr>
+                <td><span class="help-kbd">Backspace</span></td><td>Back</td>
+                <td><span class="help-kbd">r</span></td><td>Instant Replay</td>
+              </tr>
+              <tr>
+                <td><span class="help-kbd">Escape</span></td><td>Home</td>
+                <td><span class="help-kbd">+</span> / <span class="help-kbd">-</span></td><td>Volume Increase / Decrease</td>
+              </tr>
+              <tr>
+                <td><span class="help-kbd">Space</span></td><td>Play / Pause</td>
+                <td><span class="help-kbd">m</span></td><td>Mute</td>
+              </tr>
+              <tr>
+                <td><span class="help-kbd">*</span></td><td>Options menu</td>
+                <td><span class="help-kbd">Shift</span>+<span class="help-kbd">P</span></td><td>Power</td>
+              </tr>
+            </tbody>
+          </table>
+          <p>On the <strong>Remote</strong> or <strong>Dev App</strong> tab, press <span class="help-kbd">Tab</span> from the remote controls (not from the section tabs or another text field) to jump to the <strong>Send Text</strong> field. <span class="help-kbd">Enter</span> sends from that field.</p>
+          <p>Media controls (Rewind, Play/Pause, Forward) and volume buttons are also available on the virtual remote. Use <strong>Send Text</strong> at the bottom to type text directly into the device's active text field.</p>
+        </div>
+        
+        <div class="help-section" id="help-section-apps">
+          <h3><span class="icon icon-sm icon-indigo"><svg><use href="#icon-grid"/></svg></span> Apps</h3>
+          <p>View all installed apps on your Roku device. Click any app to launch it. Use the search to filter apps by name.</p>
+          <ul>
+            <li><strong>Custom Launch</strong> - Launch any app by ID, including TV inputs (HDMI 1-4)</li>
+            <li><strong>Deep Link</strong> - Launch apps with specific content using deep linking (App ID, Content ID, Media Type)</li>
+            <li><strong>Raw List of Apps</strong> - View the raw XML list of all installed apps</li>
+          </ul>
+        </div>
+        
+        <div class="help-section" id="help-section-query">
+          <h3><span class="icon icon-sm icon-pink"><svg><use href="#icon-database"/></svg></span> Query</h3>
+          <p>Query device information using Roku's ECP endpoints:</p>
+          <ul>
+            <li><strong>Device Queries</strong> - Presets for common queries like Device Info, Apps, Active App, Media Player, and more</li>
+            <li><strong>Developer Queries</strong> - Advanced queries for dev-enabled devices (SG Nodes, Plugins, Frame Rate, Channel Perf, App State, Registry)</li>
+            <li><strong>Custom Query</strong> - Enter any custom ECP endpoint</li>
+          </ul>
+          <p>Results are displayed in the Results panel below. POST endpoints (SGRendezvous tracking, FW Beacons) are also available.</p>
+        </div>
+        
+        <div class="help-section" id="help-section-dev-app">
+          <h3><span class="icon icon-sm icon-amber"><svg><use href="#icon-zap"/></svg></span> Dev App</h3>
+          <p>For Developer Mode enabled devices:</p>
+          <ul>
+            <li><strong>Auth</strong> - Enter and validate your Roku Developer password. Enable "Remember" to persist it across sessions</li>
+            <li><strong>Sideload</strong> - Install .zip or .pkg channel packages</li>
+            <li><strong>Remote</strong> - View the device's web installer page for additional dev options</li>
+            <li><strong>Screenshot</strong> - Capture screenshots from your running dev app</li>
+            <li><strong>Delete</strong> - Remove the sideloaded channel</li>
+          </ul>
+          <p>You'll need your Roku Developer password (set during Developer Mode setup).</p>
+        </div>
+        
+        <div class="help-section" id="help-section-console">
+          <h3><span class="icon icon-sm icon-red"><svg><use href="#icon-terminal"/></svg></span> Console</h3>
+          <p>Connect to the BrightScript debug console via telnet (port 8085):</p>
+          <ul>
+            <li><strong>Connect / Disconnect</strong> - Establish or close the telnet connection</li>
+            <li><strong>Find / Filter</strong> - Search through logs with options for case-sensitive, whole-word, and regex matching</li>
+            <li><strong>Auto-scroll</strong> - Automatically scroll to the latest output</li>
+            <li><strong>Copy / Save</strong> - Copy all logs to clipboard or save to a file</li>
+            <li><strong>Clear</strong> - Clear the console output</li>
+          </ul>
+          <p>Requires Developer Mode enabled. Only one telnet connection can be active at a time per device.</p>
+        </div>
+        
+        <div class="help-section" id="help-section-app-connector">
+          <h3><span class="icon icon-sm icon-teal"><svg><use href="#icon-plug"/></svg></span> App Connector</h3>
+          <p>Connect to Roku apps that implement the TrackerTask component for two-way communication:</p>
+          <ul>
+            <li><strong>Connect</strong> - Establishes a socket connection to your running dev app (default port <code>49200</code>)</li>
+            <li><strong>Execute Function</strong> - Call custom functions exposed by your scene's <code>GetExternalControlFunctions</code></li>
+            <li><strong>Response</strong> - View return values and debug output</li>
+            <li><strong>Update Node</strong> - After running <em>Get Node by ID</em>, the response panel offers a node-update modal where you can <code>selectNode</code>, <code>setField</code>, or <code>removeField</code> on the matched node</li>
+            <li><strong>RALE built-ins</strong> - The function dropdown also lists built-in RALE commands: <em>Get Node by ID</em>, <em>Get Node by SubType</em>, and a registry editor (<em>Get All Sections</em>, <em>Add/Update Section</em>, <em>Remove Section</em>, <em>Set / Edit / Remove Section Key</em>, <em>Clear All Sections</em>)</li>
+          </ul>
+          <p>Your Roku app must have TrackerTask integrated. Click <strong>Integration Guide</strong> in the App Connector tab for the BrightScript snippets and supported parameter types. Use <strong>Save TrackerTask.xml</strong> from the same modal to drop a ready-to-ship copy into your channel.</p>
+        </div>
+        
+        <div class="help-section" id="help-section-action-scripts">
+          <h3><span class="icon icon-sm icon-blue"><svg><use href="#icon-code"/></svg></span> Action Scripts</h3>
+          <p>Automate sequences of device actions using JSON-based scripts. Two views are available:</p>
+          <p><strong>Builder</strong> - Visually create action scripts action by action:</p>
+          <ul>
+            <li><strong>Action Types</strong> - Keypress, Send Text, Launch App, Device Query, POST, Sideload, Delete Sideload, Screenshot, App Function, RALE Command, Device Performance capture, Wait, If</li>
+            <li><strong>Variables (script v2)</strong> - Use a <em>Set Variable</em> step or <code>assignToVar</code> on Device Query / App Function / RALE Command to remember values, then reference them as <code>${name}</code> in later step fields (text, params, deep-link content, etc.)</li>
+            <li><strong>If / Else if / Else (script v2)</strong> - Branch on conditions sourced from <code>media-player</code> state, the active app, a RALE node field, or a stored variable; nest <em>If</em> steps for multi-step branches</li>
+            <li><strong>Wait conditions</strong> - <em>Wait</em> can be a fixed <code>delayMs</code>, or wait until a condition becomes true: <em>media-player</em> state or <em>RALE node field</em> (poll <code>getNodeById</code> and compare a field with operators like <code>equals</code>, <code>contains</code>, <code>matches</code>, <code>hasAnyValue</code>) with optional <code>timeoutMs</code> and <code>pollIntervalMs</code></li>
+            <li><strong>Device Performance step</strong> - Capture <em>CPU</em>, <em>memory</em>, <em>objects</em>, or <em>all</em> charts for the device this script runs on; the captured PNGs ship in run results / PDF export</li>
+            <li><strong>Per-step help</strong> - The <em>?</em> control on each builder row opens a context-aware help modal for that action type</li>
+            <li><strong>Action Management</strong> - Add, delete, reorder (drag & drop), copy, and paste actions</li>
+            <li><strong>Copy / Paste</strong> - Copy an action with the copy control on each row. After copying, use <strong>Paste Step</strong> next to any <strong>Add Step</strong> row to insert at that position, or <span class="help-kbd">Ctrl</span>+<span class="help-kbd">V</span> to append at the end of the script</li>
+            <li><strong>Import</strong> - Load an existing script from a JSON file</li>
+            <li><strong>Undo / Redo</strong> - <span class="help-kbd">Ctrl</span>+<span class="help-kbd">Z</span> to undo, <span class="help-kbd">Ctrl</span>+<span class="help-kbd">Shift</span>+<span class="help-kbd">Z</span> to redo</li>
+            <li><strong>JSON Preview</strong> - Live preview of the generated script. Copy or save the script to a file</li>
+            <li><strong>Copy to Executor</strong> - Send the built script directly to the Executor for running</li>
+          </ul>
+          <p><strong>Executor</strong> - Import, validate, and run action scripts:</p>
+          <ul>
+            <li><strong>Import</strong> - Upload a JSON script file or paste script JSON, then validate</li>
+            <li><strong>Run / Pause / Stop</strong> - Control execution with play, pause, and stop actions</li>
+            <li><strong>Skip / Unskip</strong> - Toggle individual actions to skip during execution</li>
+            <li><strong>Reorder</strong> - Drag and drop to reorder actions before running</li>
+            <li><strong>Results</strong> - View detailed results for each action, including inline screenshots and captured performance charts</li>
+            <li><strong>Copy / Save Results</strong> - Copy results to clipboard or save as PDF (PDF embeds screenshots and chart cards)</li>
+            <li><strong>Connect to Console</strong> - Optionally auto-connect to the debug console during runs</li>
+          </ul>
+          <p><strong>Developer Password</strong> - Actions like Screenshot, Sideload, and Delete Sideload require a developer password. The password is resolved in order: action-level <code>"password"</code> → script-level <code>"devPassword"</code> → password from the Dev App Auth section. If none is found, you'll be prompted during validation.</p>
+          <p><strong>Save Folder</strong> - The default save folder lives under <strong>Settings → Action Scripts → Default folder</strong>. Per run you can pick another folder. Artifacts (screenshots, performance chart PNGs, exported PDFs) land in a timestamped subfolder, created only when something is actually produced.</p>
+          <p><strong>AI agents</strong> - Action Scripts you build in the Builder can also be authored by AI agents through the MCP server (see the <em>AI Agents (MCP)</em> section below); the agent's script always lands in the Builder for human review before running.</p>
+        </div>
+
+        <div class="help-section" id="help-section-device-performance">
+          <h3><span class="icon icon-sm icon-accent"><svg><use href="#icon-cpu"/></svg></span> Device Performance (Remote tab)</h3>
+          <p>Toggle <strong>Show Device Performance</strong> on the Remote tab to expand a quad with live charts:</p>
+          <ul>
+            <li><strong>CPU usage</strong>, <strong>system memory</strong>, and <strong>BrightScript object</strong> charts (count or memory view where available)</li>
+            <li>Charts reflect the running app — for representative readings, the device should have <strong>Developer Mode</strong> on and your <strong>sideloaded dev channel</strong> in the foreground</li>
+            <li><strong>Settings → Device Performance</strong> tunes chart sample interval and history window; turn on <strong>Remember 'Show Device Performance'</strong> to restore the quad layout per device between sessions</li>
+            <li>Inside Action Scripts, <strong>Device Performance</strong> steps capture chart cards into run results (and PDF export)</li>
+          </ul>
+        </div>
+
+        <div class="help-section" id="help-section-ai-agents">
+          <h3><span class="icon icon-sm icon-orange"><svg><use href="#icon-bot"/></svg></span> AI Agents (MCP)</h3>
+          <p>Roku Dev Studio ships an <strong>MCP (Model Context Protocol)</strong> server so AI agents in Cursor, Claude Desktop, or VS Code can drive a real device through this app:</p>
+          <ul>
+            <li><strong>Settings → MCP Server</strong> - Toggle a client to add or remove its <code>roku-dev-studio</code> MCP entry; other entries in that client's MCP config are left untouched</li>
+            <li><strong>Two surfaces</strong> - Direct device ops for one-shot actions (<code>keypress</code>, <code>launch_app</code>, <code>screenshot</code>, <code>app_function</code>, <code>rale_command</code>, telnet …) and <strong>Action Scripts</strong> for multi-step / conditional flows that drop into the Builder for review</li>
+            <li><strong>Toasts</strong> - Destructive agent actions (launch, sideload, delete sideload, screenshot, destructive RALE commands) show a non-blocking toast in the app so you always see what the agent did</li>
+            <li><strong>Passwords stay local</strong> - Sideload / screenshot / delete-sideload reuse the password the device panel remembered; the agent never has to send one</li>
+          </ul>
+          <p>The bridge starts automatically when the app is open and shuts down on quit. If an agent reports the bridge is offline, just bring this app to the foreground.</p>
+        </div>
+
+        <div class="help-section" id="help-section-fiddle">
+          <h3><span class="icon icon-sm icon-pink"><svg><use href="#icon-edit-3"/></svg></span> BrightScript Fiddle</h3>
+          <p>Open via <strong>File → Open Fiddle</strong> (<span class="help-kbd">Ctrl</span>/<span class="help-kbd">Cmd</span>+<span class="help-kbd">Shift</span>+<span class="help-kbd">B</span>) or the <em>Open Fiddle</em> button on the Query tab.</p>
+          <ul>
+            <li><strong>Editor</strong> - Monaco editor with BrightScript highlighting and live <em>brighterscript</em> linting; the Run button is disabled while errors are present</li>
+            <li><strong>Run</strong> - Wraps your snippet into a minimal SceneGraph channel, sideloads it on the selected device, and streams the BrightScript debug console (8085) into the Fiddle window's terminal</li>
+            <li><strong>Stop / window close</strong> - Removes the Fiddle channel from the device automatically</li>
+          </ul>
+          <p>Requires a Developer Mode-enabled device with a known dev password (use the Dev App tab once to remember it, or you'll be prompted in Fiddle).</p>
+        </div>
+
+        <div class="help-section" id="help-section-log-viewer">
+          <h3><span class="icon icon-sm icon-green"><svg><use href="#icon-file-text"/></svg></span> Log File Viewer</h3>
+          <p><strong>File → Open Log File…</strong> (<span class="help-kbd">Ctrl</span>/<span class="help-kbd">Cmd</span>+<span class="help-kbd">Shift</span>+<span class="help-kbd">O</span>) opens a saved console / log file in a dedicated window with the same find / structured-log / URL-detection chrome as the live Console tab. Handy for reviewing logs from a previous session or a teammate.</p>
+        </div>
+
+        <div class="help-section" id="help-section-secret-screens">
+          <h3><span class="icon icon-sm icon-indigo"><svg><use href="#icon-key"/></svg></span> Secret Screens</h3>
+          <p>The <em>Secret Screens</em> link (Remote tab and the Query tab footer) opens a modal listing the standard Roku key sequences for hidden settings — <strong>Developer Settings</strong>, <strong>Secret Screen 1/2/3</strong>, <strong>Wi-Fi info</strong>, <strong>Channel Info</strong>, <strong>Reboot</strong>, etc. Click a sequence to send the keypresses to the connected device.</p>
+        </div>
+
+        <div class="help-section" id="help-section-settings">
+          <h3><span class="icon icon-sm icon-red"><svg><use href="#icon-settings"/></svg></span> Settings</h3>
+          <p>Open with <span class="help-kbd">Ctrl</span>/<span class="help-kbd">Cmd</span>+<span class="help-kbd">,</span> or <em>Roku Dev Studio → Settings…</em> (macOS) / <em>File → Settings</em> (Windows / Linux). Five sections:</p>
+          <ul>
+            <li><strong>General</strong> - Developer Mode, Privacy Mode (mask IPs / serials), Debug Logging to file, Roku Remote - Use Keyboard, Auto Connect to Devices, Auto Hide SideBar</li>
+            <li><strong>Action Scripts</strong> - Default folder for run artifacts (screenshots, exported PDFs)</li>
+            <li><strong>Device Performance</strong> - Chart sample interval, chart history window, Remember 'Show Device Performance' per device</li>
+            <li><strong>Timing &amp; Network</strong> - Connection / query / telnet timeouts and other network knobs (with Reset to Defaults)</li>
+            <li><strong>MCP Server</strong> - Toggle <code>roku-dev-studio</code> in your AI client(s) so agents can drive the device through this app</li>
+          </ul>
+        </div>
+        
+        <div class="help-section" id="help-section-remote-locations">
+          <h3><span class="icon icon-sm icon-cyan"><svg><use href="#icon-globe"/></svg></span> Remote Locations</h3>
+          <p>Control Roku devices at remote locations via a relay server:</p>
+          <ul>
+            <li><strong>Setup</strong> - Run the Roku Relay Server on a Mac Mini at the remote location</li>
+            <li><strong>Add Location</strong> - Click "Add" in the Remote Locations section to configure a connection</li>
+            <li><strong>Server Address</strong> - Enter the IP address or hostname of the relay server</li>
+            <li><strong>Default Port</strong> - The relay server runs on port <code>4951</code> by default</li>
+          </ul>
+          <p>The relay server can be found in the <code>remote-server</code> folder. See the README for setup instructions.</p>
+        </div>
+        
+        <div class="help-section" id="help-section-tips">
+          <h3><span class="icon icon-sm icon-amber"><svg><use href="#icon-info"/></svg></span> Tips</h3>
+          <ul>
+            <li>Enable Developer Mode on your Roku: Go to Home, press <span class="help-kbd">Home</span> 3x, <span class="help-kbd">↑</span> 2x, <span class="help-kbd">→</span> <span class="help-kbd">←</span> <span class="help-kbd">→</span> <span class="help-kbd">←</span> <span class="help-kbd">→</span></li>
+            <li>Multiple devices can be connected simultaneously - each gets its own tab</li>
+            <li>Click a connected device card to switch to its tab</li>
+            <li>Right-click device cards to copy device info</li>
+            <li>Remote locations allow you to control devices without physical access</li>
+          </ul>
+        </div>
+        </div>
+      </div>
+    </div>
+  </div>

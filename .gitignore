@@ -1,0 +1,50 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+
+# Generated from repo-root lib/path-safe.ts (see apps/roku-dev-studio/scripts/sync-path-safe.js)
+lib/path-safe.js
+apps/roku-dev-studio/lib/path-safe.js
+
+# esbuild output (see apps/roku-dev-studio/scripts/bundle-electron.js); rebuilt by prepare / start / prebuild
+apps/roku-dev-studio/preload-about.js
+apps/roku-dev-studio/preload.bundled.cjs
+apps/roku-dev-studio/main.bundled.cjs
+apps/roku-dev-studio/fiddle-preload.bundled.cjs
+apps/roku-dev-studio/log-viewer-preload.bundled.cjs
+
+# Remote relay server: built from roku-remote-server.ts (see packages/roku-dev-studio-remote-server/build.mjs)
+packages/roku-dev-studio-remote-server/roku-remote-server.js
+
+# Legacy renderer: all emitted ESM lives under renderer/dist/ (see build-legacy-renderer-modules.js)
+apps/roku-dev-studio/renderer/dist/
+
+# Vendored ESM copy (see transpile-renderer.ts); keep `renderer/vendor/*.d.ts` in git
+apps/roku-dev-studio/renderer/vendor/*.mjs
+
+# Solid + Vite renderer production build (see apps/roku-dev-studio/vite.config.ts)
+apps/roku-dev-studio/renderer-vite-dist/
+
+# System files
+.DS_Store
+
+# Environment files
+.env
+.env.local
+
+# IDE
+.vscode/
+.idea/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Wiz security scan output (per-developer)
+.wiz/*
+
+# Per-developer Claude Code session worktrees (project-level .claude/settings.local.json is tracked)
+.claude/worktrees/
+.discussion-docs/

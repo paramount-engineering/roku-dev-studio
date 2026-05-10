@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<component name="FiddleScene" extends="Scene">
+    <interface>
+        <function name="_rdsFiddle_setUpApp" />
+    </interface>
+    <script type="text/brightscript" uri="pkg:/components/FiddleScene.brs" />
+    <script type="text/brightscript" uri="pkg:/components/UserCode.brs" />
+    <children>
+        <!-- Background -->
+        <Rectangle width="1920" height="1080" color="0x0a0a12ff" />
+
+        <!-- Code panel backdrop (drawn before the scrolling content) -->
+        <Rectangle translation="[60, 150]" width="1800" height="870" color="0x16161fff" />
+
+        <!-- Scrolling source (rendered beneath header/footer masks) -->
+        <Group id="scrollGroup" translation="[80, 170]">
+            <Label id="codeLabel" width="1760" height="0" wrap="true" maxLines="0"
+                   color="0xf1f5f9ff" font="font:SmallestSystemFont" />
+        </Group>
+
+        <!-- Header (opaque — masks any scrolled-above overflow). Its height
+             matches where the code-panel backdrop begins (y=150) so there is
+             no transparent gap through which scrolled text could leak. -->
+        <Rectangle width="1920" height="150" color="0x0a0a12ff" />
+        <Poster id="appLogo" uri="pkg:/images/channel_icon_wide.png"
+                width="180" height="100" translation="[60, 22]" loadDisplayMode="scaleToFit" />
+        <Label text="Roku Dev Studio Fiddle" translation="[260, 60]"
+               color="0xf1f5f9ff" font="font:MediumBoldSystemFont" />
+        <Rectangle translation="[60, 148]" width="1800" height="2" color="0x8b5cf6cc" />
+
+        <!-- Footer (opaque — masks any scrolled-below overflow) -->
+        <Rectangle translation="[0, 1020]" width="1920" height="60" color="0x0a0a12ff" />
+        <Label id="hintLabel"
+               text="Up / Down to scroll   ·   Logs stream to Roku Dev Studio"
+               translation="[60, 1036]" color="0x64748bff" font="font:SmallestSystemFont" />
+        <Label id="scrollPos" text=""
+               translation="[1620, 1036]" width="240" horizAlign="right"
+               color="0x64748bff" font="font:SmallestSystemFont" />
+    </children>
+</component>

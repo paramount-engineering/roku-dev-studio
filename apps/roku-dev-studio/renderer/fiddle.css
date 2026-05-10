@@ -1,0 +1,779 @@
+/* BrightScript Fiddle — standalone window.
+ * Design tokens mirror apps/roku-dev-studio/renderer/index.html so the two
+ * windows share the same visual language (Inter, purple accent, subtle border,
+ * rounded cards, matching button/modal shapes). */
+
+:root {
+  --bg-deep: #08080c;
+  --bg-primary: #0e0e14;
+  --bg-secondary: #16161f;
+  --bg-tertiary: #1e1e2a;
+  --bg-elevated: #262635;
+  --bg-hover: #2f2f48;
+  --bg-card: rgba(22, 22, 31, 0.9);
+
+  --accent-purple: #8b5cf6;
+  --accent-purple-dim: rgba(139, 92, 246, 0.15);
+  --accent-purple-glow: rgba(139, 92, 246, 0.4);
+  --accent-cyan: #22d3ee;
+  --accent-green: #10b981;
+  --accent-green-dim: rgba(16, 185, 129, 0.15);
+  --accent-red: #ef4444;
+  --accent-red-dim: rgba(239, 68, 68, 0.15);
+  --accent-amber: #f59e0b;
+  --accent-amber-dim: rgba(245, 158, 11, 0.15);
+
+  --text-primary: #f1f5f9;
+  --text-secondary: #94a3b8;
+  --text-muted: #64748b;
+
+  --border: rgba(139, 92, 246, 0.12);
+  --border-hover: rgba(139, 92, 246, 0.25);
+
+  --fiddle-header-height: 76px;
+  --fiddle-status-height: 32px;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body {
+  height: 100%;
+  background: var(--bg-deep);
+  color: var(--text-primary);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 13px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ============================================================
+ * Icon system (mirrors the main app)
+ * ============================================================ */
+.icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1em;
+  height: 1em;
+  line-height: 1;
+  vertical-align: -0.125em;
+  flex-shrink: 0;
+}
+.icon svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.icon-xs { font-size: 12px; }
+.icon-sm { font-size: 14px; }
+.icon-md { font-size: 16px; }
+.icon-lg { font-size: 20px; }
+.icon-xl { font-size: 24px; }
+
+.icon-accent { color: var(--accent-purple); }
+.icon-cyan { color: var(--accent-cyan); }
+.icon-green { color: var(--accent-green); }
+.icon-red { color: var(--accent-red); }
+.icon-muted { color: var(--text-muted); }
+
+/* ============================================================
+ * Page layout
+ * ============================================================ */
+.fiddle-page {
+  display: grid;
+  grid-template-rows: auto auto 1fr;
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* Header -------------------------------------------------- */
+.fiddle-header {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 24px;
+  padding: 14px 20px;
+  background: var(--bg-primary);
+  border-bottom: 1px solid var(--border);
+}
+
+.fiddle-header-left {
+  justify-self: start;
+  min-width: 0;
+}
+
+.fiddle-header-center {
+  justify-self: center;
+}
+
+.fiddle-header-right {
+  justify-self: end;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.fiddle-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.fiddle-brand-badge {
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  background: var(--accent-purple-dim);
+  color: var(--accent-purple);
+  border: 1px solid var(--border-hover);
+}
+
+.fiddle-brand-copy h1 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--text-primary);
+}
+
+.fiddle-subtitle {
+  margin: 2px 0 0 0;
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.fiddle-header-controls {
+  display: flex;
+  align-items: flex-end;
+  gap: 16px;
+}
+
+.fiddle-device-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.fiddle-picker-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+/* Pill-shaped picker with the scan button baked into the right side */
+.fiddle-picker-row {
+  display: flex;
+  align-items: center;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.fiddle-picker-row:hover {
+  border-color: var(--border-hover);
+}
+
+.fiddle-picker-row:focus-within {
+  border-color: var(--accent-purple);
+  box-shadow: 0 0 0 2px var(--accent-purple-dim);
+}
+
+.fiddle-device-picker select {
+  min-width: 280px;
+  height: 34px;
+  padding: 0 12px;
+  background: transparent;
+  color: var(--text-primary);
+  border: 0;
+  font-size: 13px;
+  font-family: inherit;
+  outline: none;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.fiddle-device-picker select:invalid {
+  color: var(--text-muted);
+}
+
+.fiddle-picker-refresh {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border: 0;
+  border-left: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  -webkit-app-region: no-drag;
+}
+
+.fiddle-picker-refresh:hover:not(:disabled) {
+  background: var(--accent-purple-dim);
+  color: var(--accent-purple);
+}
+
+.fiddle-picker-refresh:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.fiddle-picker-refresh.scanning .icon {
+  animation: fiddle-spin 1s linear infinite;
+}
+
+@keyframes fiddle-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* ============================================================
+ * Buttons (aligned with main app)
+ * ============================================================ */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 9px 16px;
+  height: 36px;
+  border: none;
+  border-radius: 8px;
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s, transform 0.15s;
+  white-space: nowrap;
+  -webkit-app-region: no-drag;
+}
+
+.btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.btn-primary {
+  background: var(--accent-purple);
+  color: #fff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+}
+.btn-primary:hover:not(:disabled) {
+  background: #7c3aed;
+}
+.btn-primary:disabled {
+  background: var(--bg-elevated);
+  color: var(--text-muted);
+}
+
+.btn-secondary {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+}
+.btn-secondary:hover:not(:disabled) {
+  background: var(--accent-purple-dim);
+  border-color: var(--accent-purple);
+}
+
+.btn-danger {
+  background: var(--bg-tertiary);
+  color: var(--accent-red);
+  border: 1px solid var(--accent-red-dim);
+}
+.btn-danger:hover:not(:disabled) {
+  background: var(--accent-red-dim);
+}
+.btn-danger:disabled {
+  color: var(--text-muted);
+  border-color: var(--border);
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--text-secondary);
+  border: 1px solid transparent;
+}
+.btn-ghost:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.btn-icon {
+  width: 36px;
+  padding: 0;
+}
+
+/* ============================================================
+ * Status row
+ * ============================================================ */
+.fiddle-status-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 0 20px;
+  height: var(--fiddle-status-height);
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.fiddle-status {
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.fiddle-status::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--text-muted);
+}
+
+.fiddle-status.error { color: var(--accent-red); }
+.fiddle-status.error::before { background: var(--accent-red); }
+
+.fiddle-status.success { color: var(--accent-green); }
+.fiddle-status.success::before { background: var(--accent-green); }
+
+.fiddle-status.running { color: var(--accent-cyan); }
+.fiddle-status.running::before {
+  background: var(--accent-cyan);
+  animation: fiddle-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes fiddle-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+.fiddle-diag-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  background: var(--accent-amber-dim);
+  color: var(--accent-amber);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.fiddle-diag-status:hover {
+  background: rgba(245, 158, 11, 0.22);
+}
+
+.fiddle-diag-status.clean {
+  background: var(--accent-green-dim);
+  color: var(--accent-green);
+  cursor: default;
+}
+
+.fiddle-diag-status.clean:hover {
+  background: var(--accent-green-dim);
+}
+
+.fiddle-caption {
+  margin-left: auto;
+  color: var(--text-muted);
+  font-style: italic;
+  font-size: 11px;
+}
+
+/* ============================================================
+ * Main split
+ * ============================================================ */
+.fiddle-main {
+  display: grid;
+  grid-template-columns: 1fr 1px 1fr;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--bg-deep);
+}
+
+.fiddle-pane {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  background: var(--bg-primary);
+}
+
+.fiddle-split-divider {
+  background: var(--border);
+  cursor: col-resize;
+  user-select: none;
+  transition: background 0.15s;
+}
+.fiddle-split-divider:hover {
+  background: var(--border-hover);
+}
+
+.fiddle-pane-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-secondary);
+  font-size: 11px;
+  color: var(--text-secondary);
+  min-height: 38px;
+}
+
+.fiddle-pane-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-primary);
+}
+
+.fiddle-pane-hint {
+  color: var(--text-muted);
+  font-family: 'JetBrains Mono', 'Menlo', 'SF Mono', 'Monaco', monospace;
+  font-size: 11px;
+  letter-spacing: 0;
+  text-transform: none;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fiddle-pane-spacer {
+  flex: 1 1 auto;
+}
+
+.fiddle-editor {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* Terminal ------------------------------------------------ */
+.fiddle-terminal {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 12px 16px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  font-family: 'JetBrains Mono', 'Menlo', 'SF Mono', 'Monaco', monospace;
+  font-size: 12px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--text-primary);
+  background: var(--bg-deep);
+}
+
+.fiddle-terminal::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+.fiddle-terminal::-webkit-scrollbar-track {
+  background: transparent;
+}
+.fiddle-terminal::-webkit-scrollbar-thumb {
+  background: var(--bg-elevated);
+  border-radius: 5px;
+  border: 2px solid var(--bg-deep);
+}
+.fiddle-terminal::-webkit-scrollbar-thumb:hover {
+  background: var(--bg-hover);
+}
+
+.fiddle-terminal .term-line {
+  white-space: pre-wrap;
+  padding: 1px 0;
+}
+
+/* BEGIN / END sentinels */
+.fiddle-terminal .term-line.begin,
+.fiddle-terminal .term-line.end {
+  color: var(--accent-purple);
+  opacity: 0.8;
+  font-style: italic;
+  font-size: 11px;
+  padding: 4px 0 2px;
+  border-top: 1px dashed rgba(139, 92, 246, 0.2);
+  margin-top: 4px;
+}
+
+.fiddle-terminal .term-line.begin:first-child,
+.fiddle-terminal .term-line.end:first-child {
+  border-top: 0;
+  margin-top: 0;
+}
+
+/* Whole-line kind classes */
+.fiddle-terminal .term-line.user {
+  color: var(--text-primary);
+}
+
+.fiddle-terminal .term-line.system {
+  color: var(--text-muted);
+  opacity: 0.55;
+  font-size: 11px;
+  font-weight: 400;
+}
+
+.fiddle-terminal .term-line.error {
+  color: var(--accent-red);
+  font-weight: 500;
+}
+
+/* Mixed-line segments (user print + concatenated system log on one physical line) */
+.fiddle-terminal .term-line.mixed {
+  color: var(--text-muted);
+}
+
+.fiddle-terminal .term-seg {
+  white-space: pre-wrap;
+}
+
+.fiddle-terminal .term-seg-user {
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.fiddle-terminal .term-seg-begin,
+.fiddle-terminal .term-seg-end {
+  color: var(--accent-purple);
+  opacity: 0.8;
+  font-style: italic;
+}
+
+.fiddle-terminal .term-seg-system {
+  color: var(--text-muted);
+  opacity: 0.55;
+  font-size: 11px;
+  font-weight: 400;
+}
+
+.fiddle-terminal .term-seg-error {
+  color: var(--accent-red);
+  font-weight: 500;
+}
+
+/* When "Program output only" is toggled, the remaining non-sentinel lines are
+ * the user's prints — keep them bright even if they happened to be the only
+ * segment on their line. */
+.fiddle-terminal:not(:hover) .term-line.system { opacity: 0.5; }
+
+/* ============================================================
+ * Modal (aligned with main app's .modal system)
+ * ============================================================ */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  opacity: 1;
+  transition: opacity 0.2s ease;
+}
+
+.modal-overlay[hidden] {
+  display: none;
+}
+
+.modal {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  width: 90%;
+  max-width: 460px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  animation: fiddle-modal-in 0.18s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes fiddle-modal-in {
+  from { opacity: 0; transform: translateY(8px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.modal-header {
+  padding: 18px 20px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.modal-title-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.modal-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  letter-spacing: -0.005em;
+}
+
+.modal-close {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.modal-close:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.modal-body {
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  overflow-y: auto;
+}
+
+.modal-footer {
+  padding: 14px 20px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  background: var(--bg-secondary);
+  border-radius: 0 0 16px 16px;
+}
+
+/* Fiddle-specific modal content */
+.fiddle-modal-device {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  font-family: 'JetBrains Mono', 'Menlo', 'SF Mono', 'Monaco', monospace;
+  font-size: 11px;
+  width: fit-content;
+  border: 1px solid var(--border);
+}
+
+.fiddle-modal-hint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.55;
+}
+
+.fiddle-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.fiddle-field > span {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.fiddle-field input {
+  padding: 10px 12px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 13px;
+  font-family: 'JetBrains Mono', 'Menlo', 'SF Mono', 'Monaco', monospace;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.fiddle-field input::placeholder {
+  color: var(--text-muted);
+  font-family: 'Inter', sans-serif;
+}
+
+.fiddle-field input:focus {
+  border-color: var(--accent-purple);
+  box-shadow: 0 0 0 3px var(--accent-purple-dim);
+}
+
+.fiddle-modal-hint-muted {
+  margin-top: 4px;
+  font-size: 11px;
+  opacity: 0.75;
+}
+
+.fiddle-modal-error {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: var(--accent-red-dim);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  font-size: 12px;
+  color: var(--accent-red);
+}
+
+/* ============================================================
+ * Monaco blends into the dark palette
+ * ============================================================ */
+.fiddle-editor .monaco-editor,
+.fiddle-editor .monaco-editor-background,
+.fiddle-editor .monaco-editor .inputarea.ime-input,
+.fiddle-editor .monaco-editor .margin,
+.fiddle-editor .monaco-editor .minimap {
+  background: var(--bg-primary) !important;
+}
+
+.fiddle-editor .monaco-scrollable-element > .scrollbar > .slider {
+  background: var(--bg-elevated) !important;
+}

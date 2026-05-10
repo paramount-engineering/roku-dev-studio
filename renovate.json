@@ -1,0 +1,70 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    ":dependencyDashboard",
+    ":semanticCommits",
+    ":prHourlyLimit2",
+    "group:monorepos",
+    "group:recommended"
+  ],
+  "schedule": ["before 6am on monday"],
+  "timezone": "America/Los_Angeles",
+  "labels": ["dependencies"],
+  "rangeStrategy": "bump",
+  "ignorePaths": [
+    "**/node_modules/**",
+    "bun.lock"
+  ],
+  "packageRules": [
+    {
+      "groupName": "type definitions",
+      "matchPackagePatterns": ["^@types/"]
+    },
+    {
+      "groupName": "linting",
+      "matchPackageNames": ["eslint", "typescript-eslint"],
+      "matchPackagePatterns": ["^@typescript-eslint/", "^eslint-"]
+    },
+    {
+      "groupName": "esbuild",
+      "matchPackageNames": ["esbuild"]
+    },
+    {
+      "matchDepTypes": ["devDependencies"],
+      "matchUpdateTypes": ["patch", "minor"],
+      "automerge": true,
+      "automergeType": "pr",
+      "platformAutomerge": true
+    },
+    {
+      "matchPackageNames": ["electron", "electron-builder"],
+      "matchUpdateTypes": ["major"],
+      "dependencyDashboardApproval": true,
+      "labels": ["dependencies", "electron-major"]
+    },
+    {
+      "matchPackageNames": ["brighterscript"],
+      "matchUpdateTypes": ["minor", "major"],
+      "dependencyDashboardApproval": true
+    },
+    {
+      "matchPackageNames": ["@types/node"],
+      "allowedVersions": "<23.0.0"
+    },
+    {
+      "matchManagers": ["github-actions"],
+      "groupName": "github actions",
+      "automerge": true,
+      "matchUpdateTypes": ["digest", "patch", "minor"]
+    }
+  ],
+  "vulnerabilityAlerts": {
+    "labels": ["security"],
+    "automerge": false
+  },
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": ["before 6am on monday"]
+  }
+}

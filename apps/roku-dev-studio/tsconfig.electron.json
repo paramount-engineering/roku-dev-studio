@@ -1,0 +1,12 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "CommonJS",
+    "moduleResolution": "Node",
+    "noEmit": true,
+    "types": ["node"],
+    "lib": ["ES2022"]
+  },
+  "include": ["main.ts", "preload.ts", "log-viewer-preload.ts", "main/**/*.ts", "shared/**/*.ts"]
+}

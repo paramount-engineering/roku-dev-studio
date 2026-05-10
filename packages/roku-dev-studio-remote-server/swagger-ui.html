@@ -1,0 +1,1523 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Roku Remote Relay Server - API Documentation</title>
+  <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5.9.0/swagger-ui.css">
+  <style>
+    html {
+      box-sizing: border-box;
+      overflow: -moz-scrollbars-vertical;
+      overflow-y: scroll;
+    }
+    
+    *,
+    *:before,
+    *:after {
+      box-sizing: inherit;
+    }
+    
+    body {
+      margin: 0;
+      background: #fafafa;
+    }
+    
+    /* Screenshot/Image preview styles */
+    .image-preview-container {
+      background: #f5f5f5;
+      border-radius: 8px;
+      padding: 16px;
+      margin: 12px 0;
+      border: 1px solid #ddd;
+    }
+    
+    .image-preview-container .preview-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+    
+    .image-preview-container .preview-title {
+      color: #3b4151;
+      font-weight: 600;
+      font-size: 14px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    
+    .image-preview-container .preview-actions {
+      display: flex;
+      gap: 8px;
+    }
+    
+    .image-preview-container .preview-btn {
+      background: #fff;
+      border: 1px solid #ddd;
+      color: #3b4151;
+      padding: 6px 12px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+      transition: all 0.2s;
+    }
+    
+    .image-preview-container .preview-btn:hover {
+      background: #f0f0f0;
+      border-color: #49cc90;
+    }
+    
+    .image-preview-container .preview-btn.download {
+      background: #49cc90;
+      border-color: #49cc90;
+      color: #fff;
+    }
+    
+    .image-preview-container .preview-btn.download:hover {
+      background: #3bb573;
+    }
+    
+    .image-preview-container .preview-image {
+      max-width: 100%;
+      border-radius: 6px;
+      border: 1px solid #ddd;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    }
+    
+    .image-preview-container .preview-image-wrapper {
+      text-align: center;
+      background: #fff;
+      padding: 12px;
+      border-radius: 6px;
+      border: 1px solid #eee;
+    }
+    
+    .image-preview-container .raw-data-section {
+      margin-top: 16px;
+      border-top: 1px solid #ddd;
+      padding-top: 12px;
+    }
+    
+    .image-preview-container .raw-data-toggle {
+      background: #fff;
+      border: 1px solid #ddd;
+      color: #666;
+      padding: 8px 16px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+      width: 100%;
+      text-align: left;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      transition: all 0.2s;
+    }
+    
+    .image-preview-container .raw-data-toggle:hover {
+      background: #f5f5f5;
+      border-color: #bbb;
+    }
+    
+    .image-preview-container .raw-data-toggle .toggle-icon {
+      transition: transform 0.2s;
+    }
+    
+    .image-preview-container .raw-data-toggle.expanded .toggle-icon {
+      transform: rotate(180deg);
+    }
+    
+    .image-preview-container .raw-data-content {
+      display: none;
+      margin-top: 12px;
+      background: #263238;
+      border-radius: 4px;
+      padding: 12px;
+      max-height: 300px;
+      overflow: auto;
+    }
+    
+    .image-preview-container .raw-data-content.visible {
+      display: block;
+    }
+    
+    .image-preview-container .raw-data-content pre {
+      margin: 0;
+      color: #a5d6a7;
+      font-size: 11px;
+      word-break: break-all;
+      white-space: pre-wrap;
+      font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+    }
+    
+    /* XML Preview styles */
+    .xml-preview-container {
+      background: #f5f5f5;
+      border-radius: 8px;
+      padding: 16px;
+      margin: 12px 0;
+      border: 1px solid #ddd;
+    }
+    
+    .xml-preview-container .xml-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+    
+    .xml-preview-container .xml-title {
+      color: #3b4151;
+      font-weight: 600;
+      font-size: 14px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    
+    .xml-preview-container .xml-actions {
+      display: flex;
+      gap: 8px;
+    }
+    
+    .xml-preview-container .xml-btn {
+      background: #fff;
+      border: 1px solid #ddd;
+      color: #3b4151;
+      padding: 6px 12px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+      transition: all 0.2s;
+    }
+    
+    .xml-preview-container .xml-btn:hover {
+      background: #f0f0f0;
+      border-color: #61affe;
+    }
+    
+    .xml-preview-container .xml-content {
+      background: #263238;
+      border-radius: 6px;
+      padding: 16px;
+      overflow: auto;
+      max-height: 500px;
+    }
+    
+    .xml-preview-container .xml-content pre {
+      margin: 0;
+      font-size: 12px;
+      line-height: 1.5;
+      font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+      white-space: pre-wrap;
+      word-break: break-word;
+      color: #7ee787; /* Default text color - bright green for values */
+    }
+    
+    /* XML Syntax highlighting - high contrast for dark background */
+    .xml-tag { color: #ff7b72; }
+    .xml-attr-name { color: #79c0ff; }
+    .xml-attr-value { color: #a5d6ff; }
+    .xml-text { color: #7ee787; }
+    .xml-comment { color: #8b949e; font-style: italic; }
+    .xml-declaration { color: #d2a8ff; }
+    
+    .xml-preview-container .raw-json-section {
+      margin-top: 16px;
+      border-top: 1px solid #ddd;
+      padding-top: 12px;
+    }
+    
+    .xml-preview-container .raw-json-toggle {
+      background: #fff;
+      border: 1px solid #ddd;
+      color: #666;
+      padding: 8px 16px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+      width: 100%;
+      text-align: left;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      transition: all 0.2s;
+    }
+    
+    .xml-preview-container .raw-json-toggle:hover {
+      background: #f5f5f5;
+      border-color: #bbb;
+    }
+    
+    .xml-preview-container .raw-json-toggle .toggle-icon {
+      transition: transform 0.2s;
+    }
+    
+    .xml-preview-container .raw-json-toggle.expanded .toggle-icon {
+      transform: rotate(180deg);
+    }
+    
+    .xml-preview-container .raw-json-content {
+      display: none;
+      margin-top: 12px;
+      background: #263238;
+      border-radius: 4px;
+      padding: 12px;
+      max-height: 200px;
+      overflow: auto;
+    }
+    
+    .xml-preview-container .raw-json-content.visible {
+      display: block;
+    }
+    
+    .xml-preview-container .raw-json-content pre {
+      margin: 0;
+      color: #a5d6a7;
+      font-size: 11px;
+      word-break: break-all;
+      white-space: pre-wrap;
+      font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+    }
+    
+    /* JSON Response collapsible container styles - only for plain JSON responses */
+    .json-collapse-container {
+      background: #f9f9f9;
+      border-radius: 8px;
+      margin: 12px 0;
+      border: 1px solid #ddd;
+      overflow: hidden;
+    }
+    
+    .json-collapse-container.error {
+      border-color: #f93e3e;
+    }
+    
+    .json-collapse-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 16px;
+      background: #fff;
+      cursor: pointer;
+      border-bottom: 1px solid #ddd;
+      transition: background 0.2s;
+    }
+    
+    .json-collapse-header:hover {
+      background: #f5f5f5;
+    }
+    
+    .json-collapse-container.error .json-collapse-header {
+      background: #fff5f5;
+      border-bottom-color: #f93e3e;
+    }
+    
+    .json-collapse-title {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 13px;
+      font-weight: 600;
+      color: #3b4151;
+    }
+    
+    .json-collapse-title .status-badge {
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 700;
+    }
+    
+    .json-collapse-title .status-badge.success {
+      background: #e8f5e9;
+      color: #2e7d32;
+    }
+    
+    .json-collapse-title .status-badge.error {
+      background: #ffebee;
+      color: #c62828;
+    }
+    
+    .json-collapse-toggle {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      color: #666;
+    }
+    
+    .json-collapse-toggle .toggle-icon {
+      transition: transform 0.2s;
+    }
+    
+    .json-collapse-container.expanded .json-collapse-toggle .toggle-icon {
+      transform: rotate(180deg);
+    }
+    
+    .json-collapse-body {
+      display: none;
+      padding: 16px;
+    }
+    
+    .json-collapse-container.expanded .json-collapse-body {
+      display: block;
+    }
+    
+    .image-preview-container .image-info {
+      display: flex;
+      gap: 16px;
+      margin-top: 12px;
+      font-size: 12px;
+      color: #666;
+    }
+    
+    .image-preview-container .image-info span {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    
+    /* Device selector dropdown styles */
+    .device-selector-wrapper {
+      position: relative;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 8px;
+    }
+    
+    .device-selector {
+      background: #fff;
+      border: 2px solid #49cc90;
+      color: #3b4151;
+      padding: 8px 12px;
+      border-radius: 4px;
+      font-size: 13px;
+      cursor: pointer;
+      min-width: 300px;
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2349cc90' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 12px center;
+      padding-right: 36px;
+    }
+    
+    .device-selector:hover {
+      border-color: #3bb573;
+    }
+    
+    .device-selector:focus {
+      outline: none;
+      border-color: #49cc90;
+      box-shadow: 0 0 0 3px rgba(73, 204, 144, 0.2);
+    }
+    
+    .device-selector option {
+      background: #fff;
+      color: #3b4151;
+      padding: 8px;
+    }
+    
+    .device-selector-label {
+      color: #49cc90;
+      font-size: 12px;
+      font-weight: 700;
+    }
+    
+    /* App selector dropdown styles */
+    .app-selector-wrapper {
+      position: relative;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 8px;
+    }
+    
+    .app-selector {
+      background: #fff;
+      border: 2px solid #61affe;
+      color: #3b4151;
+      padding: 8px 12px;
+      border-radius: 4px;
+      font-size: 13px;
+      cursor: pointer;
+      min-width: 300px;
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2361affe' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 12px center;
+      padding-right: 36px;
+    }
+    
+    .app-selector:hover {
+      border-color: #4990e2;
+    }
+    
+    .app-selector:focus {
+      outline: none;
+      border-color: #61affe;
+      box-shadow: 0 0 0 3px rgba(97, 175, 254, 0.2);
+    }
+    
+    .app-selector option {
+      background: #fff;
+      color: #3b4151;
+      padding: 8px;
+    }
+    
+    .app-selector-label {
+      color: #61affe;
+      font-size: 12px;
+      font-weight: 700;
+    }
+    
+    .app-selector.loading {
+      opacity: 0.6;
+      cursor: wait;
+    }
+    
+    /* Hide Swagger's Examples dropdown when app selector is present */
+    .app-selector-wrapper ~ .json-schema-form-item,
+    td:has(.app-selector-wrapper) .json-schema-form-item:not(.app-selector-wrapper),
+    .parameters-col_description:has(.app-selector-wrapper) > div:not(.app-selector-wrapper):has(select) {
+      display: none !important;
+    }
+  </style>
+</head>
+<body>
+  <div id="swagger-ui"></div>
+
+  <script src="https://unpkg.com/swagger-ui-dist@5.9.0/swagger-ui-bundle.js"></script>
+  <script src="https://unpkg.com/swagger-ui-dist@5.9.0/swagger-ui-standalone-preset.js"></script>
+  <script>
+    const serverUrl = window.location.origin;
+    
+    // Global store for discovered devices
+    let discoveredDevices = [];
+    
+    // Global store for device apps (keyed by IP address)
+    let deviceAppsCache = {};
+    
+    // Initialize Swagger UI with default settings (like Petstore)
+    window.onload = () => {
+      window.ui = SwaggerUIBundle({
+        url: serverUrl + '/api-docs/swagger.json',
+        dom_id: '#swagger-ui',
+        deepLinking: true,
+        presets: [
+          SwaggerUIBundle.presets.apis,
+          SwaggerUIStandalonePreset
+        ],
+        plugins: [
+          SwaggerUIBundle.plugins.DownloadUrl
+        ],
+        layout: 'StandaloneLayout',
+        docExpansion: 'list',
+        filter: true,
+        tryItOutEnabled: true
+      });
+      
+      // Setup image preview functionality
+      setupImagePreview();
+      
+      // Setup device selector functionality
+      setupDeviceSelectors();
+    };
+    
+    // Function to check if a string contains base64 image data
+    function extractBase64Image(text) {
+      const dataUrlMatch = text.match(/"(data:image\/[^;]+;base64,[^"]+)"/);
+      if (dataUrlMatch) return dataUrlMatch[1];
+      
+      const urlFieldMatch = text.match(/"url"\s*:\s*"(data:image\/[^;]+;base64,[^"]+)"/);
+      if (urlFieldMatch) return urlFieldMatch[1];
+      
+      const dataUrlFieldMatch = text.match(/"dataUrl"\s*:\s*"(data:image\/[^;]+;base64,[^"]+)"/);
+      if (dataUrlFieldMatch) return dataUrlFieldMatch[1];
+      
+      return null;
+    }
+    
+    function getBase64Size(base64String) {
+      const base64 = base64String.split(',')[1] || base64String;
+      const padding = (base64.match(/=/g) || []).length;
+      return Math.floor((base64.length * 3) / 4) - padding;
+    }
+    
+    function formatBytes(bytes) {
+      if (bytes === 0) return '0 Bytes';
+      const k = 1024;
+      const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+      const i = Math.floor(Math.log(bytes) / Math.log(k));
+      return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    }
+    
+    function detectImageType(rawJson) {
+      if (rawJson.includes('"url"') && rawJson.includes('screenshot')) {
+        return { title: 'Screenshot Preview', icon: '📸', filename: 'roku-screenshot' };
+      }
+      if (rawJson.includes('"dataUrl"')) {
+        return { title: 'App Icon Preview', icon: '🎯', filename: 'roku-app-icon' };
+      }
+      if (rawJson.includes('jpeg') || rawJson.includes('jpg')) {
+        return { title: 'Screenshot Preview', icon: '📸', filename: 'roku-screenshot' };
+      }
+      return { title: 'Image Preview', icon: '🖼️', filename: 'roku-image' };
+    }
+    
+    function createImagePreview(imageUrl, rawJson) {
+      const container = document.createElement('div');
+      container.className = 'image-preview-container';
+      
+      const imageSize = getBase64Size(imageUrl);
+      const imageType = imageUrl.match(/data:image\/([^;]+)/)?.[1] || 'unknown';
+      const previewMeta = detectImageType(rawJson);
+      const fileExt = imageType === 'jpeg' || imageType === 'jpg' ? 'jpg' : imageType;
+      
+      container.innerHTML = `
+        <div class="preview-header">
+          <span class="preview-title">${previewMeta.icon} ${previewMeta.title}</span>
+          <div class="preview-actions">
+            <button class="preview-btn copy-btn">📋 Copy Data URL</button>
+            <button class="preview-btn download">⬇️ Download</button>
+          </div>
+        </div>
+        <div class="preview-image-wrapper">
+          <img src="${imageUrl}" alt="${previewMeta.title}" class="preview-image" />
+        </div>
+        <div class="image-info">
+          <span>📐 Format: ${imageType.toUpperCase()}</span>
+          <span>💾 Size: ${formatBytes(imageSize)}</span>
+        </div>
+        <div class="raw-data-section">
+          <button class="raw-data-toggle" onclick="toggleRawData(this)">
+            <span>📄 View Raw Response Data</span>
+            <span class="toggle-icon">▼</span>
+          </button>
+          <div class="raw-data-content">
+            <pre>${escapeHtml(rawJson)}</pre>
+          </div>
+        </div>
+      `;
+      
+      const copyBtn = container.querySelector('.copy-btn');
+      const downloadBtn = container.querySelector('.preview-btn.download');
+      
+      copyBtn.addEventListener('click', function() {
+        navigator.clipboard.writeText(imageUrl).then(() => {
+          const originalText = this.innerHTML;
+          this.innerHTML = '✓ Copied!';
+          setTimeout(() => this.innerHTML = originalText, 2000);
+        });
+      });
+      
+      downloadBtn.addEventListener('click', function() {
+        const link = document.createElement('a');
+        link.href = imageUrl;
+        link.download = `${previewMeta.filename}-${Date.now()}.${fileExt}`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      });
+      
+      return container;
+    }
+    
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+    
+    window.toggleRawData = function(button) {
+      button.classList.toggle('expanded');
+      const content = button.nextElementSibling;
+      content.classList.toggle('visible');
+    };
+    
+    window.toggleJsonCollapse = function(header) {
+      const container = header.parentElement;
+      container.classList.toggle('expanded');
+    };
+    
+    // ============================================
+    // XML Detection and Formatting
+    // ============================================
+    
+    function containsXml(text) {
+      // Check if the text contains XML (either directly or in a JSON "data" field)
+      if (text.trim().startsWith('<?xml') || text.trim().startsWith('<')) {
+        return true;
+      }
+      // Check for XML in JSON response
+      try {
+        const parsed = JSON.parse(text);
+        if (parsed.data && typeof parsed.data === 'string') {
+          const data = parsed.data.trim();
+          return data.startsWith('<?xml') || data.startsWith('<');
+        }
+      } catch (e) {}
+      return false;
+    }
+    
+    function extractXml(text) {
+      // Try to extract XML from the text
+      try {
+        const parsed = JSON.parse(text);
+        if (parsed.data && typeof parsed.data === 'string') {
+          const data = parsed.data.trim();
+          if (data.startsWith('<?xml') || data.startsWith('<')) {
+            return { xml: data, rawJson: text, success: parsed.success !== false };
+          }
+        }
+      } catch (e) {
+        // If not JSON, check if it's direct XML
+        if (text.trim().startsWith('<?xml') || text.trim().startsWith('<')) {
+          return { xml: text.trim(), rawJson: null, success: true };
+        }
+      }
+      return null;
+    }
+    
+    function formatXml(xml) {
+      // Format XML with proper indentation
+      let formatted = '';
+      let indent = 0;
+      const tab = '  ';
+      
+      xml = xml.replace(/(>)(<)(\/*)/g, '$1\n$2$3');
+      
+      xml.split('\n').forEach(node => {
+        node = node.trim();
+        if (!node) return;
+        
+        if (node.match(/^<\/\w/)) {
+          indent = Math.max(0, indent - 1);
+        }
+        
+        formatted += tab.repeat(indent) + node + '\n';
+        
+        if (node.match(/^<\w[^>]*[^\/]>$/)) {
+          indent++;
+        }
+      });
+      
+      return formatted.trim();
+    }
+    
+    function highlightXml(xml) {
+      // Apply syntax highlighting to XML
+      let highlighted = escapeHtml(xml);
+      
+      // Highlight XML declaration
+      highlighted = highlighted.replace(
+        /(&lt;\?xml[^?]*\?&gt;)/g,
+        '<span class="xml-declaration">$1</span>'
+      );
+      
+      // Highlight comments
+      highlighted = highlighted.replace(
+        /(&lt;!--[\s\S]*?--&gt;)/g,
+        '<span class="xml-comment">$1</span>'
+      );
+      
+      // Highlight attributes (name="value")
+      highlighted = highlighted.replace(
+        /(\s+)([\w-]+)(=)(&quot;|&#39;)([^&]*?)(&quot;|&#39;)/g,
+        '$1<span class="xml-attr-name">$2</span>$3<span class="xml-attr-value">$4$5$6</span>'
+      );
+      
+      // Highlight opening tags with brackets: <tagname or </tagname
+      highlighted = highlighted.replace(
+        /(&lt;\/?)([\w-]+)/g,
+        '<span class="xml-tag">$1$2</span>'
+      );
+      
+      // Highlight closing brackets: > or />
+      highlighted = highlighted.replace(
+        /(\/?&gt;)/g,
+        '<span class="xml-tag">$1</span>'
+      );
+      
+      return highlighted;
+    }
+    
+    function detectXmlType(xml) {
+      if (xml.includes('<device-info>')) {
+        return { title: 'Device Info', icon: '📱' };
+      }
+      if (xml.includes('<apps>') || xml.includes('<active-app>')) {
+        return { title: 'Apps Response', icon: '📦' };
+      }
+      if (xml.includes('<media-player>')) {
+        return { title: 'Media Player Status', icon: '▶️' };
+      }
+      if (xml.includes('<player>')) {
+        return { title: 'Player Info', icon: '🎬' };
+      }
+      return { title: 'XML Response', icon: '📄' };
+    }
+    
+    function createXmlPreview(xmlData, rawJson) {
+      const container = document.createElement('div');
+      container.className = 'xml-preview-container';
+      
+      const formattedXml = formatXml(xmlData);
+      const highlightedXml = highlightXml(formattedXml);
+      const xmlMeta = detectXmlType(xmlData);
+      
+      let rawJsonSection = '';
+      if (rawJson) {
+        let formattedJson = rawJson;
+        try {
+          const parsed = JSON.parse(rawJson);
+          formattedJson = JSON.stringify(parsed, null, 2);
+        } catch (e) {}
+        
+        rawJsonSection = `
+          <div class="raw-json-section">
+            <button class="raw-json-toggle" onclick="toggleRawData(this)">
+              <span>📋 View Raw JSON Response</span>
+              <span class="toggle-icon">▼</span>
+            </button>
+            <div class="raw-json-content">
+              <pre>${escapeHtml(formattedJson)}</pre>
+            </div>
+          </div>
+        `;
+      }
+      
+      container.innerHTML = `
+        <div class="xml-header">
+          <span class="xml-title">${xmlMeta.icon} ${xmlMeta.title}</span>
+          <div class="xml-actions">
+            <button class="xml-btn copy-btn">📋 Copy XML</button>
+          </div>
+        </div>
+        <div class="xml-content">
+          <pre>${highlightedXml}</pre>
+        </div>
+        ${rawJsonSection}
+      `;
+      
+      const copyBtn = container.querySelector('.copy-btn');
+      copyBtn.addEventListener('click', function() {
+        navigator.clipboard.writeText(formattedXml).then(() => {
+          const originalText = this.innerHTML;
+          this.innerHTML = '✓ Copied!';
+          setTimeout(() => this.innerHTML = originalText, 2000);
+        });
+      });
+      
+      return container;
+    }
+    
+    // ============================================
+    // JSON Response Collapsible Container (only for plain JSON)
+    // ============================================
+    
+    function isErrorResponse(text) {
+      try {
+        const parsed = JSON.parse(text);
+        if (parsed.success === false) return true;
+        if (parsed.error) return true;
+      } catch (e) {}
+      return false;
+    }
+    
+    function createCollapsibleJsonResponse(formattedJson, isSuccess) {
+      const container = document.createElement('div');
+      // All JSON responses are expanded by default
+      container.className = 'json-collapse-container expanded' + (isSuccess ? '' : ' error');
+      
+      const statusBadge = isSuccess 
+        ? '<span class="status-badge success">✓ Success</span>'
+        : '<span class="status-badge error">✗ Error</span>';
+      
+      container.innerHTML = `
+        <div class="json-collapse-header" onclick="toggleJsonCollapse(this)">
+          <div class="json-collapse-title">
+            ${statusBadge}
+            <span>${isSuccess ? 'Response' : 'Request failed'}</span>
+          </div>
+          <div class="json-collapse-toggle">
+            <span>Hide Response</span>
+            <span class="toggle-icon">▼</span>
+          </div>
+        </div>
+        <div class="json-collapse-body">
+          <div style="background: #263238; border-radius: 6px; padding: 16px; overflow: auto; max-height: 400px;">
+            <pre style="margin: 0; color: #a5d6a7; font-size: 12px; font-family: 'Monaco', 'Menlo', 'Consolas', monospace; white-space: pre-wrap;">${escapeHtml(formattedJson)}</pre>
+          </div>
+        </div>
+      `;
+      
+      return container;
+    }
+    
+    function processResponseBody(element) {
+      const preElements = element.querySelectorAll('pre.microlight');
+      
+      preElements.forEach(pre => {
+        if (pre.dataset.responseProcessed) return;
+        
+        const text = pre.textContent;
+        
+        // Check for image data - show directly (no collapsible wrapper)
+        const imageUrl = extractBase64Image(text);
+        if (imageUrl) {
+          pre.dataset.responseProcessed = 'true';
+          
+          let formattedJson = text;
+          try {
+            const parsed = JSON.parse(text);
+            formattedJson = JSON.stringify(parsed, null, 2);
+          } catch (e) {}
+          
+          // Show image preview directly - raw JSON is in collapsible section within the preview
+          const preview = createImagePreview(imageUrl, formattedJson);
+          pre.parentElement.insertBefore(preview, pre);
+          pre.style.display = 'none';
+          return;
+        }
+        
+        // Check for XML data - show directly (no collapsible wrapper)
+        const xmlData = extractXml(text);
+        if (xmlData) {
+          pre.dataset.responseProcessed = 'true';
+          
+          // Show XML preview directly - raw JSON is in collapsible section within the preview
+          const xmlPreview = createXmlPreview(xmlData.xml, xmlData.rawJson);
+          pre.parentElement.insertBefore(xmlPreview, pre);
+          pre.style.display = 'none';
+          return;
+        }
+        
+        // Handle regular JSON responses - make them collapsible
+        // Success = collapsed by default, Error = expanded by default
+        try {
+          const parsed = JSON.parse(text);
+          pre.dataset.responseProcessed = 'true';
+          
+          const isSuccess = parsed.success !== false && !parsed.error;
+          const formattedJson = JSON.stringify(parsed, null, 2);
+          
+          const collapsible = createCollapsibleJsonResponse(formattedJson, isSuccess);
+          pre.parentElement.insertBefore(collapsible, pre);
+          pre.style.display = 'none';
+        } catch (e) {
+          // Not valid JSON, leave as is
+        }
+      });
+    }
+    
+    function setupImagePreview() {
+      const observer = new MutationObserver((mutations) => {
+        mutations.forEach((mutation) => {
+          mutation.addedNodes.forEach((node) => {
+            if (node.nodeType === 1) {
+              if (node.classList && (
+                  node.classList.contains('responses-inner') ||
+                  node.classList.contains('response') ||
+                  node.classList.contains('live-responses-table')
+              )) {
+                setTimeout(() => processResponseBody(node), 100);
+              }
+              
+              const responseElements = node.querySelectorAll && node.querySelectorAll('.responses-inner, .response, .live-responses-table, .highlight-code');
+              if (responseElements) {
+                responseElements.forEach(el => {
+                  setTimeout(() => processResponseBody(el), 100);
+                });
+              }
+            }
+          });
+        });
+      });
+      
+      observer.observe(document.body, {
+        childList: true,
+        subtree: true
+      });
+      
+      setInterval(() => {
+        document.querySelectorAll('.highlight-code, .responses-inner').forEach(el => {
+          const unprocessed = el.querySelectorAll('pre.microlight:not([data-response-processed])');
+          if (unprocessed.length > 0) {
+            processResponseBody(el);
+          }
+        });
+      }, 1000);
+    }
+    
+    // ============================================
+    // Device Selector Functionality
+    // ============================================
+    
+    function createDeviceSelector(inputElement) {
+      if (discoveredDevices.length === 0) return;
+      if (inputElement.dataset.hasDeviceSelector) return;
+      inputElement.dataset.hasDeviceSelector = 'true';
+      
+      const wrapper = document.createElement('div');
+      wrapper.className = 'device-selector-wrapper';
+      
+      const label = document.createElement('span');
+      label.className = 'device-selector-label';
+      label.textContent = '📺 Select Device:';
+      
+      const select = document.createElement('select');
+      select.className = 'device-selector';
+      select.dataset.targetInput = 'true';
+      
+      populateDeviceSelector(select);
+      
+      select.addEventListener('change', function() {
+        if (this.value) {
+          const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+          nativeInputValueSetter.call(inputElement, this.value);
+          
+          const inputEvent = new Event('input', { bubbles: true, cancelable: true });
+          inputElement.dispatchEvent(inputEvent);
+          
+          const changeEvent = new Event('change', { bubbles: true, cancelable: true });
+          inputElement.dispatchEvent(changeEvent);
+          
+          inputElement.focus();
+          inputElement.blur();
+          
+          // Fetch apps for the selected device
+          fetchAppsForDevice(this.value);
+        }
+      });
+      
+      wrapper.appendChild(label);
+      wrapper.appendChild(select);
+      
+      const parentTd = inputElement.closest('td');
+      if (parentTd) {
+        parentTd.appendChild(wrapper);
+      } else {
+        inputElement.parentElement.appendChild(wrapper);
+      }
+    }
+    
+    function populateDeviceSelector(selectElement) {
+      selectElement.innerHTML = '';
+      
+      const defaultOption = document.createElement('option');
+      defaultOption.value = '';
+      defaultOption.textContent = `-- Choose from ${discoveredDevices.length} device(s) --`;
+      selectElement.appendChild(defaultOption);
+      
+      discoveredDevices.forEach(device => {
+        const option = document.createElement('option');
+        option.value = device.ip;
+        const name = device.deviceName || device.modelName || 'Roku Device';
+        const model = device.modelName ? ` (${device.modelName})` : '';
+        option.textContent = `${name}${model} - ${device.ip}`;
+        selectElement.appendChild(option);
+      });
+      
+      selectElement.title = `${discoveredDevices.length} device(s) available`;
+    }
+    
+    function updateAllDeviceSelectors() {
+      document.querySelectorAll('select.device-selector').forEach(select => {
+        const currentValue = select.value;
+        populateDeviceSelector(select);
+        if (currentValue && discoveredDevices.some(d => d.ip === currentValue)) {
+          select.value = currentValue;
+        }
+      });
+      
+      if (discoveredDevices.length > 0) {
+        addSelectorsToAllIpInputs();
+      }
+    }
+    
+    function addSelectorsToAllIpInputs() {
+      document.querySelectorAll('.parameters input[type="text"]').forEach(input => {
+        if (isIpAddressInput(input) && !input.dataset.hasDeviceSelector) {
+          createDeviceSelector(input);
+        }
+      });
+    }
+    
+    function isIpAddressInput(input) {
+      const placeholder = (input.placeholder || '').toLowerCase();
+      const name = (input.name || '').toLowerCase();
+      const ariaLabel = (input.getAttribute('aria-label') || '').toLowerCase();
+      
+      const paramRow = input.closest('tr');
+      if (paramRow) {
+        const paramName = paramRow.querySelector('.parameter__name');
+        if (paramName && paramName.textContent.trim().toLowerCase() === 'ip') {
+          return true;
+        }
+      }
+      
+      if (placeholder.includes('192.168') || placeholder.includes('ip')) return true;
+      if (name.includes('ip')) return true;
+      if (ariaLabel.includes('ip')) return true;
+      if (/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(input.value)) return true;
+      
+      return false;
+    }
+    
+    // ============================================
+    // App Selector Functionality
+    // ============================================
+    
+    async function fetchAppsForDevice(ip) {
+      if (!ip) return;
+      
+      // Check if we already have apps cached for this device
+      if (deviceAppsCache[ip]) {
+        console.log(`Using cached apps for ${ip}:`, deviceAppsCache[ip].length);
+        updateAllAppSelectors(ip);
+        return;
+      }
+      
+      console.log(`Fetching apps for device ${ip}...`);
+      
+      // Show loading state on app selectors
+      document.querySelectorAll('select.app-selector').forEach(select => {
+        select.classList.add('loading');
+        select.innerHTML = '<option value="">Loading apps...</option>';
+      });
+      
+      try {
+        const response = await fetch(`${serverUrl}/device/${ip}/query/apps`);
+        const data = await response.json();
+        
+        if (data.success && data.data) {
+          const apps = parseAppsFromXml(data.data);
+          deviceAppsCache[ip] = apps;
+          console.log(`Fetched ${apps.length} apps for ${ip}`);
+          updateAllAppSelectors(ip);
+          showAppNotification(apps.length, ip);
+        }
+      } catch (error) {
+        console.error('Error fetching apps:', error);
+        document.querySelectorAll('select.app-selector').forEach(select => {
+          select.classList.remove('loading');
+          select.innerHTML = '<option value="">Error loading apps</option>';
+        });
+      }
+    }
+    
+    function parseAppsFromXml(xmlString) {
+      const apps = [];
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(xmlString, 'text/xml');
+      const appElements = doc.querySelectorAll('app');
+      
+      appElements.forEach(app => {
+        const id = app.getAttribute('id');
+        const name = app.textContent.trim();
+        const type = app.getAttribute('type') || 'appl';
+        const version = app.getAttribute('version') || '';
+        
+        if (id && name) {
+          apps.push({ id, name, type, version });
+        }
+      });
+      
+      // Sort apps by name
+      apps.sort((a, b) => a.name.localeCompare(b.name));
+      
+      return apps;
+    }
+    
+    function createAppSelector(inputElement, deviceIp) {
+      if (inputElement.dataset.hasAppSelector) return;
+      inputElement.dataset.hasAppSelector = 'true';
+      
+      console.log('Creating app selector for input:', inputElement, 'device:', deviceIp);
+      
+      const wrapper = document.createElement('div');
+      wrapper.className = 'app-selector-wrapper';
+      
+      const label = document.createElement('span');
+      label.className = 'app-selector-label';
+      label.textContent = '📦 Select App:';
+      
+      const select = document.createElement('select');
+      select.className = 'app-selector';
+      select.dataset.targetInput = 'true';
+      select.dataset.deviceIp = deviceIp || '';
+      
+      // Populate if we have apps for this device
+      if (deviceIp && deviceAppsCache[deviceIp]) {
+        populateAppSelector(select, deviceAppsCache[deviceIp]);
+      } else {
+        select.innerHTML = '<option value="">-- Select a device first to load apps --</option>';
+      }
+      
+      select.addEventListener('change', function() {
+        if (this.value) {
+          const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+          nativeInputValueSetter.call(inputElement, this.value);
+          
+          const inputEvent = new Event('input', { bubbles: true, cancelable: true });
+          inputElement.dispatchEvent(inputEvent);
+          
+          const changeEvent = new Event('change', { bubbles: true, cancelable: true });
+          inputElement.dispatchEvent(changeEvent);
+          
+          inputElement.focus();
+          inputElement.blur();
+        }
+      });
+      
+      wrapper.appendChild(label);
+      wrapper.appendChild(select);
+      
+      // Try multiple parent selectors to find the best place to insert
+      const parentTd = inputElement.closest('td');
+      const parentCol = inputElement.closest('.parameters-col_description');
+      const parentDiv = inputElement.parentElement;
+      
+      // Hide Swagger's built-in "Examples" dropdown when we have our app selector
+      hideSwaggerExamplesDropdown(inputElement);
+      
+      if (parentTd) {
+        parentTd.appendChild(wrapper);
+      } else if (parentCol) {
+        parentCol.appendChild(wrapper);
+      } else if (parentDiv) {
+        parentDiv.appendChild(wrapper);
+      }
+    }
+    
+    function hideSwaggerExamplesDropdown(inputElement) {
+      // Find and hide Swagger's "Examples" dropdown near this input
+      const container = inputElement.closest('td') || inputElement.closest('.parameters-col_description') || inputElement.parentElement;
+      if (container) {
+        // Hide the "Examples:" label and its dropdown
+        const examplesSelects = container.querySelectorAll('select:not(.app-selector):not(.device-selector)');
+        examplesSelects.forEach(select => {
+          // Check if it's the Examples dropdown (usually has "Examples:" label before it)
+          const prevSibling = select.previousElementSibling;
+          if (prevSibling && prevSibling.textContent.includes('Examples')) {
+            prevSibling.style.display = 'none';
+            select.style.display = 'none';
+          } else {
+            // Also hide any select that's not ours
+            const parent = select.parentElement;
+            if (parent && parent.textContent.includes('Examples')) {
+              parent.style.display = 'none';
+            }
+          }
+        });
+        
+        // Also try to find by class name patterns Swagger uses
+        const jsonSchemaExamples = container.querySelectorAll('.json-schema-form-item-examples, [class*="examples"]');
+        jsonSchemaExamples.forEach(el => {
+          if (!el.classList.contains('app-selector-wrapper')) {
+            el.style.display = 'none';
+          }
+        });
+      }
+    }
+    
+    function populateAppSelector(selectElement, apps) {
+      selectElement.classList.remove('loading');
+      selectElement.innerHTML = '';
+      
+      const defaultOption = document.createElement('option');
+      defaultOption.value = '';
+      defaultOption.textContent = `-- Choose from ${apps.length} app(s) --`;
+      selectElement.appendChild(defaultOption);
+      
+      apps.forEach(app => {
+        const option = document.createElement('option');
+        option.value = app.id;
+        const typeIcon = app.type === 'appl' ? '📺' : (app.type === 'dev' ? '🛠️' : '📦');
+        option.textContent = `${typeIcon} ${app.name} (${app.id})`;
+        selectElement.appendChild(option);
+      });
+      
+      selectElement.title = `${apps.length} app(s) available`;
+    }
+    
+    function updateAllAppSelectors(deviceIp) {
+      const apps = deviceAppsCache[deviceIp] || [];
+      console.log(`Updating app selectors for ${deviceIp} with ${apps.length} apps`);
+      
+      // First, add app selectors to any appId inputs that don't have them
+      addAppSelectorsToInputs(deviceIp);
+      
+      // Then update all existing app selectors
+      document.querySelectorAll('select.app-selector').forEach(select => {
+        select.dataset.deviceIp = deviceIp;
+        populateAppSelector(select, apps);
+        console.log(`Populated app selector with ${apps.length} apps`);
+      });
+    }
+    
+    function isAppIdInput(input) {
+      const paramRow = input.closest('tr');
+      if (paramRow) {
+        const paramName = paramRow.querySelector('.parameter__name');
+        if (paramName) {
+          const name = paramName.textContent.trim().toLowerCase();
+          if (name === 'appid' || name === 'app_id' || name === 'app-id') {
+            return true;
+          }
+        }
+      }
+      
+      // Also check aria-label and placeholder
+      const ariaLabel = (input.getAttribute('aria-label') || '').toLowerCase();
+      const placeholder = (input.placeholder || '').toLowerCase();
+      
+      if (ariaLabel.includes('appid') || ariaLabel.includes('app id')) return true;
+      if (placeholder.includes('appid') || placeholder.includes('app')) return true;
+      
+      // Check the input value for common app IDs patterns (numeric)
+      if (/^\d+$/.test(input.value) && input.value.length <= 6) {
+        // Could be an app ID, check parent context
+        const label = input.closest('.parameters-col_description');
+        if (label && label.textContent.toLowerCase().includes('app')) {
+          return true;
+        }
+      }
+      
+      return false;
+    }
+    
+    function addAppSelectorsToInputs(deviceIp) {
+      // Find all parameter rows
+      document.querySelectorAll('.parameters tr, .parameters-col_description').forEach(row => {
+        const paramName = row.querySelector('.parameter__name');
+        if (paramName) {
+          const name = paramName.textContent.trim().toLowerCase();
+          if (name === 'appid' || name === 'app_id' || name === 'app-id') {
+            // Find the input in this row
+            const input = row.querySelector('input');
+            if (input && !input.dataset.hasAppSelector) {
+              console.log(`Found appId input, creating selector for device ${deviceIp}`);
+              createAppSelector(input, deviceIp);
+            }
+          }
+        }
+      });
+      
+      // Also try broader search
+      document.querySelectorAll('.parameters input').forEach(input => {
+        if (isAppIdInput(input) && !input.dataset.hasAppSelector) {
+          console.log(`Found appId input via isAppIdInput, creating selector`);
+          createAppSelector(input, deviceIp);
+        }
+      });
+    }
+    
+    function showAppNotification(count, ip) {
+      const existing = document.querySelector('.app-notification');
+      if (existing) existing.remove();
+      
+      const notification = document.createElement('div');
+      notification.className = 'app-notification';
+      notification.style.cssText = `
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        background: #fff;
+        border: 2px solid #61affe;
+        color: #3b4151;
+        padding: 16px 24px;
+        border-radius: 8px;
+        font-size: 14px;
+        z-index: 10000;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+        animation: slideIn 0.3s ease-out;
+      `;
+      notification.innerHTML = `
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <span style="font-size: 24px;">📦</span>
+          <div>
+            <div style="font-weight: 700; color: #61affe;">Apps Loaded!</div>
+            <div style="color: #666; font-size: 12px; margin-top: 4px;">
+              Found ${count} app${count > 1 ? 's' : ''} on device ${ip}
+            </div>
+          </div>
+        </div>
+      `;
+      
+      document.body.appendChild(notification);
+      
+      setTimeout(() => {
+        notification.style.animation = 'slideIn 0.3s ease-out reverse';
+        setTimeout(() => notification.remove(), 300);
+      }, 3000);
+    }
+    
+    // Find the current device IP from any IP input that has been filled
+    function getCurrentDeviceIp() {
+      const deviceSelectors = document.querySelectorAll('select.device-selector');
+      for (const select of deviceSelectors) {
+        if (select.value) return select.value;
+      }
+      
+      const ipInputs = document.querySelectorAll('.parameters input[type="text"]');
+      for (const input of ipInputs) {
+        if (isIpAddressInput(input) && input.value && /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(input.value)) {
+          return input.value;
+        }
+      }
+      
+      return null;
+    }
+    
+    function processDeviceResponse(responseText) {
+      try {
+        const data = JSON.parse(responseText);
+        if (data.success && Array.isArray(data.devices) && data.devices.length > 0) {
+          discoveredDevices = data.devices;
+          console.log('Discovered devices:', discoveredDevices.length);
+          
+          document.querySelectorAll('select.device-selector').forEach(select => {
+            const currentValue = select.value;
+            populateDeviceSelector(select);
+            if (currentValue && discoveredDevices.some(d => d.ip === currentValue)) {
+              select.value = currentValue;
+            }
+          });
+          
+          addSelectorsToAllIpInputs();
+          showDeviceNotification(discoveredDevices.length);
+        }
+      } catch (e) {}
+    }
+    
+    function showDeviceNotification(count) {
+      const existing = document.querySelector('.device-notification');
+      if (existing) existing.remove();
+      
+      const notification = document.createElement('div');
+      notification.className = 'device-notification';
+      notification.style.cssText = `
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        background: #fff;
+        border: 2px solid #49cc90;
+        color: #3b4151;
+        padding: 16px 24px;
+        border-radius: 8px;
+        font-size: 14px;
+        z-index: 10000;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+        animation: slideIn 0.3s ease-out;
+      `;
+      notification.innerHTML = `
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <span style="font-size: 24px;">📺</span>
+          <div>
+            <div style="font-weight: 700; color: #49cc90;">Devices Discovered!</div>
+            <div style="color: #666; font-size: 12px; margin-top: 4px;">
+              Found ${count} Roku device${count > 1 ? 's' : ''}. Device selectors updated.
+            </div>
+          </div>
+        </div>
+      `;
+      
+      document.body.appendChild(notification);
+      
+      if (!document.querySelector('#device-notification-style')) {
+        const style = document.createElement('style');
+        style.id = 'device-notification-style';
+        style.textContent = `
+          @keyframes slideIn {
+            from { transform: translateX(100px); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+          }
+        `;
+        document.head.appendChild(style);
+      }
+      
+      setTimeout(() => {
+        notification.style.animation = 'slideIn 0.3s ease-out reverse';
+        setTimeout(() => notification.remove(), 300);
+      }, 4000);
+    }
+    
+    function setupDeviceSelectors() {
+      const observer = new MutationObserver((mutations) => {
+        mutations.forEach((mutation) => {
+          mutation.addedNodes.forEach((node) => {
+            if (node.nodeType === 1) {
+              const inputs = node.querySelectorAll ? node.querySelectorAll('input[type="text"]') : [];
+              
+              // Handle device selectors
+              if (discoveredDevices.length > 0) {
+                inputs.forEach(input => {
+                  if (isIpAddressInput(input)) {
+                    setTimeout(() => createDeviceSelector(input), 50);
+                  }
+                });
+                
+                if (node.tagName === 'INPUT' && node.type === 'text' && isIpAddressInput(node)) {
+                  setTimeout(() => createDeviceSelector(node), 50);
+                }
+              }
+              
+              // Handle app selectors
+              const currentDeviceIp = getCurrentDeviceIp();
+              inputs.forEach(input => {
+                if (isAppIdInput(input) && !input.dataset.hasAppSelector) {
+                  setTimeout(() => createAppSelector(input, currentDeviceIp), 50);
+                }
+              });
+              
+              if (node.tagName === 'INPUT' && node.type === 'text' && isAppIdInput(node)) {
+                setTimeout(() => createAppSelector(node, currentDeviceIp), 50);
+              }
+              
+              const preElements = node.querySelectorAll ? node.querySelectorAll('pre.microlight') : [];
+              preElements.forEach(pre => {
+                const text = pre.textContent;
+                if (text.includes('"devices"') && text.includes('"ip"')) {
+                  processDeviceResponse(text);
+                }
+              });
+            }
+          });
+        });
+      });
+      
+      observer.observe(document.body, {
+        childList: true,
+        subtree: true
+      });
+      
+      setInterval(() => {
+        document.querySelectorAll('pre.microlight').forEach(pre => {
+          if (!pre.dataset.deviceProcessed) {
+            const text = pre.textContent;
+            if (text.includes('"devices"') && text.includes('"ip"') && text.includes('"deviceName"')) {
+              pre.dataset.deviceProcessed = 'true';
+              processDeviceResponse(text);
+            }
+          }
+        });
+        
+        // Also check for appId inputs that need app selectors
+        const currentDeviceIp = getCurrentDeviceIp();
+        if (currentDeviceIp) {
+          document.querySelectorAll('.parameters input[type="text"]').forEach(input => {
+            if (isAppIdInput(input) && !input.dataset.hasAppSelector) {
+              createAppSelector(input, currentDeviceIp);
+            }
+          });
+        }
+      }, 500);
+    }
+  </script>
+</body>
+</html>
