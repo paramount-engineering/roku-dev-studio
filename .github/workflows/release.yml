@@ -88,7 +88,12 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
         with:
           name: windows-builds
+          # The afterAllArtifactBuild hook in apps/roku-dev-studio/scripts/build-hooks.ts
+          # renames `dist/win/` → `dist/windows/` and relocates .exe files into
+          # `dist/windows/<arch>/`. The recursive glob covers both the post-hook
+          # canonical layout and any pre-hook fallback location.
           path: |
+            apps/roku-dev-studio/dist/windows/**/*.exe
             apps/roku-dev-studio/dist/win/**/*.exe
             apps/roku-dev-studio/dist/*.exe
           retention-days: 5
