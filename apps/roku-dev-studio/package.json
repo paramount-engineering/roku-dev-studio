@@ -18,7 +18,7 @@
     "dev:solid": "tsx scripts/sync-path-safe.ts && tsx scripts/build/index.ts && concurrently -k \"npm run renderer:solid:dev\" \"wait-on tcp:127.0.0.1:5173 && cross-env RDS_SOLID_RENDERER=1 tsx scripts/run-electron.ts\"",
     "build:desktop": "tsx scripts/build/index.ts",
     "build:preload": "tsx scripts/build/index.ts",
-    "prepare": "tsx scripts/sync-path-safe.ts && tsx scripts/build/index.ts",
+    "prepare": "tsx scripts/sync-path-safe.ts",
     "prebuild": "tsx scripts/sync-path-safe.ts && tsx scripts/cleanup-old-builds.ts && tsx scripts/build/index.ts",
     "clean:dist": "tsx scripts/cleanup-old-builds.ts",
     "build": "tsx scripts/cleanup-old-builds.ts && electron-builder",
