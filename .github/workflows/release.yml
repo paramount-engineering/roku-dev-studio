@@ -36,6 +36,12 @@ jobs:
       - name: Build API package (needed by app's preload bundler)
         run: npm --prefix packages/roku-dev-studio-api run build
 
+      - name: Build app bundles (main/preload/etc.)
+        # npm's `prebuild` hook only fires for `npm run build`, not `npm run build:mac`,
+        # so the bundle step must be invoked explicitly here. Without it,
+        # electron-builder packs an app.asar with no main.bundled.cjs.
+        run: npm --prefix apps/roku-dev-studio run build:preload
+
       - name: Build macOS app
         # No GH_TOKEN here — publishing to GitHub Releases happens in the
         # `release` job via softprops/action-gh-release, not here. Without
@@ -72,6 +78,9 @@ jobs:
       - name: Build API package (needed by app's preload bundler)
         run: npm --prefix packages/roku-dev-studio-api run build
 
+      - name: Build app bundles (main/preload/etc.)
+        run: npm --prefix apps/roku-dev-studio run build:preload
+
       - name: Build Windows app
         run: npm run build:win
 
@@ -104,6 +113,9 @@ jobs:
 
       - name: Build API package (needed by app's preload bundler)
         run: npm --prefix packages/roku-dev-studio-api run build
+
+      - name: Build app bundles (main/preload/etc.)
+        run: npm --prefix apps/roku-dev-studio run build:preload
 
       - name: Build Linux app
         run: npm run build:linux
