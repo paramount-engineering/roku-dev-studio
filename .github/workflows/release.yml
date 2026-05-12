@@ -28,7 +28,13 @@ jobs:
           cache: 'npm'
 
       - name: Install dependencies
-        run: npm ci
+        # Skip workspace prepare scripts: the app's prepare bundles preload.ts,
+        # which require()s packages/roku-dev-studio-api/dist/lib/*.js that don't
+        # exist until the api package is built. We build api explicitly below.
+        run: npm ci --ignore-scripts
+
+      - name: Build API package (needed by app's preload bundler)
+        run: npm --prefix packages/roku-dev-studio-api run build
 
       - name: Build macOS app
         run: npm run build:mac -- --publish never
@@ -60,7 +66,10 @@ jobs:
           cache: 'npm'
 
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --ignore-scripts
+
+      - name: Build API package (needed by app's preload bundler)
+        run: npm --prefix packages/roku-dev-studio-api run build
 
       - name: Build Windows app
         run: npm run build:win -- --publish never
@@ -92,7 +101,10 @@ jobs:
           cache: 'npm'
 
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --ignore-scripts
+
+      - name: Build API package (needed by app's preload bundler)
+        run: npm --prefix packages/roku-dev-studio-api run build
 
       - name: Build Linux app
         run: npm run build:linux -- --publish never
