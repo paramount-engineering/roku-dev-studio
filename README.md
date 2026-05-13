@@ -68,6 +68,8 @@ Roku Dev Studio is available for:
 - **Settings → Device Performance:** Tune chart **sample interval** and **history** window; optional **Remember 'Show Device Performance'** restores whether the quad was on **per device** between sessions.
 - **Action Scripts:** Add **Device Performance** steps to capture chart cards into run results (for example PNGs included when you export results to PDF).
 
+![Remote tab with Show Device Performance on — BrightScript object counts (top right), CPU usage with total/user/kernel hover tooltip (bottom left), and System Memory used/resident/anonymous/shared/limit chart (bottom right)](images/REMOTE_WITH_DEVICE_PERFORMANCE.png)
+
 ### 🔍 Device Discovery
 - **Automatic SSDP Discovery:** Automatically finds Roku devices on your local network
 - **Subnet Scanning:** Fallback discovery method when SSDP multicast is unavailable
