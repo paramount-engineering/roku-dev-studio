@@ -3138,10 +3138,11 @@
       background: rgba(251, 146, 60, 0.12);
       box-shadow: inset 0 -2px 0 0 #fb923c;
     }
-    /* CPU quad header: title on the left, mode-switch on the right (hidden until <proc-stat> seen). */
+    /* CPU quad header: title left, mode-switch centered (hidden until <proc-stat> seen).
+     * Mirrors `.remote-quad-objects-header`'s 3-column grid so the toggle sits in the middle. */
     .remote-quad-cpu-header {
       display: grid;
-      grid-template-columns: minmax(0, 1fr) auto;
+      grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
       align-items: center;
       gap: 8px;
     }
@@ -3156,6 +3157,9 @@
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
+    }
+    .remote-cpu-mode-switch-wrap {
+      justify-self: center;
     }
     .remote-cpu-mode-switch-wrap[hidden] { display: none !important; }
     .remote-cpu-mode-switch {
@@ -3189,33 +3193,100 @@
       background: rgba(96, 165, 250, 0.16);
       box-shadow: inset 0 -2px 0 0 #60a5fa;
     }
-    /* CPU process-mode table — replaces the chart svg-wrap when active. */
+    /* CPU process-mode panel — replaces the chart svg-wrap when active.
+     * Stacked vertically: a centered info table on top (state, uptime, CPU times,
+     * clock tick rate) sized to its own content, then two fault cards below
+     * (Minor / Major side-by-side) with tall sparklines filling the remaining
+     * height. Bigger font sizes than the other quad-card chrome so the panel
+     * reads as a primary content surface. */
     .remote-cpu-process-table[hidden] { display: none !important; }
     .remote-cpu-process-table {
       flex: 1;
       min-height: 0;
       display: flex;
       flex-direction: column;
-      padding: 6px 10px 4px;
-      gap: 2px;
-      overflow-y: auto;
-      font-size: 11px;
+      gap: 14px;
+      padding: 12px 16px;
+      font-size: 13px;
       color: var(--text-secondary);
+    }
+    /* Faults row: two equal-width fault cards filling the remaining height
+     * under the info table; min/max keep the graphs readable on extreme heights. */
+    .remote-cpu-process-faults {
+      flex: 1 1 auto;
+      min-height: 140px;
+      max-height: 320px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      min-width: 0;
+    }
+    .remote-cpu-process-fault-card {
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      gap: 6px;
+      padding: 10px 12px 8px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: rgba(148, 163, 184, 0.04);
+    }
+    .remote-cpu-process-fault-card--major-active {
+      background: rgba(248, 113, 113, 0.08);
+      border-color: rgba(248, 113, 113, 0.32);
+    }
+    .remote-cpu-process-fault-card-header {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 10px;
+      min-width: 0;
+    }
+    .remote-cpu-process-fault-card .remote-cpu-process-label {
+      font-size: 12px;
+      letter-spacing: 0.06em;
+    }
+    .remote-cpu-process-fault-card .remote-cpu-process-value {
+      font-size: 14px;
+    }
+    .remote-cpu-process-fault-card .remote-cpu-process-value-secondary {
+      font-size: 12px;
+    }
+    .remote-cpu-process-fault-spark-wrap {
+      flex: 1 1 auto;
+      min-height: 40px;
+      width: 100%;
+    }
+    .remote-cpu-process-fault-spark {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+    /* Info table: centered horizontally with a max-width so the rows read as a
+     * proper data table on wide quads, not a sparse strip on the left edge.
+     * Sized to its own content (`flex: 0 1 auto`) so it sits flush at the top
+     * of the panel above the faults row. */
+    .remote-cpu-process-info {
+      flex: 0 1 auto;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      align-self: center;
+      width: 100%;
+      max-width: 640px;
+      gap: 0;
+      overflow-y: auto;
     }
     .remote-cpu-process-row {
       display: grid;
-      grid-template-columns: minmax(110px, 0.9fr) minmax(0, 1fr) 56px;
+      grid-template-columns: minmax(140px, 0.9fr) minmax(0, 1fr);
       align-items: center;
-      gap: 8px;
-      padding: 3px 0;
-      border-bottom: 1px solid rgba(148, 163, 184, 0.08);
-      min-height: 22px;
+      gap: 14px;
+      padding: 8px 10px;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.10);
+      min-height: 34px;
     }
     .remote-cpu-process-row:last-child { border-bottom: none; }
-    .remote-cpu-process-row--major-active {
-      background: rgba(248, 113, 113, 0.08);
-      border-radius: 4px;
-    }
     .remote-cpu-process-row--uptime-flicker {
       animation: remote-cpu-uptime-flicker 0.9s ease-out 1;
     }
@@ -3224,19 +3295,19 @@
       100% { background: transparent; }
     }
     .remote-cpu-process-label {
-      font-size: 10px;
+      font-size: 11px;
       font-weight: 600;
       color: var(--text-muted);
       text-transform: uppercase;
-      letter-spacing: 0.04em;
+      letter-spacing: 0.05em;
       display: inline-flex;
       align-items: center;
-      gap: 6px;
+      gap: 8px;
       min-width: 0;
     }
     .remote-cpu-process-state-dot {
-      width: 8px;
-      height: 8px;
+      width: 9px;
+      height: 9px;
       border-radius: 50%;
       background: var(--text-muted);
       flex-shrink: 0;
@@ -3246,7 +3317,7 @@
     .remote-cpu-process-state-dot--red   { background: #f87171; }
     .remote-cpu-process-value {
       font-family: 'JetBrains Mono', ui-monospace, monospace;
-      font-size: 11px;
+      font-size: 13px;
       color: var(--text-primary);
       min-width: 0;
       overflow: hidden;
@@ -3254,21 +3325,9 @@
       white-space: nowrap;
     }
     .remote-cpu-process-value-secondary {
-      font-size: 10px;
+      font-size: 11px;
       color: var(--text-muted);
-      margin-left: 6px;
-    }
-    .remote-cpu-process-spark {
-      width: 100%;
-      height: 18px;
-      display: block;
-    }
-    .remote-cpu-process-footer-time {
-      font-size: 10px;
-      font-weight: 500;
-      letter-spacing: 0.02em;
-      color: var(--text-muted);
-      flex-shrink: 0;
+      margin-left: 8px;
     }
     .remote-objects-top-label {
       justify-self: end;
@@ -10052,9 +10111,6 @@
                   <div class="remote-legend-row" data-series="cpu-total"><span class="remote-legend-swatch" style="background:#f87171"></span><span class="remote-legend-label">Total</span><span class="remote-legend-val">—</span></div>
                   <div class="remote-legend-row" data-series="cpu-user"><span class="remote-legend-swatch" style="background:#60a5fa"></span><span class="remote-legend-label">User</span><span class="remote-legend-val">—</span></div>
                   <div class="remote-legend-row" data-series="cpu-sys"><span class="remote-legend-swatch" style="background:#4ade80"></span><span class="remote-legend-label">Kernel</span><span class="remote-legend-val">—</span></div>
-                </aside>
-                <aside class="remote-cpu-process-footer" data-cpu-process-footer hidden>
-                  <span class="remote-cpu-process-footer-time" data-cpu-process-time>—</span>
                 </aside>
               </div>
             </section>

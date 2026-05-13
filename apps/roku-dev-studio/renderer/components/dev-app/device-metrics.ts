@@ -519,8 +519,6 @@ export function setupRemoteTabMetrics(
   let procStatUptimeAnchorMs: number | null = null;
   /** Pending one-shot row-flicker animation flag for respawn (consumed by the next renderCharts). */
   let pendingRespawnFlicker = false;
-  /** Last cpu-mode rendered (used to switch chart vs table visibility on render). */
-  let cpuMode: CpuMode = 'percent';
 
   /**
    * Fold a fresh `<proc-stat>` sample into rings + anchor state. Pushes a null onto fault rings
@@ -809,14 +807,13 @@ export function setupRemoteTabMetrics(
   }
 
   /**
-   * Build a `<proc-stat>`-backed key/value table that replaces the CPU chart in `process` mode.
-   * Inline sparklines on the two fault-rate rows use the same `drawSparklineTimeseries` as the
-   * device-panel perf strip; everything else is plain text. Child fault/CPU-time rows are hidden
-   * when both halves are zero (the common case on Roku).
+   * Build a `<proc-stat>`-backed panel that replaces the CPU chart in `process` mode.
+   * Layout is a vertical stack: a centered info table on top (state, uptime, CPU
+   * times, clock tick rate) sized to its own content, then a 2-column faults row
+   * below (Minor / Major) with tall sparklines filling the remaining height.
    */
   function renderCpuProcessTable(
     tableEl: HTMLElement,
-    footerEl: HTMLElement | null,
     frame: { nowMs: number; historyMs: number; maxSampleGapMs: number }
   ): void {
     tableEl.innerHTML = '';
@@ -851,21 +848,24 @@ export function setupRemoteTabMetrics(
     const flickerUptime = pendingRespawnFlicker;
     pendingRespawnFlicker = false;
 
-    const addRow = (
+    const infoBlock = document.createElement('div');
+    infoBlock.className = 'remote-cpu-process-info';
+    const faultsBlock = document.createElement('div');
+    faultsBlock.className = 'remote-cpu-process-faults';
+    tableEl.appendChild(infoBlock);
+    tableEl.appendChild(faultsBlock);
+
+    const addInfoRow = (
       label: string,
       value: string,
       opts?: {
         valueSecondary?: string;
         leftDotClass?: 'green' | 'amber' | 'red' | 'neutral';
-        sparkRing?: Array<number | null>;
-        sparkColor?: string;
-        majorActive?: boolean;
         flicker?: boolean;
       }
     ): void => {
       const row = document.createElement('div');
       row.className = 'remote-cpu-process-row';
-      if (opts?.majorActive) row.classList.add('remote-cpu-process-row--major-active');
       if (opts?.flicker) row.classList.add('remote-cpu-process-row--uptime-flicker');
 
       const lab = document.createElement('span');
@@ -889,44 +889,75 @@ export function setupRemoteTabMetrics(
         val.appendChild(sec);
       }
 
-      const sparkCell = document.createElement('span');
-      if (opts?.sparkRing) {
-        const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg') as SVGSVGElement;
-        svg.classList.add('remote-cpu-process-spark');
-        sparkCell.appendChild(svg);
-        const peak = opts.sparkRing.reduce<number>(
-          (m, v) => (v != null && Number.isFinite(v) && v > m ? v : m),
-          0
-        );
-        drawSparklineTimeseries(svg, {
-          series: [
-            {
-              id: 'r',
-              color: opts.sparkColor ?? COL_FAULTS_MINOR,
-              values: opts.sparkRing
-            }
-          ],
-          yMin: 0,
-          yMax: Math.max(1, peak * 1.12),
-          sampleAt: ringSampleAt,
-          historyMs: frame.historyMs,
-          nowMs: frame.nowMs,
-          maxSampleGapMs: frame.maxSampleGapMs
-        });
-      }
-
       row.appendChild(lab);
       row.appendChild(val);
-      row.appendChild(sparkCell);
-      tableEl.appendChild(row);
+      infoBlock.appendChild(row);
     };
 
-    addRow('State', stateToLabel(ps.state), {
+    const addFaultCard = (
+      label: string,
+      value: string,
+      opts: {
+        valueSecondary?: string;
+        sparkRing: Array<number | null>;
+        sparkColor: string;
+        majorActive?: boolean;
+      }
+    ): void => {
+      const card = document.createElement('div');
+      card.className = 'remote-cpu-process-fault-card';
+      if (opts.majorActive) card.classList.add('remote-cpu-process-fault-card--major-active');
+
+      const header = document.createElement('div');
+      header.className = 'remote-cpu-process-fault-card-header';
+
+      const lab = document.createElement('span');
+      lab.className = 'remote-cpu-process-label';
+      lab.textContent = label;
+
+      const val = document.createElement('span');
+      val.className = 'remote-cpu-process-value';
+      val.textContent = value;
+      if (opts.valueSecondary) {
+        const sec = document.createElement('span');
+        sec.className = 'remote-cpu-process-value-secondary';
+        sec.textContent = opts.valueSecondary;
+        val.appendChild(sec);
+      }
+
+      header.appendChild(lab);
+      header.appendChild(val);
+
+      const sparkWrap = document.createElement('div');
+      sparkWrap.className = 'remote-cpu-process-fault-spark-wrap';
+      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg') as SVGSVGElement;
+      svg.classList.add('remote-cpu-process-fault-spark');
+      sparkWrap.appendChild(svg);
+      const peak = opts.sparkRing.reduce<number>(
+        (m, v) => (v != null && Number.isFinite(v) && v > m ? v : m),
+        0
+      );
+      drawSparklineTimeseries(svg, {
+        series: [{ id: 'r', color: opts.sparkColor, values: opts.sparkRing }],
+        yMin: 0,
+        yMax: Math.max(1, peak * 1.12),
+        sampleAt: ringSampleAt,
+        historyMs: frame.historyMs,
+        nowMs: frame.nowMs,
+        maxSampleGapMs: frame.maxSampleGapMs
+      });
+
+      card.appendChild(header);
+      card.appendChild(sparkWrap);
+      faultsBlock.appendChild(card);
+    };
+
+    addInfoRow('State', stateToLabel(ps.state), {
       leftDotClass: stateToClass(ps.state),
       valueSecondary: `(${ps.state})`
     });
 
-    addRow(
+    addInfoRow(
       'Channel uptime',
       `Stable for ${formatSecondsCompact(uptimeSec)}`,
       {
@@ -935,62 +966,42 @@ export function setupRemoteTabMetrics(
       }
     );
 
-    addRow('User CPU time', `${userSec.toFixed(2)} s`, {
+    addInfoRow('User CPU time', `${userSec.toFixed(2)} s`, {
       valueSecondary: lastUserPct != null ? `· ${lastUserPct.toFixed(1)}%` : undefined
     });
-    addRow('Kernel CPU time', `${sysSec.toFixed(2)} s`, {
+    addInfoRow('Kernel CPU time', `${sysSec.toFixed(2)} s`, {
       valueSecondary: lastSysPct != null ? `· ${lastSysPct.toFixed(1)}%` : undefined
     });
-
-    addRow(
-      'Minor faults',
-      ps.minflt.toLocaleString(),
-      {
-        valueSecondary: `· ${formatRate(lastMinorRate ?? 0)}`,
-        sparkRing: ringFaultsMinorPerSec,
-        sparkColor: COL_FAULTS_MINOR
-      }
-    );
-    const majorActive = (lastMajorRate ?? 0) > 0;
-    addRow(
-      'Major faults',
-      ps.majflt.toLocaleString(),
-      {
-        valueSecondary: `· ${formatRate(lastMajorRate ?? 0)}${majorActive ? '' : ' ✓'}`,
-        sparkRing: ringFaultsMajorPerSec,
-        sparkColor: COL_FAULTS_MAJOR,
-        majorActive
-      }
-    );
 
     if (ps.cutime > 0 || ps.cstime > 0) {
       const cUserSec = ps.cutime / clk;
       const cSysSec = ps.cstime / clk;
-      addRow('Child CPU time', `${(cUserSec + cSysSec).toFixed(2)} s`, {
+      addInfoRow('Child CPU time', `${(cUserSec + cSysSec).toFixed(2)} s`, {
         valueSecondary: `user ${cUserSec.toFixed(2)} · kernel ${cSysSec.toFixed(2)}`
       });
     }
     if (ps.cminflt > 0 || ps.cmajflt > 0) {
-      addRow(
+      addInfoRow(
         'Child faults',
         `${ps.cminflt.toLocaleString()} / ${ps.cmajflt.toLocaleString()}`,
         { valueSecondary: 'minor / major' }
       );
     }
 
-    addRow('Clock tick rate', `${clk} Hz`);
+    addInfoRow('Clock tick rate', `${clk} Hz`);
 
-    if (footerEl) {
-      const ts = footerEl.querySelector('[data-cpu-process-time]');
-      if (ts instanceof HTMLElement) {
-        const d = new Date(frame.nowMs);
-        ts.textContent = `Updated: ${d.toLocaleTimeString(undefined, {
-          hour: '2-digit',
-          minute: '2-digit',
-          second: '2-digit'
-        })}`;
-      }
-    }
+    addFaultCard('Minor Faults', ps.minflt.toLocaleString(), {
+      valueSecondary: `· ${formatRate(lastMinorRate ?? 0)}`,
+      sparkRing: ringFaultsMinorPerSec,
+      sparkColor: COL_FAULTS_MINOR
+    });
+    const majorActive = (lastMajorRate ?? 0) > 0;
+    addFaultCard('Major Faults', ps.majflt.toLocaleString(), {
+      valueSecondary: `· ${formatRate(lastMajorRate ?? 0)}${majorActive ? '' : ' ✓'}`,
+      sparkRing: ringFaultsMajorPerSec,
+      sparkColor: COL_FAULTS_MAJOR,
+      majorActive
+    });
   }
 
   function renderCpuPercentChart(
@@ -1048,31 +1059,32 @@ export function setupRemoteTabMetrics(
     if (cpuModeWrap instanceof HTMLElement) {
       cpuModeWrap.hidden = !procStatSeen;
     }
-    /* If proc-stat regressed (older firmware after a reconnect) force percent mode so the table can't show empty. */
-    const effectiveCpuMode: CpuMode = procStatSeen ? cpuMode : 'percent';
+    /* Read CPU mode from the DOM (single source of truth) so any toggler — click handler
+     * or Action Script capture's `setCpuModeUi` — flips the visible panel consistently.
+     * If proc-stat regressed (older firmware after a reconnect) force percent mode so the
+     * table can't show empty. */
+    const cpuModeRaw = root
+      .querySelector('.remote-cpu-mode-btn.is-active')
+      ?.getAttribute('data-cpu-mode');
+    const requestedCpuMode: CpuMode = cpuModeRaw === 'process' ? 'process' : 'percent';
+    const effectiveCpuMode: CpuMode = procStatSeen ? requestedCpuMode : 'percent';
     const cpuChartWrap = root.querySelector('[data-cpu-chart-wrap]');
     const cpuProcessTable = root.querySelector('[data-cpu-process-table]');
     const cpuLegend = root.querySelector('[data-legend="cpu"]');
-    const cpuProcessFooter = root.querySelector('[data-cpu-process-footer]');
     if (cpuChartWrap instanceof HTMLElement) {
       cpuChartWrap.hidden = effectiveCpuMode !== 'percent';
     }
     if (cpuProcessTable instanceof HTMLElement) {
       cpuProcessTable.hidden = effectiveCpuMode !== 'process';
     }
+    /* Legend stays hidden in process mode; the surrounding `.remote-quad-card-footer` keeps
+     * its `min-height: 34px` so the footer band height stays consistent with other cards. */
     if (cpuLegend instanceof HTMLElement) {
       cpuLegend.hidden = effectiveCpuMode !== 'percent';
     }
-    if (cpuProcessFooter instanceof HTMLElement) {
-      cpuProcessFooter.hidden = effectiveCpuMode !== 'process';
-    }
 
     if (effectiveCpuMode === 'process' && cpuProcessTable instanceof HTMLElement) {
-      renderCpuProcessTable(
-        cpuProcessTable,
-        cpuProcessFooter instanceof HTMLElement ? cpuProcessFooter : null,
-        { nowMs, historyMs, maxSampleGapMs }
-      );
+      renderCpuProcessTable(cpuProcessTable, { nowMs, historyMs, maxSampleGapMs });
     } else {
       renderCpuPercentChart(root, { nowMs, historyMs, maxSampleGapMs });
     }
@@ -1437,7 +1449,6 @@ export function setupRemoteTabMetrics(
         const m = cpuBtn.getAttribute('data-cpu-mode');
         if (m !== 'percent' && m !== 'process') return;
         if (m === 'process' && !procStatSeen) return;
-        cpuMode = m;
         wrap.querySelectorAll('[data-cpu-mode]').forEach((b) => {
           const active = b === cpuBtn;
           b.classList.toggle('is-active', active);

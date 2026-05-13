@@ -5,6 +5,9 @@
 
 const NS = 'http://www.w3.org/2000/svg';
 
+/** Monotonic counter for unique per-SVG `<clipPath>` ids (multiple sparklines coexist on the page). */
+let __sparkClipSeq = 0;
+
 export type ChanperfParsed = {
   cpuUser: number;
   cpuSys: number;
@@ -1049,17 +1052,41 @@ export function drawSparklineTimeseries(
   const gw = vbW - pl - pr;
   const gh = vbH - pt - pb;
 
+  /* `vector-effect: non-scaling-stroke` keeps strokes at their declared screen-pixel
+   * width regardless of how the tiny 88×28 viewBox is stretched into the host SVG
+   * (host can be a header strip a few dozen px tall or a 100+px fault card body). */
+  const plotRx = 3;
   const plotBg = el('rect', {
     x: String(pl),
     y: String(pt),
     width: String(gw),
     height: String(gh),
-    rx: '3',
+    rx: String(plotRx),
     fill: 'rgba(255,255,255,0.05)',
     stroke: 'rgba(255,255,255,0.08)',
-    'stroke-width': '1'
+    'stroke-width': '1',
+    'vector-effect': 'non-scaling-stroke'
   });
   svg.appendChild(plotBg);
+
+  /* Clip the data layer to the same rounded rect as the plot background so data
+   * lines near the corners follow the curve instead of poking outside the box.
+   * Unique id per call keeps multiple sparklines on the page from clashing. */
+  __sparkClipSeq += 1;
+  const clipId = `remote-ts-spark-clip-${__sparkClipSeq}`;
+  const defs = el('defs', {});
+  const clipPath = el('clipPath', { id: clipId });
+  clipPath.appendChild(
+    el('rect', {
+      x: String(pl),
+      y: String(pt),
+      width: String(gw),
+      height: String(gh),
+      rx: String(plotRx)
+    })
+  );
+  defs.appendChild(clipPath);
+  svg.appendChild(defs);
 
   const { yMin, yMax, series } = opts;
   const ySpan = yMax - yMin || 1;
@@ -1081,7 +1108,10 @@ export function drawSparklineTimeseries(
     )
   );
 
-  const lineG = el('g', { class: 'remote-ts-spark-lines' });
+  const lineG = el('g', {
+    class: 'remote-ts-spark-lines',
+    'clip-path': `url(#${clipId})`
+  });
 
   for (const s of series) {
     if (!(typeof s.yConstant === 'number' && Number.isFinite(s.yConstant))) continue;
@@ -1095,7 +1125,8 @@ export function drawSparklineTimeseries(
       stroke: s.color,
       'stroke-width': '1',
       'stroke-dasharray': '2 3',
-      'stroke-opacity': '0.9'
+      'stroke-opacity': '0.9',
+      'vector-effect': 'non-scaling-stroke'
     });
     lineG.appendChild(hLine);
   }
@@ -1144,7 +1175,8 @@ export function drawSparklineTimeseries(
           points: pts.join(' '),
           'stroke-linejoin': 'round',
           'stroke-linecap': 'round',
-          'shape-rendering': 'geometricPrecision'
+          'shape-rendering': 'geometricPrecision',
+          'vector-effect': 'non-scaling-stroke'
         });
         lineG.appendChild(poly);
       }
