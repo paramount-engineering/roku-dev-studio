@@ -104,7 +104,17 @@ body {
   overflow-x: hidden;
   padding: 12px 16px;
   background: #0a0a0f;
-  font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+  /*
+   * Mirror VSCode's Output panel / integrated terminal font stack: Menlo (macOS)
+   * → Monaco fallback → Consolas (Windows) → 'Courier New' → generic monospace.
+   * We intentionally drop 'JetBrains Mono' / 'Fira Code' on this surface because
+   * their programming-ligature substitutions (e.g. `***`, `>>>`, `==>`) are
+   * misleading inside a log viewer where every byte should look like itself.
+   * VSCode disables ligatures by default for the same reason; we also force
+   * them off below so a ligature-enabled fallback can't sneak in.
+   */
+  font-family: Menlo, Monaco, Consolas, 'Courier New', monospace;
+  font-variant-ligatures: none;
   font-size: 12px;
   line-height: 1.6;
   color: #e0e0e0;
@@ -377,6 +387,30 @@ body {
 .telnet-url-view-params::-webkit-scrollbar-corner {
   background: var(--bg-secondary);
 }
+
+/*
+ * Full-URL preview pane sits on --bg-tertiary (its own card surface, darker
+ * than the modal body), so its scrollbar track wants --bg-tertiary instead of
+ * --bg-secondary. Without this it paints the OS-default white track when the
+ * URL is long enough to scroll — see screenshot 2026-05-13 (modal title
+ * "20260513_PTVPlaybackTelnetLogs.txt: URL").
+ */
+.telnet-url-view-full-url::-webkit-scrollbar {
+  width: 8px;
+}
+.telnet-url-view-full-url::-webkit-scrollbar-track {
+  background: var(--bg-tertiary);
+}
+.telnet-url-view-full-url::-webkit-scrollbar-thumb {
+  background: #4a4a6a;
+  border-radius: 4px;
+}
+.telnet-url-view-full-url::-webkit-scrollbar-thumb:hover {
+  background: #5a5a7a;
+}
+.telnet-url-view-full-url::-webkit-scrollbar-corner {
+  background: var(--bg-tertiary);
+}
 .telnet-structured-view-pre {
   margin: 0;
   white-space: pre-wrap;
@@ -385,6 +419,70 @@ body {
   font-size: 12px;
   line-height: 1.45;
   color: var(--text-primary);
+}
+
+/*
+ * Fold / expand groups inside the structured viewer. Mirrors the inline rules in
+ * index.html so the same modal looks identical from the live Console and the
+ * standalone Log File viewer. See `applyJsonFoldStructure` / `applyXmlFoldStructure`
+ * in `telnet-structured-syntax.ts` for the DOM scaffold.
+ */
+.telnet-fold-group {
+  /* Inline flow on purpose — see twin comment in index.html for why we don't promote to
+   * inline-block. */
+}
+
+.telnet-fold-twisty {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1ch;
+  height: 1em;
+  margin-right: 4px;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  color: var(--text-muted);
+  font: inherit;
+  line-height: 1;
+  cursor: pointer;
+  vertical-align: baseline;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.telnet-fold-twisty::before {
+  content: '▾';
+  font-size: 0.9em;
+}
+.telnet-fold-collapsed > .telnet-fold-twisty::before {
+  content: '▸';
+}
+.telnet-fold-twisty:hover,
+.telnet-fold-twisty:focus-visible {
+  color: var(--accent-purple);
+  outline: none;
+}
+
+.telnet-fold-body {
+  /* default visible */
+}
+.telnet-fold-summary {
+  display: none;
+  color: var(--text-muted);
+}
+.telnet-fold-summary-ellipsis {
+  margin: 0 2px;
+  padding: 0 4px;
+  border-radius: 4px;
+  background: var(--bg-tertiary);
+  color: var(--text-muted);
+  font-size: 0.9em;
+}
+.telnet-fold-collapsed > .telnet-fold-body {
+  display: none;
+}
+.telnet-fold-collapsed > .telnet-fold-summary {
+  display: inline;
 }
 
 .telnet-hl-json-punct {

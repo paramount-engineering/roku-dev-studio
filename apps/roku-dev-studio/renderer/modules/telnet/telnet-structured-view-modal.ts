@@ -3,7 +3,13 @@ import { resetTelnetModalScrollInOverlay, scheduleTelnetModalScrollReset } from 
 import { telnetConsoleModalTitle } from './telnet-console-modal-title.js';
 import { notifyTelnetViewerClosed } from './telnet-viewer-bridge.js';
 import type { StructuredConsolePayload } from './structured-log-detect.js';
-import { applyJsonSyntaxHighlight, applyXmlSyntaxHighlight } from './telnet-structured-syntax.js';
+import {
+  applyJsonFoldStructure,
+  applyJsonSyntaxHighlight,
+  applyXmlFoldStructure,
+  applyXmlSyntaxHighlight,
+  toggleFoldGroup
+} from './telnet-structured-syntax.js';
 
 const OVERLAY_ID = 'telnetStructuredViewerOverlay';
 
@@ -139,6 +145,27 @@ function ensureOverlay(): HTMLElement {
     if (e.target === overlay) close();
   });
 
+  // Delegated twisty handler: one listener for the whole modal regardless of how many
+  // fold groups the current payload rendered. We attach to the <pre> (not the body) so
+  // text selection inside the body doesn't pay the cost of bubbling through this guard,
+  // and so toggling never accidentally fires on the Copy button. Twisties carry
+  // `tabindex="-1"` and bypass the modal's natural keyboard flow — fold is mouse-driven
+  // per the v1 scope; revisit if we add keyboard fold shortcuts.
+  const preForFold = overlay.querySelector('.telnet-structured-view-pre');
+  if (preForFold instanceof HTMLElement) {
+    preForFold.addEventListener('click', (e) => {
+      const t = e.target;
+      const start = t instanceof Element ? t : t instanceof Text ? t.parentElement : null;
+      const twisty = start?.closest('.telnet-fold-twisty');
+      if (!(twisty instanceof HTMLElement)) return;
+      const group = twisty.closest('.telnet-fold-group');
+      if (!(group instanceof HTMLElement)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      toggleFoldGroup(group);
+    });
+  }
+
   const copyBtn = overlay.querySelector('.telnet-structured-view-copy');
   copyBtn?.addEventListener('click', async () => {
     const pre = overlay.querySelector('.telnet-structured-view-pre');
@@ -199,10 +226,16 @@ export function openTelnetStructuredViewer(
     pre.replaceChildren();
     const code = document.createElement('code');
     code.className = `telnet-hl-root telnet-hl-${payload.kind}`;
+    // Syntax highlight first → flat token stream; then layer fold scaffold over it.
+    // The two-pass split keeps the tokenizer free of fold/UX concerns and means
+    // `pre.dataset.formatted` (which the Copy button uses) stays decoupled from the
+    // rendered DOM regardless of which groups the user collapses.
     if (payload.kind === 'json') {
       applyJsonSyntaxHighlight(code, payload.formatted);
+      applyJsonFoldStructure(code);
     } else {
       applyXmlSyntaxHighlight(code, payload.formatted);
+      applyXmlFoldStructure(code);
     }
     pre.appendChild(code);
   }

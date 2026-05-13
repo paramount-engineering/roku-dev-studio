@@ -3194,32 +3194,54 @@
       box-shadow: inset 0 -2px 0 0 #60a5fa;
     }
     /* CPU process-mode panel — replaces the chart svg-wrap when active.
-     * Stacked vertically: a centered info table on top (state, uptime, CPU times,
-     * clock tick rate) sized to its own content, then two fault cards below
-     * (Minor / Major side-by-side) with tall sparklines filling the remaining
-     * height. Bigger font sizes than the other quad-card chrome so the panel
-     * reads as a primary content surface. */
+     *
+     * Layout adapts to the CPU quad's actual size via a `size` container
+     * query on `.remote-quad-cpu` (named `cpu-quad`). Both axes are queried
+     * so the panel can flip to its compact layout when EITHER the width OR
+     * the height shrinks — avoiding clipped fault sparklines when a user
+     * minimizes the window without making it strictly narrow.
+     *
+     *   Narrow OR short quad (default — MacBook Pro–class screens, minimized
+     *   windows, etc.):
+     *     [ info ] [ minor ]
+     *     [ info ] [ minor ]
+     *     [ info ] [ major ]
+     *     [ info ] [ major ]
+     *
+     *   Wide AND tall quad (big displays — see the `@container` block below):
+     *     [    info    ]
+     *     [    info    ]
+     *     [minor][major]
+     *
+     * In both layouts the fault cards fill the remaining space; in the wide
+     * layout they're capped so they don't dwarf the info table on tall
+     * monitors, with the slack centered as breathing room. */
+    .remote-quad-cpu {
+      container-type: size;
+      container-name: cpu-quad;
+    }
     .remote-cpu-process-table[hidden] { display: none !important; }
     .remote-cpu-process-table {
       flex: 1;
       min-height: 0;
-      display: flex;
-      flex-direction: column;
-      gap: 14px;
-      padding: 12px 16px;
+      /* Default (narrow quad): info table left, fault cards stacked right. */
+      display: grid;
+      grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
+      grid-template-rows: 1fr;
+      gap: 12px;
+      padding: 8px 12px;
       font-size: 13px;
       color: var(--text-secondary);
     }
-    /* Faults row: two equal-width fault cards filling the remaining height
-     * under the info table; min/max keep the graphs readable on extreme heights. */
+    /* Default (narrow quad): two fault cards stacked vertically in the right
+     * column, sharing the available height equally. */
     .remote-cpu-process-faults {
-      flex: 1 1 auto;
-      min-height: 140px;
-      max-height: 320px;
       display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 12px;
+      grid-template-columns: 1fr;
+      grid-template-rows: 1fr 1fr;
+      gap: 10px;
       min-width: 0;
+      min-height: 0;
     }
     .remote-cpu-process-fault-card {
       display: flex;
@@ -3262,29 +3284,85 @@
       height: 100%;
       display: block;
     }
-    /* Info table: centered horizontally with a max-width so the rows read as a
+    /* Info table: centered within its column (left column when side-by-side,
+     * full width when stacked) and capped at a max-width so the rows read as a
      * proper data table on wide quads, not a sparse strip on the left edge.
-     * Sized to its own content (`flex: 0 1 auto`) so it sits flush at the top
-     * of the panel above the faults row. */
+     * No overflow scroll: rows are compact enough that the full table fits
+     * inside the quad on MacBook Pro heights, so we never end up with a
+     * scrollbar that snaps back to the top on every metrics refresh.
+     *
+     * The label column has no min-width so the rows still read cleanly when
+     * squeezed into the side-by-side layout's narrower left column on small
+     * tiles. */
     .remote-cpu-process-info {
-      flex: 0 1 auto;
       min-height: 0;
+      min-width: 0;
       display: flex;
       flex-direction: column;
       align-self: center;
+      justify-self: center;
       width: 100%;
       max-width: 640px;
       gap: 0;
-      overflow-y: auto;
     }
     .remote-cpu-process-row {
       display: grid;
-      grid-template-columns: minmax(140px, 0.9fr) minmax(0, 1fr);
+      grid-template-columns: minmax(0, 0.9fr) minmax(0, 1fr);
       align-items: center;
       gap: 14px;
-      padding: 8px 10px;
+      padding: 4px 10px;
       border-bottom: 1px solid rgba(148, 163, 184, 0.10);
-      min-height: 34px;
+      min-height: 24px;
+    }
+    /* Very narrow quad: in the side-by-side default the right-column fault
+     * cards can drop to ~100px wide. Stack the card header (label above
+     * value) so the value isn't clipped behind the label and the label
+     * doesn't wrap to two lines. */
+    @container cpu-quad (max-width: 380px) {
+      .remote-cpu-process-fault-card-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 2px;
+      }
+    }
+    /* Wide AND tall quad: stacked rhythm. Info table on top sized to its
+     * own content, fault cards side-by-side below capped at a reasonable
+     * height so the sparklines don't dwarf the info table on tall monitors.
+     * The flex column uses `justify-content: center`, so any leftover space
+     * when the faults are capped appears as symmetric breathing room above
+     * and below the (info + faults) block — never as an asymmetric dead
+     * band.
+     *
+     * `min-height: 0` on faults is a safety net: if the quad is right at
+     * the threshold the faults block can shrink instead of pushing content
+     * past the parent's `overflow: hidden`. The two-axis trigger
+     * (`min-width: 540px and min-height: 320px`) means the stacked layout
+     * only activates when there's genuinely enough room on both axes — a
+     * minimized window flips back to side-by-side automatically. */
+    @container cpu-quad (min-width: 540px) and (min-height: 320px) {
+      .remote-cpu-process-table {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        gap: 14px;
+        padding: 10px 14px;
+      }
+      .remote-cpu-process-info {
+        flex: 0 0 auto;
+      }
+      /* Slightly taller rows on wide quads so the info table reads as a peer
+       * to the fault sparklines instead of a dense strip above them. */
+      .remote-cpu-process-row {
+        min-height: 30px;
+        padding: 6px 10px;
+      }
+      .remote-cpu-process-faults {
+        flex: 1 1 auto;
+        min-height: 0;
+        max-height: 280px;
+        grid-template-columns: 1fr 1fr;
+        grid-template-rows: 1fr;
+      }
     }
     .remote-cpu-process-row:last-child { border-bottom: none; }
     .remote-cpu-process-row--uptime-flicker {
@@ -5122,7 +5200,17 @@
       overflow-x: hidden;
       padding: 12px 16px;
       background: #0a0a0f;
-      font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+      /*
+       * Mirror VSCode's Output panel / integrated terminal font stack:
+       * Menlo (macOS) → Monaco fallback → Consolas (Windows) → 'Courier New' → generic
+       * monospace. We intentionally drop 'JetBrains Mono' / 'Fira Code' on this surface
+       * because their programming-ligature substitutions (e.g. `***`, `>>>`, `==>`)
+       * are misleading inside a log viewer where every byte should look like itself.
+       * VSCode disables ligatures by default for the same reason; we also force them
+       * off below so a ligature-enabled fallback can't sneak in.
+       */
+      font-family: Menlo, Monaco, Consolas, 'Courier New', monospace;
+      font-variant-ligatures: none;
       font-size: 12px;
       line-height: 1.6;
       color: #e0e0e0;
@@ -5348,6 +5436,30 @@
       background: var(--bg-secondary);
     }
 
+    /*
+     * Full-URL preview pane sits on --bg-tertiary (its own card surface,
+     * darker than the modal body), so its scrollbar track wants --bg-tertiary
+     * instead of --bg-secondary. Without this it paints the OS-default white
+     * track when the URL is long enough to scroll — see screenshot 2026-05-13
+     * (modal title "20260513_PTVPlaybackTelnetLogs.txt: URL").
+     */
+    .telnet-url-view-full-url::-webkit-scrollbar {
+      width: 8px;
+    }
+    .telnet-url-view-full-url::-webkit-scrollbar-track {
+      background: var(--bg-tertiary);
+    }
+    .telnet-url-view-full-url::-webkit-scrollbar-thumb {
+      background: #4a4a6a;
+      border-radius: 4px;
+    }
+    .telnet-url-view-full-url::-webkit-scrollbar-thumb:hover {
+      background: #5a5a7a;
+    }
+    .telnet-url-view-full-url::-webkit-scrollbar-corner {
+      background: var(--bg-tertiary);
+    }
+
     .telnet-structured-view-pre {
       margin: 0;
       white-space: pre-wrap;
@@ -5365,6 +5477,82 @@
       font-family: inherit;
       font-size: inherit;
       line-height: inherit;
+    }
+
+    /*
+     * Fold / expand groups inside the structured viewer.
+     *
+     * Each foldable container ({…} / […] / <tag>…</tag>) becomes:
+     *   .telnet-fold-group
+     *     .telnet-fold-twisty          ← clickable ▾/▸
+     *     <open-token>                  ← stays inline so braces / tags read normally
+     *     .telnet-fold-body             ← intervening nodes + close-token (default visible)
+     *     .telnet-fold-summary          ← `…<closeMirror/>` (default hidden)
+     *
+     * Collapse swaps body ↔ summary purely via CSS so the same DOM serves both states
+     * — no re-rendering on toggle, no fight with text selection across boundaries.
+     */
+    .telnet-fold-group {
+      /* Inherit the surrounding monospace flow; no display:inline-block here or `pre-wrap`
+       * indentation rounding starts behaving like a separate text run and lines no longer
+       * line up with their non-foldable siblings. */
+    }
+
+    .telnet-fold-twisty {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 1ch;
+      height: 1em;
+      margin-right: 4px;
+      padding: 0;
+      background: transparent;
+      border: 0;
+      color: var(--text-muted);
+      font: inherit;
+      line-height: 1;
+      cursor: pointer;
+      vertical-align: baseline;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    .telnet-fold-twisty::before {
+      /* `▾` (BLACK DOWN-POINTING SMALL TRIANGLE) and `▸` (BLACK RIGHT-POINTING SMALL
+       * TRIANGLE) render at consistent x-height across our default monospace stack
+       * (Menlo/Monaco/Consolas), unlike `▼`/`▶` which are taller and bump line height. */
+      content: '▾';
+      font-size: 0.9em;
+    }
+    .telnet-fold-collapsed > .telnet-fold-twisty::before {
+      content: '▸';
+    }
+    .telnet-fold-twisty:hover,
+    .telnet-fold-twisty:focus-visible {
+      color: var(--accent-purple);
+      outline: none;
+    }
+
+    /* Body shown when expanded, summary shown when collapsed. */
+    .telnet-fold-body {
+      /* default visible */
+    }
+    .telnet-fold-summary {
+      display: none;
+      color: var(--text-muted);
+    }
+    .telnet-fold-summary-ellipsis {
+      margin: 0 2px;
+      padding: 0 4px;
+      border-radius: 4px;
+      background: var(--bg-tertiary);
+      color: var(--text-muted);
+      font-size: 0.9em;
+    }
+    .telnet-fold-collapsed > .telnet-fold-body {
+      display: none;
+    }
+    .telnet-fold-collapsed > .telnet-fold-summary {
+      display: inline;
     }
 
     /* JSON */

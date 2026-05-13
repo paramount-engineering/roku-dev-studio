@@ -82,15 +82,31 @@ export function createTelnetVirtualizer(opts: TelnetVirtualizerOpts): TelnetVirt
   const mounted = new Map<number, HTMLElement>();
 
   /**
-   * Newly-mounted rows queued for measurement. We defer `virt.measureElement(el)`
-   * out of `sync()` (via microtask) because measuring a fresh row immediately
-   * triggers `resizeItem → notify → onChange → sync` recursively. The outer
-   * sync's `for` loop is iterating a `getVirtualItems()` snapshot taken *before*
-   * the resize, so its later iterations would overwrite the inner sync's
-   * correct transforms with stale `item.start` values — visible to the user
-   * as rows overlapping during scroll. Measuring after the loop avoids the race.
+   * Newly-mounted rows queued for measurement. Two reasons for the defer:
+   *
+   *   1. Measuring a fresh row inside `sync()` immediately triggers
+   *      `resizeItem → notify → onChange → sync` recursively. The outer
+   *      sync's `for` loop is iterating a `getVirtualItems()` snapshot taken
+   *      *before* the resize, so its later iterations would overwrite the
+   *      inner sync's correct transforms with stale `item.start` values —
+   *      visible to the user as rows overlapping during scroll. Measuring in
+   *      a post-loop microtask avoids that race.
+   *
+   *   2. We force-measure each row by calling `virt.resizeItem(index, h)`
+   *      *directly* with `el.offsetHeight`. `virt.measureElement(node)`
+   *      registers the ResizeObserver, but its internal call to `resizeItem`
+   *      is gated by `(!isScrolling || scrollState) && shouldMeasureDuringScroll(idx)`,
+   *      so during user scroll the cache can stay at the initial estimate
+   *      forever — even though `offsetHeight` would read the true size. The
+   *      symptom was that the 18px estimate (smaller than the actual ~21px
+   *      single-line height: `font-size 12 × line-height 1.6 + 2px padding`)
+   *      compounded into multi-row visual overlap, especially around long
+   *      wrapping payloads where the estimate is dramatically wrong.
+   *      Calling `resizeItem` ourselves bypasses the gate and lands the
+   *      real measurement deterministically. Repeated calls with the same
+   *      size are cheap — `resizeItem` early-returns on `delta === 0`.
    */
-  const pendingMeasure: HTMLElement[] = [];
+  const pendingMeasure: Array<{ index: number; el: HTMLElement }> = [];
   let measureScheduled = false;
   function scheduleMeasurePass(): void {
     if (measureScheduled) return;
@@ -98,8 +114,18 @@ export function createTelnetVirtualizer(opts: TelnetVirtualizerOpts): TelnetVirt
     queueMicrotask(() => {
       measureScheduled = false;
       while (pendingMeasure.length > 0) {
-        const el = pendingMeasure.shift()!;
-        if (el.isConnected) virt.measureElement(el);
+        const job = pendingMeasure.shift()!;
+        const { index, el } = job;
+        if (!el.isConnected) continue;
+        // 1. Register with the ResizeObserver so future height changes (e.g.,
+        //    deferred-heavy-line drain replacing contentEl, font load) propagate
+        //    through upstream's path. Its internal `resizeItem` may be skipped
+        //    by the scroll gate — that's fine, step 2 handles it.
+        virt.measureElement(el);
+        // 2. Force-land the current rendered height in the size cache. `offsetHeight`
+        //    forces sync layout, so we get the true wrapped height for this row.
+        const h = el.offsetHeight;
+        if (h > 0) virt.resizeItem(index, h);
       }
     });
   }
@@ -148,7 +174,7 @@ export function createTelnetVirtualizer(opts: TelnetVirtualizerOpts): TelnetVirt
         mounted.set(item.index, el);
         opts.onMount?.(item.index, el);
         // Defer measurement to a microtask — see `pendingMeasure` doc above.
-        pendingMeasure.push(el);
+        pendingMeasure.push({ index: item.index, el });
       } else {
         el.style.transform = `translateY(${item.start}px)`;
       }

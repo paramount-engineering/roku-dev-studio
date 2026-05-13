@@ -108,13 +108,29 @@ function appendHighlightedXmlAttributes(root: HTMLElement, attrPart: string): vo
   }
 }
 
+/**
+ * Build one `<span class="telnet-xml-tag">` wrapper around the colored spans for a single
+ * XML tag and append it to `root`. Each kind (`open` / `close` / `self-closing` / `decl` /
+ * `comment`) is encoded in a `data-kind` attribute, and element tags carry their
+ * `data-tagname` so `applyXmlFoldStructure` can match opens with closes without re-parsing.
+ * The previous flat-append shape (one span per token, all siblings of `root`) made
+ * matching impossible without bracket-counting `<` and `>` directly, which broke down on
+ * tags whose attribute values contained `<` or `>`.
+ */
 function appendOneXmlTag(root: HTMLElement, tag: string): void {
+  const wrapper = document.createElement('span');
+  wrapper.className = 'telnet-xml-tag';
+
   if (tag.startsWith('<?')) {
-    root.appendChild(span('telnet-hl-xml-decl', tag));
+    wrapper.dataset.kind = 'decl';
+    wrapper.appendChild(span('telnet-hl-xml-decl', tag));
+    root.appendChild(wrapper);
     return;
   }
   if (tag.startsWith('<!--')) {
-    root.appendChild(span('telnet-hl-xml-comment', tag));
+    wrapper.dataset.kind = 'comment';
+    wrapper.appendChild(span('telnet-hl-xml-comment', tag));
+    root.appendChild(wrapper);
     return;
   }
 
@@ -127,20 +143,25 @@ function appendOneXmlTag(root: HTMLElement, tag: string): void {
   const name = sp < 0 ? rest : rest.slice(0, sp);
   const attrs = sp < 0 ? '' : rest.slice(sp);
 
-  root.appendChild(span('telnet-hl-xml-punct', '<'));
+  wrapper.dataset.kind = selfClose ? 'self-closing' : closing ? 'close' : 'open';
+  if (name) wrapper.dataset.tagname = name;
+
+  wrapper.appendChild(span('telnet-hl-xml-punct', '<'));
   if (closing) {
-    root.appendChild(span('telnet-hl-xml-punct', '/'));
+    wrapper.appendChild(span('telnet-hl-xml-punct', '/'));
   }
-  root.appendChild(span('telnet-hl-xml-tagname', name));
+  wrapper.appendChild(span('telnet-hl-xml-tagname', name));
   if (attrs.trim()) {
-    root.appendChild(document.createTextNode(' '));
-    appendHighlightedXmlAttributes(root, attrs);
+    wrapper.appendChild(document.createTextNode(' '));
+    appendHighlightedXmlAttributes(wrapper, attrs);
   }
   if (selfClose) {
-    root.appendChild(span('telnet-hl-xml-punct', '/>'));
+    wrapper.appendChild(span('telnet-hl-xml-punct', '/>'));
   } else {
-    root.appendChild(span('telnet-hl-xml-punct', '>'));
+    wrapper.appendChild(span('telnet-hl-xml-punct', '>'));
   }
+
+  root.appendChild(wrapper);
 }
 
 function nextXmlTagEnd(xml: string, start: number): number {
@@ -186,5 +207,242 @@ export function applyXmlSyntaxHighlight(root: HTMLElement, xml: string): void {
     const tag = xml.slice(last, gt + 1);
     appendOneXmlTag(root, tag);
     last = gt + 1;
+  }
+}
+
+/* ───────────────────────────── fold / expand ───────────────────────────── */
+
+/**
+ * Build the twisty + body + summary scaffold around an open/close token pair.
+ *
+ * Layout (default `expanded` state):
+ *   <span class="telnet-fold-group" data-kind=…>
+ *     <button class="telnet-fold-twisty" aria-expanded="true" tabindex="-1"></button>
+ *     <openToken/>                  ← moved from caller
+ *     <span class="telnet-fold-body">
+ *       …intervening nodes…         ← moved from caller
+ *       <closeToken/>                ← moved from caller (so its leading-whitespace
+ *                                       text node hides cleanly when collapsed)
+ *     </span>
+ *     <span class="telnet-fold-summary" aria-hidden="true">…<closeMirror/></span>
+ *   </span>
+ *
+ * `.telnet-fold-collapsed` swaps body↔summary visibility via CSS. The `summary`'s
+ * `closeMirror` is a sibling-styled copy of the close token so collapsed renders read
+ * naturally (e.g. `{…}` / `[…]` / `…</tag>`). Returns the new `.telnet-fold-body` so the
+ * caller can recurse into it.
+ */
+function wrapFoldGroup(
+  openToken: HTMLElement,
+  closeToken: HTMLElement,
+  kind: 'json-object' | 'json-array' | 'xml',
+  closeMirrorFactory: () => HTMLElement
+): HTMLElement {
+  const parent = openToken.parentNode;
+  if (!parent) throw new Error('wrapFoldGroup: openToken has no parent');
+
+  // Snapshot the body nodes (siblings strictly between openToken and closeToken) BEFORE
+  // any DOM moves — once we start `appendChild`-ing the open token into the new group,
+  // sibling pointers shift and a naive `while (n !== closeToken) bodyNodes.push(n.next…)`
+  // would race the mutation. Snapshotting up front avoids the tangle.
+  const bodyNodes: ChildNode[] = [];
+  let cursor: ChildNode | null = openToken.nextSibling;
+  while (cursor && cursor !== closeToken) {
+    bodyNodes.push(cursor);
+    cursor = cursor.nextSibling;
+  }
+
+  const group = document.createElement('span');
+  group.className = 'telnet-fold-group';
+  group.dataset.kind = kind;
+
+  parent.insertBefore(group, openToken);
+
+  const twisty = document.createElement('button');
+  twisty.type = 'button';
+  twisty.className = 'telnet-fold-twisty';
+  twisty.setAttribute('aria-expanded', 'true');
+  twisty.setAttribute('aria-label', 'Collapse');
+  twisty.tabIndex = -1;
+  group.appendChild(twisty);
+
+  group.appendChild(openToken);
+
+  const body = document.createElement('span');
+  body.className = 'telnet-fold-body';
+  for (const node of bodyNodes) {
+    body.appendChild(node);
+  }
+  body.appendChild(closeToken);
+  group.appendChild(body);
+
+  const summary = document.createElement('span');
+  summary.className = 'telnet-fold-summary';
+  summary.setAttribute('aria-hidden', 'true');
+  const ellipsis = document.createElement('span');
+  ellipsis.className = 'telnet-fold-summary-ellipsis';
+  ellipsis.textContent = '…';
+  summary.appendChild(ellipsis);
+  summary.appendChild(closeMirrorFactory());
+  group.appendChild(summary);
+
+  return body;
+}
+
+/** Find the close-brace span that balances `openEl` within its parent. */
+function findMatchingJsonClose(openEl: HTMLElement): HTMLElement | null {
+  const openChar = openEl.textContent;
+  const closeChar = openChar === '{' ? '}' : openChar === '[' ? ']' : null;
+  if (!closeChar) return null;
+  let depth = 1;
+  let n: ChildNode | null = openEl.nextSibling;
+  while (n) {
+    if (n instanceof HTMLElement && n.classList.contains('telnet-hl-json-punct')) {
+      const t = n.textContent;
+      if (t === '{' || t === '[') {
+        depth++;
+      } else if (t === '}' || t === ']') {
+        depth--;
+        if (depth === 0) return t === closeChar ? n : null;
+      }
+    }
+    n = n.nextSibling;
+  }
+  return null;
+}
+
+/**
+ * Wrap every `{…}` / `[…]` pair in a fold group, recursing into bodies for nested
+ * collapses. Empty `{}` / `[]` are left alone — the open and close tokens are adjacent
+ * siblings so there's nothing to hide and no twisty would be useful.
+ *
+ * Run *after* `applyJsonSyntaxHighlight`; it consumes the punct spans the tokenizer
+ * emitted and rewires them into the fold scaffold without changing `pre.dataset.formatted`
+ * (which lives separately for the Copy button).
+ */
+export function applyJsonFoldStructure(root: HTMLElement): void {
+  foldJsonContainer(root);
+}
+
+function foldJsonContainer(container: HTMLElement): void {
+  let node: ChildNode | null = container.firstChild;
+  while (node) {
+    const next = node.nextSibling;
+    if (
+      node instanceof HTMLElement &&
+      node.classList.contains('telnet-hl-json-punct') &&
+      (node.textContent === '{' || node.textContent === '[')
+    ) {
+      const openEl = node;
+      const openChar = openEl.textContent as '{' | '[';
+      const closeEl = findMatchingJsonClose(openEl);
+      // Skip empty containers: `{}` / `[]` have the close as the immediate next sibling,
+      // so there's nothing to fold.
+      if (closeEl && closeEl !== openEl.nextSibling) {
+        const body = wrapFoldGroup(
+          openEl,
+          closeEl,
+          openChar === '{' ? 'json-object' : 'json-array',
+          () => {
+            const mirror = document.createElement('span');
+            mirror.className = 'telnet-hl-json-punct';
+            mirror.textContent = openChar === '{' ? '}' : ']';
+            return mirror;
+          }
+        );
+        foldJsonContainer(body);
+        // Continue iterating in the parent container after the new group.
+        node = body.parentElement?.nextSibling ?? null;
+        continue;
+      }
+    }
+    node = next;
+  }
+}
+
+/** Find the close tag that balances `openEl` within its parent, matched by tag name + depth. */
+function findMatchingXmlClose(openEl: HTMLElement): HTMLElement | null {
+  const tagname = openEl.dataset.tagname;
+  if (!tagname) return null;
+  let depth = 1;
+  let n: ChildNode | null = openEl.nextSibling;
+  while (n) {
+    if (n instanceof HTMLElement && n.classList.contains('telnet-xml-tag')) {
+      // Only nested elements with the *same* tag name affect depth. Self-closing tags
+      // (no body) and decl/comment kinds are inert for matching purposes.
+      const kind = n.dataset.kind;
+      const name = n.dataset.tagname;
+      if (kind === 'open' && name === tagname) {
+        depth++;
+      } else if (kind === 'close' && name === tagname) {
+        depth--;
+        if (depth === 0) return n;
+      }
+    }
+    n = n.nextSibling;
+  }
+  return null;
+}
+
+/**
+ * Wrap every non-self-closing `<tag>…</tag>` pair in a fold group, recursing into bodies.
+ * Empty elements (`<tag></tag>` with open immediately followed by close) are left alone
+ * — same rationale as empty JSON containers.
+ *
+ * Run *after* `applyXmlSyntaxHighlight` so the tags are already grouped into
+ * `<span class="telnet-xml-tag" data-kind=… data-tagname=…>` wrappers and we can match
+ * by name without re-parsing the XML.
+ */
+export function applyXmlFoldStructure(root: HTMLElement): void {
+  foldXmlContainer(root);
+}
+
+function foldXmlContainer(container: HTMLElement): void {
+  let node: ChildNode | null = container.firstChild;
+  while (node) {
+    const next = node.nextSibling;
+    if (
+      node instanceof HTMLElement &&
+      node.classList.contains('telnet-xml-tag') &&
+      node.dataset.kind === 'open'
+    ) {
+      const openEl = node;
+      const closeEl = findMatchingXmlClose(openEl);
+      if (closeEl && closeEl !== openEl.nextSibling) {
+        const body = wrapFoldGroup(openEl, closeEl, 'xml', () => {
+          // Mirror the close tag (`</tagname>`) so the collapsed summary renders as
+          // `<tag>…</tag>` — same coloring as the original close, just a fresh DOM node
+          // (we can't move the original because the body still needs it for expand).
+          const tagname = openEl.dataset.tagname ?? '';
+          const mirror = document.createElement('span');
+          mirror.className = 'telnet-xml-tag';
+          mirror.dataset.kind = 'close';
+          mirror.dataset.tagname = tagname;
+          mirror.appendChild(span('telnet-hl-xml-punct', '<'));
+          mirror.appendChild(span('telnet-hl-xml-punct', '/'));
+          mirror.appendChild(span('telnet-hl-xml-tagname', tagname));
+          mirror.appendChild(span('telnet-hl-xml-punct', '>'));
+          return mirror;
+        });
+        foldXmlContainer(body);
+        node = body.parentElement?.nextSibling ?? null;
+        continue;
+      }
+    }
+    node = next;
+  }
+}
+
+/**
+ * Toggle a fold group's collapsed state. Idempotent: the caller (delegated click handler)
+ * can flip without first checking the current state. Mirrors `aria-expanded` on the twisty
+ * so screen readers and keyboard users see the live state.
+ */
+export function toggleFoldGroup(group: HTMLElement): void {
+  const collapsed = group.classList.toggle('telnet-fold-collapsed');
+  const twisty = group.querySelector(':scope > .telnet-fold-twisty');
+  if (twisty instanceof HTMLElement) {
+    twisty.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+    twisty.setAttribute('aria-label', collapsed ? 'Expand' : 'Collapse');
   }
 }
