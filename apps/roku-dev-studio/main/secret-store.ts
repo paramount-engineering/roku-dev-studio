@@ -1,11 +1,30 @@
 /**
  * Encrypted secret store for the main process.
  *
- * Backs the renderer's `roku-dev-passwords` cache with an `safeStorage`-encrypted
+ * Backs the renderer's `roku-dev-passwords` cache with a `safeStorage`-encrypted
  * file under `<userData>/secrets/dev-passwords.json`. Per-entry encryption (not
  * whole-file) so a corrupt entry can't take the rest down.
  *
- * Status semantics:
+ * Opt-in gating
+ * -------------
+ * Touching `safeStorage` on macOS triggers the OS keychain prompt — the
+ * "Roku Dev Studio wants to use your confidential information stored in 'Roku
+ * Dev Studio Safe Storage' in your keychain" dialog — on every cold launch for
+ * unsigned builds. To avoid prompting users who never opted in to keychain
+ * persistence, the entire store is gated behind a `rememberPasswordsInKeychain`
+ * setting (default off). When the setting is off:
+ *   - `init()` does NOT call any `safeStorage.*` API.
+ *   - `init()` does NOT decrypt the on-disk file.
+ *   - `getStatus()` returns `'disabled'` without probing.
+ *   - `setPassword()` stores in-memory only for the session.
+ *   - `deletePassword()` mutates the in-memory cache only.
+ *   - `getAllPasswords()` returns the session cache.
+ * Flipping the setting on (via Settings → General) calls `setEnabled(true)`,
+ * which lazily loads + decrypts the existing on-disk file the first time. THIS
+ * is the point where macOS may prompt — and by that point the user has clearly
+ * opted in.
+ *
+ * Status semantics (when enabled):
  *   - `encrypted`   — `safeStorage.isEncryptionAvailable() === true` AND the
  *                     selected backend is a real keychain (macOS Keychain,
  *                     Windows DPAPI, secret-service, kwallet, etc.).
@@ -16,6 +35,8 @@
  *   - `unavailable` — `isEncryptionAvailable()` is false. Persistence is
  *                     refused; in-memory cache is the only thing keeping
  *                     remembered passwords for the session.
+ *   - `disabled`    — User has not opted in. No `safeStorage` call has been
+ *                     made; we have no idea what the backend would report.
  *
  * Security:
  *   - File mode 0600.
@@ -34,7 +55,7 @@ const FILE_VERSION = 1;
 const FILE_NAME = 'dev-passwords.json';
 const DIR_NAME = 'secrets';
 
-export type SecretStoreStatus = 'encrypted' | 'unencrypted' | 'unavailable';
+export type SecretStoreStatus = 'encrypted' | 'unencrypted' | 'unavailable' | 'disabled';
 
 interface SecretsFile {
   version: number;
@@ -46,9 +67,11 @@ interface SecretsFile {
 let secretsDir: string | null = null;
 let secretsFile: string | null = null;
 let initialized = false;
+let enabled = false;
+let onDiskLoaded = false;
 
 /** Cleartext, in-memory mirror of the on-disk store. Source of truth for reads
- * after `init()` so we don't have to re-decrypt on every IPC call. */
+ * after enable+load so we don't have to re-decrypt on every IPC call. */
 const cache: Record<string, string> = {};
 let backendName: string = 'unknown';
 
@@ -90,10 +113,11 @@ function readBackend(): string {
 
 /**
  * Single source of truth for "is the on-disk file actually encrypted right
- * now". `basic_text` returns true for `isEncryptionAvailable()` so we have to
- * check the backend explicitly.
+ * now". Only probes `safeStorage` if the user has opted in; otherwise returns
+ * `disabled` without touching the keychain.
  */
 export function getStatus(): { status: SecretStoreStatus; backend: string } {
+  if (!enabled) return { status: 'disabled', backend: 'disabled' };
   let available = false;
   try {
     available = safeStorage.isEncryptionAvailable();
@@ -107,8 +131,13 @@ export function getStatus(): { status: SecretStoreStatus; backend: string } {
 }
 
 function encryptOrEncodeForDisk(plaintext: string): string {
-  const status = getStatus().status;
-  if (status === 'unavailable') {
+  let available = false;
+  try {
+    available = safeStorage.isEncryptionAvailable();
+  } catch {
+    available = false;
+  }
+  if (!available) {
     throw new Error('safeStorage encryption is not available on this system');
   }
   // `basic_text` mode: safeStorage will base64-encode (NOT encrypt). We still
@@ -150,9 +179,15 @@ function readFile(): SecretsFile | null {
   }
 }
 
+/**
+ * Persist the in-memory cache to disk. No-op when disabled — we never write
+ * cleartext or touch the keychain unless the user has opted in.
+ */
 function writeFile(): void {
+  if (!enabled) return;
   if (!secretsFile) return;
   ensureDir();
+  if (backendName === 'unknown') backendName = readBackend();
   // Re-encrypt the in-memory cache from scratch so the on-disk file is
   // always consistent with the current backend (defensive against backend
   // changes between launches).
@@ -178,22 +213,19 @@ function writeFile(): void {
 }
 
 /**
- * Resolve paths and load the on-disk store into the in-memory cache. Idempotent.
- * Must be called before any other API in this module.
+ * Decrypt any existing on-disk file into the in-memory cache. Idempotent — once
+ * loaded we keep using the in-memory copy. Only called after the user opts in
+ * (`enabled === true`); this is the first time we ever invoke `safeStorage`.
+ *
+ * Returns the cleaned entry counts so callers can log a single line about the
+ * one-time hydration.
  */
-export function init(app: App): void {
-  if (initialized) return;
-  initialized = true;
-  const userData = app.getPath('userData');
-  secretsDir = path.join(userData, DIR_NAME);
-  secretsFile = path.join(secretsDir, FILE_NAME);
-  backendName = readBackend();
-
+function loadFromDiskIfEnabled(): { loaded: number; dropped: number } {
+  if (!enabled || onDiskLoaded) return { loaded: 0, dropped: 0 };
+  onDiskLoaded = true;
+  if (backendName === 'unknown') backendName = readBackend();
   const file = readFile();
-  if (!file) {
-    logInfo(`no existing store at ${secretsFile} (status=${getStatus().status}, backend=${backendName})`);
-    return;
-  }
+  if (!file) return { loaded: 0, dropped: 0 };
   let loaded = 0;
   let dropped = 0;
   for (const [serial, encoded] of Object.entries(file.entries)) {
@@ -210,9 +242,58 @@ export function init(app: App): void {
     // the warning on every launch.
     writeFile();
   }
-  logInfo(
-    `loaded ${loaded} entries from ${secretsFile} (status=${getStatus().status}, backend=${backendName}, dropped=${dropped})`
-  );
+  return { loaded, dropped };
+}
+
+/**
+ * Resolve paths and remember the opt-in flag. Idempotent. NEVER calls
+ * `safeStorage.*` on its own — that only happens after `setEnabled(true)` is
+ * invoked (typically from the Settings window toggle).
+ */
+export function init(app: App, opts: { enabled: boolean }): void {
+  if (initialized) return;
+  initialized = true;
+  const userData = app.getPath('userData');
+  secretsDir = path.join(userData, DIR_NAME);
+  secretsFile = path.join(secretsDir, FILE_NAME);
+  enabled = !!opts.enabled;
+  // Note: we deliberately do NOT call `readBackend()` here either. Although on
+  // macOS/Windows that's a no-op for `safeStorage`, keeping init free of any
+  // platform-specific keychain code path makes the "never prompt unless opted
+  // in" guarantee easier to audit. The backend name is filled in lazily by
+  // `loadFromDiskIfEnabled()` / `writeFile()` when we actually need it.
+  logInfo(`init (enabled=${enabled}, file=${secretsFile})`);
+  if (enabled) loadFromDiskIfEnabled();
+}
+
+/**
+ * Flip the opt-in flag at runtime. When turning **on** for the first time
+ * this triggers the one-shot hydration from disk (`safeStorage.decryptString`
+ * may prompt the OS at that moment). When turning **off**, any in-memory
+ * passwords saved during the session are kept (they were already exposed to
+ * the renderer); we just stop persisting new writes.
+ *
+ * NOTE: turning off does NOT delete the on-disk file. The user can clear it
+ * explicitly via "Clear Cache and Reload" / `clearAll`.
+ */
+export function setEnabled(next: boolean): { status: SecretStoreStatus; backend: string } {
+  const was = enabled;
+  enabled = !!next;
+  if (!was && enabled) {
+    // First hydrate from any existing on-disk file (catches users who had the
+    // toggle on previously, then off, then on again).
+    loadFromDiskIfEnabled();
+    // Then persist any in-memory entries that accumulated while disabled —
+    // e.g. legacy localStorage entries imported via `migrateLegacy`, or
+    // session-only passwords the user typed earlier in this launch. Without
+    // this, flipping on would silently lose those values at app quit.
+    if (Object.keys(cache).length > 0) writeFile();
+  }
+  return getStatus();
+}
+
+export function isEnabled(): boolean {
+  return enabled;
 }
 
 export function getAllPasswords(): Record<string, string> {
@@ -225,14 +306,16 @@ export function setPassword(serial: string, password: string): void {
   if (typeof password !== 'string') return;
   if (cache[serial] === password) return;
   cache[serial] = password;
-  writeFile();
+  // Persists only when the user has opted in. Otherwise the password stays
+  // session-only (renderer treats this as "remembered for now"; lost on quit).
+  if (enabled) writeFile();
 }
 
 export function deletePassword(serial: string): void {
   if (typeof serial !== 'string' || !serial) return;
   if (!(serial in cache)) return;
   delete cache[serial];
-  writeFile();
+  if (enabled) writeFile();
 }
 
 export function clearAll(): void {
@@ -248,12 +331,20 @@ export function clearAll(): void {
       logWarn('failed to remove secrets file during clearAll:', e);
     }
   }
+  // Allow the next opt-in to re-hydrate fresh from disk (which will now be
+  // empty / missing).
+  onDiskLoaded = false;
 }
 
 /**
  * One-shot bulk import from the legacy renderer-side `localStorage` blob.
  * Only runs when the on-disk store is empty; returns the count migrated so
  * the renderer can decide whether to drop the legacy `localStorage` key.
+ *
+ * Legacy migration is allowed regardless of the opt-in flag so we don't lose
+ * existing entries — but if the user is currently opted **out**, the migrated
+ * entries live in memory only until they opt in (at which point `writeFile`
+ * persists them).
  */
 export function migrateLegacy(legacy: Record<string, string>): { migrated: number; skipped: boolean } {
   if (Object.keys(cache).length > 0) {
@@ -268,6 +359,6 @@ export function migrateLegacy(legacy: Record<string, string>): { migrated: numbe
     cache[serial] = password;
     count += 1;
   }
-  if (count > 0) writeFile();
+  if (count > 0 && enabled) writeFile();
   return { migrated: count, skipped: false };
 }

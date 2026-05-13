@@ -14,7 +14,8 @@ const { registerLogViewerIpc, openLogFileViewerWindow } = require('./main/log-fi
 const {
   registerFiddleIpc,
   openFiddleWindow,
-  broadcastFiddleTerminalData
+  broadcastFiddleTerminalData,
+  broadcastFiddlePrivacyMode
 } = require('./main/fiddle-window');
 const { registerBsFiddleIpc } = require('./main/ipc/bs-fiddle-handlers');
 const { showAboutDialog, registerAboutIpc } = require('./main/about-dialog');
@@ -265,10 +266,18 @@ function createWindow(appState: AppWindowState) {
           accelerator: 'CmdOrCtrl+Shift+P',
           click: (menuItem: import('electron').MenuItem) => {
             privacyModeEnabled = !!menuItem.checked;
-            // Notify renderer of the change
+            // Keep appState in sync so the system-handler `getPrivacyMode`
+            // invoke (used by freshly-opened Fiddle / Settings windows) reads
+            // the current value instead of the snapshot captured at startup.
+            if (appState) {
+              appState.privacyModeEnabled = privacyModeEnabled;
+            }
             if (win && win.webContents) {
               win.webContents.send('privacy-mode-changed', privacyModeEnabled);
             }
+            // Fan the toggle out to every open Fiddle window so its dropdown
+            // and password modal mask IPs in lockstep with the main window.
+            broadcastFiddlePrivacyMode(privacyModeEnabled);
           }
         },
         {
@@ -476,7 +485,9 @@ function registerSecretsIpc(ipc: typeof ipcMain) {
 
 app.whenReady().then(() => {
   initSettings(app);
-  secretStore.init(app);
+  const earlySettings = loadSettings();
+  const rememberPasswordsInKeychain = earlySettings.rememberPasswordsInKeychain === true;
+  secretStore.init(app, { enabled: rememberPasswordsInKeychain });
   registerAboutIpc(ipcMain, clipboard, shell);
   registerLogViewerIpc(ipcMain);
   registerSettingsIpc(ipcMain);
@@ -536,8 +547,19 @@ app.whenReady().then(() => {
         disableFileLogging();
       }
     },
+    applyRememberPasswordsInKeychain: (next: boolean) => {
+      // Flipping the toggle off doesn't delete the on-disk file — only
+      // "Clear Cache and Reload" / the explicit clearAll IPC does that. We
+      // just stop persisting new writes and avoid `safeStorage.*` calls.
+      secretStore.setEnabled(next);
+    },
     notifyRenderer: (channel: string, data: unknown) => {
       safeSendToRenderer(channel, data);
+      // Privacy Mode toggles need to reach every open Fiddle window too —
+      // the main renderer is no longer the only consumer of this signal.
+      if (channel === IPC.PrivacyModeChanged) {
+        broadcastFiddlePrivacyMode(!!data);
+      }
     }
   });
 

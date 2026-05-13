@@ -504,6 +504,26 @@
       color: var(--accent-purple);
       background: rgba(139, 92, 246, 0.12);
     }
+
+    /* Local section title is short ("Local"); let it hug its natural width so
+     * the device-count badge sits directly beside it. The Scan button is then
+     * pushed to the right edge via margin-left:auto. Remote locations keep
+     * the default flex:1 name behavior because their names can be long. */
+    .location-section.local .location-name {
+      flex: 0 0 auto;
+    }
+    .location-section.local #scanBtn {
+      margin-left: auto;
+    }
+    /* While a local scan is in progress the Scan button morphs into a
+     * "Scanning..." pill that already encodes the active state; the
+     * device-count badge next to it just adds visual noise (and can briefly
+     * show stale counts mid-scan). Hide it for the duration of the scan.
+     * updateScanButton() toggles .scanning on #scanBtn — we react to that
+     * via :has() so no JS changes are needed. */
+    .location-section.local .location-header-top:has(#scanBtn.scanning) .location-device-count {
+      display: none;
+    }
     
     .location-section.remote .location-device-count {
       color: var(--accent-cyan);
@@ -2755,6 +2775,13 @@
     .remote-metrics-paused-hint-actions .btn-sm {
       white-space: nowrap;
     }
+    /* Same `.btn { display: inline-flex }` vs `[hidden] { display: none }`
+     * cascade collision as `.card-header-actions .btn[hidden]` below; force
+     * the attribute to win so the Launch / Sideload-Dev-App buttons in the
+     * paused banner can be toggled via `el.hidden = …` without inline styles. */
+    .remote-metrics-paused-hint-actions .btn[hidden] {
+      display: none !important;
+    }
     .remote-tab-metrics-root[data-metrics-paused="1"] .remote-metrics-paused-hint {
       display: flex;
     }
@@ -3110,6 +3137,138 @@
       color: var(--text-primary);
       background: rgba(251, 146, 60, 0.12);
       box-shadow: inset 0 -2px 0 0 #fb923c;
+    }
+    /* CPU quad header: title on the left, mode-switch on the right (hidden until <proc-stat> seen). */
+    .remote-quad-cpu-header {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 8px;
+    }
+    .remote-quad-cpu-header-title {
+      justify-self: start;
+      min-width: 0;
+      font-size: 13px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text-secondary);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .remote-cpu-mode-switch-wrap[hidden] { display: none !important; }
+    .remote-cpu-mode-switch {
+      display: inline-flex;
+      flex-direction: row;
+      align-items: stretch;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      overflow: hidden;
+      background: var(--bg-tertiary);
+    }
+    .remote-cpu-mode-btn {
+      margin: 0;
+      padding: 3px 10px;
+      font-size: 10px;
+      font-weight: 600;
+      color: var(--text-muted);
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      font-family: inherit;
+    }
+    .remote-cpu-mode-btn:hover { color: var(--text-secondary); }
+    .remote-cpu-mode-btn[data-cpu-mode="percent"].is-active {
+      color: var(--text-primary);
+      background: rgba(248, 113, 113, 0.16);
+      box-shadow: inset 0 -2px 0 0 #f87171;
+    }
+    .remote-cpu-mode-btn[data-cpu-mode="process"].is-active {
+      color: var(--text-primary);
+      background: rgba(96, 165, 250, 0.16);
+      box-shadow: inset 0 -2px 0 0 #60a5fa;
+    }
+    /* CPU process-mode table — replaces the chart svg-wrap when active. */
+    .remote-cpu-process-table[hidden] { display: none !important; }
+    .remote-cpu-process-table {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      padding: 6px 10px 4px;
+      gap: 2px;
+      overflow-y: auto;
+      font-size: 11px;
+      color: var(--text-secondary);
+    }
+    .remote-cpu-process-row {
+      display: grid;
+      grid-template-columns: minmax(110px, 0.9fr) minmax(0, 1fr) 56px;
+      align-items: center;
+      gap: 8px;
+      padding: 3px 0;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.08);
+      min-height: 22px;
+    }
+    .remote-cpu-process-row:last-child { border-bottom: none; }
+    .remote-cpu-process-row--major-active {
+      background: rgba(248, 113, 113, 0.08);
+      border-radius: 4px;
+    }
+    .remote-cpu-process-row--uptime-flicker {
+      animation: remote-cpu-uptime-flicker 0.9s ease-out 1;
+    }
+    @keyframes remote-cpu-uptime-flicker {
+      0%   { background: rgba(251, 191, 36, 0.35); }
+      100% { background: transparent; }
+    }
+    .remote-cpu-process-label {
+      font-size: 10px;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      min-width: 0;
+    }
+    .remote-cpu-process-state-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--text-muted);
+      flex-shrink: 0;
+    }
+    .remote-cpu-process-state-dot--green { background: #4ade80; }
+    .remote-cpu-process-state-dot--amber { background: #fbbf24; }
+    .remote-cpu-process-state-dot--red   { background: #f87171; }
+    .remote-cpu-process-value {
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-size: 11px;
+      color: var(--text-primary);
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .remote-cpu-process-value-secondary {
+      font-size: 10px;
+      color: var(--text-muted);
+      margin-left: 6px;
+    }
+    .remote-cpu-process-spark {
+      width: 100%;
+      height: 18px;
+      display: block;
+    }
+    .remote-cpu-process-footer-time {
+      font-size: 10px;
+      font-weight: 500;
+      letter-spacing: 0.02em;
+      color: var(--text-muted);
+      flex-shrink: 0;
     }
     .remote-objects-top-label {
       justify-self: end;
@@ -8141,7 +8300,10 @@
       font-size: 13px;
       font-weight: 500;
       line-height: 1.3;
-      transition: background 0.15s, color 0.15s, border-color 0.15s;
+      /* No transition: when the user clicks B before A's 0.15s fade-out
+       * completes, A is still wearing the highlight while B fades in — two
+       * items appear active at once. Snap-switching makes the previous item
+       * lose its highlight the instant the new one gains it. */
     }
 
     .help-nav-item .icon {
@@ -8162,11 +8324,15 @@
       white-space: nowrap;
     }
 
-    .help-nav-item:hover {
+    /* `:not(.active)` is defensive — the .active rule below already wins by
+     * source order today, but tying hover explicitly to non-active makes the
+     * "only ever one highlight" invariant load-bearing rather than
+     * accidental. */
+    .help-nav-item:hover:not(.active) {
       background: var(--bg-tertiary);
       color: var(--text-primary);
     }
-    .help-nav-item:hover .icon { color: var(--text-primary); }
+    .help-nav-item:hover:not(.active) .icon { color: var(--text-primary); }
 
     .help-nav-item.active {
       background: var(--accent-purple-dim, rgba(139, 92, 246, 0.15));
@@ -9188,15 +9354,13 @@
           <div class="location-header" id="localDevicesHeader">
             <div class="location-header-top">
               <span class="location-status"></span>
-              <span class="location-name">Local Devices</span>
+              <span class="location-name">Local</span>
+              <span class="location-device-count" id="localDeviceCount">0 devices</span>
               <button class="location-action-btn primary" id="scanBtn">
                 <span class="scan-icon icon icon-sm"><svg><use href="#icon-radar"/></svg></span>
                 <span class="scan-text">Scan</span>
               </button>
               <span class="location-toggle"><span class="icon icon-sm"><svg><use href="#icon-chevron-down"/></svg></span></span>
-            </div>
-            <div class="location-header-bottom">
-              <span class="location-device-count" id="localDeviceCount">0 devices</span>
             </div>
           </div>
           <div class="location-body" id="localDevicesBody">
@@ -9868,17 +10032,29 @@
               <div class="remote-quad-card-footer remote-objects-quad-footer" data-objects-footer hidden></div>
             </section>
             <section class="remote-quad remote-quad-cpu" aria-label="CPU usage">
-              <div class="remote-quad-header remote-quad-chart-title">CPU Usage</div>
-              <div class="remote-quad-chart-layout">
-                <div class="remote-chart-svg-wrap">
-                  <svg class="remote-chart-svg" data-chart="cpu" viewBox="0 0 420 200" preserveAspectRatio="xMidYMid meet" aria-hidden="true"></svg>
+              <div class="remote-quad-header remote-quad-cpu-header">
+                <span class="remote-quad-cpu-header-title">CPU Usage</span>
+                <div class="remote-cpu-mode-switch-wrap" data-cpu-mode-switch-wrap hidden>
+                  <div class="remote-cpu-mode-switch" role="tablist" aria-label="CPU metrics mode">
+                    <button type="button" class="remote-cpu-mode-btn is-active" role="tab" aria-selected="true" data-cpu-mode="percent">CPU %</button>
+                    <button type="button" class="remote-cpu-mode-btn" role="tab" aria-selected="false" data-cpu-mode="process">Process</button>
+                  </div>
                 </div>
               </div>
-              <div class="remote-quad-card-footer remote-chart-quad-footer">
+              <div class="remote-quad-chart-layout">
+                <div class="remote-chart-svg-wrap" data-cpu-chart-wrap>
+                  <svg class="remote-chart-svg" data-chart="cpu" viewBox="0 0 420 200" preserveAspectRatio="xMidYMid meet" aria-hidden="true"></svg>
+                </div>
+                <div class="remote-cpu-process-table" data-cpu-process-table hidden></div>
+              </div>
+              <div class="remote-quad-card-footer remote-chart-quad-footer" data-cpu-quad-footer>
                 <aside class="remote-chart-legend" data-legend="cpu">
                   <div class="remote-legend-row" data-series="cpu-total"><span class="remote-legend-swatch" style="background:#f87171"></span><span class="remote-legend-label">Total</span><span class="remote-legend-val">—</span></div>
                   <div class="remote-legend-row" data-series="cpu-user"><span class="remote-legend-swatch" style="background:#60a5fa"></span><span class="remote-legend-label">User</span><span class="remote-legend-val">—</span></div>
                   <div class="remote-legend-row" data-series="cpu-sys"><span class="remote-legend-swatch" style="background:#4ade80"></span><span class="remote-legend-label">Kernel</span><span class="remote-legend-val">—</span></div>
+                </aside>
+                <aside class="remote-cpu-process-footer" data-cpu-process-footer hidden>
+                  <span class="remote-cpu-process-footer-time" data-cpu-process-time>—</span>
                 </aside>
               </div>
             </section>

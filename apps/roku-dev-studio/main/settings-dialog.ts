@@ -87,6 +87,7 @@ function settingsHtml(): string {
       align-items: center;
       gap: 10px;
       margin: 0;
+      min-width: 0;
     }
     .settings-header h1::before {
       content: '';
@@ -95,6 +96,27 @@ function settingsHtml(): string {
       border-radius: 2px;
       background: linear-gradient(180deg, var(--accent-purple), var(--accent-cyan));
       flex-shrink: 0;
+    }
+    /* Crumb-style separator between "Settings" and the active subsection. The
+     * subsection label updates live in selectSection(); we use a chevron so
+     * the relationship reads as parent to child rather than two co-equal
+     * headings. */
+    .settings-header-delim {
+      color: var(--text-muted);
+      font-weight: 400;
+      font-size: 16px;
+      line-height: 1;
+      flex-shrink: 0;
+      opacity: 0.8;
+    }
+    .settings-header-section {
+      color: var(--text-secondary);
+      font-weight: 500;
+      letter-spacing: -0.01em;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      min-width: 0;
     }
     .modal-close {
       width: 28px;
@@ -245,11 +267,11 @@ function settingsHtml(): string {
       transition: border-color 0.15s;
     }
     .settings-section:hover { border-color: var(--border-hover); }
-    /* No border-top: the last .settings-row-toggle above already has border-bottom; a top here doubled the divider. */
-    .general-timing-rows {
-      margin-top: 8px;
-      padding-top: 12px;
-    }
+    /* .general-timing-rows is a grouping div with no own spacing — the last
+     * toggle row's bottom padding + border and the first timing row's top
+     * padding already give the same gap as any other row-to-row transition.
+     * Adding extra margin/padding here just orphaned the timing block
+     * visually (see the Toast Duration gap regression). */
     .help-blurb {
       font-size: 12px;
       color: var(--text-secondary);
@@ -269,7 +291,11 @@ function settingsHtml(): string {
       .timing-row .row-label { flex: 1 1 100% !important; }
       .timing-row .timing-field { flex: 1 1 100% !important; }
     }
-    .timing-row:last-child { border-bottom: none; padding-bottom: 0; }
+    /* Strip only the divider on the last row, NOT the bottom padding —
+     * stripping padding makes the last row visually shorter than its peers
+     * (the doubled-up TOAST_DISPLAY_DURATION vs STATUS_MESSAGE_DURATION
+     * gap). The section's own padding provides the room beneath. */
+    .timing-row:last-child { border-bottom: none; }
     .timing-row .row-label {
       flex: 4 1 0;
       min-width: 0;
@@ -468,18 +494,6 @@ function settingsHtml(): string {
     .section-save-status.err {
       color: var(--accent-red);
     }
-    .settings-panel-heading {
-      flex-shrink: 0;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-      flex-wrap: wrap;
-      margin: 0 0 14px 0;
-    }
-    .settings-panel-heading .settings-panel-title {
-      margin: 0;
-    }
     .folder-scripts-block .help-blurb {
       margin-bottom: 12px;
     }
@@ -536,18 +550,9 @@ function settingsHtml(): string {
       background: var(--accent-purple-dim);
       border-left-color: var(--border-hover);
     }
-    .folder-clear-slot {
-      flex: 1 1 0;
-      min-width: 0;
-      display: flex;
-    }
-    .folder-clear-slot .btn {
-      width: 100%;
-      min-height: 100%;
-    }
     @media (max-width: 560px) {
       .folder-action-row { flex-direction: column; }
-      .folder-integrated, .folder-clear-slot { flex: 1 1 auto; width: 100%; }
+      .folder-integrated { flex: 1 1 auto; width: 100%; }
     }
     .btn {
       padding: 10px 18px;
@@ -622,12 +627,11 @@ function settingsHtml(): string {
       padding: 12px 0;
       border-bottom: 1px solid var(--border);
     }
-    .mcp-client-row:first-child {
-      padding-top: 0;
-    }
+    /* Same rationale as .timing-row:last-child — drop only the divider,
+     * not the row padding, so every MCP client row has the same height
+     * regardless of position. */
     .mcp-client-row:last-child {
       border-bottom: none;
-      padding-bottom: 0;
     }
     .mcp-client-row.disabled .settings-toggle-wrap {
       cursor: not-allowed;
@@ -722,7 +726,11 @@ function settingsHtml(): string {
 <body>
   <div id="settingsAnimateRoot" class="settings-animate-root">
   <div class="settings-header">
-    <h1>Settings</h1>
+    <h1>
+      <span>Settings</span>
+      <span class="settings-header-delim" aria-hidden="true">›</span>
+      <span id="settingsHeaderSection" class="settings-header-section">General</span>
+    </h1>
     <button type="button" class="modal-close" id="btnHeaderClose" title="Close" aria-label="Close">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
         <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
@@ -741,7 +749,6 @@ function settingsHtml(): string {
       <div class="settings-panel active" data-section="general" id="panel-general" role="tabpanel" aria-labelledby="nav-general" aria-hidden="false">
         <div class="settings-panel-fill">
           <div class="settings-panel-scroll">
-            <h2 class="settings-panel-title">General</h2>
             <div class="settings-section">
               <div class="settings-row-toggle">
                 <div class="settings-row-text">
@@ -803,10 +810,21 @@ function settingsHtml(): string {
                   <span class="settings-toggle-ui" aria-hidden="true"></span>
                 </label>
               </div>
+              <div class="settings-row-toggle">
+                <div class="settings-row-text">
+                  <strong>Persist Save Passwords in System Keychain</strong>
+                  <span class="settings-row-desc">Stores each device's "Remember password" entry in the OS keychain so it survives quit/relaunch. Your OS may prompt the first time. When Off, remembered passwords stay in memory and are cleared on quit.</span>
+                </div>
+                <label class="settings-toggle-wrap" for="optRememberPasswordsInKeychain">
+                  <input type="checkbox" id="optRememberPasswordsInKeychain" class="settings-toggle-input" role="switch" aria-label="Persist saved passwords in system keychain" aria-checked="false" />
+                  <span class="settings-toggle-ui" aria-hidden="true"></span>
+                </label>
+              </div>
               <div id="generalTimingRows" class="general-timing-rows"></div>
             </div>
           </div>
           <div class="section-save-dock">
+            <button type="button" class="btn-timing-reset" id="btnResetGeneral">Reset to Defaults</button>
             <span class="section-save-status" id="saveStatusGeneral" aria-live="polite"></span>
             <button type="button" class="btn btn-primary" id="btnSaveGeneral">Save</button>
           </div>
@@ -815,7 +833,6 @@ function settingsHtml(): string {
       <div class="settings-panel" data-section="action-scripts" id="panel-action-scripts" role="tabpanel" aria-labelledby="nav-action-scripts" aria-hidden="true">
         <div class="settings-panel-fill">
           <div class="settings-panel-scroll">
-            <h2 class="settings-panel-title">Action Scripts</h2>
             <div class="settings-section folder-scripts-block">
               <p class="help-blurb">Default folder for screenshots and logs when a script needs saves. You can still pick another folder per run.</p>
               <div class="folder-action-row">
@@ -823,23 +840,17 @@ function settingsHtml(): string {
                   <div id="folderDisplay" class="folder-integrated-path empty">No folder set</div>
                   <button type="button" class="folder-integrated-btn" id="btnBrowseFolder">Choose folder…</button>
                 </div>
-                <div class="folder-clear-slot">
-                  <button type="button" class="btn btn-secondary" id="btnClearFolder">Clear</button>
-                </div>
               </div>
             </div>
           </div>
           <div class="section-save-dock">
+            <button type="button" class="btn-timing-reset" id="btnResetActionScripts">Reset to Defaults</button>
             <span class="section-save-status" id="saveStatusActionScripts" aria-live="polite"></span>
             <button type="button" class="btn btn-primary" id="btnSaveActionScripts">Save</button>
           </div>
         </div>
       </div>
-      <div class="settings-panel" data-section="device-performance" id="panel-device-performance" role="tabpanel" aria-labelledby="device-performance-panel-title" aria-hidden="true">
-        <div class="settings-panel-heading">
-          <h2 class="settings-panel-title" id="device-performance-panel-title">Device Performance</h2>
-          <button type="button" class="btn-timing-reset" id="btnResetDevicePerf">Reset to Defaults</button>
-        </div>
+      <div class="settings-panel" data-section="device-performance" id="panel-device-performance" role="tabpanel" aria-labelledby="nav-device-performance" aria-hidden="true">
         <div class="settings-panel-fill">
           <div class="settings-panel-scroll">
             <p class="help-blurb">Applies while <strong>Show Device Performance</strong> is on, the Roku has Developer Mode, and the Dev App is in the foreground. When <strong>Remember 'Show Device Performance'</strong> is on below, the Remote tab restores the quad layout per device.</p>
@@ -858,16 +869,13 @@ function settingsHtml(): string {
             </div>
           </div>
           <div class="section-save-dock">
+            <button type="button" class="btn-timing-reset" id="btnResetDevicePerf">Reset to Defaults</button>
             <span class="section-save-status" id="saveStatusDevicePerf" aria-live="polite"></span>
             <button type="button" class="btn btn-primary" id="btnSaveDevicePerf">Save</button>
           </div>
         </div>
       </div>
-      <div class="settings-panel" data-section="timing" id="panel-timing" role="tabpanel" aria-labelledby="timing-panel-title" aria-hidden="true">
-        <div class="settings-panel-heading">
-          <h2 class="settings-panel-title" id="timing-panel-title">Timing &amp; Network</h2>
-          <button type="button" class="btn-timing-reset" id="btnResetTiming">Reset to Defaults</button>
-        </div>
+      <div class="settings-panel" data-section="timing" id="panel-timing" role="tabpanel" aria-labelledby="nav-timing" aria-hidden="true">
         <div class="settings-panel-fill">
           <div class="settings-panel-scroll">
             <div class="settings-section">
@@ -875,6 +883,7 @@ function settingsHtml(): string {
             </div>
           </div>
           <div class="section-save-dock">
+            <button type="button" class="btn-timing-reset" id="btnResetTiming">Reset to Defaults</button>
             <span class="section-save-status" id="saveStatusTiming" aria-live="polite"></span>
             <button type="button" class="btn btn-primary" id="btnSaveTiming">Save</button>
           </div>
@@ -883,13 +892,13 @@ function settingsHtml(): string {
       <div class="settings-panel" data-section="mcp-server" id="panel-mcp-server" role="tabpanel" aria-labelledby="nav-mcp-server" aria-hidden="true">
         <div class="settings-panel-fill">
           <div class="settings-panel-scroll">
-            <h2 class="settings-panel-title">MCP Server</h2>
             <p class="help-blurb">Expose Roku Dev Studio to AI agents via the <a href="https://modelcontextprotocol.io" target="_blank" rel="noopener noreferrer" class="mcp-link">Model Context Protocol</a>. Toggle a client to add or remove its <code class="mcp-inline-code">roku-dev-studio</code> MCP Server entry; other entries are left untouched.</p>
             <div class="settings-section">
               <div id="mcpClientsList" class="mcp-clients-list" aria-live="polite"></div>
             </div>
           </div>
           <div class="section-save-dock">
+            <button type="button" class="btn-timing-reset" id="btnResetMcpServer">Reset to Defaults</button>
             <span class="section-save-status" id="saveStatusMcpServer" aria-live="polite"></span>
             <button type="button" class="btn btn-primary" id="btnSaveMcpServer">Save</button>
           </div>
@@ -932,6 +941,7 @@ function settingsHtml(): string {
       var mcpClientDetections = [];
 
       function selectSection(targetId) {
+        var activeLabel = '';
         document.querySelectorAll('.settings-panel').forEach(function (panel) {
           var on = panel.getAttribute('data-section') === targetId;
           panel.classList.toggle('active', on);
@@ -941,7 +951,14 @@ function settingsHtml(): string {
           var on = btn.getAttribute('data-target') === targetId;
           btn.classList.toggle('active', on);
           btn.setAttribute('aria-selected', on ? 'true' : 'false');
+          if (on) {
+            // Use the nav item's own text as the breadcrumb label so the
+            // header stays in sync without a parallel id → label map.
+            activeLabel = (btn.textContent || '').trim();
+          }
         });
+        var headerSection = document.getElementById('settingsHeaderSection');
+        if (headerSection && activeLabel) headerSection.textContent = activeLabel;
       }
 
       document.querySelectorAll('.settings-nav-item').forEach(function (btn) {
@@ -1511,6 +1528,7 @@ function settingsHtml(): string {
         setToggle('optKeyboardRemote', state.keyboardRemoteShortcutsEnabled === true);
         setToggle('optAutoConnectLast', state.autoConnectLastDeviceEnabled === true);
         setToggle('optRememberSidebarToggle', state.rememberSidebarToggle === true);
+        setToggle('optRememberPasswordsInKeychain', state.rememberPasswordsInKeychain === true);
         setToggle('optDevicePerfRememberQuad', state.devicePerformanceRememberQuadPerDevice === true);
         if (state.logFilePath && el('logPathHint')) {
           el('logPathHint').textContent = 'Log file: ' + state.logFilePath;
@@ -1534,9 +1552,28 @@ function settingsHtml(): string {
           if (res && res.success && res.folderPath) setFolderDisplay(res.folderPath);
         });
       });
-      el('btnClearFolder').addEventListener('click', function () {
-        setFolderDisplay('');
-      });
+      var btnResetActionScripts = el('btnResetActionScripts');
+      if (btnResetActionScripts) {
+        btnResetActionScripts.addEventListener('click', function () {
+          setFolderDisplay('');
+        });
+      }
+      // Form-only reset, same contract as the other panels: flip every
+      // installed client toggle off in the UI and let the user click Save
+      // to actually remove the roku-dev-studio entries from disk. Not-
+      // installed clients have no entry to remove, so we leave them alone.
+      var btnResetMcpServer = el('btnResetMcpServer');
+      if (btnResetMcpServer) {
+        btnResetMcpServer.addEventListener('click', function () {
+          mcpClientDetections.forEach(function (det) {
+            if (!det || !det.installed) return;
+            var id = det.id;
+            if (MCP_CLIENT_IDS.indexOf(id) === -1) return;
+            mcpClientsState[id] = false;
+          });
+          renderMcpClients();
+        });
+      }
       el('btnResetTiming').addEventListener('click', function () {
         applyDefaultsForKeys(TIMING_KEYS);
         validateTimingPanel('Timing');
@@ -1549,12 +1586,38 @@ function settingsHtml(): string {
           validateTimingPanel('DevicePerf');
         });
       }
+      // Factory defaults for the General panel. Declared as an explicit map
+      // (not a blanket "all false" loop) so adding a new toggle here forces
+      // the author to pick a default; silent omissions would leave new
+      // settings out of the Reset action. Reset DOES NOT delete persisted
+      // password entries on disk; flipping the keychain toggle off just
+      // stops persistence — see secret-store.ts for the rationale.
+      var GENERAL_TOGGLE_DEFAULTS = {
+        optDevMode: false,
+        optPrivacy: false,
+        optDebugLog: false,
+        optKeyboardRemote: false,
+        optAutoConnectLast: false,
+        optRememberSidebarToggle: false,
+        optRememberPasswordsInKeychain: false
+      };
+      var btnResetGeneral = el('btnResetGeneral');
+      if (btnResetGeneral) {
+        btnResetGeneral.addEventListener('click', function () {
+          Object.keys(GENERAL_TOGGLE_DEFAULTS).forEach(function (id) {
+            setToggle(id, GENERAL_TOGGLE_DEFAULTS[id]);
+          });
+          applyDefaultsForKeys(GENERAL_TIMING_KEYS);
+          validateTimingPanel('General');
+        });
+      }
       wireToggleAria('optDevMode');
       wireToggleAria('optPrivacy');
       wireToggleAria('optDebugLog');
       wireToggleAria('optKeyboardRemote');
       wireToggleAria('optAutoConnectLast');
       wireToggleAria('optRememberSidebarToggle');
+      wireToggleAria('optRememberPasswordsInKeychain');
       wireToggleAria('optDevicePerfRememberQuad');
 
       function buildPayload() {
@@ -1568,6 +1631,7 @@ function settingsHtml(): string {
           keyboardRemoteShortcutsEnabled: boolFromToggle('optKeyboardRemote'),
           autoConnectLastDeviceEnabled: boolFromToggle('optAutoConnectLast'),
           rememberSidebarToggle: boolFromToggle('optRememberSidebarToggle'),
+          rememberPasswordsInKeychain: boolFromToggle('optRememberPasswordsInKeychain'),
           mcpClients: (function () {
             var out = {};
             MCP_CLIENT_IDS.forEach(function (id) {

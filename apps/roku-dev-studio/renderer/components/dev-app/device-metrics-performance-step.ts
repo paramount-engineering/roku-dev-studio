@@ -8,7 +8,7 @@ import {
   DEVICE_PERFORMANCE_CHART_IDS,
   type DevicePerformanceChartId
 } from '../action-scripts/action-registry.js';
-import type { ObjectCountRow } from './remote-metrics-charts.js';
+import type { ObjectCountRow, ProcStatParsed } from './remote-metrics-charts.js';
 import { domToPng } from '../../vendor/modern-screenshot.mjs';
 
 /** Internal only: max wall time to wait for first usable metrics sample (not shown in UI). */
@@ -28,12 +28,29 @@ type PerformanceCaptureItem = {
   caption: string;
   /** When set, Count/Memory UI is synced before this capture. */
   objectsMode?: 'count' | 'memory';
+  /** When set, CPU % / Process UI is synced before this capture (Process requires proc-stat available). */
+  cpuMode?: 'percent' | 'process';
+  /** When true, this item is silently skipped if `procStat` is unavailable on the current device. */
+  skipIfNoProcStat?: boolean;
 };
 
+/**
+ * Per-chart capture plan. `cpu` and `aboveAll` emit a Process page in addition to the Graph when
+ * the device has produced a `<proc-stat>` block this session; the runner consults the live wrap to
+ * decide and filters items with `skipIfNoProcStat: true` if proc-stat is absent.
+ */
 function performanceCapturePlan(chart: DevicePerformanceChartId): PerformanceCaptureItem[] {
   switch (chart) {
     case 'cpu':
-      return [{ sel: SEL_CPU, caption: 'CPU Usage' }];
+      return [
+        { sel: SEL_CPU, caption: 'CPU Usage (Graph)', cpuMode: 'percent' },
+        {
+          sel: SEL_CPU,
+          caption: 'CPU Usage (Process)',
+          cpuMode: 'process',
+          skipIfNoProcStat: true
+        }
+      ];
     case 'memory':
       return [{ sel: SEL_MEM, caption: 'System Memory' }];
     case 'objects':
@@ -43,7 +60,13 @@ function performanceCapturePlan(chart: DevicePerformanceChartId): PerformanceCap
       ];
     case 'aboveAll':
       return [
-        { sel: SEL_CPU, caption: 'CPU Usage' },
+        { sel: SEL_CPU, caption: 'CPU Usage (Graph)', cpuMode: 'percent' },
+        {
+          sel: SEL_CPU,
+          caption: 'CPU Usage (Process)',
+          cpuMode: 'process',
+          skipIfNoProcStat: true
+        },
         { sel: SEL_MEM, caption: 'System Memory' },
         { sel: SEL_OBJ, caption: 'BrightScript Objects (Count)', objectsMode: 'count' },
         { sel: SEL_OBJ, caption: 'BrightScript Objects (Memory)', objectsMode: 'memory' }
@@ -67,12 +90,18 @@ export type MetricsRingSnapshot = {
   ringMemAnon: Array<number | null>;
   ringMemShared: Array<number | null>;
   ringObjTotal: Array<number | null>;
+  /** Minor / major page-fault rates derived from successive `<proc-stat>` samples. */
+  ringFaultsMinorPerSec: Array<number | null>;
+  ringFaultsMajorPerSec: Array<number | null>;
   ringSampleAt: Array<number | null>;
   lastObjectRows: ObjectCountRow[];
   lastObjectTotalBytes: number | null;
   lastChanperfMemUsed: number;
   lastChanperfMemLimitBytes: number | null;
   chartSessionStartMs: number | null;
+  /** Latched true once chanperf has carried a `<proc-stat>` block (Roku OS 15.2+). */
+  procStatSeen: boolean;
+  lastProcStat: ProcStatParsed | null;
 };
 
 function snapHasChanperf(snap: MetricsRingSnapshot): boolean {
@@ -117,6 +146,29 @@ function setObjectsModeUi(wrap: HTMLElement, mode: 'count' | 'memory'): void {
     b.classList.toggle('is-active', active);
     b.setAttribute('aria-selected', active ? 'true' : 'false');
   });
+}
+
+function getCpuModeFromWrap(wrap: HTMLElement): 'percent' | 'process' {
+  const raw = wrap.querySelector('.remote-cpu-mode-btn.is-active')?.getAttribute('data-cpu-mode');
+  return raw === 'process' ? 'process' : 'percent';
+}
+
+function setCpuModeUi(wrap: HTMLElement, mode: 'percent' | 'process'): void {
+  wrap.querySelectorAll('[data-cpu-mode]').forEach((b) => {
+    if (!(b instanceof HTMLElement)) return;
+    const m = b.getAttribute('data-cpu-mode');
+    if (m !== 'percent' && m !== 'process') return;
+    const active = m === mode;
+    b.classList.toggle('is-active', active);
+    b.setAttribute('aria-selected', active ? 'true' : 'false');
+  });
+}
+
+/** True when the device has produced at least one `<proc-stat>` block this session (mode-switch visible). */
+function wrapHasProcStat(wrap: HTMLElement): boolean {
+  const sw = wrap.querySelector('[data-cpu-mode-switch-wrap]');
+  if (!(sw instanceof HTMLElement)) return false;
+  return !sw.hidden;
 }
 
 async function rafTwice(): Promise<void> {
@@ -387,15 +439,32 @@ export async function runDevicePerformanceCaptureStep(
     }
   };
 
-  const plan = performanceCapturePlan(chart);
+  const planRaw = performanceCapturePlan(chart);
+  const procStatAvailable = wrapHasProcStat(wrap);
+  const plan = planRaw.filter((p) => {
+    if (p.skipIfNoProcStat && !procStatAvailable) {
+      logNotes.push(
+        `Skipped "${p.caption}" capture — device has not produced <proc-stat> yet (requires Roku OS 15.2+).`
+      );
+      return false;
+    }
+    return true;
+  });
   const restoreObjectsMode = plan.some((p) => p.objectsMode != null);
   const previousObjectsMode = restoreObjectsMode ? getObjectsModeFromWrap(wrap) : null;
+  const restoreCpuMode = plan.some((p) => p.cpuMode != null);
+  const previousCpuMode = restoreCpuMode ? getCpuModeFromWrap(wrap) : null;
 
   let any = false;
   try {
     for (const item of plan) {
       if (item.objectsMode) {
         setObjectsModeUi(wrap, item.objectsMode);
+        await forceLiveSample();
+        await rafTwice();
+      }
+      if (item.cpuMode) {
+        setCpuModeUi(wrap, item.cpuMode);
         await forceLiveSample();
         await rafTwice();
       }
@@ -406,6 +475,11 @@ export async function runDevicePerformanceCaptureStep(
   } finally {
     if (previousObjectsMode !== null) {
       setObjectsModeUi(wrap, previousObjectsMode);
+      await forceLiveSample();
+      await rafTwice();
+    }
+    if (previousCpuMode !== null) {
+      setCpuModeUi(wrap, previousCpuMode);
       await forceLiveSample();
       await rafTwice();
     }

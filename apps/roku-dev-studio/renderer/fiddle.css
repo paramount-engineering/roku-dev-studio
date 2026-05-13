@@ -704,6 +704,21 @@ body {
   border: 1px solid var(--border);
 }
 
+/* Privacy Mode — mirrors the main window's `body.privacy-mode .device-ip`
+ * pattern (blur, hover to reveal). Only the IP span is masked so the device
+ * name stays readable. The dropdown's `<option>` IPs are masked at the data
+ * layer instead (see PRIVACY_IP_MASK in fiddle.ts) because Chromium's native
+ * picker ignores `filter: blur` on option text. */
+body.privacy-mode .fiddle-modal-device-ip {
+  filter: blur(5px);
+  user-select: none;
+  transition: filter 0.2s ease;
+}
+
+body.privacy-mode .fiddle-modal-device-ip:hover {
+  filter: blur(0);
+}
+
 .fiddle-modal-hint {
   margin: 0;
   font-size: 12px;

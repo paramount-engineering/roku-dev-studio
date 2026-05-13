@@ -24,7 +24,8 @@ import {
   drawTimeseriesChart,
   drawSparklineTimeseries,
   memChartYAxisMaxBytes,
-  type ObjectCountRow
+  type ObjectCountRow,
+  type ProcStatParsed
 } from './remote-metrics-charts.js';
 import type { DevicePerformanceChartId } from '../action-scripts/action-registry.js';
 import {
@@ -49,6 +50,64 @@ const COL_MEM_USED = '#f87171';
 const COL_MEM_RES = '#60a5fa';
 const COL_MEM_ANON = '#c084fc';
 const COL_MEM_SHARED = '#fb923c';
+const COL_FAULTS_MINOR = '#60a5fa';
+const COL_FAULTS_MAJOR = '#f87171';
+
+type CpuMode = 'percent' | 'process';
+
+/** Linux process-state letter → dot color class (see `proc_pid_stat(5)`). */
+function stateToClass(state: string): 'green' | 'amber' | 'red' | 'neutral' {
+  switch (state) {
+    case 'R':
+      return 'green';
+    case 'S':
+    case 'I':
+      return 'neutral';
+    case 't':
+      return 'amber';
+    case 'D':
+    case 'T':
+    case 'Z':
+    case 'X':
+      return 'red';
+    default:
+      return 'neutral';
+  }
+}
+
+/** Linux process-state letter → friendly label. */
+function stateToLabel(state: string): string {
+  switch (state) {
+    case 'R': return 'Running';
+    case 'S': return 'Sleeping';
+    case 'I': return 'Idle';
+    case 't': return 'Tracing stop';
+    case 'D': return 'Disk wait';
+    case 'T': return 'Stopped';
+    case 'Z': return 'Zombie';
+    case 'X': return 'Dead';
+    default: return state || '?';
+  }
+}
+
+function formatSecondsCompact(seconds: number): string {
+  if (!Number.isFinite(seconds) || seconds < 0) return '0 s';
+  if (seconds < 1) return `${seconds.toFixed(2)} s`;
+  if (seconds < 60) return `${seconds.toFixed(1)} s`;
+  const m = Math.floor(seconds / 60);
+  const s = Math.floor(seconds % 60);
+  if (m < 60) return `${m} m ${s.toString().padStart(2, '0')} s`;
+  const h = Math.floor(m / 60);
+  const mm = m % 60;
+  return `${h} h ${mm.toString().padStart(2, '0')} m`;
+}
+
+function formatRate(perSec: number): string {
+  if (!Number.isFinite(perSec) || perSec <= 0) return '0 / s';
+  if (perSec >= 1000) return `${(perSec / 1000).toFixed(1)}k / s`;
+  if (perSec >= 10) return `${perSec.toFixed(0)} / s`;
+  return `${perSec.toFixed(1)} / s`;
+}
 const OBJ_BAR_COLORS = [
   '#f87171',
   '#60a5fa',
@@ -422,6 +481,9 @@ export function setupRemoteTabMetrics(
   let ringMemAnon = makeRing(ringSlotCount());
   let ringMemShared = makeRing(ringSlotCount());
   let ringObjTotal = makeRing(ringSlotCount());
+  /** Roku OS 15.2+ proc-stat-derived rates (faults per second between samples). */
+  let ringFaultsMinorPerSec = makeRing(ringSlotCount());
+  let ringFaultsMajorPerSec = makeRing(ringSlotCount());
   /** Wall ms aligned with each chanperf tick (same length as metric rings). */
   let ringSampleAt = makeRing(ringSlotCount());
 
@@ -434,6 +496,8 @@ export function setupRemoteTabMetrics(
     ringMemAnon = resizeRingPreserve(ringMemAnon, n);
     ringMemShared = resizeRingPreserve(ringMemShared, n);
     ringObjTotal = resizeRingPreserve(ringObjTotal, n);
+    ringFaultsMinorPerSec = resizeRingPreserve(ringFaultsMinorPerSec, n);
+    ringFaultsMajorPerSec = resizeRingPreserve(ringFaultsMajorPerSec, n);
     ringSampleAt = resizeRingPreserve(ringSampleAt, n);
   }
 
@@ -442,6 +506,68 @@ export function setupRemoteTabMetrics(
   let lastChanperfMemUsed = 0;
   /** Last chanperf-reported plugin memory cap (`total` / `limit`); keeps axis scale stable between polls. */
   let lastChanperfMemLimitBytes: number | null = null;
+
+  /** Latched: once a single chanperf carries `<proc-stat>`, reveal the CPU mode-switch and never re-hide it. */
+  let procStatSeen = false;
+  /** Previous proc-stat snapshot (for delta-rate computation). */
+  let prevProcStat: ProcStatParsed | null = null;
+  /** Wall ms when prev proc-stat was sampled — used as elapsed denominator. */
+  let prevProcStatSampleMs: number | null = null;
+  /** Most recent proc-stat snapshot (for table render). */
+  let lastProcStat: ProcStatParsed | null = null;
+  /** Wall ms when we first observed the current `starttime` — reset to "now" on respawn. */
+  let procStatUptimeAnchorMs: number | null = null;
+  /** Pending one-shot row-flicker animation flag for respawn (consumed by the next renderCharts). */
+  let pendingRespawnFlicker = false;
+  /** Last cpu-mode rendered (used to switch chart vs table visibility on render). */
+  let cpuMode: CpuMode = 'percent';
+
+  /**
+   * Fold a fresh `<proc-stat>` sample into rings + anchor state. Pushes a null onto fault rings
+   * when proc-stat is absent or the previous sample is missing (delta unavailable).
+   */
+  function applyProcStatSample(procStat: ProcStatParsed | null, nowMs: number): void {
+    if (!procStat) {
+      pushRing(ringFaultsMinorPerSec, null);
+      pushRing(ringFaultsMajorPerSec, null);
+      /* Do not clear `lastProcStat` — keep the last known table values visible during transient gaps. */
+      return;
+    }
+
+    procStatSeen = true;
+
+    /* Respawn detection: `starttime` changes only when the channel process restarts. */
+    const respawned =
+      prevProcStat != null && prevProcStat.starttime !== procStat.starttime;
+    if (respawned || procStatUptimeAnchorMs == null) {
+      procStatUptimeAnchorMs = nowMs;
+      if (respawned) pendingRespawnFlicker = true;
+    }
+
+    /* Fault rates: cumulative counters divided by elapsed wall time. */
+    let minorRate: number | null = null;
+    let majorRate: number | null = null;
+    if (
+      prevProcStat != null &&
+      prevProcStatSampleMs != null &&
+      !respawned &&
+      nowMs > prevProcStatSampleMs
+    ) {
+      const dtSec = (nowMs - prevProcStatSampleMs) / 1000;
+      if (dtSec > 0) {
+        const dMinor = Math.max(0, procStat.minflt - prevProcStat.minflt);
+        const dMajor = Math.max(0, procStat.majflt - prevProcStat.majflt);
+        minorRate = dMinor / dtSec;
+        majorRate = dMajor / dtSec;
+      }
+    }
+    pushRing(ringFaultsMinorPerSec, minorRate);
+    pushRing(ringFaultsMajorPerSec, majorRate);
+
+    lastProcStat = procStat;
+    prevProcStat = procStat;
+    prevProcStatSampleMs = nowMs;
+  }
 
   /** Wall time when this performance session began (quad on); drives ramping chart x-axis span. */
   let chartSessionStartMs: number | null = null;
@@ -682,14 +808,196 @@ export function setupRemoteTabMetrics(
     }
   }
 
-  function renderCharts(root: HTMLElement): void {
-    if (wrap.getAttribute('data-remote-layout') !== 'quad') {
-      syncDevicePanelPerfStrip();
+  /**
+   * Build a `<proc-stat>`-backed key/value table that replaces the CPU chart in `process` mode.
+   * Inline sparklines on the two fault-rate rows use the same `drawSparklineTimeseries` as the
+   * device-panel perf strip; everything else is plain text. Child fault/CPU-time rows are hidden
+   * when both halves are zero (the common case on Roku).
+   */
+  function renderCpuProcessTable(
+    tableEl: HTMLElement,
+    footerEl: HTMLElement | null,
+    frame: { nowMs: number; historyMs: number; maxSampleGapMs: number }
+  ): void {
+    tableEl.innerHTML = '';
+    const ps = lastProcStat;
+    if (!ps) {
+      const empty = document.createElement('div');
+      empty.className = 'remote-cpu-process-row';
+      const lab = document.createElement('span');
+      lab.className = 'remote-cpu-process-label';
+      lab.textContent = 'Process';
+      const val = document.createElement('span');
+      val.className = 'remote-cpu-process-value';
+      val.textContent = 'Waiting for proc-stat sample…';
+      empty.appendChild(lab);
+      empty.appendChild(val);
+      tableEl.appendChild(empty);
       return;
     }
 
-    const { nowMs, historyMs, maxSampleGapMs } = computeChartFrameTiming();
+    const clk = ps.clkTck > 0 ? ps.clkTck : 100;
+    const userSec = ps.utime / clk;
+    const sysSec = ps.stime / clk;
+    const lastUserPct = [...ringCpuUser].reverse().find((v) => v != null) ?? null;
+    const lastSysPct = [...ringCpuSys].reverse().find((v) => v != null) ?? null;
+    const lastMinorRate = [...ringFaultsMinorPerSec].reverse().find((v) => v != null) ?? null;
+    const lastMajorRate = [...ringFaultsMajorPerSec].reverse().find((v) => v != null) ?? null;
+    const uptimeSec =
+      procStatUptimeAnchorMs != null
+        ? Math.max(0, (frame.nowMs - procStatUptimeAnchorMs) / 1000)
+        : 0;
 
+    const flickerUptime = pendingRespawnFlicker;
+    pendingRespawnFlicker = false;
+
+    const addRow = (
+      label: string,
+      value: string,
+      opts?: {
+        valueSecondary?: string;
+        leftDotClass?: 'green' | 'amber' | 'red' | 'neutral';
+        sparkRing?: Array<number | null>;
+        sparkColor?: string;
+        majorActive?: boolean;
+        flicker?: boolean;
+      }
+    ): void => {
+      const row = document.createElement('div');
+      row.className = 'remote-cpu-process-row';
+      if (opts?.majorActive) row.classList.add('remote-cpu-process-row--major-active');
+      if (opts?.flicker) row.classList.add('remote-cpu-process-row--uptime-flicker');
+
+      const lab = document.createElement('span');
+      lab.className = 'remote-cpu-process-label';
+      if (opts?.leftDotClass) {
+        const dot = document.createElement('span');
+        dot.className = `remote-cpu-process-state-dot remote-cpu-process-state-dot--${opts.leftDotClass}`;
+        lab.appendChild(dot);
+      }
+      const text = document.createElement('span');
+      text.textContent = label;
+      lab.appendChild(text);
+
+      const val = document.createElement('span');
+      val.className = 'remote-cpu-process-value';
+      val.textContent = value;
+      if (opts?.valueSecondary) {
+        const sec = document.createElement('span');
+        sec.className = 'remote-cpu-process-value-secondary';
+        sec.textContent = opts.valueSecondary;
+        val.appendChild(sec);
+      }
+
+      const sparkCell = document.createElement('span');
+      if (opts?.sparkRing) {
+        const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg') as SVGSVGElement;
+        svg.classList.add('remote-cpu-process-spark');
+        sparkCell.appendChild(svg);
+        const peak = opts.sparkRing.reduce<number>(
+          (m, v) => (v != null && Number.isFinite(v) && v > m ? v : m),
+          0
+        );
+        drawSparklineTimeseries(svg, {
+          series: [
+            {
+              id: 'r',
+              color: opts.sparkColor ?? COL_FAULTS_MINOR,
+              values: opts.sparkRing
+            }
+          ],
+          yMin: 0,
+          yMax: Math.max(1, peak * 1.12),
+          sampleAt: ringSampleAt,
+          historyMs: frame.historyMs,
+          nowMs: frame.nowMs,
+          maxSampleGapMs: frame.maxSampleGapMs
+        });
+      }
+
+      row.appendChild(lab);
+      row.appendChild(val);
+      row.appendChild(sparkCell);
+      tableEl.appendChild(row);
+    };
+
+    addRow('State', stateToLabel(ps.state), {
+      leftDotClass: stateToClass(ps.state),
+      valueSecondary: `(${ps.state})`
+    });
+
+    addRow(
+      'Channel uptime',
+      `Stable for ${formatSecondsCompact(uptimeSec)}`,
+      {
+        valueSecondary: 'since first observed',
+        flicker: flickerUptime
+      }
+    );
+
+    addRow('User CPU time', `${userSec.toFixed(2)} s`, {
+      valueSecondary: lastUserPct != null ? `· ${lastUserPct.toFixed(1)}%` : undefined
+    });
+    addRow('Kernel CPU time', `${sysSec.toFixed(2)} s`, {
+      valueSecondary: lastSysPct != null ? `· ${lastSysPct.toFixed(1)}%` : undefined
+    });
+
+    addRow(
+      'Minor faults',
+      ps.minflt.toLocaleString(),
+      {
+        valueSecondary: `· ${formatRate(lastMinorRate ?? 0)}`,
+        sparkRing: ringFaultsMinorPerSec,
+        sparkColor: COL_FAULTS_MINOR
+      }
+    );
+    const majorActive = (lastMajorRate ?? 0) > 0;
+    addRow(
+      'Major faults',
+      ps.majflt.toLocaleString(),
+      {
+        valueSecondary: `· ${formatRate(lastMajorRate ?? 0)}${majorActive ? '' : ' ✓'}`,
+        sparkRing: ringFaultsMajorPerSec,
+        sparkColor: COL_FAULTS_MAJOR,
+        majorActive
+      }
+    );
+
+    if (ps.cutime > 0 || ps.cstime > 0) {
+      const cUserSec = ps.cutime / clk;
+      const cSysSec = ps.cstime / clk;
+      addRow('Child CPU time', `${(cUserSec + cSysSec).toFixed(2)} s`, {
+        valueSecondary: `user ${cUserSec.toFixed(2)} · kernel ${cSysSec.toFixed(2)}`
+      });
+    }
+    if (ps.cminflt > 0 || ps.cmajflt > 0) {
+      addRow(
+        'Child faults',
+        `${ps.cminflt.toLocaleString()} / ${ps.cmajflt.toLocaleString()}`,
+        { valueSecondary: 'minor / major' }
+      );
+    }
+
+    addRow('Clock tick rate', `${clk} Hz`);
+
+    if (footerEl) {
+      const ts = footerEl.querySelector('[data-cpu-process-time]');
+      if (ts instanceof HTMLElement) {
+        const d = new Date(frame.nowMs);
+        ts.textContent = `Updated: ${d.toLocaleTimeString(undefined, {
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit'
+        })}`;
+      }
+    }
+  }
+
+  function renderCpuPercentChart(
+    root: HTMLElement,
+    frame: { nowMs: number; historyMs: number; maxSampleGapMs: number }
+  ): void {
+    const { nowMs, historyMs, maxSampleGapMs } = frame;
     const lastU = [...ringCpuUser].reverse().find((v) => v != null);
     const lastS = [...ringCpuSys].reverse().find((v) => v != null);
     const lastT =
@@ -725,6 +1033,49 @@ export function setupRemoteTabMetrics(
         seriesLabels: { tot: 'Total', usr: 'User', sys: 'Kernel' }
       }
     });
+  }
+
+  function renderCharts(root: HTMLElement): void {
+    if (wrap.getAttribute('data-remote-layout') !== 'quad') {
+      syncDevicePanelPerfStrip();
+      return;
+    }
+
+    const { nowMs, historyMs, maxSampleGapMs } = computeChartFrameTiming();
+
+    /* CPU mode-switch visibility tracks `procStatSeen` — never hides once revealed. */
+    const cpuModeWrap = root.querySelector('[data-cpu-mode-switch-wrap]');
+    if (cpuModeWrap instanceof HTMLElement) {
+      cpuModeWrap.hidden = !procStatSeen;
+    }
+    /* If proc-stat regressed (older firmware after a reconnect) force percent mode so the table can't show empty. */
+    const effectiveCpuMode: CpuMode = procStatSeen ? cpuMode : 'percent';
+    const cpuChartWrap = root.querySelector('[data-cpu-chart-wrap]');
+    const cpuProcessTable = root.querySelector('[data-cpu-process-table]');
+    const cpuLegend = root.querySelector('[data-legend="cpu"]');
+    const cpuProcessFooter = root.querySelector('[data-cpu-process-footer]');
+    if (cpuChartWrap instanceof HTMLElement) {
+      cpuChartWrap.hidden = effectiveCpuMode !== 'percent';
+    }
+    if (cpuProcessTable instanceof HTMLElement) {
+      cpuProcessTable.hidden = effectiveCpuMode !== 'process';
+    }
+    if (cpuLegend instanceof HTMLElement) {
+      cpuLegend.hidden = effectiveCpuMode !== 'percent';
+    }
+    if (cpuProcessFooter instanceof HTMLElement) {
+      cpuProcessFooter.hidden = effectiveCpuMode !== 'process';
+    }
+
+    if (effectiveCpuMode === 'process' && cpuProcessTable instanceof HTMLElement) {
+      renderCpuProcessTable(
+        cpuProcessTable,
+        cpuProcessFooter instanceof HTMLElement ? cpuProcessFooter : null,
+        { nowMs, historyMs, maxSampleGapMs }
+      );
+    } else {
+      renderCpuPercentChart(root, { nowMs, historyMs, maxSampleGapMs });
+    }
 
     const lastUsed = [...ringMemUsed].reverse().find((v) => v != null);
     const lastRes = [...ringMemRes].reverse().find((v) => v != null);
@@ -916,7 +1267,8 @@ export function setupRemoteTabMetrics(
         pushRing(ringObjTotal, null);
       }
 
-      pushRing(ringSampleAt, Date.now());
+      const nowMs = Date.now();
+      pushRing(ringSampleAt, nowMs);
       if (full) {
         pushRing(ringCpuUser, full.cpuUser);
         pushRing(ringCpuSys, full.cpuSys);
@@ -928,6 +1280,7 @@ export function setupRemoteTabMetrics(
         if (full.memLimitBytes != null && full.memLimitBytes > 0) {
           lastChanperfMemLimitBytes = full.memLimitBytes;
         }
+        applyProcStatSample(full.procStat, nowMs);
       } else {
         pushRing(ringCpuUser, null);
         pushRing(ringCpuSys, null);
@@ -938,6 +1291,8 @@ export function setupRemoteTabMetrics(
         pushRing(ringMemShared, null);
         lastChanperfMemUsed = 0;
         /* Keep lastChanperfMemLimitBytes so axis scale stays stable during chanperf gaps. */
+        pushRing(ringFaultsMinorPerSec, null);
+        pushRing(ringFaultsMajorPerSec, null);
       }
 
       const ocErr = oc.success ? null : oc.error || 'Object counts failed';
@@ -1074,6 +1429,21 @@ export function setupRemoteTabMetrics(
         ev.preventDefault();
         const devTab = panel.querySelector('.inner-tab[data-inner-tab="devapp"]');
         if (devTab instanceof HTMLButtonElement) devTab.click();
+        return;
+      }
+
+      const cpuBtn = t.closest('[data-cpu-mode]');
+      if (cpuBtn instanceof HTMLButtonElement && wrap.contains(cpuBtn)) {
+        const m = cpuBtn.getAttribute('data-cpu-mode');
+        if (m !== 'percent' && m !== 'process') return;
+        if (m === 'process' && !procStatSeen) return;
+        cpuMode = m;
+        wrap.querySelectorAll('[data-cpu-mode]').forEach((b) => {
+          const active = b === cpuBtn;
+          b.classList.toggle('is-active', active);
+          b.setAttribute('aria-selected', active ? 'true' : 'false');
+        });
+        renderCharts(wrap);
         return;
       }
 
@@ -1267,12 +1637,16 @@ export function setupRemoteTabMetrics(
       ringMemAnon: c(ringMemAnon),
       ringMemShared: c(ringMemShared),
       ringObjTotal: c(ringObjTotal),
+      ringFaultsMinorPerSec: c(ringFaultsMinorPerSec),
+      ringFaultsMajorPerSec: c(ringFaultsMajorPerSec),
       ringSampleAt: c(ringSampleAt),
       lastObjectRows: lastObjectRows.map((r) => ({ ...r })),
       lastObjectTotalBytes,
       lastChanperfMemUsed,
       lastChanperfMemLimitBytes,
-      chartSessionStartMs
+      chartSessionStartMs,
+      procStatSeen,
+      lastProcStat: lastProcStat ? { ...lastProcStat } : null
     };
   }
 

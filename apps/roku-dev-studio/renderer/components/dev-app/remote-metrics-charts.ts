@@ -16,6 +16,33 @@ export type ChanperfParsed = {
   memShared: number;
   /** Plugin / channel memory ceiling when the firmware sends `total` / `limit` in chanperf XML. */
   memLimitBytes: number | null;
+  /** Raw `/proc/<pid>/stat` block (Roku OS 15.2+). `null` when chanperf did not carry one. */
+  procStat: ProcStatParsed | null;
+};
+
+/**
+ * Roku OS 15.2+ `chanperf` `<proc-stat>` block — raw `/proc/<pid>/stat` for the channel process.
+ * See `proc_pid_stat(5)` for field semantics. `utime` includes guest time per field (14) of the man page.
+ */
+export type ProcStatParsed = {
+  /** User-mode CPU ticks since process start (divide by `clkTck` for seconds). */
+  utime: number;
+  /** Kernel-mode CPU ticks since process start. */
+  stime: number;
+  cutime: number;
+  cstime: number;
+  /** Minor page faults (no disk I/O). */
+  minflt: number;
+  /** Major page faults (paged in from storage). */
+  majflt: number;
+  cminflt: number;
+  cmajflt: number;
+  /** Clock ticks since system boot when the process started; changes on respawn. */
+  starttime: number;
+  /** One-letter process state (`R`/`S`/`D`/`T`/`t`/`Z`/`X`/`I`/etc.). */
+  state: string;
+  /** `sysconf(_SC_CLK_TCK)` from the device (typically 100 on Roku). */
+  clkTck: number;
 };
 
 function firstMatchInt(xml: string, tag: string): number | null {
@@ -30,6 +57,40 @@ function firstMatchFloat(xml: string, tag: string): number | null {
   if (!m) return null;
   const n = parseFloat(m[1]);
   return Number.isFinite(n) ? n : null;
+}
+
+/** Single-letter state extractor — `<state>S</state>` (or `R`/`D`/`T`/`t`/`Z`/`X`/`I`). */
+function firstMatchStateLetter(xml: string, tag: string): string | null {
+  const m = xml.match(new RegExp(`<${tag}>\\s*([A-Za-z])\\s*</${tag}>`));
+  return m ? m[1] : null;
+}
+
+/** Parse a Roku 15.2+ `<proc-stat>` block. Returns `null` when the block is absent or unreadable. */
+export function parseProcStat(xml: string): ProcStatParsed | null {
+  const m = xml.match(/<proc-stat[\s\S]*?<\/proc-stat>/i);
+  if (!m) return null;
+  const block = m[0];
+  /* clk-tck is required to make ticks meaningful; without it, treat the block as unusable. */
+  const clkTck = firstMatchInt(block, 'clk-tck');
+  if (clkTck == null || clkTck <= 0) return null;
+  const utime = firstMatchInt(block, 'utime');
+  const stime = firstMatchInt(block, 'stime');
+  const starttime = firstMatchInt(block, 'starttime');
+  if (utime == null || stime == null || starttime == null) return null;
+  const state = firstMatchStateLetter(block, 'state') ?? '?';
+  return {
+    utime,
+    stime,
+    cutime: firstMatchInt(block, 'cutime') ?? 0,
+    cstime: firstMatchInt(block, 'cstime') ?? 0,
+    minflt: firstMatchInt(block, 'minflt') ?? 0,
+    majflt: firstMatchInt(block, 'majflt') ?? 0,
+    cminflt: firstMatchInt(block, 'cminflt') ?? 0,
+    cmajflt: firstMatchInt(block, 'cmajflt') ?? 0,
+    starttime,
+    state,
+    clkTck
+  };
 }
 
 /** Full chanperf parse: CPU user/sys + memory byte fields from `<plugin>` and/or `<memory>`. */
@@ -65,7 +126,8 @@ export function parseChanperfFull(xml: string): ChanperfParsed | null {
     memSwap: firstMatchInt(memBlock, 'swap') ?? firstMatchInt(pluginBlock, 'swap') ?? 0,
     memFile: firstMatchInt(memBlock, 'file') ?? firstMatchInt(pluginBlock, 'file') ?? 0,
     memShared: firstMatchInt(memBlock, 'shared') ?? firstMatchInt(pluginBlock, 'shared') ?? 0,
-    memLimitBytes
+    memLimitBytes,
+    procStat: parseProcStat(pluginBlock) ?? parseProcStat(xml)
   };
 }
 
