@@ -124,6 +124,14 @@ export type SettingsWindowSavePayload = {
   /** When true, persist primary sidebar collapsed state (localStorage). Default off. */
   rememberSidebarToggle: boolean;
   /**
+   * When true, dev passwords are persisted across launches via the OS
+   * keychain (`safeStorage`). Default **off** — on macOS this causes a
+   * one-time system password prompt the first time the keychain entry is
+   * accessed, which we want to keep opt-in. When off, dev passwords are
+   * remembered only for the current session (in-memory).
+   */
+  rememberPasswordsInKeychain: boolean;
+  /**
    * Per-client MCP enablement. Toggling a client on writes the
    * `roku-dev-studio` server entry into that client's MCP config; toggling
    * off removes it. Keys not present here are left untouched.
@@ -145,6 +153,13 @@ type RegisterDeps = {
     privacyModeEnabled: boolean,
     debugLoggingEnabled: boolean
   ) => void;
+  /**
+   * Called when the user flips the "Remember device passwords in system
+   * keychain" toggle. Main wires this to `secretStore.setEnabled(next)` so
+   * a flip-on triggers the one-shot keychain hydration (the only point where
+   * `safeStorage.*` is allowed to prompt the OS).
+   */
+  applyRememberPasswordsInKeychain: (rememberPasswordsInKeychain: boolean) => void;
   notifyRenderer: (channel: string, data: unknown) => void;
 };
 
@@ -230,6 +245,9 @@ function registerSettingsWindowIpc(
     const autoConnectLastDeviceEnabled = typeof autoConnRaw === 'boolean' ? autoConnRaw : false;
     const rememberSidebarRaw = settings['rememberSidebarToggle'];
     const rememberSidebarToggle = typeof rememberSidebarRaw === 'boolean' ? rememberSidebarRaw : false;
+    const rememberPasswordsInKeychainRaw = settings['rememberPasswordsInKeychain'];
+    const rememberPasswordsInKeychain =
+      typeof rememberPasswordsInKeychainRaw === 'boolean' ? rememberPasswordsInKeychainRaw : false;
 
     const mcpDetections = detectMcpClients();
     const mcpEnabledRaw = settings['mcpEnabledClients'];
@@ -263,6 +281,7 @@ function registerSettingsWindowIpc(
       keyboardRemoteShortcutsEnabled,
       autoConnectLastDeviceEnabled,
       rememberSidebarToggle,
+      rememberPasswordsInKeychain,
       mcpClients: mcpClientsState,
       mcpClientDetections: mcpDetections.map((d) => ({
         id: d.id,
@@ -309,6 +328,7 @@ function registerSettingsWindowIpc(
         settings['keyboardRemoteShortcutsEnabled'] = !!payload.keyboardRemoteShortcutsEnabled;
         settings['autoConnectLastDeviceEnabled'] = !!payload.autoConnectLastDeviceEnabled;
         settings['rememberSidebarToggle'] = !!payload.rememberSidebarToggle;
+        settings['rememberPasswordsInKeychain'] = !!payload.rememberPasswordsInKeychain;
         settings.debugLoggingEnabled = !!payload.debugLoggingEnabled;
 
         const mcpRequested = sanitizeMcpClientsPayload(payload.mcpClients);
@@ -337,6 +357,11 @@ function registerSettingsWindowIpc(
         const dbg = !!payload.debugLoggingEnabled;
 
         deps.applyModesAfterSave(d, p, dbg);
+
+        // Apply the keychain opt-in **after** the file write succeeded so a
+        // toggle-on only triggers `safeStorage.*` once we've actually
+        // committed the user's choice to disk.
+        deps.applyRememberPasswordsInKeychain(!!payload.rememberPasswordsInKeychain);
 
         syncFileMenuCheckboxes(Menu, d, p, dbg);
 

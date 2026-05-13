@@ -97,7 +97,18 @@ interface FiddleBridge {
   onTerminalCleared: (cb: () => void) => () => void;
   onRunResult: (cb: (data: FiddleRunResultPayload) => void) => () => void;
   onScanStatus: (cb: (data: { scanning: boolean }) => void) => () => void;
+  /** Resolves with the current Privacy Mode state. The same handler the main
+   * window uses; null when the bridge wasn't built with the privacy surface
+   * (defensive for older preload bundles). */
+  getPrivacyMode?: () => Promise<{ enabled: boolean }>;
+  onPrivacyModeChanged?: (cb: (enabled: boolean) => void) => () => void;
 }
+
+/** Placeholder shown for IPs in the device dropdown when Privacy Mode is on.
+ * `<select><option>` text isn't reliably stylable with `filter: blur` in
+ * Chromium (the native popup ignores most CSS), so we mask the data itself
+ * instead of trying to blur it visually. */
+const PRIVACY_IP_MASK = '•••.•••.•••.•••';
 
 const DEFAULT_SNIPPET = [
   "' `userFiddle` is the entry point Fiddle runs after the channel is on-screen.",
@@ -206,6 +217,11 @@ interface FiddleCtx {
   trailingPartial: string;
   /** Passwords entered for devices during this window's lifetime (keyed by deviceId). */
   sessionPasswords: Map<string, string>;
+  /** Mirror of the global Privacy Mode toggle. When true, the device dropdown
+   * masks IPs at the data layer and the password modal blurs its IP via CSS
+   * (`body.privacy-mode .fiddle-modal-device-ip`). Updated by the
+   * `onPrivacyModeChanged` listener so menu/Settings toggles flow through. */
+  privacyModeEnabled: boolean;
   els: {
     deviceSelect: HTMLSelectElement;
     runBtn: HTMLButtonElement;
@@ -468,7 +484,12 @@ function renderDeviceOptions(
     // Lead with `[Remote]` on relay-reachable devices so it's the first thing
     // the user scans before the name; local devices just show "name (ip)".
     const remotePrefix = d.isRemote ? '[Remote] ' : '';
-    opt.textContent = `${remotePrefix}${label} (${d.ip})`;
+    // When Privacy Mode is on, mask the IP at the data layer — `<option>` text
+    // can't be reliably blurred via CSS in Chromium's native picker, so the
+    // only way to hide it from screen-share / over-the-shoulder viewers is
+    // to substitute the visible characters.
+    const ipText = ctx.privacyModeEnabled ? PRIVACY_IP_MASK : d.ip;
+    opt.textContent = `${remotePrefix}${label} (${ipText})`;
     sel.appendChild(opt);
   }
 
@@ -592,7 +613,22 @@ function openPasswordModal(
     const errorEl = ctx.els.passwordError;
     const label = ctx.els.passwordDeviceLabel;
 
-    label.textContent = `${device.name || 'Roku'} — ${device.ip}`;
+    // Build the device label as structured spans so CSS can blur just the IP
+    // when Privacy Mode is on (see `body.privacy-mode .fiddle-modal-device-ip`
+    // in fiddle.css). `textContent` is reset below to clear any previous run.
+    label.textContent = '';
+    const nameSpan = document.createElement('span');
+    nameSpan.className = 'fiddle-modal-device-name';
+    nameSpan.textContent = device.name || 'Roku';
+    const sepSpan = document.createElement('span');
+    sepSpan.className = 'fiddle-modal-device-sep';
+    sepSpan.textContent = ' — ';
+    const ipSpan = document.createElement('span');
+    ipSpan.className = 'fiddle-modal-device-ip';
+    ipSpan.textContent = device.ip;
+    label.appendChild(nameSpan);
+    label.appendChild(sepSpan);
+    label.appendChild(ipSpan);
     input.value = '';
     errorEl.hidden = true;
     errorEl.textContent = '';
@@ -877,6 +913,43 @@ function setRefreshScanning(ctx: FiddleCtx, scanning: boolean): void {
   ctx.els.refreshBtn.disabled = scanning;
 }
 
+/**
+ * Apply the global Privacy Mode toggle to this Fiddle window:
+ *   - Toggle the `privacy-mode` body class so CSS-blur rules light up
+ *     (currently the password modal's IP span — see fiddle.css).
+ *   - Re-render the device dropdown so the option text picks up the new
+ *     masked / unmasked IP value (the `<option>` text can't be blurred via
+ *     CSS in Chromium's native picker).
+ */
+function applyPrivacyMode(ctx: FiddleCtx, enabled: boolean): void {
+  const next = !!enabled;
+  if (ctx.privacyModeEnabled === next) return;
+  ctx.privacyModeEnabled = next;
+  document.body.classList.toggle('privacy-mode', next);
+  // Re-render the dropdown in place so the IP toggle takes effect immediately.
+  // `renderDeviceOptions` already preserves the current selection.
+  renderDeviceOptions(ctx, ctx.devices, true, null);
+}
+
+/** Pull the current Privacy Mode state from main and start listening for
+ * toggles. The bridge methods are optional so older preload bundles don't
+ * crash the window — privacy mode just stays off in that case. */
+function bindPrivacyMode(ctx: FiddleCtx): void {
+  const bridge = getWindowFiddle();
+  if (typeof bridge.getPrivacyMode === 'function') {
+    void bridge
+      .getPrivacyMode()
+      .then((res) => applyPrivacyMode(ctx, !!res?.enabled))
+      .catch((err: unknown) => {
+        // Privacy mode handler not available (older main process) — leave off.
+        console.warn('[Fiddle] getPrivacyMode failed:', err);
+      });
+  }
+  if (typeof bridge.onPrivacyModeChanged === 'function') {
+    bridge.onPrivacyModeChanged((enabled) => applyPrivacyMode(ctx, enabled));
+  }
+}
+
 async function main(): Promise<void> {
   const els = {
     deviceSelect: qs<HTMLSelectElement>('fiddleDeviceSelect'),
@@ -949,10 +1022,12 @@ async function main(): Promise<void> {
     rawBuffer: [],
     trailingPartial: '',
     sessionPasswords: new Map(),
+    privacyModeEnabled: false,
     els
   };
 
   bindEvents(ctx);
+  bindPrivacyMode(ctx);
   scheduleLint(ctx);
 
   // Wait for initial device snapshot from main.

@@ -54,5 +54,18 @@ contextBridge.exposeInMainWorld('fiddle', {
     const handler = (_event: IpcRendererEvent, data: { scanning: boolean }) => callback(data);
     ipcRenderer.on(IPC.FiddleScanStatus, handler);
     return () => ipcRenderer.removeListener(IPC.FiddleScanStatus, handler);
+  },
+
+  // Privacy Mode — mirrors the main window's bridge surface. Reads the current
+  // state at startup (via the same `GetPrivacyMode` invoke handler the main
+  // renderer uses) and listens for menu/Settings toggles. The main process
+  // fans `IPC.PrivacyModeChanged` out to every open Fiddle window so live
+  // toggles take effect without re-opening the window.
+  getPrivacyMode: () => ipcRenderer.invoke(IPC.GetPrivacyMode) as Promise<{ enabled: boolean }>,
+
+  onPrivacyModeChanged: (callback: (enabled: boolean) => void) => {
+    const handler = (_event: IpcRendererEvent, enabled: boolean) => callback(!!enabled);
+    ipcRenderer.on(IPC.PrivacyModeChanged, handler);
+    return () => ipcRenderer.removeListener(IPC.PrivacyModeChanged, handler);
   }
 });

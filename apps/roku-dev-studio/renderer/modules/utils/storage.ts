@@ -22,7 +22,16 @@
 
 const LEGACY_PASSWORDS_KEY = 'roku-dev-passwords';
 
-export type SecretStorageStatus = 'encrypted' | 'unencrypted' | 'unavailable' | 'unknown';
+/**
+ * - `encrypted`   — system keychain backs the on-disk store.
+ * - `unencrypted` — Electron's `basic_text` backend (Linux without a keyring).
+ * - `unavailable` — `safeStorage.isEncryptionAvailable()` is false; nothing persisted.
+ * - `disabled`    — User has opted **out** of system keychain in Settings →
+ *                   General → "Remember device passwords (System Keychain)".
+ *                   Passwords are remembered for the current session only.
+ * - `unknown`     — Hydration hasn't completed yet.
+ */
+export type SecretStorageStatus = 'encrypted' | 'unencrypted' | 'unavailable' | 'disabled' | 'unknown';
 
 interface SecretsApi {
   secretsStatus?: () => Promise<{ success: boolean; status?: SecretStorageStatus; backend?: string; error?: string }>;
