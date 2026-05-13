@@ -63,7 +63,94 @@ interface FilePatternConfig {
  * platforms the current run actually built — `Platform.name` is one of
  * `'mac' | 'linux' | 'windows'`, the same strings used in `filePatterns`.
  */
+/**
+ * Flip electron-builder's default mac artifact naming so Apple Silicon is the
+ * unmarked default and Intel is explicitly tagged:
+ *
+ *   electron-builder default → after this rename
+ *   ─────────────────────────────────────────────
+ *   *.dmg                    → *-intel.dmg
+ *   *-arm64.dmg              → *.dmg
+ *   *-mac.zip                → *-intel-mac.zip
+ *   *-arm64-mac.zip          → *-mac.zip
+ *   (+ matching .blockmap files)
+ *
+ * Order matters: x64 (currently unmarked) is tagged with `-intel` BEFORE arm64
+ * is rewritten to "no suffix", otherwise both files would collide on the same
+ * destination name.
+ */
+function renameMacArtifacts(): number {
+  if (!fs.existsSync(distDir)) {
+    return 0;
+  }
+
+  type RenameRule = { match: RegExp; replacement: string };
+
+  const tagX64WithIntel: RenameRule[] = [
+    { match: /^(?!.*-arm64)(?!.*-intel)(.+)\.dmg$/, replacement: '$1-intel.dmg' },
+    { match: /^(?!.*-arm64)(?!.*-intel)(.+)\.dmg\.blockmap$/, replacement: '$1-intel.dmg.blockmap' },
+    { match: /^(?!.*-arm64)(?!.*-intel)(.+)-mac\.zip$/, replacement: '$1-intel-mac.zip' },
+    {
+      match: /^(?!.*-arm64)(?!.*-intel)(.+)-mac\.zip\.blockmap$/,
+      replacement: '$1-intel-mac.zip.blockmap',
+    },
+  ];
+
+  const stripArm64Suffix: RenameRule[] = [
+    { match: /^(.+)-arm64\.dmg$/, replacement: '$1.dmg' },
+    { match: /^(.+)-arm64\.dmg\.blockmap$/, replacement: '$1.dmg.blockmap' },
+    { match: /^(.+)-arm64-mac\.zip$/, replacement: '$1-mac.zip' },
+    { match: /^(.+)-arm64-mac\.zip\.blockmap$/, replacement: '$1-mac.zip.blockmap' },
+  ];
+
+  let renamedCount = 0;
+
+  function applyRules(rules: RenameRule[]): void {
+    if (!fs.existsSync(distDir)) {
+      return;
+    }
+    const entries = fs.readdirSync(distDir, { withFileTypes: true });
+    for (const entry of entries) {
+      if (!entry.isFile()) {
+        continue;
+      }
+      for (const { match, replacement } of rules) {
+        if (!match.test(entry.name)) {
+          continue;
+        }
+        const newName = entry.name.replace(match, replacement);
+        if (newName === entry.name) {
+          break;
+        }
+        const fromPath = resolveUnderBase(distDir, entry.name) || path.join(distDir, entry.name);
+        const toPath = resolveUnderBase(distDir, newName) || path.join(distDir, newName);
+        if (fs.existsSync(toPath)) {
+          break;
+        }
+        try {
+          fs.renameSync(fromPath, toPath);
+          console.log(`  ${entry.name} → ${newName}`);
+          renamedCount++;
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : String(err);
+          console.error(`  Error renaming ${entry.name} → ${newName}: ${msg}`);
+        }
+        break;
+      }
+    }
+  }
+
+  applyRules(tagX64WithIntel);
+  applyRules(stripArm64Suffix);
+
+  return renamedCount;
+}
+
 function organizeDistFiles(allowedPlatforms: ReadonlySet<string>): void {
+  if (allowedPlatforms.has('mac')) {
+    renameMacArtifacts();
+  }
+
   if (allowedPlatforms.has('windows')) {
     const winDir = resolveUnderBase(distDir, 'win') || path.join(distDir, 'win');
     const windowsDir = resolveUnderBase(distDir, 'windows') || path.join(distDir, 'windows');
@@ -175,12 +262,34 @@ function organizeDistFiles(allowedPlatforms: ReadonlySet<string>): void {
   const dirsMoved = organizeDirectories();
 
   const filePatterns: FilePatternConfig[] = [
-    { pattern: /-arm64-mac\.zip\.blockmap$/, platform: 'mac', arch: 'arm64' },
-    { pattern: /-arm64-mac\.zip$/, platform: 'mac', arch: 'arm64' },
-    { pattern: /-arm64\.dmg$/, platform: 'mac', arch: 'arm64' },
-    { pattern: /\.dmg$/, platform: 'mac', arch: 'x64', excludeIf: (file) => file.includes('-arm64') },
-    { pattern: /-mac\.zip$/, platform: 'mac', arch: 'x64', excludeIf: (file) => file.includes('-arm64') },
-    { pattern: /-mac\.zip\.blockmap$/, platform: 'mac', arch: 'x64', excludeIf: (file) => file.includes('-arm64') },
+    { pattern: /-intel-mac\.zip\.blockmap$/, platform: 'mac', arch: 'x64' },
+    { pattern: /-intel-mac\.zip$/, platform: 'mac', arch: 'x64' },
+    { pattern: /-intel\.dmg\.blockmap$/, platform: 'mac', arch: 'x64' },
+    { pattern: /-intel\.dmg$/, platform: 'mac', arch: 'x64' },
+    {
+      pattern: /\.dmg\.blockmap$/,
+      platform: 'mac',
+      arch: 'arm64',
+      excludeIf: (file) => file.includes('-intel'),
+    },
+    {
+      pattern: /\.dmg$/,
+      platform: 'mac',
+      arch: 'arm64',
+      excludeIf: (file) => file.includes('-intel'),
+    },
+    {
+      pattern: /-mac\.zip\.blockmap$/,
+      platform: 'mac',
+      arch: 'arm64',
+      excludeIf: (file) => file.includes('-intel'),
+    },
+    {
+      pattern: /-mac\.zip$/,
+      platform: 'mac',
+      arch: 'arm64',
+      excludeIf: (file) => file.includes('-intel'),
+    },
     { pattern: /^latest-mac\.yml$/, platform: 'mac', arch: null },
 
     { pattern: /-arm64\.AppImage$/, platform: 'linux', arch: 'arm64' },

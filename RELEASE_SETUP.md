@@ -119,9 +119,11 @@ Each release will include the artifacts listed in the **Downloads** table below.
 
 | Platform | Intel/x64 | ARM64/Apple Silicon |
 |----------|-----------|----------------------|
-| **macOS** | Roku Dev Studio-VERSION.dmg | Roku Dev Studio-VERSION-arm64.dmg |
+| **macOS** | Roku Dev Studio-VERSION-intel.dmg | Roku Dev Studio-VERSION.dmg |
 | **Windows** | Roku Dev Studio Setup VERSION.exe, Roku Dev Studio VERSION.exe (portable) | - |
 | **Linux** | roku-dev-studio_VERSION_amd64.deb, Roku Dev Studio-VERSION-x86_64.AppImage | roku-dev-studio_VERSION_arm64.deb, Roku Dev Studio-VERSION-arm64.AppImage |
+
+*(macOS naming convention: Apple Silicon is the unmarked default; Intel builds are tagged with `-intel`.)*
 
 *(VERSION is replaced automatically in the release body; in this doc it just shows the naming pattern.)*
 

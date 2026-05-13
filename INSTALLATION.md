@@ -35,8 +35,12 @@ Always run **`npm install` from the repository root** so workspaces link correct
 npm run build:mac
 ```
 This creates (under `apps/roku-dev-studio/dist/`):
-- `apps/roku-dev-studio/dist/mac/Roku Dev Studio-{version}.dmg` - macOS installer (x64 & arm64)
-- `apps/roku-dev-studio/dist/mac/Roku Dev Studio-{version}-mac.zip` - Portable macOS app (x64 & arm64)
+- `apps/roku-dev-studio/dist/mac/arm64/Roku Dev Studio-{version}.dmg` - macOS installer (Apple Silicon, default)
+- `apps/roku-dev-studio/dist/mac/x64/Roku Dev Studio-{version}-intel.dmg` - macOS installer (Intel)
+- `apps/roku-dev-studio/dist/mac/arm64/Roku Dev Studio-{version}-mac.zip` - Portable macOS app (Apple Silicon)
+- `apps/roku-dev-studio/dist/mac/x64/Roku Dev Studio-{version}-intel-mac.zip` - Portable macOS app (Intel)
+
+Apple Silicon is the unmarked default; Intel builds are tagged with `-intel` in the filename.
 
 ### For Windows:
 ```bash

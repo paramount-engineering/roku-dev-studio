@@ -201,7 +201,7 @@ jobs:
             
             | Platform | Intel/x64 | ARM64/Apple Silicon |
             |----------|-----------|----------------------|
-            | **macOS** | Roku Dev Studio-${{ steps.get_version.outputs.VERSION }}.dmg | Roku Dev Studio-${{ steps.get_version.outputs.VERSION }}-arm64.dmg |
+            | **macOS** | Roku Dev Studio-${{ steps.get_version.outputs.VERSION }}-intel.dmg | Roku Dev Studio-${{ steps.get_version.outputs.VERSION }}.dmg |
             | **Windows** | Roku Dev Studio Setup ${{ steps.get_version.outputs.VERSION }}.exe, Roku Dev Studio ${{ steps.get_version.outputs.VERSION }}.exe (portable) | - |
             | **Linux** | roku-dev-studio_${{ steps.get_version.outputs.VERSION }}_amd64.deb, Roku Dev Studio-${{ steps.get_version.outputs.VERSION }}-x86_64.AppImage | roku-dev-studio_${{ steps.get_version.outputs.VERSION }}_arm64.deb, Roku Dev Studio-${{ steps.get_version.outputs.VERSION }}-arm64.AppImage |
             
