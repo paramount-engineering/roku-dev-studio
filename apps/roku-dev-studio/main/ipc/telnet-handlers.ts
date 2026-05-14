@@ -23,6 +23,10 @@ type DebugTelnetConn = {
   isRemote: boolean;
   /** Batched text before IPC to renderer */
   ipcCoalesce: TelnetIpcCoalesceState;
+  /** monotonic ms when the socket actually opened — for diagnostic close logs */
+  openedAtMs: number;
+  /** total bytes received on this socket — for diagnostic close logs */
+  bytesReceived: number;
 };
 
 type SystemTelnetConn = { socket: Socket; ipcCoalesce: TelnetIpcCoalesceState };
@@ -63,7 +67,9 @@ async function connectDebugTelnetInternal(ip: string): Promise<{ success: boolea
   telnetConnections.set(connectionId, {
     socket,
     isRemote: false,
-    ipcCoalesce: createTelnetIpcCoalesceState()
+    ipcCoalesce: createTelnetIpcCoalesceState(),
+    openedAtMs: Date.now(),
+    bytesReceived: 0
   });
   console.log('[Telnet] connected to', ip, ':8085 (readyState=' + (socket as unknown as { readyState?: string }).readyState + ')');
   if (safeSend) safeSend(IPC.TelnetConnected, { ip, connectionId });
@@ -72,6 +78,7 @@ async function connectDebugTelnetInternal(ip: string): Promise<{ success: boolea
     const text = data.toString('utf8');
     const connection = telnetConnections.get(connectionId);
     if (!connection) return;
+    connection.bytesReceived += data.length;
     connection.ipcCoalesce.pending += text;
     scheduleCoalescedMapFlush(telnetConnections, connectionId, (_live, slice) => {
       if (safeSend) safeSend(IPC.TelnetData, { ip, connectionId, data: slice });
@@ -79,17 +86,39 @@ async function connectDebugTelnetInternal(ip: string): Promise<{ success: boolea
   });
 
   socket.on('error', (error: Error) => {
+    console.warn('[Telnet] socket error for', ip, ':8085 →', error.message);
     if (safeSend) {
       safeSend(IPC.TelnetError, { ip, connectionId, error: error.message });
     }
   });
 
   socket.on('close', (hadError: boolean) => {
+    // Diagnostic detail for the "connected but no logs are received" class
+    // of bug. `bytesReceived === 0` + a short lifetime is the signature of
+    // either (a) another telnet client holds Roku's BrightScript stdout
+    // binding (Roku 8085 is single-client and the rebind is racy — see
+    // bs-fiddle-handlers.ts comments around the post-sideload bounce),
+    // or (b) the channel exited / crashed immediately after we attached.
+    // The renderer surfaces this to the user; the console.log here is for
+    // the support log bundle.
+    const conn = telnetConnections.get(connectionId);
+    const aliveMs = conn ? Date.now() - conn.openedAtMs : -1;
+    const bytes = conn ? conn.bytesReceived : -1;
+    console.log('[Telnet] socket close for', ip, ':8085',
+      '(hadError=' + hadError + ', aliveMs=' + aliveMs + ', bytesReceived=' + bytes + ')');
     flushCoalescedMapNow(telnetConnections, connectionId, (_live, slice) => {
       if (safeSend) safeSend(IPC.TelnetData, { ip, connectionId, data: slice });
     });
     telnetConnections.delete(connectionId);
-    if (safeSend) safeSend(IPC.TelnetDisconnected, { ip, connectionId, hadError });
+    if (safeSend) {
+      safeSend(IPC.TelnetDisconnected, {
+        ip,
+        connectionId,
+        hadError,
+        aliveMs,
+        bytesReceived: bytes
+      });
+    }
   });
 
   return { success: true, connectionId };
@@ -151,8 +180,22 @@ function setupTelnetHandlers(_mainWindow: BrowserWindow | undefined, safeSendToR
   cachedSafeSend = safeSendToRenderer;
 
   ipcMain.handle(IPC.TelnetConnect, async (_event: IpcMainInvokeEvent, { ip }: IpPayload) => {
-    const result = await connectDebugTelnetInternal(ip);
-    if (result.success) console.log('[Telnet] Connected to', ip, ':8085');
+    // Idempotent: reuse a healthy 8085 socket rather than destroy+reopen.
+    // The Roku 8085 BrightScript log stream binds to a single client and the
+    // rebind on a destroy/reopen cycle is racy — repeated connects (e.g. an
+    // Action Script auto-connect colliding with a manual click, or an MCP
+    // agent retrying) used to bounce the socket each time and could leave
+    // the user "connected" with no log stream attached. `ensureDebugTelnetConnected`
+    // checks `readyState === 'open'` + `!destroyed` before reopening.
+    // The internal `bounceDebugTelnet` (still exported for `bs-fiddle-handlers.ts`'s
+    // post-sideload rebind) remains the explicit destructive path; it is
+    // intentionally not exposed via IPC because the actual cause of
+    // "connected but no logs" in the field is almost always Roku-side
+    // (another telnet client holds the binding, channel exited, etc.) and
+    // a renderer-driven reconnect doesn't help — the disconnect-cause
+    // diagnostics on the close handler do.
+    const result = await ensureDebugTelnetConnected(ip);
+    if (result.success) console.log('[Telnet] TelnetConnect OK for', ip, ':8085 (idempotent)');
     return result;
   });
 

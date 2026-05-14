@@ -233,6 +233,24 @@ export function attachTelnetOutputFindBar(opts: AttachTelnetOutputFindBarOpts): 
   let findTimeout: ReturnType<typeof setTimeout> | undefined;
 
   /**
+   * The hit the user most recently asked to navigate to (Next/Prev/typing).
+   * `tryScrollPendingHitIntoView` consumes (and clears) it once the line is
+   * mounted and the actual match Range can be positioned in the viewport.
+   *
+   * Why: the per-line scroll in `highlightCurrentMatch` only centers the
+   * `.telnet-log-line` element. For a single log line that wraps onto many
+   * visual rows (e.g. a 500 KB JSON dump on one entry), centering the line
+   * puts the *middle* of the wrapped content in view — the actual match,
+   * often near the start, ends up far above or below the viewport. Following
+   * up with a Range-based scroll lands the matched characters themselves.
+   *
+   * Multiple paths (the immediate 2-RAF after Next, the line-mount hook in
+   * `bindLineHighlights`) try to satisfy the pending hit; the first one to
+   * find a mounted line wins and clears the slot.
+   */
+  let pendingScrollHit: FlatHit | null = null;
+
+  /**
    * Persistent global Highlight. Range objects are added/removed per *line* as it
    * mounts/unmounts (`bindLineHighlights` / `unbindLineHighlights`), so the
    * registry only ever holds ranges whose underlying text nodes are still in the
@@ -446,12 +464,42 @@ export function attachTelnetOutputFindBar(opts: AttachTelnetOutputFindBarOpts): 
     }
   }
 
+  /**
+   * Refine the scroll position so the actual match Range — not the line
+   * element — sits inside the viewport. No-op if the range is already fully
+   * visible (small padding). Always clears `pendingScrollHit` on a successful
+   * attempt so the line-mount hook doesn't re-run it.
+   */
+  function tryScrollPendingHitIntoView(): void {
+    const hit = pendingScrollHit;
+    if (!hit) return;
+    const lineEl = model.getLineEl(hit.lineIndex);
+    if (!lineEl) return; // line not mounted yet — wait for `bindLineHighlights`
+    const range = buildRangeForHit(hit);
+    if (!range) return;
+    const rangeRect = range.getBoundingClientRect();
+    if (rangeRect.width === 0 && rangeRect.height === 0) return;
+    const scrollRect = outputEl.getBoundingClientRect();
+    pendingScrollHit = null;
+    const PADDING = 4;
+    if (
+      rangeRect.top >= scrollRect.top + PADDING &&
+      rangeRect.bottom <= scrollRect.bottom - PADDING
+    ) {
+      return;
+    }
+    const desiredTop = scrollRect.top + (scrollRect.height - rangeRect.height) / 2;
+    const delta = rangeRect.top - desiredTop;
+    outputEl.scrollTo({ top: outputEl.scrollTop + delta, behavior: 'auto' });
+  }
+
   function highlightCurrentMatch(scrollIntoView: boolean): void {
     paintCurrentHighlight();
     if (currentHitIndex < 0 || currentHitIndex >= flatHits.length) return;
     if (!scrollIntoView) return;
 
     const hit = flatHits[currentHitIndex]!;
+    pendingScrollHit = hit;
     if (opts.scrollLineIntoView) {
       // Virtualization-aware path: handler scrolls (and mounts the row if it
       // was virtualized out). Subsequent `onMount` fires `bindLineHighlights`,
@@ -460,8 +508,18 @@ export function attachTelnetOutputFindBar(opts: AttachTelnetOutputFindBarOpts): 
       opts.scrollLineIntoView(hit.lineIndex);
     } else {
       const lineEl = model.getLineEl(hit.lineIndex);
-      lineEl?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      lineEl?.scrollIntoView({ block: 'center' });
     }
+    // Two RAFs: first frame lets the virtualizer's mount + measure microtask
+    // run; second lets the resulting layout settle before we read the Range
+    // rect. If the line isn't mounted by then, `bindLineHighlights` will
+    // pick the pending hit up when it fires.
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        if (pendingScrollHit !== hit) return; // a newer Next/Prev superseded us
+        tryScrollPendingHitIntoView();
+      });
+    });
   }
 
   function searchNext(): void {
@@ -778,6 +836,7 @@ export function attachTelnetOutputFindBar(opts: AttachTelnetOutputFindBarOpts): 
     flatHits = [];
     currentHitIndex = -1;
     currentEntry = null;
+    pendingScrollHit = null;
     cache.clear();
     clearAllHighlights();
     findCountEl.textContent = '';
@@ -899,6 +958,13 @@ export function attachTelnetOutputFindBar(opts: AttachTelnetOutputFindBarOpts): 
     // If the just-mounted line happens to host the active match, paint it.
     if (currentHitIndex >= 0 && flatHits[currentHitIndex]?.lineIndex === lineIndex) {
       paintCurrentHighlight();
+      // The Next/Prev path may have been waiting for this very line to mount
+      // before refining the scroll position to land on the actual match
+      // (instead of the line center). One more RAF lets the row's measured
+      // height land before we read the Range rect.
+      if (pendingScrollHit?.lineIndex === lineIndex) {
+        requestAnimationFrame(() => tryScrollPendingHitIntoView());
+      }
     }
   };
 

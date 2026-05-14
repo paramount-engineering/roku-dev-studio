@@ -36,7 +36,36 @@
       --border-hover: rgba(139, 92, 246, 0.25);
       
       --sidebar-width: 340px;
-      --titlebar-height: 38px;
+      /*
+       * --titlebar-height-base is the design value at 100% zoom (38 screen px).
+       * --titlebar-height inverse-scales for zoom < 100% so the bar always
+       * stays at least 38 *screen* px tall — the macOS traffic lights
+       * (~28 px, OS-drawn, ignore zoom) and the Windows/Linux custom
+       * close/min/max controls otherwise spill into the content below at
+       * extreme zoom-out. `--app-zoom` is set by the renderer from
+       * IPC.AppZoomChanged (main → renderer); see app.ts subscribeToAppZoom.
+       * `min(...,1)` makes this a no-op when zoomed in (≥100%) — the bar
+       * just grows naturally with the rest of the UI in that direction.
+       */
+      --titlebar-height-base: 38px;
+      --titlebar-height: calc(var(--titlebar-height-base) / min(var(--app-zoom, 1), 1));
+      --titlebar-traffic-spacer-base: 78px;
+      --titlebar-traffic-spacer-width: calc(var(--titlebar-traffic-spacer-base) / min(var(--app-zoom, 1), 1));
+      --titlebar-control-base: 46px;
+      --titlebar-control-width: calc(var(--titlebar-control-base) / min(var(--app-zoom, 1), 1));
+      /*
+       * --titlebar-content-scale is the multiplier you apply to ANY fixed
+       * px value inside the title bar (sidebar toggle, Scan/Help buttons,
+       * "Roku Dev Studio" title, icons) so its rendered SCREEN size stays
+       * constant across zoom levels. Without this, only the bar's outer
+       * dimensions stay constant; the contents shrink at zoom-out and look
+       * mismatched against the OS-drawn macOS traffic lights (or just
+       * become hard-to-read tiny labels on every platform). Use as
+       * `calc(<base-px> * var(--titlebar-content-scale))`. At zoom ≥ 100%
+       * the multiplier is 1.0 (no change); at zoom-out it grows the CSS
+       * px so the screen px stays put.
+       */
+      --titlebar-content-scale: calc(1 / min(var(--app-zoom, 1), 1));
       /* Sidebar lists + device tab panels: one outer shell and one inner inset */
       --device-shell-padding: 16px;
       --device-section-inset: 12px;
@@ -135,7 +164,7 @@
     }
 
     body.platform-darwin .titlebar-traffic-spacer {
-      width: 78px;
+      width: var(--titlebar-traffic-spacer-width);
     }
 
     .titlebar-sidebar-toggle {
@@ -143,12 +172,15 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      width: 30px;
-      height: 28px;
-      margin: 0 4px 0 2px;
+      /* All fixed sizes inverse-scale with content zoom so the button
+         stays the same physical size as the macOS traffic lights /
+         Win/Linux titlebar controls next to it. See --titlebar-content-scale. */
+      width: calc(36px * var(--titlebar-content-scale));
+      height: calc(32px * var(--titlebar-content-scale));
+      margin: 0 calc(4px * var(--titlebar-content-scale)) 0 calc(2px * var(--titlebar-content-scale));
       padding: 0;
       border: none;
-      border-radius: 5px;
+      border-radius: calc(6px * var(--titlebar-content-scale));
       background: transparent;
       color: var(--text-muted);
       cursor: default;
@@ -161,6 +193,10 @@
       display: flex;
       align-items: center;
       justify-content: center;
+      /* `.icon-sm` defaults to 14px font-size globally; override here so
+         the icon glyph also stays at constant screen size and reads at
+         a comfortable hit-target size on the title bar. */
+      font-size: calc(18px * var(--titlebar-content-scale));
       transition: transform 0.32s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.28s ease;
     }
 
@@ -169,11 +205,21 @@
       color: var(--text-primary);
     }
 
-    body.platform-darwin .titlebar-sidebar-toggle,
-    body.platform-darwin .titlebar-scan-btn,
-    body.platform-darwin .titlebar-help-btn {
-      transform: translateY(3px);
-    }
+    /*
+     * Intentionally no platform-specific vertical translate on the leading
+     * buttons. Past iterations tried to align them with the macOS traffic
+     * lights via a 3px downward translate, but the math only works at 100%
+     * zoom — the title bar height grows with renderer zoom (min() clamp on
+     * `--titlebar-content-scale` is a no-op for zoom ≥ 100%), while the
+     * OS-drawn traffic lights are anchored at a fixed screen offset and
+     * don't scale. At 200% the same translate becomes 6 screen px and the
+     * toggle visibly drifts off the title bar's vertical center.
+     *
+     * Treat the toggle / Scan / Help & Guide as our own content (not OS
+     * chrome) and let `.titlebar-leading { align-items: center; }` center
+     * them. The toggle ends up on the same centerline as the right-side
+     * zoom indicator — consistent across zoom levels, no magic numbers.
+     */
 
     body.sidebar-collapsed .titlebar-sidebar-toggle {
       color: var(--accent-purple);
@@ -189,15 +235,16 @@
       -webkit-app-region: no-drag;
       flex-direction: row;
       align-items: center;
-      gap: 5px;
-      height: 28px;
-      margin: 0 2px 0 0;
-      padding: 0 10px 0 8px;
+      /* Inverse-scaled fixed sizes — see --titlebar-content-scale. */
+      gap: calc(5px * var(--titlebar-content-scale));
+      height: calc(28px * var(--titlebar-content-scale));
+      margin: 0 calc(2px * var(--titlebar-content-scale)) 0 0;
+      padding: 0 calc(10px * var(--titlebar-content-scale)) 0 calc(8px * var(--titlebar-content-scale));
       border: 1px solid var(--border);
-      border-radius: 6px;
+      border-radius: calc(6px * var(--titlebar-content-scale));
       background: var(--bg-tertiary);
       color: var(--text-secondary);
-      font-size: 12px;
+      font-size: calc(12px * var(--titlebar-content-scale));
       font-weight: 500;
       font-family: inherit;
       cursor: default;
@@ -215,15 +262,16 @@
       -webkit-app-region: no-drag;
       flex-direction: row;
       align-items: center;
-      gap: 5px;
-      height: 28px;
-      margin: 0 6px 0 0;
-      padding: 0 10px 0 8px;
+      /* Inverse-scaled fixed sizes — see --titlebar-content-scale. */
+      gap: calc(5px * var(--titlebar-content-scale));
+      height: calc(28px * var(--titlebar-content-scale));
+      margin: 0 calc(6px * var(--titlebar-content-scale)) 0 0;
+      padding: 0 calc(10px * var(--titlebar-content-scale)) 0 calc(8px * var(--titlebar-content-scale));
       border: 1px solid var(--border);
-      border-radius: 6px;
+      border-radius: calc(6px * var(--titlebar-content-scale));
       background: var(--bg-tertiary);
       color: var(--text-secondary);
-      font-size: 12px;
+      font-size: calc(12px * var(--titlebar-content-scale));
       font-weight: 500;
       font-family: inherit;
       cursor: default;
@@ -268,6 +316,11 @@
     .titlebar-help-btn .icon {
       flex-shrink: 0;
       pointer-events: none;
+      font-size: calc(14px * var(--titlebar-content-scale));
+    }
+
+    .titlebar-scan-btn .icon {
+      font-size: calc(14px * var(--titlebar-content-scale));
     }
 
     .titlebar-center {
@@ -282,7 +335,10 @@
     }
 
     .titlebar-text {
-      font-size: 13px;
+      /* Inverse-scaled so "Roku Dev Studio" stays at the same physical
+         size on screen as the OS-drawn macOS traffic lights next to it,
+         and stays comfortably readable on Win/Linux at low zoom. */
+      font-size: calc(13px * var(--titlebar-content-scale));
       font-weight: 500;
       color: var(--text-secondary);
       pointer-events: none;
@@ -293,9 +349,91 @@
       justify-self: stretch;
       display: flex;
       justify-content: flex-end;
-      align-items: stretch;
+      align-items: center;
+      gap: calc(6px * var(--titlebar-content-scale));
+      /* Breathing room from the right edge of the window. The Win/Linux
+         min/max/close controls sit *outside* this padding (they have their
+         own fixed width and reach the edge by design); on macOS, this is
+         the only thing keeping the zoom indicator off the screen edge. */
+      padding-right: calc(10px * var(--titlebar-content-scale));
       min-width: 0;
       min-height: var(--titlebar-height);
+    }
+
+    /* Win/Linux: the OS-style close/min/max controls must reach the window
+       edge, so cancel the trailing padding when they're showing. */
+    body.platform-win32 .titlebar-trailing,
+    body.platform-linux .titlebar-trailing {
+      padding-right: 0;
+    }
+
+    /*
+     * Title-bar zoom indicator (`-`, percentage, `+`). Hidden when the renderer
+     * zoom factor is exactly 1.0 — it only surfaces once the user has zoomed
+     * out / in. Sized via --titlebar-content-scale so it matches the other
+     * title-bar affordances (Scan / Help & Guide) at any zoom.
+     */
+    .titlebar-zoom {
+      -webkit-app-region: no-drag;
+      display: inline-flex;
+      flex-direction: row;
+      align-items: stretch;
+      height: calc(28px * var(--titlebar-content-scale));
+      border: 1px solid var(--border);
+      border-radius: calc(6px * var(--titlebar-content-scale));
+      background: var(--bg-tertiary);
+      color: var(--text-secondary);
+      overflow: hidden;
+      font-family: inherit;
+      font-size: calc(12px * var(--titlebar-content-scale));
+      font-weight: 500;
+      line-height: 1;
+      white-space: nowrap;
+      transition: border-color 0.18s ease;
+    }
+
+    .titlebar-zoom[hidden] {
+      display: none;
+    }
+
+    .titlebar-zoom-btn,
+    .titlebar-zoom-label {
+      -webkit-app-region: no-drag;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+      margin: 0;
+      border: 0;
+      background: transparent;
+      color: inherit;
+      font: inherit;
+      cursor: default;
+      transition: background 0.18s ease, color 0.18s ease;
+    }
+
+    .titlebar-zoom-btn {
+      width: calc(26px * var(--titlebar-content-scale));
+      font-size: calc(15px * var(--titlebar-content-scale));
+      font-weight: 500;
+    }
+
+    .titlebar-zoom-label {
+      min-width: calc(44px * var(--titlebar-content-scale));
+      padding: 0 calc(6px * var(--titlebar-content-scale));
+      border-left: 1px solid var(--border);
+      border-right: 1px solid var(--border);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .titlebar-zoom-btn:hover,
+    .titlebar-zoom-label:hover {
+      background: var(--bg-hover);
+      color: var(--text-primary);
+    }
+
+    .titlebar-zoom:hover {
+      border-color: var(--accent-purple);
     }
 
     .titlebar-controls {
@@ -315,7 +453,11 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      width: 46px;
+      /* Inverse-scales for zoom < 100% — see --titlebar-height-base
+         comment for rationale. Keeps the Win/Linux close/min/max buttons
+         at a constant ≥46 screen px wide so they remain comfortable
+         click targets when the rest of the app zooms out. */
+      width: var(--titlebar-control-width);
       height: 100%;
       min-height: var(--titlebar-height);
       padding: 0;
@@ -324,10 +466,16 @@
       border-left: 1px solid var(--border);
       background: transparent;
       color: var(--text-secondary);
-      font-size: 14px;
+      /* Glyph (×, –, ⬜) also inverse-scaled so it doesn't shrink to a
+         dot at low zoom while the button stays 46 screen px wide. */
+      font-size: calc(14px * var(--titlebar-content-scale));
       line-height: 1;
       cursor: default;
       transition: background 0.12s, color 0.12s;
+    }
+
+    .titlebar-control .icon {
+      font-size: calc(14px * var(--titlebar-content-scale));
     }
 
     .titlebar-control:hover {
@@ -3611,13 +3759,17 @@
       gap: calc(var(--rq) * 0.055);
     }
     .remote-tab-metrics-root[data-remote-layout="quad"] .remote-quad-remote .remote-secret-screens-footer {
+      /* Sibling of `.remote-quad-remote-scroll` (see markup) — pinned to
+         the bottom of the card by the section's flex-column layout. No
+         negative margins needed; the footer spans the section's full width
+         naturally and the section's `border-radius: 8px` + `overflow: hidden`
+         clip the footer's bottom corners cleanly. */
       flex-shrink: 0;
-      margin: 0 -8px -8px;
       min-height: 34px;
       box-sizing: border-box;
       display: flex;
       align-items: stretch;
-      border-radius: 0 0 7px 7px;
+      border-radius: 0;
     }
     .remote-tab-metrics-root[data-remote-layout="quad"]
       .remote-quad-remote
@@ -3738,15 +3890,13 @@
         justify-content: center;
       }
     }
-    /* Solo: bleed to scroll edges — pad-x / pad-b vars come from .remote-quad-remote-scroll (solo). */
+    /* Solo: footer is a sibling of the scroll wrapper (see markup), so it
+       spans the card's full width naturally. Section's `border-radius` +
+       `overflow: hidden` clip the footer's bottom corners. */
     .remote-tab-metrics-root[data-remote-layout="solo"] .remote-quad-remote .remote-secret-screens-footer {
-      margin-top: clamp(20px, 3.5vw, 32px);
-      margin-left: calc(-1 * var(--remote-solo-scroll-pad-x, 12px));
-      margin-right: calc(-1 * var(--remote-solo-scroll-pad-x, 12px));
-      margin-bottom: 0;
-      border-radius: 0 0 8px 8px;
-      align-self: stretch;
-      width: calc(100% + 2 * var(--remote-solo-scroll-pad-x, 12px));
+      margin: 0;
+      border-radius: 0;
+      width: 100%;
       box-sizing: border-box;
     }
     .remote-tab-metrics-root[data-remote-layout="solo"]
@@ -7971,10 +8121,13 @@
     }
     
     .remote-secret-screens-footer {
+      /* The footer is now a sibling of `.remote-quad-remote-scroll` (lifted
+         out of it so the body can scroll without dragging the footer along
+         at high zoom). Quad/solo selectors override sizing/border-radius —
+         this base rule just owns the visual chrome. */
       border-top: 1px solid var(--border);
       background: var(--bg-tertiary);
-      margin: 18px -18px -18px;
-      border-radius: 0 0 10px 10px;
+      margin: 0;
     }
     
     /* Apps Grid */
@@ -8189,8 +8342,12 @@
     .output-area .xml-attr { color: #ffcb6b; }
     .output-area .xml-value { color: #c3e88d; }
     .output-area .xml-content { color: #f1f5f9; }
-    .output-area .search-highlight { background: rgba(255, 203, 107, 0.3); color: #ffcb6b; border-radius: 2px; }
-    .output-area .search-highlight.current { background: var(--accent-purple); color: white; }
+    /* Search highlights overlay the existing xml-* syntax colors: only the
+       background changes so the underlying token color stays readable. The
+       active match adds a stronger background + outline (still no color
+       override) so the existing colors stay intact. */
+    .output-area .search-highlight { background: rgba(255, 203, 107, 0.35); color: inherit; border-radius: 2px; }
+    .output-area .search-highlight.current { background: rgba(199, 146, 234, 0.55); color: inherit; outline: 1px solid var(--accent-purple); border-radius: 2px; }
     
     .custom-query-row { display: flex; gap: 10px; margin-top: 12px; }
     .custom-query-input { flex: 1; padding: 10px 14px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-primary); color: var(--text-primary); font-size: 13px; font-family: 'JetBrains Mono', monospace; }
@@ -8870,6 +9027,7 @@
       border-top: 1px solid var(--border);
       display: flex;
       justify-content: center;
+      gap: 8px;
       background: var(--bg-primary);
       z-index: 101;
       position: relative;
@@ -9268,6 +9426,12 @@
     reserves room for the macOS traffic lights on first paint. Without this
     the 78px spacer only kicks in once the renderer JS loads, and the sidebar
     toggle briefly renders underneath the red/yellow/green buttons.
+
+    Same script primes `--app-zoom: 1` on :root so the titlebar starts at the
+    correct screen-pixel size on cold start. Main re-broadcasts the actual
+    factor on `did-finish-load` (and on every Cmd+/-/0 / Ctrl+wheel) via
+    `IPC.AppZoomChanged` and the renderer mirrors it into this same variable
+    — see `subscribeToAppZoom()` in renderer/app.ts.
   -->
   <script>
     (function () {
@@ -9276,6 +9440,7 @@
           (window.rdsShell && window.rdsShell.platform) ||
           (typeof navigator !== 'undefined' && /Mac/i.test(navigator.platform) ? 'darwin' : '');
         if (p) document.body.classList.add('platform-' + p);
+        document.documentElement.style.setProperty('--app-zoom', '1');
       } catch (e) { /* ignore */ }
     })();
   </script>
@@ -9319,6 +9484,29 @@
       <span class="titlebar-text">Roku Dev Studio</span>
     </div>
     <div class="titlebar-trailing">
+      <div class="titlebar-zoom" id="titlebarZoom" hidden>
+        <button
+          type="button"
+          class="titlebar-zoom-btn titlebar-zoom-out"
+          id="titlebarZoomOut"
+          title="Zoom out"
+          aria-label="Zoom out"
+        >&#8722;</button>
+        <button
+          type="button"
+          class="titlebar-zoom-label"
+          id="titlebarZoomLabel"
+          title="Reset zoom to 100%"
+          aria-label="Current zoom; click to reset to 100%"
+        >100%</button>
+        <button
+          type="button"
+          class="titlebar-zoom-btn titlebar-zoom-in"
+          id="titlebarZoomIn"
+          title="Zoom in"
+          aria-label="Zoom in"
+        >+</button>
+      </div>
       <div class="titlebar-controls">
         <button type="button" class="titlebar-control titlebar-minimize" title="Minimize" aria-label="Minimize">&#8722;</button>
         <button type="button" class="titlebar-control titlebar-maximize" title="Maximize" aria-label="Maximize">&#9633;</button>
@@ -10250,12 +10438,19 @@
                     </div>
                   </div>
                 </div>
-                <div class="remote-secret-screens-footer">
-                  <button type="button" class="connection-card-footer-btn secret-screens-open-btn" title="Remote key sequences for Roku secret and diagnostic screens">
-                    <span class="icon icon-xs"><svg><use href="#icon-user-secret"/></svg></span>
-                    Roku Secret Screens
-                  </button>
-                </div>
+              </div>
+              <!--
+                Pinned footer: lives outside `.remote-quad-remote-scroll` so it
+                stays at the bottom of the card even when the body overflows
+                (e.g. high renderer zoom in quad layout). The section is a
+                flex column with `overflow: hidden`, so this sibling with
+                `flex-shrink: 0` always sits flush on the card's bottom edge.
+              -->
+              <div class="remote-secret-screens-footer">
+                <button type="button" class="connection-card-footer-btn secret-screens-open-btn" title="Remote key sequences for Roku secret and diagnostic screens">
+                  <span class="icon icon-xs"><svg><use href="#icon-user-secret"/></svg></span>
+                  Roku Secret Screens
+                </button>
               </div>
             </section>
             <section class="remote-quad remote-quad-objects" aria-label="BrightScript object counts (dev)">

@@ -3487,6 +3487,19 @@ document.addEventListener('keydown', async (e) => {
     return;
   }
 
+  // Skip when any application-level modifier is held — Cmd/Ctrl/Alt
+  // combinations are reserved for menu accelerators (View > Zoom In/Out
+  // is `Cmd+/-`, the BrightScript Fiddle window is `Cmd+B`, Reload is
+  // `Cmd+R`, etc.) and for OS-level shortcuts (`Cmd+M` minimize on
+  // macOS). Without this guard, e.g. `Cmd+-` fires zoomOut from the menu
+  // **and** `VolumeDown` from the keyMap below, because Electron menu
+  // accelerators don't suppress the renderer DOM keydown event. Shift
+  // alone is fine: it's the typing modifier for several keymap entries
+  // (`+`, `*`) and is the trigger for `shiftPForPower`.
+  if (e.metaKey || e.ctrlKey || e.altKey) {
+    return;
+  }
+
   const keyMap = {
     'ArrowUp': 'Up',
     'ArrowDown': 'Down',
@@ -3517,24 +3530,26 @@ document.addEventListener('keydown', async (e) => {
   const rokuKey = shiftPForPower ? 'PowerOff' : keyMap[lookupKey];
   if (rokuKey) {
     e.preventDefault();
-    
-    // Visual feedback using pressed class
-    const btn = activePanel.querySelector(`[data-key="${rokuKey}"]`);
-    if (btn) {
-      btn.classList.add('pressed');
-    }
-    
+
+    // Visual feedback. Use querySelectorAll so the press lights up *every*
+    // button bound to this key in the active panel — both the main Remote
+    // panel button and the Dev App's Quick Remote mirror (`.devapp-key`)
+    // share the same `data-key`. The previous singular `querySelector` only
+    // hit the first one (the Remote panel), so users on the Dev App tab
+    // saw no feedback even though the keypress fired.
+    const btns = activePanel.querySelectorAll<HTMLElement>(`[data-key="${rokuKey}"]`);
+    btns.forEach((btn) => btn.classList.add('pressed'));
+
     try {
       await panelApi.keypress(rokuKey);
       scheduleKeyboardRemoteAutoScreenshotForActiveInnerTab(activePanel);
     } catch (error) {
       console.error('Keypress error:', error);
     }
-    
-    // Remove visual feedback
-    if (btn) {
+
+    if (btns.length > 0) {
       setTimeout(() => {
-        btn.classList.remove('pressed');
+        btns.forEach((btn) => btn.classList.remove('pressed'));
       }, 100);
     }
   }
@@ -4784,8 +4799,64 @@ End Sub
 
 // showToast is now imported from modules/utils/ui.js
 
+/**
+ * Mirror the webContents zoom factor into the `--app-zoom` CSS variable on
+ * `:root`. The frameless title bar's CSS uses this to inverse-scale itself
+ * (via `max(base, calc(base / var(--app-zoom)))`) and stay at a constant
+ * screen-pixel size even as the renderer zoom shrinks — otherwise the
+ * macOS-drawn traffic lights (and the Win/Linux custom titlebar controls)
+ * collide with the content below. Source side: `apps/roku-dev-studio/main.ts`
+ * `applyZoomFactor` + the `did-finish-load` initial broadcast.
+ *
+ * Also drives the title-bar zoom indicator (`-` / `100%` / `+`) — the
+ * indicator is the single subscriber that knows the current factor, so it
+ * updates its label and toggles its visibility off when factor === 1.
+ */
+function subscribeToAppZoom() {
+  const shell = window.rdsShell;
+  if (!shell || typeof shell.onAppZoomChanged !== 'function') return;
+
+  const zoomGroupEl = document.getElementById('titlebarZoom');
+  const zoomLabelEl = document.getElementById('titlebarZoomLabel');
+  const zoomInEl = document.getElementById('titlebarZoomIn');
+  const zoomOutEl = document.getElementById('titlebarZoomOut');
+
+  // 1px tolerance vs 1.0 — `Number.isFinite` rules out NaN/±Infinity from
+  // a malformed IPC payload, and the epsilon hides the indicator after a
+  // round-trip through `setZoomFactor` (which can reply with 0.9999...).
+  const isAtDefaultZoom = (factor: number): boolean => Math.abs(factor - 1) < 0.005;
+
+  if (zoomInEl && typeof shell.zoomIn === 'function') {
+    zoomInEl.addEventListener('click', () => shell.zoomIn?.());
+  }
+  if (zoomOutEl && typeof shell.zoomOut === 'function') {
+    zoomOutEl.addEventListener('click', () => shell.zoomOut?.());
+  }
+  if (zoomLabelEl && typeof shell.zoomReset === 'function') {
+    // Clicking the percentage resets to 100% — natural counterpart to the
+    // ± buttons. The indicator hides itself on the resulting broadcast.
+    zoomLabelEl.addEventListener('click', () => shell.zoomReset?.());
+  }
+
+  shell.onAppZoomChanged((factor: number) => {
+    const safe = Number.isFinite(factor) && factor > 0 ? factor : 1;
+    document.documentElement.style.setProperty('--app-zoom', String(safe));
+    if (zoomGroupEl) {
+      if (isAtDefaultZoom(safe)) {
+        zoomGroupEl.setAttribute('hidden', '');
+      } else {
+        zoomGroupEl.removeAttribute('hidden');
+      }
+    }
+    if (zoomLabelEl) {
+      zoomLabelEl.textContent = `${Math.round(safe * 100)}%`;
+    }
+  });
+}
+
 // Start the app when DOM is ready
 function runInit() {
+  subscribeToAppZoom();
   registerMcpConnectFlow();
   ensureMcpStoredPasswordBridge();
   ensureMcpAgentScreenshotBridge();

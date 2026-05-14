@@ -276,7 +276,7 @@ contextBridge.exposeInMainWorld('roku', {
   // Telnet Debug Console (Port 8085)
   // ============================================
   
-  // Connect to local device telnet
+  // Connect to local device telnet (idempotent — reuses a healthy 8085 socket)
   telnetConnect: (ip: string) => ipcRenderer.invoke(IPC.TelnetConnect, { ip }),
   
   // Disconnect local telnet
@@ -558,7 +558,31 @@ contextBridge.exposeInMainWorld('rdsShell', {
   platform: rdsPlatform,
   minimizeWindow: () => ipcRenderer.send(IPC.MainWindowMinimize),
   toggleMaximizeWindow: () => ipcRenderer.send(IPC.MainWindowToggleMaximize),
-  closeWindow: () => ipcRenderer.send(IPC.MainWindowClose)
+  closeWindow: () => ipcRenderer.send(IPC.MainWindowClose),
+  /**
+   * Subscribe to webContents zoom-factor changes (View > Zoom In/Out/Reset,
+   * ⌘=/⌘-/⌘0, Ctrl+wheel). Main also fires this once on `did-finish-load`
+   * so the renderer can sync `--app-zoom` before first paint and the
+   * frameless title bar starts at the correct screen-pixel size. Returns
+   * an unsubscribe fn. See `apps/roku-dev-studio/main.ts::applyZoomFactor`.
+   */
+  onAppZoomChanged: (callback: (factor: number) => void) => {
+    const handler = (_event: IpcRendererEvent, payload: { factor: number }) => {
+      const factor = payload && typeof payload.factor === 'number' ? payload.factor : 1;
+      callback(factor);
+    };
+    ipcRenderer.on(IPC.AppZoomChanged, handler);
+    return () => ipcRenderer.removeListener(IPC.AppZoomChanged, handler);
+  },
+  /**
+   * Request a zoom step from the title-bar indicator. Main re-uses its
+   * `zoomIn`/`zoomOut`/`resetZoom` (clamped + broadcast via `AppZoomChanged`),
+   * so the renderer never sets the zoom factor itself — the indicator label
+   * + visibility update from the broadcast above.
+   */
+  zoomIn: () => ipcRenderer.send(IPC.AppZoomChange, { direction: 'in' }),
+  zoomOut: () => ipcRenderer.send(IPC.AppZoomChange, { direction: 'out' }),
+  zoomReset: () => ipcRenderer.send(IPC.AppZoomChange, { direction: 'reset' })
 });
 
 // MCP bridge: renderer pushes selected-device + App Connector state to main so

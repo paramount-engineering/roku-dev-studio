@@ -178,6 +178,20 @@ var init_channels = __esm({
       MainWindowMinimize: "main-window:minimize",
       MainWindowToggleMaximize: "main-window:toggle-maximize",
       MainWindowClose: "main-window:close",
+      /** Main → renderer: webContents zoom factor changed (menu Cmd+/-/0,
+       * Ctrl+wheel, or initial load). Renderer mirrors it into the
+       * `--app-zoom` CSS variable so the frameless title bar can stay at a
+       * constant screen-pixel size — macOS-drawn traffic lights and the
+       * Windows/Linux custom controls don't scale with content zoom and
+       * collide with content otherwise. */
+      AppZoomChanged: "app:zoom-changed",
+      /** Renderer → main: request a zoom step from the title-bar zoom indicator
+       * (`-` / `+` buttons). Payload: `{ direction: 'in' | 'out' | 'reset' }`.
+       * Main re-uses the same `applyZoomFactor` path as the View > Zoom menu
+       * so clamp + broadcast stay centralized; the renderer is told the new
+       * factor via `AppZoomChanged` and updates its `--app-zoom` + the
+       * indicator label from there. */
+      AppZoomChange: "app:zoom-change",
       /** BrightScript Fiddle — standalone window (editor + terminal) */
       FiddleOpen: "fiddle:open",
       FiddleReady: "fiddle:ready",

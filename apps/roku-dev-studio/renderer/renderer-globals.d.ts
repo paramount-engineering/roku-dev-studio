@@ -37,6 +37,10 @@ declare global {
       minimizeWindow: () => void;
       toggleMaximizeWindow: () => void;
       closeWindow: () => void;
+      onAppZoomChanged?: (callback: (factor: number) => void) => () => void;
+      zoomIn?: () => void;
+      zoomOut?: () => void;
+      zoomReset?: () => void;
     };
     /**
      * Preload `roku` bridge — index signature keeps IPC surface usable while Phase 3 migrates.

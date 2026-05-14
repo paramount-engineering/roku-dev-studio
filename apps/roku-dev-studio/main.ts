@@ -83,6 +83,56 @@ let mainWindow: import('electron').BrowserWindow | undefined;
 let developerModeEnabled = false;
 let privacyModeEnabled = false;
 
+// ============================================
+// Window zoom (View > Zoom In/Out/Reset, ⌘=/⌘-/⌘0, Ctrl+wheel)
+// ============================================
+//
+// Why this lives here: the frameless main window has a CSS title bar that
+// scales with `webContents` zoom, while the macOS-drawn traffic-light
+// buttons (and the Win/Linux custom controls) DO NOT scale. At extreme
+// zoom-out the title bar shrinks below the traffic lights' height and they
+// spill into the content (overlapping device tabs). We:
+//   1. Clamp zoom to a sensible band so it can never break the chrome
+//      catastrophically (50%–200%).
+//   2. Broadcast every change to the renderer via `IPC.AppZoomChanged` so
+//      the title-bar CSS can inverse-scale itself to stay at a constant
+//      screen-pixel size — matching the OS-drawn traffic lights.
+const ZOOM_MIN_FACTOR = 0.5;
+const ZOOM_MAX_FACTOR = 2.0;
+const ZOOM_STEP_FACTOR = 0.1;
+const ZOOM_DEFAULT_FACTOR = 1.0;
+const ZOOM_EPSILON = 0.001;
+
+function clampZoomFactor(factor: number): number {
+  if (!Number.isFinite(factor)) return ZOOM_DEFAULT_FACTOR;
+  return Math.max(ZOOM_MIN_FACTOR, Math.min(ZOOM_MAX_FACTOR, factor));
+}
+
+function applyZoomFactor(win: import('electron').BrowserWindow | undefined, factor: number) {
+  if (!win || !win.webContents || win.webContents.isDestroyed()) return;
+  const target = clampZoomFactor(factor);
+  // setZoomFactor → triggers a layout pass; the renderer reads the new
+  // factor off the IPC payload below rather than via a getter.
+  if (Math.abs(win.webContents.getZoomFactor() - target) > ZOOM_EPSILON) {
+    win.webContents.setZoomFactor(target);
+  }
+  safeSendToRenderer(IPC.AppZoomChanged, { factor: target });
+}
+
+function zoomIn(win: import('electron').BrowserWindow | undefined) {
+  if (!win) return;
+  applyZoomFactor(win, win.webContents.getZoomFactor() + ZOOM_STEP_FACTOR);
+}
+
+function zoomOut(win: import('electron').BrowserWindow | undefined) {
+  if (!win) return;
+  applyZoomFactor(win, win.webContents.getZoomFactor() - ZOOM_STEP_FACTOR);
+}
+
+function resetZoom(win: import('electron').BrowserWindow | undefined) {
+  applyZoomFactor(win, ZOOM_DEFAULT_FACTOR);
+}
+
 // Helper function to safely send messages to renderer
 function safeSendToRenderer(channel: string, data: unknown) {
   if (mainWindow && mainWindow.webContents && !mainWindow.webContents.isDestroyed()) {
@@ -212,6 +262,30 @@ function createWindow(appState: AppWindowState) {
   // Show window as soon as it's ready (before content fully loads)
   win.once('ready-to-show', () => {
     win.show();
+  });
+
+  // ---- Zoom plumbing (see ZOOM_* helpers above for rationale) ---------
+  // 1. Pinch-zoom on a touchpad bypasses our menu handlers entirely;
+  //    disable it so the only paths to zoom are the menu (clamped) and
+  //    Ctrl+wheel (caught + clamped via the `zoom-changed` listener
+  //    below).
+  win.webContents.setVisualZoomLevelLimits(1, 1).catch((err: Error) => {
+    console.warn('[Zoom] setVisualZoomLevelLimits failed:', err.message);
+  });
+  // 2. Ctrl+wheel doesn't fire our menu handlers — Electron applies the
+  //    new zoom level itself and emits `zoom-changed`. Re-clamp on top of
+  //    its applied value, then re-broadcast so the renderer mirrors the
+  //    final factor. Note: `zoom-changed` fires AFTER the new zoom is
+  //    applied, so reading `getZoomFactor()` returns the post-Electron
+  //    value; clamping it back is idempotent if already in-range.
+  win.webContents.on('zoom-changed', (_event: Electron.Event, _direction: 'in' | 'out') => {
+    applyZoomFactor(win, win.webContents.getZoomFactor());
+  });
+  // 3. Tell the renderer the starting zoom factor as soon as it loads,
+  //    so the `--app-zoom` CSS variable is set before first paint and
+  //    the title bar starts at the correct size on cold start / reload.
+  win.webContents.on('did-finish-load', () => {
+    safeSendToRenderer(IPC.AppZoomChanged, { factor: clampZoomFactor(win.webContents.getZoomFactor()) });
   });
 
   loadMainRenderer(win);
@@ -375,9 +449,35 @@ function createWindow(appState: AppWindowState) {
         { role: 'reload' },
         { role: 'toggleDevTools' },
         { type: 'separator' },
-        { role: 'resetZoom' },
-        { role: 'zoomIn' },
-        { role: 'zoomOut' },
+        // Custom zoom handlers (instead of the built-in roles) so we can
+        // clamp to ZOOM_MIN_FACTOR..ZOOM_MAX_FACTOR and broadcast the new
+        // factor to the renderer for title-bar inverse-scaling.
+        {
+          label: 'Actual Size',
+          accelerator: 'CmdOrCtrl+0',
+          click: () => resetZoom(win)
+        },
+        {
+          label: 'Zoom In',
+          accelerator: 'CmdOrCtrl+Plus',
+          click: () => zoomIn(win)
+        },
+        {
+          // Second binding — Cmd+= without Shift. Electron's
+          // built-in `zoomIn` role registers both `CmdOrCtrl+Plus` and
+          // `CmdOrCtrl+=`; we mirror that so the unshifted top-row "="
+          // works too.
+          label: 'Zoom In (=)',
+          accelerator: 'CmdOrCtrl+=',
+          visible: false,
+          acceleratorWorksWhenHidden: true,
+          click: () => zoomIn(win)
+        },
+        {
+          label: 'Zoom Out',
+          accelerator: 'CmdOrCtrl+-',
+          click: () => zoomOut(win)
+        },
         { type: 'separator' },
         { role: 'togglefullscreen' }
       ]
@@ -501,6 +601,18 @@ app.whenReady().then(() => {
     const devices = Array.isArray(payload?.devices) ? payload!.devices : [];
     const initialId = payload?.initialDeviceId ?? null;
     openFiddleWindow(parent || undefined, devices, initialId);
+  });
+
+  // Title-bar zoom indicator (`-` / `+` buttons in the renderer): route the
+  // direction through the same `zoomIn`/`zoomOut`/`resetZoom` helpers as the
+  // View menu so clamp + `AppZoomChanged` broadcast stay in one place.
+  ipcMain.on(IPC.AppZoomChange, (event: import('electron').IpcMainEvent, payload: { direction?: unknown }) => {
+    const win = BrowserWindow.fromWebContents(event.sender) || mainWindow;
+    if (!win) return;
+    const direction = payload?.direction;
+    if (direction === 'in') zoomIn(win);
+    else if (direction === 'out') zoomOut(win);
+    else if (direction === 'reset') resetZoom(win);
   });
 
   // Load debug logging from settings (no file-on-Desktop needed)

@@ -655,36 +655,55 @@ export function setupTelnet(
     openTelnetStructuredViewer(line, payload);
   });
 
+  // In-flight guard. Multiple concurrent callers (e.g. an Action Script
+  // auto-connect colliding with a manual click, or the executor pre-run
+  // hook firing simultaneously with the checkbox-change handler) used to
+  // each issue their own `api.telnetConnect()` IPC. With the main-process
+  // handler now idempotent that is no longer destructive, but we still
+  // dedupe here to avoid stacked `--- Connected ---` placeholder lines and
+  // redundant `updateConnectionState` work, and to give every caller the
+  // same resolved promise.
+  let connectInFlight: Promise<void> | null = null;
+
   /** Shared click-handler + programmatic-entry path so the button and the
    *  exposed `panel.connectTelnet()` go through identical logic. */
   async function connectTelnet(): Promise<void> {
     if (isConnected) return;
-    updateConnectionState(false, true);
+    if (connectInFlight) return connectInFlight;
 
-    try {
-      const result = await api.telnetConnect();
+    const promise = (async () => {
+      updateConnectionState(false, true);
 
-      if (result.success) {
-        telnetTcpState.value = '';
-        pendingTelnetLines.length = 0;
-        cancelTelnetFlush();
-        clearDeferredTelnetHeavyLines();
-        updateConnectionState(true);
-        addLogLine(`--- Connected to ${api.ip}:8085 ${api.isRemote ? '(via relay)' : ''} ---`, false);
-      } else {
-        updateConnectionState(false, false, result.error || 'Connection failed');
-        addLogLine(`--- Connection failed: ${result.error || 'Unknown error'} ---`, false);
+      try {
+        const result = await api.telnetConnect();
+
+        if (result.success) {
+          telnetTcpState.value = '';
+          pendingTelnetLines.length = 0;
+          cancelTelnetFlush();
+          clearDeferredTelnetHeavyLines();
+          updateConnectionState(true);
+          addLogLine(`--- Connected to ${api.ip}:8085 ${api.isRemote ? '(via relay)' : ''} ---`, false);
+        } else {
+          updateConnectionState(false, false, result.error || 'Connection failed');
+          addLogLine(`--- Connection failed: ${result.error || 'Unknown error'} ---`, false);
+        }
+      } catch (error) {
+        const msg = errMessage(error);
+        updateConnectionState(false, false, msg);
+        addLogLine(`--- Connection error: ${msg} ---`, false);
       }
-    } catch (error) {
-      const msg = errMessage(error);
-      updateConnectionState(false, false, msg);
-      addLogLine(`--- Connection error: ${msg} ---`, false);
-    }
+    })();
+    connectInFlight = promise.finally(() => {
+      connectInFlight = null;
+    });
+    return connectInFlight;
   }
 
   connectBtn.addEventListener('click', () => {
     void connectTelnet();
   });
+
 
   /** Shared exit path so the Disconnect button and the exposed
    *  `panel.disconnectTelnet()` go through identical logic. Idempotent. */
@@ -704,21 +723,36 @@ export function setupTelnet(
     void disconnectTelnet();
   });
   
-  // Copy all logs (without timestamps)
-  copyBtn.addEventListener('click', () => {
+  /**
+   * Single source of truth for "what the user sees and would expect to take
+   * with them" — drives both Copy and Save. Flushes any pending append batch
+   * so a click right after a burst of output isn't off by a few lines, then
+   * applies the *filter*-mode query (Find mode is navigation only, not a
+   * visibility cull) and returns the matching `LogLine`s in order.
+   *
+   * Per-line timestamps stay out of the result — they're a viewer affordance
+   * only, and the saved file / clipboard text needs to round-trip through
+   * tools that expect raw BrightScript console output unchanged.
+   */
+  function getVisibleLogLines(): typeof logLines {
     flushTelnetPendingLinesSync();
-    const visibleLogs = logLines
-      .filter((log) => {
-        if (!findBarHandle) return true;
-        const q = findBarHandle.getQuery();
-        if (findBarHandle.getMode() !== 'filter' || !q) return true;
-        return telnetFindMatchesQuery(log.text, q, findBarHandle.getFindOptions());
-      })
-      .map(log => log.text)
-      .join('\n');
-    
+    return logLines.filter((log) => {
+      if (!findBarHandle) return true;
+      const q = findBarHandle.getQuery();
+      if (findBarHandle.getMode() !== 'filter' || !q) return true;
+      return telnetFindMatchesQuery(log.text, q, findBarHandle.getFindOptions());
+    });
+  }
+
+  function getVisibleLogsBody(): string {
+    return getVisibleLogLines().map((log) => log.text).join('\n');
+  }
+
+  copyBtn.addEventListener('click', () => {
+    const visibleLogs = getVisibleLogsBody();
+
     window.roku.copyToClipboard(visibleLogs);
-    
+
     // Visual feedback
     const originalText = copyBtn.innerHTML;
     setSafeHTML(copyBtn, '<span class="icon icon-xs"><svg><use href="#icon-check"/></svg></span> Copied!');
@@ -726,23 +760,19 @@ export function setupTelnet(
       setSafeHTML(copyBtn, originalText);
     }, 2000);
   });
-  
-  // Save all logs to file (with timestamps)
+
+  // Save = Copy body + a header block (device + timestamp + line count) +
+  // write-to-file via the system save dialog. The body itself comes through
+  // the same `getVisibleLogLines` helper as Copy so the two stay byte-for-
+  // byte identical and a future filter rule only has to land in one place.
   if (saveBtn) {
     saveBtn.addEventListener('click', async () => {
       // Store original button text at the start
       const originalText = saveBtn.innerHTML;
-      
+
       try {
-        flushTelnetPendingLinesSync();
-        // Get all logs (respecting filter if active)
-        const logsToSave = logLines.filter((log) => {
-          if (!findBarHandle) return true;
-          const q = findBarHandle.getQuery();
-          if (findBarHandle.getMode() !== 'filter' || !q) return true;
-          return telnetFindMatchesQuery(log.text, q, findBarHandle.getFindOptions());
-        });
-        
+        const logsToSave = getVisibleLogLines();
+
         if (logsToSave.length === 0) {
           // Show feedback that there's nothing to save
           setSafeHTML(saveBtn, icon('x', 'icon-xs') + ' No logs');
@@ -751,14 +781,8 @@ export function setupTelnet(
           }, 2000);
           return;
         }
-        
-        // Format logs with timestamps
-        const formattedLogs = logsToSave.map(log => {
-          if (log.timestamp) {
-            return `[${log.timestamp}] ${log.text}`;
-          }
-          return log.text;
-        }).join('\n');
+
+        const formattedLogs = logsToSave.map((log) => log.text).join('\n');
         
         // Add header with device info and timestamp
         const header = [
@@ -842,20 +866,45 @@ export function setupTelnet(
   clearBtn.addEventListener('click', () => {
     telnetTcpState.value = '';
     pendingTelnetLines.length = 0;
+    pendingLogPrefix = '';
     cancelTelnetFlush();
     clearDeferredTelnetHeavyLines();
     logLines = [];
-    outputEl.innerHTML = '';
+    // Drive the row teardown THROUGH the virtualizer rather than blowing
+    // away `outputEl.innerHTML`. The virtualizer's container element
+    // (`virtualContainerEl`, appended to outputEl during setup) IS a child
+    // of outputEl; `innerHTML = ''` would detach it, leaving the
+    // virtualizer pointing at a DOM node no longer in the tree.
+    // Subsequent `addLogLinesBatch` → `virt.setCount(...)` calls would
+    // then mount rows into the orphaned container and the user would see
+    // nothing — exactly the "logs aren't streaming after Clear" symptom.
+    // setCount(0) walks the mounted map and runs `onUnmount` per row, then
+    // recomputes layout against the now-empty model.
+    virt.setCount(0);
     findBarHandle?.resetFindState();
-    
+
+    // Reset scroll-tail tracking so the next batch of incoming lines
+    // pins to the bottom (consistent with a fresh-clear UX).
+    userManuallyScrolled = false;
+    lastScrollTop = 0;
+    outputEl.scrollTop = 0;
+
+    // Re-add the placeholder when disconnected, but APPEND it next to
+    // virtualContainerEl rather than replacing outputEl's contents — same
+    // shape as the cold-start markup in index.html, where the placeholder
+    // and the virtualizer container are siblings inside .telnet-output.
     if (!isConnected) {
-      setSafeHTML(outputEl, `
-        <div class="telnet-placeholder">
+      const existingPlaceholder = outputEl.querySelector('.telnet-placeholder');
+      if (!existingPlaceholder) {
+        const placeholder = document.createElement('div');
+        placeholder.className = 'telnet-placeholder';
+        setSafeHTML(placeholder, `
           <span class="icon icon-lg"><svg><use href="#icon-terminal"/></svg></span>
           <p>Connect to view BrightScript debug output</p>
           <p class="telnet-hint">Requires Developer Mode enabled on the Roku device.<br>Only one telnet connection to a Roku device can be active at a time.</p>
-        </div>
-      `);
+        `);
+        outputEl.insertBefore(placeholder, virtualContainerEl);
+      }
     }
   });
 
@@ -901,8 +950,40 @@ export function setupTelnet(
         addLogLine(pendingLogPrefix);
         pendingLogPrefix = '';
       }
+
+      // Diagnostic detail from main: how long the socket stayed open and
+      // whether any bytes ever arrived. Roku 8085 closing fast with zero
+      // bytes received is the classic "another telnet client holds the
+      // BrightScript log binding" / "channel exited immediately" pattern;
+      // a plain "--- Connection closed ---" hides the actual cause.
+      const aliveMs = typeof data.aliveMs === 'number' ? data.aliveMs : -1;
+      const bytes = typeof data.bytesReceived === 'number' ? data.bytesReceived : -1;
+      const aliveStr = aliveMs >= 0
+        ? (aliveMs < 1000 ? `${aliveMs}ms` : `${(aliveMs / 1000).toFixed(1)}s`)
+        : null;
+
+      let summary = '--- Connection closed';
+      if (aliveStr !== null) summary += ` (alive ${aliveStr}`;
+      if (bytes >= 0) summary += `${aliveStr !== null ? ', ' : ' ('}received ${bytes} bytes`;
+      if (aliveStr !== null || bytes >= 0) summary += ')';
+      summary += ' ---';
+      addLogLine(summary, false);
+
+      // Heuristic hint: short-lived socket + zero bytes ⇒ Roku didn't
+      // bind its log stream to us. Most common causes: another telnet
+      // client (BrightScript IDE, VS Code BrightScript extension, an
+      // IDE plugin, a stray `telnet <ip> 8085` in a terminal, another
+      // Dev Studio window pointed at the same IP) holds the binding;
+      // the channel exited or crashed; or 8085 was never reachable
+      // (firewall / Developer Mode off). hadError adds the OS-level
+      // signal that the close was abnormal (RST etc.).
+      if (aliveMs >= 0 && aliveMs < 5000 && bytes <= 0) {
+        addLogLine('--- Hint: Roku closed the socket quickly with no log data. Check that no other telnet client is connected to this device on port 8085 (BrightScript IDE, another Dev Studio window, a `telnet` terminal session, …) and that a sideloaded channel is currently running. ---', false);
+      } else if (data.hadError) {
+        addLogLine('--- Hint: socket close was abnormal (TCP RST or similar). Roku may have rebooted or another client took the 8085 binding. ---', false);
+      }
+
       updateConnectionState(false, false, data.hadError ? 'Connection lost' : null);
-      addLogLine('--- Connection closed ---', false);
     }
   });
   

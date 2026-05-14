@@ -11,6 +11,10 @@ declare global {
       minimizeWindow: () => void;
       toggleMaximizeWindow: () => void;
       closeWindow: () => void;
+      onAppZoomChanged?: (callback: (factor: number) => void) => () => void;
+      zoomIn?: () => void;
+      zoomOut?: () => void;
+      zoomReset?: () => void;
     };
   }
 }
