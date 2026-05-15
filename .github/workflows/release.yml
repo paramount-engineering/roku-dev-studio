@@ -48,9 +48,14 @@ jobs:
             os: windows-latest
             build-cmd: build:win
             artifact-name: windows-builds
+            # The afterAllArtifactBuild hook
+            # (apps/roku-dev-studio/scripts/build-hooks.ts) reorganizes Windows
+            # artifacts into dist/windows/x64/. We deliberately do NOT use
+            # dist/windows/**/*.exe because dist/windows/unpacked/ contains
+            # the Electron app's unpacked tree with `Roku Dev Studio.exe` and
+            # dozens of node_modules .exe files we don't want in the release.
             artifact-paths: |
-              apps/roku-dev-studio/dist/*.exe
-              apps/roku-dev-studio/dist/win/**/*.exe
+              apps/roku-dev-studio/dist/windows/x64/*.exe
           - label: Linux
             os: ubuntu-latest
             build-cmd: build:linux
