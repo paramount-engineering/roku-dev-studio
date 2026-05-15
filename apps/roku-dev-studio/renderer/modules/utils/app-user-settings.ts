@@ -33,6 +33,20 @@ export const SETTINGS_KEY_AUTO_CONNECT_LAST_DEVICE = 'autoConnectLastDeviceEnabl
 /** When true, title-bar primary sidebar show/hide is saved in localStorage between sessions. Default off. */
 export const SETTINGS_KEY_REMEMBER_SIDEBAR_TOGGLE = 'rememberSidebarToggle';
 
+/**
+ * When true, a draggable Floating Remote is shown over the current device
+ * panel whenever the active inner tab is not `remote` or `devapp`. Toggled
+ * per-user from the device-panel header button. Default off.
+ */
+export const SETTINGS_KEY_FLOATING_REMOTE_ENABLED = 'floating-remote.enabled';
+
+/**
+ * Persisted last-known floating remote shell top-left position in CSS pixels.
+ * Shape: `{ x: number, y: number }`. Re-clamped to the viewport on load /
+ * window resize so a smaller window doesn't strand the floater off-screen.
+ */
+export const SETTINGS_KEY_FLOATING_REMOTE_POSITION = 'floating-remote.position';
+
 export let REMEMBER_DEVICE_PERFORMANCE_QUAD_PER_DEVICE = false;
 
 export let KEYBOARD_REMOTE_SHORTCUTS_ENABLED = false;
@@ -40,6 +54,15 @@ export let KEYBOARD_REMOTE_SHORTCUTS_ENABLED = false;
 export let AUTO_CONNECT_LAST_DEVICE_ENABLED = false;
 
 export let REMEMBER_SIDEBAR_TOGGLE = false;
+
+export let FLOATING_REMOTE_ENABLED = false;
+
+export interface FloatingRemotePosition {
+  x: number;
+  y: number;
+}
+
+export let FLOATING_REMOTE_POSITION: FloatingRemotePosition | null = null;
 
 type DevicePerfQuadMap = Record<string, boolean>;
 
@@ -152,11 +175,57 @@ export async function loadPersistedAppSettings(): Promise<void> {
       REMEMBER_SIDEBAR_TOGGLE = false;
     }
 
+    const floatingRemoteRes = await window.roku.getSetting(SETTINGS_KEY_FLOATING_REMOTE_ENABLED);
+    if (floatingRemoteRes && floatingRemoteRes.success && typeof floatingRemoteRes.value === 'boolean') {
+      FLOATING_REMOTE_ENABLED = floatingRemoteRes.value;
+    } else {
+      FLOATING_REMOTE_ENABLED = false;
+    }
+
+    const floatingRemotePosRes = await window.roku.getSetting(SETTINGS_KEY_FLOATING_REMOTE_POSITION);
+    FLOATING_REMOTE_POSITION = parseFloatingRemotePosition(
+      floatingRemotePosRes && floatingRemotePosRes.success ? floatingRemotePosRes.value : null
+    );
+
     if (typeof document !== 'undefined' && document.body) {
       document.body.classList.toggle('keyboard-remote-shortcuts-on', KEYBOARD_REMOTE_SHORTCUTS_ENABLED);
+      document.body.classList.toggle('floating-remote-on', FLOATING_REMOTE_ENABLED);
     }
   } catch (e) {
     console.error('[App settings] Failed to load persisted settings:', e);
+  }
+}
+
+function parseFloatingRemotePosition(value: unknown): FloatingRemotePosition | null {
+  if (value == null || typeof value !== 'object' || Array.isArray(value)) return null;
+  const v = value as { x?: unknown; y?: unknown };
+  if (typeof v.x !== 'number' || typeof v.y !== 'number') return null;
+  if (!Number.isFinite(v.x) || !Number.isFinite(v.y)) return null;
+  return { x: v.x, y: v.y };
+}
+
+/** Persist the floating remote toggle. Caller updates UI separately. */
+export async function setFloatingRemoteEnabled(enabled: boolean): Promise<void> {
+  FLOATING_REMOTE_ENABLED = enabled;
+  if (typeof document !== 'undefined' && document.body) {
+    document.body.classList.toggle('floating-remote-on', enabled);
+  }
+  if (!window.roku?.setSetting) return;
+  try {
+    await window.roku.setSetting(SETTINGS_KEY_FLOATING_REMOTE_ENABLED, enabled);
+  } catch (e) {
+    console.error('[App settings] Failed to persist floating remote enabled:', e);
+  }
+}
+
+/** Persist the floating remote top-left position. Called on drag end. */
+export async function setFloatingRemotePosition(pos: FloatingRemotePosition): Promise<void> {
+  FLOATING_REMOTE_POSITION = pos;
+  if (!window.roku?.setSetting) return;
+  try {
+    await window.roku.setSetting(SETTINGS_KEY_FLOATING_REMOTE_POSITION, pos);
+  } catch (e) {
+    console.error('[App settings] Failed to persist floating remote position:', e);
   }
 }
 

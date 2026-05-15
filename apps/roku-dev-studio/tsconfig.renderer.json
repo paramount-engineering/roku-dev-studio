@@ -19,6 +19,7 @@
     "renderer/components/action-scripts/**/*.ts",
     "renderer/components/inspector/**/*.ts",
     "renderer/components/dev-app/**/*.ts",
+    "renderer/components/floating-remote/**/*.ts",
     "renderer/components/modals/**/*.ts",
     "renderer/components/fiddle/**/*.ts",
     "renderer/vendor/modern-screenshot.d.ts",
