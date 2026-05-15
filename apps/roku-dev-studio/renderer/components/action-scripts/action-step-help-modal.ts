@@ -17,6 +17,7 @@ import {
   playModalOpenMotion,
   closeModalWithOriginMotion
 } from '../../modules/utils/modal-origin-motion.js';
+import { attachBackdropClickToClose } from '../../modules/utils/modal-backdrop-click.js';
 
 export type ActionStepHelpContext = {
   actionType: string;
@@ -559,7 +560,7 @@ export function openActionStepHelpModal(
   if (closeBtn instanceof HTMLElement) {
     closeBtn.addEventListener('click', close);
   }
-  overlay.addEventListener('click', (e) => {
-    if (e.target === overlay) close();
-  });
+  // Backdrop click-to-close, mousedown-gated so a text selection inside the
+  // dialog body that ends on the backdrop doesn't dismiss the modal.
+  attachBackdropClickToClose(overlay, close);
 }

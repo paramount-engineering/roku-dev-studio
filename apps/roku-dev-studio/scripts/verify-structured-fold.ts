@@ -41,7 +41,7 @@ async function main() {
     applyXmlSyntaxHighlight,
     applyXmlFoldStructure,
     toggleFoldGroup
-  } = await import('../renderer/modules/telnet/telnet-structured-syntax.js');
+  } = await import('../renderer/modules/console-log/console-structured-syntax.js');
 
   /* ── JSON pass ─────────────────────────────────────────────────────────── */
   const jsonPretty = `{

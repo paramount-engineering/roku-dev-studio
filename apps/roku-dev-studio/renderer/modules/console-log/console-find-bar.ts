@@ -14,65 +14,36 @@
  * Browser support: requires the CSS Custom Highlight API (Chrome 105+, Safari 17.2+).
  * Electron 33 ships Chromium 130, so we always have it; if the API is missing we still
  * compute counts and navigate, just without painted highlights.
+ *
+ * Pure helpers (regex compile, ReDoS guard, query match, cache key) live in
+ * `console-find-helpers.ts` so the algorithmic pieces are readable without
+ * scrolling past the DOM event glue.
  */
 
-export type TelnetFindOptions = { case: boolean; word: boolean; regex: boolean };
+import {
+  buildSearchRegex,
+  cacheKeyFor,
+  FIND_CACHE_CAP,
+  HIGHLIGHT_PAINT_CAP,
+  consoleFindMatchesQuery,
+  type FindCacheEntry,
+  type FlatHit,
+  type ConsoleFindOptions
+} from './console-find-helpers.js';
 
-const MAX_REGEX_PATTERN_LENGTH = 100;
-const MAX_FIND_QUERY_LENGTH = 300;
-/**
- * Cap the number of painted match ranges. The find count and prev/next navigation
- * still cover all hits — we just stop *painting* once we have this many. Mirrors
- * xterm.js's default decoration cap (1000); we go higher because our find bar is the
- * primary navigation surface and users expect "60 of 60" all visible at once.
- */
-const HIGHLIGHT_PAINT_CAP = 5000;
-
-function isLikelyRedos(pattern: string): boolean {
-  if (pattern.length > MAX_REGEX_PATTERN_LENGTH) return true;
-  return /\(\.\*\)\*|\(\.\+\)\+|\(\.\*\)\+|\(\.\+\)\*|\{\d+,\s*\d*\}\s*\+/.test(pattern);
-}
-
-function safeRegexEscape(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-/** Plain match helper for copy/save and filter (same rules as find bar). */
-export function telnetFindMatchesQuery(text: string, query: string, findOptions: TelnetFindOptions): boolean {
-  if (!query) return true;
-  if (query.length > MAX_FIND_QUERY_LENGTH) return false;
-
-  const flags = findOptions.case ? '' : 'i';
-  const literalMatch = () =>
-    findOptions.case ? text.includes(query) : text.toLowerCase().includes(query.toLowerCase());
-
-  if (findOptions.regex) {
-    if (isLikelyRedos(query)) return literalMatch();
-    try {
-      const regex = new RegExp(query, flags);
-      return regex.test(text);
-    } catch {
-      return literalMatch();
-    }
-  }
-  if (findOptions.word) {
-    try {
-      const escaped = safeRegexEscape(query);
-      const regex = new RegExp(`\\b${escaped}\\b`, flags);
-      return regex.test(text);
-    } catch {
-      return literalMatch();
-    }
-  }
-  return literalMatch();
-}
+// Re-export so existing callers that imported these from the find-bar module
+// keep working after the helpers were extracted.
+export {
+  consoleFindMatchesQuery,
+  type ConsoleFindOptions
+} from './console-find-helpers.js';
 
 /**
  * Source-of-truth model for find / filter. The find bar reads from this — it never
  * reads `textContent` off the DOM. Consumers (log file viewer, live Console panel)
  * implement this against their own line buffer.
  */
-export type TelnetFindModel = {
+export type ConsoleFindModel = {
   /** Total number of entries (lines) in the model. */
   getEntryCount(): number;
   /** Entry text by 0-based line index, or undefined if out of range. Must equal the
@@ -89,7 +60,7 @@ export type TelnetFindModel = {
   forEachMountedLine(cb: (lineIndex: number, lineEl: HTMLElement) => void): void;
 };
 
-export type TelnetOutputFindBarHandle = {
+export type ConsoleFindBarHandle = {
   resetFindState: () => void;
   /** Call after the underlying model mutated in a way that doesn't fit the
    *  append/remove hooks below — re-runs the active query from scratch. Cheap
@@ -110,9 +81,18 @@ export type TelnetOutputFindBarHandle = {
    *  line's Range objects from the global Highlight so detached text nodes don't
    *  linger in the registry. */
   unbindLineHighlights: (lineIndex: number) => void;
-  getFindOptions: () => TelnetFindOptions;
+  getFindOptions: () => ConsoleFindOptions;
   getMode: () => 'find' | 'filter';
   getQuery: () => string;
+  /**
+   * Single source of truth for "is this entry hidden by the active filter?".
+   * Returns `true` only when (a) mode is `filter`, (b) the query is non-empty,
+   * and (c) the entry text doesn't match. Both surfaces (live Console row
+   * builder, Log Viewer mount opt) call this so a future filter rule (case-
+   * sensitive default, multi-line regex, …) lands in one place — earlier each
+   * surface re-derived the predicate inline and one would inevitably drift.
+   */
+  shouldFilterOut: (text: string) => boolean;
   /** Move focus to the find input (e.g. from a Cmd+F / Ctrl+F shortcut handler). */
   focusInput: () => void;
   /** Programmatically navigate to the next / previous match, same as the bar's own buttons. */
@@ -123,11 +103,11 @@ export type TelnetOutputFindBarHandle = {
   dispose: () => void;
 };
 
-export type AttachTelnetOutputFindBarOpts = {
+export type AttachConsoleFindBarOpts = {
   /** Element that contains `.telnet-find-bar`, `.telnet-find-input`, … (e.g. device panel or log viewer header). */
   root: HTMLElement | Document;
   outputEl: HTMLElement;
-  model: TelnetFindModel;
+  model: ConsoleFindModel;
   /** Unique key for this find bar's CSS Custom Highlight registry entries. Defaults
    *  to `'telnet-find'`. Override when multiple find bars share a document. */
   highlightId?: string;
@@ -143,36 +123,12 @@ export type AttachTelnetOutputFindBarOpts = {
   scrollLineIntoView?: (lineIndex: number) => void;
 };
 
-type FlatHit = { lineIndex: number; start: number; end: number };
-
-/**
- * One cache slot per `(query, options)` pair. `hits` and `scannedUpTo` together
- * describe "we have searched entries `[0, scannedUpTo)` for this query and these
- * are the matches we found". The trim hook (`onLinesRemoved`) keeps both fields
- * consistent in-place so a cached entry stays usable across scrollback churn.
- *
- * The active query's `hits` array is *aliased* (same reference) as the find bar's
- * `flatHits`, so pushing during a chunked scan transparently updates the cache.
- */
-type CacheEntry = {
-  query: string;
-  options: TelnetFindOptions;
-  hits: FlatHit[];
-  scannedUpTo: number;
-};
-
-const CACHE_CAP = 8;
-
-function cacheKeyFor(query: string, options: TelnetFindOptions): string {
-  return `${options.case ? '1' : '0'}|${options.word ? '1' : '0'}|${options.regex ? '1' : '0'}|${query}`;
-}
-
 const supportsCssHighlights =
   typeof CSS !== 'undefined' &&
   typeof (CSS as unknown as { highlights?: unknown }).highlights !== 'undefined' &&
   typeof (globalThis as unknown as { Highlight?: unknown }).Highlight === 'function';
 
-export function attachTelnetOutputFindBar(opts: AttachTelnetOutputFindBarOpts): TelnetOutputFindBarHandle | null {
+export function attachConsoleFindBar(opts: AttachConsoleFindBarOpts): ConsoleFindBarHandle | null {
   const { outputEl, model } = opts;
   const root = opts.root instanceof Document ? opts.root.documentElement : opts.root;
   const highlightId = opts.highlightId ?? 'telnet-find';
@@ -213,21 +169,21 @@ export function attachTelnetOutputFindBar(opts: AttachTelnetOutputFindBarOpts): 
    *  entry's `hits` array — pushing during a chunked scan updates the cache too. */
   let flatHits: FlatHit[] = [];
   let currentHitIndex = -1;
-  const findOptions: TelnetFindOptions = { case: false, word: false, regex: false };
+  const findOptions: ConsoleFindOptions = { case: false, word: false, regex: false };
 
   /**
    * LRU cache of `(query, options) → hits + scannedUpTo`. `Map`'s insertion-order
    * iteration is the LRU order; bump on access by `delete + set`, evict the
-   * oldest entry when the size exceeds `CACHE_CAP`.
+   * oldest entry when the size exceeds `FIND_CACHE_CAP`.
    *
    * Filter mode does not use the cache — its semantics (toggle visibility per
    * line, no enumeration of match ranges) make caching a different shape.
    */
-  const cache: Map<string, CacheEntry> = new Map();
+  const cache: Map<string, FindCacheEntry> = new Map();
   /** The cache slot the current find query is reading from. `flatHits` aliases
    *  `currentEntry.hits`, so pushes go into both. `null` when there is no active
    *  query (or in filter mode). */
-  let currentEntry: CacheEntry | null = null;
+  let currentEntry: FindCacheEntry | null = null;
 
   let searchAbortController: { abort: boolean } | null = null;
   let findTimeout: ReturnType<typeof setTimeout> | undefined;
@@ -279,25 +235,6 @@ export function attachTelnetOutputFindBar(opts: AttachTelnetOutputFindBarOpts): 
     // Drop the empty Highlight; lazy-recreate on next paint.
     CSS.highlights.delete(highlightId);
     allHighlight = null;
-  }
-
-  function buildSearchRegex(query: string): RegExp | null {
-    if (!query) return null;
-    if (query.length > MAX_FIND_QUERY_LENGTH) return null;
-    const flags = findOptions.case ? 'g' : 'gi';
-    try {
-      if (findOptions.regex && !isLikelyRedos(query)) {
-        return new RegExp(query, flags);
-      }
-    } catch {
-      /* fall through to escaped */
-    }
-    const escaped = safeRegexEscape(query);
-    try {
-      return findOptions.word ? new RegExp(`\\b${escaped}\\b`, flags) : new RegExp(escaped, flags);
-    } catch {
-      return null;
-    }
   }
 
   /**
@@ -552,7 +489,14 @@ export function attachTelnetOutputFindBar(opts: AttachTelnetOutputFindBarOpts): 
       return;
     }
     const base = `${currentHitIndex + 1} of ${flatHits.length}`;
-    findCountEl.textContent = scanPercent != null ? `${base} (searching ${scanPercent}%)` : base;
+    // When the total exceeds the paint cap, only the first
+    // `HIGHLIGHT_PAINT_CAP` matches are visually highlighted; navigation
+    // (Next/Prev) still covers all of them. Without this annotation users see
+    // "200 of 1200" but only some matches glow, which reads as broken paint.
+    const cappedNote =
+      flatHits.length > HIGHLIGHT_PAINT_CAP ? ' (highlights capped)' : '';
+    const navPart = `${base}${cappedNote}`;
+    findCountEl.textContent = scanPercent != null ? `${navPart} (searching ${scanPercent}%)` : navPart;
   }
 
   function applyFilter(): void {
@@ -566,7 +510,7 @@ export function attachTelnetOutputFindBar(opts: AttachTelnetOutputFindBarOpts): 
         continue;
       }
       const text = model.getEntryText(i) ?? '';
-      if (!telnetFindMatchesQuery(text, currentQuery, findOptions)) {
+      if (!consoleFindMatchesQuery(text, currentQuery, findOptions)) {
         lineEl.classList.add('filtered-out');
       } else {
         lineEl.classList.remove('filtered-out');
@@ -588,7 +532,7 @@ export function attachTelnetOutputFindBar(opts: AttachTelnetOutputFindBarOpts): 
    * full-or-partial-cache initial scan) and `onLinesAppended` (for the active
    * query's tail-extension when new lines arrive during streaming).
    */
-  function startScanFromCursor(entry: CacheEntry, rx: RegExp, autoJumpOnFirst: boolean): void {
+  function startScanFromCursor(entry: FindCacheEntry, rx: RegExp, autoJumpOnFirst: boolean): void {
     if (searchAbortController) {
       searchAbortController.abort = true;
       searchAbortController = null;
@@ -690,7 +634,7 @@ export function attachTelnetOutputFindBar(opts: AttachTelnetOutputFindBarOpts): 
       return;
     }
 
-    const maybeRx = buildSearchRegex(currentQuery);
+    const maybeRx = buildSearchRegex(currentQuery, findOptions);
     if (!maybeRx) {
       flatHits = [];
       currentEntry = null;
@@ -717,7 +661,7 @@ export function attachTelnetOutputFindBar(opts: AttachTelnetOutputFindBarOpts): 
       cache.set(key, entry);
       // LRU eviction: drop the oldest entry first (Map iteration starts from
       // oldest insertion). Cap is small enough that linear walk is fine.
-      while (cache.size > CACHE_CAP) {
+      while (cache.size > FIND_CACHE_CAP) {
         const oldestKey = cache.keys().next().value;
         if (oldestKey === undefined || oldestKey === key) break;
         cache.delete(oldestKey);
@@ -793,9 +737,24 @@ export function attachTelnetOutputFindBar(opts: AttachTelnetOutputFindBarOpts): 
   const onFindKeydown = (e: KeyboardEvent): void => {
     if (e.key === 'Enter') {
       e.preventDefault();
+      // Flush any pending debounce so Enter operates on the *current* input
+      // value, not whatever query last completed. Without this, typing a new
+      // query and hitting Enter immediately advances through the previous
+      // result set (or no-ops on a fresh query) until the 300ms debounce fires.
+      //
+      // When the query has changed, `executeFindAction` already lands on the
+      // first match (or paints from cache + jumps to hit 0), so Shift+Enter is
+      // the only direction that needs an extra navigation step. On an
+      // unchanged query, both Enter and Shift+Enter behave like Next/Prev.
+      const typedQuery = findInputEl.value.trim();
+      const queryChanged = typedQuery !== currentQuery;
+      if (queryChanged) {
+        clearTimeout(findTimeout);
+        executeFindAction();
+      }
       if (currentMode === 'find') {
         if (e.shiftKey) searchPrev();
-        else searchNext();
+        else if (!queryChanged) searchNext();
       }
     }
     if (e.key === 'Escape') {
@@ -869,7 +828,7 @@ export function attachTelnetOutputFindBar(opts: AttachTelnetOutputFindBarOpts): 
     if (!currentEntry || !currentQuery) return;
     if (searchAbortController) return; // a scan is already running
 
-    const rx = buildSearchRegex(currentQuery);
+    const rx = buildSearchRegex(currentQuery, findOptions);
     if (!rx) return;
 
     const totalEntries = model.getEntryCount();
@@ -972,6 +931,19 @@ export function attachTelnetOutputFindBar(opts: AttachTelnetOutputFindBarOpts): 
     unbindLineFindRangesInternal(lineIndex);
   };
 
+  /**
+   * Used by both surfaces' row-build paths (`telnet-console-panel.ts
+   * createLogLineElement` and `console-log-file-view.ts buildLogLineElement`)
+   * so newly-mounted rows pick up the active filter without each call site
+   * re-deriving the predicate. Mirrors the in-bar `applyFilter` (`text` ↔
+   * `model.getEntryText(i)`).
+   */
+  const shouldFilterOut = (text: string): boolean => {
+    if (currentMode !== 'filter') return false;
+    if (!currentQuery) return false;
+    return !consoleFindMatchesQuery(text, currentQuery, findOptions);
+  };
+
   return {
     resetFindState,
     refresh,
@@ -982,6 +954,7 @@ export function attachTelnetOutputFindBar(opts: AttachTelnetOutputFindBarOpts): 
     getFindOptions: () => ({ ...findOptions }),
     getMode: () => currentMode,
     getQuery: () => currentQuery,
+    shouldFilterOut,
     focusInput,
     searchNext,
     searchPrev,

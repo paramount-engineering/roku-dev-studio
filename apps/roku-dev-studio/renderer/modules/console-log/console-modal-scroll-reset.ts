@@ -1,10 +1,10 @@
-import { MODAL_ORIGIN_MOTION_FALLBACK_MS } from './modal-origin-motion.js';
+import { MODAL_ORIGIN_MOTION_FALLBACK_MS } from '../utils/modal-origin-motion.js';
 
 /**
  * Telnet JSON/XML/URL modals reuse one DOM subtree; browsers keep scrollTop on nested
  * overflow boxes. Reset every descendant that can scroll (heuristic + known shells).
  */
-export function resetTelnetModalScrollInOverlay(overlay: HTMLElement): void {
+export function resetConsoleModalScrollInOverlay(overlay: HTMLElement): void {
   overlay.scrollTop = 0;
   overlay.scrollLeft = 0;
 
@@ -33,8 +33,8 @@ export function resetTelnetModalScrollInOverlay(overlay: HTMLElement): void {
 }
 
 /** Run after paint and again after open motion so scroll position does not stick from the previous open. */
-export function scheduleTelnetModalScrollReset(overlay: HTMLElement): void {
-  const run = () => resetTelnetModalScrollInOverlay(overlay);
+export function scheduleConsoleModalScrollReset(overlay: HTMLElement): void {
+  const run = () => resetConsoleModalScrollInOverlay(overlay);
   queueMicrotask(run);
   requestAnimationFrame(() => {
     requestAnimationFrame(run);

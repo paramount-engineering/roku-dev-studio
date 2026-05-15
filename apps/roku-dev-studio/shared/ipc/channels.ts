@@ -75,8 +75,37 @@ export const IPC = {
   ShellOpenExternal: 'shell:open-external',
   IsDebugEnabled: 'is-debug-enabled',
   OpenLogFile: 'open-log-file',
-  /** Log file viewer window: read file bound to that BrowserWindow (path chosen in main only). */
-  LogViewerLoad: 'log-viewer:load',
+  /**
+   * Console scrollback spill — disk-backed history beyond the in-memory cap.
+   *
+   * Per-tab session: renderer calls `Start` once on Connect to get a handle,
+   * `Append` per scrollback trim to write the dropped entries to disk, `Read`
+   * once when the user scrolls near the top of the in-memory buffer (so we
+   * can prepend the spilled history into the visible model), `Clear` on the
+   * Clear button or tab teardown. Cleanup on `will-quit` is handled in the
+   * main-process module without an IPC round-trip.
+   *
+   * File format: NDJSON, one entry per line. Each line is a JSON object with
+   * compact keys (`t`, `ty`, `st?`) so the file stays parseable end-to-end
+   * even when an individual log line contains an embedded newline (the
+   * embedded `\n` is escaped inside the JSON string).
+   */
+  ConsoleSpillStart: 'console-spill:start',
+  ConsoleSpillAppend: 'console-spill:append',
+  ConsoleSpillRead: 'console-spill:read',
+  ConsoleSpillClear: 'console-spill:clear',
+  /** Streaming load: renderer kicks off the read; main answers with file
+   *  metadata and starts emitting `LogViewerStreamChunk` / `Complete` /
+   *  `Error` events. Streaming avoids holding the whole decoded file string
+   *  in memory in both processes (which doubled peak heap on large files). */
+  LogViewerStreamStart: 'log-viewer:stream-start',
+  /** Main → renderer: a decoded text chunk plus progress
+   *  (`{ text, doneBytes, totalBytes }`). Sent multiple times per stream. */
+  LogViewerStreamChunk: 'log-viewer:stream-chunk',
+  /** Main → renderer: stream finished cleanly (EOF). */
+  LogViewerStreamComplete: 'log-viewer:stream-complete',
+  /** Main → renderer: read failed mid-stream. Payload `{ error: string }`. */
+  LogViewerStreamError: 'log-viewer:stream-error',
   RokuSaveTrackerTask: 'roku:save-tracker-task',
   RokuSaveConsoleLogs: 'roku:save-console-logs',
   RokuActionScriptShowSaveFolder: 'roku:action-script-show-save-folder',

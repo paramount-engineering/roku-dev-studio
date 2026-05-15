@@ -5124,6 +5124,24 @@
       font-size: 12px;
       margin-right: 12px;
     }
+
+    /*
+     * Live line counter shown in the card header when connected. Sits to the
+     * left of the status pill (markup order) and uses the same muted-tabular
+     * look as other "metadata next to a primary state" affordances elsewhere
+     * in the panel. `font-variant-numeric: tabular-nums` keeps the digits
+     * width-stable as the count grows, so the surrounding controls don't
+     * shift on every batch.
+     */
+    .telnet-line-count {
+      font-size: 11px;
+      color: var(--text-muted);
+      font-variant-numeric: tabular-nums;
+      margin-right: 8px;
+    }
+    .telnet-line-count[hidden] {
+      display: none;
+    }
     
     .telnet-status-dot {
       width: 8px;
@@ -5290,7 +5308,7 @@
     
     /*
      * Find-match painting via the CSS Custom Highlight API. Highlights live on
-     * Range objects in CSS.highlights (see telnet-output-find-bar.ts), so the
+     * Range objects in CSS.highlights (see console-find-bar.ts), so the
      * underlying DOM — including .telnet-log-url spans and structured pills — is
      * never mutated by the find bar.
      */
@@ -11104,9 +11122,14 @@
           <div class="card telnet-card">
             <div class="card-header">
               <span class="card-icon"><span class="icon icon-sm"><svg><use href="#icon-terminal"/></svg></span></span>
-              <span class="card-title">Debug Console</span>
+              <span class="card-title">Telnet Console</span>
               <span class="telnet-port-badge">Port 8085</span>
               <div class="card-header-actions">
+                <!-- Live line counter; hidden until first batch arrives so the
+                     "Disconnected" state stays uncluttered. Updated by the
+                     panel's `addLogLinesBatch` / `ensureTelnetScrollbackRoom`
+                     paths so trim is reflected too. -->
+                <span class="telnet-line-count" aria-live="polite" hidden></span>
                 <span class="telnet-status disconnected">
                   <span class="telnet-status-dot"></span>
                   <span class="telnet-status-text">Disconnected</span>

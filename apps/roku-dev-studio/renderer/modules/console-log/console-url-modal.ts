@@ -1,11 +1,7 @@
-import { closeModalWithOriginMotion, openModalOverlayActiveFromOpener } from '../utils/modal-origin-motion.js';
-import { resetTelnetModalScrollInOverlay, scheduleTelnetModalScrollReset } from '../utils/telnet-modal-scroll-reset.js';
-import { telnetConsoleModalTitle } from './telnet-console-modal-title.js';
-import { notifyTelnetViewerClosed } from './telnet-viewer-bridge.js';
+import { createSingletonConsoleModal } from './singleton-console-modal.js';
+import { consoleViewerModalTitle } from './console-modal-title.js';
 
 const OVERLAY_ID = 'telnetUrlViewerOverlay';
-
-let telnetUrlEscapeListenerAdded = false;
 
 function tryDecode(s: string): string {
   try {
@@ -148,15 +144,13 @@ function populateUrlModalBody(overlay: HTMLElement, url: string): void {
   });
 }
 
-function ensureOverlay(): HTMLElement {
-  const existing = document.getElementById(OVERLAY_ID);
-  if (existing instanceof HTMLElement) return existing;
-
-  const overlay = document.createElement('div');
-  overlay.id = OVERLAY_ID;
-  overlay.className = 'modal-overlay';
-  overlay.setAttribute('aria-hidden', 'true');
-  overlay.innerHTML = `
+// All shared lifecycle (singleton overlay, backdrop click-with-mousedown-gate,
+// Esc handler, focus-trap re-arm, scroll reset, motion bridging) lives in
+// `singleton-telnet-modal.ts`. This file owns only the URL-viewer-specific
+// markup and the per-open populate logic.
+const urlModal = createSingletonConsoleModal({
+  overlayId: OVERLAY_ID,
+  innerHTML: `
     <div class="modal telnet-url-view-modal" role="dialog" aria-modal="true" aria-labelledby="telnetUrlViewerTitle">
       <div class="modal-header">
         <span class="modal-title" id="telnetUrlViewerTitle">Console</span>
@@ -171,95 +165,53 @@ function ensureOverlay(): HTMLElement {
         <div class="telnet-url-view-params" aria-label="Query parameters"></div>
       </div>
     </div>
-  `;
-  document.body.appendChild(overlay);
-
-  const close = () => {
-    if (!overlay.classList.contains('active')) return;
-    closeModalWithOriginMotion(overlay, () => {
-      resetTelnetModalScrollInOverlay(overlay);
-      overlay.classList.remove('active');
-      overlay.setAttribute('aria-hidden', 'true');
-      notifyTelnetViewerClosed();
-    });
-  };
-
-  overlay.querySelector('.telnet-url-view-close')?.addEventListener('click', close);
-  overlay.addEventListener('click', (e) => {
-    if (e.target === overlay) close();
-  });
-
-  overlay.querySelector('.telnet-url-view-open')?.addEventListener('click', async () => {
-    const raw = overlay.dataset.currentUrl || '';
-    if (!raw || (!raw.startsWith('http://') && !raw.startsWith('https://'))) {
-      return;
-    }
-    try {
-      await window.roku.openExternal(raw);
-    } catch {
-      /* ignore */
-    } finally {
-      close();
-    }
-  });
-
-  const copyBtn = overlay.querySelector('.telnet-url-view-copy');
-  copyBtn?.addEventListener('click', async () => {
-    const raw = overlay.dataset.currentUrl || '';
-    try {
-      await window.roku.copyToClipboard(raw);
-      if (copyBtn instanceof HTMLElement) {
-        const prev = copyBtn.textContent;
-        copyBtn.textContent = 'Copied';
-        setTimeout(() => {
-          copyBtn.textContent = prev || 'Copy';
-        }, 1600);
+  `,
+  closeButtonSelector: '.telnet-url-view-close',
+  onMount: (overlay, { close }) => {
+    overlay.querySelector('.telnet-url-view-open')?.addEventListener('click', async () => {
+      const raw = overlay.dataset.currentUrl || '';
+      if (!raw || (!raw.startsWith('http://') && !raw.startsWith('https://'))) {
+        return;
       }
-    } catch {
-      /* ignore */
-    }
-  });
+      try {
+        await window.roku.openExternal(raw);
+      } catch {
+        /* ignore */
+      } finally {
+        close();
+      }
+    });
 
-  if (!telnetUrlEscapeListenerAdded) {
-    telnetUrlEscapeListenerAdded = true;
-    document.addEventListener(
-      'keydown',
-      (e) => {
-        if (e.key !== 'Escape') return;
-        const o = document.getElementById(OVERLAY_ID);
-        if (!(o instanceof HTMLElement) || !o.classList.contains('active')) return;
-        closeModalWithOriginMotion(o, () => {
-          resetTelnetModalScrollInOverlay(o);
-          o.classList.remove('active');
-          o.setAttribute('aria-hidden', 'true');
-          notifyTelnetViewerClosed();
-        });
-      },
-      true
-    );
+    const copyBtn = overlay.querySelector('.telnet-url-view-copy');
+    copyBtn?.addEventListener('click', async () => {
+      const raw = overlay.dataset.currentUrl || '';
+      try {
+        await window.roku.copyToClipboard(raw);
+        if (copyBtn instanceof HTMLElement) {
+          const prev = copyBtn.textContent;
+          copyBtn.textContent = 'Copied';
+          setTimeout(() => {
+            copyBtn.textContent = prev || 'Copy';
+          }, 1600);
+        }
+      } catch {
+        /* ignore */
+      }
+    });
   }
-
-  return overlay;
-}
+});
 
 /**
  * Preview URL in a modal: full URL in a highlighted block; query params in one or more tables
  * (multiple tables for FreeWheel-style queries: major breaks at `;ptgt=` / `;slid=`, else `;` groups.)
  */
-export function openTelnetUrlViewer(opener: HTMLElement | null, url: string): void {
-  const overlay = ensureOverlay();
-  const title = overlay.querySelector('#telnetUrlViewerTitle');
-
-  overlay.dataset.currentUrl = url.trim();
-
-  if (title) {
-    title.textContent = telnetConsoleModalTitle('URL');
-  }
-  populateUrlModalBody(overlay, url);
-
-  resetTelnetModalScrollInOverlay(overlay);
-  overlay.setAttribute('aria-hidden', 'false');
-  openModalOverlayActiveFromOpener(overlay, opener, () => {
-    scheduleTelnetModalScrollReset(overlay);
+export function openConsoleUrlViewer(opener: HTMLElement | null, url: string): void {
+  urlModal.open(opener, (overlay) => {
+    const title = overlay.querySelector('#telnetUrlViewerTitle');
+    overlay.dataset.currentUrl = url.trim();
+    if (title) {
+      title.textContent = consoleViewerModalTitle('URL');
+    }
+    populateUrlModalBody(overlay, url);
   });
 }

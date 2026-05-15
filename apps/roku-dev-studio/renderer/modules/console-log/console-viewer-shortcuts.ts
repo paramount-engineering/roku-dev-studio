@@ -7,6 +7,10 @@
  *   Shift+Cmd/Ctrl+G  /  Shift+F3
  *                          → previous match
  *   Cmd/Ctrl+Alt+F        → toggle Find ⇄ Filter mode
+ *   Cmd/Ctrl+A            → copy the entire log model to the clipboard (only
+ *                           when `selectAllAction` is provided; otherwise the
+ *                           native Cmd+A is left to the browser, which can
+ *                           only select the virtualized window's DOM rows)
  *   Cmd/Ctrl+End  /  End  → scroll to bottom
  *   Cmd/Ctrl+Home /  Home → scroll to top
  *   Esc (in find input)   → clear query, then on second press blur back to viewer
@@ -28,10 +32,10 @@
  *     to navigate matches.
  */
 
-import type { TelnetOutputFindBarHandle } from './telnet-output-find-bar.js';
+import type { ConsoleFindBarHandle } from './console-find-bar.js';
 
 export type ViewerShortcutOpts = {
-  findBar: TelnetOutputFindBarHandle | null;
+  findBar: ConsoleFindBarHandle | null;
   /** Scrolling container (`.telnet-output`). Used for End/Home; also the
    *  visibility check via `offsetParent`. */
   outputEl: HTMLElement;
@@ -42,6 +46,19 @@ export type ViewerShortcutOpts = {
   /** The find input — used to detect "is the user typing in the find input?"
    *  so Cmd+G works whether the input is focused or blurred. */
   findInputEl: HTMLInputElement | null;
+  /**
+   * Optional Cmd/Ctrl+A handler. Native Select-All on a virtualized log only
+   * picks up the DOM rows currently in the visible window, so a subsequent
+   * Copy silently truncates to whatever was on screen. Hook this to a
+   * model-aware "copy entire log to clipboard" path (Log Viewer / Console
+   * both expose one) and we replace the broken native behavior with a
+   * deterministic full-buffer copy.
+   *
+   * Returns a status string for transient feedback (e.g. shown in the header
+   * line-count area). Implementations can defer the real work — the
+   * shortcut handler doesn't await the result.
+   */
+  selectAllAction?: () => string | void;
 };
 
 function isMacLike(): boolean {
@@ -112,6 +129,20 @@ export function attachViewerShortcuts(opts: ViewerShortcutOpts): { dispose: () =
       e.preventDefault();
       if (e.shiftKey) fb.searchPrev();
       else fb.searchNext();
+      return;
+    }
+
+    // Cmd/Ctrl+A → copy whole log to clipboard, *only* when the caller wired
+    // `selectAllAction`. The native browser Cmd+A would select what's in the
+    // DOM (the virtualized window), so a follow-up Cmd+C silently truncates
+    // to whatever was visible. We replace that with a deterministic full
+    // model copy. We do NOT preventDefault when there's no handler — that
+    // way the user still gets native Select-All on whatever DOM rows are
+    // mounted, which is at least better than no-op.
+    if (cmd && !e.altKey && !e.shiftKey && (e.key === 'a' || e.key === 'A')) {
+      if (!opts.selectAllAction) return;
+      e.preventDefault();
+      opts.selectAllAction();
       return;
     }
 

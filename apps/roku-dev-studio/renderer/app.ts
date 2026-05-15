@@ -29,6 +29,7 @@ import {
   closeModalWithOriginMotion,
   openModalOverlayActiveFromOpener
 } from './modules/utils/modal-origin-motion.js';
+import { attachBackdropClickToClose } from './modules/utils/modal-backdrop-click.js';
 import { setupTelnet } from './modules/telnet/telnet-console-panel.js';
 import { setupQueries as setupQueriesComponent } from './components/queries/index.js';
 import { setupInspector as setupInspectorComponent } from './components/inspector/index.js';
@@ -2626,9 +2627,9 @@ function openDeviceHardwareImageModal(imageSrc, device, opener?: HTMLElement | n
     e.stopPropagation();
     requestClose();
   });
-  overlay.addEventListener('click', (e) => {
-    if (e.target === overlay) requestClose();
-  });
+  // Backdrop click-to-close, mousedown-gated so a text selection inside the
+  // dialog body that ends on the backdrop doesn't dismiss the modal.
+  attachBackdropClickToClose(overlay, requestClose);
 
   const escHandler = (e: KeyboardEvent) => {
     if (e.key === 'Escape') requestClose();

@@ -160,6 +160,17 @@ contextBridge.exposeInMainWorld('roku', {
   // Save console logs to file
   saveConsoleLogs: (content: string) => ipcRenderer.invoke(IPC.RokuSaveConsoleLogs, { content }),
 
+  // Console scrollback spill — disk-backed history past the in-memory cap.
+  // See `main/console-spill.ts` for the file lifecycle. The renderer calls
+  // `Start` on Connect, `Append` per scrollback trim, `Read` on a one-shot
+  // "user scrolled near top of in-memory range, materialize the spill" load,
+  // and `Clear` on the Clear button or device-tab teardown.
+  consoleSpillStart: (tag: string) => ipcRenderer.invoke(IPC.ConsoleSpillStart, { tag }),
+  consoleSpillAppend: (spillId: string, entries: ReadonlyArray<Record<string, unknown>>) =>
+    ipcRenderer.invoke(IPC.ConsoleSpillAppend, { spillId, entries }),
+  consoleSpillRead: (spillId: string) => ipcRenderer.invoke(IPC.ConsoleSpillRead, { spillId }),
+  consoleSpillClear: (spillId: string) => ipcRenderer.invoke(IPC.ConsoleSpillClear, { spillId }),
+
   // Action Scripts: select folder for run outputs (screenshots, console log)
   actionScriptShowSaveFolder: () => ipcRenderer.invoke(IPC.RokuActionScriptShowSaveFolder),
   // Write file: (folderPath, filename, content, encoding) or ({ filePath, content, encoding })

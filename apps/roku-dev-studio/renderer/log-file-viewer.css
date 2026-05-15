@@ -61,6 +61,19 @@ body {
   align-self: center;
 }
 
+.log-viewer-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  align-self: center;
+  flex: 0 0 auto;
+}
+
+.log-viewer-actions .btn {
+  font-size: 11px;
+  padding: 6px 10px;
+}
+
 .log-viewer-find-host .telnet-find-bar {
   max-width: none;
   width: 100%;
@@ -209,6 +222,19 @@ body {
    * any part of the line is visible — the pill rides along, then slides out
    * naturally when the line's bottom reaches the viewport top. `z-index` keeps
    * it above the find / JSON+ inline highlights.
+   *
+   * Caveat (theoretical): the virtualizer positions each `.telnet-log-line`
+   * with `transform: translateY(...)` for streaming-paint smoothness
+   * (see the comment in `console-virtualizer.ts: sync()` for why `top:`
+   * was reverted). A transformed ancestor establishes a containing block
+   * for `position: sticky` descendants in some browsers, which *could*
+   * pin the pill to the line element instead of the scroll viewport.
+   * In our Chromium this hasn't been observed in practice — sticky still
+   * appears to behave correctly here — but if it ever shows up as a
+   * broken pin on multi-viewport-tall lines, the right fix is to
+   * restructure the pill DOM (promote it out of the line into the scroll
+   * container) rather than reverting the virtualizer to `top:` and
+   * regressing streaming paint.
    */
   position: sticky;
   top: 4px;
@@ -828,7 +854,7 @@ body {
 
 /*
  * Find-match painting via the CSS Custom Highlight API. Highlights are kept on
- * `Range` objects in `CSS.highlights` (see `telnet-output-find-bar.ts`), so the
+ * `Range` objects in `CSS.highlights` (see `console-find-bar.ts`), so the
  * underlying DOM — including `.telnet-log-url` spans and structured-payload pills —
  * is never mutated by the find bar. Background-only properties paint cleanly across
  * arbitrary nested elements.

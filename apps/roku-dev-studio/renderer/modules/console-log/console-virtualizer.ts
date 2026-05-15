@@ -34,7 +34,7 @@ import {
   measureElement as defaultMeasureElement
 } from '../../vendor/tanstack-virtual-core.mjs';
 
-export type TelnetVirtualizerOpts = {
+export type ConsoleVirtualizerOpts = {
   /** The `overflow-y: auto` scroll element. */
   scrollEl: HTMLElement;
   /** Inner spacer (sits inside `scrollEl`). The wrapper sets its `height` to
@@ -55,26 +55,47 @@ export type TelnetVirtualizerOpts = {
   onUnmount?: (index: number, lineEl: HTMLElement) => void;
 };
 
-export type TelnetVirtualizerHandle = {
+export type ConsoleVirtualizerHandle = {
   scrollToIndex: (index: number, opts?: { align?: 'auto' | 'start' | 'center' | 'end' }) => void;
   scrollToOffset: (offset: number) => void;
   getLineEl: (index: number) => HTMLElement | null;
   /** Iterate all currently-mounted (index, element) pairs. */
   forEachMounted: (cb: (index: number, lineEl: HTMLElement) => void) => void;
+  /** Total scrollable size in px, summed from each entry's currently-measured
+   *  (or estimated) height. Read this *before* a `setCount` / trim and again
+   *  *after* to compute the exact pixel delta a trim removed — needed when the
+   *  caller has to compensate `scrollTop` so the user's visible window stays
+   *  put. Multiplying by `estimateSize` is wrong for measured rows, especially
+   *  long wrapped lines. */
+  getTotalSize: () => number;
   setCount: (n: number) => void;
   /**
-   * After the consumer trimmed `headCount` entries from the head of its model,
-   * renumber every mounted row's `data-line-index` (and our internal map) so
-   * `getLineEl(i)` keeps returning the row for entry `i` post-trim.
-   * Then `setCount(newCount)` to let the virtualizer relayout.
+   * After the consumer trimmed `headCount` entries from the head of its
+   * model, renumber every mounted row's `data-line-index` (and our internal
+   * map) so `getLineEl(i)` keeps returning the row for entry `i` post-trim.
+   * Also shifts the underlying virtualizer's internal `itemSizeCache` so
+   * off-screen rows keep their measured sizes — without this, `item.start`
+   * for non-visible rows compute wrong, surfacing as overlapping rows
+   * during streaming past the scrollback cap. Call `setCount(newCount)`
+   * after to let the virtualizer relayout.
    */
   shiftIndicesAfterTrim: (headCount: number) => void;
+  /**
+   * Inverse of `shiftIndicesAfterTrim`. After the consumer prepended
+   * `headCount` entries to the *front* of its model (e.g. lazy-load of a
+   * disk spill into the in-memory model), renumber every mounted row's
+   * `data-line-index` *up* by `headCount` and shift the size cache the
+   * same direction. The newly-prepended entries (now at indices 0 ..
+   * headCount-1) have no cached size yet and use `estimateSize` until
+   * they mount and self-measure. Call `setCount(newCount)` after.
+   */
+  shiftIndicesAfterPrepend: (headCount: number) => void;
   /** Force a relayout pass (e.g. when row content changed shape). */
   measure: () => void;
   dispose: () => void;
 };
 
-export function createTelnetVirtualizer(opts: TelnetVirtualizerOpts): TelnetVirtualizerHandle {
+export function createConsoleVirtualizer(opts: ConsoleVirtualizerOpts): ConsoleVirtualizerHandle {
   const overscan = opts.overscan ?? 8;
 
   // Mounted rows by entry index. Single source of truth for both `getLineEl`
@@ -157,6 +178,16 @@ export function createTelnetVirtualizer(opts: TelnetVirtualizerOpts): TelnetVirt
 
     const items = virt.getVirtualItems();
     const desired = new Set<number>();
+    // Track the previously-processed row so we can insert each new row
+    // immediately after it, keeping `containerEl.children` ordered by entry
+    // index. This matters for native text selection: the browser builds a
+    // Range from anchor → focus in DOM order, not visual order. If new rows
+    // were just `appendChild`ed (e.g. after scrolling backward), DOM order
+    // would drift from visual order and a click-drag across two visually-
+    // adjacent rows could end up selecting hundreds of intervening nodes in
+    // DOM order. Index-ordered children keep selection ranges aligned with
+    // what the user sees on screen.
+    let prevEl: HTMLElement | null = null;
     for (const item of items) {
       desired.add(item.index);
       let el = mounted.get(item.index);
@@ -166,11 +197,38 @@ export function createTelnetVirtualizer(opts: TelnetVirtualizerOpts): TelnetVirt
         el.style.left = '0';
         el.style.right = '0';
         el.style.top = '0';
+        // Position with `transform: translateY(...)`, NOT `top: ${px}`.
+        //
+        // Why this matters during streaming: the measure-then-resync cycle
+        // fires sync() multiple times per batch (initial mount with
+        // estimate-based item.start → measurement microtask → resizeItem →
+        // re-sync with corrected item.start). With `top`, each sync's
+        // assignment triggers a real layout pass and the user briefly
+        // sees rows positioned at the *stale* (estimate-based) coords —
+        // visible as rows overlapping each other during heavy streaming.
+        // With `transform`, the position changes get composited and only
+        // the final value paints per frame, so the intermediate states
+        // are invisible.
+        //
+        // We tried `top: ${item.start}px` once on the theory that
+        // `transform` breaks `position: sticky` on descendants (because
+        // a transformed ancestor establishes a containing block for
+        // sticky elements). That theory was speculative — never confirmed
+        // broken in our Chromium for `.telnet-structured-view-pills` —
+        // and the streaming-overlap regression it caused was immediate
+        // and obvious. If sticky pills DO turn out to be broken on long
+        // wrapped lines in some Chromium build, the right fix is to
+        // restructure the pill DOM (e.g. promote it out of the line
+        // element and into the scroll container), not to revert this.
         el.style.transform = `translateY(${item.start}px)`;
         // `data-index` lets the default `measureElement` correlate the
         // ResizeObserver entry back to a virtualizer index.
         el.dataset.index = String(item.index);
-        opts.containerEl.appendChild(el);
+        if (prevEl) {
+          prevEl.after(el);
+        } else {
+          opts.containerEl.prepend(el);
+        }
         mounted.set(item.index, el);
         opts.onMount?.(item.index, el);
         // Defer measurement to a microtask — see `pendingMeasure` doc above.
@@ -178,6 +236,7 @@ export function createTelnetVirtualizer(opts: TelnetVirtualizerOpts): TelnetVirt
       } else {
         el.style.transform = `translateY(${item.start}px)`;
       }
+      prevEl = el;
     }
 
     // Unmount: anything in `mounted` that's no longer in `desired`.
@@ -217,6 +276,9 @@ export function createTelnetVirtualizer(opts: TelnetVirtualizerOpts): TelnetVirt
     forEachMounted(cb) {
       for (const [idx, el] of mounted) cb(idx, el);
     },
+    getTotalSize() {
+      return virt.getTotalSize();
+    },
     setCount(n) {
       virt.setOptions({ ...virt.options, count: n });
       // setOptions only merges; nothing internally re-runs layout. Calling
@@ -243,6 +305,69 @@ export function createTelnetVirtualizer(opts: TelnetVirtualizerOpts): TelnetVirt
       }
       mounted.clear();
       for (const [idx, el] of next) mounted.set(idx, el);
+
+      // Shift the virtualizer's INTERNAL size cache too. Without this, every
+      // off-screen row's `item.start` ends up computed from a stale size
+      // (the cache is keyed by index, and trim makes index 0 in the new
+      // model correspond to a different entry than the cache thinks). The
+      // visible rows self-correct on next mount via the pendingMeasure
+      // path, but off-screen rows stay wrong — surfacing as visible row
+      // overlap at trim boundaries during streaming (≥ 50K-line sessions
+      // where `ensureTelnetScrollbackRoom` fires constantly).
+      //
+      // The default `getItemKey` is `(index) => index`, so cache keys are
+      // numeric indices. Any key < headCount belongs to a trimmed entry
+      // (drop it); any key >= headCount renames to (key - headCount).
+      //
+      // `itemSizeCache` and `measurementsCache` are marked `private` in
+      // TS but are plain class fields at runtime — same access hatch the
+      // upstream code itself uses internally on every `resizeItem` (see
+      // node_modules/@tanstack/virtual-core/dist/esm/index.js: ~line 656,
+      // `this.itemSizeCache = new Map(...)`). Resetting `measurementsCache`
+      // forces the next `getMeasurements()` call (triggered by `setCount`'s
+      // `_willUpdate`) to rebuild the derived `start`/`end` array from the
+      // freshly-shifted size cache.
+      const internals = virt as unknown as {
+        itemSizeCache: Map<number, number>;
+        measurementsCache: unknown[];
+      };
+      const oldSizeCache = internals.itemSizeCache;
+      const newSizeCache = new Map<number, number>();
+      for (const [key, size] of oldSizeCache) {
+        if (key >= headCount) newSizeCache.set(key - headCount, size);
+      }
+      internals.itemSizeCache = newSizeCache;
+      internals.measurementsCache = [];
+    },
+    shiftIndicesAfterPrepend(headCount) {
+      if (headCount <= 0) return;
+      // Symmetric inverse of `shiftIndicesAfterTrim`. Every existing entry's
+      // index moves *up* by `headCount` so the prepended entries can occupy
+      // the new 0 .. headCount-1 range.
+      const next = new Map<number, HTMLElement>();
+      for (const [idx, el] of mounted) {
+        const newIdx = idx + headCount;
+        el.dataset.index = String(newIdx);
+        next.set(newIdx, el);
+      }
+      mounted.clear();
+      for (const [idx, el] of next) mounted.set(idx, el);
+
+      // Shift the size cache the same direction. Entries currently at key K
+      // belong to entries that are about to move to key K + headCount.
+      // Prepended entries (keys 0 .. headCount-1) have no cached size yet
+      // and will use estimateSize until they mount and self-measure.
+      const internals = virt as unknown as {
+        itemSizeCache: Map<number, number>;
+        measurementsCache: unknown[];
+      };
+      const oldSizeCache = internals.itemSizeCache;
+      const newSizeCache = new Map<number, number>();
+      for (const [key, size] of oldSizeCache) {
+        newSizeCache.set(key + headCount, size);
+      }
+      internals.itemSizeCache = newSizeCache;
+      internals.measurementsCache = [];
     },
     measure() {
       virt.measure();

@@ -18,6 +18,18 @@
     <symbol id="icon-chevron-down" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
       <path d="m6 9 6 6 6-6" />
     </symbol>
+    <symbol id="icon-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <rect width="14" height="14" x="8" y="8" rx="2" ry="2"/>
+      <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>
+    </symbol>
+    <symbol id="icon-download" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+      <polyline points="7 10 12 15 17 10"/>
+      <line x1="12" x2="12" y1="15" y2="3"/>
+    </symbol>
+    <symbol id="icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="20 6 9 17 4 12"/>
+    </symbol>
   </svg>
   <header id="logViewerHeader" class="log-viewer-header">
     <div class="log-viewer-header-primary">
@@ -31,24 +43,46 @@
           <option value="filter">Filter</option>
         </select>
         <div class="telnet-find-input-wrapper">
-          <input type="text" class="telnet-find-input" placeholder="Find..." spellcheck="false" />
+          <input
+            type="text"
+            class="telnet-find-input"
+            placeholder="Find..."
+            spellcheck="false"
+            aria-label="Find or filter query"
+          />
           <div class="telnet-find-options">
-            <button type="button" class="telnet-option-btn" data-option="case" title="Match Case">Aa</button>
-            <button type="button" class="telnet-option-btn" data-option="word" title="Match Whole Word">ab</button>
-            <button type="button" class="telnet-option-btn" data-option="regex" title="Use Regular Expression">.*</button>
+            <button type="button" class="telnet-option-btn" data-option="case" title="Match Case" aria-label="Match Case">Aa</button>
+            <button type="button" class="telnet-option-btn" data-option="word" title="Match Whole Word" aria-label="Match Whole Word">ab</button>
+            <button type="button" class="telnet-option-btn" data-option="regex" title="Use Regular Expression" aria-label="Use Regular Expression">.*</button>
           </div>
         </div>
         <span class="telnet-find-count" aria-live="polite"></span>
-        <button type="button" class="btn btn-icon telnet-find-prev" title="Previous (Shift+Enter)">
+        <button type="button" class="btn btn-icon telnet-find-prev" title="Previous (Shift+Enter)" aria-label="Previous match">
           <span class="icon icon-xs"><svg><use href="#icon-chevron-up" /></svg></span>
         </button>
-        <button type="button" class="btn btn-icon telnet-find-next" title="Next (Enter)">
+        <button type="button" class="btn btn-icon telnet-find-next" title="Next (Enter)" aria-label="Next match">
           <span class="icon icon-xs"><svg><use href="#icon-chevron-down" /></svg></span>
         </button>
-        <button type="button" class="btn btn-icon telnet-find-clear" title="Clear">
+        <button type="button" class="btn btn-icon telnet-find-clear" title="Clear" aria-label="Clear find">
           <span class="icon icon-xs"><svg><use href="#icon-x" /></svg></span>
         </button>
       </div>
+    </div>
+    <div id="logViewerActions" class="log-viewer-actions" hidden>
+      <button
+        type="button"
+        class="btn btn-secondary log-viewer-copy-btn"
+        title="Copy filtered log content to clipboard"
+      >
+        <span class="icon icon-xs"><svg><use href="#icon-copy" /></svg></span> Copy
+      </button>
+      <button
+        type="button"
+        class="btn btn-secondary log-viewer-save-btn"
+        title="Save filtered log content to file"
+      >
+        <span class="icon icon-xs"><svg><use href="#icon-download" /></svg></span> Save
+      </button>
     </div>
   </header>
   <main class="log-viewer-main">

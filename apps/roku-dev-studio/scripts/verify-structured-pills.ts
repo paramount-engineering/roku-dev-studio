@@ -85,10 +85,10 @@ async function main() {
   window.document.head.appendChild(svg);
 
   const { attachStructuredPillsToLine } = await import(
-    '../renderer/modules/telnet/telnet-structured-view-modal.js'
+    '../renderer/modules/console-log/console-structured-view-modal.js'
   );
   const { rawLogFileTextToEntries } = await import(
-    '../renderer/modules/telnet/console-log-file-view.js'
+    '../renderer/modules/console-log/console-log-file-view.js'
   );
 
   const argPath = process.argv[2];
@@ -111,7 +111,7 @@ async function main() {
     process.exit(1);
   }
 
-  const entries = rawLogFileTextToEntries(raw, false);
+  const entries = rawLogFileTextToEntries(raw);
   const entry = entries.find((e) => e.text.includes('com.adobe.event.response'));
   if (!entry?.structuredTargets || entry.structuredTargets.length < 2) {
     console.error(

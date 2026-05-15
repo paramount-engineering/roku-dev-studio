@@ -1,7 +1,5 @@
-import { closeModalWithOriginMotion, openModalOverlayActiveFromOpener } from '../utils/modal-origin-motion.js';
-import { resetTelnetModalScrollInOverlay, scheduleTelnetModalScrollReset } from '../utils/telnet-modal-scroll-reset.js';
-import { telnetConsoleModalTitle } from './telnet-console-modal-title.js';
-import { notifyTelnetViewerClosed } from './telnet-viewer-bridge.js';
+import { createSingletonConsoleModal } from './singleton-console-modal.js';
+import { consoleViewerModalTitle } from './console-modal-title.js';
 import type { StructuredConsolePayload } from './structured-log-detect.js';
 import {
   applyJsonFoldStructure,
@@ -9,14 +7,12 @@ import {
   applyXmlFoldStructure,
   applyXmlSyntaxHighlight,
   toggleFoldGroup
-} from './telnet-structured-syntax.js';
+} from './console-structured-syntax.js';
 
 const OVERLAY_ID = 'telnetStructuredViewerOverlay';
 
-let telnetStructuredEscapeListenerAdded = false;
-
 /** First Element on the event path (skips Text nodes, etc.). */
-export function firstHitElementOnTelnetClick(e: MouseEvent): Element | null {
+export function firstHitElementOnConsoleClick(e: MouseEvent): Element | null {
   for (const n of e.composedPath()) {
     if (n instanceof Element) return n;
   }
@@ -24,8 +20,8 @@ export function firstHitElementOnTelnetClick(e: MouseEvent): Element | null {
 }
 
 /** Find the `.telnet-log-line` hosting this click (works when `event.target` is a Text node). */
-export function closestTelnetLogLineFromEvent(e: MouseEvent): HTMLElement | null {
-  const start = firstHitElementOnTelnetClick(e);
+export function closestConsoleLogLineFromEvent(e: MouseEvent): HTMLElement | null {
+  const start = firstHitElementOnConsoleClick(e);
   const fromClosest = start?.closest('.telnet-log-line');
   if (fromClosest instanceof HTMLElement) return fromClosest;
   for (const n of e.composedPath()) {
@@ -106,15 +102,12 @@ export function clickedStructuredTargetIndex(
   return bestIdx;
 }
 
-function ensureOverlay(): HTMLElement {
-  const existing = document.getElementById(OVERLAY_ID);
-  if (existing instanceof HTMLElement) return existing;
-
-  const overlay = document.createElement('div');
-  overlay.id = OVERLAY_ID;
-  overlay.className = 'modal-overlay';
-  overlay.setAttribute('aria-hidden', 'true');
-  overlay.innerHTML = `
+// Shared singleton overlay lifecycle (backdrop, Esc, focus trap, scroll reset,
+// motion bridging) lives in `singleton-telnet-modal.ts`. This file owns the
+// JSON/XML-specific markup, the Copy button, and the fold-twisty delegate.
+const structuredModal = createSingletonConsoleModal({
+  overlayId: OVERLAY_ID,
+  innerHTML: `
     <div class="modal telnet-structured-view-modal" role="dialog" aria-modal="true" aria-labelledby="telnetStructuredViewerTitle">
       <div class="modal-header">
         <span class="modal-title" id="telnetStructuredViewerTitle">Console</span>
@@ -127,123 +120,85 @@ function ensureOverlay(): HTMLElement {
         <pre class="telnet-structured-view-pre" tabindex="0"></pre>
       </div>
     </div>
-  `;
-  document.body.appendChild(overlay);
-
-  const close = () => {
-    if (!overlay.classList.contains('active')) return;
-    closeModalWithOriginMotion(overlay, () => {
-      resetTelnetModalScrollInOverlay(overlay);
-      overlay.classList.remove('active');
-      overlay.setAttribute('aria-hidden', 'true');
-      notifyTelnetViewerClosed();
-    });
-  };
-
-  overlay.querySelector('.telnet-structured-view-close')?.addEventListener('click', close);
-  overlay.addEventListener('click', (e) => {
-    if (e.target === overlay) close();
-  });
-
-  // Delegated twisty handler: one listener for the whole modal regardless of how many
-  // fold groups the current payload rendered. We attach to the <pre> (not the body) so
-  // text selection inside the body doesn't pay the cost of bubbling through this guard,
-  // and so toggling never accidentally fires on the Copy button. Twisties carry
-  // `tabindex="-1"` and bypass the modal's natural keyboard flow — fold is mouse-driven
-  // per the v1 scope; revisit if we add keyboard fold shortcuts.
-  const preForFold = overlay.querySelector('.telnet-structured-view-pre');
-  if (preForFold instanceof HTMLElement) {
-    preForFold.addEventListener('click', (e) => {
-      const t = e.target;
-      const start = t instanceof Element ? t : t instanceof Text ? t.parentElement : null;
-      const twisty = start?.closest('.telnet-fold-twisty');
-      if (!(twisty instanceof HTMLElement)) return;
-      const group = twisty.closest('.telnet-fold-group');
-      if (!(group instanceof HTMLElement)) return;
-      e.preventDefault();
-      e.stopPropagation();
-      toggleFoldGroup(group);
-    });
-  }
-
-  const copyBtn = overlay.querySelector('.telnet-structured-view-copy');
-  copyBtn?.addEventListener('click', async () => {
-    const pre = overlay.querySelector('.telnet-structured-view-pre');
-    const text =
-      (pre instanceof HTMLElement && pre.dataset.formatted) || pre?.textContent || '';
-    try {
-      await window.roku.copyToClipboard(text);
-      if (copyBtn instanceof HTMLElement) {
-        const prev = copyBtn.textContent;
-        copyBtn.textContent = 'Copied';
-        setTimeout(() => {
-          copyBtn.textContent = prev || 'Copy';
-        }, 1600);
-      }
-    } catch {
-      /* ignore */
+  `,
+  closeButtonSelector: '.telnet-structured-view-close',
+  onMount: (overlay) => {
+    // Delegated twisty handler: one listener for the whole modal regardless
+    // of how many fold groups the current payload rendered. We attach to the
+    // <pre> (not the body) so text selection inside the body doesn't pay the
+    // cost of bubbling through this guard, and so toggling never accidentally
+    // fires on the Copy button. Twisties carry `tabindex="-1"` and bypass the
+    // modal's natural keyboard flow — fold is mouse-driven per the v1 scope;
+    // revisit if we add keyboard fold shortcuts.
+    const preForFold = overlay.querySelector('.telnet-structured-view-pre');
+    if (preForFold instanceof HTMLElement) {
+      preForFold.addEventListener('click', (e) => {
+        const t = e.target;
+        const start = t instanceof Element ? t : t instanceof Text ? t.parentElement : null;
+        const twisty = start?.closest('.telnet-fold-twisty');
+        if (!(twisty instanceof HTMLElement)) return;
+        const group = twisty.closest('.telnet-fold-group');
+        if (!(group instanceof HTMLElement)) return;
+        e.preventDefault();
+        e.stopPropagation();
+        toggleFoldGroup(group);
+      });
     }
-  });
 
-  if (!telnetStructuredEscapeListenerAdded) {
-    telnetStructuredEscapeListenerAdded = true;
-    document.addEventListener(
-      'keydown',
-      (e) => {
-        if (e.key !== 'Escape') return;
-        const o = document.getElementById(OVERLAY_ID);
-        if (!(o instanceof HTMLElement) || !o.classList.contains('active')) return;
-        closeModalWithOriginMotion(o, () => {
-          resetTelnetModalScrollInOverlay(o);
-          o.classList.remove('active');
-          o.setAttribute('aria-hidden', 'true');
-          notifyTelnetViewerClosed();
-        });
-      },
-      true
-    );
+    const copyBtn = overlay.querySelector('.telnet-structured-view-copy');
+    copyBtn?.addEventListener('click', async () => {
+      const pre = overlay.querySelector('.telnet-structured-view-pre');
+      const text =
+        (pre instanceof HTMLElement && pre.dataset.formatted) || pre?.textContent || '';
+      try {
+        await window.roku.copyToClipboard(text);
+        if (copyBtn instanceof HTMLElement) {
+          const prev = copyBtn.textContent;
+          copyBtn.textContent = 'Copied';
+          setTimeout(() => {
+            copyBtn.textContent = prev || 'Copy';
+          }, 1600);
+        }
+      } catch {
+        /* ignore */
+      }
+    });
   }
-
-  return overlay;
-}
+});
 
 /**
  * Open the shared formatted JSON/XML viewer (singleton overlay).
  */
-export function openTelnetStructuredViewer(
+export function openConsoleStructuredViewer(
   opener: HTMLElement | null,
   payload: StructuredConsolePayload
 ): void {
-  const overlay = ensureOverlay();
-  const title = overlay.querySelector('#telnetStructuredViewerTitle');
-  const pre = overlay.querySelector('.telnet-structured-view-pre');
+  structuredModal.open(opener, (overlay) => {
+    const title = overlay.querySelector('#telnetStructuredViewerTitle');
+    const pre = overlay.querySelector('.telnet-structured-view-pre');
 
-  if (title) {
-    title.textContent = telnetConsoleModalTitle(payload.kind === 'json' ? 'JSON' : 'XML');
-  }
-  if (pre instanceof HTMLElement) {
-    pre.dataset.formatted = payload.formatted;
-    pre.replaceChildren();
-    const code = document.createElement('code');
-    code.className = `telnet-hl-root telnet-hl-${payload.kind}`;
-    // Syntax highlight first → flat token stream; then layer fold scaffold over it.
-    // The two-pass split keeps the tokenizer free of fold/UX concerns and means
-    // `pre.dataset.formatted` (which the Copy button uses) stays decoupled from the
-    // rendered DOM regardless of which groups the user collapses.
-    if (payload.kind === 'json') {
-      applyJsonSyntaxHighlight(code, payload.formatted);
-      applyJsonFoldStructure(code);
-    } else {
-      applyXmlSyntaxHighlight(code, payload.formatted);
-      applyXmlFoldStructure(code);
+    if (title) {
+      title.textContent = consoleViewerModalTitle(payload.kind === 'json' ? 'JSON' : 'XML');
     }
-    pre.appendChild(code);
-  }
-
-  resetTelnetModalScrollInOverlay(overlay);
-  overlay.setAttribute('aria-hidden', 'false');
-  openModalOverlayActiveFromOpener(overlay, opener, () => {
-    scheduleTelnetModalScrollReset(overlay);
+    if (pre instanceof HTMLElement) {
+      pre.dataset.formatted = payload.formatted;
+      pre.replaceChildren();
+      const code = document.createElement('code');
+      code.className = `telnet-hl-root telnet-hl-${payload.kind}`;
+      // Syntax highlight first → flat token stream; then layer fold scaffold
+      // over it. The two-pass split keeps the tokenizer free of fold/UX
+      // concerns and means `pre.dataset.formatted` (which the Copy button
+      // uses) stays decoupled from the rendered DOM regardless of which
+      // groups the user collapses.
+      if (payload.kind === 'json') {
+        applyJsonSyntaxHighlight(code, payload.formatted);
+        applyJsonFoldStructure(code);
+      } else {
+        applyXmlSyntaxHighlight(code, payload.formatted);
+        applyXmlFoldStructure(code);
+      }
+      pre.appendChild(code);
+    }
   });
 }
 
@@ -311,7 +266,7 @@ export function attachStructuredPillsToLine(
       (ev) => {
         ev.preventDefault();
         ev.stopPropagation();
-        openTelnetStructuredViewer(pill, payload);
+        openConsoleStructuredViewer(pill, payload);
       },
       { passive: false }
     );

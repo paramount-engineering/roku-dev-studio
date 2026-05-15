@@ -11,6 +11,7 @@ const { resolveUnderBase, isPathUnderOneOf, resolveUserPathUnderOneOf } = requir
 // Import IPC handler modules
 const { setupIpcHandlers } = require('./main/ipc/index');
 const { registerLogViewerIpc, openLogFileViewerWindow } = require('./main/log-file-viewer-window');
+const { registerConsoleSpillIpc } = require('./main/console-spill');
 const {
   registerFiddleIpc,
   openFiddleWindow,
@@ -93,18 +94,26 @@ let privacyModeEnabled = false;
 // rationale behind the clamp band and why pinch-zoom is disabled.
 const { zoomIn, zoomOut, resetZoom, setupZoomGuards } = require('./main/window-zoom');
 
-// Helper function to safely send messages to renderer
+// Helper function to safely send messages to renderer.
+//
+// IMPORTANT: accessing `mainWindow.webContents` on a destroyed BrowserWindow
+// itself throws `TypeError: Object has been destroyed` (the getter proxies
+// into a native object that no longer exists). So the BrowserWindow's own
+// `isDestroyed()` MUST be checked first, before touching `webContents` at
+// all. The whole body is also wrapped in a try/catch as a last-resort guard
+// against teardown races (e.g. window destroyed between the isDestroyed()
+// check and `.send()` returning) — this used to crash the main process via
+// `uncaughtException` when a buffered telnet flush landed mid-teardown.
 function safeSendToRenderer(channel: string, data: unknown) {
-  if (mainWindow && mainWindow.webContents && !mainWindow.webContents.isDestroyed()) {
-    try {
-      mainWindow.webContents.send(channel, data);
-      return true;
-    } catch (error) {
-      // Window was destroyed during send, ignore
-      return false;
-    }
+  try {
+    if (!mainWindow || mainWindow.isDestroyed()) return false;
+    const wc = mainWindow.webContents;
+    if (!wc || wc.isDestroyed()) return false;
+    wc.send(channel, data);
+    return true;
+  } catch {
+    return false;
   }
-  return false;
 }
 
 // Fiddle windows tap into the same 8085 telnet stream as the main renderer.
@@ -542,6 +551,7 @@ app.whenReady().then(() => {
   secretStore.init(app, { enabled: rememberPasswordsInKeychain });
   registerAboutIpc(ipcMain, clipboard, shell);
   registerLogViewerIpc(ipcMain);
+  registerConsoleSpillIpc(ipcMain, app);
   registerSettingsIpc(ipcMain);
   registerSecretsIpc(ipcMain);
   registerFiddleIpc(ipcMain, () => (mainWindow && !mainWindow.isDestroyed() ? mainWindow.webContents : null));

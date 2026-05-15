@@ -58,7 +58,7 @@ export function createTelnetUrlSpan(url: string): HTMLSpanElement {
 }
 
 /** Fill a log line content element with text nodes + URL spans. */
-export function populateTelnetLineContentWithUrls(contentEl: HTMLElement, text: string): void {
+export function populateConsoleLineContentWithUrls(contentEl: HTMLElement, text: string): void {
   contentEl.replaceChildren();
   for (const part of splitTextWithUrls(text)) {
     if (part.type === 'text') {
