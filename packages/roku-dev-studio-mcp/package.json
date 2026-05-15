@@ -1,6 +1,6 @@
 {
   "name": "roku-dev-studio-mcp",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "MCP server exposing Roku Dev Studio Action Scripts to AI agents",
   "main": "dist/index.cjs",
   "bin": {
