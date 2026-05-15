@@ -5,6 +5,7 @@
 
 import type { BrowserWindow as ElectronBrowserWindow, IpcMain, WebContents } from 'electron';
 import { IPC } from '../shared/ipc/channels';
+import { setupZoomGuards } from './window-zoom';
 
 const fs = require('fs');
 const path = require('path');
@@ -142,6 +143,10 @@ export function openFiddleWindow(
     activeFiddleDeviceId: null,
     activeFiddlePassword: null
   });
+
+  // Same zoom band + pinch-zoom guard as the main window so View > Zoom and
+  // Ctrl+wheel both clamp to the configured min/max factor.
+  setupZoomGuards(child);
 
   child.once('closed', () => {
     // Pull the snapshot out BEFORE we delete so the close cleanup (which may
