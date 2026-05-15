@@ -114,10 +114,32 @@ Manual dispatch always creates a `v`-prefixed tag on the release (e.g. `v1.1.0`)
 ## Workflow Files
 
 ### `.github/workflows/release.yml`
-Main release workflow - triggers on version tags or manual dispatch.
+Main release workflow — triggers on version tags or manual dispatch. All three
+platforms build via a single matrix job; artifacts are aggregated into one
+GitHub Release by a follow-on `release` job.
 
-### `.github/workflows/build-test.yml`
-Test workflow - builds on every push to main/master to verify builds work.
+Notes for maintainers:
+- Build steps install with `npm ci --ignore-scripts`, then `npm rebuild`, then
+  explicitly build workspace packages in dependency order
+  (`api → mcp → remote-server → app`). This is intentional: npm does not
+  guarantee topological ordering of workspace `prepare` scripts during
+  `npm ci`, and the desktop app's preload bundle requires
+  `roku-dev-studio-api/dist/` to already exist.
+- The electron + electron-builder download caches are persisted across runs
+  (~150 MB per platform), keyed on the lockfile and `apps/roku-dev-studio/package.json`.
+- Do **not** add `-- --publish never` to the build commands. Root-level
+  scripts re-invoke npm via `npm --prefix apps/roku-dev-studio run build:*`,
+  and the inner npm strips the `--publish` flag, leaving a stray `never`
+  that electron-builder treats as a target name. Publishing is handled by
+  `softprops/action-gh-release` in the `release` job — electron-builder
+  itself never publishes.
+- All `uses:` references are pinned to full commit SHAs (org policy).
+
+### `.github/workflows/ci.yml`
+Per-PR / per-push smoke checks (typecheck + per-package syntax). Uses the
+same `npm ci --ignore-scripts` + `npm rebuild` + explicit workspace-build
+pattern as the release workflow, so contributors can't get bitten by the
+prepare-ordering race.
 
 ## Release Outputs
 
