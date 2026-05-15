@@ -6,22 +6,6 @@ on:
   pull_request:
     branches: [main, master]
 
-# A new push to the same PR/branch supersedes any in-flight CI run.
-concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
-
-# Determinism note for CI:
-#
-# Every workspace `prepare` script in this monorepo no-ops when CI=true
-# (GitHub Actions sets this automatically). Without the guard, cross-workspace
-# `prepare` scripts race during `npm ci` because npm doesn't topologically
-# order them, and the desktop app's preload bundling depends on
-# roku-dev-studio-api/dist/lib/*.js. Each job below installs deps with
-# `npm ci`, then explicitly builds the workspace packages it needs in
-# dependency order. (`--ignore-scripts` does NOT help here: in npm 10+ it
-# does not skip workspace `prepare` — see npm/cli#5856.)
-
 jobs:
   typecheck:
     name: TypeScript (workspace)
@@ -33,11 +17,6 @@ jobs:
           node-version: '22'
           cache: 'npm'
       - run: npm ci
-      - name: Build workspace packages (topological order)
-        run: |
-          npm run build -w roku-dev-studio-api
-          npm run build -w roku-dev-studio-mcp
-          npm run build -w roku-dev-studio-remote-server
       - run: npm run typecheck
 
   api-package:
@@ -50,8 +29,6 @@ jobs:
           node-version: '22'
           cache: 'npm'
       - run: npm ci
-      - name: Build API package
-        run: npm run build -w roku-dev-studio-api
       - run: npm run ci:api
 
   remote-server:
@@ -64,10 +41,6 @@ jobs:
           node-version: '22'
           cache: 'npm'
       - run: npm ci
-      - name: Build workspace packages (topological order)
-        run: |
-          npm run build -w roku-dev-studio-api
-          npm run build -w roku-dev-studio-remote-server
       - run: npm run ci:remote-check
 
   electron-app:
@@ -80,9 +53,4 @@ jobs:
           node-version: '22'
           cache: 'npm'
       - run: npm ci
-      - name: Build workspace packages (topological order)
-        run: |
-          npm run build -w roku-dev-studio-api
-          npm run build -w roku-dev-studio-mcp
-          npm run build -w roku-dev-studio-remote-server
       - run: npm run ci:app-check

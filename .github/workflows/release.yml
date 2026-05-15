@@ -16,26 +16,20 @@ on:
         required: true
         default: '1.0.0'
 
-# A re-pushed tag (or repeat dispatch) cancels the in-flight run instead of
-# stacking another full mac/win/linux build on top.
-concurrency:
-  group: release-${{ github.ref }}
-  cancel-in-progress: true
-
 jobs:
-  # ============================================================
+  # ----------------------------------------------------------------
   # Build all three platforms via a matrix.
   #
-  # Determinism: every workspace `prepare` script in this monorepo no-ops
-  # when `CI=true` (set automatically by GitHub Actions). Without the guard,
-  # cross-workspace `prepare` scripts race during `npm ci` because npm does
-  # not topologically order them, and the desktop app's preload bundling
-  # consumes `roku-dev-studio-api/dist/lib/*.js`. We instead build the
-  # workspace packages explicitly, in dependency order, in a dedicated step
-  # below. (`--ignore-scripts` is NOT used: in npm 10+ it does not skip
-  # workspace `prepare` anyway — see npm/cli#5856 — and we still need
-  # native postinstalls (electron, sharp, esbuild) to run.)
-  # ============================================================
+  # Determinism note: `apps/roku-dev-studio` and `roku-dev-studio-mcp` both
+  # have CI-guarded `prepare` scripts (`if (process.env.CI) process.exit(0)`).
+  # Without the guard their prepares race against `roku-dev-studio-api`'s
+  # prepare during `npm ci` (npm doesn't topologically order workspace
+  # prepare scripts), and the desktop app's preload bundle / mcp's bundle
+  # both consume `roku-dev-studio-api/dist/lib/*.js`. We therefore build
+  # mcp explicitly here and let the desktop app's `build:mac|win|linux`
+  # chain `build:bundle` itself. (`api` and `remote-server` prepares run
+  # normally — they're self-contained and don't race.)
+  # ----------------------------------------------------------------
   build:
     name: Build (${{ matrix.label }})
     runs-on: ${{ matrix.os }}
@@ -50,8 +44,6 @@ jobs:
             artifact-paths: |
               apps/roku-dev-studio/dist/*.dmg
               apps/roku-dev-studio/dist/mac/**/*.dmg
-            electron-cache: ~/Library/Caches/electron
-            builder-cache: ~/Library/Caches/electron-builder
           - label: Windows
             os: windows-latest
             build-cmd: build:win
@@ -59,8 +51,6 @@ jobs:
             artifact-paths: |
               apps/roku-dev-studio/dist/*.exe
               apps/roku-dev-studio/dist/win/**/*.exe
-            electron-cache: ~/AppData/Local/electron/Cache
-            builder-cache: ~/AppData/Local/electron-builder/Cache
           - label: Linux
             os: ubuntu-latest
             build-cmd: build:linux
@@ -70,8 +60,6 @@ jobs:
               apps/roku-dev-studio/dist/*.AppImage
               apps/roku-dev-studio/dist/linux/**/*.deb
               apps/roku-dev-studio/dist/linux/**/*.AppImage
-            electron-cache: ~/.cache/electron
-            builder-cache: ~/.cache/electron-builder
     steps:
       - name: Checkout code
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
@@ -82,42 +70,18 @@ jobs:
           node-version: '22'
           cache: 'npm'
 
-      # Cache the prebuilt electron + electron-builder downloads (~150 MB per
-      # platform). Keyed on lockfile + the desktop app's package.json so any
-      # change to the electron version invalidates correctly.
-      - name: Cache Electron downloads
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830  # v4
-        with:
-          path: |
-            ${{ matrix.electron-cache }}
-            ${{ matrix.builder-cache }}
-          key: ${{ runner.os }}-electron-${{ hashFiles('package-lock.json', 'apps/roku-dev-studio/package.json') }}
-          restore-keys: |
-            ${{ runner.os }}-electron-
-
       - name: Install dependencies
-        # CI=true (auto-set by GitHub Actions) makes every workspace
-        # `prepare` script no-op; `npm ci` still runs native postinstalls
-        # (electron, sharp, esbuild platform binaries).
         run: npm ci
 
-      - name: Build workspace packages (topological order)
-        # api -> mcp/remote-server (both depend on api). The desktop app's
-        # `build:bundle` (chained into build:mac/win/linux) requires
-        # roku-dev-studio-api/dist/lib/*.js, so api must be built first.
-        run: |
-          npm run build -w roku-dev-studio-api
-          npm run build -w roku-dev-studio-mcp
-          npm run build -w roku-dev-studio-remote-server
+      - name: Build mcp (its CI-guarded prepare did not run)
+        run: npm run build -w roku-dev-studio-mcp
 
       - name: Build desktop app
         # `build:mac|win|linux` chains build:bundle (sync-path-safe +
         # transpile main/preload/renderer) -> clean:dist -> electron-builder.
-        # Do NOT pass `-- --publish never`: root scripts re-invoke npm via
-        # `npm --prefix apps/roku-dev-studio run ...`, and the inner npm
-        # strips the `--publish` flag, leaving a stray `never` that
-        # electron-builder reads as a target name. Publishing is handled
-        # by the `release` job via softprops/action-gh-release.
+        # Publishing is disabled in `apps/roku-dev-studio/package.json`
+        # (`"build": { "publish": null }`) — `softprops/action-gh-release`
+        # in the `release` job below handles the GitHub Release.
         run: npm run ${{ matrix.build-cmd }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -130,9 +94,9 @@ jobs:
           if-no-files-found: error
           retention-days: 5
 
-  # ============================================================
+  # ----------------------------------------------------------------
   # Aggregate all artifacts into a single GitHub Release.
-  # ============================================================
+  # ----------------------------------------------------------------
   release:
     needs: [build]
     runs-on: ubuntu-latest
@@ -142,21 +106,7 @@ jobs:
       - name: Download all build artifacts
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093  # v4
         with:
-          # No `name:` -> downloads every artifact this run produced into
-          # ./artifacts/<artifact-name>/...
           path: ./artifacts
-
-      - name: List downloaded artifacts
-        run: |
-          echo "::group::macOS builds"
-          find ./artifacts/mac-builds -type f -name "*.dmg" 2>/dev/null -exec ls -lh {} \; || echo "(none)"
-          echo "::endgroup::"
-          echo "::group::Windows builds"
-          find ./artifacts/windows-builds -type f -name "*.exe" 2>/dev/null -exec ls -lh {} \; || echo "(none)"
-          echo "::endgroup::"
-          echo "::group::Linux builds"
-          find ./artifacts/linux-builds -type f \( -name "*.deb" -o -name "*.AppImage" \) 2>/dev/null -exec ls -lh {} \; || echo "(none)"
-          echo "::endgroup::"
 
       - name: Resolve version + tag from event
         id: get_version

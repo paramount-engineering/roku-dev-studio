@@ -118,39 +118,40 @@ Main release workflow — triggers on version tags or manual dispatch. All three
 platforms build via a single matrix job; artifacts are aggregated into one
 GitHub Release by a follow-on `release` job.
 
-Notes for maintainers:
-- **Workspace `prepare` is CI-guarded.** Each `prepare` in this monorepo
-  short-circuits when `CI=true` (set automatically by GitHub Actions):
+Notes for maintainers (read these before changing the workflow):
+- **`prepare` is CI-guarded in `apps/roku-dev-studio` and `roku-dev-studio-mcp`.**
+  Each contains:
   ```js
   if (process.env.CI) process.exit(0);
   ```
-  Without this guard, cross-workspace `prepare` scripts race during `npm ci`
-  because npm does not topologically order them, and the desktop app's
-  preload bundling consumes `roku-dev-studio-api/dist/lib/*.js`. We instead
-  build workspace packages explicitly in dependency order, in a dedicated
-  step after `npm ci`. (`--ignore-scripts` does **not** solve this in
-  npm 10+ — see [npm/cli#5856](https://github.com/npm/cli/issues/5856) — and
-  also blocks native postinstalls (electron, sharp, esbuild) which we need.)
-- **Each `build:<platform>` is self-contained.** `build:mac`, `build:win`,
-  `build:linux` chain `build:bundle` (sync-path-safe + transpile main /
-  preload / renderer) → `clean:dist` → `electron-builder`. They no longer
-  rely on `prepare` having run. Local dev still benefits from `prepare`
-  (it runs everywhere except CI).
-- **Caching.** Electron + electron-builder download caches (~150 MB per
-  platform) are persisted across runs, keyed on `package-lock.json` and
-  `apps/roku-dev-studio/package.json` (where the electron version lives).
-- **Do not add `-- --publish never`.** Root-level scripts re-invoke npm via
+  Without it, those packages' prepares race against
+  `roku-dev-studio-api`'s prepare during `npm ci` (npm doesn't topologically
+  order workspace prepares), and bundling fails with
+  `Could not resolve '../../packages/roku-dev-studio-api/dist/lib/...'`.
+  In CI the workflow builds mcp explicitly after `npm ci` (`api` and
+  `remote-server` prepares are self-contained, so they run normally).
+  `--ignore-scripts` does NOT solve this in npm 10+ —
+  see [npm/cli#5856](https://github.com/npm/cli/issues/5856).
+- **`build:mac`, `build:win`, `build:linux` are self-contained** and chain
+  `build:bundle` → `clean:dist` → `electron-builder`. They do not rely on
+  `prepare` having run.
+- **Publishing is disabled in `apps/roku-dev-studio/package.json`
+  (`"build": { "publish": null }`).** Without this, electron-builder enters
+  auto-publish mode whenever `CI=true` and fails with
+  `Cannot detect repository by .git/config`. Publishing is owned by
+  `softprops/action-gh-release` in the `release` job. Do not add
+  `-- --publish never` either: root-level scripts re-invoke npm via
   `npm --prefix apps/roku-dev-studio run build:*`, and the inner npm strips
   the `--publish` flag, leaving a stray `never` that electron-builder reads
-  as a target name. Publishing is handled by `softprops/action-gh-release`
-  in the `release` job — electron-builder itself never publishes here.
+  as a target name.
 - **All `uses:` references are pinned to full commit SHAs (org policy).**
 
 ### `.github/workflows/ci.yml`
-Per-PR / per-push smoke checks (typecheck + per-package syntax). Uses the
-same CI-guarded `prepare` + explicit topological workspace-build pattern as
-the release workflow, so contributors can't get bitten by the
-prepare-ordering race.
+Per-PR / per-push smoke checks (typecheck + per-package syntax). Just
+`actions/checkout` → `actions/setup-node` → `npm ci` → script per job, with
+all actions SHA-pinned. The CI-guarded prepares above are sufficient — no
+extra topological build is needed here because the smoke checks don't
+consume the desktop app bundle.
 
 ## Release Outputs
 
