@@ -2,9 +2,14 @@
  * Per-device developer-password storage.
  *
  * The on-disk store lives in the main process (see `main/secret-store.ts`)
- * encrypted with Electron `safeStorage`. The renderer holds a hydrated
- * cleartext mirror so the UI can keep using a synchronous API
- * (`getStoredPassword(serial)` returns immediately on the auto-verify path).
+ * either encrypted via Electron `safeStorage` (when the user opts into
+ * keychain protection) or as JSON-encoded plaintext (when they don't).
+ * Either way "Remember" survives quit/relaunch — the toggle controls *how*
+ * the value is stored, not *whether* it's stored.
+ *
+ * The renderer holds a hydrated cleartext mirror so the UI can keep using a
+ * synchronous API (`getStoredPassword(serial)` returns immediately on the
+ * auto-verify path).
  *
  * Lifecycle:
  *   1. `hydrateSecretCache()` runs once early in `app.ts#init`. It:
@@ -25,10 +30,16 @@ const LEGACY_PASSWORDS_KEY = 'roku-dev-passwords';
 /**
  * - `encrypted`   — system keychain backs the on-disk store.
  * - `unencrypted` — Electron's `basic_text` backend (Linux without a keyring).
- * - `unavailable` — `safeStorage.isEncryptionAvailable()` is false; nothing persisted.
+ *                   `safeStorage` is in use but produces base64 plaintext.
+ * - `unavailable` — User opted into keychain but
+ *                   `safeStorage.isEncryptionAvailable()` is false; main
+ *                   refuses to write an unreadable encrypted file, so
+ *                   entries are session-only until the keychain comes back.
  * - `disabled`    — User has opted **out** of system keychain in Settings →
- *                   General → "Remember device passwords (System Keychain)".
- *                   Passwords are remembered for the current session only.
+ *                   General → "Encrypt Saved Passwords with System
+ *                   Keychain". Remembered passwords still persist across
+ *                   quit/relaunch, but as JSON-encoded plaintext on disk
+ *                   (mode 0600).
  * - `unknown`     — Hydration hasn't completed yet.
  */
 export type SecretStorageStatus = 'encrypted' | 'unencrypted' | 'unavailable' | 'disabled' | 'unknown';

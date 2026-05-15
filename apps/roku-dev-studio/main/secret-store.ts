@@ -1,48 +1,50 @@
 /**
- * Encrypted secret store for the main process.
+ * Developer-password store for the main process.
  *
- * Backs the renderer's `roku-dev-passwords` cache with a `safeStorage`-encrypted
- * file under `<userData>/secrets/dev-passwords.json`. Per-entry encryption (not
- * whole-file) so a corrupt entry can't take the rest down.
+ * Backs the renderer's `roku-dev-passwords` cache with an on-disk file under
+ * `<userData>/secrets/dev-passwords.json`. Per-entry storage (not whole-file)
+ * so a corrupt entry can't take the rest down.
  *
- * Opt-in gating
- * -------------
- * Touching `safeStorage` on macOS triggers the OS keychain prompt — the
- * "Roku Dev Studio wants to use your confidential information stored in 'Roku
- * Dev Studio Safe Storage' in your keychain" dialog — on every cold launch for
- * unsigned builds. To avoid prompting users who never opted in to keychain
- * persistence, the entire store is gated behind a `rememberPasswordsInKeychain`
- * setting (default off). When the setting is off:
- *   - `init()` does NOT call any `safeStorage.*` API.
- *   - `init()` does NOT decrypt the on-disk file.
- *   - `getStatus()` returns `'disabled'` without probing.
- *   - `setPassword()` stores in-memory only for the session.
- *   - `deletePassword()` mutates the in-memory cache only.
- *   - `getAllPasswords()` returns the session cache.
- * Flipping the setting on (via Settings → General) calls `setEnabled(true)`,
- * which lazily loads + decrypts the existing on-disk file the first time. THIS
- * is the point where macOS may prompt — and by that point the user has clearly
- * opted in.
+ * Two on-disk modes — the file's `mode` field is the source of truth at read
+ * time, the `rememberPasswordsInKeychain` setting is the source of truth at
+ * write time:
  *
- * Status semantics (when enabled):
- *   - `encrypted`   — `safeStorage.isEncryptionAvailable() === true` AND the
- *                     selected backend is a real keychain (macOS Keychain,
- *                     Windows DPAPI, secret-service, kwallet, etc.).
- *   - `unencrypted` — Electron reports encryption is "available" but the
- *                     backend is `basic_text` (Linux without a keyring).
- *                     Values are base64 plaintext on disk; surface this in
- *                     UI so users know what they're getting.
- *   - `unavailable` — `isEncryptionAvailable()` is false. Persistence is
- *                     refused; in-memory cache is the only thing keeping
- *                     remembered passwords for the session.
- *   - `disabled`    — User has not opted in. No `safeStorage` call has been
- *                     made; we have no idea what the backend would report.
+ *   - `mode: 'encrypted'`  — entries are base64 ciphertext produced by
+ *     Electron `safeStorage.encryptString`. Used when the user has opted in
+ *     to "Encrypt remembered passwords with System Keychain". Touching
+ *     `safeStorage` on macOS triggers the OS keychain prompt — the
+ *     "Roku Dev Studio wants to use your confidential information stored in
+ *     'Roku Dev Studio Safe Storage' in your keychain" dialog — on every
+ *     cold launch for unsigned builds.
+ *   - `mode: 'plaintext'`  — entries are stored as JSON strings on disk.
+ *     File mode is still `0o600`, but the values are readable by anything
+ *     running as the user. Used when the keychain toggle is OFF. This is
+ *     the same trust level as the legacy renderer `localStorage` blob and
+ *     it survives quit/relaunch (the explicit user requirement that
+ *     prompted this design — see
+ *     `.discussion-docs/safe-storage-integration.md`).
  *
- * Security:
- *   - File mode 0600.
- *   - Renderer never sees ciphertext — it asks for cleartext over IPC and
- *     receives a decrypted snapshot. Same trust boundary as the previous
- *     localStorage-based scheme (the renderer already had the cleartext).
+ * Toggle flips at runtime call `setEnabled(next)`, which:
+ *   1. Loads the existing file in its current mode (if any), populating the
+ *      in-memory cache.
+ *   2. Re-writes the file in the new mode so subsequent launches read
+ *      correctly without having to sniff.
+ *
+ * Status semantics surfaced to the renderer (`getStatus()`):
+ *   - `encrypted`   — keychain ON, `safeStorage.isEncryptionAvailable() === true`,
+ *                     and the selected backend is a real keychain.
+ *   - `unencrypted` — keychain ON but Electron reports `basic_text` (Linux
+ *                     without a keyring). Values are base64 plaintext on
+ *                     disk — surface this so users know what they're
+ *                     getting.
+ *   - `unavailable` — keychain ON but `isEncryptionAvailable()` is false.
+ *                     We refuse to persist via `safeStorage`; the
+ *                     in-memory cache is the only thing keeping
+ *                     remembered passwords for the session. (Note: we do
+ *                     NOT silently fall back to plaintext mode here —
+ *                     the user explicitly opted into keychain protection
+ *                     and we shouldn't downgrade behind their back.)
+ *   - `disabled`    — keychain OFF. Entries persist on disk as plaintext.
  */
 
 import type { App } from 'electron';
@@ -57,10 +59,21 @@ const DIR_NAME = 'secrets';
 
 export type SecretStoreStatus = 'encrypted' | 'unencrypted' | 'unavailable' | 'disabled';
 
+/** What format the on-disk file holds entries in. */
+type DiskMode = 'encrypted' | 'plaintext';
+
 interface SecretsFile {
   version: number;
+  /** How to decode `entries`. Authoritative at read time. */
+  mode: DiskMode;
+  /** Best-effort label of the encrypting backend; informational only. */
   backend: string;
-  /** Per-serial base64-encoded ciphertext (or base64 plaintext on `basic_text`). */
+  /**
+   * `mode === 'encrypted'` → base64-encoded ciphertext from `safeStorage.encryptString`.
+   * `mode === 'plaintext'` → JSON-encoded string value (so we never confuse
+   *                         a literal `null`/empty/quoted password with a
+   *                         missing entry).
+   */
   entries: Record<string, string>;
 }
 
@@ -71,7 +84,7 @@ let enabled = false;
 let onDiskLoaded = false;
 
 /** Cleartext, in-memory mirror of the on-disk store. Source of truth for reads
- * after enable+load so we don't have to re-decrypt on every IPC call. */
+ * after load so we don't have to re-decrypt / re-parse on every IPC call. */
 const cache: Record<string, string> = {};
 let backendName: string = 'unknown';
 
@@ -112,12 +125,12 @@ function readBackend(): string {
 }
 
 /**
- * Single source of truth for "is the on-disk file actually encrypted right
- * now". Only probes `safeStorage` if the user has opted in; otherwise returns
- * `disabled` without touching the keychain.
+ * Single source of truth for "what kind of protection do remembered
+ * passwords have right now?". Only probes `safeStorage` when the user opted
+ * into keychain protection.
  */
 export function getStatus(): { status: SecretStoreStatus; backend: string } {
-  if (!enabled) return { status: 'disabled', backend: 'disabled' };
+  if (!enabled) return { status: 'disabled', backend: 'plaintext' };
   let available = false;
   try {
     available = safeStorage.isEncryptionAvailable();
@@ -130,7 +143,7 @@ export function getStatus(): { status: SecretStoreStatus; backend: string } {
   return { status: 'encrypted', backend: backendName };
 }
 
-function encryptOrEncodeForDisk(plaintext: string): string {
+function encryptForDisk(plaintext: string): string {
   let available = false;
   try {
     available = safeStorage.isEncryptionAvailable();
@@ -156,6 +169,25 @@ function decryptFromDisk(encoded: string): string | null {
   }
 }
 
+function encodePlaintextForDisk(plaintext: string): string {
+  // JSON-encode so an empty string or a value containing surprising
+  // characters round-trips losslessly. Decode handles malformed entries by
+  // skipping them.
+  return JSON.stringify(plaintext);
+}
+
+function decodePlaintextFromDisk(encoded: string): string | null {
+  try {
+    const parsed = JSON.parse(encoded);
+    return typeof parsed === 'string' ? parsed : null;
+  } catch {
+    // Tolerate legacy entries that may have been stored unwrapped — treat
+    // the raw value as the password so a hand-edited or migrated file
+    // doesn't silently lose data.
+    return typeof encoded === 'string' ? encoded : null;
+  }
+}
+
 function readFile(): SecretsFile | null {
   if (!secretsFile) return null;
   try {
@@ -168,8 +200,14 @@ function readFile(): SecretsFile | null {
     for (const [k, v] of Object.entries(entries)) {
       if (typeof k === 'string' && typeof v === 'string') cleanEntries[k] = v;
     }
+    // Older files predate the `mode` field. If they were written by the
+    // previous gated-keychain implementation, every entry was always
+    // safeStorage-encrypted, so treat missing `mode` as `'encrypted'`.
+    const rawMode = (parsed as { mode?: unknown }).mode;
+    const mode: DiskMode = rawMode === 'plaintext' ? 'plaintext' : 'encrypted';
     return {
       version: typeof parsed.version === 'number' ? parsed.version : FILE_VERSION,
+      mode,
       backend: typeof parsed.backend === 'string' ? parsed.backend : 'unknown',
       entries: cleanEntries
     };
@@ -180,27 +218,52 @@ function readFile(): SecretsFile | null {
 }
 
 /**
- * Persist the in-memory cache to disk. No-op when disabled — we never write
- * cleartext or touch the keychain unless the user has opted in.
+ * Persist the in-memory cache to disk in the current mode (encrypted iff the
+ * keychain toggle is on AND `safeStorage` is available, plaintext otherwise).
+ * Always writes — keychain OFF still persists so "Remember" survives
+ * quit/relaunch (the documented design).
  */
 function writeFile(): void {
-  if (!enabled) return;
   if (!secretsFile) return;
   ensureDir();
-  if (backendName === 'unknown') backendName = readBackend();
-  // Re-encrypt the in-memory cache from scratch so the on-disk file is
-  // always consistent with the current backend (defensive against backend
-  // changes between launches).
+
+  // Decide the mode we'll write in. We only ever emit `'encrypted'` when the
+  // user has opted in AND `safeStorage` will actually accept calls; otherwise
+  // refuse to write an encrypted file with no way to read it back.
+  let writeMode: DiskMode = 'plaintext';
+  let available = false;
+  if (enabled) {
+    try {
+      available = safeStorage.isEncryptionAvailable();
+    } catch {
+      available = false;
+    }
+    if (available) {
+      writeMode = 'encrypted';
+      if (backendName === 'unknown') backendName = readBackend();
+    } else {
+      // Keychain toggle is on but the OS refused — fall back to in-memory
+      // only for this write. Don't downgrade silently to plaintext on disk;
+      // the user explicitly asked for keychain protection.
+      logWarn('keychain toggle is on but safeStorage is unavailable; skipping disk write');
+      return;
+    }
+  }
+
   const out: SecretsFile = {
     version: FILE_VERSION,
-    backend: backendName,
+    mode: writeMode,
+    backend: writeMode === 'encrypted' ? backendName : 'plaintext',
     entries: {}
   };
   for (const [serial, plaintext] of Object.entries(cache)) {
     try {
-      out.entries[serial] = encryptOrEncodeForDisk(plaintext);
+      out.entries[serial] =
+        writeMode === 'encrypted'
+          ? encryptForDisk(plaintext)
+          : encodePlaintextForDisk(plaintext);
     } catch (e) {
-      logWarn(`failed to encrypt entry for serial=${serial}; dropping from disk:`, e);
+      logWarn(`failed to encode entry for serial=${serial}; dropping from disk:`, e);
     }
   }
   try {
@@ -213,23 +276,27 @@ function writeFile(): void {
 }
 
 /**
- * Decrypt any existing on-disk file into the in-memory cache. Idempotent — once
- * loaded we keep using the in-memory copy. Only called after the user opts in
- * (`enabled === true`); this is the first time we ever invoke `safeStorage`.
+ * Load any existing on-disk file into the in-memory cache. Idempotent —
+ * once loaded we keep using the in-memory copy.
  *
- * Returns the cleaned entry counts so callers can log a single line about the
- * one-time hydration.
+ * Reads the file's `mode` field to decide how to decode entries. This lets a
+ * file written with the keychain toggle on (encrypted) survive being read
+ * with the toggle off later (we still need the file's mode field — not the
+ * current toggle — to choose the decoder).
+ *
+ * Touching `safeStorage` only happens when the file is in `'encrypted'`
+ * mode, which is the only case where the OS keychain prompt is justified.
  */
-function loadFromDiskIfEnabled(): { loaded: number; dropped: number } {
-  if (!enabled || onDiskLoaded) return { loaded: 0, dropped: 0 };
+function loadFromDiskIfNeeded(): { loaded: number; dropped: number } {
+  if (onDiskLoaded) return { loaded: 0, dropped: 0 };
   onDiskLoaded = true;
-  if (backendName === 'unknown') backendName = readBackend();
   const file = readFile();
   if (!file) return { loaded: 0, dropped: 0 };
   let loaded = 0;
   let dropped = 0;
   for (const [serial, encoded] of Object.entries(file.entries)) {
-    const cleartext = decryptFromDisk(encoded);
+    const cleartext =
+      file.mode === 'encrypted' ? decryptFromDisk(encoded) : decodePlaintextFromDisk(encoded);
     if (cleartext != null) {
       cache[serial] = cleartext;
       loaded += 1;
@@ -237,6 +304,7 @@ function loadFromDiskIfEnabled(): { loaded: number; dropped: number } {
       dropped += 1;
     }
   }
+  if (file.mode === 'encrypted' && backendName === 'unknown') backendName = readBackend();
   if (dropped > 0) {
     // Persist the cleaned cache so undecryptable entries don't keep tripping
     // the warning on every launch.
@@ -246,9 +314,11 @@ function loadFromDiskIfEnabled(): { loaded: number; dropped: number } {
 }
 
 /**
- * Resolve paths and remember the opt-in flag. Idempotent. NEVER calls
- * `safeStorage.*` on its own — that only happens after `setEnabled(true)` is
- * invoked (typically from the Settings window toggle).
+ * Resolve paths, remember the keychain opt-in flag, and load any existing
+ * on-disk store. Idempotent. May call `safeStorage.decryptString` if the
+ * stored file is in `'encrypted'` mode (so the OS keychain prompt CAN fire
+ * here on macOS) — but only when the file itself indicates encrypted mode,
+ * which only happens if the user previously opted in.
  */
 export function init(app: App, opts: { enabled: boolean }): void {
   if (initialized) return;
@@ -257,38 +327,31 @@ export function init(app: App, opts: { enabled: boolean }): void {
   secretsDir = path.join(userData, DIR_NAME);
   secretsFile = path.join(secretsDir, FILE_NAME);
   enabled = !!opts.enabled;
-  // Note: we deliberately do NOT call `readBackend()` here either. Although on
-  // macOS/Windows that's a no-op for `safeStorage`, keeping init free of any
-  // platform-specific keychain code path makes the "never prompt unless opted
-  // in" guarantee easier to audit. The backend name is filled in lazily by
-  // `loadFromDiskIfEnabled()` / `writeFile()` when we actually need it.
   logInfo(`init (enabled=${enabled}, file=${secretsFile})`);
-  if (enabled) loadFromDiskIfEnabled();
+  loadFromDiskIfNeeded();
 }
 
 /**
- * Flip the opt-in flag at runtime. When turning **on** for the first time
- * this triggers the one-shot hydration from disk (`safeStorage.decryptString`
- * may prompt the OS at that moment). When turning **off**, any in-memory
- * passwords saved during the session are kept (they were already exposed to
- * the renderer); we just stop persisting new writes.
+ * Flip the keychain opt-in flag at runtime. Always re-writes the file in the
+ * new mode so a subsequent cold launch reads it back with the right decoder
+ * (we can't rely on probing the current toggle at read time — the user may
+ * flip again while the app is closed).
  *
- * NOTE: turning off does NOT delete the on-disk file. The user can clear it
- * explicitly via "Clear Cache and Reload" / `clearAll`.
+ * NOTE: turning off does NOT delete the on-disk file. Entries are simply
+ * re-saved in plaintext form. The user can clear them explicitly via "Clear
+ * Cache and Reload" / `clearAll`.
  */
 export function setEnabled(next: boolean): { status: SecretStoreStatus; backend: string } {
   const was = enabled;
   enabled = !!next;
-  if (!was && enabled) {
-    // First hydrate from any existing on-disk file (catches users who had the
-    // toggle on previously, then off, then on again).
-    loadFromDiskIfEnabled();
-    // Then persist any in-memory entries that accumulated while disabled —
-    // e.g. legacy localStorage entries imported via `migrateLegacy`, or
-    // session-only passwords the user typed earlier in this launch. Without
-    // this, flipping on would silently lose those values at app quit.
-    if (Object.keys(cache).length > 0) writeFile();
-  }
+  if (was === enabled) return getStatus();
+  // Make sure the cache reflects the current on-disk file before we
+  // overwrite it in the new mode (otherwise flipping the toggle on an app
+  // start that hasn't read the file yet would clobber whatever's there).
+  loadFromDiskIfNeeded();
+  // Re-emit the file in the new mode so the next cold launch reads it back
+  // correctly. Safe even if the cache is empty — writes an empty entry map.
+  writeFile();
   return getStatus();
 }
 
@@ -306,16 +369,14 @@ export function setPassword(serial: string, password: string): void {
   if (typeof password !== 'string') return;
   if (cache[serial] === password) return;
   cache[serial] = password;
-  // Persists only when the user has opted in. Otherwise the password stays
-  // session-only (renderer treats this as "remembered for now"; lost on quit).
-  if (enabled) writeFile();
+  writeFile();
 }
 
 export function deletePassword(serial: string): void {
   if (typeof serial !== 'string' || !serial) return;
   if (!(serial in cache)) return;
   delete cache[serial];
-  if (enabled) writeFile();
+  writeFile();
 }
 
 export function clearAll(): void {
@@ -341,10 +402,10 @@ export function clearAll(): void {
  * Only runs when the on-disk store is empty; returns the count migrated so
  * the renderer can decide whether to drop the legacy `localStorage` key.
  *
- * Legacy migration is allowed regardless of the opt-in flag so we don't lose
- * existing entries — but if the user is currently opted **out**, the migrated
- * entries live in memory only until they opt in (at which point `writeFile`
- * persists them).
+ * Migrated entries are written to disk immediately in whatever mode the
+ * current toggle dictates — so a user who never opted into keychain still
+ * has their previously-remembered passwords persisted (just in plaintext
+ * mode, matching what they had under the legacy `localStorage` scheme).
  */
 export function migrateLegacy(legacy: Record<string, string>): { migrated: number; skipped: boolean } {
   if (Object.keys(cache).length > 0) {
@@ -359,6 +420,6 @@ export function migrateLegacy(legacy: Record<string, string>): { migrated: numbe
     cache[serial] = password;
     count += 1;
   }
-  if (count > 0 && enabled) writeFile();
+  if (count > 0) writeFile();
   return { migrated: count, skipped: false };
 }

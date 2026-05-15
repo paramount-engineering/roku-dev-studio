@@ -660,9 +660,12 @@ app.whenReady().then(() => {
       }
     },
     applyRememberPasswordsInKeychain: (next: boolean) => {
-      // Flipping the toggle off doesn't delete the on-disk file — only
-      // "Clear Cache and Reload" / the explicit clearAll IPC does that. We
-      // just stop persisting new writes and avoid `safeStorage.*` calls.
+      // Flipping the toggle just changes the on-disk encoding (encrypted via
+      // `safeStorage` when on, JSON-encoded plaintext when off — see
+      // `main/secret-store.ts`). The file is re-written in the new mode so
+      // the next cold launch reads it back correctly. "Clear Cache and
+      // Reload" / the explicit clearAll IPC is the only thing that actually
+      // deletes remembered entries.
       secretStore.setEnabled(next);
     },
     notifyRenderer: (channel: string, data: unknown) => {

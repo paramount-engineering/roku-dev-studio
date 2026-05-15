@@ -812,8 +812,8 @@ function settingsHtml(): string {
               </div>
               <div class="settings-row-toggle">
                 <div class="settings-row-text">
-                  <strong>Persist Save Passwords in System Keychain</strong>
-                  <span class="settings-row-desc">Stores each device's "Remember password" entry in the OS keychain so it survives quit/relaunch. Your OS may prompt the first time. When Off, remembered passwords stay in memory and are cleared on quit.</span>
+                  <strong>Encrypt Saved Passwords with System Keychain</strong>
+                  <span class="settings-row-desc">When On, each device's "Remember password" entry is encrypted via the OS keychain — your OS may prompt the first time. When Off, remembered passwords still persist across quit/relaunch but are stored unencrypted on disk.</span>
                 </div>
                 <label class="settings-toggle-wrap" for="optRememberPasswordsInKeychain">
                   <input type="checkbox" id="optRememberPasswordsInKeychain" class="settings-toggle-input" role="switch" aria-label="Persist saved passwords in system keychain" aria-checked="false" />
