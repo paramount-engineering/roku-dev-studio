@@ -3,7 +3,12 @@ name: Build and Release
 on:
   push:
     tags:
-      - 'v*'  # Triggers on version tags like v1.0.0, v2.1.3, etc.
+      # Both prefixed (v1.2.3) and un-prefixed (1.2.3) semver tags trigger a release.
+      # Pre-release suffixes (-rc.1, -beta.2, etc.) are accepted on either form.
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+      - 'v[0-9]+.[0-9]+.[0-9]+-*'
+      - '[0-9]+.[0-9]+.[0-9]+'
+      - '[0-9]+.[0-9]+.[0-9]+-*'
   workflow_dispatch:  # Allows manual trigger from GitHub UI
     inputs:
       version:
@@ -155,12 +160,17 @@ jobs:
         id: get_version
         run: |
           if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
-            echo "VERSION=${{ github.event.inputs.version }}" >> "$GITHUB_OUTPUT"
-            echo "TAG_NAME=v${{ github.event.inputs.version }}" >> "$GITHUB_OUTPUT"
+            VERSION="${{ github.event.inputs.version }}"
+            # Manual dispatch always materializes as a v-prefixed tag on the release.
+            TAG_NAME="v${VERSION#v}"
           else
-            echo "VERSION=${GITHUB_REF#refs/tags/v}" >> "$GITHUB_OUTPUT"
-            echo "TAG_NAME=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
+            TAG_NAME="${GITHUB_REF#refs/tags/}"
+            # Strip an optional leading 'v' so VERSION is always bare semver
+            # (used in artifact filenames in the release body).
+            VERSION="${TAG_NAME#v}"
           fi
+          echo "VERSION=$VERSION"   >> "$GITHUB_OUTPUT"
+          echo "TAG_NAME=$TAG_NAME" >> "$GITHUB_OUTPUT"
 
       - name: Create Release
         uses: softprops/action-gh-release@v2

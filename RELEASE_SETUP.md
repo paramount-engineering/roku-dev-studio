@@ -73,26 +73,32 @@ Create `entitlements.mac.plist` in the root folder (if not exists):
 
 ### Method 1: Using Git Tags (Recommended)
 
+The release workflow accepts **either** an un-prefixed semver tag (`1.1.0`) **or** a v-prefixed one (`v1.1.0`). Pre-release suffixes (e.g. `1.1.0-rc.1`, `v1.1.0-beta.2`) are also accepted. Pick one convention per repo and stick with it; this repo uses un-prefixed (`1.0.0`, `1.1.0`, …).
+
 ```bash
-# 1. Update version in package.json
-# Edit package.json and change "version": "1.0.0" to your new version
+# 1. Update the desktop app's version
+# Edit apps/roku-dev-studio/package.json: "version": "1.0.0" -> "1.1.0"
+# (electron-builder reads this file; it determines the artifact filenames.)
 
 # 2. Commit the version change
-git add package.json
-git commit -m "Bump version to 1.1.0"
+git add apps/roku-dev-studio/package.json
+git commit -m "App | 1.0.0 ---> 1.1.0"
 
-# 3. Create a version tag
-git tag v1.1.0
+# 3. Create a version tag (un-prefixed convention used by this repo)
+git tag 1.1.0
+# Or, if you prefer the v-prefixed form:
+# git tag v1.1.0
 
 # 4. Push the commit and tag
 git push origin main
-git push origin v1.1.0
+git push origin 1.1.0
 ```
 
 The GitHub Action will automatically:
-1. Build the macOS app (DMG + ZIP for both Intel and Apple Silicon)
+1. Build the macOS app (DMG for both Intel and Apple Silicon)
 2. Build the Windows app (Installer + Portable)
-3. Create a GitHub Release with all files attached
+3. Build the Linux app (`.deb` and `.AppImage` for x64 and arm64)
+4. Create a GitHub Release with all files attached, named `Roku Dev Studio v1.1.0` and pointing at whichever tag you pushed.
 
 ### Method 2: Manual Trigger
 
@@ -102,6 +108,8 @@ The GitHub Action will automatically:
 4. Click **Run workflow**
 5. Enter the version number (e.g., `1.1.0`)
 6. Click **Run workflow**
+
+Manual dispatch always creates a `v`-prefixed tag on the release (e.g. `v1.1.0`), regardless of any existing un-prefixed tag. If you want the release attached to your existing un-prefixed tag, use Method 1 instead.
 
 ## Workflow Files
 
@@ -192,6 +200,6 @@ For a professional release without security warnings:
 - [ ] Create `assets/icon.ico` (Windows icon)
 - [ ] Create `entitlements.mac.plist`
 - [ ] Push to GitHub
-- [ ] Create and push a version tag (e.g., `git tag v1.0.0 && git push origin v1.0.0`)
+- [ ] Create and push a version tag (e.g., `git tag 1.0.0 && git push origin 1.0.0`, or the v-prefixed `v1.0.0` form — both are accepted)
 - [ ] Check Actions tab for build progress
 - [ ] Find release in Releases tab when complete
