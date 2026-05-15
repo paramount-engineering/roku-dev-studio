@@ -14,7 +14,7 @@ The copy under `apps/roku-dev-studio/lib/` is **generated** (gitignored). It is 
 
 - **`npm install` / `npm ci`** — `prepare` in `apps/roku-dev-studio` runs `scripts/sync-path-safe.ts` (via **`tsx`**).
 - **`npm run start`** (repo root) — runs sync before launching Electron.
-- **Packaging** — root `build*` scripts and `prebuild` in the app run sync before `cleanup-old-builds.ts` (**`tsx`**) / `electron-builder`.
+- **Packaging** — `build:bundle` in the app (chained into `build:mac`/`win`/`linux`) runs sync before `cleanup-old-builds.ts` (**`tsx`**) / `electron-builder`.
 
 Edit **`lib/path-safe.ts`** only; do not hand-edit **`lib/path-safe.js`** or the app `lib/` copy (both generated).
 

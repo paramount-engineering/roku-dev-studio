@@ -10,7 +10,7 @@
   ],
   "scripts": {
     "build": "node build.mjs",
-    "prepare": "node -e \"require('fs').existsSync('roku-remote-server.js') || require('child_process').execSync('node build.mjs', { stdio: 'inherit' })\"",
+    "prepare": "node -e \"if (process.env.CI) process.exit(0); require('fs').existsSync('roku-remote-server.js') || require('child_process').execSync('node build.mjs', { stdio: 'inherit' })\"",
     "start": "node roku-remote-server.js",
     "start:port": "node roku-remote-server.js 4951",
     "typecheck": "tsc --noEmit"

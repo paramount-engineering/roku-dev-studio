@@ -11,19 +11,16 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
-# Why every job uses `npm ci --ignore-scripts` + `npm rebuild` + an explicit
-# topological workspace-build step:
+# Determinism note for CI:
 #
-# Several workspace packages (roku-dev-studio-api, -mcp, -remote-server, and
-# the desktop app) have `prepare` scripts that build dist/ via esbuild. The
-# desktop app's prepare bundles preload.ts, which require()s files from
-# packages/roku-dev-studio-api/dist/lib/*.js. npm does NOT guarantee
-# topological ordering of workspace `prepare` during `npm ci`, so on a fresh
-# checkout the app's prepare can race ahead of the api's prepare and fail
-# with "Could not resolve '../../packages/roku-dev-studio-api/dist/lib/...'".
-# Skipping lifecycle scripts on install, restoring native postinstalls via
-# `npm rebuild`, and running workspace builds explicitly in dep order makes
-# the pipeline deterministic.
+# Every workspace `prepare` script in this monorepo no-ops when CI=true
+# (GitHub Actions sets this automatically). Without the guard, cross-workspace
+# `prepare` scripts race during `npm ci` because npm doesn't topologically
+# order them, and the desktop app's preload bundling depends on
+# roku-dev-studio-api/dist/lib/*.js. Each job below installs deps with
+# `npm ci`, then explicitly builds the workspace packages it needs in
+# dependency order. (`--ignore-scripts` does NOT help here: in npm 10+ it
+# does not skip workspace `prepare` — see npm/cli#5856.)
 
 jobs:
   typecheck:
@@ -35,9 +32,8 @@ jobs:
         with:
           node-version: '22'
           cache: 'npm'
-      - run: npm ci --ignore-scripts
-      - run: npm rebuild
-      - name: Build workspace packages (topological)
+      - run: npm ci
+      - name: Build workspace packages (topological order)
         run: |
           npm run build -w roku-dev-studio-api
           npm run build -w roku-dev-studio-mcp
@@ -53,8 +49,7 @@ jobs:
         with:
           node-version: '22'
           cache: 'npm'
-      - run: npm ci --ignore-scripts
-      - run: npm rebuild
+      - run: npm ci
       - name: Build API package
         run: npm run build -w roku-dev-studio-api
       - run: npm run ci:api
@@ -68,9 +63,8 @@ jobs:
         with:
           node-version: '22'
           cache: 'npm'
-      - run: npm ci --ignore-scripts
-      - run: npm rebuild
-      - name: Build workspace packages (topological)
+      - run: npm ci
+      - name: Build workspace packages (topological order)
         run: |
           npm run build -w roku-dev-studio-api
           npm run build -w roku-dev-studio-remote-server
@@ -85,9 +79,8 @@ jobs:
         with:
           node-version: '22'
           cache: 'npm'
-      - run: npm ci --ignore-scripts
-      - run: npm rebuild
-      - name: Build workspace packages (topological)
+      - run: npm ci
+      - name: Build workspace packages (topological order)
         run: |
           npm run build -w roku-dev-studio-api
           npm run build -w roku-dev-studio-mcp

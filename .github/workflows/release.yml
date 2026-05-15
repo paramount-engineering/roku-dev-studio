@@ -26,19 +26,15 @@ jobs:
   # ============================================================
   # Build all three platforms via a matrix.
   #
-  # Why --ignore-scripts on `npm ci`:
-  # Several workspace packages (roku-dev-studio-api, -mcp, -remote-server,
-  # and the app itself) have `prepare` scripts that build dist/ via esbuild.
-  # `apps/roku-dev-studio`'s prepare bundles `preload.ts` which require()s
-  # files from `packages/roku-dev-studio-api/dist/lib/*.js`. npm does NOT
-  # guarantee topological ordering for workspace `prepare` scripts during
-  # `npm ci`, so on a fresh CI checkout the app's prepare can race ahead of
-  # the api's prepare and fail with:
-  #   "Could not resolve '../../packages/roku-dev-studio-api/dist/lib/...'"
-  # We sidestep the race entirely: install without lifecycle scripts,
-  # `npm rebuild` to restore native postinstalls (electron, sharp, esbuild
-  # platform binaries), then explicitly build workspace packages in
-  # dependency order before invoking electron-builder.
+  # Determinism: every workspace `prepare` script in this monorepo no-ops
+  # when `CI=true` (set automatically by GitHub Actions). Without the guard,
+  # cross-workspace `prepare` scripts race during `npm ci` because npm does
+  # not topologically order them, and the desktop app's preload bundling
+  # consumes `roku-dev-studio-api/dist/lib/*.js`. We instead build the
+  # workspace packages explicitly, in dependency order, in a dedicated step
+  # below. (`--ignore-scripts` is NOT used: in npm 10+ it does not skip
+  # workspace `prepare` anyway — see npm/cli#5856 — and we still need
+  # native postinstalls (electron, sharp, esbuild) to run.)
   # ============================================================
   build:
     name: Build (${{ matrix.label }})
@@ -99,32 +95,29 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-electron-
 
-      - name: Install dependencies (no lifecycle scripts)
-        run: npm ci --ignore-scripts
+      - name: Install dependencies
+        # CI=true (auto-set by GitHub Actions) makes every workspace
+        # `prepare` script no-op; `npm ci` still runs native postinstalls
+        # (electron, sharp, esbuild platform binaries).
+        run: npm ci
 
-      - name: Rebuild native modules
-        # Re-runs install/postinstall lifecycle for native deps (electron,
-        # sharp, esbuild platform binaries). Does NOT run `prepare`, so the
-        # workspace prepare-ordering race we avoided above stays avoided.
-        run: npm rebuild
-
-      - name: Build workspace packages (topological)
-        # api -> mcp/remote-server (both depend on api) -> app preload bundling
-        # consumes api/dist/lib/*.js and so requires api to be built first.
+      - name: Build workspace packages (topological order)
+        # api -> mcp/remote-server (both depend on api). The desktop app's
+        # `build:bundle` (chained into build:mac/win/linux) requires
+        # roku-dev-studio-api/dist/lib/*.js, so api must be built first.
         run: |
           npm run build -w roku-dev-studio-api
           npm run build -w roku-dev-studio-mcp
           npm run build -w roku-dev-studio-remote-server
 
       - name: Build desktop app
-        # NOTE: do NOT pass `-- --publish never`. Root's "build:mac" calls
-        # `npm --prefix apps/roku-dev-studio run build:mac`, and the inner
-        # npm strips the `--publish` flag (it doesn't recognize it as a
-        # forwarded arg without `--`), leaving a stray `never` that
-        # electron-builder reads as a target name → "Unknown target: never".
-        # Publishing is handled by the `release` job below via
-        # softprops/action-gh-release, not by electron-builder, so no
-        # publish flag is needed.
+        # `build:mac|win|linux` chains build:bundle (sync-path-safe +
+        # transpile main/preload/renderer) -> clean:dist -> electron-builder.
+        # Do NOT pass `-- --publish never`: root scripts re-invoke npm via
+        # `npm --prefix apps/roku-dev-studio run ...`, and the inner npm
+        # strips the `--publish` flag, leaving a stray `never` that
+        # electron-builder reads as a target name. Publishing is handled
+        # by the `release` job via softprops/action-gh-release.
         run: npm run ${{ matrix.build-cmd }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

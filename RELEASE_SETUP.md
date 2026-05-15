@@ -119,26 +119,37 @@ platforms build via a single matrix job; artifacts are aggregated into one
 GitHub Release by a follow-on `release` job.
 
 Notes for maintainers:
-- Build steps install with `npm ci --ignore-scripts`, then `npm rebuild`, then
-  explicitly build workspace packages in dependency order
-  (`api → mcp → remote-server → app`). This is intentional: npm does not
-  guarantee topological ordering of workspace `prepare` scripts during
-  `npm ci`, and the desktop app's preload bundle requires
-  `roku-dev-studio-api/dist/` to already exist.
-- The electron + electron-builder download caches are persisted across runs
-  (~150 MB per platform), keyed on the lockfile and `apps/roku-dev-studio/package.json`.
-- Do **not** add `-- --publish never` to the build commands. Root-level
-  scripts re-invoke npm via `npm --prefix apps/roku-dev-studio run build:*`,
-  and the inner npm strips the `--publish` flag, leaving a stray `never`
-  that electron-builder treats as a target name. Publishing is handled by
-  `softprops/action-gh-release` in the `release` job — electron-builder
-  itself never publishes.
-- All `uses:` references are pinned to full commit SHAs (org policy).
+- **Workspace `prepare` is CI-guarded.** Each `prepare` in this monorepo
+  short-circuits when `CI=true` (set automatically by GitHub Actions):
+  ```js
+  if (process.env.CI) process.exit(0);
+  ```
+  Without this guard, cross-workspace `prepare` scripts race during `npm ci`
+  because npm does not topologically order them, and the desktop app's
+  preload bundling consumes `roku-dev-studio-api/dist/lib/*.js`. We instead
+  build workspace packages explicitly in dependency order, in a dedicated
+  step after `npm ci`. (`--ignore-scripts` does **not** solve this in
+  npm 10+ — see [npm/cli#5856](https://github.com/npm/cli/issues/5856) — and
+  also blocks native postinstalls (electron, sharp, esbuild) which we need.)
+- **Each `build:<platform>` is self-contained.** `build:mac`, `build:win`,
+  `build:linux` chain `build:bundle` (sync-path-safe + transpile main /
+  preload / renderer) → `clean:dist` → `electron-builder`. They no longer
+  rely on `prepare` having run. Local dev still benefits from `prepare`
+  (it runs everywhere except CI).
+- **Caching.** Electron + electron-builder download caches (~150 MB per
+  platform) are persisted across runs, keyed on `package-lock.json` and
+  `apps/roku-dev-studio/package.json` (where the electron version lives).
+- **Do not add `-- --publish never`.** Root-level scripts re-invoke npm via
+  `npm --prefix apps/roku-dev-studio run build:*`, and the inner npm strips
+  the `--publish` flag, leaving a stray `never` that electron-builder reads
+  as a target name. Publishing is handled by `softprops/action-gh-release`
+  in the `release` job — electron-builder itself never publishes here.
+- **All `uses:` references are pinned to full commit SHAs (org policy).**
 
 ### `.github/workflows/ci.yml`
 Per-PR / per-push smoke checks (typecheck + per-package syntax). Uses the
-same `npm ci --ignore-scripts` + `npm rebuild` + explicit workspace-build
-pattern as the release workflow, so contributors can't get bitten by the
+same CI-guarded `prepare` + explicit topological workspace-build pattern as
+the release workflow, so contributors can't get bitten by the
 prepare-ordering race.
 
 ## Release Outputs

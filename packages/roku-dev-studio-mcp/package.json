@@ -10,7 +10,7 @@
   "scripts": {
     "build": "node build.mjs",
     "typecheck": "tsc --noEmit",
-    "prepare": "node -e \"require('fs').existsSync('dist/index.cjs') || require('child_process').execSync('npm run build', { stdio: 'inherit' })\""
+    "prepare": "node -e \"if (process.env.CI) process.exit(0); require('fs').existsSync('dist/index.cjs') || require('child_process').execSync('npm run build', { stdio: 'inherit' })\""
   },
   "license": "MIT",
   "dependencies": {

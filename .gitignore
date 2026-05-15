@@ -8,7 +8,7 @@ dist/
 lib/path-safe.js
 apps/roku-dev-studio/lib/path-safe.js
 
-# esbuild output (see apps/roku-dev-studio/scripts/bundle-electron.js); rebuilt by prepare / start / prebuild
+# esbuild output (see apps/roku-dev-studio/scripts/bundle-electron.js); rebuilt by prepare / start / build:bundle
 apps/roku-dev-studio/preload-about.js
 apps/roku-dev-studio/preload.bundled.cjs
 apps/roku-dev-studio/main.bundled.cjs

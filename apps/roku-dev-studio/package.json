@@ -18,14 +18,14 @@
     "dev:solid": "tsx scripts/sync-path-safe.ts && tsx scripts/build/index.ts && concurrently -k \"npm run renderer:solid:dev\" \"wait-on tcp:127.0.0.1:5173 && cross-env RDS_SOLID_RENDERER=1 tsx scripts/run-electron.ts\"",
     "build:desktop": "tsx scripts/build/index.ts",
     "build:preload": "tsx scripts/build/index.ts",
-    "prepare": "tsx scripts/sync-path-safe.ts && tsx scripts/build/index.ts",
-    "prebuild": "tsx scripts/sync-path-safe.ts && tsx scripts/cleanup-old-builds.ts && tsx scripts/build/index.ts",
+    "build:bundle": "tsx scripts/sync-path-safe.ts && tsx scripts/build/index.ts",
+    "prepare": "node -e \"if (process.env.CI) process.exit(0); require('child_process').execSync('npm run build:bundle', { stdio: 'inherit' })\"",
     "clean:dist": "tsx scripts/cleanup-old-builds.ts",
-    "build": "tsx scripts/cleanup-old-builds.ts && electron-builder",
-    "build:mac": "tsx scripts/cleanup-old-builds.ts && electron-builder --mac",
-    "build:win": "tsx scripts/cleanup-old-builds.ts && electron-builder --win",
-    "build:linux": "tsx scripts/cleanup-old-builds.ts && electron-builder --linux",
-    "build:all": "npm run clean:dist && concurrently --names mac,linux,win --prefix-colors cyan,green,magenta \"electron-builder --mac\" \"electron-builder --linux\" \"electron-builder --win\""
+    "build": "npm run build:bundle && npm run clean:dist && electron-builder",
+    "build:mac": "npm run build:bundle && npm run clean:dist && electron-builder --mac",
+    "build:win": "npm run build:bundle && npm run clean:dist && electron-builder --win",
+    "build:linux": "npm run build:bundle && npm run clean:dist && electron-builder --linux",
+    "build:all": "npm run build:bundle && npm run clean:dist && concurrently --names mac,linux,win --prefix-colors cyan,green,magenta \"electron-builder --mac\" \"electron-builder --linux\" \"electron-builder --win\""
   },
   "author": {
     "name": "Hareendra Donapati",

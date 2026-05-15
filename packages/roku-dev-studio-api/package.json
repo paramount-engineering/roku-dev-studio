@@ -25,7 +25,7 @@
   "scripts": {
     "build": "node build.mjs && tsc --emitDeclarationOnly",
     "typecheck": "tsc --noEmit",
-    "prepare": "node -e \"require('fs').existsSync('dist/index.js') || require('child_process').execSync('npm run build', { stdio: 'inherit' })\"",
+    "prepare": "node -e \"if (process.env.CI) process.exit(0); require('fs').existsSync('dist/index.js') || require('child_process').execSync('npm run build', { stdio: 'inherit' })\"",
     "example:direct": "node dist/examples/direct-sample.js",
     "example:relay": "node dist/examples/relay-sample.js",
     "rds": "node dist/cli.js",
