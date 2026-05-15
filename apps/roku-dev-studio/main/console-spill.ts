@@ -48,16 +48,19 @@ const SPILL_FILE_PREFIX = 'console-';
 
 type SpillSession = {
   filePath: string;
+  /** Bytes written so far. Used internally to enforce `SPILL_FILE_MAX_BYTES`;
+   *  not returned to the renderer (the dropped-count + entryCount are enough
+   *  for the line counter and cap-hit detection). */
   byteSize: number;
-  /** Total entries written across the lifetime of the file. Renderer reads
-   *  this back on `start` (always 0 for a new session) and on `read` (so it
+  /** Total entries written across the lifetime of the file. Mirrored to the
+   *  renderer on every `Append` (for the live counter) and on `Read` (so it
    *  can size its prepend correctly). */
   entryCount: number;
 };
 
-/** spillId → in-memory bookkeeping. The byte/entry counts are mirrored on
- *  the renderer side for the live counter, but the source of truth lives
- *  here so a renderer crash + restart re-syncs from disk on next start. */
+/** spillId → in-memory bookkeeping. The entry count is mirrored to the
+ *  renderer for the live counter, but the source of truth lives here so a
+ *  renderer crash + restart re-syncs from disk on next start. */
 const sessions = new Map<string, SpillSession>();
 
 let consoleSpillIpcRegistered = false;
@@ -167,7 +170,6 @@ export function registerConsoleSpillIpc(ipcMain: IpcMain, app: App): void {
       if (!Array.isArray(payload.entries) || payload.entries.length === 0) {
         return {
           success: true as const,
-          byteSize: session.byteSize,
           entryCount: session.entryCount,
           dropped: 0
         };
@@ -192,7 +194,6 @@ export function registerConsoleSpillIpc(ipcMain: IpcMain, app: App): void {
         // `dropped` count and may stop trying to append.
         return {
           success: true as const,
-          byteSize: session.byteSize,
           entryCount: session.entryCount,
           dropped
         };
@@ -212,7 +213,6 @@ export function registerConsoleSpillIpc(ipcMain: IpcMain, app: App): void {
 
       return {
         success: true as const,
-        byteSize: session.byteSize,
         entryCount: session.entryCount,
         dropped
       };
@@ -233,7 +233,6 @@ export function registerConsoleSpillIpc(ipcMain: IpcMain, app: App): void {
       return {
         success: true as const,
         entries: lines,
-        byteSize: session.byteSize,
         entryCount: session.entryCount
       };
     } catch (e) {

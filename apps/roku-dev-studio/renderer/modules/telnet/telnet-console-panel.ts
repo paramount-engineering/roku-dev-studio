@@ -217,8 +217,8 @@ export function setupTelnet(
   });
 
   /**
-   * Cap scrollback. Live-only; the Log Viewer is bounded by the file-size
-   * cap upstream.
+   * Cap scrollback in memory. Live-only; the Log Viewer is bounded by the
+   * file-size cap upstream.
    *
    * Sized for a long debug session (≈ a few hours of moderate streaming)
    * without making the renderer feel sluggish:
@@ -236,10 +236,15 @@ export function setupTelnet(
    * virtualization that ceiling is no longer the binding constraint, so
    * this is a 5× headroom bump for users with long telnet sessions.
    *
-   * Older lines past the cap are silently dropped on next batch — same
-   * "scrollback" model as Chrome DevTools, iTerm, the VSCode integrated
-   * terminal. Use the Save button before disconnecting if a long history
-   * matters; or wait for the spill-to-disk option (TODO) if it lands.
+   * Older lines past the cap are **not** lost: `ensureTelnetScrollbackRoom`
+   * spills the trimmed segment to an NDJSON file in OS temp (see
+   * `main/console-spill.ts`), and `maybeAutoLoadSpill` / `loadAllEntriesIncludingSpill`
+   * prepend that history back into the visible model on scroll-to-top and
+   * on Copy/Save/Cmd+A respectively. The live counter renders
+   * `<buffered> of <total> lines` while a spill is active. Hard ceiling at
+   * 100 MB per session — past that, `spillCapHit` latches and the surface
+   * degrades to the classic "scrollback" model (Chrome DevTools, iTerm,
+   * VSCode integrated terminal) for any further trims.
    */
   const TELNET_MAX_SCROLLBACK_LINES = 50000;
   let isScrolling = false;
@@ -865,22 +870,30 @@ export function setupTelnet(
   }
 
   /**
+   * Settle pending IPC batches and pull in any disk-spilled history so the
+   * caller sees the complete "everything this device tab has logged"
+   * sequence. Both `getVisibleLogLines` and `getVisibleLogsBody` are built
+   * on this — keeping the flush+load step in one place means a future
+   * change (e.g. an extra await on a metadata fetch) lands once instead of
+   * drifting between Copy and Save body paths.
+   */
+  async function loadAllEntriesForExport(): Promise<TelnetLogEntry[]> {
+    flushTelnetPendingLinesSync();
+    return loadAllEntriesIncludingSpill();
+  }
+
+  /**
    * Source of truth for "what the user sees and would expect to take with
-   * them" — drives Copy / Save / Cmd+A. Flushes any pending append batch so
-   * a click right after a burst of output isn't off by a few lines, pulls
-   * in any spilled history from disk, then delegates to
-   * `selectVisibleLogEntries` (shared with the Log Viewer) to apply the
-   * *filter*-mode query.
+   * them" — drives Copy / Save / Cmd+A. Delegates to `selectVisibleLogEntries`
+   * (shared with the Log Viewer) to apply the *filter*-mode query.
    */
   async function getVisibleLogLines(): Promise<typeof logLines> {
-    flushTelnetPendingLinesSync();
-    const allEntries = await loadAllEntriesIncludingSpill();
+    const allEntries = await loadAllEntriesForExport();
     return selectVisibleLogEntries(allEntries, findBarHandle) as typeof logLines;
   }
 
   async function getVisibleLogsBody(): Promise<string> {
-    flushTelnetPendingLinesSync();
-    const allEntries = await loadAllEntriesIncludingSpill();
+    const allEntries = await loadAllEntriesForExport();
     return buildVisibleLogText(allEntries, findBarHandle);
   }
 
