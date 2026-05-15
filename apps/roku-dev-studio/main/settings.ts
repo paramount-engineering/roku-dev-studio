@@ -84,7 +84,12 @@ const RENDERER_WRITABLE_KEYS = new Set<string>([
   'action-script-default-save-folder',
   'device-performance-view-quad-v1',
   'remote-locations',
-  'autoConnectRememberedDevices'
+  'autoConnectRememberedDevices',
+  // Floating Remote: renderer-owned. `enabled` is flipped by the title-bar
+  // toggle button; `position` is persisted on drag-end. Both are read back by
+  // `loadPersistedAppSettings()` so they survive across sessions.
+  'floating-remote.enabled',
+  'floating-remote.position'
 ]);
 
 /**
