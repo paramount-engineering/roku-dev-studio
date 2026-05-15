@@ -9418,6 +9418,189 @@
     body.privacy-mode .privacy-badge {
       display: flex;
     }
+
+    /* ============================================
+       Floating Remote
+       ============================================ */
+
+    /*
+     * Toggle button lives in the title-bar trailing area (left of the zoom
+     * indicator and the Win/Linux window controls). It is the single global
+     * source of truth for the Floating Remote — clicking it flips the
+     * `floating-remote.enabled` setting for every connected device, including
+     * devices that connect *after* the toggle is enabled (the manager always
+     * binds to the currently active panel via `getPanelApi`).
+     *
+     * Sizes use `--titlebar-content-scale` so the button stays the same
+     * physical size as `.titlebar-help-btn` / `.titlebar-scan-btn` at every
+     * zoom level, and flex reflow inside `.titlebar-trailing` automatically
+     * slides it leftward as the zoom indicator (and Win/Linux controls)
+     * appear on the right.
+     */
+    .floating-remote-toggle-btn {
+      -webkit-app-region: no-drag;
+      display: inline-flex;
+      align-items: center;
+      gap: calc(5px * var(--titlebar-content-scale));
+      height: calc(28px * var(--titlebar-content-scale));
+      padding: 0 calc(10px * var(--titlebar-content-scale));
+      border: 1px solid var(--border);
+      border-radius: calc(6px * var(--titlebar-content-scale));
+      background: transparent;
+      color: var(--text-secondary);
+      font-size: calc(12px * var(--titlebar-content-scale));
+      font-weight: 500;
+      cursor: pointer;
+      transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+    }
+    .floating-remote-toggle-btn:hover {
+      color: var(--text-primary);
+      border-color: var(--accent-purple);
+      background: rgba(124, 58, 237, 0.08);
+    }
+    /*
+     * Visual ON state — clearly distinct from the hover-only state so the
+     * user can tell at a glance whether the floater is enabled.
+     */
+    .floating-remote-toggle-btn--on {
+      color: var(--accent-purple);
+      border-color: var(--accent-purple);
+      background: rgba(124, 58, 237, 0.18);
+      box-shadow: inset 0 0 0 1px rgba(124, 58, 237, 0.35);
+    }
+    .floating-remote-toggle-btn--on:hover {
+      background: rgba(124, 58, 237, 0.26);
+    }
+    /*
+     * `hidden` is set via the `hidden` HTML attribute by app.ts whenever no
+     * device is connected (`state.connectedDevices.size === 0`), so the button
+     * isn't a dead control on the Home view.
+     */
+    .floating-remote-toggle-btn[hidden] {
+      display: none !important;
+    }
+
+    /* Body-level mount root. Always present; the shell inside it controls
+       its own visibility via the `--visible` modifier so the manager doesn't
+       need to manage display state on the root itself. */
+    #floating-remote-root {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 950;
+    }
+
+    .floating-remote-shell {
+      /*
+       * Critical: the frameless title bar sets `-webkit-app-region: drag` on
+       * `.titlebar`, and the floater is body-level so it visually overlaps
+       * that drag region whenever its top edge reaches the title bar area.
+       * Without an explicit `no-drag` here, the OS captures the mousedown
+       * and drags the WINDOW instead of the floater. The wildcard rule
+       * below propagates `no-drag` to the cloned `.quick-remote-card` and
+       * its descendants so the entire floater is fully interactive.
+       */
+      -webkit-app-region: no-drag;
+      position: absolute;
+      /*
+       * Default position is bottom-right via CSS anchoring so the first
+       * render needs no measurement — `display: none` returns zeroed rects
+       * and made the JS-computed default land unpredictably. JS only
+       * switches to explicit `left`/`top` after the user has dragged the
+       * floater or a persisted position is restored.
+       */
+      right: 24px;
+      bottom: 24px;
+      width: 220px;
+      pointer-events: auto;
+      background: var(--surface, #1a1d23);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      box-shadow: 0 14px 36px rgba(0, 0, 0, 0.5), 0 2px 6px rgba(0, 0, 0, 0.4);
+      display: none;
+      flex-direction: column;
+      overflow: hidden;
+      user-select: none;
+    }
+    .floating-remote-shell,
+    .floating-remote-shell * {
+      -webkit-app-region: no-drag;
+    }
+    .floating-remote-shell--visible {
+      display: flex;
+    }
+
+    .floating-remote-shell-handle {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 6px 10px;
+      background: rgba(124, 58, 237, 0.15);
+      border-bottom: 1px solid var(--border);
+      cursor: grab;
+    }
+    body.floating-remote-dragging .floating-remote-shell-handle {
+      cursor: grabbing;
+    }
+    body.floating-remote-dragging,
+    body.floating-remote-dragging * {
+      /* Stop accidental text selection while dragging. */
+      user-select: none !important;
+      cursor: grabbing !important;
+    }
+
+    .floating-remote-shell-title {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      letter-spacing: 0.02em;
+    }
+
+    .floating-remote-shell-close {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 22px;
+      height: 22px;
+      padding: 0;
+      border-radius: 6px;
+      border: 1px solid transparent;
+      background: transparent;
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: background-color 0.15s ease, color 0.15s ease;
+    }
+    .floating-remote-shell-close:hover {
+      color: var(--text-primary);
+      background: rgba(255, 255, 255, 0.08);
+    }
+
+    .floating-remote-shell-body {
+      padding: 0;
+    }
+    /* The cloned `.quick-remote-card` keeps its existing styles; just trim its
+       outer card chrome so it sits flush inside our shell. */
+    .floating-remote-shell .quick-remote-card {
+      box-shadow: none;
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+    }
+    .floating-remote-shell .quick-remote-card .card-body {
+      padding: 10px !important;
+    }
+
+    /* Mirror the existing ECP-Disabled treatment so the floater dims +
+       disables interaction when the active device's ECP is off. */
+    .floating-remote-shell[data-ecp-mode="Disabled"] .quick-remote-card,
+    .floating-remote-shell[data-ecp-mode="Disabled"] .devapp-text-section {
+      pointer-events: none;
+      opacity: 0.65;
+    }
   </style>
 </head>
 <body>
@@ -9484,6 +9667,18 @@
       <span class="titlebar-text">Roku Dev Studio</span>
     </div>
     <div class="titlebar-trailing">
+      <button
+        type="button"
+        class="floating-remote-toggle-btn titlebar-floating-remote-btn"
+        id="titlebarFloatingRemoteBtn"
+        title="Toggle a floating remote that follows you outside Remote and Dev App tabs"
+        aria-label="Toggle Floating Remote"
+        aria-pressed="false"
+        hidden
+      >
+        <span class="icon icon-sm" aria-hidden="true"><svg><use href="#icon-gamepad"/></svg></span>
+        <span class="titlebar-floating-remote-btn-label">Floating Remote</span>
+      </button>
       <div class="titlebar-zoom" id="titlebarZoom" hidden>
         <button
           type="button"
@@ -11290,6 +11485,8 @@
     <span class="icon icon-sm"><svg><use href="#icon-lock"/></svg></span>
     <span>Privacy Mode</span>
   </div>
+
+  <div id="floating-remote-root" aria-live="polite"></div>
 
   <script type="module" src="dist/app.js"></script>
 </body>

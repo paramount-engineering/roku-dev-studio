@@ -40,6 +40,12 @@ import { registerKeyboardRemoteAutoScreenshotRemote, scheduleKeyboardRemoteAutoS
 import { registerPanelApi, getPanelApi } from './modules/device-api/panel-api-registry.js';
 import { onAppSettingsChanged } from './modules/utils/app-settings-change-bus.js';
 import {
+  mountFloatingRemote,
+  refreshFloatingRemote,
+  isFloatingRemoteVisible,
+  syncToggleButtonsState as syncFloatingRemoteToggleButtons
+} from './components/floating-remote/floating-remote.js';
+import {
   pushMcpBridgeState,
   setFocusedDevice,
   registerMcpConnectResolver,
@@ -2195,12 +2201,32 @@ function activateTab(tabId) {
     }
   }
   updateTabBarVisibility();
+  refreshFloatingRemote();
 }
 
 function updateTabBarVisibility() {
   const onHome = !state.activeTabId;
   const noDevices = state.connectedDevices.size === 0;
   elements.tabBar.classList.toggle('hidden', onHome && noDevices);
+  updateTitlebarFloatingRemoteVisibility();
+}
+
+/**
+ * The title-bar Floating Remote toggle is only meaningful once at least one
+ * device is connected — otherwise there's nothing to drive. Hide it on the
+ * Home view to keep the title bar uncluttered, and re-evaluate the floater
+ * itself (which also force-hides when no device is connected).
+ */
+function updateTitlebarFloatingRemoteVisibility() {
+  const btn = document.getElementById('titlebarFloatingRemoteBtn');
+  if (!(btn instanceof HTMLElement)) return;
+  const hasConnected = state.connectedDevices.size > 0;
+  btn.hidden = !hasConnected;
+  // When the last device disconnects mid-session, ask the manager to
+  // re-evaluate so the floater hides immediately even if the user had it on.
+  if (!hasConnected) {
+    refreshFloatingRemote();
+  }
 }
 
 /**
@@ -2846,6 +2872,9 @@ function setupInnerTabs(panel) {
       
       // Dispatch custom event for tab switch
       panel.dispatchEvent(new CustomEvent('innertabswitch', { detail: { tab: target } }));
+
+      // Show / hide the floating remote based on the new inner tab.
+      refreshFloatingRemote();
     });
   });
 }
@@ -3372,6 +3401,21 @@ function isKeyboardRemoteNavigationContextActive(panel: HTMLElement): boolean {
   return remote instanceof HTMLElement && remote.classList.contains('active');
 }
 
+/**
+ * Whether global remote-key shortcuts should fire for this panel. Extends
+ * `isKeyboardRemoteNavigationContextActive` with the floating-remote case so
+ * arrow keys / Enter / etc. still drive the device from Console / Inspector /
+ * Action Scripts / Query / Apps while the floating remote is visible.
+ *
+ * Kept separate from the Tab→Send-Text gate (which intentionally only fires
+ * on Remote / Dev App, because those are the only tabs whose Send-Text input
+ * is actually focusable in the DOM).
+ */
+function isKeyboardRemoteShortcutContextActive(panel: HTMLElement): boolean {
+  if (isKeyboardRemoteNavigationContextActive(panel)) return true;
+  return isFloatingRemoteVisible();
+}
+
 /** Remote tab Send Text field, scoped to the active inner pane. */
 function queryRemoteSendTextInput(panel: HTMLElement): HTMLInputElement | null {
   const el = panel.querySelector(
@@ -3483,7 +3527,7 @@ document.addEventListener('keydown', async (e) => {
   const panelApi = getPanelApi(activePanel);
   if (!panelApi) return;
 
-  if (!isKeyboardRemoteNavigationContextActive(activePanel)) {
+  if (!isKeyboardRemoteShortcutContextActive(activePanel)) {
     return;
   }
 
@@ -4038,6 +4082,8 @@ async function init() {
   resetPostStartupSidebarSessionState();
 
   setupSidebarTitlebarToggle();
+  mountFloatingRemote();
+  syncFloatingRemoteToggleButtons();
 
   // The shared bus performs `loadPersistedAppSettings()` once and fans out to
   // every subscriber, so the global shell and each device-metrics panel no

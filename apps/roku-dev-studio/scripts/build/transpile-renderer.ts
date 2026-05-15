@@ -125,6 +125,7 @@ export function transpileRenderer(appDir: string): void {
     path.join(rendererRoot, 'components', 'action-scripts'),
     path.join(rendererRoot, 'components', 'inspector'),
     path.join(rendererRoot, 'components', 'dev-app'),
+    path.join(rendererRoot, 'components', 'floating-remote'),
     path.join(rendererRoot, 'components', 'modals'),
     path.join(rendererRoot, 'components', 'log-file-viewer'),
     path.join(rendererRoot, 'components', 'fiddle'),
