@@ -1,6 +1,6 @@
 {
   "name": "roku-dev-studio",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Roku Dev Studio - Control your Roku device over the local network",
   "homepage": "https://github.com/paramount-engineering/roku-dev-studio",
   "main": "main.bundled.cjs",
