@@ -1,64 +1,30 @@
 # Roku Dev Studio Remote Server
 
-npm package name: **`roku-dev-studio-remote-server`**. A lightweight Node.js server that runs on a Mac Mini (or any computer) at a remote location so Roku Dev Studio can control Roku devices over the network.
-
-**From this monorepo:** run `npm install` from the **repository root**, then start with **`npm run remote-server`** (root script) or **`npm run start -w roku-dev-studio-remote-server`**.
-
-**On a remote / standalone machine** (you only copied this package — **no** root `package.json` with `workspaces`): **do not** use `-w roku-dev-studio-remote-server` (that error means npm is not in a workspace root). Instead:
-
-```bash
-cd /path/to/roku-dev-studio-remote-server
-npm install
-npm start
-# or: node roku-remote-server.js
-```
-
-The package lives at **`packages/roku-dev-studio-remote-server/`** in the repo (folder name); npm name is **`roku-dev-studio-remote-server`**.
-
-## Overview
-
-This server acts as a bridge between the Roku Dev Studio desktop application and Roku devices on a remote network. It provides a REST API that mirrors all Roku ECP (External Control Protocol) functionality.
+A lightweight Node.js server that runs on a computer at a remote location so the **Roku Dev Studio** desktop app can control Roku devices over the network. The server discovers Rokus on its own LAN and exposes an HTTP/WebSocket bridge that mirrors all Roku ECP (External Control Protocol) functionality, plus telnet relay and RALE / App Connector access.
 
 ## Requirements
 
-- Node.js 14.0 or higher
-- Network access to Roku devices on the local network
-- Port 4951 (default) must be accessible from the remote Roku Dev Studio
+- Node.js 18 or higher
+- Network access to Roku devices on the server's local network
+- Port 4951 (default) reachable from wherever the Roku Dev Studio app is running
 
-## Quick Start
+## Install and run
 
-1. Copy **`packages/roku-dev-studio-remote-server/`** plus **`packages/roku-dev-studio-api/`** (siblings under `packages/`) and repo-root **`lib/path-safe.js`** so paths match the monorepo (see **Deploy layout** below). Or use a full repo clone and `npm install` at the repo root.
-2. On the server, **`cd` into `roku-dev-studio-remote-server`** (the folder that contains `package.json` and `roku-remote-server.js`).
-3. **`npm install`** then start — **not** workspace flags:
+**Option A — From npm:**
 
 ```bash
+npm install -g roku-dev-studio-remote-server
+roku-remote-server          # default port 4951
+roku-remote-server 4000     # or pick a port
+```
+
+**Option B — From source (full repo clone):**
+
+```bash
+git clone https://github.com/paramount-engineering/roku-dev-studio.git
+cd roku-dev-studio
 npm install
-npm start
-```
-
-Or run Node directly:
-
-```bash
-node roku-remote-server.js
-```
-
-Or specify a custom port:
-
-```bash
-node roku-remote-server.js 4000
-```
-
-### Deploy layout (minimal copy, no full git repo)
-
-`roku-remote-server.js` loads `../../lib/path-safe.js` and `package.json` depends on `file:../roku-dev-studio-api`. Preserve this shape on the remote host:
-
-```text
-<deploy-root>/
-  lib/
-    path-safe.js
-  packages/
-    roku-dev-studio-remote-server/   ← cd here for npm install && npm start
-    roku-dev-studio-api/
+npm run remote-server       # root script — listens on 4951 by default
 ```
 
 ## Installation as a Service (macOS)
@@ -67,7 +33,15 @@ To run the server automatically on boot:
 
 ### 1. Create a Launch Agent
 
-Create a file at `~/Library/LaunchAgents/com.roku-dev-studio.remote-server.plist` (a starter copy ships in this package as `com.roku-dev-studio.remote-server.plist`; rename the `Label` if you want a different reverse-DNS identifier — it just has to be unique on the box):
+A starter `com.roku-dev-studio.remote-server.plist` ships inside the package. Copy it to your LaunchAgents directory and edit the two paths inside (Node binary and the `roku-remote-server.js` location on this machine):
+
+```bash
+# Adjust the source path to wherever you installed the package
+cp ./node_modules/roku-dev-studio-remote-server/com.roku-dev-studio.remote-server.plist \
+   ~/Library/LaunchAgents/com.roku-dev-studio.remote-server.plist
+```
+
+The bundled plist looks like this — the inline comments call out which paths you need to replace before loading:
 
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
@@ -78,8 +52,10 @@ Create a file at `~/Library/LaunchAgents/com.roku-dev-studio.remote-server.plist
     <string>com.roku-dev-studio.remote-server</string>
     <key>ProgramArguments</key>
     <array>
+        <!-- Path to your Node binary -->
         <string>/usr/local/bin/node</string>
-        <string>/path/to/packages/roku-dev-studio-remote-server/roku-remote-server.js</string>
+        <!-- Path to the installed roku-remote-server.js -->
+        <string>/Users/YOUR_USERNAME/remote-server/roku-remote-server.js</string>
         <string>4951</string>
     </array>
     <key>RunAtLoad</key>
@@ -94,7 +70,7 @@ Create a file at `~/Library/LaunchAgents/com.roku-dev-studio.remote-server.plist
 </plist>
 ```
 
-**Important:** Replace the script path with the actual path to `roku-remote-server.js` on that machine.
+Rename the `Label` if you want a different reverse-DNS identifier — it just has to be unique on the box.
 
 ### 2. Load the Launch Agent
 
@@ -131,7 +107,7 @@ The server includes interactive API documentation powered by Swagger/OpenAPI 3.0
 
 **Access Swagger UI:** `http://localhost:4951/api-docs`
 
-![Swagger UI at /api-docs](../../images/REMOTE_SERVER_SWAGGER.png)
+![Swagger UI at /api-docs](https://raw.githubusercontent.com/paramount-engineering/roku-dev-studio/main/images/REMOTE_SERVER_SWAGGER.png)
 
 The Swagger UI provides:
 - Interactive API explorer (Health, Capabilities, Discovery, Device Info, Remote Control, RALE …)
@@ -168,11 +144,11 @@ All device endpoints use the pattern: `/device/:ip/...`
 | `/device/:ip/launch/:appId` | POST | Launch an app |
 | `/device/:ip/query/*` | GET | Query endpoint (device-info, apps, etc.) |
 | `/device/:ip/post/*` | POST | POST endpoint (sgrendezvous, fwbeacons, etc.) |
-
-**GET `/device/:ip/query/*` — short response cache:** Successful JSON responses are cached per `(device IP, query path)` for **500 ms** (same value as Roku Dev Studio’s minimum *Device performance* sampling interval). Multiple Dev Studio clients polling the same Roku through this relay therefore share one ECP hit per path within that window. Failed responses are not cached.
 | `/device/:ip/input-text` | POST | Send text input |
 | `/device/:ip/deeplink` | POST | Deep link to content |
 | `/device/:ip/icon/:appId` | GET | Get app icon as base64 |
+
+**GET `/device/:ip/query/*` — short response cache:** Successful JSON responses are cached per `(device IP, query path)` for **500 ms** (same value as Roku Dev Studio's minimum *Device performance* sampling interval). Multiple Dev Studio clients polling the same Roku through this relay therefore share one ECP hit per path within that window. Failed responses are not cached.
 
 ### Developer Features
 
@@ -193,58 +169,68 @@ All device endpoints use the pattern: `/device/:ip/...`
 
 ## Example Usage
 
+Replace `<relay-host>` with the address (hostname or IP) of the machine running the relay, and `<roku-ip>` with the device IP as seen on the relay's network.
+
 ### Discover Devices
 
 ```bash
-curl http://mac-mini-ip:4951/devices
+curl http://<relay-host>:4951/devices
 ```
 
 ### Send Key Press
 
 ```bash
-curl -X POST http://mac-mini-ip:4951/device/192.168.1.100/keypress/Home
+curl -X POST http://<relay-host>:4951/device/<roku-ip>/keypress/Home
 ```
 
-### Launch Netflix
+### Launch an App
 
 ```bash
-curl -X POST http://mac-mini-ip:4951/device/192.168.1.100/launch/12
+curl -X POST http://<relay-host>:4951/device/<roku-ip>/launch/<appId>
 ```
 
 ### Query Device Info
 
 ```bash
-curl http://mac-mini-ip:4951/device/192.168.1.100/query/device-info
+curl http://<relay-host>:4951/device/<roku-ip>/query/device-info
 ```
 
 ### Get Installed Apps
 
 ```bash
-curl http://mac-mini-ip:4951/device/192.168.1.100/query/apps
+curl http://<relay-host>:4951/device/<roku-ip>/query/apps
 ```
 
 ### Take Screenshot
 
 ```bash
-curl -X POST http://mac-mini-ip:4951/device/192.168.1.100/screenshot \
+curl -X POST http://<relay-host>:4951/device/<roku-ip>/screenshot \
   -H "Content-Type: application/json" \
   -d '{"password": "your-dev-password"}'
 ```
 
 ## Firewall Configuration
 
-Ensure port 4951 (or your custom port) is open on your Mac Mini's firewall:
+Ensure port 4951 (or your custom port) is open on the relay host's firewall.
 
-1. Go to **System Preferences** > **Security & Privacy** > **Firewall**
-2. Click **Firewall Options**
-3. Add Node.js or the server to allowed applications
+**macOS:**
+
+1. **System Settings → Network → Firewall → Options**
+2. Add Node.js (or this server's binary) to allowed applications.
 
 Or via Terminal:
 
 ```bash
-# Allow incoming connections on port 4951
 sudo /usr/libexec/ApplicationFirewall/socketfilterfw --add /usr/local/bin/node
 ```
+
+**Linux (ufw):**
+
+```bash
+sudo ufw allow 4951/tcp
+```
+
+**Windows:** allow Node.js (or the server binary) through Windows Defender Firewall via *Settings → Privacy & security → Windows Security → Firewall & network protection*.
 
 ## Security Considerations
 
@@ -261,9 +247,9 @@ sudo /usr/libexec/ApplicationFirewall/socketfilterfw --add /usr/local/bin/node
 - Ensure Node.js is installed: `node --version`
 
 ### No devices found
-- Ensure Roku devices are on the same network as the Mac Mini
-- Check firewall settings on Mac Mini
-- Try subnet scan by accessing `/devices` endpoint
+- Ensure Roku devices are on the same network as the relay host
+- Check the relay host's firewall settings (see [Firewall Configuration](#firewall-configuration))
+- Try a fresh subnet scan by hitting the `/devices` endpoint (uncached) instead of `/devices/cached`
 
 ### RALE connection fails
 - Ensure the sideloaded app has TrackerTask integrated
@@ -272,5 +258,5 @@ sudo /usr/libexec/ApplicationFirewall/socketfilterfw --add /usr/local/bin/node
 
 ## License
 
-Released under the [MIT License](../../LICENSE). This package has no third-party runtime dependencies beyond the workspace's `roku-dev-studio-api` (whose own dependencies are listed in [its README](../roku-dev-studio-api/README.md#license)).
+Released under the [MIT License](./LICENSE). This package has no third-party runtime dependencies beyond [`roku-dev-studio-api`](https://www.npmjs.com/package/roku-dev-studio-api).
 

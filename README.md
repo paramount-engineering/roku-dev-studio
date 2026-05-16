@@ -205,21 +205,38 @@ Open with `Ctrl/Cmd+,` (or *Roku Dev Studio → Settings…* on macOS, *File →
 
 ## Remote Server Setup
 
-Roku Dev Studio can control devices over the internet using a remote server bridge. This enables you to manage devices in remote locations without being on the same network.
+Roku Dev Studio can control devices over the internet using a remote server bridge. This lets you manage devices in remote locations without being on the same network as the desktop app.
 
-1. **Deploy the Remote Server:**
-   - Use [`packages/roku-dev-studio-remote-server/`](packages/roku-dev-studio-remote-server/README.md) (or publish/install npm package `roku-dev-studio-remote-server`)
-   - From the **repo root**: `npm install` then `npm run remote-server` (or `npm run start -w roku-dev-studio-remote-server`)
-   - Or copy that folder to the remote machine (with `packages/roku-dev-studio-api` available or installed from npm) and run `node roku-remote-server.js [port]` (default: 4951)
+### 1. Run the relay server
 
-2. **Configure Firewall:**
-   - Ensure the server port is accessible from your desktop app
-   - Consider using VPN for secure access
+**Option A — From this repo:**
 
-3. **Connect from Desktop App:**
-   - Click **Add Remote Location** in device selector
-   - Enter server URL (e.g., `http://remote-server-ip:4951`)
-   - Click **Connect** to discover remote devices
+```bash
+git clone https://github.com/paramount-engineering/roku-dev-studio.git
+cd roku-dev-studio
+npm install
+npm run remote-server     # listens on port 4951 by default
+```
+
+**Option B — From npm:**
+
+```bash
+npm install -g roku-dev-studio-remote-server
+roku-remote-server        # or: roku-remote-server 4951
+```
+
+See the [remote server package README](packages/roku-dev-studio-remote-server/README.md) for the full HTTP/WebSocket API and Swagger docs.
+
+### 2. Configure the network
+
+- Open the chosen port (default `4951`) on the host running the relay.
+- For internet exposure, prefer a VPN or tunnel rather than a public-internet port.
+
+### 3. Connect from the desktop app
+
+- Click **Add Remote Location** in the device selector.
+- Enter the server URL (e.g. `http://remote-server-ip:4951`).
+- Click **Connect** to discover remote devices.
 
 ### Remote Server Features
 
@@ -256,12 +273,14 @@ See the [remote server package README](packages/roku-dev-studio-remote-server/RE
 ```
 .
 ├── apps/
-│   └── roku-dev-studio/          # Electron app (see INSTALLATION.md)
+│   └── roku-dev-studio/                 # Electron desktop app (see INSTALLATION.md)
 ├── packages/
-│   ├── roku-dev-studio-api/      # Shared API package (npm: roku-dev-studio-api)
-│   └── roku-dev-studio-remote-server/
-├── lib/                            # path-safe and other repo-root helpers
-├── package.json                    # Workspace root (workspaces: apps/*, packages/*)
+│   ├── roku-dev-studio-api/             # Shared API + `rds` CLI (npm: roku-dev-studio-api)
+│   ├── roku-dev-studio-mcp/             # MCP server bundled into the desktop app
+│   └── roku-dev-studio-remote-server/   # HTTP/WS relay (npm: roku-dev-studio-remote-server)
+├── roku-components/                     # TrackerTask + Fiddle SceneGraph assets
+├── lib/                                 # path-safe and other repo-root helpers
+├── package.json                         # Workspace root (workspaces: apps/*, packages/*)
 ├── INSTALLATION.md
 └── README.md
 ```

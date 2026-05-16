@@ -3,18 +3,32 @@
   "version": "1.0.0",
   "description": "Remote server for Roku Dev Studio - enables remote device control and telnet debug console streaming",
   "main": "roku-remote-server.js",
+  "bin": {
+    "roku-remote-server": "roku-remote-server.js"
+  },
   "files": [
     "roku-remote-server.js",
     "swagger.json",
-    "swagger-ui.html"
+    "swagger-ui.html",
+    "com.roku-dev-studio.remote-server.plist"
   ],
   "scripts": {
     "build": "node build.mjs",
     "prepare": "node -e \"require('fs').existsSync('roku-remote-server.js') || require('child_process').execSync('node build.mjs', { stdio: 'inherit' })\"",
+    "prepublishOnly": "npm run build",
     "start": "node roku-remote-server.js",
     "start:port": "node roku-remote-server.js 4951",
     "typecheck": "tsc --noEmit"
   },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/paramount-engineering/roku-dev-studio.git",
+    "directory": "packages/roku-dev-studio-remote-server"
+  },
+  "bugs": {
+    "url": "https://github.com/paramount-engineering/roku-dev-studio/issues"
+  },
+  "homepage": "https://github.com/paramount-engineering/roku-dev-studio#readme",
   "keywords": [
     "roku",
     "remote",
@@ -24,10 +38,10 @@
   "author": "Hareendra Donapati",
   "license": "MIT",
   "engines": {
-    "node": ">=14.0.0"
+    "node": ">=18.0.0"
   },
   "dependencies": {
-    "roku-dev-studio-api": "file:../roku-dev-studio-api"
+    "roku-dev-studio-api": "^1.0.0"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",

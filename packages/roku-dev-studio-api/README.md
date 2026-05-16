@@ -9,7 +9,7 @@ Node.js package for Roku **discovery** (SSDP / subnet scan), **ECP** (keypress, 
 
 **Requirements**
 
-- **Node.js** ≥ 14  
+- **Node.js** ≥ 18
 - **curl** on `PATH` for `captureRokuScreenshot`, `sideloadChannel`, and `deleteSideload` (direct mode only; relay runs these on the server host).
 
 **Install**
@@ -18,35 +18,27 @@ Node.js package for Roku **discovery** (SSDP / subnet scan), **ECP** (keypress, 
 npm install roku-dev-studio-api
 ```
 
-In this monorepo the desktop app (`apps/roku-dev-studio`) depends on `file:../../packages/roku-dev-studio-api`; the relay server uses `file:../roku-dev-studio-api` from `packages/roku-dev-studio-remote-server/`.
-
-**Runnable examples** (after `npm install` at repo root, or with the package installed):
+**Runnable examples** (shipped under `examples/` in the published package):
 
 ```bash
 # Direct LAN — optional IP; otherwise SSDP discovery (~5s)
-node packages/roku-dev-studio-api/examples/direct-sample.js
-node packages/roku-dev-studio-api/examples/direct-sample.js 192.168.1.10
-
-# From package folder
-npm run example:direct -w roku-dev-studio-api
-npm run example:direct -w roku-dev-studio-api -- 192.168.1.10
+node node_modules/roku-dev-studio-api/dist/examples/direct-sample.js
+node node_modules/roku-dev-studio-api/dist/examples/direct-sample.js 192.168.1.10
 
 # Relay — remote server URL + Roku IP as seen by the relay
-node packages/roku-dev-studio-api/examples/relay-sample.js http://relay-host:4951 192.168.1.10
-npm run example:relay -w roku-dev-studio-api -- http://localhost:4951 192.168.1.10
+node node_modules/roku-dev-studio-api/dist/examples/relay-sample.js http://relay-host:4951 192.168.1.10
 ```
 
 ---
 
 ## CLI (`rds`)
 
-The package installs a terminal command **`rds`** (**R**oku **D**ev **S**tudio).
+The package installs a terminal command **`rds`** (**R**oku **D**ev **S**tudio). After `npm install -g roku-dev-studio-api` the command is on your `PATH`; otherwise prefix with `npx`.
 
 **Global options** (before the subcommand): `--ip <ipv4>`, `--relay <url>`, `--password <pwd>` (or **`ROKU_DEV_PASSWORD`**), `--json`, `--quiet`, `--timeout <ms>`.
 
 ```bash
-# From monorepo root (after npm install)
-npm exec -w roku-dev-studio-api -- rds --help
+rds --help        # or: npx rds --help
 
 # Examples (direct — device on LAN)
 rds discover
@@ -117,19 +109,16 @@ One set of values for the **npm package**, **`rds` CLI**, **remote relay server*
 |--------|--------|
 | `runActionScript(script, options)` | Run Action Script JSON (same shape as Dev Studio). See `lib/script-runner.js` for `options`. |
 | `validateScriptStructure(script)` | **Sentence-form** offline validation; `{ valid, errors[] }`. Thin adapter over the canonical validator. |
-| `validateActionScript(script, opts?)` | **Canonical** validator: `{ ok, errors[], stepCounts }` with structured `{ path, code, expected[]?, stepIndex? }` errors. Used by every surface (MCP `validate_script`, the renderer Builder per-row hints, the `rds script validate` CLI). See `.discussion-docs/unified-action-script-validation.md` for the rule matrix. |
+| `validateActionScript(script, opts?)` | **Canonical** validator: `{ ok, errors[], stepCounts }` with structured `{ path, code, expected[]?, stepIndex? }` errors. Used by every surface (MCP `validate_script`, the renderer Builder per-row hints, the `rds script validate` CLI). |
 | `raleWake`, `raleConnect`, `raleCommand`, `raleDisconnect`, `raleDisconnectAll`, `raleConnectionStatus` | Direct TCP RALE on LAN (same protocol as the relay server). Default port **`DEFAULT_RALE_PORT`** (shared-constants). |
 | `normalizeRaleFunctions(raw)` | Normalize `getExternalControlFunctions` entries to `{ name, params, description? }[]` (description preserved verbatim from the channel payload when present). |
 | `parseGetExternalControlFunctionsResponse(raleResult)` | Parse `raleCommand` result object into `{ ok, functions?, error?, raw? }`. |
 
 ### Action Script JSON shape
 
-Authoring contract lives in two places:
+`validateActionScript` is the source of truth for the JSON shape — call it on any candidate script to get back `{ ok, errors[], stepCounts }` with structured error paths. The same JSON runs in three places: the **Roku Dev Studio** desktop app's *Action Scripts → Builder + Executor*, the MCP server's `validate_script` + `send_script_to_builder` flow, and `rds script validate` / `rds script run`.
 
-- **Canonical validator rules:** `lib/validate-action-script.ts` (rule logic) + `test/validate-action-script.test.ts` (51-case fixture covering every required / optional field, condition source, version gate, and password-handling rule).
-- **Agent-readable contract:** `roku-dev-studio://action-script-contract.md` exposed by the MCP server (`packages/roku-dev-studio-mcp/src/prose/action-script-contract.md`) — includes worked templates for `appFunction.functionParams`, `wait` / `if` conditions (`media-player`, `active-app`, `rale-node-field`, `variables`), and the password-resolution order.
-
-The same JSON runs in three places: the desktop **Action Scripts → Builder + Executor**, the **MCP** server's `validate_script` + `send_script_to_builder` flow, and `rds script validate` / `rds script run`.
+For an agent-readable copy of the contract (with worked templates for `appFunction.functionParams`, `wait` / `if` conditions, and password-resolution order), call the MCP server's `roku-dev-studio://action-script-contract.md` resource — it's the same prose the desktop app's Builder hints surface.
 
 ### Catalogs (`lib/catalogs.js`)
 
@@ -424,13 +413,9 @@ relayExample().catch(console.error);
 
 ---
 
-**When you change this package** (add/remove/rename exports, change signatures or behavior): update **this `README.md`** in the same change so the public API and examples stay accurate.
-
----
-
 ## License
 
-Released under the [MIT License](../../LICENSE).
+Released under the [MIT License](./LICENSE).
 
 **Third-party runtime dependencies:**
 
