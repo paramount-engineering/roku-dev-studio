@@ -3906,14 +3906,15 @@
       min-height: 40px;
       padding: 10px 14px;
     }
-    /* Solo (remote-only): column rhythm; no bottom padding so secret-screens footer sits flush on the card. */
+    /* Solo (remote-only): column rhythm; bottom pad keeps Send Text off the footer. */
     .remote-tab-metrics-root[data-remote-layout="solo"] .remote-quad-remote .remote-quad-remote-scroll {
       --remote-solo-scroll-pad-x: clamp(12px, 3vw, 40px);
       --remote-solo-scroll-pad-top: clamp(12px, 2.5vw, 24px);
+      --remote-solo-scroll-pad-bottom: clamp(18px, 3vw, 28px);
       display: flex;
       flex-direction: column;
       align-items: center;
-      padding: var(--remote-solo-scroll-pad-top) var(--remote-solo-scroll-pad-x) 0;
+      padding: var(--remote-solo-scroll-pad-top) var(--remote-solo-scroll-pad-x) var(--remote-solo-scroll-pad-bottom);
     }
     .remote-tab-metrics-root[data-remote-layout="solo"] .remote-quad-remote .remote-container {
       gap: clamp(28px, 4vw, 52px);
