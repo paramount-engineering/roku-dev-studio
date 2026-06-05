@@ -532,6 +532,12 @@ export function registerBsFiddleIpc(ipcMain: IpcMain): void {
     // block below), because Roku firmwares sometimes route BrightScript
     // prints only to whichever telnet client was bound last, and that needs
     // to be us at the exact moment `_rdsFiddle_setUpApp` runs.
+    const fiddleTelnetHolder = `fiddle:${senderWin.id}`;
+    if (!device.isRemote) {
+      state.telnetIpsUsed.add(device.ip);
+    } else if (device.serverUrl) {
+      state.remoteTelnetTargetsUsed.push({ serverUrl: device.serverUrl, ip: device.ip });
+    }
     if (device.isRemote) {
       if (!device.serverUrl) {
         return {
@@ -541,7 +547,9 @@ export function registerBsFiddleIpc(ipcMain: IpcMain): void {
         };
       }
       try {
-        const tRes = await ensureRemoteTelnetConnected(device.serverUrl, device.ip);
+        const tRes = await ensureRemoteTelnetConnected(device.serverUrl, device.ip, {
+          holder: fiddleTelnetHolder
+        });
         if (!tRes.success) {
           console.warn('[Fiddle] Remote telnet connect failed (continuing):', tRes.error);
         }
@@ -550,7 +558,7 @@ export function registerBsFiddleIpc(ipcMain: IpcMain): void {
       }
     } else {
       try {
-        const res = await ensureDebugTelnetConnected(device.ip);
+        const res = await ensureDebugTelnetConnected(device.ip, { holder: fiddleTelnetHolder });
         console.log('[Fiddle] ensureDebugTelnetConnected (pre-sideload) →', res, 'for', device.ip);
       } catch (err) {
         console.warn('[Fiddle] Telnet connect failed (continuing):', errMsg(err));

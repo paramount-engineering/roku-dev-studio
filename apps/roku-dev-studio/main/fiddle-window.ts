@@ -5,6 +5,14 @@
 
 import type { BrowserWindow as ElectronBrowserWindow, IpcMain, WebContents } from 'electron';
 import { IPC } from '../shared/ipc/channels';
+import {
+  disconnectDebugTelnetIfUnheld,
+  releaseAllDebugTelnetHoldersForFiddleWindow
+} from './ipc/telnet-handlers';
+import {
+  disconnectRemoteTelnetIfUnheld,
+  releaseAllRemoteTelnetHoldersForFiddleWindow
+} from './ipc/remote-handlers';
 import { setupZoomGuards } from './window-zoom';
 
 const fs = require('fs');
@@ -35,6 +43,10 @@ type FiddleWindowState = {
    * user ran Fiddle with a session-only modal-entered password). Cleared when
    * `activeFiddleDeviceId` is cleared. */
   activeFiddlePassword: string | null;
+  /** Device IPs this window opened 8085 / relay telnet for (any Run attempt). */
+  telnetIpsUsed: Set<string>;
+  /** Remote relay telnet targets this window opened during any Run. */
+  remoteTelnetTargetsUsed: Array<{ serverUrl: string; ip: string }>;
 };
 
 const fiddleWindowsById = new Map<number, ElectronBrowserWindow>();
@@ -141,7 +153,9 @@ export function openFiddleWindow(
     devices: Array.isArray(devicesSnapshot) ? devicesSnapshot : [],
     initialDeviceId: initialDeviceId || null,
     activeFiddleDeviceId: null,
-    activeFiddlePassword: null
+    activeFiddlePassword: null,
+    telnetIpsUsed: new Set(),
+    remoteTelnetTargetsUsed: []
   });
 
   // Same zoom band + pinch-zoom guard as the main window so View > Zoom and
@@ -156,6 +170,8 @@ export function openFiddleWindow(
     const matchingDevice = activeId && state
       ? state.devices.find((d) => d.id === activeId)
       : undefined;
+    const telnetIpsUsed = state ? [...state.telnetIpsUsed] : [];
+    const remoteTelnetTargetsUsed = state ? [...state.remoteTelnetTargetsUsed] : [];
     // Prefer the password that produced the current sideload (session-scoped)
     // so cleanup works even when the persisted password on the snapshot is
     // empty (modal-entered password, never saved to localStorage).
@@ -163,6 +179,31 @@ export function openFiddleWindow(
 
     fiddleWindowsById.delete(child.id);
     fiddleStateByWindowId.delete(child.id);
+
+    // Release Fiddle's 8085 / relay telnet leases so VS Code and other tools
+    // can attach when the main Console never connected. If the user already
+    // connected in the main window, its `main-ui` holder keeps the stream.
+    void (async () => {
+      try {
+        await releaseAllDebugTelnetHoldersForFiddleWindow(child.id);
+        await releaseAllRemoteTelnetHoldersForFiddleWindow(child.id);
+        for (const ip of telnetIpsUsed) {
+          await disconnectDebugTelnetIfUnheld(ip);
+        }
+        for (const target of remoteTelnetTargetsUsed) {
+          await disconnectRemoteTelnetIfUnheld(target.serverUrl, target.ip);
+        }
+        if (matchingDevice) {
+          if (matchingDevice.isRemote && matchingDevice.serverUrl) {
+            await disconnectRemoteTelnetIfUnheld(matchingDevice.serverUrl, matchingDevice.ip);
+          } else {
+            await disconnectDebugTelnetIfUnheld(matchingDevice.ip);
+          }
+        }
+      } catch (err) {
+        console.warn('[Fiddle] telnet holder release failed:', err);
+      }
+    })();
 
     if (activeId && fiddleCloseCleanup) {
       try {

@@ -37,6 +37,56 @@ type SystemTelnetConn = { socket: Socket; ipcCoalesce: TelnetIpcCoalesceState };
 const telnetConnections = new Map<string, DebugTelnetConn>();
 const telnetSystemConnections = new Map<string, SystemTelnetConn>();
 
+/** Logical holders per device IP. The TCP socket stays open while any holder
+ * remains; releasing the last holder closes 8085. Fiddle registers
+ * `fiddle:<windowId>`; the main Console / MCP path registers `main-ui`. */
+const debugTelnetHoldersByIp = new Map<string, Set<string>>();
+
+function fiddleDebugTelnetHolderKey(fiddleWindowId: number): string {
+  return `fiddle:${fiddleWindowId}`;
+}
+
+function addDebugTelnetHolder(ip: string, holder: string): void {
+  let set = debugTelnetHoldersByIp.get(ip);
+  if (!set) {
+    set = new Set();
+    debugTelnetHoldersByIp.set(ip, set);
+  }
+  set.add(holder);
+}
+
+async function removeDebugTelnetHolder(ip: string, holder: string): Promise<void> {
+  const set = debugTelnetHoldersByIp.get(ip);
+  if (!set) return;
+  set.delete(holder);
+  if (set.size === 0) {
+    debugTelnetHoldersByIp.delete(ip);
+    await disconnectDebugTelnetInternal(ip);
+  }
+}
+
+/** Drop every Fiddle lease when its window closes so 8085 is free for VS Code
+ * and other tools unless the main Console still holds `main-ui`. */
+export async function releaseAllDebugTelnetHoldersForFiddleWindow(
+  fiddleWindowId: number
+): Promise<void> {
+  const key = fiddleDebugTelnetHolderKey(fiddleWindowId);
+  const ips = [...debugTelnetHoldersByIp.entries()]
+    .filter(([, holders]) => holders.has(key))
+    .map(([ip]) => ip);
+  await Promise.all(ips.map((ip) => removeDebugTelnetHolder(ip, key)));
+}
+
+/** Close 8085 when the socket is open but no logical holder remains (e.g.
+ * Fiddle connected before holder tracking, or a leaked process-wide socket). */
+export async function disconnectDebugTelnetIfUnheld(ip: string): Promise<void> {
+  const holders = debugTelnetHoldersByIp.get(ip);
+  if (holders && holders.size > 0) return;
+  if (!telnetConnections.has(ip)) return;
+  debugTelnetHoldersByIp.delete(ip);
+  await disconnectDebugTelnetInternal(ip);
+}
+
 let cachedSafeSend: SafeSendFn | null = null;
 
 /**
@@ -110,6 +160,7 @@ async function connectDebugTelnetInternal(ip: string): Promise<{ success: boolea
       if (safeSend) safeSend(IPC.TelnetData, { ip, connectionId, data: slice });
     });
     telnetConnections.delete(connectionId);
+    debugTelnetHoldersByIp.delete(connectionId);
     if (safeSend) {
       safeSend(IPC.TelnetDisconnected, {
         ip,
@@ -151,12 +202,16 @@ export async function bounceDebugTelnet(ip: string): Promise<{ success: boolean;
  * — `!destroyed` alone isn't enough because a stale map entry can carry a
  * half-open/zombie socket that passes the laxer check but never receives data.
  */
-export async function ensureDebugTelnetConnected(ip: string): Promise<{ success: boolean; error?: string }> {
+export async function ensureDebugTelnetConnected(
+  ip: string,
+  options?: { holder?: string }
+): Promise<{ success: boolean; error?: string }> {
   const existing = telnetConnections.get(ip);
   const socket = existing?.socket as (Socket & { readyState?: string }) | undefined;
   const isHealthy = !!(existing && socket && !socket.destroyed && socket.readyState === 'open');
   if (isHealthy) {
     console.log('[Telnet] ensureDebugTelnetConnected: reusing healthy socket for', ip);
+    if (options?.holder) addDebugTelnetHolder(ip, options.holder);
     return { success: true };
   }
   // Stale or missing — wipe it and open fresh.
@@ -169,6 +224,7 @@ export async function ensureDebugTelnetConnected(ip: string): Promise<{ success:
     console.log('[Telnet] ensureDebugTelnetConnected: no existing socket for', ip, '— opening fresh');
   }
   const result = await connectDebugTelnetInternal(ip);
+  if (result.success && options?.holder) addDebugTelnetHolder(ip, options.holder);
   return { success: result.success, error: result.error };
 }
 
@@ -194,13 +250,14 @@ function setupTelnetHandlers(_mainWindow: BrowserWindow | undefined, safeSendToR
     // (another telnet client holds the binding, channel exited, etc.) and
     // a renderer-driven reconnect doesn't help — the disconnect-cause
     // diagnostics on the close handler do.
-    const result = await ensureDebugTelnetConnected(ip);
+    const result = await ensureDebugTelnetConnected(ip, { holder: 'main-ui' });
     if (result.success) console.log('[Telnet] TelnetConnect OK for', ip, ':8085 (idempotent)');
     return result;
   });
 
   ipcMain.handle(IPC.TelnetDisconnect, async (_event: IpcMainInvokeEvent, { ip }: IpPayload) => {
-    return await disconnectDebugTelnetInternal(ip);
+    await removeDebugTelnetHolder(ip, 'main-ui');
+    return { success: true };
   });
 
   ipcMain.handle(IPC.TelnetSend, async (_event: IpcMainInvokeEvent, { ip, command }: IpCommandPayload) => {

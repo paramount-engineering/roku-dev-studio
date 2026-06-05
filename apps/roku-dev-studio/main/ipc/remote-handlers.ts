@@ -121,6 +121,95 @@ type RemoteTelnetConn = {
 // telnet logs start streaming even if the user hasn't manually opened the
 // remote Console panel).
 const remoteTelnetConnections = new Map<string, RemoteTelnetConn>();
+/** See `debugTelnetHoldersByIp` in telnet-handlers.ts — same lease model for relay streams. */
+const remoteTelnetHoldersByConnId = new Map<string, Set<string>>();
+
+function fiddleRemoteTelnetHolderKey(fiddleWindowId: number): string {
+  return `fiddle:${fiddleWindowId}`;
+}
+
+function addRemoteTelnetHolder(connectionId: string, holder: string): void {
+  let set = remoteTelnetHoldersByConnId.get(connectionId);
+  if (!set) {
+    set = new Set();
+    remoteTelnetHoldersByConnId.set(connectionId, set);
+  }
+  set.add(holder);
+}
+
+async function closeRemoteTelnetConnection(connectionId: string): Promise<void> {
+  const connection = remoteTelnetConnections.get(connectionId);
+  if (!connection) return;
+  const safeSendToRenderer: SafeSendFn = (channel, payload) => {
+    return moduleSafeSendToRenderer ? moduleSafeSendToRenderer(channel, payload) : false;
+  };
+  flushCoalescedMapNow(remoteTelnetConnections, connectionId, (live, slice) => {
+    safeSendToRenderer(IPC.TelnetData, {
+      ip: live.ip,
+      connectionId,
+      data: slice,
+      isRemote: true
+    });
+  });
+  const { serverUrl, ip, sessionId } = connection;
+  try {
+    const url = new URL('/telnet/disconnect', serverUrl);
+    const isHttps = url.protocol === 'https:';
+    const httpModule = isHttps ? require('https') : require('http');
+    const postData = JSON.stringify({ sessionId });
+    const req = httpModule.request({
+      hostname: url.hostname,
+      port: url.port || (isHttps ? 443 : 80),
+      path: url.pathname,
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(postData)
+      }
+    });
+    req.write(postData);
+    req.end();
+  } catch (e: unknown) {
+    console.log('[Remote Telnet] Error notifying relay of disconnect:', errMsg(e));
+  }
+  try {
+    if (connection.ws) connection.ws.close();
+  } catch { /* ignore */ }
+  remoteTelnetConnections.delete(connectionId);
+}
+
+async function removeRemoteTelnetHolder(connectionId: string, holder: string): Promise<void> {
+  const set = remoteTelnetHoldersByConnId.get(connectionId);
+  if (!set) return;
+  set.delete(holder);
+  if (set.size === 0) {
+    remoteTelnetHoldersByConnId.delete(connectionId);
+    await closeRemoteTelnetConnection(connectionId);
+  }
+}
+
+export async function releaseAllRemoteTelnetHoldersForFiddleWindow(
+  fiddleWindowId: number
+): Promise<void> {
+  const key = fiddleRemoteTelnetHolderKey(fiddleWindowId);
+  const connIds = [...remoteTelnetHoldersByConnId.entries()]
+    .filter(([, holders]) => holders.has(key))
+    .map(([connId]) => connId);
+  await Promise.all(connIds.map((connId) => removeRemoteTelnetHolder(connId, key)));
+}
+
+export async function disconnectRemoteTelnetIfUnheld(
+  serverUrl: string,
+  ip: string
+): Promise<void> {
+  const connectionId = `${serverUrl}:${ip}`;
+  const holders = remoteTelnetHoldersByConnId.get(connectionId);
+  if (holders && holders.size > 0) return;
+  if (!remoteTelnetConnections.has(connectionId)) return;
+  remoteTelnetHoldersByConnId.delete(connectionId);
+  await closeRemoteTelnetConnection(connectionId);
+}
+
 let moduleMainWindow: BrowserWindow | undefined;
 let moduleSafeSendToRenderer: SafeSendFn | null = null;
 
@@ -258,6 +347,7 @@ function establishRemoteTelnetConnection(
             safeSendToRenderer(IPC.TelnetData, { ip: live.ip, connectionId, data: slice, isRemote: true });
           });
           remoteTelnetConnections.delete(connectionId);
+          remoteTelnetHoldersByConnId.delete(connectionId);
           safeSendToRenderer(IPC.TelnetDisconnected, { ip, connectionId, isRemote: true });
         });
 
@@ -284,15 +374,18 @@ function establishRemoteTelnetConnection(
  */
 export async function ensureRemoteTelnetConnected(
   serverUrl: string,
-  ip: string
+  ip: string,
+  options?: { holder?: string }
 ): Promise<{ success: boolean; error?: string }> {
   const connectionId = `${serverUrl}:${ip}`;
   const existing = remoteTelnetConnections.get(connectionId);
   // ws.OPEN === 1 but WebSocket.OPEN may not be imported; readyState 1 is open.
   if (existing && existing.ws && existing.ws.readyState === 1) {
+    if (options?.holder) addRemoteTelnetHolder(connectionId, options.holder);
     return { success: true };
   }
   const res = await establishRemoteTelnetConnection(serverUrl, ip);
+  if (res.success && options?.holder) addRemoteTelnetHolder(connectionId, options.holder);
   return { success: !!res.success, error: res.error };
 }
 
@@ -501,55 +594,16 @@ function setupRemoteHandlers(mainWindow: BrowserWindow | undefined, safeSendToRe
   // the user explicitly hits Connect we tear down any existing session and
   // dial a fresh one.
   ipcMain.handle(IPC.RemoteTelnetConnect, async (_event: IpcMainInvokeEvent, { serverUrl, ip }: RemoteDevicePayload) => {
-    return await establishRemoteTelnetConnection(serverUrl, ip);
+    const connectionId = `${serverUrl}:${ip}`;
+    const res = await establishRemoteTelnetConnection(serverUrl, ip);
+    if (res.success) addRemoteTelnetHolder(connectionId, 'main-ui');
+    return res;
   });
 
   // Disconnect remote telnet
   ipcMain.handle(IPC.RemoteTelnetDisconnect, async (_event: IpcMainInvokeEvent, { serverUrl, ip }: RemoteDevicePayload) => {
     const connectionId = `${serverUrl}:${ip}`;
-    const connection = remoteTelnetConnections.get(connectionId);
-    
-    if (connection) {
-      flushCoalescedMapNow(remoteTelnetConnections, connectionId, (live, slice) => {
-        safeSendToRenderer(IPC.TelnetData, {
-          ip: live.ip,
-          connectionId,
-          data: slice,
-          isRemote: true
-        });
-      });
-      // Notify relay server to close the session
-      try {
-        const url = new URL('/telnet/disconnect', serverUrl);
-        const isHttps = url.protocol === 'https:';
-        const httpModule = isHttps ? require('https') : require('http');
-        
-        const postData = JSON.stringify({ sessionId: connection.sessionId });
-        
-        const req = httpModule.request({
-          hostname: url.hostname,
-          port: url.port || (isHttps ? 443 : 80),
-          path: url.pathname,
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Content-Length': Buffer.byteLength(postData)
-          }
-        });
-        
-        req.write(postData);
-        req.end();
-      } catch (e: unknown) {
-        console.log('[Remote Telnet] Error notifying relay of disconnect:', errMsg(e));
-      }
-      
-      // Close WebSocket
-      if (connection.ws) {
-        connection.ws.close();
-      }
-      remoteTelnetConnections.delete(connectionId);
-    }
-    
+    await removeRemoteTelnetHolder(connectionId, 'main-ui');
     return { success: true };
   });
 
