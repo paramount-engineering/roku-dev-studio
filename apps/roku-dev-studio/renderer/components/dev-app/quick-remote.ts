@@ -1,6 +1,8 @@
 // Quick remote controls for Dev App + shared helper used by the Floating Remote
 
 import type { DevAppApi, DevicePanelRoot } from './dev-app-types.js';
+import { SCREENSHOT_DEBOUNCE_DELAY } from '../../modules/utils/constants.js';
+import { scheduleAutoScreenshotAfterSendText } from '../../modules/utils/keyboard-remote-auto-screenshot-registry.js';
 
 /** Options for `attachQuickRemoteKeys` shared between the Dev App card and the Floating Remote. */
 export interface AttachQuickRemoteKeysOptions {
@@ -10,6 +12,8 @@ export interface AttachQuickRemoteKeysOptions {
    * active device panel even though the buttons live on the body-level shell.
    */
   dispatchHomePressedOn?: HTMLElement;
+  /** Device panel root — used for auto-screenshot after Send Text when no explicit scheduler is passed (e.g. Floating Remote). */
+  devicePanel?: HTMLElement;
 }
 
 /**
@@ -76,12 +80,26 @@ export function attachQuickRemoteKeys(
       sendTextBtn.classList.add('pressed');
 
       try {
-        for (const char of text) {
-          await api.keypress(`Lit_${encodeURIComponent(char)}`);
+        const apiWithInput = api as DevAppApi & {
+          inputText?: (t: string) => Promise<{ success?: boolean; error?: string }>;
+        };
+        if (typeof apiWithInput.inputText === 'function') {
+          const result = await apiWithInput.inputText(text);
+          if (!result || result.success !== true) {
+            console.error('Quick remote send text failed:', result?.error || result);
+            return;
+          }
+        } else {
+          for (const char of text) {
+            await api.keypress(`Lit_${encodeURIComponent(char)}`);
+          }
         }
         textInput.value = '';
+        const screenshotDelay = SCREENSHOT_DEBOUNCE_DELAY;
         if (scheduleAutoScreenshot) {
-          scheduleAutoScreenshot();
+          scheduleAutoScreenshot(screenshotDelay);
+        } else if (opts?.devicePanel) {
+          scheduleAutoScreenshotAfterSendText(opts.devicePanel, screenshotDelay);
         }
       } catch (error) {
         console.error('Quick remote send text error:', error);

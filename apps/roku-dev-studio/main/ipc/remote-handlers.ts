@@ -27,6 +27,7 @@ import {
   type TelnetIpcCoalesceState
 } from './telnet-log-ipc-coalesce.js';
 
+const { computeInputTextRelayHttpTimeoutMs } = require('roku-dev-studio-api');
 const WebSocket = require('ws');
 const FormData = require('form-data');
 const fs = require('fs');
@@ -423,9 +424,14 @@ function setupRemoteHandlers(mainWindow: BrowserWindow | undefined, safeSendToRe
     return await remoteHttpRequest(serverUrl, `/device/${ip}/info`);
   });
 
-  // Send key press via remote server
+  // Send key press via remote server. Encode path segments so Lit_ keys with
+  // % (e.g. Lit_%40 for @) survive URL parsing — matches relay-client.ts.
   ipcMain.handle(IPC.RemoteKeypress, async (_event: IpcMainInvokeEvent, { serverUrl, ip, key }: RemoteKeypressPayload) => {
-    return await remoteHttpRequest(serverUrl, `/device/${ip}/keypress/${key}`, 'POST');
+    return await remoteHttpRequest(
+      serverUrl,
+      `/device/${encodeURIComponent(ip)}/keypress/${encodeURIComponent(key)}`,
+      'POST'
+    );
   });
 
   // Launch app via remote server
@@ -443,9 +449,12 @@ function setupRemoteHandlers(mainWindow: BrowserWindow | undefined, safeSendToRe
     return await remoteHttpRequest(serverUrl, `/device/${ip}/post${endpoint}`, 'POST');
   });
 
-  // Input text via remote server
+  // Input text via remote server — scale HTTP timeout with string length so long
+  // URLs/emails do not hit the default 15s client limit while the relay is still
+  // sending Lit_ keypresses on the LAN.
   ipcMain.handle(IPC.RemoteInputText, async (_event: IpcMainInvokeEvent, { serverUrl, ip, text }: RemoteTextPayload) => {
-    return await remoteHttpRequest(serverUrl, `/device/${ip}/input-text`, 'POST', { text });
+    const timeoutMs = computeInputTextRelayHttpTimeoutMs(text);
+    return await remoteHttpRequest(serverUrl, `/device/${ip}/input-text`, 'POST', { text }, timeoutMs);
   });
 
   // Deep link via remote server

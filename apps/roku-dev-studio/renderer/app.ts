@@ -2926,13 +2926,13 @@ function setupRemoteControls(panel, device, api) {
     }
   }
   
-  function scheduleAutoScreenshot() {
+  function scheduleAutoScreenshot(delayMs = SCREENSHOT_DEBOUNCE_DELAY) {
     if (!autoScreenshotCheckbox || !autoScreenshotCheckbox.checked) return;
     
     if (screenshotDebounceTimer) {
       clearTimeout(screenshotDebounceTimer);
     }
-    screenshotDebounceTimer = setTimeout(takeAutoScreenshot, SCREENSHOT_DEBOUNCE_DELAY);
+    screenshotDebounceTimer = setTimeout(takeAutoScreenshot, delayMs);
   }
 
   registerKeyboardRemoteAutoScreenshotRemote(panel, scheduleAutoScreenshot);
@@ -2994,7 +2994,7 @@ function setupRemoteControls(panel, device, api) {
     btn.addEventListener('contextmenu', (e) => e.preventDefault());
   });
   
-  // Text input (same approach as Dev App Quick Remote: Lit_ keypress per character so it works for both local and remote)
+  // Text input via shared `inputText` API (Lit_ sequence locally; relay JSON body remotely)
   const textInput = panel.querySelector('.text-input');
   const sendTextBtn = panel.querySelector('.send-text-btn');
   
@@ -3013,11 +3013,16 @@ function setupRemoteControls(panel, device, api) {
     if (sendTextLabel) sendTextLabel.textContent = 'Sending...';
     
     try {
-      for (const char of text) {
-        await api.keypress(`Lit_${encodeURIComponent(char)}`);
+      // POST JSON to the relay (`/input-text`) so @, ?, #, & in emails/URLs
+      // are not mangled by URL path encoding on per-char Lit_ keypress hops.
+      const result = await api.inputText(text);
+      if (result && typeof result === 'object' && result.success === true) {
+        textInput.value = '';
+        // Screenshot only after the full Lit_ sequence finishes (local or relay).
+        scheduleAutoScreenshot(SCREENSHOT_DEBOUNCE_DELAY);
+      } else {
+        console.error('Remote Send Text failed:', result?.error || result);
       }
-      textInput.value = '';
-      scheduleAutoScreenshot();
     } catch (error) {
       console.error('Remote Send Text error:', error);
     } finally {

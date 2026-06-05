@@ -164,7 +164,8 @@ function rebindCard(panel: HTMLElement, api: DevAppApi): void {
   // Always (re)attach keypress handlers against the *current* api adapter so
   // the floater follows local-vs-relay routing for the active device.
   attachQuickRemoteKeys(cardSlotEl, api, undefined, {
-    dispatchHomePressedOn: panel
+    dispatchHomePressedOn: panel,
+    devicePanel: panel
   });
 
   // Reflect the active device's ECP mode so the existing

@@ -50,6 +50,39 @@ const TOAST_DISPLAY_DURATION = 5000;
 /** ms — header status line visibility (Settings → General; 2–10 s in UI) */
 const STATUS_MESSAGE_DURATION = 5000;
 
+/** ms — default pause between Lit_ keypresses in `inputText` (relay + local). */
+const INPUT_TEXT_KEY_DELAY_MS = 100;
+
+/** ms — per-character ECP keypress socket timeout used by `inputText`. */
+const INPUT_TEXT_PER_KEY_TIMEOUT_MS = 2000;
+
+/** ms — floor for RDS/CLI → relay HTTP timeout on `/input-text`. */
+const INPUT_TEXT_RELAY_HTTP_MIN_TIMEOUT_MS = 15000;
+
+/** ms — cap for RDS/CLI → relay HTTP timeout on `/input-text`. */
+const INPUT_TEXT_RELAY_HTTP_MAX_TIMEOUT_MS = 180000;
+
+/**
+ * Estimate how long the relay should take to finish `inputText` so the
+ * client HTTP socket does not give up early on long emails/URLs. Matches the
+ * relay handler defaults (`inputKeyDelayMs` 100, per-key timeout 2000).
+ */
+function computeInputTextRelayHttpTimeoutMs(
+  text: unknown,
+  opts: { inputKeyDelayMs?: number; perKeyTimeoutMs?: number } = {}
+): number {
+  const len = text == null ? 0 : String(text).length;
+  if (len === 0) return INPUT_TEXT_RELAY_HTTP_MIN_TIMEOUT_MS;
+  const keyDelay = opts.inputKeyDelayMs ?? INPUT_TEXT_KEY_DELAY_MS;
+  const perKey = opts.perKeyTimeoutMs ?? INPUT_TEXT_PER_KEY_TIMEOUT_MS;
+  // Budget each char for one ECP POST + inter-key delay; add margin for JSON/HTTP.
+  const estimated = len * (perKey + keyDelay) + 5000;
+  return Math.min(
+    INPUT_TEXT_RELAY_HTTP_MAX_TIMEOUT_MS,
+    Math.max(INPUT_TEXT_RELAY_HTTP_MIN_TIMEOUT_MS, estimated)
+  );
+}
+
 module.exports = {
   DEFAULT_RALE_PORT,
   SCREENSHOT_DEBOUNCE_DELAY,
@@ -62,5 +95,10 @@ module.exports = {
   DEVICE_METRICS_SAMPLE_INTERVAL_MIN_MS,
   DEVICE_METRICS_CHART_HISTORY_MS,
   TOAST_DISPLAY_DURATION,
-  STATUS_MESSAGE_DURATION
+  STATUS_MESSAGE_DURATION,
+  INPUT_TEXT_KEY_DELAY_MS,
+  INPUT_TEXT_PER_KEY_TIMEOUT_MS,
+  INPUT_TEXT_RELAY_HTTP_MIN_TIMEOUT_MS,
+  INPUT_TEXT_RELAY_HTTP_MAX_TIMEOUT_MS,
+  computeInputTextRelayHttpTimeoutMs
 };

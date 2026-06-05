@@ -6,7 +6,11 @@
 
 import type { IncomingMessage } from 'http';
 
-const { DEFAULT_RALE_PORT, QUERY_TIMEOUT } = require('./lib/shared-constants');
+const {
+  DEFAULT_RALE_PORT,
+  QUERY_TIMEOUT,
+  computeInputTextRelayHttpTimeoutMs
+} = require('./lib/shared-constants');
 const http = require('http');
 const https = require('https');
 const fs = require('fs');
@@ -228,7 +232,8 @@ function createRelayClient({
     },
 
     inputText(deviceIp: string, text: string) {
-      return relayRequest(base, 'POST', `/device/${enc(deviceIp)}/input-text`, { text }, timeout);
+      const inputTimeout = computeInputTextRelayHttpTimeoutMs(text);
+      return relayRequest(base, 'POST', `/device/${enc(deviceIp)}/input-text`, { text }, inputTimeout);
     },
 
     deeplink(deviceIp: string, appId: string, contentId: string, mediaType: string) {
