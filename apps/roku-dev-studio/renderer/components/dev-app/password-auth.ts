@@ -27,16 +27,27 @@ export function setupPasswordAuth(
   
   let isAuthenticated = false;
   
+  function formatAuthStatusLabel(authenticated: boolean, detail?: string): string {
+    if (authenticated) {
+      return icon('circle', 'icon-xs', 'icon-green') + ' Authenticated';
+    }
+    const base = icon('circle', 'icon-xs', 'icon-red') + ' Not Authenticated';
+    if (detail) {
+      return `${base} — ${detail}`;
+    }
+    return base;
+  }
+
   // Update authentication status display (and optionally persist remember state)
-  function updateAuthStatus(authenticated: boolean) {
+  function updateAuthStatus(authenticated: boolean, detail?: string) {
     isAuthenticated = authenticated;
     if (authStatus) {
-      if (authenticated) {
-        setSafeHTML(authStatus, icon('circle', 'icon-xs', 'icon-green') + ' Authenticated');
-        authStatus.className = 'auth-status authenticated';
+      setSafeHTML(authStatus, formatAuthStatusLabel(authenticated, detail));
+      authStatus.className = authenticated ? 'auth-status authenticated' : 'auth-status not-authenticated';
+      if (detail && !authenticated) {
+        authStatus.setAttribute('title', detail);
       } else {
-        setSafeHTML(authStatus, icon('circle', 'icon-xs', 'icon-red') + ' Not Authenticated');
-        authStatus.className = 'auth-status not-authenticated';
+        authStatus.removeAttribute('title');
       }
     }
 
@@ -65,7 +76,7 @@ export function setupPasswordAuth(
   async function verifyPassword() {
     const password = passwordInput.value.trim();
     if (!password) {
-      updateAuthStatus(false);
+      updateAuthStatus(false, 'Enter a developer password.');
       return false;
     }
     
@@ -78,7 +89,7 @@ export function setupPasswordAuth(
       const result = await api.verifyDevAuth(password);
 
       if (!result) {
-        updateAuthStatus(false);
+        updateAuthStatus(false, 'Verification failed — no response from the app.');
         if (verifyPasswordBtn) {
           verifyPasswordBtn.disabled = false;
           verifyPasswordBtn.textContent = 'Verify';
@@ -87,7 +98,11 @@ export function setupPasswordAuth(
       }
 
       const authOk = !!result.success;
-      updateAuthStatus(authOk);
+      const errDetail =
+        !authOk && typeof result.error === 'string' && result.error.trim()
+          ? result.error.trim()
+          : undefined;
+      updateAuthStatus(authOk, errDetail);
 
       // Stored-password invalidation. If the Roku rejected the exact password
       // we had persisted (i.e. what we just auto-loaded, or what the user

@@ -196,6 +196,10 @@ function createRelayClient({
   const enc = encodeURIComponent;
 
   return {
+    health() {
+      return relayRequest(base, 'GET', '/health', null, timeout);
+    },
+
     discover() {
       return relayRequest(base, 'GET', '/devices', null, timeout).then((body) => {
         if (body && body.success === true && Array.isArray(body.devices)) return body.devices;

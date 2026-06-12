@@ -10,7 +10,8 @@
     "roku-remote-server.js",
     "swagger.json",
     "swagger-ui.html",
-    "com.roku-dev-studio.remote-server.plist"
+    "com.roku-dev-studio.remote-server.plist",
+    "roku-remote-server.service"
   ],
   "scripts": {
     "build": "node build.mjs",

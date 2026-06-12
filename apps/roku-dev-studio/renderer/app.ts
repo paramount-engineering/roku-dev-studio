@@ -489,6 +489,16 @@ function createApiAdapter(isRemote, ip, serverUrl = null) {
     adapter[spec.name] = wrapApiCall(spec.name, impl);
   }
 
+  if (useRemote) {
+    adapter.telnetClearRelayBuffer = wrapApiCall('telnetClearRelayBuffer', () =>
+      roku.remoteTelnetClearBuffer(remoteBase, ip));
+    adapter.telnetConnect = wrapApiCall(
+      'telnetConnect',
+      (options?: { skipRelayBuffer?: boolean }) =>
+        roku.remoteTelnetConnect(remoteBase, ip, options)
+    );
+  }
+
   // Cast to `any` to match the duck-typed `api` shape consumed by the various
   // `setup*` component functions (same looseness as before the refactor).
   return adapter as any;
@@ -3811,14 +3821,213 @@ function setupKeyboardRemoteHelpModal(): void {
 /** Custom title bar: platform class + window controls (Windows / Linux; macOS uses traffic lights). */
 function setupFramelessTitlebar(): void {
   const shell = window.rdsShell;
+  const platform =
+    shell?.platform ??
+    (typeof navigator !== 'undefined' && /Mac/i.test(navigator.platform) ? 'darwin' : 'win32');
+  if (platform !== 'darwin') {
+    document.body.classList.add(`platform-${platform}`);
+  } else if (shell) {
+    document.body.classList.add(`platform-${shell.platform}`);
+  }
+
+  if (!shell && platform !== 'darwin') {
+    if (!document.getElementById('titlebarShellWarning')) {
+      const banner = document.createElement('div');
+      banner.id = 'titlebarShellWarning';
+      banner.className = 'titlebar-shell-warning';
+      banner.setAttribute('role', 'alert');
+      banner.textContent = 'Window controls are unavailable. Quit and restart Roku Dev Studio.';
+      document.body.prepend(banner);
+    }
+    return;
+  }
   if (!shell) return;
-  document.body.classList.add(`platform-${shell.platform}`);
 
   const root = document.querySelector('.titlebar');
   if (!root) return;
   root.querySelector('.titlebar-minimize')?.addEventListener('click', () => shell.minimizeWindow());
   root.querySelector('.titlebar-maximize')?.addEventListener('click', () => shell.toggleMaximizeWindow());
   root.querySelector('.titlebar-close')?.addEventListener('click', () => shell.closeWindow());
+
+  const maximizeBtn = root.querySelector<HTMLButtonElement>('.titlebar-maximize');
+  const syncMaximizeButton = (maximized: boolean) => {
+    if (!maximizeBtn) return;
+    maximizeBtn.classList.toggle('titlebar-maximized', maximized);
+    const label = maximized ? 'Restore down' : 'Maximize';
+    maximizeBtn.title = label;
+    maximizeBtn.setAttribute('aria-label', label);
+  };
+  if (maximizeBtn && typeof shell.isMainWindowMaximized === 'function') {
+    shell.isMainWindowMaximized().then((res) => syncMaximizeButton(!!res?.maximized)).catch(() => {});
+  }
+  if (typeof shell.onMainWindowMaximizeChanged === 'function') {
+    shell.onMainWindowMaximizeChanged(syncMaximizeButton);
+  }
+
+  setupTitlebarHamburgerMenu(shell);
+}
+
+function setupTitlebarHamburgerMenu(shell: NonNullable<Window['rdsShell']>): void {
+  const btn = document.getElementById('titlebarHamburgerBtn');
+  const menu = document.getElementById('titlebarHamburgerMenu');
+  if (!(btn instanceof HTMLButtonElement) || !(menu instanceof HTMLElement)) return;
+
+  const toggleButtons = Array.from(
+    menu.querySelectorAll<HTMLButtonElement>('[data-menu-action^="toggle-"]')
+  );
+
+  const setMenuOpen = (open: boolean) => {
+    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    menu.classList.toggle('titlebar-hamburger-menu--open', open);
+    if (open) {
+      menu.removeAttribute('hidden');
+    } else {
+      menu.setAttribute('hidden', '');
+    }
+  };
+
+  const syncToggleStates = async () => {
+    const [devRes, privacyRes, debugRes] = await Promise.all([
+      window.roku.getDeveloperMode().catch(() => ({ enabled: false })),
+      window.roku.getPrivacyMode().catch(() => ({ enabled: false })),
+      window.roku.isDebugEnabled().catch(() => ({ enabled: false }))
+    ]);
+    const states: Record<string, boolean> = {
+      'toggle-developer': !!devRes?.enabled,
+      'toggle-privacy': !!privacyRes?.enabled,
+      'toggle-debug-logging': !!debugRes?.enabled
+    };
+    for (const item of toggleButtons) {
+      const action = item.dataset.menuAction;
+      if (!action) continue;
+      const checked = !!states[action];
+      item.setAttribute('aria-checked', checked ? 'true' : 'false');
+    }
+  };
+
+  const closeMenu = () => setMenuOpen(false);
+
+  const syncHamburgerZoomLabel = () => {
+    const pctEl = document.getElementById('titlebarHamburgerZoomPct');
+    if (!pctEl) return;
+    const raw = getComputedStyle(document.documentElement).getPropertyValue('--app-zoom').trim();
+    const factor = Number(raw);
+    pctEl.textContent =
+      Number.isFinite(factor) && factor > 0 ? `${Math.round(factor * 100)}%` : '100%';
+  };
+
+  /** Toggles + zoom adjust in-place; everything else opens a dialog/window or reloads. */
+  const menuStaysOpenActions = new Set([
+    'toggle-developer',
+    'toggle-privacy',
+    'toggle-debug-logging',
+    'zoom-in',
+    'zoom-out',
+    'zoom-reset'
+  ]);
+
+  const runMenuAction = async (action: string) => {
+    switch (action) {
+      case 'toggle-developer': {
+        const res = await window.roku.getDeveloperMode();
+        await window.roku.setDeveloperMode(!res?.enabled);
+        break;
+      }
+      case 'toggle-privacy': {
+        const res = await window.roku.getPrivacyMode();
+        await window.roku.setPrivacyMode(!res?.enabled);
+        break;
+      }
+      case 'toggle-debug-logging':
+        if (typeof shell.appMenuAction === 'function') {
+          await shell.appMenuAction('toggle-debug-logging');
+        }
+        break;
+      case 'open-log-file':
+        if (typeof shell.appMenuAction === 'function') {
+          await shell.appMenuAction('open-log-file-picker');
+        }
+        break;
+      case 'open-fiddle':
+        if (typeof shell.appMenuAction === 'function') {
+          await shell.appMenuAction('open-fiddle');
+        }
+        break;
+      case 'settings':
+        if (typeof shell.appMenuAction === 'function') {
+          await shell.appMenuAction('settings');
+        }
+        break;
+      case 'clear-cache':
+        if (typeof shell.appMenuAction === 'function') {
+          await shell.appMenuAction('clear-cache');
+        }
+        break;
+      case 'zoom-in':
+        shell.zoomIn?.();
+        break;
+      case 'zoom-out':
+        shell.zoomOut?.();
+        break;
+      case 'zoom-reset':
+        shell.zoomReset?.();
+        break;
+      case 'about':
+        if (typeof shell.showAboutDialog === 'function') {
+          await shell.showAboutDialog();
+        }
+        break;
+      default:
+        break;
+    }
+
+    if (action.startsWith('toggle-')) {
+      await syncToggleStates();
+    }
+    if (action === 'zoom-in' || action === 'zoom-out' || action === 'zoom-reset') {
+      syncHamburgerZoomLabel();
+    }
+    if (!menuStaysOpenActions.has(action)) {
+      closeMenu();
+    }
+  };
+
+  btn.addEventListener('click', (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const willOpen = btn.getAttribute('aria-expanded') !== 'true';
+    if (willOpen) {
+      void syncToggleStates().then(() => {
+        syncHamburgerZoomLabel();
+        setMenuOpen(true);
+      });
+    } else {
+      closeMenu();
+    }
+  });
+
+  menu.addEventListener('click', (event) => {
+    const target = event.target;
+    if (!(target instanceof Element)) return;
+    const btn = target.closest<HTMLButtonElement>('button[data-menu-action]');
+    if (!btn) return;
+    const action = btn.dataset.menuAction;
+    if (!action) return;
+    event.preventDefault();
+    event.stopPropagation();
+    void runMenuAction(action);
+  });
+
+  document.addEventListener('pointerdown', (event) => {
+    if (btn.getAttribute('aria-expanded') !== 'true') return;
+    const target = event.target;
+    if (target instanceof Node && (btn.contains(target) || menu.contains(target))) return;
+    closeMenu();
+  });
+
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') closeMenu();
+  });
 }
 
 let primarySidebarTitlebarToggleWired = false;
@@ -4872,6 +5081,7 @@ function subscribeToAppZoom() {
   const zoomLabelEl = document.getElementById('titlebarZoomLabel');
   const zoomInEl = document.getElementById('titlebarZoomIn');
   const zoomOutEl = document.getElementById('titlebarZoomOut');
+  const hamburgerZoomPctEl = document.getElementById('titlebarHamburgerZoomPct');
 
   // 1px tolerance vs 1.0 — `Number.isFinite` rules out NaN/±Infinity from
   // a malformed IPC payload, and the epsilon hides the indicator after a
@@ -4902,6 +5112,9 @@ function subscribeToAppZoom() {
     }
     if (zoomLabelEl) {
       zoomLabelEl.textContent = `${Math.round(safe * 100)}%`;
+    }
+    if (hamburgerZoomPctEl) {
+      hamburgerZoomPctEl.textContent = `${Math.round(safe * 100)}%`;
     }
   });
 }

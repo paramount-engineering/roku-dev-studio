@@ -101,6 +101,35 @@ tail -f /tmp/roku-remote.log
 tail -f /tmp/roku-remote.error.log
 ```
 
+## Installation as a Service (Linux)
+
+A starter **systemd** unit ships as `roku-remote-server.service`. Edit `User`, `WorkingDirectory`, and `ExecStart` paths, then:
+
+```bash
+sudo cp roku-remote-server.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now roku-remote-server
+journalctl -u roku-remote-server -f
+```
+
+Ensure port **4951** is open in the host firewall if Dev Studio connects from another machine.
+
+## Installation as a Service (Windows)
+
+Run the server at logon with **Task Scheduler** (adjust paths):
+
+1. Open Task Scheduler → Create Task.
+2. Triggers: **At log on** (or **At startup**).
+3. Action: **Start a program**
+   - Program: `C:\Program Files\nodejs\node.exe`
+   - Arguments: `C:\path\to\roku-remote-server.js 4951`
+   - Start in: `C:\path\to\`
+4. Allow task to run whether user is logged on or not (optional for headless hosts).
+
+Alternatively use [NSSM](https://nssm.cc/) to wrap `node roku-remote-server.js 4951` as a Windows Service.
+
+**Health check:** `GET http://<host>:4951/health` returns `apiVersion` (bundled `roku-dev-studio-api` version) — keep the relay host updated when Dev Studio reports sideload/screenshot mismatches.
+
 ## API Documentation (Swagger)
 
 The server includes interactive API documentation powered by Swagger/OpenAPI 3.0.

@@ -2,7 +2,7 @@ import type { IpcRendererEvent } from 'electron';
 import { IPC } from './shared/ipc/channels';
 import type { ActionScriptWriteFilePayload } from './shared/ipc/payloads';
 
-const { contextBridge, ipcRenderer } = require('electron');
+const { contextBridge, ipcRenderer, webUtils } = require('electron');
 // Resolved at esbuild bundle time (see scripts/build/transpile-main-process.ts). Do not use bare
 // `roku-dev-studio-api/...` here — workspace hoisting breaks it; the bundle inlines these files.
 const {
@@ -82,6 +82,18 @@ contextBridge.exposeInMainWorld('roku', {
   
   // Sideload channel package
   selectSideloadFile: () => ipcRenderer.invoke(IPC.RokuSelectSideloadFile),
+  resolveSideloadFile: (filePath: string) =>
+    ipcRenderer.invoke(IPC.RokuResolveSideloadFile, { filePath }),
+  /** Resolve a drag-dropped File via preload (renderer cannot read `file.path` in modern Electron). */
+  resolveDroppedSideloadFile: (file: File) => {
+    try {
+      const filePath = webUtils.getPathForFile(file);
+      return ipcRenderer.invoke(IPC.RokuResolveSideloadFile, { filePath });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      return Promise.resolve({ success: false, error: message || 'Could not read the dropped file path' });
+    }
+  },
   sideload: (ip: string, filePath: string, password: string | undefined) => 
     ipcRenderer.invoke(IPC.RokuSideload, { ip, filePath, password }),
   deleteSideload: (ip: string, password: string | undefined) => 
@@ -300,8 +312,11 @@ contextBridge.exposeInMainWorld('roku', {
   telnetStatus: (ip: string) => ipcRenderer.invoke(IPC.TelnetStatus, { ip }),
   
   // Connect to remote telnet via relay
-  remoteTelnetConnect: (serverUrl: string, ip: string) => 
-    ipcRenderer.invoke(IPC.RemoteTelnetConnect, { serverUrl, ip }),
+  remoteTelnetConnect: (
+    serverUrl: string,
+    ip: string,
+    options?: { skipRelayBuffer?: boolean }
+  ) => ipcRenderer.invoke(IPC.RemoteTelnetConnect, { serverUrl, ip, skipRelayBuffer: options?.skipRelayBuffer }),
   
   // Disconnect remote telnet
   remoteTelnetDisconnect: (serverUrl: string, ip: string) => 
@@ -314,6 +329,10 @@ contextBridge.exposeInMainWorld('roku', {
   // Check remote telnet status
   remoteTelnetStatus: (serverUrl: string, ip: string) => 
     ipcRenderer.invoke(IPC.RemoteTelnetStatus, { serverUrl, ip }),
+
+  // Clear relay-side telnet log buffer (8085 session stays open)
+  remoteTelnetClearBuffer: (serverUrl: string, ip: string) =>
+    ipcRenderer.invoke(IPC.RemoteTelnetClearBuffer, { serverUrl, ip }),
   
   // Telnet System Commands (port 8080) - Remote via IPC
   remoteTelnetSystemConnect: (serverUrl: string, ip: string) => 
@@ -567,9 +586,17 @@ const rdsPlatform =
   typeof process !== 'undefined' && typeof process.platform === 'string' ? process.platform : 'unknown';
 contextBridge.exposeInMainWorld('rdsShell', {
   platform: rdsPlatform,
+  appMenuAction: (action: string) => ipcRenderer.invoke(IPC.AppMenuAction, action),
+  showAboutDialog: () => ipcRenderer.invoke(IPC.ShowAboutDialog),
   minimizeWindow: () => ipcRenderer.send(IPC.MainWindowMinimize),
   toggleMaximizeWindow: () => ipcRenderer.send(IPC.MainWindowToggleMaximize),
   closeWindow: () => ipcRenderer.send(IPC.MainWindowClose),
+  isMainWindowMaximized: () => ipcRenderer.invoke(IPC.IsMainWindowMaximized) as Promise<{ maximized?: boolean }>,
+  onMainWindowMaximizeChanged: (callback: (maximized: boolean) => void) => {
+    const handler = (_event: IpcRendererEvent, maximized: boolean) => callback(!!maximized);
+    ipcRenderer.on(IPC.MainWindowMaximizeChanged, handler);
+    return () => ipcRenderer.removeListener(IPC.MainWindowMaximizeChanged, handler);
+  },
   /**
    * Subscribe to webContents zoom-factor changes (View > Zoom In/Out/Reset,
    * ⌘=/⌘-/⌘0, Ctrl+wheel). Main also fires this once on `did-finish-load`

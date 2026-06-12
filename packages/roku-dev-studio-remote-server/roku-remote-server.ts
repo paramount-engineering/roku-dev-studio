@@ -46,6 +46,7 @@ const execPromise = promisify(exec);
 function errMsg(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
 }
+const api = require('roku-dev-studio-api');
 const {
   ssdpDiscover,
   subnetScan,
@@ -74,7 +75,7 @@ const {
   connectRokuSystemTelnet,
   writeRokuTelnetLine,
   DEVICE_METRICS_SAMPLE_INTERVAL_MIN_MS
-} = require('roku-dev-studio-api');
+} = api;
 
 /** GET `/query/*` cache TTL — matches Dev Studio minimum Device Performance sampling interval (ms). */
 const RELAY_QUERY_CACHE_TTL_MS = DEVICE_METRICS_SAMPLE_INTERVAL_MIN_MS;
@@ -499,6 +500,25 @@ function telnetSessionClose(sessionId) {
 }
 
 /**
+ * Drop in-memory log buffer for a device's active 8085 session without
+ * closing the Roku socket. Used when the Dev Studio user clears the relay
+ * buffer from a remote Console tab.
+ */
+function telnetClearBuffer(deviceIP) {
+  for (const [sessionId, session] of telnetSessions.entries()) {
+    if (session.deviceIP === deviceIP && session.socket && !session.socket.destroyed) {
+      const clearedBytes = (session.buffer?.length || 0) + (session.lineBuffer?.length || 0);
+      session.buffer = '';
+      session.lineBuffer = '';
+      session.lastActivity = Date.now();
+      log(`Telnet: Cleared buffer for ${deviceIP} (${clearedBytes} bytes)`);
+      return { success: true, sessionId, clearedBytes };
+    }
+  }
+  return { success: true, message: 'No active session for this device', clearedBytes: 0 };
+}
+
+/**
  * Get telnet session status
  */
 function telnetStatus(sessionId) {
@@ -515,9 +535,12 @@ function telnetStatus(sessionId) {
 }
 
 /**
- * Handle WebSocket upgrade for telnet streaming
+ * Handle WebSocket upgrade for telnet streaming.
+ * @param {{ skipBuffer?: boolean }} [opts] When true, do not replay the relay's
+ *   in-memory gap buffer on attach (live-only tail). The buffer is left intact
+ *   for a later Connect with replay or until the user clears it explicitly.
  */
-function handleTelnetWebSocket(req, socket, head, sessionId) {
+function handleTelnetWebSocket(req, socket, head, sessionId, opts = {}) {
   const session = telnetSessions.get(sessionId);
   
   if (!session) {
@@ -562,8 +585,9 @@ function handleTelnetWebSocket(req, socket, head, sessionId) {
   session.wsClients.add(ws);
   session.lastActivity = Date.now();
 
-  // Send buffered logs
-  if (session.buffer && session.buffer.length > 0) {
+  // Replay the gap buffer by default. skipBuffer leaves it on the server for
+  // a later replay Connect or an explicit Clear relay buffer action.
+  if (!opts.skipBuffer && session.buffer && session.buffer.length > 0) {
     ws.send(JSON.stringify({ type: 'log', data: session.buffer }));
     session.buffer = '';
   }
@@ -589,8 +613,22 @@ function handleTelnetWebSocket(req, socket, head, sessionId) {
       }
       
       if (frame.opcode === 0x1 && frame.payload) {
-        // Text frame - could handle commands here if needed
         session.lastActivity = Date.now();
+        try {
+          const msg = JSON.parse(frame.payload);
+          if (msg && typeof msg.command === 'string') {
+            if (session.socket && !session.socket.destroyed) {
+              const w = writeRokuTelnetLine(session.socket, msg.command);
+              if (!w.success) {
+                ws.send(JSON.stringify({ type: 'error', error: w.error || 'Send failed' }));
+              }
+            } else {
+              ws.send(JSON.stringify({ type: 'error', error: 'Not connected to device telnet' }));
+            }
+          }
+        } catch {
+          /* non-JSON client frames are ignored */
+        }
       }
     }
   });
@@ -917,6 +955,7 @@ async function handleRequest(req, res) {
       return sendJson(res, { 
         success: true, 
         status: 'ok',
+        apiVersion: api.PACKAGE_VERSION || 'unknown',
         hostname: os.hostname(),
         platform: os.platform(),
         uptime: process.uptime(),
@@ -1004,6 +1043,16 @@ async function handleRequest(req, res) {
         }
       }
       return sendJson(res, { success: true, message: 'No active session for this device' });
+    }
+
+    // Clear in-memory relay buffer without closing the Roku telnet socket
+    const telnetClearBufferMatch = pathname.match(/^\/device\/([^\/]+)\/telnet\/clear-buffer$/);
+    if (telnetClearBufferMatch && method === 'POST') {
+      const deviceIP = telnetClearBufferMatch[1];
+      if (!isValidIp(deviceIP)) {
+        return sendError(res, 'Invalid device IP', 400);
+      }
+      return sendJson(res, telnetClearBuffer(deviceIP));
     }
     
     // Disconnect telnet — JSON body (sessionId)
@@ -1473,7 +1522,8 @@ server.on('upgrade', (req, socket, head) => {
   const match = pathname.match(/^\/telnet\/stream\/([^\/]+)$/);
   if (match) {
     const sessionId = match[1];
-    handleTelnetWebSocket(req, socket, head, sessionId);
+    const skipBuffer = parsedUrl.searchParams.get('skipBuffer') === '1';
+    handleTelnetWebSocket(req, socket, head, sessionId, { skipBuffer });
   } else {
     // Not a telnet WebSocket, reject
     socket.write('HTTP/1.1 404 Not Found\r\n\r\n');
@@ -1504,6 +1554,7 @@ server.listen(PORT, '0.0.0.0', () => {
   log(`Telnet Debug Console (Port 8085):`);
   log(`  POST /device/:ip/telnet/connect    - Start telnet session`);
   log(`  POST /device/:ip/telnet/disconnect - End telnet session`);
+  log(`  POST /device/:ip/telnet/clear-buffer - Clear relay log buffer (keep socket)`);
   log(`  GET  /telnet/sessions              - List all sessions`);
   log(`  GET  /telnet/status/:sessionId     - Check session status`);
   log(`  WSS  /telnet/stream/:sessionId     - WebSocket log stream`);

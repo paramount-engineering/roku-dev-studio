@@ -44,6 +44,9 @@ export interface IpFilePasswordPayload {
   filePath: string;
   password?: string;
 }
+export interface SideloadFilePathPayload {
+  filePath: string;
+}
 export interface IpPasswordPayload {
   ip: string;
   password?: string;

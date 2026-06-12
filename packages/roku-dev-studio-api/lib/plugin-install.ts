@@ -3,13 +3,15 @@
  * Used by both the Electron main process and the remote server.
  */
 
-const { exec } = require('child_process');
+const fs = require('fs');
 const path = require('path');
-const { promisify } = require('util');
 const { isValidIp, validateDevPassword } = require('./validate-input');
-const { errorMessage } = require('./err-util');
-
-const execPromise = promisify(exec);
+const {
+  buildMultipartBody,
+  httpDigestRequest,
+  mapDeviceHttpError,
+  responseLooksLikeAuthFailure
+} = require('./http-digest');
 
 type LogFn = (msg: string) => void;
 
@@ -26,11 +28,53 @@ interface DeleteSideloadOpts {
   log?: LogFn;
 }
 
+const SIDELOAD_TIMEOUT_MS = 120000;
+const DELETE_TIMEOUT_MS = 30000;
+
+function parsePluginInstallResponse(response: string): { success: true; message: string } | { success: false; error: string; authFailed?: boolean } {
+  if (response.includes('Install Success') || response.includes('Application Received') || response.includes('Conversion complete')) {
+    return { success: true, message: 'Channel installed successfully!' };
+  }
+  if (response.includes('Install Failure')) {
+    const errorMatch = response.match(/Install Failure:\s*([^<\n]+)/);
+    return { success: false, error: errorMatch ? errorMatch[1].trim() : 'Installation failed' };
+  }
+  if (response.includes('Delete Success') || (response.includes('Roku') && !response.includes('Failure'))) {
+    return { success: true, message: 'Sideloaded channel deleted successfully!' };
+  }
+  if (responseLooksLikeAuthFailure(0, response)) {
+    return { success: false, error: 'Authentication failed. Check your developer password.', authFailed: true };
+  }
+  if (response.includes('Roku') && !response.includes('Failure')) {
+    return { success: true, message: 'Channel installed! Check your Roku device.' };
+  }
+  return { success: false, error: 'Unknown response from device. Check your Roku to see if the channel was installed.' };
+}
+
+async function postPluginInstall(
+  ip: string,
+  password: string,
+  fields: { name: string; value: string }[],
+  files: { name: string; filename: string; data: Buffer }[],
+  timeoutMs: number,
+  log: LogFn
+): Promise<{ statusCode: number; text: string }> {
+  const { body, contentType } = buildMultipartBody(fields, files);
+  log('plugin_install: posting multipart request');
+  const { statusCode, body: responseBody } = await httpDigestRequest({
+    ip,
+    password,
+    path: '/plugin_install',
+    method: 'POST',
+    body,
+    headers: { 'Content-Type': contentType },
+    timeoutMs
+  });
+  return { statusCode, text: responseBody.toString('utf8') };
+}
+
 /**
  * Sideload a channel package to a Roku device.
- *
- * @param {{ ip: string, filePath: string, password: string, log?: (msg: string) => void }}
- * @returns {Promise<{ success: true, message: string } | { success: false, error: string }>}
  */
 async function sideloadChannel({ ip, filePath, password, log = (_m: string) => undefined }: SideloadChannelOpts) {
   if (!isValidIp(ip)) {
@@ -47,51 +91,45 @@ async function sideloadChannel({ ip, filePath, password, log = (_m: string) => u
   if (normalizedPath.includes('..')) {
     return { success: false, error: 'Invalid file path' };
   }
+  if (!fs.existsSync(normalizedPath)) {
+    return { success: false, error: 'File not found' };
+  }
 
-  const curlCmd = `curl -s -S --digest --user "rokudev:${password}" -F "mysubmit=Install" -F "archive=@${normalizedPath}" "http://${ip}/plugin_install" --connect-timeout 10 --max-time 120`;
   try {
-    log('Sideload: running curl');
-    const { stdout, stderr } = await execPromise(curlCmd);
-    const response = stdout || stderr;
+    const fileData = fs.readFileSync(normalizedPath);
+    const filename = path.basename(normalizedPath);
+    const { statusCode, text } = await postPluginInstall(
+      ip,
+      password,
+      [{ name: 'mysubmit', value: 'Install' }],
+      [{ name: 'archive', filename, data: fileData }],
+      SIDELOAD_TIMEOUT_MS,
+      log
+    );
 
-    if (response.includes('Install Success') || response.includes('Application Received') || response.includes('Conversion complete')) {
-      return { success: true, message: 'Channel installed successfully!' };
-    }
-    if (response.includes('Install Failure')) {
-      const errorMatch = response.match(/Install Failure:\s*([^<\n]+)/);
-      return { success: false, error: errorMatch ? errorMatch[1].trim() : 'Installation failed' };
-    }
-    if (response.includes('401') || response.includes('Authentication')) {
-      // `authFailed: true` is the stable contract callers use to decide whether
-      // to wipe a cached developer password and re-prompt (vs. a transient
-      // network/state error where the cached password is still valid).
+    if (statusCode === 401 || responseLooksLikeAuthFailure(statusCode, text)) {
       return { success: false, error: 'Authentication failed. Check your developer password.', authFailed: true };
     }
-    if (response.includes('Roku') && !response.includes('Failure')) {
-      return { success: true, message: 'Channel installed! Check your Roku device.' };
+
+    const parsed = parsePluginInstallResponse(text);
+    if (!parsed.success) {
+      log(`Sideload: unexpected response (first 500): ${text.substring(0, 500)}`);
     }
-    log(`Sideload: unexpected response (first 500): ${response.substring(0, 500)}`);
-    return { success: false, error: 'Unknown response from device. Check your Roku to see if the channel was installed.' };
+    return parsed;
   } catch (error: unknown) {
-    const msg = errorMessage(error);
-    if (msg.includes('Connection refused')) {
+    const mapped = mapDeviceHttpError(error, 'Upload');
+    if (mapped.error.includes('Connection refused')) {
       return { success: false, error: 'Connection refused. Make sure Developer Mode is enabled.' };
     }
-    if (msg.includes('timed out')) {
+    if (mapped.error.includes('timed out')) {
       return { success: false, error: 'Connection timed out. Check the device IP address.' };
     }
-    if (msg.includes('Could not resolve host')) {
-      return { success: false, error: 'Could not resolve host. Check the device IP address.' };
-    }
-    return { success: false, error: `Upload failed: ${msg}` };
+    return mapped;
   }
 }
 
 /**
  * Delete the sideloaded channel from a Roku device.
- *
- * @param {{ ip: string, password: string, log?: (msg: string) => void }}
- * @returns {Promise<{ success: true, message: string } | { success: false, error: string }>}
  */
 async function deleteSideload({ ip, password, log = (_m: string) => undefined }: DeleteSideloadOpts) {
   if (!isValidIp(ip)) {
@@ -102,21 +140,28 @@ async function deleteSideload({ ip, password, log = (_m: string) => undefined }:
     return { success: false, error: pwdCheck.error || 'Invalid developer password' };
   }
 
-  const curlCmd = `curl -s -S --digest --user "rokudev:${password}" -F "mysubmit=Delete" -F "archive=;" "http://${ip}/plugin_install" --connect-timeout 10 --max-time 30`;
   try {
-    log('Delete sideload: running curl');
-    const { stdout, stderr } = await execPromise(curlCmd);
-    const response = stdout || stderr;
+    const { statusCode, text } = await postPluginInstall(
+      ip,
+      password,
+      [
+        { name: 'mysubmit', value: 'Delete' },
+        { name: 'archive', value: ';' }
+      ],
+      [],
+      DELETE_TIMEOUT_MS,
+      log
+    );
 
-    if (response.includes('Delete Success') || (response.includes('Roku') && !response.includes('Failure'))) {
-      return { success: true, message: 'Sideloaded channel deleted successfully!' };
-    }
-    if (response.includes('401') || response.includes('Authentication')) {
+    if (statusCode === 401 || responseLooksLikeAuthFailure(statusCode, text)) {
       return { success: false, error: 'Authentication failed. Check your developer password.', authFailed: true };
+    }
+    if (text.includes('Delete Success') || (text.includes('Roku') && !text.includes('Failure'))) {
+      return { success: true, message: 'Sideloaded channel deleted successfully!' };
     }
     return { success: true, message: 'Delete command sent. Check your Roku device.' };
   } catch (error: unknown) {
-    return { success: false, error: `Delete failed: ${errorMessage(error)}` };
+    return mapDeviceHttpError(error, 'Delete');
   }
 }
 

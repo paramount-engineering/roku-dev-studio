@@ -34,9 +34,13 @@ declare global {
     /** Frameless shell: platform + window controls (see preload `rdsShell`). */
     rdsShell?: {
       platform: string;
+      appMenuAction?: (action: string) => Promise<{ success?: boolean; error?: string; enabled?: boolean; canceled?: boolean }>;
+      showAboutDialog?: () => Promise<{ success?: boolean; error?: string }>;
       minimizeWindow: () => void;
       toggleMaximizeWindow: () => void;
       closeWindow: () => void;
+      isMainWindowMaximized?: () => Promise<{ maximized?: boolean }>;
+      onMainWindowMaximizeChanged?: (callback: (maximized: boolean) => void) => () => void;
       onAppZoomChanged?: (callback: (factor: number) => void) => () => void;
       zoomIn?: () => void;
       zoomOut?: () => void;

@@ -29,6 +29,7 @@
           <h3><span class="icon icon-sm icon-accent"><svg><use href="#icon-radar"/></svg></span> Device Discovery</h3>
           <p>Click <strong>Scan</strong> to automatically discover Roku devices on your network. Devices with Developer Mode enabled will show a green "Dev" badge.</p>
           <p>You can also manually connect by entering an IP address in the "Manual Connect" section at the bottom of the sidebar.</p>
+          <p><strong>Scan finds nothing?</strong> SSDP multicast (UDP port 1900) may be blocked by VPN, corporate Wi‑Fi, or firewall rules — try Manual Connect with the device IP. The PC and Roku must be on the same reachable network.</p>
         </div>
         
         <div class="help-section" id="help-section-remote-control">
@@ -195,7 +196,7 @@
 
         <div class="help-section" id="help-section-log-viewer">
           <h3><span class="icon icon-sm icon-green"><svg><use href="#icon-file-text"/></svg></span> Log File Viewer</h3>
-          <p><strong>File → Open Log File…</strong> (<span class="help-kbd">Ctrl</span>/<span class="help-kbd">Cmd</span>+<span class="help-kbd">Shift</span>+<span class="help-kbd">O</span>) opens a saved console / log file in a dedicated window with the same find / structured-log / URL-detection chrome as the live Console tab. Handy for reviewing logs from a previous session or a teammate.</p>
+          <p><strong>File → Open Log File</strong> (<span class="help-kbd">Ctrl</span>/<span class="help-kbd">Cmd</span>+<span class="help-kbd">Shift</span>+<span class="help-kbd">O</span>) opens a saved console / log file in a dedicated window with the same find / structured-log / URL-detection chrome as the live Console tab. Handy for reviewing logs from a previous session or a teammate.</p>
         </div>
 
         <div class="help-section" id="help-section-secret-screens">
@@ -205,9 +206,9 @@
 
         <div class="help-section" id="help-section-settings">
           <h3><span class="icon icon-sm icon-red"><svg><use href="#icon-settings"/></svg></span> Settings</h3>
-          <p>Open with <span class="help-kbd">Ctrl</span>/<span class="help-kbd">Cmd</span>+<span class="help-kbd">,</span> or <em>Roku Dev Studio → Settings…</em> (macOS) / <em>File → Settings</em> (Windows / Linux). Five sections:</p>
+          <p>Open with <span class="help-kbd">Ctrl</span>/<span class="help-kbd">Cmd</span>+<span class="help-kbd">,</span> or <em>Roku Dev Studio → Settings</em> (macOS) / <em>File → Settings</em> (Windows / Linux). Five sections:</p>
           <ul>
-            <li><strong>General</strong> - Developer Mode, Privacy Mode (mask IPs / serials), Debug Logging to file, Roku Remote - Use Keyboard, Auto Connect to Devices, Auto Hide SideBar</li>
+            <li><strong>General</strong> - Developer Mode, Privacy Mode (mask IPs / serials), Debug Logging to file, Roku Remote - Use Keyboard, Auto Connect to Devices, Auto Hide SideBar, Encrypt Saved Passwords (status line shows whether the OS keychain is really encrypting — on some Linux setups it is not)</li>
             <li><strong>Action Scripts</strong> - Default folder for run artifacts (screenshots, exported PDFs)</li>
             <li><strong>Device Performance</strong> - Chart sample interval, chart history window, Remember 'Show Device Performance' per device</li>
             <li><strong>Timing &amp; Network</strong> - Connection / query / telnet timeouts and other network knobs (with Reset to Defaults)</li>
@@ -224,7 +225,8 @@
             <li><strong>Server Address</strong> - Enter the IP address or hostname of the relay server</li>
             <li><strong>Default Port</strong> - The relay server runs on port <code>4951</code> by default</li>
           </ul>
-          <p>The relay server can be found in the <code>remote-server</code> folder. See the README for setup instructions.</p>
+          <p>The relay server can be found in the <code>remote-server</code> folder. See the README for setup instructions (macOS LaunchAgent, Linux systemd, Windows Task Scheduler).</p>
+          <p><strong>Sideload or screenshot fails via relay but ECP works?</strong> Update the relay host to the same <code>roku-dev-studio-api</code> version as this app. Check <code>GET /health</code> on the relay (<code>apiVersion</code> field) and ensure port <code>4951</code> is reachable through firewalls.</p>
         </div>
         
         <div class="help-section" id="help-section-tips">
@@ -235,6 +237,8 @@
             <li>Click a connected device card to switch to its tab</li>
             <li>Right-click device cards to copy device info</li>
             <li>Remote locations allow you to control devices without physical access</li>
+            <li><strong>macOS:</strong> closing the main window quits the app (telnet and MCP sessions are torn down). Use <em>Roku Dev Studio → Quit</em> or <span class="help-kbd">Cmd</span>+<span class="help-kbd">Q</span> — the app does not stay in the dock with no windows.</li>
+            <li><strong>Windows / Linux:</strong> use the title-bar menu (☰) for Settings, Privacy Mode, and About; window min/max/close buttons are on the right edge of the title bar.</li>
           </ul>
         </div>
         </div>

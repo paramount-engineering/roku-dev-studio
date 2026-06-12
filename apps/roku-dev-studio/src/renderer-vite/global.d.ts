@@ -11,6 +11,8 @@ declare global {
       minimizeWindow: () => void;
       toggleMaximizeWindow: () => void;
       closeWindow: () => void;
+      isMainWindowMaximized?: () => Promise<{ maximized?: boolean }>;
+      onMainWindowMaximizeChanged?: (callback: (maximized: boolean) => void) => () => void;
       onAppZoomChanged?: (callback: (factor: number) => void) => () => void;
       zoomIn?: () => void;
       zoomOut?: () => void;

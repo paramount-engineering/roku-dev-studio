@@ -1,4 +1,5 @@
 import type { App, BrowserWindow, Clipboard, Dialog, IpcMainInvokeEvent, Rectangle } from 'electron';
+import { broadcastFiddlePrivacyMode } from '../fiddle-window';
 import { openExternalUrl } from '../open-external-url';
 import { IPC } from '../../shared/ipc/channels';
 import type {
@@ -50,6 +51,13 @@ function setupSystemHandlers(
     if (fromSender && !fromSender.isDestroyed()) return fromSender;
     if (mainWindow && !mainWindow.isDestroyed()) return mainWindow;
     return undefined;
+  }
+
+  function notifyMainRenderer(channel: string, data: unknown): void {
+    const win = mainWindow && !mainWindow.isDestroyed() ? mainWindow : undefined;
+    if (win?.webContents && !win.webContents.isDestroyed()) {
+      win.webContents.send(channel, data);
+    }
   }
 
   if (!mainWindowChromeIpcRegistered) {
@@ -218,6 +226,7 @@ function setupSystemHandlers(
         }
       }
     }
+    notifyMainRenderer(IPC.DeveloperModeChanged, enabled);
     return { success: true, enabled: state.developerModeEnabled };
   });
 
@@ -240,7 +249,14 @@ function setupSystemHandlers(
         }
       }
     }
+    notifyMainRenderer(IPC.PrivacyModeChanged, enabled);
+    broadcastFiddlePrivacyMode(enabled);
     return { success: true, enabled: state.privacyModeEnabled };
+  });
+
+  ipcMain.handle(IPC.IsMainWindowMaximized, async (event: IpcMainInvokeEvent) => {
+    const win = mainWinFromEvent(event.sender);
+    return { maximized: !!win?.isMaximized() };
   });
 
   // ============================================

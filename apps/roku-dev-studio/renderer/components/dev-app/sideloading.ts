@@ -48,19 +48,24 @@ export function setupSideloading(
     clearFileBtn
   } = elements;
   
-  // Store selected file path for remote sideloading
   let selectedFilePath = '';
-  
-  // Update drop zone text for remote devices
-  if (api.isRemote && dropZone) {
-    setSafeHTML(dropZone, `
-      <div class="drop-zone-icon">📤</div>
-      <div class="drop-zone-text">Remote Sideloading</div>
-      <div class="drop-zone-hint" style="max-width: 280px; line-height: 1.4;">
-        Select a .zip or .pkg file from your computer.<br>
-        It will be uploaded to the remote server and installed.
-      </div>
-    `);
+
+  function applySelectedFile(result: { filePath: string; fileName: string; fileSize: number }) {
+    selectedFilePath = result.filePath;
+    if (filePathInput) filePathInput.value = result.filePath;
+    const sizeKB = (result.fileSize / 1024).toFixed(1);
+    const sizeMB = (result.fileSize / (1024 * 1024)).toFixed(2);
+    const sizeText = result.fileSize > 1024 * 1024 ? `${sizeMB} MB` : `${sizeKB} KB`;
+
+    if (fileNameSpan) {
+      fileNameSpan.textContent = `${result.fileName} (${sizeText})`;
+      fileNameSpan.title = result.filePath;
+      fileNameSpan.classList.add('has-file');
+    }
+
+    if (dropZone) dropZone.style.display = 'none';
+    if (selectedFileInfo) selectedFileInfo.style.display = 'flex';
+    updateSideloadButton();
   }
   
   // Function to update sideload button state
@@ -76,29 +81,66 @@ export function setupSideloading(
     passwordInput.addEventListener('input', updateSideloadButton);
   }
   
-  // File selection
+  // File selection (click)
   selectFileBtn.addEventListener('click', async () => {
     const result = await window.roku.selectSideloadFile();
     if (result && result.success) {
-      selectedFilePath = result.filePath;
-      if (filePathInput) filePathInput.value = result.filePath;
-      const sizeKB = (result.fileSize / 1024).toFixed(1);
-      const sizeMB = (result.fileSize / (1024 * 1024)).toFixed(2);
-      const sizeText = result.fileSize > 1024 * 1024 ? `${sizeMB} MB` : `${sizeKB} KB`;
-      
-      if (fileNameSpan) {
-        fileNameSpan.textContent = `${result.fileName} (${sizeText})`;
-        fileNameSpan.title = result.filePath;
-        fileNameSpan.classList.add('has-file');
-      }
-      
-      // Show selected file info, hide drop zone
-      if (dropZone) dropZone.style.display = 'none';
-      if (selectedFileInfo) selectedFileInfo.style.display = 'flex';
-      
-      updateSideloadButton();
+      applySelectedFile(result);
     }
   });
+
+  // Drag-and-drop onto the Select Package zone
+  if (dropZone) {
+    const dragOverClass = 'install-drop-zone--dragover';
+    let dragDepth = 0;
+
+    dropZone.addEventListener('dragenter', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      dragDepth += 1;
+      dropZone.classList.add(dragOverClass);
+    });
+
+    dropZone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
+    });
+
+    dropZone.addEventListener('dragleave', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      dragDepth -= 1;
+      if (dragDepth <= 0) {
+        dragDepth = 0;
+        dropZone.classList.remove(dragOverClass);
+      }
+    });
+
+    dropZone.addEventListener('drop', async (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      dragDepth = 0;
+      dropZone.classList.remove(dragOverClass);
+
+      const file = e.dataTransfer?.files?.[0];
+      if (!file) return;
+
+      const resolveDropped = window.roku.resolveDroppedSideloadFile;
+      if (typeof resolveDropped !== 'function') {
+        showStatusMessage(statusDiv, 'Drag and drop is not available in this build', 'error');
+        return;
+      }
+
+      const result = await resolveDropped(file);
+      if (result && result.success) {
+        applySelectedFile(result);
+        statusDiv.innerHTML = '';
+      } else if (result?.error) {
+        showStatusMessage(statusDiv, result.error, 'error');
+      }
+    });
+  }
   
   // Clear file selection
   if (clearFileBtn) {
@@ -126,7 +168,7 @@ export function setupSideloading(
     }
     
     sideloadBtn.disabled = true;
-    sideloadBtn.textContent = api.isRemote ? 'Uploading & Installing...' : 'Installing...';
+    sideloadBtn.textContent = 'Installing...';
     progressDiv.style.display = 'block';
     statusDiv.innerHTML = '';
     let sideloadSucceeded = false;
@@ -170,7 +212,7 @@ export function setupSideloading(
       showStatusMessage(statusDiv, '✗ ' + (errMessage(error) || 'Unknown error'), 'error');
     }
     
-    setSafeHTML(sideloadBtn, icon('rocket', 'icon-xs') + ' Install App');
+    setSafeHTML(sideloadBtn, icon('rocket', 'icon-xs') + ' Install');
     sideloadBtn.disabled = false;
     updateSideloadButton();
     setTimeout(() => {

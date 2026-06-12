@@ -1,4 +1,10 @@
 export { IPC, type IpcChannel } from './channels';
+export {
+  debugTelnetConnectionId,
+  debugTelnetIpcTargetsDevice,
+  type DebugTelnetDeviceRef,
+  type DebugTelnetIpcPayload
+} from './debug-telnet-connection-id';
 export type {
   ActionScriptWriteFilePayload,
   ConnectionIdPayload,
@@ -35,5 +41,6 @@ export type {
   SaveResultsPdfPayload,
   SaveScreenshotPayload,
   ServerUrlPayload,
-  SafeSendFn
+  SafeSendFn,
+  SideloadFilePathPayload
 } from './payloads';

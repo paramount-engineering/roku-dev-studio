@@ -10,6 +10,11 @@
  *   5. Run calls `fiddle.run({ deviceId, code })`; output arrives via `onTerminalData`.
  */
 
+import {
+  debugTelnetIpcTargetsDevice,
+  type DebugTelnetDeviceRef
+} from '../../../shared/ipc/debug-telnet-connection-id.js';
+
 export {};
 
 type MonacoNamespace = typeof import('monaco-editor');
@@ -83,6 +88,7 @@ interface FiddleTerminalDataPayload {
   ip: string;
   data: string;
   isRemote?: boolean;
+  connectionId?: string;
 }
 
 interface FiddleBridge {
@@ -845,10 +851,18 @@ function bindEvents(ctx: FiddleCtx): void {
   bridge.onTerminalData((payload) => {
     if (!payload || typeof payload.data !== 'string') return;
     // Main forwards every telnet chunk to every Fiddle window; filter client-
-    // side so each window shows only its currently-selected device.
+    // side so each window shows only its currently-selected device (by
+    // connectionId — not IP alone — so remote labs with the same private IP
+    // do not cross-deliver output).
     if (!ctx.selectedDeviceId) return;
     const selectedDevice = ctx.devices.find((d) => d.id === ctx.selectedDeviceId);
-    if (!selectedDevice || selectedDevice.ip !== (payload as { ip?: string }).ip) return;
+    if (!selectedDevice) return;
+    const deviceRef: DebugTelnetDeviceRef = {
+      ip: selectedDevice.ip,
+      isRemote: selectedDevice.isRemote,
+      serverUrl: selectedDevice.serverUrl
+    };
+    if (!debugTelnetIpcTargetsDevice(payload, deviceRef)) return;
 
     const expectedRunId = ctx.currentRun ? ctx.currentRun.runId : '';
     const beginMarker = expectedRunId ? '[FIDDLE_BEGIN:' + expectedRunId + ']' : '';

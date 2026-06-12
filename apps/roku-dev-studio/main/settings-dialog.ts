@@ -390,6 +390,11 @@ function settingsHtml(): string {
       color: var(--text-primary);
       font-weight: 500;
     }
+    .settings-keychain-status.warn {
+      color: var(--accent-yellow, #c9a227);
+      font-weight: 600;
+    }
+
     .settings-row-text .settings-row-desc {
       display: block;
       font-size: 12px;
@@ -814,6 +819,7 @@ function settingsHtml(): string {
                 <div class="settings-row-text">
                   <strong>Encrypt Saved Passwords with System Keychain</strong>
                   <span class="settings-row-desc">When On, each device's "Remember password" entry is encrypted via the OS keychain — your OS may prompt the first time. When Off, remembered passwords still persist across quit/relaunch but are stored unencrypted on disk.</span>
+                  <span class="settings-row-desc settings-keychain-status" id="keychainStorageStatus" aria-live="polite"></span>
                 </div>
                 <label class="settings-toggle-wrap" for="optRememberPasswordsInKeychain">
                   <input type="checkbox" id="optRememberPasswordsInKeychain" class="settings-toggle-input" role="switch" aria-label="Persist saved passwords in system keychain" aria-checked="false" />
@@ -1521,6 +1527,33 @@ function settingsHtml(): string {
         Object.keys(TIMING_PANEL_INFO).forEach(function (k) { validateTimingPanel(k); });
       }
 
+      var keychainSnap = null;
+
+      function describeSecretStoreStatus(status, backend, toggleOn) {
+        if (!toggleOn) {
+          return 'Encryption toggle is off — remembered passwords are stored as plaintext on disk.';
+        }
+        if (status === 'encrypted') {
+          return 'Storage: encrypted via ' + (backend || 'system keychain') + '.';
+        }
+        if (status === 'unencrypted') {
+          return 'Warning: toggle is on but this system uses basic_text — passwords are base64 plaintext on disk. Use a Linux keyring (Secret Service/KWallet) for real encryption.';
+        }
+        if (status === 'unavailable') {
+          return 'Warning: toggle is on but the OS keychain is unavailable — passwords stay in memory for this session only.';
+        }
+        return 'Storage status: ' + status + (backend ? ' (' + backend + ')' : '') + '.';
+      }
+
+      function updateKeychainStatusHint(toggleOn, snapshot) {
+        var hint = el('keychainStorageStatus');
+        if (!hint) return;
+        var snap = snapshot || {};
+        var text = describeSecretStoreStatus(snap.status, snap.backend, toggleOn);
+        hint.textContent = text;
+        hint.className = 'settings-row-desc settings-keychain-status' + (text.indexOf('Warning') >= 0 ? ' warn' : '');
+      }
+
       api.getState().then(function (state) {
         setToggle('optDevMode', !!state.developerModeEnabled);
         setToggle('optPrivacy', !!state.privacyModeEnabled);
@@ -1529,6 +1562,8 @@ function settingsHtml(): string {
         setToggle('optAutoConnectLast', state.autoConnectLastDeviceEnabled === true);
         setToggle('optRememberSidebarToggle', state.rememberSidebarToggle === true);
         setToggle('optRememberPasswordsInKeychain', state.rememberPasswordsInKeychain === true);
+        keychainSnap = state.secretStoreStatus || null;
+        updateKeychainStatusHint(state.rememberPasswordsInKeychain === true, keychainSnap);
         setToggle('optDevicePerfRememberQuad', state.devicePerformanceRememberQuadPerDevice === true);
         if (state.logFilePath && el('logPathHint')) {
           el('logPathHint').textContent = 'Log file: ' + state.logFilePath;
@@ -1618,6 +1653,21 @@ function settingsHtml(): string {
       wireToggleAria('optAutoConnectLast');
       wireToggleAria('optRememberSidebarToggle');
       wireToggleAria('optRememberPasswordsInKeychain');
+      var optKeychain = el('optRememberPasswordsInKeychain');
+      if (optKeychain) {
+        optKeychain.addEventListener('change', function () {
+          if (optKeychain.checked && keychainSnap && keychainSnap.status === 'unencrypted') {
+            var ok = window.confirm(
+              'Your system does not provide a real encryption keyring. Enabling this stores passwords as encoded plaintext on disk, not encrypted. Continue?'
+            );
+            if (!ok) {
+              optKeychain.checked = false;
+              setToggle('optRememberPasswordsInKeychain', false);
+            }
+          }
+          updateKeychainStatusHint(!!optKeychain.checked, keychainSnap);
+        });
+      }
       wireToggleAria('optDevicePerfRememberQuad');
 
       function buildPayload() {

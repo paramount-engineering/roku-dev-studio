@@ -164,7 +164,7 @@ Each row is one supported host (Cursor, Claude Desktop, VS Code, Visual Studio C
 | ![Fiddle channel on the Roku — source mirrored on screen, hint footer reports run state](images/BRIGHTSCRIPT_FIDDLE_ON_TV.png) |
 
 ### 📂 Log File Viewer
-- **Open saved logs:** *File → Open Log File…* (`Ctrl/Cmd+Shift+O`) opens a dedicated window with the same find / structured-log / URL-detection chrome as the live Console tab — handy for triaging logs from a previous session or a teammate
+- **Open saved logs:** *File → Open Log File* (`Ctrl/Cmd+Shift+O`) opens a dedicated window with the same find / structured-log / URL-detection chrome as the live Console tab — handy for triaging logs from a previous session or a teammate
 
 ### 🛠 `rds` CLI (terminal)
 - Ships with [`roku-dev-studio-api`](packages/roku-dev-studio-api/README.md#cli-rds): `rds discover`, `rds device info`, `rds keypress`, `rds launch`, `rds ecp query`, `rds sideload`, `rds screenshot`, `rds script validate / run`, `rds rale repl`, `rds appconnector connect` — works direct over LAN or against a `--relay` server URL.
@@ -177,7 +177,7 @@ Each row is one supported host (Cursor, Claude Desktop, VS Code, Visual Studio C
 - **Swagger API:** Interactive API documentation for remote server
 
 ### ⚙️ Settings
-Open with `Ctrl/Cmd+,` (or *Roku Dev Studio → Settings…* on macOS, *File → Settings* on Windows / Linux). Five sections:
+Open with `Ctrl/Cmd+,` (or *Roku Dev Studio → Settings* on macOS, *File → Settings* on Windows / Linux). Five sections:
 
 - **General:** Developer Mode, Privacy Mode (mask IPs / serials), Debug Logging to file, Roku Remote - Use Keyboard, Auto Connect to Devices, Auto Hide SideBar
 - **Action Scripts:** Default folder for run artifacts (screenshots, exported PDFs)

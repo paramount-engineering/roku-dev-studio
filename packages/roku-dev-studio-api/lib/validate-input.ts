@@ -22,7 +22,11 @@ function validateDevPassword(password: unknown): { valid: boolean; error?: strin
   if (s.length > 128) return { valid: false, error: 'Password is too long' };
   const unsafe = /["'`$\\\r\n\t;|&<>*?()[\]{}]|\.\./;
   if (unsafe.test(s)) {
-    return { valid: false, error: 'Password contains invalid characters' };
+    return {
+      valid: false,
+      error:
+        'Password contains characters Dev Studio cannot use (quotes, $, shell symbols, etc.). The device web UI may accept a broader set — try a simpler password for sideload/verify here.'
+    };
   }
   return { valid: true };
 }

@@ -115,6 +115,10 @@ type RemoteTelnetConn = {
   ip: string;
   isRemote: boolean;
   ipcCoalesce: TelnetIpcCoalesceState;
+  openedAtMs: number;
+  bytesReceived: number;
+  /** Set when the relay reports Roku socket closed with hadError. */
+  relayCloseHadError?: boolean;
 };
 
 // Module-scoped state shared with non-IPC callers (e.g. Fiddle run flow, which
@@ -222,7 +226,8 @@ let moduleSafeSendToRenderer: SafeSendFn | null = null;
  */
 function establishRemoteTelnetConnection(
   serverUrl: string,
-  ip: string
+  ip: string,
+  options?: { skipRelayBuffer?: boolean }
 ): Promise<{ success: boolean; error?: string; connectionId?: string; sessionId?: string }> {
   const connectionId = `${serverUrl}:${ip}`;
   const safeSendToRenderer: SafeSendFn = (channel, payload) => {
@@ -286,10 +291,12 @@ function establishRemoteTelnetConnection(
       }
 
       const wsUrl = serverUrl.replace('https://', 'wss://').replace('http://', 'ws://');
-      const ws = new WebSocket(`${wsUrl}/telnet/stream/${sessionId}`);
+      const streamQuery = options?.skipRelayBuffer ? '?skipBuffer=1' : '';
+      const ws = new WebSocket(`${wsUrl}/telnet/stream/${sessionId}${streamQuery}`);
 
       return await new Promise<{ success: boolean; error?: string; connectionId?: string; sessionId?: string }>((resolve) => {
         let resolved = false;
+        let wsCloseHadError = false;
 
         ws.on('open', () => {
           console.log('[Remote Telnet] WebSocket connected to relay');
@@ -299,7 +306,9 @@ function establishRemoteTelnetConnection(
             serverUrl,
             ip,
             isRemote: true,
-            ipcCoalesce: createTelnetIpcCoalesceState()
+            ipcCoalesce: createTelnetIpcCoalesceState(),
+            openedAtMs: Date.now(),
+            bytesReceived: 0
           });
           if (!resolved) {
             resolved = true;
@@ -311,17 +320,27 @@ function establishRemoteTelnetConnection(
         });
 
         ws.on('message', (data: Buffer | ArrayBuffer | Buffer[]) => {
+          const chunkText = Buffer.isBuffer(data)
+            ? data.toString('utf8')
+            : Array.isArray(data)
+              ? Buffer.concat(data).toString('utf8')
+              : Buffer.from(data).toString('utf8');
           try {
-            const parsed = JSON.parse(data.toString());
+            const parsed = JSON.parse(chunkText);
             if (parsed.type === 'log') {
               const rt = remoteTelnetConnections.get(connectionId);
               if (rt && typeof parsed.data === 'string') {
+                rt.bytesReceived += Buffer.byteLength(parsed.data, 'utf8');
                 rt.ipcCoalesce.pending += parsed.data;
                 scheduleCoalescedMapFlush(remoteTelnetConnections, connectionId, (live, slice) => {
                   safeSendToRenderer(IPC.TelnetData, { ip: live.ip, connectionId, data: slice, isRemote: true });
                 });
               }
             } else if (parsed.type === 'disconnected') {
+              const rt = remoteTelnetConnections.get(connectionId);
+              if (rt && parsed.hadError) {
+                rt.relayCloseHadError = true;
+              }
               ws.close();
             } else if (parsed.type === 'error') {
               safeSendToRenderer(IPC.TelnetError, { ip, connectionId, error: parsed.error, isRemote: true });
@@ -329,7 +348,8 @@ function establishRemoteTelnetConnection(
           } catch {
             const rt = remoteTelnetConnections.get(connectionId);
             if (rt) {
-              rt.ipcCoalesce.pending += data.toString();
+              rt.bytesReceived += Buffer.byteLength(chunkText, 'utf8');
+              rt.ipcCoalesce.pending += chunkText;
               scheduleCoalescedMapFlush(remoteTelnetConnections, connectionId, (live, slice) => {
                 safeSendToRenderer(IPC.TelnetData, { ip: live.ip, connectionId, data: slice, isRemote: true });
               });
@@ -339,17 +359,29 @@ function establishRemoteTelnetConnection(
 
         ws.on('error', (error: Error) => {
           console.log('[Remote Telnet] WebSocket error:', error.message);
+          wsCloseHadError = true;
           if (!resolved) { resolved = true; resolve({ success: false, error: error.message }); }
         });
 
         ws.on('close', () => {
           console.log('[Remote Telnet] WebSocket closed');
+          const rt = remoteTelnetConnections.get(connectionId);
+          const aliveMs = rt ? Date.now() - rt.openedAtMs : -1;
+          const bytesReceived = rt ? rt.bytesReceived : -1;
+          const hadError = wsCloseHadError || !!rt?.relayCloseHadError;
           flushCoalescedMapNow(remoteTelnetConnections, connectionId, (live, slice) => {
             safeSendToRenderer(IPC.TelnetData, { ip: live.ip, connectionId, data: slice, isRemote: true });
           });
           remoteTelnetConnections.delete(connectionId);
           remoteTelnetHoldersByConnId.delete(connectionId);
-          safeSendToRenderer(IPC.TelnetDisconnected, { ip, connectionId, isRemote: true });
+          safeSendToRenderer(IPC.TelnetDisconnected, {
+            ip,
+            connectionId,
+            isRemote: true,
+            hadError,
+            aliveMs,
+            bytesReceived
+          });
         });
 
         setTimeout(() => {
@@ -602,9 +634,12 @@ function setupRemoteHandlers(mainWindow: BrowserWindow | undefined, safeSendToRe
   // The IPC handler preserves the historical "force-reconnect" semantics: when
   // the user explicitly hits Connect we tear down any existing session and
   // dial a fresh one.
-  ipcMain.handle(IPC.RemoteTelnetConnect, async (_event: IpcMainInvokeEvent, { serverUrl, ip }: RemoteDevicePayload) => {
+  ipcMain.handle(IPC.RemoteTelnetConnect, async (
+    _event: IpcMainInvokeEvent,
+    { serverUrl, ip, skipRelayBuffer }: RemoteDevicePayload & { skipRelayBuffer?: boolean }
+  ) => {
     const connectionId = `${serverUrl}:${ip}`;
-    const res = await establishRemoteTelnetConnection(serverUrl, ip);
+    const res = await establishRemoteTelnetConnection(serverUrl, ip, { skipRelayBuffer });
     if (res.success) addRemoteTelnetHolder(connectionId, 'main-ui');
     return res;
   });
@@ -642,6 +677,10 @@ function setupRemoteHandlers(mainWindow: BrowserWindow | undefined, safeSendToRe
     const connection = remoteTelnetConnections.get(connectionId);
     const connected = connection && connection.ws && connection.ws.readyState === 1;
     return { connected, connectionId, sessionId: connection?.sessionId };
+  });
+
+  ipcMain.handle(IPC.RemoteTelnetClearBuffer, async (_event: IpcMainInvokeEvent, { serverUrl, ip }: RemoteDevicePayload) => {
+    return await remoteHttpRequest(serverUrl, `/device/${ip}/telnet/clear-buffer`, 'POST');
   });
 
   // ============================================

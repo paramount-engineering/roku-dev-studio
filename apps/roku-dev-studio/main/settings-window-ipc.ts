@@ -146,8 +146,14 @@ type AppStateRef = {
   logFile: string | null;
 };
 
+type SecretStoreStatusSnapshot = {
+  status: string;
+  backend: string;
+};
+
 type RegisterDeps = {
   getAppState: () => AppStateRef;
+  getSecretStoreStatus: () => SecretStoreStatusSnapshot;
   applyModesAfterSave: (
     developerModeEnabled: boolean,
     privacyModeEnabled: boolean,
@@ -282,6 +288,7 @@ function registerSettingsWindowIpc(
       autoConnectLastDeviceEnabled,
       rememberSidebarToggle,
       rememberPasswordsInKeychain,
+      secretStoreStatus: deps.getSecretStoreStatus(),
       mcpClients: mcpClientsState,
       mcpClientDetections: mcpDetections.map((d) => ({
         id: d.id,

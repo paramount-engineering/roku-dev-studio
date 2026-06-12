@@ -1,0 +1,25 @@
+# Example systemd unit for Roku Dev Studio Remote Server (Linux).
+# Install:
+#   1. Edit Node path and roku-remote-server.js path below.
+#   2. sudo cp roku-remote-server.service /etc/systemd/system/
+#   3. sudo systemctl daemon-reload
+#   4. sudo systemctl enable --now roku-remote-server
+#
+# Logs: journalctl -u roku-remote-server -f
+
+[Unit]
+Description=Roku Dev Studio Remote Server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=YOUR_LINUX_USER
+WorkingDirectory=/opt/roku-remote-server
+ExecStart=/usr/bin/node /opt/roku-remote-server/roku-remote-server.js 4951
+Restart=on-failure
+RestartSec=5
+Environment=NODE_ENV=production
+
+[Install]
+WantedBy=multi-user.target

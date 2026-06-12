@@ -202,6 +202,7 @@ function getInstallCandidates(id: McpClientId): string[] {
     if (id === 'cursor') {
       return [
         path.join(localAppData, 'Programs', 'cursor', 'Cursor.exe'),
+        path.join(localAppData, 'cursor', 'Cursor.exe'),
         path.join(programFiles, 'Cursor', 'Cursor.exe'),
         path.join(programFilesX86, 'Cursor', 'Cursor.exe')
       ];
@@ -259,6 +260,8 @@ function getInstallCandidates(id: McpClientId): string[] {
         '/usr/bin/cursor',
         '/opt/cursor/cursor',
         '/snap/bin/cursor',
+        path.join(home, '.local', 'share', 'cursor', 'cursor'),
+        path.join(home, '.var', 'app', 'com.cursor.Cursor'),
         path.join(home, '.config', 'Cursor')
       ];
     }
@@ -267,6 +270,7 @@ function getInstallCandidates(id: McpClientId): string[] {
         '/usr/bin/code',
         '/usr/share/code/code',
         '/snap/bin/code',
+        path.join(home, '.var', 'app', 'com.visualstudio.code'),
         path.join(home, '.config', 'Code')
       ];
     }

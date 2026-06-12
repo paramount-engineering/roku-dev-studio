@@ -61,6 +61,21 @@ function requirePassword(ctx) {
   }
 }
 
+async function warnRelayApiVersionMismatch(client: { health?: () => Promise<Record<string, unknown>> }, ctx: { quiet?: boolean }) {
+  if (ctx.quiet || typeof client.health !== 'function') return;
+  try {
+    const health = await client.health();
+    const remoteVer = health && typeof health.apiVersion === 'string' ? health.apiVersion : '';
+    if (remoteVer && remoteVer !== api.PACKAGE_VERSION) {
+      console.error(
+        `Warning: relay apiVersion ${remoteVer} differs from this CLI (${api.PACKAGE_VERSION}). Update the remote server for matching sideload/screenshot behavior.`
+      );
+    }
+  } catch {
+    // Non-fatal — relay may not expose /health yet.
+  }
+}
+
 function getTransport(ctx) {
   if (ctx.relay) {
     try {
@@ -439,6 +454,7 @@ async function main() {
         requirePassword(ctx);
         const t = getTransport(ctx);
         if (t.mode === 'relay') {
+          await warnRelayApiVersionMismatch(t.client, ctx);
           const result = await t.client.deleteSideload(ctx.ip, ctx.password);
           exitFromSuccess(ctx, result, () => console.log(result.message || 'Deleted'));
           return;
@@ -459,6 +475,7 @@ async function main() {
       }
       const t = getTransport(ctx);
       if (t.mode === 'relay') {
+        await warnRelayApiVersionMismatch(t.client, ctx);
         const result = await t.client.sideload(ctx.ip, {
           file: abs,
           password: ctx.password
@@ -517,6 +534,7 @@ async function main() {
 
       let buf;
       if (t.mode === 'relay') {
+        await warnRelayApiVersionMismatch(t.client, ctx);
         const result = await t.client.screenshot(ctx.ip, {
           password: ctx.password,
           waitAfterTriggerMs

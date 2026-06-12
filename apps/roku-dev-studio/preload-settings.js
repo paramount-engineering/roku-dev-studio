@@ -85,6 +85,7 @@ var init_channels = __esm({
       RokuInputText: "roku:input-text",
       RokuDeeplink: "roku:deeplink",
       RokuSelectSideloadFile: "roku:select-sideload-file",
+      RokuResolveSideloadFile: "roku:resolve-sideload-file",
       RokuSideload: "roku:sideload",
       RokuDeleteSideload: "roku:delete-sideload",
       RokuScreenshot: "roku:screenshot",
@@ -176,6 +177,7 @@ var init_channels = __esm({
       RemoteTelnetDisconnect: "remote:telnet-disconnect",
       RemoteTelnetSend: "remote:telnet-send",
       RemoteTelnetStatus: "remote:telnet-status",
+      RemoteTelnetClearBuffer: "remote:telnet-clear-buffer",
       RemoteTelnetSystemConnect: "remote:telnet-system-connect",
       RemoteTelnetSystemDisconnect: "remote:telnet-system-disconnect",
       RemoteTelnetSystemSend: "remote:telnet-system-send",
@@ -203,10 +205,17 @@ var init_channels = __esm({
       SetPrivacyMode: "set-privacy-mode",
       PrivacyModeChanged: "privacy-mode-changed",
       DebugLoggingChanged: "debug-logging-changed",
+      /** Win/Linux title-bar hamburger → main-process menu actions. */
+      AppMenuAction: "app-menu:action",
+      ShowAboutDialog: "show-about-dialog",
+      /** @deprecated Native popup removed — renderer draws the hamburger menu. */
+      ShowHamburgerMenu: "show-hamburger-menu",
       /** Frameless main window — custom title bar (Windows / Linux). */
       MainWindowMinimize: "main-window:minimize",
       MainWindowToggleMaximize: "main-window:toggle-maximize",
       MainWindowClose: "main-window:close",
+      IsMainWindowMaximized: "main-window:is-maximized",
+      MainWindowMaximizeChanged: "main-window:maximize-changed",
       /** Main → renderer: webContents zoom factor changed (menu Cmd+/-/0,
        * Ctrl+wheel, or initial load). Renderer mirrors it into the
        * `--app-zoom` CSS variable so the frameless title bar can stay at a

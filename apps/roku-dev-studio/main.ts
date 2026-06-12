@@ -93,6 +93,8 @@ let privacyModeEnabled = false;
 // and Fiddle windows can register the same guards. See that module for the
 // rationale behind the clamp band and why pinch-zoom is disabled.
 const { zoomIn, zoomOut, resetZoom, setupZoomGuards } = require('./main/window-zoom');
+const { registerHamburgerMenuIpc } = require('./main/hamburger-menu');
+const { registerStripAuxWindowMenus } = require('./main/strip-aux-window-menu');
 
 // Helper function to safely send messages to renderer.
 //
@@ -121,10 +123,20 @@ function safeSendToRenderer(channel: string, data: unknown) {
 function safeSendToRendererWithFiddleMirror(channel: string, data: unknown) {
   try {
     if (channel === 'telnet:data' && data && typeof data === 'object') {
-      const payload = data as { ip?: string; data?: string; isRemote?: boolean };
+      const payload = data as {
+        ip?: string;
+        data?: string;
+        isRemote?: boolean;
+        connectionId?: string;
+      };
       if (typeof payload.ip === 'string' && typeof payload.data === 'string') {
         try {
-          broadcastFiddleTerminalData(payload.ip, payload.data, !!payload.isRemote);
+          broadcastFiddleTerminalData({
+            ip: payload.ip,
+            data: payload.data,
+            isRemote: payload.isRemote,
+            connectionId: payload.connectionId
+          });
         } catch (e) {
           /* ignore fiddle broadcast errors */
         }
@@ -208,13 +220,16 @@ function createWindow(appState: AppWindowState) {
     minWidth: 1100,
     minHeight: 700,
     backgroundColor: '#0a0a12',
-    frame: false,
+    // macOS: keep the native frame so traffic lights layer correctly with
+    // hiddenInset — frame:false + titleBarStyle is a known bad combo (HTML
+    // title-bar controls can paint focus rings over the close button).
+    // Win/Linux: frameless shell with custom min/max/close in the HTML title bar.
     ...(isMac
       ? {
           titleBarStyle: 'hiddenInset' as const,
           trafficLightPosition: { x: 14, y: 13 }
         }
-      : {}),
+      : { frame: false }),
     show: false, // Don't show until ready - faster perceived startup
     webPreferences: {
       preload: preloadPath,
@@ -223,6 +238,12 @@ function createWindow(appState: AppWindowState) {
     }
   });
   mainWindow = win;
+
+  // Win/Linux: hide the native menu bar on the main window (hamburger is the
+  // primary surface). Accelerators from setApplicationMenu still apply app-wide.
+  if (!isMac) {
+    win.setMenu(null);
+  }
 
   win.webContents.on('preload-error', (_event: unknown, failedPath: string, error: Error) => {
     console.error('[Roku Dev Studio] Preload failed:', failedPath, error);
@@ -238,6 +259,16 @@ function createWindow(appState: AppWindowState) {
   // `./main/window-zoom` for rationale.
   setupZoomGuards(win);
 
+  if (!isMac) {
+    const sendMaximizeState = () => {
+      if (!win.isDestroyed()) {
+        win.webContents.send(IPC.MainWindowMaximizeChanged, win.isMaximized());
+      }
+    };
+    win.on('maximize', sendMaximizeState);
+    win.on('unmaximize', sendMaximizeState);
+  }
+
   loadMainRenderer(win);
 
   // Create application menu
@@ -252,7 +283,7 @@ function createWindow(appState: AppWindowState) {
         },
         { type: 'separator' },
         {
-          label: 'Settings…',
+          label: 'Settings',
           accelerator: 'CmdOrCtrl+,',
           click: () => showSettingsDialog(win)
         },
@@ -360,7 +391,7 @@ function createWindow(appState: AppWindowState) {
             }
           }
         },
-        // On macOS, Settings lives in the app menu (Roku Dev Studio → Settings…); listing
+        // On macOS, Settings lives in the app menu (Roku Dev Studio → Settings); listing
         // it here too would duplicate it. Keep the File-menu entry on Windows / Linux where
         // there is no app menu.
         ...(isMac
@@ -545,6 +576,7 @@ function registerSecretsIpc(ipc: typeof ipcMain) {
 }
 
 app.whenReady().then(() => {
+  registerStripAuxWindowMenus(app);
   initSettings(app);
   const earlySettings = loadSettings();
   const rememberPasswordsInKeychain = earlySettings.rememberPasswordsInKeychain === true;
@@ -596,6 +628,40 @@ app.whenReady().then(() => {
     logFile
   };
   createWindow(appState);
+
+  registerHamburgerMenuIpc(ipcMain, {
+    dialog,
+    getMainWindow: () => mainWindow,
+    getDebugLogging: () => debugLoggingEnabled,
+    setDebugLogging: (enabled: boolean) => {
+      debugLoggingEnabled = enabled;
+      appState.debugLoggingEnabled = debugLoggingEnabled;
+      appState.logFile = logFile;
+      const nextSettings = loadSettings();
+      nextSettings.debugLoggingEnabled = debugLoggingEnabled;
+      saveSettings(nextSettings);
+      if (debugLoggingEnabled && logFile) {
+        enableFileLogging(logFile);
+      } else {
+        disableFileLogging();
+      }
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send(IPC.DebugLoggingChanged, debugLoggingEnabled);
+      }
+    },
+    showAboutDialog,
+    showSettingsDialog,
+    openLogFileViewer: openLogFileViewerWindow,
+    openFiddle: () => {
+      if (mainWindow && mainWindow.webContents && !mainWindow.webContents.isDestroyed()) {
+        mainWindow.webContents.send(IPC.FiddleOpen, {});
+      } else {
+        openFiddleWindow(undefined, [], null);
+      }
+    },
+    clearCacheAndReload: () => clearCacheAndReload(appState)
+  });
+
   setupIpcHandlers(mainWindow, getDeviceInfo, getDeviceId, safeSendToRendererWithFiddleMirror, dialog, Menu, clipboard, app, appState);
 
   startMcpBridge({
@@ -607,6 +673,7 @@ app.whenReady().then(() => {
 
   registerSettingsWindowIpc(ipcMain, Menu, dialog, {
     getAppState: () => appState,
+    getSecretStoreStatus: () => secretStore.getStatus(),
     applyModesAfterSave: (d: boolean, p: boolean, dbg: boolean) => {
       developerModeEnabled = d;
       privacyModeEnabled = p;

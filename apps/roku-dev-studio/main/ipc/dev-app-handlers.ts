@@ -5,7 +5,8 @@ import type {
   IpFilePasswordPayload,
   IpPasswordPayload,
   IpPasswordScreenshotPayload,
-  SaveScreenshotPayload
+  SaveScreenshotPayload,
+  SideloadFilePathPayload
 } from '../../shared/ipc/payloads';
 import { IPC } from '../../shared/ipc/channels';
 
@@ -23,6 +24,43 @@ const {
 
 function errMsg(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
+}
+
+const SIDELOAD_PACKAGE_EXTENSIONS = new Set(['zip', 'pkg']);
+
+function getSideloadAllowedBases(): string[] {
+  return [os.homedir(), process.platform === 'win32' ? process.env.USERPROFILE || '' : os.homedir()].filter(Boolean);
+}
+
+type ResolvedSideloadFile =
+  | { success: true; filePath: string; fileName: string; fileSize: number }
+  | { success: false; error: string };
+
+function resolveSideloadPackageFile(filePath: string): ResolvedSideloadFile {
+  if (!filePath || typeof filePath !== 'string') {
+    return { success: false, error: 'File path required' };
+  }
+  const resolved = resolveUserPathUnderOneOf(getSideloadAllowedBases(), filePath);
+  if (!resolved) {
+    return { success: false, error: 'Path is not under an allowed directory' };
+  }
+  if (!fs.existsSync(resolved)) {
+    return { success: false, error: 'File not found' };
+  }
+  const ext = path.extname(resolved).slice(1).toLowerCase();
+  if (!SIDELOAD_PACKAGE_EXTENSIONS.has(ext)) {
+    return { success: false, error: 'Select a .zip or .pkg Roku channel package' };
+  }
+  const stats = fs.statSync(resolved);
+  if (!stats.isFile()) {
+    return { success: false, error: 'Not a file' };
+  }
+  return {
+    success: true,
+    filePath: resolved,
+    fileName: path.basename(resolved),
+    fileSize: stats.size
+  };
 }
 
 /**
@@ -45,16 +83,12 @@ function setupDevAppHandlers(mainWindow: BrowserWindow | undefined, dialog: Dial
       return { success: false, canceled: true };
     }
 
-    const filePath = result.filePaths[0];
-    const fileName = path.basename(filePath);
-    const stats = fs.statSync(filePath);
+    return resolveSideloadPackageFile(result.filePaths[0]);
+  });
 
-    return {
-      success: true,
-      filePath,
-      fileName,
-      fileSize: stats.size
-    };
+  // Resolve a dropped or pasted sideload package path (same validation as the file picker).
+  ipcMain.handle(IPC.RokuResolveSideloadFile, async (_event: IpcMainInvokeEvent, { filePath }: SideloadFilePathPayload) => {
+    return resolveSideloadPackageFile(filePath);
   });
 
   // Sideload a channel package (shared logic in lib/roku-plugin-install.js). filePath must be under allowed dirs.
@@ -62,8 +96,7 @@ function setupDevAppHandlers(mainWindow: BrowserWindow | undefined, dialog: Dial
     if (!filePath || typeof filePath !== 'string') {
       return { success: false, error: 'File path required' };
     }
-    const allowedBases = [os.homedir(), process.platform === 'win32' ? process.env.USERPROFILE || '' : os.homedir()].filter(Boolean);
-    const resolved = resolveUserPathUnderOneOf(allowedBases, filePath);
+    const resolved = resolveUserPathUnderOneOf(getSideloadAllowedBases(), filePath);
     if (!resolved) {
       return { success: false, error: 'Path is not under an allowed directory' };
     }

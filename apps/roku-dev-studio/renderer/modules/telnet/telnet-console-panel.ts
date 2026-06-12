@@ -22,14 +22,21 @@ import {
   parseConsoleLineBatch
 } from '../console-log/console-line-parser.js';
 import { icon, setSafeHTML } from '../index.js';
+import {
+  debugTelnetIpcTargetsDevice,
+  type DebugTelnetIpcPayload
+} from '../../../shared/ipc/debug-telnet-connection-id.js';
 
 export type TelnetConsoleDevice = { deviceName?: string; modelName?: string; ip: string };
 
 export type TelnetConsoleApi = {
   ip: string;
   isRemote?: boolean;
-  telnetConnect: () => Promise<{ success: boolean; error?: string }>;
+  serverUrl?: string | null;
+  telnetConnect: (options?: { skipRelayBuffer?: boolean }) => Promise<{ success: boolean; error?: string }>;
   telnetDisconnect: () => Promise<unknown>;
+  /** Remote relay only — clears the server-side gap buffer without closing 8085. */
+  telnetClearRelayBuffer?: () => Promise<{ success?: boolean; error?: string; clearedBytes?: number }>;
 };
 
 export type TelnetLogLine = { text: string; timestamp: string | null; type: string };
@@ -60,7 +67,7 @@ export type TelnetPanelElement = HTMLElement & {
    * a `.telnet-connect-btn` click, which would silently fail if the markup
    * changed.
    */
-  connectTelnet?: () => Promise<void>;
+  connectTelnet?: (options?: { skipRelayBuffer?: boolean }) => Promise<void>;
   /**
    * Programmatically close the Telnet console connection, mirroring the
    * Disconnect button. Idempotent: no-op when already disconnected. Used by
@@ -627,7 +634,7 @@ export function setupTelnet(
    *
    * Reset on Clear / new Connect (both call `consoleSpillStart` again,
    * which implies a fresh session — old loaded entries are dropped via
-   * `logLines = []` in those paths).
+   * in-place `logLines.length = 0` in the Clear path).
    */
   let spillAutoLoadInFlight = false;
   let spillAutoLoaded = false;
@@ -742,7 +749,7 @@ export function setupTelnet(
 
   /** Shared click-handler + programmatic-entry path so the button and the
    *  exposed `panel.connectTelnet()` go through identical logic. */
-  async function connectTelnet(): Promise<void> {
+  async function connectTelnet(options?: { skipRelayBuffer?: boolean }): Promise<void> {
     if (isConnected) return;
     if (connectInFlight) return connectInFlight;
 
@@ -750,7 +757,7 @@ export function setupTelnet(
       updateConnectionState(false, true);
 
       try {
-        const result = await api.telnetConnect();
+        const result = await api.telnetConnect(options);
 
         if (result.success) {
           telnetTcpState.value = '';
@@ -779,7 +786,12 @@ export function setupTelnet(
               console.warn('[Console spill] start rejected:', err);
             });
           updateConnectionState(true);
-          addLogLine(`--- Connected to ${api.ip}:8085 ${api.isRemote ? '(via relay)' : ''} ---`, false);
+          const relayNote = api.isRemote
+            ? options?.skipRelayBuffer
+              ? ' (via relay, skip existing logs buffer)'
+              : ' (via relay, replay buffer)'
+            : '';
+          addLogLine(`--- Connected to ${api.ip}:8085${relayNote} ---`, false);
         } else {
           updateConnectionState(false, false, result.error || 'Connection failed');
           addLogLine(`--- Connection failed: ${result.error || 'Unknown error'} ---`, false);
@@ -1025,14 +1037,17 @@ export function setupTelnet(
 
   outputEl.querySelector('.telnet-scroll-spacer')?.remove();
 
-  // Clear console
-  clearBtn.addEventListener('click', () => {
+  function clearConsoleLocal(): void {
     telnetTcpState.value = '';
     pendingTelnetLines.length = 0;
     telnetParserState.pendingLogPrefix = '';
     cancelTelnetFlush();
     clearDeferredTelnetHeavyLines();
-    logLines = [];
+    // Clear in place — `mountConsoleLogSurface` holds the same array
+    // reference as `entries`. Reassigning (`logLines = []`) would leave the
+    // virtualizer + find bar observing a stale array while new IPC batches
+    // push into a fresh one: the line counter increments but nothing renders.
+    logLines.length = 0;
     // Drive the row teardown THROUGH the virtualizer rather than blowing
     // away `outputEl.innerHTML`. The virtualizer's container element
     // (`virtualContainerEl`, appended to outputEl during setup) IS a child
@@ -1100,7 +1115,108 @@ export function setupTelnet(
         outputEl.insertBefore(placeholder, surface.view.getContainerEl());
       }
     }
+  }
+
+  // Clear console (local scrollback only)
+  clearBtn.addEventListener('click', () => {
+    clearConsoleLocal();
   });
+
+  /** Wire a relay-only split-button dropdown (Connect / Clear chevrons). */
+  function wireTelnetSplitMenu(
+    menuBtn: HTMLButtonElement,
+    menu: HTMLElement,
+    registerCleanup: (fn: () => void) => void
+  ): { close: () => void } {
+    menuBtn.hidden = false;
+
+    function setOpen(open: boolean): void {
+      menu.hidden = !open;
+      menuBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    }
+
+    menuBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      setOpen(menu.hidden);
+    });
+
+    const onDocumentClick = (e: MouseEvent) => {
+      if (menu.hidden) return;
+      const t = e.target;
+      if (!(t instanceof Node)) return;
+      if (menu.contains(t) || menuBtn.contains(t)) return;
+      setOpen(false);
+    };
+
+    const onDocumentKeydown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !menu.hidden) {
+        setOpen(false);
+      }
+    };
+
+    document.addEventListener('click', onDocumentClick);
+    document.addEventListener('keydown', onDocumentKeydown);
+    registerCleanup(() => {
+      document.removeEventListener('click', onDocumentClick);
+      document.removeEventListener('keydown', onDocumentKeydown);
+    });
+
+    return { close: () => setOpen(false) };
+  }
+
+  const isRelayConsole = !!(api.isRemote && api.serverUrl && api.telnetClearRelayBuffer);
+  const splitMenuCleanups: Array<() => void> = [];
+  const registerSplitMenuCleanup = (fn: () => void) => {
+    splitMenuCleanups.push(fn);
+  };
+
+  // Relay Connect: default replays the server gap buffer; menu offers live-only.
+  const connectMenuBtn = panel.querySelector<HTMLButtonElement>('.telnet-connect-menu-btn');
+  const connectMenu = panel.querySelector<HTMLElement>('.telnet-connect-menu');
+  const connectLiveOnlyItem = panel.querySelector<HTMLButtonElement>(
+    '.telnet-connect-menu-item[data-connect-action="live-only"]'
+  );
+
+  if (isRelayConsole && connectMenuBtn && connectMenu && connectLiveOnlyItem) {
+    const connectMenuUi = wireTelnetSplitMenu(connectMenuBtn, connectMenu, registerSplitMenuCleanup);
+    connectLiveOnlyItem.addEventListener('click', () => {
+      connectMenuUi.close();
+      void connectTelnet({ skipRelayBuffer: true });
+    });
+  }
+
+  // Relay Clear: main button = local only; menu = relay-only or local + relay.
+  const clearMenuBtn = panel.querySelector<HTMLButtonElement>('.telnet-clear-menu-btn');
+  const clearMenu = panel.querySelector<HTMLElement>('.telnet-clear-menu');
+  const clearRelayOnlyItem = panel.querySelector<HTMLButtonElement>(
+    '.telnet-clear-menu-item[data-clear-action="relay-buffer"]'
+  );
+  const clearLocalAndRelayItem = panel.querySelector<HTMLButtonElement>(
+    '.telnet-clear-menu-item[data-clear-action="local-and-relay"]'
+  );
+
+  function clearRelayBufferOnServer(): void {
+    void api.telnetClearRelayBuffer!().then((res) => {
+      if (res?.success === false) {
+        console.warn('[Console] relay buffer clear failed:', res?.error);
+      }
+    }).catch((err: unknown) => {
+      console.warn('[Console] relay buffer clear rejected:', err);
+    });
+  }
+
+  if (isRelayConsole && clearMenuBtn && clearMenu && clearRelayOnlyItem && clearLocalAndRelayItem) {
+    const clearMenuUi = wireTelnetSplitMenu(clearMenuBtn, clearMenu, registerSplitMenuCleanup);
+    clearRelayOnlyItem.addEventListener('click', () => {
+      clearMenuUi.close();
+      clearRelayBufferOnServer();
+    });
+    clearLocalAndRelayItem.addEventListener('click', () => {
+      clearMenuUi.close();
+      clearConsoleLocal();
+      clearRelayBufferOnServer();
+    });
+  }
 
   // Expose full console log to Action Script executor (reads in-memory logLines, not DOM)
   panel.getTelnetLogText = function () {
@@ -1124,17 +1240,34 @@ export function setupTelnet(
   };
   panel.connectTelnet = connectTelnet;
   panel.disconnectTelnet = disconnectTelnet;
-  
-  // Listen for telnet events (these come from the main process)
-  // We need to filter by IP to only handle events for this device
+
+  const telnetDeviceRef = {
+    ip: api.ip,
+    isRemote: api.isRemote,
+    serverUrl: api.serverUrl
+  };
+
+  function isOurTelnetEvent(data: unknown): data is DebugTelnetIpcPayload {
+    return debugTelnetIpcTargetsDevice(data as DebugTelnetIpcPayload, telnetDeviceRef);
+  }
+
+  // Listen for telnet events (these come from the main process).
+  // Filter by connectionId so remote tabs at the same private IP (or a local
+  // tab plus a remote tab at the same address) do not cross-deliver chunks.
   const dataCleanup = window.roku.onTelnetData((data) => {
-    if (data.ip === api.ip && typeof data.data === 'string') {
-      ingestTelnetIpcChunk(data.data);
+    const payload = data as DebugTelnetIpcPayload & { data?: string };
+    if (isOurTelnetEvent(payload) && typeof payload.data === 'string') {
+      ingestTelnetIpcChunk(payload.data);
     }
   });
-  
+
   const disconnectCleanup = window.roku.onTelnetDisconnected((data) => {
-    if (data.ip === api.ip) {
+    const payload = data as DebugTelnetIpcPayload & {
+      hadError?: boolean;
+      aliveMs?: number;
+      bytesReceived?: number;
+    };
+    if (isOurTelnetEvent(payload)) {
       const tail = takeTelnetTail(telnetTcpState);
       if (tail) {
         pendingTelnetLines.push(tail);
@@ -1150,8 +1283,8 @@ export function setupTelnet(
       // bytes received is the classic "another telnet client holds the
       // BrightScript log binding" / "channel exited immediately" pattern;
       // a plain "--- Connection closed ---" hides the actual cause.
-      const aliveMs = typeof data.aliveMs === 'number' ? data.aliveMs : -1;
-      const bytes = typeof data.bytesReceived === 'number' ? data.bytesReceived : -1;
+      const aliveMs = typeof payload.aliveMs === 'number' ? payload.aliveMs : -1;
+      const bytes = typeof payload.bytesReceived === 'number' ? payload.bytesReceived : -1;
       const aliveStr = aliveMs >= 0
         ? (aliveMs < 1000 ? `${aliveMs}ms` : `${(aliveMs / 1000).toFixed(1)}s`)
         : null;
@@ -1173,22 +1306,24 @@ export function setupTelnet(
       // signal that the close was abnormal (RST etc.).
       if (aliveMs >= 0 && aliveMs < 5000 && bytes <= 0) {
         addLogLine('--- Hint: Roku closed the socket quickly with no log data. Check that no other telnet client is connected to this device on port 8085 (BrightScript IDE, another Dev Studio window, a `telnet` terminal session, …) and that a sideloaded channel is currently running. ---', false);
-      } else if (data.hadError) {
+      } else if (payload.hadError) {
         addLogLine('--- Hint: socket close was abnormal (TCP RST or similar). Roku may have rebooted or another client took the 8085 binding. ---', false);
       }
 
-      updateConnectionState(false, false, data.hadError ? 'Connection lost' : null);
+      updateConnectionState(false, false, payload.hadError ? 'Connection lost' : null);
     }
   });
   
   const errorCleanup = window.roku.onTelnetError((data) => {
-    if (data.ip === api.ip) {
-      addLogLine(`--- Error: ${data.error} ---`, false);
+    const payload = data as DebugTelnetIpcPayload & { error?: string };
+    if (isOurTelnetEvent(payload)) {
+      addLogLine(`--- Error: ${payload.error ?? 'Unknown error'} ---`, false);
     }
   });
   
   // Store cleanup functions on panel for later removal
   panel._telnetCleanup = () => {
+    for (const fn of splitMenuCleanups) fn();
     // Surface dispose tears down: find bar (clears caches + highlight
     // registry + listeners), document-level keydown shortcut listener,
     // virtualizer ResizeObservers + scroll observers + all mounted rows.

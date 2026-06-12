@@ -255,11 +255,16 @@ export function openFiddleWindow(
  * its run-specific `[FIDDLE_BEGIN:…]` marker arrives. This function just
  * delivers the bytes.
  */
-export function broadcastFiddleTerminalData(ip: string, data: string, isRemote: boolean): void {
+export function broadcastFiddleTerminalData(payload: {
+  ip: string;
+  data: string;
+  isRemote?: boolean;
+  connectionId?: string;
+}): void {
   if (fiddleWindowsById.size === 0) return;
   for (const win of fiddleWindowsById.values()) {
     if (win && !win.isDestroyed()) {
-      win.webContents.send(IPC.FiddleTerminalData, { ip, data, isRemote });
+      win.webContents.send(IPC.FiddleTerminalData, payload);
     }
   }
 }

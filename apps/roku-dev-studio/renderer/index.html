@@ -131,6 +131,17 @@
       flex-direction: column;
     }
     
+    .titlebar-shell-warning {
+      flex-shrink: 0;
+      padding: 6px 12px;
+      background: var(--accent-red-dim, #3a1515);
+      color: var(--accent-red, #e85d5d);
+      font-size: 12px;
+      font-weight: 600;
+      text-align: center;
+      border-bottom: 1px solid var(--border);
+    }
+
     .titlebar {
       -webkit-app-region: drag;
       height: var(--titlebar-height);
@@ -205,21 +216,20 @@
       color: var(--text-primary);
     }
 
-    /*
-     * Intentionally no platform-specific vertical translate on the leading
-     * buttons. Past iterations tried to align them with the macOS traffic
-     * lights via a 3px downward translate, but the math only works at 100%
-     * zoom — the title bar height grows with renderer zoom (min() clamp on
-     * `--titlebar-content-scale` is a no-op for zoom ≥ 100%), while the
-     * OS-drawn traffic lights are anchored at a fixed screen offset and
-     * don't scale. At 200% the same translate becomes 6 screen px and the
-     * toggle visibly drifts off the title bar's vertical center.
-     *
-     * Treat the toggle / Scan / Help & Guide as our own content (not OS
-     * chrome) and let `.titlebar-leading { align-items: center; }` center
-     * them. The toggle ends up on the same centerline as the right-side
-     * zoom indicator — consistent across zoom levels, no magic numbers.
-     */
+    /* Suppress Chromium's default rectangular focus ring on title-bar buttons —
+       it can paint over macOS traffic lights when a leading control overlaps or
+       receives focus. Use :focus-visible for keyboard users once controls sit
+       past the traffic-light spacer. */
+    .titlebar-leading button:focus {
+      outline: none;
+    }
+
+    .titlebar-leading button:focus-visible {
+      outline: 2px solid var(--accent-purple);
+      outline-offset: 2px;
+    }
+
+    /* Title-bar leading controls stay vertically centered via flex — no per-platform translate. */
 
     body.sidebar-collapsed .titlebar-sidebar-toggle {
       color: var(--accent-purple);
@@ -475,7 +485,20 @@
     }
 
     .titlebar-control .icon {
-      font-size: calc(14px * var(--titlebar-content-scale));
+      font-size: calc(10px * var(--titlebar-content-scale));
+      pointer-events: none;
+    }
+
+    .titlebar-maximize .titlebar-restore-glyph {
+      display: none;
+    }
+
+    .titlebar-maximize.titlebar-maximized .titlebar-maximize-glyph {
+      display: none;
+    }
+
+    .titlebar-maximize.titlebar-maximized .titlebar-restore-glyph {
+      display: inline-flex;
     }
 
     .titlebar-control:hover {
@@ -5338,6 +5361,67 @@
       align-items: center;
       gap: 8px;
     }
+
+    /* Split-button controls — relay devices only (chevron hidden for local tabs). */
+    .telnet-split-control {
+      position: relative;
+      display: inline-flex;
+      align-items: stretch;
+    }
+    .telnet-split-control .telnet-split-main {
+      border-top-right-radius: 0;
+      border-bottom-right-radius: 0;
+    }
+    .telnet-split-control .telnet-split-menu-btn {
+      border-top-left-radius: 0;
+      border-bottom-left-radius: 0;
+      border-left: 1px solid rgba(255, 255, 255, 0.08);
+      padding-left: 6px;
+      padding-right: 6px;
+      min-width: 0;
+    }
+    .telnet-split-control .telnet-split-menu-btn[hidden] {
+      display: none;
+    }
+    .telnet-split-control:not(:has(.telnet-split-menu-btn:not([hidden]))) .telnet-split-main {
+      border-radius: var(--radius-sm, 6px);
+    }
+    .telnet-split-menu {
+      position: absolute;
+      top: calc(100% + 4px);
+      right: 0;
+      z-index: 40;
+      min-width: 240px;
+      padding: 4px;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-sm, 6px);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+    }
+    .telnet-split-menu[hidden] {
+      display: none;
+    }
+    .telnet-split-menu-item {
+      display: block;
+      width: 100%;
+      padding: 8px 10px;
+      border: none;
+      border-radius: 4px;
+      background: transparent;
+      color: var(--text-primary);
+      font-size: 12px;
+      text-align: left;
+      cursor: pointer;
+    }
+    .telnet-split-menu-item:hover {
+      background: var(--bg-tertiary);
+    }
+    .telnet-connect-split {
+      margin-right: 0;
+    }
+    .telnet-clear-menu {
+      min-width: 280px;
+    }
     
     .telnet-autoscroll-label {
       display: flex;
@@ -5651,7 +5735,7 @@
     /*
      * Fold / expand groups inside the structured viewer.
      *
-     * Each foldable container ({…} / […] / <tag>…</tag>) becomes:
+     * Each foldable container ({…} / […] / element-with-children) becomes:
      *   .telnet-fold-group
      *     .telnet-fold-twisty          ← clickable ▾/▸
      *     <open-token>                  ← stays inline so braces / tags read normally
@@ -6325,7 +6409,8 @@
       background: var(--bg-primary);
     }
     
-    .install-drop-zone:hover {
+    .install-drop-zone:hover,
+    .install-drop-zone.install-drop-zone--dragover {
       border-color: var(--accent-purple);
       background: var(--accent-purple-dim);
     }
@@ -8391,9 +8476,9 @@
     .sideloaded-app-meta span { margin-right: 16px; }
     .sideloaded-none { color: var(--text-muted); font-size: 13px; padding: 12px 0; }
     
-    .auth-status { font-size: 11px; font-weight: 600; padding: 4px 10px; border-radius: 12px; }
+    .auth-status { font-size: 11px; font-weight: 600; padding: 4px 10px; border-radius: 12px; max-width: 100%; }
     .auth-status.authenticated { background: var(--accent-green-dim); color: var(--accent-green); }
-    .auth-status.not-authenticated { background: var(--accent-red-dim); color: var(--accent-red); }
+    .auth-status.not-authenticated { background: var(--accent-red-dim); color: var(--accent-red); white-space: normal; line-height: 1.35; }
     
     .screenshot-actions { display: flex; gap: 10px; margin-bottom: 12px; }
     .screenshot-container { margin-top: 12px; border-radius: 8px; overflow: hidden; background: var(--bg-tertiary); }
@@ -9499,6 +9584,201 @@
       display: none !important;
     }
 
+    /*
+     * Win/Linux app menu — sits in `.titlebar-trailing` immediately to the
+     * right of Floating Remote (when visible) and left of the zoom indicator.
+     * macOS keeps the system menu bar; this control is hidden there.
+     */
+    .titlebar-hamburger-btn {
+      display: none;
+      -webkit-app-region: no-drag;
+      align-items: center;
+      justify-content: center;
+      width: calc(28px * var(--titlebar-content-scale));
+      height: calc(28px * var(--titlebar-content-scale));
+      padding: 0;
+      border: 1px solid var(--border);
+      border-radius: calc(6px * var(--titlebar-content-scale));
+      background: var(--bg-tertiary);
+      color: var(--text-secondary);
+      cursor: pointer;
+      transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease;
+    }
+
+    body.platform-win32 .titlebar-hamburger-btn,
+    body.platform-linux .titlebar-hamburger-btn {
+      display: inline-flex;
+    }
+
+    .titlebar-hamburger-btn:hover {
+      background: var(--bg-hover);
+      color: var(--text-primary);
+      border-color: var(--accent-purple);
+    }
+
+    .titlebar-hamburger-btn .icon {
+      flex-shrink: 0;
+      pointer-events: none;
+      font-size: calc(14px * var(--titlebar-content-scale));
+    }
+
+    .titlebar-hamburger-btn[aria-expanded="true"] {
+      color: var(--text-primary);
+      border-color: var(--accent-purple);
+      background: var(--bg-hover);
+    }
+
+    /*
+     * Win/Linux hamburger dropdown — fixed to the top-right of the window so
+     * its right edge sits near the window chrome (past the min/max/close row).
+     */
+    body.platform-darwin .titlebar-hamburger-menu {
+      display: none !important;
+    }
+
+    .titlebar-hamburger-menu {
+      position: fixed;
+      top: var(--titlebar-height);
+      right: 0;
+      z-index: 260;
+      display: none;
+      min-width: calc(260px * var(--titlebar-content-scale));
+      max-width: min(92vw, calc(340px * var(--titlebar-content-scale)));
+      padding: calc(6px * var(--titlebar-content-scale)) 0;
+      border: 1px solid var(--border);
+      border-top: 0;
+      border-right: 0;
+      border-radius: 0 0 0 calc(8px * var(--titlebar-content-scale));
+      background: var(--bg-elevated);
+      box-shadow: 0 calc(10px * var(--titlebar-content-scale)) calc(28px * var(--titlebar-content-scale)) rgba(0, 0, 0, 0.42);
+      -webkit-app-region: no-drag;
+    }
+
+    .titlebar-hamburger-menu--open {
+      display: block;
+    }
+
+    .titlebar-hamburger-menu-list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+    }
+
+    .titlebar-hamburger-menu-sep {
+      height: 1px;
+      margin: calc(5px * var(--titlebar-content-scale)) calc(10px * var(--titlebar-content-scale));
+      background: var(--border);
+      pointer-events: none;
+    }
+
+    .titlebar-hamburger-menu-item {
+      -webkit-app-region: no-drag;
+      display: flex;
+      align-items: center;
+      width: 100%;
+      margin: 0;
+      padding: calc(8px * var(--titlebar-content-scale)) calc(14px * var(--titlebar-content-scale));
+      border: 0;
+      background: transparent;
+      color: var(--text-secondary);
+      font-family: inherit;
+      font-size: calc(12px * var(--titlebar-content-scale));
+      font-weight: 500;
+      line-height: 1.35;
+      text-align: left;
+      cursor: pointer;
+      transition: background 0.15s ease, color 0.15s ease;
+    }
+
+    .titlebar-hamburger-menu-item:hover {
+      background: var(--bg-hover);
+      color: var(--text-primary);
+    }
+
+    .titlebar-hamburger-menu-item[role="menuitemcheckbox"]::before {
+      content: "";
+      display: inline-block;
+      flex: 0 0 calc(14px * var(--titlebar-content-scale));
+      width: calc(14px * var(--titlebar-content-scale));
+      margin-right: calc(8px * var(--titlebar-content-scale));
+      text-align: center;
+    }
+
+    .titlebar-hamburger-menu-item[aria-checked="true"]::before {
+      content: "✓";
+      color: var(--accent-purple);
+    }
+
+    /*
+     * Chrome-style zoom row: label on the left, − / % / + stepper on the right.
+     * Stays open while adjusting zoom (handled in app.ts).
+     */
+    .titlebar-hamburger-menu-zoom-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: calc(10px * var(--titlebar-content-scale));
+      padding: calc(6px * var(--titlebar-content-scale)) calc(14px * var(--titlebar-content-scale));
+      -webkit-app-region: no-drag;
+    }
+
+    .titlebar-hamburger-menu-zoom-label {
+      flex: 0 0 auto;
+      font-size: calc(12px * var(--titlebar-content-scale));
+      font-weight: 500;
+      color: var(--text-secondary);
+      line-height: 1.35;
+    }
+
+    .titlebar-hamburger-menu-zoom-controls {
+      display: inline-flex;
+      align-items: center;
+      gap: calc(4px * var(--titlebar-content-scale));
+      flex-shrink: 0;
+    }
+
+    .titlebar-hamburger-menu-zoom-btn,
+    .titlebar-hamburger-menu-zoom-pct {
+      -webkit-app-region: no-drag;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0;
+      padding: 0;
+      border: 1px solid var(--border);
+      background: var(--bg-tertiary);
+      color: var(--text-secondary);
+      font-family: inherit;
+      cursor: pointer;
+      transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+    }
+
+    .titlebar-hamburger-menu-zoom-btn {
+      width: calc(26px * var(--titlebar-content-scale));
+      height: calc(26px * var(--titlebar-content-scale));
+      border-radius: 50%;
+      font-size: calc(14px * var(--titlebar-content-scale));
+      font-weight: 500;
+      line-height: 1;
+    }
+
+    .titlebar-hamburger-menu-zoom-pct {
+      min-width: calc(44px * var(--titlebar-content-scale));
+      height: calc(26px * var(--titlebar-content-scale));
+      padding: 0 calc(6px * var(--titlebar-content-scale));
+      border-radius: calc(13px * var(--titlebar-content-scale));
+      font-size: calc(11px * var(--titlebar-content-scale));
+      font-weight: 500;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .titlebar-hamburger-menu-zoom-btn:hover,
+    .titlebar-hamburger-menu-zoom-pct:hover {
+      background: var(--bg-hover);
+      color: var(--text-primary);
+      border-color: var(--accent-purple);
+    }
+
     /* Body-level mount root. Always present; the shell inside it controls
        its own visibility via the `--visible` modifier so the manager doesn't
        need to manage display state on the root itself. */
@@ -9698,6 +9978,16 @@
         <span class="icon icon-sm" aria-hidden="true"><svg><use href="#icon-gamepad"/></svg></span>
         <span class="titlebar-floating-remote-btn-label">Floating Remote</span>
       </button>
+      <button
+        type="button"
+        class="titlebar-hamburger-btn"
+        id="titlebarHamburgerBtn"
+        title="App menu"
+        aria-label="App menu"
+        aria-haspopup="menu"
+      >
+        <span class="icon icon-sm" aria-hidden="true"><svg><use href="#icon-menu"/></svg></span>
+      </button>
       <div class="titlebar-zoom" id="titlebarZoom" hidden>
         <button
           type="button"
@@ -9722,10 +10012,15 @@
         >+</button>
       </div>
       <div class="titlebar-controls">
-        <button type="button" class="titlebar-control titlebar-minimize" title="Minimize" aria-label="Minimize">&#8722;</button>
-        <button type="button" class="titlebar-control titlebar-maximize" title="Maximize" aria-label="Maximize">&#9633;</button>
+        <button type="button" class="titlebar-control titlebar-minimize" title="Minimize" aria-label="Minimize">
+          <span class="icon" aria-hidden="true"><svg><use href="#icon-win-minimize"/></svg></span>
+        </button>
+        <button type="button" class="titlebar-control titlebar-maximize" title="Maximize" aria-label="Maximize">
+          <span class="icon titlebar-maximize-glyph" aria-hidden="true"><svg><use href="#icon-win-maximize"/></svg></span>
+          <span class="icon titlebar-restore-glyph" aria-hidden="true"><svg><use href="#icon-win-restore"/></svg></span>
+        </button>
         <button type="button" class="titlebar-control titlebar-close" title="Close" aria-label="Close">
-          <span class="icon icon-xs"><svg><use href="#icon-x"/></svg></span>
+          <span class="icon" aria-hidden="true"><svg><use href="#icon-win-close"/></svg></span>
         </button>
       </div>
     </div>
@@ -9896,6 +10191,20 @@
     <symbol id="icon-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <path d="M18 6 6 18"/><path d="m6 6 12 12"/>
     </symbol>
+    <symbol id="icon-win-minimize" viewBox="0 0 10 10">
+      <line x1="1" y1="5" x2="9" y2="5" stroke="currentColor" stroke-width="1" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="icon-win-maximize" viewBox="0 0 10 10">
+      <rect x="1.5" y="1.5" width="7" height="7" fill="none" stroke="currentColor" stroke-width="1"/>
+    </symbol>
+    <symbol id="icon-win-restore" viewBox="0 0 10 10">
+      <rect x="2.5" y="0.5" width="7" height="7" fill="none" stroke="currentColor" stroke-width="1"/>
+      <rect x="0.5" y="2.5" width="7" height="7" fill="none" stroke="currentColor" stroke-width="1"/>
+    </symbol>
+    <symbol id="icon-win-close" viewBox="0 0 10 10">
+      <path d="M1.5 1.5 8.5 8.5" stroke="currentColor" stroke-width="1" stroke-linecap="round"/>
+      <path d="M8.5 1.5 1.5 8.5" stroke="currentColor" stroke-width="1" stroke-linecap="round"/>
+    </symbol>
     <symbol id="icon-plug" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <path d="M12 22v-5"/><path d="M9 8V2"/><path d="M15 8V2"/><path d="M18 8v5a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V8Z"/>
     </symbol>
@@ -9904,6 +10213,9 @@
     </symbol>
     <symbol id="icon-list" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <line x1="8" x2="21" y1="6" y2="6"/><line x1="8" x2="21" y1="12" y2="12"/><line x1="8" x2="21" y1="18" y2="18"/><line x1="3" x2="3.01" y1="6" y2="6"/><line x1="3" x2="3.01" y1="12" y2="12"/><line x1="3" x2="3.01" y1="18" y2="18"/>
+    </symbol>
+    <symbol id="icon-menu" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <line x1="4" x2="20" y1="6" y2="6"/><line x1="4" x2="20" y1="12" y2="12"/><line x1="4" x2="20" y1="18" y2="18"/>
     </symbol>
     <symbol id="icon-clear-actions" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
       <g aria-hidden="true" stroke-width="2.25">
@@ -11135,9 +11447,19 @@
                   <span class="telnet-status-dot"></span>
                   <span class="telnet-status-text">Disconnected</span>
                 </span>
-                <button class="btn btn-primary telnet-connect-btn">
-                  <span class="icon icon-xs"><svg><use href="#icon-plug"/></svg></span> Connect
-                </button>
+                <div class="telnet-split-control telnet-connect-split">
+                  <button type="button" class="btn btn-primary telnet-connect-btn telnet-split-main" title="Connect and pull relay buffer">
+                    <span class="icon icon-xs"><svg><use href="#icon-plug"/></svg></span> Connect
+                  </button>
+                  <button type="button" class="btn btn-primary telnet-connect-menu-btn telnet-split-menu-btn" title="More connect options" aria-haspopup="menu" aria-expanded="false" hidden>
+                    <span class="icon icon-xs"><svg><use href="#icon-chevron-down"/></svg></span>
+                  </button>
+                  <div class="telnet-split-menu telnet-connect-menu" role="menu" hidden>
+                    <button type="button" class="telnet-split-menu-item telnet-connect-menu-item" role="menuitem" data-connect-action="live-only">
+                      Connect (skip existing logs buffer)
+                    </button>
+                  </div>
+                </div>
                 <button class="btn btn-danger telnet-disconnect-btn" style="display: none;">
                   <span class="icon icon-xs"><svg><use href="#icon-x"/></svg></span> Disconnect
                 </button>
@@ -11173,9 +11495,22 @@
                   <button class="btn btn-secondary telnet-save-btn" title="Save logs to file">
                     <span class="icon icon-xs"><svg><use href="#icon-download"/></svg></span> Save
                   </button>
-                  <button class="btn btn-secondary telnet-clear-btn" title="Clear console">
-                    <span class="icon icon-sm"><svg><use href="#icon-trash"/></svg></span> Clear
-                  </button>
+                  <div class="telnet-split-control telnet-clear-split">
+                    <button type="button" class="btn btn-secondary telnet-clear-btn telnet-split-main" title="Clear console">
+                      <span class="icon icon-sm"><svg><use href="#icon-trash"/></svg></span> Clear
+                    </button>
+                    <button type="button" class="btn btn-secondary telnet-clear-menu-btn telnet-split-menu-btn" title="More clear options" aria-haspopup="menu" aria-expanded="false" hidden>
+                      <span class="icon icon-xs"><svg><use href="#icon-chevron-down"/></svg></span>
+                    </button>
+                    <div class="telnet-split-menu telnet-clear-menu" role="menu" hidden>
+                      <button type="button" class="telnet-split-menu-item telnet-clear-menu-item" role="menuitem" data-clear-action="relay-buffer">
+                        Clear (on Relay Server only)
+                      </button>
+                      <button type="button" class="telnet-split-menu-item telnet-clear-menu-item" role="menuitem" data-clear-action="local-and-relay">
+                        Clear (Local and on Relay Server)
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </div>
               <div class="telnet-output-container">
@@ -11511,6 +11846,35 @@
   </div>
 
   <div id="floating-remote-root" aria-live="polite"></div>
+
+  <nav
+    id="titlebarHamburgerMenu"
+    class="titlebar-hamburger-menu"
+    aria-label="App menu"
+    hidden
+  >
+    <ul class="titlebar-hamburger-menu-list" role="menu">
+      <li role="none"><button type="button" class="titlebar-hamburger-menu-item" role="menuitemcheckbox" data-menu-action="toggle-developer" aria-checked="false">Developer Mode</button></li>
+      <li role="none"><button type="button" class="titlebar-hamburger-menu-item" role="menuitemcheckbox" data-menu-action="toggle-privacy" aria-checked="false">Privacy Mode</button></li>
+      <li role="none"><button type="button" class="titlebar-hamburger-menu-item" role="menuitemcheckbox" data-menu-action="toggle-debug-logging" aria-checked="false">Debug Logging</button></li>
+      <li class="titlebar-hamburger-menu-sep" role="separator" aria-hidden="true"></li>
+      <li role="none"><button type="button" class="titlebar-hamburger-menu-item" role="menuitem" data-menu-action="open-log-file">Open Log File</button></li>
+      <li role="none"><button type="button" class="titlebar-hamburger-menu-item" role="menuitem" data-menu-action="open-fiddle">Open Fiddle</button></li>
+      <li role="none"><button type="button" class="titlebar-hamburger-menu-item" role="menuitem" data-menu-action="settings">Settings</button></li>
+      <li role="none"><button type="button" class="titlebar-hamburger-menu-item" role="menuitem" data-menu-action="clear-cache">Clear Cache and Reload</button></li>
+      <li class="titlebar-hamburger-menu-sep" role="separator" aria-hidden="true"></li>
+      <li role="none" class="titlebar-hamburger-menu-zoom-row">
+        <span class="titlebar-hamburger-menu-zoom-label">Zoom</span>
+        <div class="titlebar-hamburger-menu-zoom-controls">
+          <button type="button" class="titlebar-hamburger-menu-zoom-btn" data-menu-action="zoom-out" title="Zoom out" aria-label="Zoom out">&#8722;</button>
+          <button type="button" class="titlebar-hamburger-menu-zoom-pct" id="titlebarHamburgerZoomPct" data-menu-action="zoom-reset" title="Reset zoom to 100%" aria-label="Current zoom; click to reset to 100%">100%</button>
+          <button type="button" class="titlebar-hamburger-menu-zoom-btn" data-menu-action="zoom-in" title="Zoom in" aria-label="Zoom in">+</button>
+        </div>
+      </li>
+      <li class="titlebar-hamburger-menu-sep" role="separator" aria-hidden="true"></li>
+      <li role="none"><button type="button" class="titlebar-hamburger-menu-item" role="menuitem" data-menu-action="about">About Roku Dev Studio</button></li>
+    </ul>
+  </nav>
 
   <script type="module" src="dist/app.js"></script>
 </body>
