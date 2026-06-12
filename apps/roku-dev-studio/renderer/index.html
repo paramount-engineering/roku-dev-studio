@@ -9940,6 +9940,21 @@
       color: var(--accent-purple);
     }
 
+    .titlebar-hamburger-menu-icon {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex: 0 0 calc(14px * var(--titlebar-content-scale));
+      width: calc(14px * var(--titlebar-content-scale));
+      margin-right: calc(8px * var(--titlebar-content-scale));
+      color: var(--text-muted);
+      pointer-events: none;
+    }
+
+    .titlebar-hamburger-menu-item:hover .titlebar-hamburger-menu-icon {
+      color: var(--text-secondary);
+    }
+
     /*
      * Chrome-style zoom row: label on the left, − / % / + stepper on the right.
      * Stays open while adjusting zoom (handled in app.ts).
@@ -9954,11 +9969,17 @@
     }
 
     .titlebar-hamburger-menu-zoom-label {
+      display: inline-flex;
+      align-items: center;
       flex: 0 0 auto;
       font-size: calc(12px * var(--titlebar-content-scale));
       font-weight: 500;
       color: var(--text-secondary);
       line-height: 1.35;
+    }
+
+    .titlebar-hamburger-menu-zoom-label .titlebar-hamburger-menu-icon {
+      color: var(--text-muted);
     }
 
     .titlebar-hamburger-menu-zoom-controls {
@@ -10443,6 +10464,9 @@
     </symbol>
     <symbol id="icon-menu" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <line x1="4" x2="20" y1="6" y2="6"/><line x1="4" x2="20" y1="12" y2="12"/><line x1="4" x2="20" y1="18" y2="18"/>
+    </symbol>
+    <symbol id="icon-zoom" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
     </symbol>
     <symbol id="icon-clear-actions" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
       <g aria-hidden="true" stroke-width="2.25">
@@ -12092,13 +12116,13 @@
       <li role="none"><button type="button" class="titlebar-hamburger-menu-item" role="menuitemcheckbox" data-menu-action="toggle-privacy" aria-checked="false">Privacy Mode</button></li>
       <li role="none"><button type="button" class="titlebar-hamburger-menu-item" role="menuitemcheckbox" data-menu-action="toggle-debug-logging" aria-checked="false">Debug Logging</button></li>
       <li class="titlebar-hamburger-menu-sep" role="separator" aria-hidden="true"></li>
-      <li role="none"><button type="button" class="titlebar-hamburger-menu-item" role="menuitem" data-menu-action="open-log-file">Open Log File</button></li>
-      <li role="none"><button type="button" class="titlebar-hamburger-menu-item" role="menuitem" data-menu-action="open-fiddle">Open Fiddle</button></li>
-      <li role="none"><button type="button" class="titlebar-hamburger-menu-item" role="menuitem" data-menu-action="settings">Settings</button></li>
-      <li role="none"><button type="button" class="titlebar-hamburger-menu-item" role="menuitem" data-menu-action="clear-cache">Clear Cache and Reload</button></li>
+      <li role="none"><button type="button" class="titlebar-hamburger-menu-item" role="menuitem" data-menu-action="open-log-file"><span class="titlebar-hamburger-menu-icon icon icon-sm" aria-hidden="true"><svg><use href="#icon-file-text"/></svg></span>Open Log File</button></li>
+      <li role="none"><button type="button" class="titlebar-hamburger-menu-item" role="menuitem" data-menu-action="open-fiddle"><span class="titlebar-hamburger-menu-icon icon icon-sm" aria-hidden="true"><svg><use href="#icon-code"/></svg></span>Open Fiddle</button></li>
+      <li role="none"><button type="button" class="titlebar-hamburger-menu-item" role="menuitem" data-menu-action="settings"><span class="titlebar-hamburger-menu-icon icon icon-sm" aria-hidden="true"><svg><use href="#icon-settings"/></svg></span>Settings</button></li>
+      <li role="none"><button type="button" class="titlebar-hamburger-menu-item" role="menuitem" data-menu-action="clear-cache"><span class="titlebar-hamburger-menu-icon icon icon-sm" aria-hidden="true"><svg><use href="#icon-refresh"/></svg></span>Clear Cache and Reload</button></li>
       <li class="titlebar-hamburger-menu-sep" role="separator" aria-hidden="true"></li>
       <li role="none" class="titlebar-hamburger-menu-zoom-row">
-        <span class="titlebar-hamburger-menu-zoom-label">Zoom</span>
+        <span class="titlebar-hamburger-menu-zoom-label"><span class="titlebar-hamburger-menu-icon icon icon-sm" aria-hidden="true"><svg><use href="#icon-zoom"/></svg></span>Zoom</span>
         <div class="titlebar-hamburger-menu-zoom-controls">
           <button type="button" class="titlebar-hamburger-menu-zoom-btn" data-menu-action="zoom-out" title="Zoom out" aria-label="Zoom out">&#8722;</button>
           <button type="button" class="titlebar-hamburger-menu-zoom-pct" id="titlebarHamburgerZoomPct" data-menu-action="zoom-reset" title="Reset zoom to 100%" aria-label="Current zoom; click to reset to 100%">100%</button>
@@ -12106,7 +12130,7 @@
         </div>
       </li>
       <li class="titlebar-hamburger-menu-sep" role="separator" aria-hidden="true"></li>
-      <li role="none"><button type="button" class="titlebar-hamburger-menu-item" role="menuitem" data-menu-action="about">About Roku Dev Studio</button></li>
+      <li role="none"><button type="button" class="titlebar-hamburger-menu-item" role="menuitem" data-menu-action="about"><span class="titlebar-hamburger-menu-icon icon icon-sm" aria-hidden="true"><svg><use href="#icon-info"/></svg></span>About Roku Dev Studio</button></li>
     </ul>
   </nav>
 
