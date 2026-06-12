@@ -34,6 +34,13 @@ import {
   measureElement as defaultMeasureElement
 } from '../../vendor/tanstack-virtual-core.mjs';
 
+/** Keep `data-line-index` (click/find) and `data-index` (virtualizer measure) in sync. */
+function setRowDatasetIndex(el: HTMLElement, index: number): void {
+  const s = String(index);
+  el.dataset.lineIndex = s;
+  el.dataset.index = s;
+}
+
 export type ConsoleVirtualizerOpts = {
   /** The `overflow-y: auto` scroll element. */
   scrollEl: HTMLElement;
@@ -222,8 +229,9 @@ export function createConsoleVirtualizer(opts: ConsoleVirtualizerOpts): ConsoleV
         // element and into the scroll container), not to revert this.
         el.style.transform = `translateY(${item.start}px)`;
         // `data-index` lets the default `measureElement` correlate the
-        // ResizeObserver entry back to a virtualizer index.
-        el.dataset.index = String(item.index);
+        // ResizeObserver entry back to a virtualizer index; `data-line-index`
+        // is what click/find handlers read — keep both in sync.
+        setRowDatasetIndex(el, item.index);
         if (prevEl) {
           prevEl.after(el);
         } else {
@@ -299,7 +307,7 @@ export function createConsoleVirtualizer(opts: ConsoleVirtualizerOpts): ConsoleV
           opts.onUnmount?.(idx, el);
           el.remove();
         } else {
-          el.dataset.index = String(newIdx);
+          setRowDatasetIndex(el, newIdx);
           next.set(newIdx, el);
         }
       }
@@ -347,7 +355,7 @@ export function createConsoleVirtualizer(opts: ConsoleVirtualizerOpts): ConsoleV
       const next = new Map<number, HTMLElement>();
       for (const [idx, el] of mounted) {
         const newIdx = idx + headCount;
-        el.dataset.index = String(newIdx);
+        setRowDatasetIndex(el, newIdx);
         next.set(newIdx, el);
       }
       mounted.clear();

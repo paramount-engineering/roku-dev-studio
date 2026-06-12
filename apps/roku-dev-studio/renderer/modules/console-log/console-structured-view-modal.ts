@@ -30,8 +30,23 @@ export function closestConsoleLogLineFromEvent(e: MouseEvent): HTMLElement | nul
   return null;
 }
 
+/** Resolve the entry index for a mounted `.telnet-log-line` row. */
+export function consoleLogLineEntryIndex(line: HTMLElement): number {
+  const raw = line.dataset.lineIndex ?? line.dataset.index ?? '';
+  const idx = parseInt(raw, 10);
+  return Number.isFinite(idx) && idx >= 0 ? idx : -1;
+}
+
+export function primaryStructuredTarget(
+  targets: ReadonlyArray<StructuredConsolePayload>
+): StructuredConsolePayload | undefined {
+  if (targets.length === 0) return undefined;
+  const outerJson = targets.find((t) => t.kind === 'json' && !t.fromEscapedString);
+  if (outerJson) return outerJson;
+  return targets[0];
+}
+
 /**
- * Map a click on `contentEl` to a flat character offset into the line's text.
  * Walks `.telnet-log-content`'s text nodes (incl. children of `.telnet-log-url`)
  * in DOM order, summing lengths until reaching the caret's text node — this is
  * the inverse of the find bar's `flatOffsetToDomPosition` and shares the same
@@ -203,13 +218,15 @@ export function openConsoleStructuredViewer(
 }
 
 /**
- * Append JSON/XML pills with **direct** click handlers on each pill.
+ * Append JSON/XML pills. Clicks are handled by delegated listeners on the
+ * scroll container (see `console-log-file-view.ts`) so each open resolves
+ * `structuredTargets` from the live entry via `data-line-index` — not from
+ * closures that can go stale after virtualizer trim/recycle.
  *
  * UX contract:
- * - **JSON+** (nested / escaped): only that button opens the inner payload (`stopPropagation`).
- * - **JSON** (primary): same — opens the outer fragment only.
- * - **Log text** (`.telnet-log-content`): delegated handler opens `targets[0]` only — the full
- *   structured object for the line (outer JSON when nested JSON+ exists).
+ * - **JSON** (outer): opens the primary payload for the line.
+ * - **JSON+** (nested): opens that nested fragment only.
+ * - **Log text** (`.telnet-log-content`): same as **JSON** — primary payload.
  */
 export function attachStructuredPillsToLine(
   lineEl: HTMLElement,
@@ -218,39 +235,28 @@ export function attachStructuredPillsToLine(
 ): void {
   if (targets.length === 0) return;
   lineEl.classList.add('has-structured');
-  const first = targets[0]!;
-  const hasNestedRanges = targets.some((t, i) => i > 0 && t.lineRange);
+  const primary = primaryStructuredTarget(targets);
+  const hasNested = targets.some((t) => t.fromEscapedString);
   const defaultHint =
-    first.kind === 'json'
-      ? targets.length > 1
-        ? hasNestedRanges
-          ? 'Click outside a nested JSON+ to view the outer JSON; click inside a nested JSON+ region (or its pill) to view it directly.'
-          : 'Click anywhere on this line to view the full (outer) JSON. Use JSON+ for nested JSON only.'
+    primary?.kind === 'json'
+      ? hasNested
+        ? 'Click to view the full JSON for this line. Use JSON+ for nested fragments only.'
         : 'Click to view formatted JSON (opens in a modal)'
-      : targets.length > 1
-        ? 'Click anywhere on this line to view the full (outer) XML. Use extra badges for other fragments.'
+      : hasNested
+        ? 'Click to view the full XML for this line.'
         : 'Click to view formatted XML (opens in a modal)';
   contentEl.title = defaultHint;
 
   const wrap = document.createElement('span');
   wrap.className = 'telnet-structured-view-pills';
-  wrap.addEventListener('click', (ev) => {
-    const t = ev.target;
-    const el = t instanceof Element ? t : t instanceof Text ? t.parentElement : null;
-    if (el?.closest('.telnet-structured-view-pill')) return;
-    ev.stopPropagation();
-  });
 
   for (let i = 0; i < targets.length; i++) {
     const structured = targets[i]!;
-    const payload = structured;
     const hint =
       structured.kind === 'json' && structured.fromEscapedString
         ? 'Nested JSON only (from an escaped string). Does not open the full outer JSON.'
         : structured.kind === 'json'
-          ? targets.length > 1 && i === 0
-            ? 'Outer JSON only — full object for this line (click the line text for the same).'
-            : 'Click to view formatted JSON (opens in a modal)'
+          ? 'Full JSON for this line (click the line text for the same).'
           : 'Click to view formatted XML (opens in a modal)';
     const pill = document.createElement('button');
     pill.type = 'button';
@@ -261,15 +267,6 @@ export function attachStructuredPillsToLine(
     pill.title = hint;
     pill.setAttribute('aria-label', hint);
     pill.dataset.structuredIndex = String(i);
-    pill.addEventListener(
-      'click',
-      (ev) => {
-        ev.preventDefault();
-        ev.stopPropagation();
-        openConsoleStructuredViewer(pill, payload);
-      },
-      { passive: false }
-    );
     wrap.appendChild(pill);
   }
   lineEl.appendChild(wrap);

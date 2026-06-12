@@ -84,9 +84,8 @@ async function main() {
   svg.appendChild(sym);
   window.document.head.appendChild(svg);
 
-  const { attachStructuredPillsToLine } = await import(
-    '../renderer/modules/console-log/console-structured-view-modal.js'
-  );
+  const { attachStructuredPillsToLine, openConsoleStructuredViewer, primaryStructuredTarget } =
+    await import('../renderer/modules/console-log/console-structured-view-modal.js');
   const { rawLogFileTextToEntries } = await import(
     '../renderer/modules/console-log/console-log-file-view.js'
   );
@@ -148,7 +147,7 @@ async function main() {
     return pre instanceof window.HTMLElement ? pre.dataset.formatted ?? null : null;
   };
 
-  pills[0]!.dispatchEvent(new window.MouseEvent('click', { bubbles: true, cancelable: true }));
+  openConsoleStructuredViewer(pills[0]!, primaryStructuredTarget(entry.structuredTargets)!);
   const after0 = readModalFormatted();
   if (after0 !== outer.formatted) {
     console.error('First pill should show outer JSON formatted text.');
@@ -156,7 +155,8 @@ async function main() {
     process.exit(1);
   }
 
-  pills[1]!.dispatchEvent(new window.MouseEvent('click', { bubbles: true, cancelable: true }));
+  const innerIdx = parseInt(pills[1]!.dataset.structuredIndex || '1', 10);
+  openConsoleStructuredViewer(pills[1]!, entry.structuredTargets[innerIdx]!);
   const after1 = readModalFormatted();
   if (after1 !== inner.formatted) {
     console.error('JSON+ pill should show inner (message) JSON formatted text.');
@@ -190,6 +190,21 @@ async function main() {
     if (!el) return;
     const urlHit = el.closest('.telnet-log-url');
     if (urlHit) return;
+    const pillHit = el.closest('.telnet-structured-view-pill');
+    if (pillHit instanceof window.HTMLElement) {
+      const ln = pillHit.closest('.telnet-log-line');
+      if (!(ln instanceof window.HTMLElement)) return;
+      const idx = parseInt(ln.dataset.lineIndex || '-1', 10);
+      const ent = idx >= 0 ? logLines[idx] : undefined;
+      if (!ent?.structuredTargets?.length) return;
+      e.preventDefault();
+      const targetIdx = parseInt(pillHit.dataset.structuredIndex || '0', 10);
+      const payload = pillHit.classList.contains('telnet-structured-view-pill--nested')
+        ? ent.structuredTargets[targetIdx]
+        : primaryStructuredTarget(ent.structuredTargets);
+      delegatedPayload = payload?.formatted ?? null;
+      return;
+    }
     if (!el.closest('.telnet-log-content')) return;
     const ln = el.closest('.telnet-log-line');
     if (!(ln instanceof window.HTMLElement)) return;
@@ -197,7 +212,7 @@ async function main() {
     const ent = idx >= 0 ? logLines[idx] : undefined;
     if (!ent?.structuredTargets?.length) return;
     e.preventDefault();
-    delegatedPayload = ent.structuredTargets[0]!.formatted;
+    delegatedPayload = primaryStructuredTarget(ent.structuredTargets)?.formatted ?? null;
   });
 
   content2.dispatchEvent(new window.MouseEvent('click', { bubbles: true, cancelable: true }));

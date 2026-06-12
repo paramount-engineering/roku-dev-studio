@@ -101,6 +101,44 @@ export function copyTanstackVirtualVendor(appDir: string, rendererRoot: string, 
   fs.copyFileSync(destDist, destSrcTree);
 }
 
+/** Emit renderer-imported modules from `shared/` into `renderer/dist/shared/` (runtime ESM). */
+function transpileSharedForRenderer(appDir: string, rendererDist: string): void {
+  const sharedRoot = path.join(appDir, 'shared');
+  const entryPoints = [
+    path.join(sharedRoot, 'ipc', 'debug-telnet-connection-id.ts'),
+  ].filter((p) => fs.existsSync(p));
+  if (entryPoints.length === 0) return;
+
+  const sharedOut = path.join(rendererDist, 'shared');
+  fs.mkdirSync(sharedOut, { recursive: true });
+
+  esbuild.buildSync({
+    absWorkingDir: appDir,
+    entryPoints,
+    outdir: sharedOut,
+    outbase: sharedRoot,
+    bundle: false,
+    platform: 'browser',
+    format: 'esm',
+    target: 'es2022',
+    logLevel: 'info',
+  });
+}
+
+/** Fail fast when renderer/dist is missing modules the HTML shell loads at runtime. */
+function verifyRendererDist(appDir: string, rendererDist: string): void {
+  const required = [
+    path.join(rendererDist, 'app.js'),
+    path.join(rendererDist, 'shared', 'ipc', 'debug-telnet-connection-id.js'),
+  ];
+  const missing = required.filter((p) => !fs.existsSync(p));
+  if (missing.length > 0) {
+    throw new Error(
+      `transpile-renderer: missing expected output:\n${missing.map((p) => `  - ${path.relative(appDir, p)}`).join('\n')}`
+    );
+  }
+}
+
 function walkTsFiles(dir: string, acc: string[] = []): string[] {
   if (!fs.existsSync(dir)) return acc;
   for (const name of fs.readdirSync(dir)) {
@@ -153,6 +191,7 @@ export function transpileRenderer(appDir: string): void {
     logLevel: 'info',
   });
 
+  transpileSharedForRenderer(appDir, rendererDist);
   copyModernScreenshotVendor(appDir, rendererRoot, rendererDist);
   copyTanstackVirtualVendor(appDir, rendererRoot, rendererDist);
   copyMonacoVendor(appDir, rendererDist);
@@ -164,5 +203,6 @@ export function transpileRenderer(appDir: string): void {
     fs.cpSync(fragmentsSrc, fragmentsDest, { recursive: true });
   }
 
+  verifyRendererDist(appDir, rendererDist);
   console.log('HTML renderer:', entryPoints.length, 'modules →', path.relative(appDir, rendererDist));
 }

@@ -25,7 +25,7 @@ import { icon, setSafeHTML } from '../index.js';
 import {
   debugTelnetIpcTargetsDevice,
   type DebugTelnetIpcPayload
-} from '../../../shared/ipc/debug-telnet-connection-id.js';
+} from '../../shared/ipc/debug-telnet-connection-id.js';
 
 export type TelnetConsoleDevice = { deviceName?: string; modelName?: string; ip: string };
 
@@ -93,16 +93,16 @@ export function setupTelnet(
   // typed without per-call casting. Then we re-bind to non-nullable aliases
   // under the bare names — TypeScript's null-narrowing from the if-guard
   // below only flows through linear control flow, nested callbacks (event
-  // handlers, IPC subscriptions, the autoscroll RAF) re-widen back to
+  // handlers, IPC subscriptions, scroll-tail RAF) re-widen back to
   // `T | null`, so per-callsite `!` assertions would otherwise be needed.
   const maybeConnectBtn = panel.querySelector<HTMLButtonElement>('.telnet-connect-btn');
   const maybeDisconnectBtn = panel.querySelector<HTMLButtonElement>('.telnet-disconnect-btn');
   const maybeStatusEl = panel.querySelector<HTMLElement>('.telnet-status');
   const maybeStatusText = panel.querySelector<HTMLElement>('.telnet-status-text');
   const maybeOutputEl = panel.querySelector<HTMLElement>('.telnet-output');
-  const autoscrollCheckbox = panel.querySelector<HTMLInputElement>('.telnet-autoscroll');
   const copyBtn = panel.querySelector<HTMLButtonElement>('.telnet-copy-btn');
   const saveBtn = panel.querySelector<HTMLButtonElement>('.telnet-save-btn');
+  const scrollToBottomBtn = panel.querySelector<HTMLButtonElement>('.telnet-scroll-to-bottom');
   const maybeClearBtn = panel.querySelector<HTMLButtonElement>('.telnet-clear-btn');
   // Live counter shown left of the connection status pill while connected.
   // Optional element — not in the early null-guard because absence just
@@ -132,6 +132,9 @@ export function setupTelnet(
   const statusText = maybeStatusText;
   const outputEl = maybeOutputEl;
   const clearBtn = maybeClearBtn;
+  const connectSplit = panel.querySelector<HTMLElement>('.telnet-connect-split');
+  const isRelayConsole = !!(api.isRemote && api.serverUrl && api.telnetClearRelayBuffer);
+  let closeOpenTelnetSplitMenu: (() => void) | null = null;
 
   // State
   type TelnetLogEntry = {
@@ -254,9 +257,64 @@ export function setupTelnet(
    * VSCode integrated terminal) for any further trims.
    */
   const TELNET_MAX_SCROLLBACK_LINES = 50000;
+  const SCROLL_TAIL_THRESHOLD_PX = 100;
   let isScrolling = false;
-  let userManuallyScrolled = false; // Track if user manually scrolled away from bottom
+  /** When true, new log lines keep the view pinned to the tail. */
+  let pinnedToBottom = true;
   let lastScrollTop = 0;
+  let tailFollowToken = 0;
+
+  function distanceFromBottom(): number {
+    return outputEl.scrollHeight - outputEl.scrollTop - outputEl.clientHeight;
+  }
+
+  function isNearBottom(): boolean {
+    return distanceFromBottom() <= SCROLL_TAIL_THRESHOLD_PX;
+  }
+
+  function updateScrollToBottomAffordance(): void {
+    if (!scrollToBottomBtn) return;
+    scrollToBottomBtn.hidden = logLines.length === 0 || pinnedToBottom;
+  }
+
+  /** Scroll the virtualizer to the log tail. Multi-pass so measured row heights settle. */
+  function followTailScroll(onDone?: () => void): void {
+    const token = ++tailFollowToken;
+    isScrolling = true;
+    const scrollOnce = (): void => {
+      if (token !== tailFollowToken || !pinnedToBottom) return;
+      if (logLines.length > 0) {
+        virt.scrollToIndex(logLines.length - 1, { align: 'end' });
+        lastScrollTop = outputEl.scrollTop;
+      }
+    };
+    const finish = (): void => {
+      if (token !== tailFollowToken) return;
+      lastScrollTop = outputEl.scrollTop;
+      isScrolling = false;
+      onDone?.();
+    };
+    requestAnimationFrame(() => {
+      if (token !== tailFollowToken) return;
+      scrollOnce();
+      requestAnimationFrame(() => {
+        if (token !== tailFollowToken) return;
+        scrollOnce();
+        queueMicrotask(() => {
+          scrollOnce();
+          finish();
+        });
+      });
+    });
+  }
+
+  function scrollToLatestLogs(): void {
+    if (logLines.length === 0) return;
+    pinnedToBottom = true;
+    followTailScroll(() => {
+      updateScrollToBottomAffordance();
+    });
+  }
 
   function isTelnetContentModalOpen(): boolean {
     const s = document.getElementById('telnetStructuredViewerOverlay');
@@ -313,6 +371,104 @@ export function setupTelnet(
     }
   }
 
+  /** Relay split menus use fixed coords; portal to body so inner-tab transforms don't offset them. */
+  function wireTelnetSplitMenu(
+    splitControl: HTMLElement,
+    menuBtn: HTMLButtonElement,
+    menu: HTMLElement,
+    registerCleanup: (fn: () => void) => void
+  ): { close: () => void } {
+    menuBtn.hidden = false;
+
+    function portalMenu(): void {
+      if (menu.parentElement !== document.body) {
+        document.body.appendChild(menu);
+      }
+    }
+
+    function restoreMenu(): void {
+      if (menu.parentElement === document.body && splitControl.isConnected) {
+        splitControl.appendChild(menu);
+      }
+    }
+
+    function positionMenu(): void {
+      portalMenu();
+      const rect = menuBtn.getBoundingClientRect();
+      const splitMain = splitControl.querySelector<HTMLElement>('.telnet-split-main');
+      const anchorWidth = splitMain
+        ? splitMain.getBoundingClientRect().width + rect.width
+        : rect.width;
+      menu.style.position = 'fixed';
+      menu.style.top = `${Math.round(rect.bottom + 4)}px`;
+      menu.style.left = 'auto';
+      menu.style.right = `${Math.round(window.innerWidth - rect.right)}px`;
+      menu.style.bottom = 'auto';
+      menu.style.minWidth = `${Math.max(Math.round(anchorWidth), 240)}px`;
+    }
+
+    function setOpen(open: boolean): void {
+      if (open) {
+        closeOpenTelnetSplitMenu?.();
+        closeOpenTelnetSplitMenu = closeMenu;
+        positionMenu();
+        menu.hidden = false;
+        menuBtn.setAttribute('aria-expanded', 'true');
+      } else {
+        if (closeOpenTelnetSplitMenu === closeMenu) {
+          closeOpenTelnetSplitMenu = null;
+        }
+        menu.hidden = true;
+        menuBtn.setAttribute('aria-expanded', 'false');
+        restoreMenu();
+      }
+    }
+
+    function closeMenu(): void {
+      setOpen(false);
+    }
+
+    menuBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      setOpen(menu.hidden);
+    });
+
+    const onDocumentClick = (e: MouseEvent) => {
+      if (menu.hidden) return;
+      const t = e.target;
+      if (!(t instanceof Node)) return;
+      if (menu.contains(t) || menuBtn.contains(t)) return;
+      closeMenu();
+    };
+
+    const onDocumentKeydown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !menu.hidden) {
+        closeMenu();
+      }
+    };
+
+    const onReposition = () => {
+      if (!menu.hidden) positionMenu();
+    };
+
+    document.addEventListener('click', onDocumentClick);
+    document.addEventListener('keydown', onDocumentKeydown);
+    window.addEventListener('resize', onReposition);
+    window.addEventListener('scroll', onReposition, true);
+    registerCleanup(() => {
+      closeMenu();
+      if (closeOpenTelnetSplitMenu === closeMenu) {
+        closeOpenTelnetSplitMenu = null;
+      }
+      document.removeEventListener('click', onDocumentClick);
+      document.removeEventListener('keydown', onDocumentKeydown);
+      window.removeEventListener('resize', onReposition);
+      window.removeEventListener('scroll', onReposition, true);
+    });
+
+    return { close: closeMenu };
+  }
+
   // Update UI based on connection state
   function updateConnectionState(connected: boolean, connecting = false, error: string | null = null) {
     isConnected = connected;
@@ -321,11 +477,19 @@ export function setupTelnet(
       statusEl.className = 'telnet-status connecting';
       statusText.textContent = 'Connecting...';
       connectBtn.disabled = true;
+      if (isRelayConsole && connectSplit) {
+        connectSplit.hidden = true;
+      }
+      closeOpenTelnetSplitMenu?.();
     } else if (connected) {
       statusEl.className = 'telnet-status connected';
       statusText.textContent = 'Connected';
       connectBtn.style.display = 'none';
       disconnectBtn.style.display = '';
+      if (isRelayConsole && connectSplit) {
+        connectSplit.hidden = true;
+      }
+      closeOpenTelnetSplitMenu?.();
 
       // Clear placeholder
       const placeholder = outputEl.querySelector('.telnet-placeholder');
@@ -336,6 +500,9 @@ export function setupTelnet(
       connectBtn.style.display = '';
       connectBtn.disabled = false;
       disconnectBtn.style.display = 'none';
+      if (isRelayConsole && connectSplit) {
+        connectSplit.hidden = false;
+      }
     }
 
     refreshLineCount();
@@ -587,37 +754,10 @@ export function setupTelnet(
     surface.notifyAppended();
     refreshLineCount();
 
-    let shouldAutoScroll = false;
-    if (autoscrollCheckbox && autoscrollCheckbox.checked) {
-      if (!userManuallyScrolled) {
-        shouldAutoScroll = true;
-      } else {
-        const scrollThreshold = 100;
-        const distanceFromBottom = outputEl.scrollHeight - outputEl.scrollTop - outputEl.clientHeight;
-        if (distanceFromBottom < scrollThreshold) {
-          userManuallyScrolled = false;
-          shouldAutoScroll = true;
-        }
-      }
-    }
-
-    if (shouldAutoScroll) {
-      isScrolling = true;
-      requestAnimationFrame(() => {
-        if (autoscrollCheckbox && autoscrollCheckbox.checked && !userManuallyScrolled && logLines.length > 0) {
-          // Route through the virtualizer's scroll path so it relayouts the
-          // bottom-edge window correctly. Going through `outputEl.scrollTop`
-          // *also* works (the offset observer would catch up) but
-          // `scrollToIndex(end)` is one less hop and is robust against the
-          // virtualizer's content height not being set yet on the first
-          // frame after a flush.
-          virt.scrollToIndex(logLines.length - 1, { align: 'end' });
-          lastScrollTop = outputEl.scrollTop;
-        }
-        requestAnimationFrame(() => {
-          isScrolling = false;
-        });
-      });
+    if (pinnedToBottom) {
+      followTailScroll();
+    } else {
+      updateScrollToBottomAffordance();
     }
   }
 
@@ -714,14 +854,25 @@ export function setupTelnet(
   }
 
   function handleScroll() {
-    if (isScrolling) return;
+    if (isScrolling) {
+      lastScrollTop = outputEl.scrollTop;
+      return;
+    }
 
     const newScrollTop = outputEl.scrollTop;
-    const scrollDelta = Math.abs(newScrollTop - lastScrollTop);
-    if (scrollDelta > 5) {
-      const scrollThreshold = 100;
-      const distanceFromBottom = outputEl.scrollHeight - newScrollTop - outputEl.clientHeight;
-      userManuallyScrolled = distanceFromBottom > scrollThreshold;
+    const delta = newScrollTop - lastScrollTop;
+
+    // Pin state follows *user intent*, not instantaneous distance-from-bottom.
+    // Programmatic tail-scroll and virtualizer remeasure often fire scroll
+    // events before the view lands within SCROLL_TAIL_THRESHOLD_PX — treating
+    // those as "user left the tail" left pinnedToBottom false while the ↓
+    // button was still shown.
+    if (delta < -5) {
+      pinnedToBottom = false;
+      updateScrollToBottomAffordance();
+    } else if (!pinnedToBottom && delta > 5 && isNearBottom()) {
+      pinnedToBottom = true;
+      updateScrollToBottomAffordance();
     }
 
     lastScrollTop = newScrollTop;
@@ -735,7 +886,7 @@ export function setupTelnet(
   // inside `mountConsoleLogFileView` (called by `mountConsoleLogSurface`),
   // so we don't attach a duplicate handler here. The surface's handler uses
   // identical logic — `firstHitElementOnConsoleClick` → URL span check →
-  // structured-target lookup via `clickedStructuredTargetIndex`.
+  // structured-target lookup via `primaryStructuredTarget` (outer JSON/XML).
 
   // In-flight guard. Multiple concurrent callers (e.g. an Action Script
   // auto-connect colliding with a manual click, or the executor pre-run
@@ -999,40 +1150,26 @@ export function setupTelnet(
     });
   }
   
-  // Auto-scroll checkbox change handler
-  if (autoscrollCheckbox) {
-    autoscrollCheckbox.addEventListener('change', () => {
-      if (autoscrollCheckbox.checked) {
-        // When re-enabled, reset manual scroll flag and scroll to bottom
-        userManuallyScrolled = false;
-        
-        // Mark as programmatic scroll to avoid triggering manual scroll detection
-        isScrolling = true;
-        
-        // Scroll to bottom via the virtualizer so the trailing window is
-        // mounted and aligned to the true bottom edge. Going through
-        // `outputEl.scrollTop = scrollHeight` lands fine when every row is
-        // measured, but on the frame after a flush the virtualizer's total
-        // size hasn't fully settled and `scrollHeight` can land slightly
-        // short of the last entry — leaving the user one row above the tail.
-        // Same path the streaming flusher uses (search "shouldAutoScroll").
-        requestAnimationFrame(() => {
-          if (logLines.length > 0) {
-            virt.scrollToIndex(logLines.length - 1, { align: 'end' });
-            lastScrollTop = outputEl.scrollTop;
-          }
-
-          // Reset scroll flag after scroll completes
-          // Use a small delay to ensure scroll event has been processed
-          setTimeout(() => {
-            isScrolling = false;
-          }, 50);
-        });
-      }
-      // When unchecked, we don't need to do anything - the shouldAutoScroll logic will handle it
+  if (scrollToBottomBtn) {
+    scrollToBottomBtn.addEventListener('click', () => {
+      scrollToLatestLogs();
     });
   }
-  
+
+  // Wheel up is an explicit "leave the tail" gesture; don't infer that from
+  // distance-from-bottom after programmatic scroll/layout churn.
+  outputEl.addEventListener(
+    'wheel',
+    (e) => {
+      if (isScrolling) return;
+      if (e.deltaY < 0) {
+        pinnedToBottom = false;
+        updateScrollToBottomAffordance();
+      }
+    },
+    { passive: true }
+  );
+
   outputEl.addEventListener('scroll', handleScroll, { passive: true });
 
   outputEl.querySelector('.telnet-scroll-spacer')?.remove();
@@ -1090,9 +1227,10 @@ export function setupTelnet(
 
     // Reset scroll-tail tracking so the next batch of incoming lines
     // pins to the bottom (consistent with a fresh-clear UX).
-    userManuallyScrolled = false;
+    pinnedToBottom = true;
     lastScrollTop = 0;
     outputEl.scrollTop = 0;
+    updateScrollToBottomAffordance();
 
     // Re-add the placeholder when disconnected, but APPEND it next to
     // virtualContainerEl rather than replacing outputEl's contents — same
@@ -1122,49 +1260,6 @@ export function setupTelnet(
     clearConsoleLocal();
   });
 
-  /** Wire a relay-only split-button dropdown (Connect / Clear chevrons). */
-  function wireTelnetSplitMenu(
-    menuBtn: HTMLButtonElement,
-    menu: HTMLElement,
-    registerCleanup: (fn: () => void) => void
-  ): { close: () => void } {
-    menuBtn.hidden = false;
-
-    function setOpen(open: boolean): void {
-      menu.hidden = !open;
-      menuBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
-    }
-
-    menuBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      setOpen(menu.hidden);
-    });
-
-    const onDocumentClick = (e: MouseEvent) => {
-      if (menu.hidden) return;
-      const t = e.target;
-      if (!(t instanceof Node)) return;
-      if (menu.contains(t) || menuBtn.contains(t)) return;
-      setOpen(false);
-    };
-
-    const onDocumentKeydown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !menu.hidden) {
-        setOpen(false);
-      }
-    };
-
-    document.addEventListener('click', onDocumentClick);
-    document.addEventListener('keydown', onDocumentKeydown);
-    registerCleanup(() => {
-      document.removeEventListener('click', onDocumentClick);
-      document.removeEventListener('keydown', onDocumentKeydown);
-    });
-
-    return { close: () => setOpen(false) };
-  }
-
-  const isRelayConsole = !!(api.isRemote && api.serverUrl && api.telnetClearRelayBuffer);
   const splitMenuCleanups: Array<() => void> = [];
   const registerSplitMenuCleanup = (fn: () => void) => {
     splitMenuCleanups.push(fn);
@@ -1177,8 +1272,8 @@ export function setupTelnet(
     '.telnet-connect-menu-item[data-connect-action="live-only"]'
   );
 
-  if (isRelayConsole && connectMenuBtn && connectMenu && connectLiveOnlyItem) {
-    const connectMenuUi = wireTelnetSplitMenu(connectMenuBtn, connectMenu, registerSplitMenuCleanup);
+  if (isRelayConsole && connectSplit && connectMenuBtn && connectMenu && connectLiveOnlyItem) {
+    const connectMenuUi = wireTelnetSplitMenu(connectSplit, connectMenuBtn, connectMenu, registerSplitMenuCleanup);
     connectLiveOnlyItem.addEventListener('click', () => {
       connectMenuUi.close();
       void connectTelnet({ skipRelayBuffer: true });
@@ -1205,8 +1300,9 @@ export function setupTelnet(
     });
   }
 
-  if (isRelayConsole && clearMenuBtn && clearMenu && clearRelayOnlyItem && clearLocalAndRelayItem) {
-    const clearMenuUi = wireTelnetSplitMenu(clearMenuBtn, clearMenu, registerSplitMenuCleanup);
+  const clearSplit = panel.querySelector<HTMLElement>('.telnet-clear-split');
+  if (isRelayConsole && clearSplit && clearMenuBtn && clearMenu && clearRelayOnlyItem && clearLocalAndRelayItem) {
+    const clearMenuUi = wireTelnetSplitMenu(clearSplit, clearMenuBtn, clearMenu, registerSplitMenuCleanup);
     clearRelayOnlyItem.addEventListener('click', () => {
       clearMenuUi.close();
       clearRelayBufferOnServer();

@@ -687,11 +687,16 @@ export function setupRemoteTabMetrics(
       return;
     }
 
-    if (sampling) {
-      liveRow.hidden = false;
-      pausedEl.hidden = true;
+    /* Paused state is shown by `.device-panel-paused-nav` (warning + Launch/Sideload). */
+    if (!sampling) {
+      aside.hidden = true;
+      return;
+    }
 
-      const lastU = [...ringCpuUser].reverse().find((v) => v != null);
+    liveRow.hidden = false;
+    pausedEl.hidden = true;
+
+    const lastU = [...ringCpuUser].reverse().find((v) => v != null);
       const lastS = [...ringCpuSys].reverse().find((v) => v != null);
       const lastT =
         lastU != null && lastS != null
@@ -794,15 +799,9 @@ export function setupRemoteTabMetrics(
           maxSampleGapMs: sparkGap
         });
       }
-    } else {
-      liveRow.hidden = true;
-      pausedEl.hidden = false;
-    }
 
     if (btn instanceof HTMLButtonElement) {
-      btn.title = sampling
-        ? 'Latest Device Performance [Click to Open Remote]'
-        : 'Device Performance paused — bring the Dev App to the foreground to resume sampling. [Click to Open Remote]';
+      btn.title = 'Latest Device Performance [Click to Open Remote]';
     }
   }
 
@@ -1409,19 +1408,19 @@ export function setupRemoteTabMetrics(
     );
   }
 
-  wrap.addEventListener(
+  panel.addEventListener(
     'click',
     (ev) => {
       const t = ev.target;
       if (!(t instanceof HTMLElement)) return;
 
-      const pausedLaunch = t.closest('[data-paused-launch-dev]');
-      if (pausedLaunch instanceof HTMLButtonElement && wrap.contains(pausedLaunch)) {
+      const launchBtn = t.closest('[data-paused-launch-dev]');
+      if (launchBtn instanceof HTMLButtonElement && !launchBtn.hidden) {
         ev.preventDefault();
-        if (pausedLaunch.disabled) return;
-        pausedLaunch.disabled = true;
-        const prevLabel = pausedLaunch.textContent;
-        pausedLaunch.textContent = 'Launching…';
+        if (launchBtn.disabled) return;
+        launchBtn.disabled = true;
+        const prevLabel = launchBtn.textContent;
+        launchBtn.textContent = 'Launching…';
         void (async () => {
           try {
             await api.launch('dev');
@@ -1429,20 +1428,27 @@ export function setupRemoteTabMetrics(
           } catch (e: unknown) {
             showToast(errMessage(e) || 'Launch failed', 'error');
           } finally {
-            pausedLaunch.disabled = false;
-            if (prevLabel != null) pausedLaunch.textContent = prevLabel;
+            launchBtn.disabled = false;
+            if (prevLabel != null) launchBtn.textContent = prevLabel;
           }
         })();
         return;
       }
 
-      const pausedSideloadNav = t.closest('[data-paused-goto-sideload]');
-      if (pausedSideloadNav instanceof HTMLButtonElement && wrap.contains(pausedSideloadNav)) {
-        ev.preventDefault();
-        const devTab = panel.querySelector('.inner-tab[data-inner-tab="devapp"]');
-        if (devTab instanceof HTMLButtonElement) devTab.click();
-        return;
-      }
+      const sideloadNavBtn = t.closest('[data-paused-goto-sideload]');
+      if (!(sideloadNavBtn instanceof HTMLButtonElement) || sideloadNavBtn.hidden) return;
+      ev.preventDefault();
+      const devTab = panel.querySelector('.inner-tab[data-inner-tab="devapp"]');
+      if (devTab instanceof HTMLButtonElement) devTab.click();
+    },
+    { signal: wrapUiAc.signal }
+  );
+
+  wrap.addEventListener(
+    'click',
+    (ev) => {
+      const t = ev.target;
+      if (!(t instanceof HTMLElement)) return;
 
       const cpuBtn = t.closest('[data-cpu-mode]');
       if (cpuBtn instanceof HTMLButtonElement && wrap.contains(cpuBtn)) {
@@ -1474,24 +1480,61 @@ export function setupRemoteTabMetrics(
 
   const perfToggle = wrap.querySelector('[data-remote-performance-toggle]');
   const perfWrap = wrap.querySelector('[data-remote-performance-wrap]');
-  const pausedHint = wrap.querySelector('[data-remote-metrics-paused]');
+  const pausedNav = panel.querySelector('[data-device-panel-paused-nav]');
+  const launchNavBtn = panel.querySelector('[data-paused-launch-dev]');
+  const sideloadNavBtn = panel.querySelector('[data-paused-goto-sideload]');
   let suppressToggleEvent = false;
 
-  /** Set when `/query/apps` is checked (Dev App tab); drives paused-banner Launch vs Sideload. */
+  /** Set when `/query/apps` is checked (Dev App tab); drives header Launch vs Sideload. */
   let devAppSideloadInstalled: boolean | null = null;
+  let metricsPaused = false;
 
-  function updatePausedHintActions(): void {
-    if (!(pausedHint instanceof HTMLElement)) return;
-    const launchBtn = pausedHint.querySelector('[data-paused-launch-dev]');
-    const sideloadNavBtn = pausedHint.querySelector('[data-paused-goto-sideload]');
-    const bannerVisible = !pausedHint.hidden;
-    const ready = bannerVisible && devAppSideloadInstalled !== null;
-    if (launchBtn instanceof HTMLButtonElement) {
-      launchBtn.hidden = !(ready && devAppSideloadInstalled === true);
+  function pausedNavMessage(installed: boolean | null): {
+    full: string;
+    short: string;
+    title: string;
+  } {
+    if (installed === false) {
+      return {
+        full: 'Device Performance Paused — Sideload Dev App to Resume',
+        short: 'Sideload to resume',
+        title: 'Device Performance Paused — Sideload Dev App to Resume'
+      };
+    }
+    if (installed === true) {
+      return {
+        full: 'Device Performance Paused — Launch Dev App to Resume',
+        short: 'Launch to resume',
+        title: 'Device Performance Paused — Launch Dev App to Resume'
+      };
+    }
+    return {
+      full: 'Device performance paused — bring the Dev App to the foreground to resume.',
+      short: 'Performance paused',
+      title: 'Device performance paused — bring the Dev App to the foreground to resume.'
+    };
+  }
+
+  function updateDevicePanelPausedNav(): void {
+    if (pausedNav instanceof HTMLElement) {
+      pausedNav.hidden = !metricsPaused;
+    }
+    const ready = metricsPaused && devAppSideloadInstalled !== null;
+    if (launchNavBtn instanceof HTMLButtonElement) {
+      launchNavBtn.hidden = !(ready && devAppSideloadInstalled === true);
     }
     if (sideloadNavBtn instanceof HTMLButtonElement) {
       sideloadNavBtn.hidden = !(ready && devAppSideloadInstalled === false);
     }
+    const msg = pausedNavMessage(metricsPaused ? devAppSideloadInstalled : null);
+    const textWrap = panel.querySelector('.device-panel-paused-nav-text');
+    const fullEl = panel.querySelector('[data-paused-text-full]');
+    const shortEl = panel.querySelector('[data-paused-text-short]');
+    if (textWrap instanceof HTMLElement) {
+      textWrap.title = msg.title;
+    }
+    if (fullEl) fullEl.textContent = msg.full;
+    if (shortEl) shortEl.textContent = msg.short;
   }
 
   panel.addEventListener(
@@ -1500,7 +1543,7 @@ export function setupRemoteTabMetrics(
       const ce = e as CustomEvent<{ installed?: boolean }>;
       if (!ce.detail || typeof ce.detail.installed !== 'boolean') return;
       devAppSideloadInstalled = ce.detail.installed;
-      updatePausedHintActions();
+      updateDevicePanelPausedNav();
     },
     { signal: wrapUiAc.signal }
   );
@@ -1514,15 +1557,8 @@ export function setupRemoteTabMetrics(
 
     const wantQuad = developerEnabled && perfToggle.checked;
     wrap.setAttribute('data-remote-layout', wantQuad ? 'quad' : 'solo');
-    wrap.setAttribute(
-      'data-metrics-paused',
-      wantQuad && devAppForeground === false ? '1' : '0'
-    );
-
-    if (pausedHint instanceof HTMLElement) {
-      pausedHint.hidden = !(wantQuad && devAppForeground === false);
-    }
-    updatePausedHintActions();
+    metricsPaused = wantQuad && devAppForeground === false;
+    updateDevicePanelPausedNav();
 
     /* Unchecked: only enable when dev is foreground. Checked: always allow uncheck (incl. paused / unknown). */
     perfToggle.disabled = !perfToggle.checked && devAppForeground !== true;
@@ -1535,8 +1571,7 @@ export function setupRemoteTabMetrics(
         label.title =
           'Bring the Dev App to the foreground on the device to enable Device Performance.';
       } else if (devAppForeground === false && perfToggle.checked) {
-        label.title =
-          'Device Performance paused — bring the Dev App to the foreground to resume. Uncheck to return to the just the remote.';
+        label.title = pausedNavMessage(devAppSideloadInstalled).title;
       } else {
         label.removeAttribute('title');
       }

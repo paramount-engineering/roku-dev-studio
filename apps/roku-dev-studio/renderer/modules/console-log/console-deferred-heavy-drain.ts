@@ -95,18 +95,18 @@ export function createConsoleDeferredHeavyDrain(
         const job = queue.shift()!;
         if (!job.lineEl.isConnected) continue;
 
+        populateConsoleLineContentWithUrls(job.contentEl, job.entry.text);
+
         if (!job.entry.structuredTargets?.length) {
           const detected = detectStructuredConsoleLine(job.entry.text);
           if (detected.length) {
             job.entry.structuredTargets = detected;
             attachStructuredPillsToLine(job.lineEl, job.contentEl, detected);
           }
+        } else if (!job.lineEl.querySelector('.telnet-structured-view-pills')) {
+          attachStructuredPillsToLine(job.lineEl, job.contentEl, job.entry.structuredTargets);
         }
 
-        // Repopulating contentEl below replaces all child text nodes, so any
-        // stale Range bindings (find highlight, JSON+ tint) from before the
-        // drain are detached. Re-bind JSON+ inline tint after the rewrite.
-        populateConsoleLineContentWithUrls(job.contentEl, job.entry.text);
         if (job.entry.structuredTargets?.length) {
           paintJsonPlusRangesForLine(job.lineEl, job.contentEl, job.entry.structuredTargets);
         }

@@ -40,6 +40,7 @@ declare global {
     /** Telnet console */
     option?: string;
     lineIndex?: string;
+    index?: string;
 
     /** Warnings / inspector */
     warning?: string;

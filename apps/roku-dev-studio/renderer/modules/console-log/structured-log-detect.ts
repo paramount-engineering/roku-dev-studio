@@ -212,8 +212,8 @@ function normalizeXmlLogSlice(s: string): string {
 
 /**
  * Strong XML signals (declaration or known ad/feed roots) must win over embedded JSON
- * (e.g. VAST CDATA with VerificationParameters JSON, or URLs) — otherwise tryJsonEmbedded
- * parses the first balanced `{...}` inside the line and mislabels the whole row as JSON.
+ * (e.g. VAST CDATA with VerificationParameters JSON, or URLs) — otherwise embedded-JSON
+ * scan parses the first balanced `{...}` inside the line and mislabels the whole row as JSON.
  */
 function tryXmlFromStrongMarkers(line: string): StructuredConsolePayload | null {
   const lower = line.toLowerCase();
@@ -236,20 +236,27 @@ function tryXmlFromStrongMarkers(line: string): StructuredConsolePayload | null 
 
 /**
  * Try JSON starting at every `{` / `[` in the line (left to right).
- * Skips false positives like `[DEBUG]` by requiring JSON.parse to succeed.
+ * Returns the **largest** valid balanced fragment so a small object before a
+ * big `Payload: [...]` array does not become the primary JSON target.
  */
-function tryJsonEmbedded(line: string, fromIdx: number): StructuredConsolePayload | null {
+function tryJsonEmbeddedPrimary(line: string, fromIdx: number): StructuredConsolePayload | null {
+  let bestRaw: string | null = null;
+  let bestParsed: unknown = null;
   for (let i = fromIdx; i < line.length; i++) {
     const c = line[i];
     if (c !== '{' && c !== '[') continue;
     const frag = extractBalancedJsonFragment(line, i);
-    if (!frag) continue;
+    if (!frag || frag.length < 2) continue;
     const parsed = tryParseJsonCandidate(frag);
     if (parsed !== null && isJsonObjectOrArray(parsed)) {
-      return { kind: 'json', raw: frag.trim(), formatted: formatJson(parsed) };
+      if (!bestRaw || frag.length > bestRaw.length) {
+        bestRaw = frag;
+        bestParsed = parsed;
+      }
     }
   }
-  return null;
+  if (!bestRaw || bestParsed === null) return null;
+  return { kind: 'json', raw: bestRaw.trim(), formatted: formatJson(bestParsed) };
 }
 
 function formattedDedupeKey(formatted: string): string {
@@ -418,7 +425,7 @@ export function detectStructuredConsoleLine(line: string): StructuredConsolePayl
   const targets: StructuredConsolePayload[] = [];
   const seenFormatted = new Map<string, number>();
 
-  const embedded = tryJsonEmbedded(line, i0);
+  const embedded = tryJsonEmbeddedPrimary(line, i0);
   if (embedded) {
     const parsed = tryParseJsonCandidate(embedded.raw);
     if (parsed !== null && isJsonObjectOrArray(parsed)) {

@@ -18,10 +18,11 @@ import { populateConsoleLineContentWithUrls } from './console-url-detect.js';
 import { createConsoleVirtualizer } from './console-virtualizer.js';
 import {
   attachStructuredPillsToLine,
-  clickedStructuredTargetIndex,
   closestConsoleLogLineFromEvent,
+  consoleLogLineEntryIndex,
   firstHitElementOnConsoleClick,
-  openConsoleStructuredViewer
+  openConsoleStructuredViewer,
+  primaryStructuredTarget
 } from './console-structured-view-modal.js';
 import { openConsoleUrlViewer } from './console-url-modal.js';
 import type { ConsoleLogFileEntry } from './console-log-file-parse.js';
@@ -271,16 +272,33 @@ export function mountConsoleLogFileView(
         return;
       }
 
+      const pillHit = anchor.closest('.telnet-structured-view-pill');
+      if (pillHit instanceof HTMLElement) {
+        const line = pillHit.closest('.telnet-log-line');
+        if (!(line instanceof HTMLElement)) return;
+        const idx = consoleLogLineEntryIndex(line);
+        const entry = idx >= 0 ? logLines[idx] : undefined;
+        if (!entry?.structuredTargets?.length) return;
+        e.preventDefault();
+        e.stopPropagation();
+        const targetIdx = parseInt(pillHit.dataset.structuredIndex || '0', 10);
+        const payload = pillHit.classList.contains('telnet-structured-view-pill--nested')
+          ? entry.structuredTargets[targetIdx]
+          : primaryStructuredTarget(entry.structuredTargets);
+        if (!payload) return;
+        openConsoleStructuredViewer(line, payload);
+        return;
+      }
+
       const contentEl = anchor.closest('.telnet-log-content');
       if (!(contentEl instanceof HTMLElement)) return;
       const line = closestConsoleLogLineFromEvent(e);
       if (!line) return;
-      const idx = parseInt(line.dataset.lineIndex || '-1', 10);
+      const idx = consoleLogLineEntryIndex(line);
       const entry = idx >= 0 ? logLines[idx] : undefined;
       if (!entry?.structuredTargets?.length) return;
       e.preventDefault();
-      const targetIdx = clickedStructuredTargetIndex(contentEl, e, entry.structuredTargets);
-      const payload = entry.structuredTargets[targetIdx] ?? entry.structuredTargets[0];
+      const payload = primaryStructuredTarget(entry.structuredTargets);
       if (!payload) return;
       openConsoleStructuredViewer(line, payload);
     },

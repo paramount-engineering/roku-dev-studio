@@ -11,6 +11,7 @@
   },
   "include": [
     "shared/mcp-bridge-state.ts",
+    "renderer/shared/**/*.ts",
     "renderer/renderer-globals.d.ts",
     "renderer/types/**/*.ts",
     "renderer/app.ts",

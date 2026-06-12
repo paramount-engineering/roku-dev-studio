@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: http: https:;">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' blob:; worker-src 'self' blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: http: https:;">
   <title>Roku Dev Studio</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <style>
@@ -146,10 +146,12 @@
       -webkit-app-region: drag;
       height: var(--titlebar-height);
       background: var(--bg-primary);
-      border-bottom: 1px solid var(--border);
+      /* Inset line instead of border-bottom so the full height is available for
+         vertical centering (border-bottom stole 1px and skewed flex vs OS lights). */
+      box-shadow: inset 0 -1px 0 var(--border);
       display: grid;
       grid-template-columns: 1fr auto 1fr;
-      align-items: center;
+      align-items: stretch;
       column-gap: 0;
       flex-shrink: 0;
       z-index: 200;
@@ -162,9 +164,9 @@
       display: flex;
       flex-direction: row;
       align-items: center;
+      align-self: stretch;
       min-width: 0;
       -webkit-app-region: no-drag;
-      min-height: var(--titlebar-height);
     }
 
     .titlebar-traffic-spacer {
@@ -180,23 +182,23 @@
 
     .titlebar-sidebar-toggle {
       -webkit-app-region: no-drag;
-      display: flex;
+      display: inline-flex;
+      flex-direction: row;
       align-items: center;
       justify-content: center;
-      /* All fixed sizes inverse-scale with content zoom so the button
-         stays the same physical size as the macOS traffic lights /
-         Win/Linux titlebar controls next to it. See --titlebar-content-scale. */
-      width: calc(36px * var(--titlebar-content-scale));
-      height: calc(32px * var(--titlebar-content-scale));
+      /* Match Scan / Help box model (28px + 1px border) for shared vertical center. */
+      width: calc(28px * var(--titlebar-content-scale));
+      height: calc(28px * var(--titlebar-content-scale));
       margin: 0 calc(4px * var(--titlebar-content-scale)) 0 calc(2px * var(--titlebar-content-scale));
       padding: 0;
-      border: none;
+      border: 1px solid transparent;
       border-radius: calc(6px * var(--titlebar-content-scale));
       background: transparent;
-      color: var(--text-muted);
+      color: var(--text-secondary);
       cursor: default;
       line-height: 0;
-      transition: background 0.18s ease, color 0.18s ease, transform 0.18s ease;
+      flex-shrink: 0;
+      transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease;
     }
 
     .titlebar-sidebar-toggle .icon {
@@ -204,16 +206,33 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      /* `.icon-sm` defaults to 14px font-size globally; override here so
-         the icon glyph also stays at constant screen size and reads at
-         a comfortable hit-target size on the title bar. */
-      font-size: calc(18px * var(--titlebar-content-scale));
-      transition: transform 0.32s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.28s ease;
+      font-size: calc(16px * var(--titlebar-content-scale));
+    }
+
+    .titlebar-sidebar-toggle .sidebar-layout-frame,
+    .titlebar-sidebar-toggle .sidebar-layout-divider {
+      fill: none;
+      stroke: currentColor;
+    }
+
+    .titlebar-sidebar-toggle .sidebar-layout-pane {
+      stroke: none;
+      fill: var(--text-primary);
+      transition: fill 0.18s ease, opacity 0.18s ease;
+    }
+
+    body.sidebar-collapsed .titlebar-sidebar-toggle .sidebar-layout-pane {
+      fill: currentColor;
+      opacity: 0.38;
     }
 
     .titlebar-sidebar-toggle:hover {
       background: var(--bg-hover);
       color: var(--text-primary);
+    }
+
+    body.sidebar-collapsed .titlebar-sidebar-toggle:hover .sidebar-layout-pane {
+      opacity: 0.58;
     }
 
     /* Suppress Chromium's default rectangular focus ring on title-bar buttons —
@@ -226,19 +245,10 @@
 
     .titlebar-leading button:focus-visible {
       outline: 2px solid var(--accent-purple);
-      outline-offset: 2px;
+      outline-offset: -2px;
     }
 
     /* Title-bar leading controls stay vertically centered via flex — no per-platform translate. */
-
-    body.sidebar-collapsed .titlebar-sidebar-toggle {
-      color: var(--accent-purple);
-    }
-
-    body.sidebar-collapsed .titlebar-sidebar-toggle .icon {
-      transform: scale(0.92);
-      opacity: 0.88;
-    }
 
     .titlebar-help-btn {
       display: none;
@@ -339,6 +349,7 @@
       display: flex;
       align-items: center;
       justify-content: center;
+      align-self: stretch;
       min-width: 0;
       max-width: 100%;
       -webkit-app-region: drag;
@@ -360,6 +371,7 @@
       display: flex;
       justify-content: flex-end;
       align-items: center;
+      align-self: stretch;
       gap: calc(6px * var(--titlebar-content-scale));
       /* Breathing room from the right edge of the window. The Win/Linux
          min/max/close controls sit *outside* this padding (they have their
@@ -367,7 +379,6 @@
          the only thing keeping the zoom indicator off the screen edge. */
       padding-right: calc(10px * var(--titlebar-content-scale));
       min-width: 0;
-      min-height: var(--titlebar-height);
     }
 
     /* Win/Linux: the OS-style close/min/max controls must reach the window
@@ -2913,49 +2924,6 @@
     .remote-performance-checkbox:disabled {
       cursor: not-allowed;
     }
-    .remote-metrics-paused-hint {
-      display: none;
-      justify-content: space-between;
-      align-items: center;
-      gap: 10px 12px;
-      flex-wrap: wrap;
-      flex-shrink: 0;
-      padding: 8px 12px;
-      margin: 0 0 8px;
-      border-radius: 6px;
-      border: 1px solid rgba(251, 191, 36, 0.35);
-      background: rgba(251, 191, 36, 0.08);
-      font-size: 11px;
-      font-weight: 500;
-      line-height: 1.35;
-      color: var(--text-secondary);
-    }
-    .remote-metrics-paused-hint-left {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      min-width: 0;
-      flex: 1 1 180px;
-    }
-    .remote-metrics-paused-hint-actions {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      flex-shrink: 0;
-    }
-    .remote-metrics-paused-hint-actions .btn-sm {
-      white-space: nowrap;
-    }
-    /* Same `.btn { display: inline-flex }` vs `[hidden] { display: none }`
-     * cascade collision as `.card-header-actions .btn[hidden]` below; force
-     * the attribute to win so the Launch / Sideload-Dev-App buttons in the
-     * paused banner can be toggled via `el.hidden = …` without inline styles. */
-    .remote-metrics-paused-hint-actions .btn[hidden] {
-      display: none !important;
-    }
-    .remote-tab-metrics-root[data-metrics-paused="1"] .remote-metrics-paused-hint {
-      display: flex;
-    }
     .remote-tab-metrics-root[data-remote-layout="solo"] .remote-metrics-hint {
       display: none;
     }
@@ -5148,6 +5116,16 @@
       font-size: 12px;
       margin-right: 12px;
     }
+    .telnet-status.connected {
+      padding: 4px 10px;
+      border-radius: 6px;
+      background: var(--accent-purple);
+      color: white;
+      font-weight: 600;
+    }
+    .telnet-status.connected .telnet-status-text {
+      color: white;
+    }
 
     /*
      * Live line counter shown in the card header when connected. Sits to the
@@ -5175,8 +5153,8 @@
     }
     
     .telnet-status.connected .telnet-status-dot {
-      background: var(--success);
-      box-shadow: 0 0 8px var(--success);
+      background: rgba(255, 255, 255, 0.92);
+      box-shadow: none;
     }
     
     .telnet-status.disconnected .telnet-status-dot {
@@ -5367,73 +5345,230 @@
       position: relative;
       display: inline-flex;
       align-items: stretch;
+      vertical-align: middle;
+      border-radius: 6px;
+      overflow: hidden;
+    }
+    .telnet-split-control .telnet-split-main,
+    .telnet-split-control .telnet-split-menu-btn {
+      margin: 0;
     }
     .telnet-split-control .telnet-split-main {
-      border-top-right-radius: 0;
-      border-bottom-right-radius: 0;
+      border-radius: 0;
     }
     .telnet-split-control .telnet-split-menu-btn {
-      border-top-left-radius: 0;
-      border-bottom-left-radius: 0;
-      border-left: 1px solid rgba(255, 255, 255, 0.08);
-      padding-left: 6px;
-      padding-right: 6px;
-      min-width: 0;
+      border-radius: 0;
+      padding: 0 7px;
+      min-width: 28px;
+      justify-content: center;
     }
     .telnet-split-control .telnet-split-menu-btn[hidden] {
       display: none;
     }
     .telnet-split-control:not(:has(.telnet-split-menu-btn:not([hidden]))) .telnet-split-main {
-      border-radius: var(--radius-sm, 6px);
+      border-radius: 6px;
+    }
+    /* Secondary split — single shared outline + unified group hover */
+    .telnet-clear-split {
+      border: 1px solid var(--border);
+      background: var(--bg-tertiary);
+      transition: border-color 0.15s ease, background 0.15s ease;
+    }
+    .telnet-clear-split .telnet-split-main.btn-secondary,
+    .telnet-clear-split .telnet-split-menu-btn.btn-secondary {
+      border: none;
+      background: transparent;
+      transition: color 0.15s ease;
+    }
+    .telnet-clear-split .telnet-split-menu-btn.btn-secondary {
+      border-left: 1px solid var(--border);
+      transition: border-color 0.15s ease, color 0.15s ease;
+    }
+    /* Wrapper owns hover/focus/open — not individual halves */
+    .telnet-clear-split:hover:not(:has(.telnet-split-main:disabled)),
+    .telnet-clear-split:focus-within:not(:has(.telnet-split-main:disabled)),
+    .telnet-clear-split:has(.telnet-split-menu-btn[aria-expanded="true"]) {
+      border-color: var(--accent-purple);
+      background: var(--accent-purple-dim);
+    }
+    .telnet-clear-split:hover:not(:has(.telnet-split-main:disabled)) .telnet-split-main.btn-secondary,
+    .telnet-clear-split:hover:not(:has(.telnet-split-main:disabled)) .telnet-split-menu-btn.btn-secondary,
+    .telnet-clear-split:focus-within:not(:has(.telnet-split-main:disabled)) .telnet-split-main.btn-secondary,
+    .telnet-clear-split:focus-within:not(:has(.telnet-split-main:disabled)) .telnet-split-menu-btn.btn-secondary,
+    .telnet-clear-split:has(.telnet-split-menu-btn[aria-expanded="true"]) .telnet-split-main.btn-secondary,
+    .telnet-clear-split:has(.telnet-split-menu-btn[aria-expanded="true"]) .telnet-split-menu-btn.btn-secondary {
+      background: transparent;
+      color: var(--text-primary);
+    }
+    .telnet-clear-split:hover:not(:has(.telnet-split-main:disabled)) .telnet-split-menu-btn.btn-secondary,
+    .telnet-clear-split:focus-within:not(:has(.telnet-split-main:disabled)) .telnet-split-menu-btn.btn-secondary,
+    .telnet-clear-split:has(.telnet-split-menu-btn[aria-expanded="true"]) .telnet-split-menu-btn.btn-secondary {
+      border-left-color: rgba(139, 92, 246, 0.45);
+    }
+    /* Block global .btn-secondary:hover from painting a partial inner ring */
+    .telnet-clear-split .btn-secondary:hover:not(:disabled),
+    .telnet-clear-split .btn-secondary:focus-visible:not(:disabled) {
+      background: transparent;
+      border-color: transparent;
+    }
+    /* Primary split — single purple control with internal divider */
+    .telnet-connect-split {
+      background: var(--accent-purple);
+      transition: background 0.15s ease;
+    }
+    .telnet-connect-split .telnet-split-main.btn-primary,
+    .telnet-connect-split .telnet-split-menu-btn.btn-primary {
+      border: none;
+      background: transparent;
+      color: white;
+    }
+    .telnet-connect-split .telnet-split-main.btn-primary {
+      border-right: 1px solid rgba(255, 255, 255, 0.22);
+    }
+    .telnet-connect-split:hover:not(:has(.telnet-split-main:disabled)),
+    .telnet-connect-split:focus-within:not(:has(.telnet-split-main:disabled)),
+    .telnet-connect-split:has(.telnet-split-menu-btn[aria-expanded="true"]) {
+      background: #7c3aed;
+    }
+    .telnet-connect-split .btn-primary:hover:not(:disabled),
+    .telnet-connect-split .btn-primary:focus-visible:not(:disabled) {
+      background: transparent;
+    }
+    .telnet-split-control .telnet-split-menu-btn:focus {
+      outline: none;
+    }
+    .telnet-split-control .telnet-split-menu-btn:focus-visible {
+      outline: 2px solid var(--accent-purple);
+      outline-offset: -2px;
+      z-index: 1;
+    }
+    .telnet-connect-split .telnet-split-menu-btn:focus-visible {
+      outline-color: rgba(255, 255, 255, 0.65);
     }
     .telnet-split-menu {
-      position: absolute;
-      top: calc(100% + 4px);
-      right: 0;
-      z-index: 40;
+      position: fixed;
+      z-index: 300;
       min-width: 240px;
-      padding: 4px;
-      background: var(--bg-secondary);
-      border: 1px solid var(--border-color);
-      border-radius: var(--radius-sm, 6px);
-      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+      max-width: min(92vw, 360px);
+      padding: 6px;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      box-shadow:
+        0 10px 28px rgba(0, 0, 0, 0.42),
+        0 0 0 1px rgba(139, 92, 246, 0.1);
+      -webkit-app-region: no-drag;
     }
     .telnet-split-menu[hidden] {
-      display: none;
+      display: none !important;
     }
     .telnet-split-menu-item {
       display: block;
       width: 100%;
-      padding: 8px 10px;
+      margin: 0;
+      padding: 8px 12px;
       border: none;
-      border-radius: 4px;
+      border-radius: 6px;
       background: transparent;
-      color: var(--text-primary);
+      color: var(--text-secondary);
+      font-family: inherit;
       font-size: 12px;
+      font-weight: 500;
+      line-height: 1.45;
       text-align: left;
       cursor: pointer;
+      white-space: nowrap;
+      transition: background 0.15s ease, color 0.15s ease;
+    }
+    .telnet-split-menu-item + .telnet-split-menu-item {
+      margin-top: 2px;
     }
     .telnet-split-menu-item:hover {
-      background: var(--bg-tertiary);
+      background: var(--bg-hover);
+      color: var(--text-primary);
+    }
+    .telnet-split-menu-item:active {
+      background: var(--accent-purple-dim);
+      color: var(--text-primary);
     }
     .telnet-connect-split {
       margin-right: 0;
     }
+    .telnet-connect-split[hidden],
+    .telnet-clear-split[hidden] {
+      display: none !important;
+    }
     .telnet-clear-menu {
-      min-width: 280px;
+      min-width: 300px;
+    }
+    .card-header-actions .telnet-split-control .btn {
+      padding-top: 4px;
+      padding-bottom: 4px;
+    }
+    .card-header-actions .telnet-split-control .telnet-split-menu-btn {
+      padding-top: 4px;
+      padding-bottom: 4px;
     }
     
-    .telnet-autoscroll-label {
-      display: flex;
+    .telnet-scroll-to-bottom {
+      position: absolute;
+      left: 50%;
+      bottom: 20px;
+      transform: translateX(-50%);
+      z-index: 5;
+      display: inline-flex;
       align-items: center;
-      gap: 6px;
-      font-size: 12px;
-      color: var(--text-secondary);
+      justify-content: center;
+      width: 40px;
+      height: 40px;
+      padding: 0;
+      border-radius: 999px;
+      border: 1px solid rgba(167, 139, 250, 0.65);
+      background: #18181f;
+      color: #ddd6fe;
+      box-shadow:
+        0 6px 22px rgba(0, 0, 0, 0.62),
+        0 0 0 1px rgba(0, 0, 0, 0.45),
+        inset 0 1px 0 rgba(255, 255, 255, 0.08);
       cursor: pointer;
+      opacity: 1;
+      transition:
+        background 0.15s ease,
+        border-color 0.15s ease,
+        color 0.15s ease,
+        box-shadow 0.15s ease,
+        transform 0.15s ease;
+      -webkit-app-region: no-drag;
     }
-    
-    .telnet-autoscroll-label input {
-      cursor: pointer;
+    .telnet-scroll-to-bottom .icon {
+      filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.45));
+    }
+    .telnet-scroll-to-bottom[hidden] {
+      display: none !important;
+    }
+    .telnet-scroll-to-bottom:hover {
+      background: #7c3aed;
+      border-color: #c4b5fd;
+      color: #ffffff;
+      box-shadow:
+        0 8px 28px rgba(124, 58, 237, 0.55),
+        0 0 0 1px rgba(196, 181, 253, 0.35),
+        inset 0 1px 0 rgba(255, 255, 255, 0.18);
+      transform: translateX(-50%) translateY(-2px);
+    }
+    .telnet-scroll-to-bottom:active {
+      background: #6d28d9;
+      transform: translateX(-50%) translateY(0);
+      box-shadow:
+        0 4px 16px rgba(124, 58, 237, 0.45),
+        0 0 0 1px rgba(196, 181, 253, 0.28);
+    }
+    .telnet-scroll-to-bottom:focus {
+      outline: none;
+    }
+    .telnet-scroll-to-bottom:focus-visible {
+      outline: 2px solid var(--accent-purple);
+      outline-offset: 2px;
     }
     
     .telnet-output-container {
@@ -6502,6 +6637,8 @@
       gap: 16px;
       justify-self: start;
       min-width: 0;
+      max-width: 100%;
+      overflow: hidden;
     }
     
     .device-panel-icon {
@@ -6674,11 +6811,11 @@
     }
     
     .device-panel-perf-wrap {
-      justify-self: end;
       min-width: 0;
       max-width: min(380px, 42vw);
       display: flex;
       justify-content: flex-end;
+      flex: 0 1 auto;
     }
     .device-panel-perf-wrap[hidden] {
       display: none !important;
@@ -6795,10 +6932,24 @@
       background: rgba(245, 158, 11, 0.08);
     }
     
-    .inner-tabs {
-      display: flex;
+    .device-panel-nav {
       grid-column: 2;
       justify-self: center;
+      min-width: 0;
+      max-width: 100%;
+    }
+    .device-panel-right {
+      grid-column: 3;
+      justify-self: end;
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 8px;
+      min-width: 0;
+      max-width: 100%;
+    }
+    .inner-tabs {
+      display: flex;
       align-items: center;
       gap: 4px;
       margin: 0;
@@ -6808,6 +6959,86 @@
       padding: 4px;
       border-radius: 10px;
       width: max-content;
+    }
+    .device-panel-paused-nav {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+      max-width: min(420px, 100%);
+      flex: 0 1 auto;
+      padding: 4px 8px 4px 6px;
+      border-radius: 8px;
+      border: 1px solid rgba(251, 191, 36, 0.35);
+      background: rgba(251, 191, 36, 0.08);
+      color: var(--text-secondary);
+      font-size: 10px;
+      font-weight: 500;
+      line-height: 1.25;
+    }
+    .device-panel-paused-nav[hidden] {
+      display: none !important;
+    }
+    .device-panel-paused-nav-icon {
+      flex: 0 0 auto;
+      color: var(--accent-yellow, #f59e0b);
+    }
+    .device-panel-paused-nav-text {
+      min-width: 0;
+      flex: 1 1 auto;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .device-panel-paused-nav-text-short {
+      display: none;
+    }
+    .device-panel-nav-action-btn {
+      flex: 0 0 auto;
+      padding: 4px 8px;
+      font-size: 10px;
+      font-weight: 500;
+      line-height: 1.2;
+      white-space: nowrap;
+      border-radius: 6px;
+    }
+    .device-panel-nav-action-btn[hidden] {
+      display: none !important;
+    }
+    .device-panel-sideload-btn .device-panel-sideload-label-short {
+      display: none;
+    }
+    @media (max-width: 1180px) {
+      .device-panel-right {
+        gap: 6px;
+      }
+      .inner-tab {
+        padding: 8px 10px;
+        font-size: 12px;
+        gap: 4px;
+      }
+      .device-panel-paused-nav {
+        max-width: min(280px, 32vw);
+        gap: 6px;
+        padding: 4px 6px;
+      }
+      .device-panel-paused-nav-text-full {
+        display: none;
+      }
+      .device-panel-paused-nav-text-short {
+        display: inline;
+      }
+      .device-panel-sideload-btn .device-panel-sideload-label-full {
+        display: none;
+      }
+      .device-panel-sideload-btn .device-panel-sideload-label-short {
+        display: inline;
+      }
+    }
+    @media (min-width: 1181px) {
+      .device-panel-paused-nav-text-short {
+        display: none;
+      }
     }
     
     .inner-tab {
@@ -9915,17 +10146,7 @@
     `IPC.AppZoomChanged` and the renderer mirrors it into this same variable
     — see `subscribeToAppZoom()` in renderer/app.ts.
   -->
-  <script>
-    (function () {
-      try {
-        var p =
-          (window.rdsShell && window.rdsShell.platform) ||
-          (typeof navigator !== 'undefined' && /Mac/i.test(navigator.platform) ? 'darwin' : '');
-        if (p) document.body.classList.add('platform-' + p);
-        document.documentElement.style.setProperty('--app-zoom', '1');
-      } catch (e) { /* ignore */ }
-    })();
-  </script>
+  <script src="shell-prime.js"></script>
   <header class="titlebar" role="banner">
     <div class="titlebar-leading">
       <div class="titlebar-traffic-spacer" aria-hidden="true"></div>
@@ -9938,7 +10159,13 @@
         aria-expanded="true"
         aria-controls="appSidebar"
       >
-        <span class="icon icon-sm"><svg><use href="#icon-sidebar-layout"/></svg></span>
+        <span class="icon icon-sm" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect class="sidebar-layout-frame" width="18" height="16" x="3" y="4" rx="2" ry="2"/>
+            <rect class="sidebar-layout-pane" x="4" y="5" width="5" height="14" rx="1" ry="1"/>
+            <line class="sidebar-layout-divider" x1="9" x2="9" y1="5" y2="19"/>
+          </svg>
+        </span>
       </button>
       <button
         type="button"
@@ -10274,8 +10501,9 @@
       <line x1="10" x2="8" y1="9" y2="9"/>
     </symbol>
     <symbol id="icon-sidebar-layout" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <rect width="18" height="16" x="3" y="4" rx="2" ry="2"/>
-      <line x1="9" x2="9" y1="8" y2="16"/>
+      <rect class="sidebar-layout-frame" width="18" height="16" x="3" y="4" rx="2" ry="2"/>
+      <rect class="sidebar-layout-pane" x="4" y="5" width="5" height="14" rx="1" ry="1"/>
+      <line class="sidebar-layout-divider" x1="9" x2="9" y1="5" y2="19"/>
     </symbol>
     <symbol id="icon-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/>
@@ -10844,16 +11072,19 @@
             </div>
           </div>
         </div>
-        <div class="inner-tabs">
-          <button class="inner-tab active" data-inner-tab="remote"><span class="icon icon-sm"><svg><use href="#icon-gamepad"/></svg></span> Remote</button>
-          <button class="inner-tab" data-inner-tab="apps"><span class="icon icon-sm"><svg><use href="#icon-grid"/></svg></span> Apps</button>
-          <button class="inner-tab" data-inner-tab="query"><span class="icon icon-sm"><svg><use href="#icon-database"/></svg></span> Query</button>
-          <button class="inner-tab" data-inner-tab="devapp"><span class="icon icon-sm"><svg><use href="#icon-zap"/></svg></span> Dev App</button>
-          <button class="inner-tab" data-inner-tab="telnet"><span class="icon icon-sm"><svg><use href="#icon-terminal"/></svg></span> Console</button>
-          <button class="inner-tab" data-inner-tab="inspector"><span class="icon icon-sm"><svg><use href="#icon-plug"/></svg></span> App Connector</button>
-          <button class="inner-tab" data-inner-tab="actionscripts"><span class="icon icon-sm"><svg><use href="#icon-code"/></svg></span> Action Scripts</button>
+        <div class="device-panel-nav">
+          <div class="inner-tabs">
+            <button class="inner-tab active" data-inner-tab="remote"><span class="icon icon-sm"><svg><use href="#icon-gamepad"/></svg></span> Remote</button>
+            <button class="inner-tab" data-inner-tab="apps"><span class="icon icon-sm"><svg><use href="#icon-grid"/></svg></span> Apps</button>
+            <button class="inner-tab" data-inner-tab="query"><span class="icon icon-sm"><svg><use href="#icon-database"/></svg></span> Query</button>
+            <button class="inner-tab" data-inner-tab="devapp"><span class="icon icon-sm"><svg><use href="#icon-zap"/></svg></span> Dev App</button>
+            <button class="inner-tab" data-inner-tab="telnet"><span class="icon icon-sm"><svg><use href="#icon-terminal"/></svg></span> Console</button>
+            <button class="inner-tab" data-inner-tab="inspector"><span class="icon icon-sm"><svg><use href="#icon-plug"/></svg></span> App Connector</button>
+            <button class="inner-tab" data-inner-tab="actionscripts"><span class="icon icon-sm"><svg><use href="#icon-code"/></svg></span> Action Scripts</button>
+          </div>
         </div>
-        <div class="device-panel-perf-wrap" data-device-panel-perf-wrap hidden>
+        <div class="device-panel-right">
+          <div class="device-panel-perf-wrap" data-device-panel-perf-wrap hidden>
           <button type="button" class="device-panel-perf-btn" data-device-panel-perf-btn title="Open Remote tab">
             <span class="device-panel-perf-live" data-perf-strip-live>
               <span class="device-panel-perf-item">
@@ -10882,6 +11113,19 @@
             <span class="device-panel-perf-paused" data-perf-strip-paused hidden>Paused — launch Dev App to resume</span>
           </button>
         </div>
+          <div class="device-panel-paused-nav" data-device-panel-paused-nav hidden>
+            <span class="device-panel-paused-nav-icon icon icon-xs" aria-hidden="true"><svg><use href="#icon-warning"/></svg></span>
+            <span class="device-panel-paused-nav-text" title="Device performance paused — bring the Dev App to the foreground to resume.">
+              <span class="device-panel-paused-nav-text-full" data-paused-text-full>Device performance paused — bring the Dev App to the foreground to resume.</span>
+              <span class="device-panel-paused-nav-text-short" data-paused-text-short>Performance paused</span>
+            </span>
+            <button type="button" class="btn btn-secondary btn-sm device-panel-nav-action-btn" data-paused-launch-dev hidden>Launch</button>
+            <button type="button" class="btn btn-secondary btn-sm device-panel-nav-action-btn device-panel-sideload-btn" data-paused-goto-sideload hidden title="Sideload Dev App">
+              <span class="device-panel-sideload-label-full">Sideload Dev App</span>
+              <span class="device-panel-sideload-label-short">Sideload</span>
+            </button>
+          </div>
+        </div>
       </div>
       
       <div class="device-inner-panes">
@@ -10901,17 +11145,7 @@
             </div>
           </div>
         </div>
-        <div class="remote-tab-metrics-root" data-remote-layout="solo" data-metrics-paused="0">
-          <div class="remote-metrics-paused-hint" data-remote-metrics-paused hidden>
-            <div class="remote-metrics-paused-hint-left">
-              <span class="icon icon-sm" aria-hidden="true"><svg><use href="#icon-warning"/></svg></span>
-              <span>Device performance paused — bring the Dev App to the foreground to resume.</span>
-            </div>
-            <div class="remote-metrics-paused-hint-actions">
-              <button type="button" class="btn btn-secondary btn-sm" data-paused-launch-dev hidden>Launch</button>
-              <button type="button" class="btn btn-secondary btn-sm" data-paused-goto-sideload hidden>Sideload Dev App</button>
-            </div>
-          </div>
+        <div class="remote-tab-metrics-root" data-remote-layout="solo">
           <div class="remote-quadrant-grid">
             <section class="remote-quad remote-quad-remote" aria-label="Remote control">
               <div class="remote-quad-header remote-quad-remote-header">
@@ -11451,7 +11685,7 @@
                   <button type="button" class="btn btn-primary telnet-connect-btn telnet-split-main" title="Connect and pull relay buffer">
                     <span class="icon icon-xs"><svg><use href="#icon-plug"/></svg></span> Connect
                   </button>
-                  <button type="button" class="btn btn-primary telnet-connect-menu-btn telnet-split-menu-btn" title="More connect options" aria-haspopup="menu" aria-expanded="false" hidden>
+                  <button type="button" class="btn btn-primary telnet-connect-menu-btn telnet-split-menu-btn" title="Connect options" aria-label="Connect options" aria-haspopup="menu" aria-expanded="false" hidden>
                     <span class="icon icon-xs"><svg><use href="#icon-chevron-down"/></svg></span>
                   </button>
                   <div class="telnet-split-menu telnet-connect-menu" role="menu" hidden>
@@ -11486,9 +11720,6 @@
                   <button class="btn btn-icon telnet-find-clear" title="Clear"><span class="icon icon-xs"><svg><use href="#icon-x"/></svg></span></button>
                 </div>
                 <div class="telnet-actions">
-                  <label class="telnet-autoscroll-label">
-                    <input type="checkbox" class="telnet-autoscroll" checked> Auto-scroll
-                  </label>
                   <button class="btn btn-secondary telnet-copy-btn" title="Copy all logs">
                     <span class="icon icon-xs"><svg><use href="#icon-copy"/></svg></span> Copy
                   </button>
@@ -11499,7 +11730,7 @@
                     <button type="button" class="btn btn-secondary telnet-clear-btn telnet-split-main" title="Clear console">
                       <span class="icon icon-sm"><svg><use href="#icon-trash"/></svg></span> Clear
                     </button>
-                    <button type="button" class="btn btn-secondary telnet-clear-menu-btn telnet-split-menu-btn" title="More clear options" aria-haspopup="menu" aria-expanded="false" hidden>
+                    <button type="button" class="btn btn-secondary telnet-clear-menu-btn telnet-split-menu-btn" title="Clear options" aria-label="Clear options" aria-haspopup="menu" aria-expanded="false" hidden>
                       <span class="icon icon-xs"><svg><use href="#icon-chevron-down"/></svg></span>
                     </button>
                     <div class="telnet-split-menu telnet-clear-menu" role="menu" hidden>
@@ -11521,6 +11752,9 @@
                     <p class="telnet-hint">Requires Developer Mode enabled on the Roku device.<br>Only one telnet connection to a Roku device can be active at a time.</p>
                   </div>
                 </div>
+                <button type="button" class="telnet-scroll-to-bottom" hidden title="Jump to latest logs" aria-label="Jump to latest logs">
+                  <span class="icon icon-sm"><svg><use href="#icon-chevron-down"/></svg></span>
+                </button>
               </div>
             </div>
           </div>

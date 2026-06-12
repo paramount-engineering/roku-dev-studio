@@ -214,6 +214,11 @@ function createWindow(appState: AppWindowState) {
   ensurePreloadBundle();
   const preloadPath = path.resolve(__dirname, 'preload.bundled.cjs');
   const isMac = process.platform === 'darwin';
+  /** Keep in sync with `--titlebar-height-base` in renderer/index.html */
+  const MACOS_TITLEBAR_HEIGHT = 38;
+  /** macOS traffic-light cluster visual height (centers in the custom title bar). */
+  const MACOS_TRAFFIC_LIGHT_HEIGHT = 14;
+  const macTrafficLightY = Math.round(MACOS_TITLEBAR_HEIGHT / 2 - MACOS_TRAFFIC_LIGHT_HEIGHT / 2);
   const win = new BrowserWindow({
     width: 1400,
     height: 900,
@@ -227,7 +232,7 @@ function createWindow(appState: AppWindowState) {
     ...(isMac
       ? {
           titleBarStyle: 'hiddenInset' as const,
-          trafficLightPosition: { x: 14, y: 13 }
+          trafficLightPosition: { x: 14, y: macTrafficLightY }
         }
       : { frame: false }),
     show: false, // Don't show until ready - faster perceived startup
