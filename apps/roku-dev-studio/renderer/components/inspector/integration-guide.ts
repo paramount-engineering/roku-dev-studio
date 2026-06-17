@@ -1,6 +1,7 @@
 // Integration Guide setup
 
 import type { DevicePanelRoot } from '../../types/device-panel-dom.js';
+import { attachBackdropClickToClose } from '../../modules/utils/modal-backdrop-click.js';
 import {
   openModalOverlayActiveFromOpener,
   closeModalWithOriginMotion
@@ -44,9 +45,7 @@ export function setupIntegrationGuide(panel: DevicePanelRoot) {
     const closeBtn = modal.querySelector('.integration-guide-modal-close');
     closeBtn?.addEventListener('click', () => closeIntegrationGuideModal(modal));
 
-    modal.addEventListener('click', (e: MouseEvent) => {
-      if (e.target === modal) closeIntegrationGuideModal(modal);
-    });
+    attachBackdropClickToClose(modal, () => closeIntegrationGuideModal(modal));
 
     document.addEventListener('keydown', (e: KeyboardEvent) => {
       if (e.key === 'Escape' && modal.classList.contains('active')) {

@@ -1,6 +1,7 @@
 /**
- * Input validation for Roku libs that build shell commands (curl).
- * Reduces risk of command injection when IP or developer password are interpolated.
+ * Input validation for Roku device requests. IP/password are sent over native
+ * HTTP (Digest auth + multipart) — not interpolated into a shell — so password
+ * validation only guards length and control characters, not shell metacharacters.
  */
 
 function isValidIp(ip: unknown): boolean {
@@ -20,12 +21,16 @@ function validateDevPassword(password: unknown): { valid: boolean; error?: strin
   const s = String(password);
   if (s.length === 0) return { valid: false, error: 'Password is required' };
   if (s.length > 128) return { valid: false, error: 'Password is too long' };
-  const unsafe = /["'`$\\\r\n\t;|&<>*?()[\]{}]|\.\./;
-  if (unsafe.test(s)) {
+  // Only reject control characters (CR/LF/NUL/etc.) that could corrupt HTTP
+  // headers or the multipart body. Quotes, `$`, and other shell metacharacters
+  // are now safe — the password is hashed for Digest auth, never shelled out —
+  // and the Roku device web UI accepts them, so blocking them only locked out
+  // legitimate passwords.
+  // eslint-disable-next-line no-control-regex
+  if (/[\u0000-\u001f\u007f]/.test(s)) {
     return {
       valid: false,
-      error:
-        'Password contains characters Dev Studio cannot use (quotes, $, shell symbols, etc.). The device web UI may accept a broader set — try a simpler password for sideload/verify here.'
+      error: 'Password contains invalid control characters. Remove line breaks or tabs and try again.'
     };
   }
   return { valid: true };

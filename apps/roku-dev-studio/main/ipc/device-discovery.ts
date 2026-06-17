@@ -3,6 +3,8 @@
 import type { BrowserWindow } from 'electron';
 import type { GetDeviceIdFn, GetDeviceInfoFn, SafeSendFn } from '../../shared/ipc/payloads';
 import { IPC } from '../../shared/ipc/channels';
+import { detectHotspotInterface } from '../network-inspector/index';
+import { loadSettings } from '../settings';
 
 const { ssdpDiscover, subnetScan } = require('roku-dev-studio-api');
 
@@ -45,7 +47,27 @@ function setupDeviceDiscovery(
   ipcMain.handle(IPC.RokuScanSubnet, async () => {
     console.log('=== Subnet Scan Started ===');
     try {
+      const settings = loadSettings();
+      const networkInspectorEnabled = settings['networkInspectorEnabled'] === true;
+      const extraSubnetPrefixes: string[] = [];
+      if (networkInspectorEnabled) {
+        const hotspot = detectHotspotInterface();
+        if (hotspot) {
+          extraSubnetPrefixes.push(hotspot.subnet);
+          console.log(
+            'Network Inspector: including hotspot subnet',
+            hotspot.subnet + '.0/24',
+            'on',
+            hotspot.name
+          );
+        } else {
+          console.log(
+            'Network Inspector enabled but no hotspot interface detected — scanning LAN subnets only'
+          );
+        }
+      }
       const devices = await subnetScan({
+        extraSubnetPrefixes,
         onDeviceFound: (device: unknown) => safeSendToRenderer(IPC.RokuDeviceFound, device),
         log: (msg: unknown) => console.log(msg)
       });

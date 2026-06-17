@@ -189,6 +189,19 @@ export function setupTelnet(
     shortcutScopeEl: panel,
     preservePlaceholder: true,
     buildLineEl: (entry, index) => createLogLineElement(entry as TelnetLogEntry, index),
+    // Find navigation must unpin stick-to-bottom before scrolling to the match.
+    // Otherwise a streaming batch's `followTailScroll()` keeps snapping the view
+    // back to the newest line while the find bar pulls it to the hit — the two
+    // scroll controllers fight every frame and the console visibly flickers.
+    // Setting `pinnedToBottom = false` here also cancels any in-flight
+    // `followTailScroll` (its `scrollOnce` guard bails on `!pinnedToBottom`).
+    scrollLineIntoView: (idx) => {
+      if (pinnedToBottom) {
+        pinnedToBottom = false;
+        updateScrollToBottomAffordance();
+      }
+      virt.scrollToIndex(idx, { align: 'center' });
+    },
     onSelectAll: () => {
       // Async because Cmd+A copy includes the disk spill (if any).
       // Fire-and-forget — the shortcut handler's contract doesn't await.
@@ -263,6 +276,9 @@ export function setupTelnet(
   let pinnedToBottom = true;
   let lastScrollTop = 0;
   let tailFollowToken = 0;
+  /** True while a tail-follow RAF chain is pending — lets streaming flushes
+   *  coalesce onto the in-flight chain instead of stacking a new 3-pass run. */
+  let tailFollowScheduled = false;
 
   function distanceFromBottom(): number {
     return outputEl.scrollHeight - outputEl.scrollTop - outputEl.clientHeight;
@@ -279,7 +295,13 @@ export function setupTelnet(
 
   /** Scroll the virtualizer to the log tail. Multi-pass so measured row heights settle. */
   function followTailScroll(onDone?: () => void): void {
+    // Each pass reads the *current* tail (`logLines.length - 1`) at execution
+    // time, so when a chain is already pending for the streaming path it will
+    // land on the newest line anyway — skip stacking another. Only callers that
+    // need the `onDone` callback (programmatic jump-to-bottom) force a fresh run.
+    if (tailFollowScheduled && !onDone) return;
     const token = ++tailFollowToken;
+    tailFollowScheduled = true;
     isScrolling = true;
     const scrollOnce = (): void => {
       if (token !== tailFollowToken || !pinnedToBottom) return;
@@ -290,6 +312,7 @@ export function setupTelnet(
     };
     const finish = (): void => {
       if (token !== tailFollowToken) return;
+      tailFollowScheduled = false;
       lastScrollTop = outputEl.scrollTop;
       isScrolling = false;
       onDone?.();
@@ -693,6 +716,12 @@ export function setupTelnet(
   document.addEventListener(CONSOLE_VIEWER_CLOSED_EVENT, onTelnetViewerClosedResume);
 
   function ingestTelnetIpcChunk(chunk: string) {
+    // The main-process 8085 socket can stay open after this panel disconnects
+    // when another holder (e.g. a Fiddle window) still leases it. In that case
+    // `TelnetData` keeps broadcasting to every renderer; ignore it here once
+    // this panel is no longer connected so the UI state and the log stream
+    // don't diverge (and `getTelnetLogSnapshot().connected` stays truthful).
+    if (!isConnected) return;
     const lines = appendTelnetChunk(telnetTcpState, chunk);
     if (lines.length === 0) return;
     for (let i = 0; i < lines.length; i++) {
@@ -886,7 +915,8 @@ export function setupTelnet(
   // inside `mountConsoleLogFileView` (called by `mountConsoleLogSurface`),
   // so we don't attach a duplicate handler here. The surface's handler uses
   // identical logic — `firstHitElementOnConsoleClick` → URL span check →
-  // structured-target lookup via `primaryStructuredTarget` (outer JSON/XML).
+  // structured-target lookup via `clickedStructuredTargetIndex` (deepest
+  // nested JSON+ literal under the click), falling back to the primary target.
 
   // In-flight guard. Multiple concurrent callers (e.g. an Action Script
   // auto-connect colliding with a manual click, or the executor pre-run

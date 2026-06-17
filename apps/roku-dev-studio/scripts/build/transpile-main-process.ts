@@ -15,7 +15,10 @@ export const MAIN_EXTERNAL = [
   // BrightScript Fiddle deps — require() at runtime, not bundled.
   'brighterscript',
   'fsevents',
-  'chokidar'
+  'chokidar',
+  // Optional native packet-capture binding (Network Inspector, Windows). Loaded via a guarded
+  // runtime require(); must stay external so esbuild doesn't try to bundle its .node binary.
+  'cap'
 ];
 
 /**

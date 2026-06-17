@@ -18,6 +18,7 @@ import { populateConsoleLineContentWithUrls } from './console-url-detect.js';
 import { createConsoleVirtualizer } from './console-virtualizer.js';
 import {
   attachStructuredPillsToLine,
+  clickedStructuredTargetIndex,
   closestConsoleLogLineFromEvent,
   consoleLogLineEntryIndex,
   firstHitElementOnConsoleClick,
@@ -281,10 +282,13 @@ export function mountConsoleLogFileView(
         if (!entry?.structuredTargets?.length) return;
         e.preventDefault();
         e.stopPropagation();
-        const targetIdx = parseInt(pillHit.dataset.structuredIndex || '0', 10);
-        const payload = pillHit.classList.contains('telnet-structured-view-pill--nested')
-          ? entry.structuredTargets[targetIdx]
-          : primaryStructuredTarget(entry.structuredTargets);
+        // A pill carries its own target index; fall back to the primary target
+        // when the index is missing/out of range (so a second non-nested badge
+        // — e.g. two XML fragments — opens its own payload, not the first).
+        const targetIdx = parseInt(pillHit.dataset.structuredIndex || '', 10);
+        const payload =
+          (Number.isInteger(targetIdx) ? entry.structuredTargets[targetIdx] : undefined) ??
+          primaryStructuredTarget(entry.structuredTargets);
         if (!payload) return;
         openConsoleStructuredViewer(line, payload);
         return;
@@ -298,7 +302,11 @@ export function mountConsoleLogFileView(
       const entry = idx >= 0 ? logLines[idx] : undefined;
       if (!entry?.structuredTargets?.length) return;
       e.preventDefault();
-      const payload = primaryStructuredTarget(entry.structuredTargets);
+      // Resolve to the deepest nested JSON+ literal the click landed inside, so
+      // clicking within a tinted nested region opens that payload rather than
+      // always opening the outer object.
+      const targetIdx = clickedStructuredTargetIndex(contentEl, e, entry.structuredTargets);
+      const payload = entry.structuredTargets[targetIdx] ?? primaryStructuredTarget(entry.structuredTargets);
       if (!payload) return;
       openConsoleStructuredViewer(line, payload);
     },

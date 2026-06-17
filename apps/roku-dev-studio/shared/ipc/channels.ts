@@ -7,6 +7,8 @@ export const IPC = {
   AboutCopy: 'about:copy',
   AboutOpenExternal: 'about:openExternal',
   // Settings window (modal)
+  /** Main renderer asks to open the Settings window, optionally navigated to a section. */
+  SettingsOpen: 'settings:open',
   SettingsWindowGetState: 'settings-window:get-state',
   SettingsWindowSave: 'settings-window:save',
   SettingsWindowPickFolder: 'settings-window:pick-folder',
@@ -14,6 +16,10 @@ export const IPC = {
   SettingsWindowClose: 'settings-window:close',
   /** Settings window asks main to open a detected MCP client's config file in the default editor (falls back to revealing in folder). */
   SettingsWindowOpenMcpConfig: 'settings-window:open-mcp-config',
+  /** Settings window probes a remote location's Network Inspector capability + current config. */
+  SettingsWindowRemoteNetworkProbe: 'settings-window:remote-network-probe',
+  /** Settings window applies Network Inspector config to a remote location. */
+  SettingsWindowRemoteNetworkSetConfig: 'settings-window:remote-network-set-config',
   AppSettingsUpdated: 'app-settings-updated',
   /** Renderer pushes its current state (selected device, App Connector Functions) to main for the MCP bridge to expose. */
   McpBridgeReportState: 'mcp-bridge:report-state',
@@ -121,6 +127,13 @@ export const IPC = {
   RemoteDevicesCached: 'remote:devices-cached',
   RemoteHealth: 'remote:health',
   RemoteCapabilities: 'remote:capabilities',
+  RemoteNetworkStatus: 'remote:network-status',
+  RemoteNetworkGetConfig: 'remote:network-get-config',
+  RemoteNetworkSetConfig: 'remote:network-set-config',
+  RemoteNetworkEvents: 'remote:network-events',
+  RemoteNetworkEventDetail: 'remote:network-event-detail',
+  RemoteNetworkClear: 'remote:network-clear',
+  RemoteNetworkSetupCapture: 'remote:network-setup-capture',
   RemoteDeviceInfo: 'remote:device-info',
   RemoteKeypress: 'remote:keypress',
   RemoteLaunch: 'remote:launch',
@@ -220,7 +233,27 @@ export const IPC = {
   /** Main process asks main renderer to wipe a device's stored password (auth failed upstream). */
   FiddleClearPasswordRequest: 'fiddle:clear-password-request',
   /** Main renderer pushes scan status (spinner state) to open Fiddle windows. */
-  FiddleScanStatus: 'fiddle:scan-status'
+  FiddleScanStatus: 'fiddle:scan-status',
+  /** Network Inspector — hotspot traffic capture (local devices). */
+  NetworkInspectorGetStatus: 'network-inspector:get-status',
+  NetworkInspectorGetEvents: 'network-inspector:get-events',
+  NetworkInspectorGetEventDetail: 'network-inspector:get-event-detail',
+  NetworkInspectorClearEvents: 'network-inspector:clear-events',
+  NetworkInspectorSetRecording: 'network-inspector:set-recording',
+  NetworkInspectorExportPcap: 'network-inspector:export-pcap',
+  NetworkInspectorApplySettings: 'network-inspector:apply-settings',
+  NetworkInspectorStatus: 'network-inspector:status',
+  NetworkInspectorCaptureEvents: 'network-inspector:capture-events',
+  NetworkInspectorDeviceJoined: 'network-inspector:device-joined',
+  NetworkInspectorDeviceLeft: 'network-inspector:device-left',
+  NetworkInspectorDeviceDiscovered: 'network-inspector:device-discovered',
+  NetworkInspectorClientsCleared: 'network-inspector:clients-cleared',
+  NetworkInspectorGetCaInfo: 'network-inspector:get-ca-info',
+  NetworkInspectorExportCaPem: 'network-inspector:export-ca-pem',
+  NetworkInspectorExportCaCert: 'network-inspector:export-ca-cert',
+  NetworkInspectorInstallBpfAccess: 'network-inspector:install-bpf-access',
+  NetworkInspectorGetTrafficRules: 'network-inspector:get-traffic-rules',
+  NetworkInspectorSetDeviceTrafficRules: 'network-inspector:set-device-traffic-rules'
 } as const;
 
 export type IpcChannel = (typeof IPC)[keyof typeof IPC];

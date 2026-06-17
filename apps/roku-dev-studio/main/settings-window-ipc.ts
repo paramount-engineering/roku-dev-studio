@@ -12,6 +12,12 @@ import {
   sanitizeMcpClientsPayload
 } from './mcp-clients';
 import type { McpClientId } from './mcp-clients';
+import { initNetworkInspectorFromSettings } from './network-inspector/index';
+import { getCapturePlatform } from './network-inspector/index';
+import {
+  DEFAULT_MAX_RAW_PACKETS_PER_DEVICE,
+  clampMaxRawPacketsPerDevice
+} from '../shared/network-inspector/types';
 
 const sharedConstants = require('roku-dev-studio-api/lib/shared-constants') as Record<string, number>;
 
@@ -137,6 +143,14 @@ export type SettingsWindowSavePayload = {
    * off removes it. Keys not present here are left untouched.
    */
   mcpClients?: Partial<Record<McpClientId, boolean>>;
+  /** When true, Network Inspector captures hotspot traffic for local devices. */
+  networkInspectorEnabled: boolean;
+  networkInspectorMitmEnabled?: boolean;
+  networkInspectorMitmPort?: number;
+  /** Max raw frames retained per device for the per-device pcap export. */
+  networkInspectorMaxRawPacketsPerDevice?: number;
+  /** Host OS for the running app (`darwin` | `win32` | `linux`). */
+  hostPlatform: string;
 };
 
 type AppStateRef = {
@@ -186,6 +200,90 @@ function syncFileMenuCheckboxes(
   }
 }
 
+/** Connected remote locations (id/name/serverUrl) for the Settings Network Inspector place picker. */
+function readRemoteLocations(
+  settings: Record<string, unknown>
+): Array<{ id: string; name: string; serverUrl: string; host: string }> {
+  const raw = settings['remote-locations'];
+  if (!Array.isArray(raw)) return [];
+  const out: Array<{ id: string; name: string; serverUrl: string; host: string }> = [];
+  for (const entry of raw) {
+    if (!entry || typeof entry !== 'object') continue;
+    const o = entry as Record<string, unknown>;
+    const serverUrl = typeof o.serverUrl === 'string' ? o.serverUrl : '';
+    if (!serverUrl) continue;
+    // Prefer the stored host; fall back to parsing it out of the server URL.
+    let host = typeof o.host === 'string' && o.host.trim() ? o.host.trim() : '';
+    if (!host) {
+      try {
+        host = new URL(serverUrl).hostname;
+      } catch {
+        host = '';
+      }
+    }
+    out.push({
+      id: typeof o.id === 'string' ? o.id : serverUrl,
+      name: typeof o.name === 'string' && o.name.trim() ? o.name : serverUrl,
+      serverUrl,
+      host
+    });
+  }
+  return out;
+}
+
+/** Minimal JSON HTTP request to a remote location server (probe capabilities / network config). */
+function settingsRemoteHttp(
+  serverUrl: string,
+  pathStr: string,
+  method = 'GET',
+  body?: Record<string, unknown>
+): Promise<Record<string, unknown>> {
+  return new Promise((resolve) => {
+    try {
+      const url = new URL(pathStr, serverUrl);
+      const isHttps = url.protocol === 'https:';
+      const mod = require(isHttps ? 'https' : 'http');
+      const headers: Record<string, string | number> = {};
+      let postData: string | null = null;
+      if (body) {
+        postData = JSON.stringify(body);
+        headers['Content-Type'] = 'application/json';
+        headers['Content-Length'] = Buffer.byteLength(postData);
+      }
+      const req = mod.request(
+        {
+          hostname: url.hostname,
+          port: url.port || (isHttps ? 443 : 80),
+          path: `${url.pathname}${url.search}`,
+          method,
+          headers,
+          timeout: 8000
+        },
+        (res: import('http').IncomingMessage) => {
+          let data = '';
+          res.on('data', (c: Buffer | string) => (data += c));
+          res.on('end', () => {
+            try {
+              resolve(JSON.parse(data));
+            } catch {
+              resolve({ success: false, error: 'Invalid JSON response' });
+            }
+          });
+        }
+      );
+      req.on('error', (e: Error) => resolve({ success: false, error: e.message }));
+      req.on('timeout', () => {
+        req.destroy();
+        resolve({ success: false, error: 'Request timed out' });
+      });
+      if (postData) req.write(postData);
+      req.end();
+    } catch (e) {
+      resolve({ success: false, error: e instanceof Error ? e.message : String(e) });
+    }
+  });
+}
+
 /**
  * Register IPC used by the Settings window preload.
  */
@@ -230,6 +328,41 @@ function registerSettingsWindowIpc(
     }
   );
 
+  ipcMain.handle(
+    IPC.SettingsWindowRemoteNetworkProbe,
+    async (_event: IpcMainInvokeEvent, payload: { serverUrl?: string }) => {
+      const serverUrl = typeof payload?.serverUrl === 'string' ? payload.serverUrl : '';
+      if (!serverUrl) return { success: false, error: 'serverUrl required' };
+      const [caps, cfg, status] = await Promise.all([
+        settingsRemoteHttp(serverUrl, '/capabilities'),
+        settingsRemoteHttp(serverUrl, '/network/config'),
+        settingsRemoteHttp(serverUrl, '/network/status')
+      ]);
+      const capabilities = (caps?.capabilities as Record<string, unknown> | undefined) || undefined;
+      // The server responded with a capabilities payload → it's reachable / "connected".
+      const reachable = !!capabilities;
+      return {
+        success: true,
+        reachable,
+        networkInspector: capabilities?.networkInspector ?? null,
+        config: cfg?.config ?? null,
+        status: status?.status ?? null
+      };
+    }
+  );
+
+  ipcMain.handle(
+    IPC.SettingsWindowRemoteNetworkSetConfig,
+    async (
+      _event: IpcMainInvokeEvent,
+      payload: { serverUrl?: string; config?: Record<string, unknown> }
+    ) => {
+      const serverUrl = typeof payload?.serverUrl === 'string' ? payload.serverUrl : '';
+      if (!serverUrl) return { success: false, error: 'serverUrl required' };
+      return await settingsRemoteHttp(serverUrl, '/network/config', 'PUT', payload?.config || {});
+    }
+  );
+
   ipcMain.handle(IPC.SettingsWindowGetState, async () => {
     const settings = loadSettings();
     const st = deps.getAppState();
@@ -254,6 +387,18 @@ function registerSettingsWindowIpc(
     const rememberPasswordsInKeychainRaw = settings['rememberPasswordsInKeychain'];
     const rememberPasswordsInKeychain =
       typeof rememberPasswordsInKeychainRaw === 'boolean' ? rememberPasswordsInKeychainRaw : false;
+    const networkInspectorEnabled = settings['networkInspectorEnabled'] === true;
+    // MITM proxy is always on with the inspector (no dedicated toggle); default true.
+    const networkInspectorMitmEnabled = settings['networkInspectorMitmEnabled'] !== false;
+    const mitmPortRaw = settings['networkInspectorMitmPort'];
+    const networkInspectorMitmPort =
+      typeof mitmPortRaw === 'number' && mitmPortRaw > 0 && mitmPortRaw < 65536
+        ? Math.floor(mitmPortRaw)
+        : 8888;
+    const networkInspectorMaxRawPacketsPerDevice =
+      'networkInspectorMaxRawPacketsPerDevice' in settings
+        ? clampMaxRawPacketsPerDevice(settings['networkInspectorMaxRawPacketsPerDevice'])
+        : DEFAULT_MAX_RAW_PACKETS_PER_DEVICE;
 
     const mcpDetections = detectMcpClients();
     const mcpEnabledRaw = settings['mcpEnabledClients'];
@@ -288,6 +433,25 @@ function registerSettingsWindowIpc(
       autoConnectLastDeviceEnabled,
       rememberSidebarToggle,
       rememberPasswordsInKeychain,
+      networkInspectorEnabled,
+      networkInspectorMitmEnabled,
+      networkInspectorMitmPort,
+      networkInspectorMaxRawPacketsPerDevice,
+      hostPlatform: process.platform,
+      remoteLocations: readRemoteLocations(settings),
+      // Capture readiness comes from the per-OS capture worker — no platform branching here. Off-
+      // platform detail flags default to "available" so the settings UI only gates on the host's
+      // relevant prerequisite (matching the previous per-detector defaults).
+      ...(() => {
+        const readiness = getCapturePlatform().getReadiness();
+        return {
+          bpfCaptureAvailable: readiness.bpfCaptureAvailable ?? true,
+          bpfLaunchDaemonInstalled: readiness.bpfLaunchDaemonInstalled ?? false,
+          captureToolAvailable: readiness.captureToolAvailable,
+          linuxCaptureAvailable: readiness.linuxCaptureAvailable ?? true,
+          capModuleAvailable: readiness.capModuleAvailable ?? true
+        };
+      })(),
       secretStoreStatus: deps.getSecretStoreStatus(),
       mcpClients: mcpClientsState,
       mcpClientDetections: mcpDetections.map((d) => ({
@@ -336,6 +500,19 @@ function registerSettingsWindowIpc(
         settings['autoConnectLastDeviceEnabled'] = !!payload.autoConnectLastDeviceEnabled;
         settings['rememberSidebarToggle'] = !!payload.rememberSidebarToggle;
         settings['rememberPasswordsInKeychain'] = !!payload.rememberPasswordsInKeychain;
+        settings['networkInspectorEnabled'] = !!payload.networkInspectorEnabled;
+        settings['networkInspectorMitmEnabled'] = !!payload.networkInspectorMitmEnabled;
+        if (typeof payload.networkInspectorMitmPort === 'number') {
+          settings['networkInspectorMitmPort'] = Math.max(
+            1,
+            Math.min(65535, Math.floor(payload.networkInspectorMitmPort))
+          );
+        }
+        const niMaxRawPackets =
+          typeof payload.networkInspectorMaxRawPacketsPerDevice === 'number'
+            ? clampMaxRawPacketsPerDevice(payload.networkInspectorMaxRawPacketsPerDevice)
+            : DEFAULT_MAX_RAW_PACKETS_PER_DEVICE;
+        settings['networkInspectorMaxRawPacketsPerDevice'] = niMaxRawPackets;
         settings.debugLoggingEnabled = !!payload.debugLoggingEnabled;
 
         const mcpRequested = sanitizeMcpClientsPayload(payload.mcpClients);
@@ -370,12 +547,31 @@ function registerSettingsWindowIpc(
         // committed the user's choice to disk.
         deps.applyRememberPasswordsInKeychain(!!payload.rememberPasswordsInKeychain);
 
+        const { app } = require('electron') as typeof import('electron');
+        initNetworkInspectorFromSettings(
+          (channel, data) => deps.notifyRenderer(channel, data),
+          {
+            enabled: !!payload.networkInspectorEnabled,
+            mitmEnabled: !!payload.networkInspectorMitmEnabled,
+            mitmPort:
+              typeof payload.networkInspectorMitmPort === 'number'
+                ? payload.networkInspectorMitmPort
+                : 8888,
+            maxRawPacketsPerDevice: niMaxRawPackets,
+            userDataPath: app.getPath('userData')
+          }
+        );
+
         syncFileMenuCheckboxes(Menu, d, p, dbg);
 
         deps.notifyRenderer(IPC.DeveloperModeChanged, d);
         deps.notifyRenderer(IPC.PrivacyModeChanged, p);
         deps.notifyRenderer(IPC.DebugLoggingChanged, dbg);
-        deps.notifyRenderer(IPC.AppSettingsUpdated, { timing: true, folder: true });
+        deps.notifyRenderer(IPC.AppSettingsUpdated, {
+          timing: true,
+          folder: true,
+          networkInspector: true
+        });
 
         if (mcpErrors.length > 0) {
           const summary = mcpErrors

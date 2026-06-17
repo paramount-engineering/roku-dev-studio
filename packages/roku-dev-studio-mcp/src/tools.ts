@@ -501,6 +501,141 @@ async function raleGetNodeByIdTool(args: Record<string, unknown>): Promise<ToolR
   return jsonResult(res.body);
 }
 
+// ----------------------------------------------------------------------------
+// Network Inspector (read-only). Whole-hotspot packet/HTTP capture that Dev
+// Studio runs in its main process. All gated on the feature being enabled;
+// when disabled the bridge returns structured remediation (surface it to the
+// user). HTTPS request/response bodies are only present when the MITM proxy is
+// active (CA injected into the sideloaded channel); otherwise expect HTTP plus
+// DNS/TLS metadata only.
+// ----------------------------------------------------------------------------
+
+async function networkInspectorStatusTool(): Promise<ToolResult> {
+  const res = await bridgeRequest({ method: 'GET', pathname: '/network-inspector/status' });
+  if (!res.ok) return bridgeToolFailure('network_inspector_status', res);
+  return jsonResult(res.body);
+}
+
+async function networkInspectorListEventsTool(args: Record<string, unknown>): Promise<ToolResult> {
+  const res = await bridgeRequest({ method: 'POST', pathname: '/network-inspector/events', body: args });
+  if (!res.ok) return bridgeToolFailure('network_inspector_list_events', res);
+  return jsonResult(res.body);
+}
+
+async function networkInspectorGetEventDetailTool(args: Record<string, unknown>): Promise<ToolResult> {
+  const id = String(args.id || '').trim();
+  if (!id) {
+    return errorResult('Missing required argument "id" (an event id from network_inspector_list_events).', {
+      code: 'missing_id',
+      argument: 'id'
+    });
+  }
+  const res = await bridgeRequest({ method: 'POST', pathname: '/network-inspector/event-detail', body: args });
+  if (!res.ok) return bridgeToolFailure('network_inspector_get_event_detail', res);
+  return jsonResult(res.body);
+}
+
+async function networkInspectorAnalyzeTool(args: Record<string, unknown>): Promise<ToolResult> {
+  const res = await bridgeRequest({ method: 'POST', pathname: '/network-inspector/analyze', body: args });
+  if (!res.ok) return bridgeToolFailure('network_inspector_analyze', res);
+  return jsonResult(res.body);
+}
+
+async function networkInspectorGetCaInfoTool(): Promise<ToolResult> {
+  const res = await bridgeRequest({ method: 'GET', pathname: '/network-inspector/ca-info' });
+  if (!res.ok) return bridgeToolFailure('network_inspector_get_ca_info', res);
+  return jsonResult(res.body);
+}
+
+const NETWORK_EVENT_TYPES = [
+  'dns-query',
+  'dns-response',
+  'tls-handshake',
+  'tcp-connection',
+  'udp-datagram',
+  'http-transaction'
+] as const;
+
+const NETWORK_INSPECTOR_TOOLS: Tool[] = [
+  {
+    name: 'network_inspector_status',
+    title: 'Network Inspector: Status',
+    description:
+      'Report whether Dev Studio\'s Network Inspector is enabled and actively capturing, plus connected Roku clients, packet/event counts, MITM (HTTPS decryption) state, and `prerequisites[]` remediation. **Call this first** before the other network_inspector_* tools — if `ready` is false, relay `notice` / `remediation` to the user (enable the feature, grant capture access, connect the Roku to the hotspot). Reads return nothing useful until `ready` is true.',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+    annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
+    handler: async () => networkInspectorStatusTool()
+  },
+  {
+    name: 'network_inspector_list_events',
+    title: 'Network Inspector: List Events',
+    description:
+      'List captured network events as lightweight summaries (no full headers/body — drill down with network_inspector_get_event_detail using an event `id`). Summary-first by design to protect context. All filters optional and AND-combined: `device` (IP or serial; omit for all Rokus on the hotspot), `host` (case-insensitive substring of hostname/SNI/URL), `method` (GET/POST/…), `type` (one of the network event types), `errorsOnly` (HTTP status >= 400), `mitmOnly` (decrypted-HTTPS transactions only), `limit` (default 200, max 2000). Returns most-recent events. Requires Network Inspector enabled (see network_inspector_status).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        device: { type: 'string', description: 'Optional Roku IP or serial. Omit to include every Roku on the hotspot.' },
+        host: { type: 'string', description: 'Optional case-insensitive substring matched against hostname, TLS SNI, or request URL.' },
+        method: { type: 'string', description: 'Optional HTTP method filter (e.g. "GET", "POST").' },
+        type: { type: 'string', description: 'Optional event type filter.', enum: NETWORK_EVENT_TYPES as unknown as string[] },
+        errorsOnly: { type: 'boolean', description: 'Only HTTP transactions with a response status >= 400.' },
+        mitmOnly: { type: 'boolean', description: 'Only decrypted-HTTPS transactions captured via the MITM proxy.' },
+        limit: { type: 'number', description: 'Max events to return (default 200, max 2000).' }
+      },
+      additionalProperties: false
+    },
+    annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
+    handler: async (args) => networkInspectorListEventsTool(args)
+  },
+  {
+    name: 'network_inspector_get_event_detail',
+    title: 'Network Inspector: Event Detail',
+    description:
+      'Fetch the full headers and body for one captured event by `id` (from network_inspector_list_events). Bodies are capped at `maxBodyChars` (default 4096) and the response lists `warnings` when truncated; pass `includeFullBody: true` to override. DNS/TLS/TCP events have no body and may return 404. Requires Network Inspector enabled.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        id: { type: 'string', description: 'Required. Event id from network_inspector_list_events.' },
+        includeFullBody: { type: 'boolean', description: 'Return untruncated request/response bodies (can be large).' },
+        maxBodyChars: { type: 'number', description: 'Per-side body character cap when includeFullBody is not set (default 4096).' }
+      },
+      required: ['id'],
+      additionalProperties: false
+    },
+    annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
+    handler: async (args) => networkInspectorGetEventDetailTool(args)
+  },
+  {
+    name: 'network_inspector_analyze',
+    title: 'Network Inspector: Analyze',
+    description:
+      'Aggregate the captured buffer into hotspots and rollups in one call — counts by event type, by HTTP status class (2xx/3xx/4xx/5xx), top hosts (with error counts), top content types, total HTTP/MITM transactions, error count, and the largest responses. Use this to orient on a session before drilling into individual events. Accepts the same optional filters as network_inspector_list_events (`device`, `host`, `method`, `type`, `errorsOnly`, `mitmOnly`). Requires Network Inspector enabled.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        device: { type: 'string', description: 'Optional Roku IP or serial. Omit to include every Roku on the hotspot.' },
+        host: { type: 'string', description: 'Optional case-insensitive substring matched against hostname, TLS SNI, or request URL.' },
+        method: { type: 'string', description: 'Optional HTTP method filter.' },
+        type: { type: 'string', description: 'Optional event type filter.', enum: NETWORK_EVENT_TYPES as unknown as string[] },
+        errorsOnly: { type: 'boolean', description: 'Only count HTTP transactions with a response status >= 400.' },
+        mitmOnly: { type: 'boolean', description: 'Only count decrypted-HTTPS transactions.' }
+      },
+      additionalProperties: false
+    },
+    annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
+    handler: async (args) => networkInspectorAnalyzeTool(args)
+  },
+  {
+    name: 'network_inspector_get_ca_info',
+    title: 'Network Inspector: HTTPS CA Info',
+    description:
+      'Return the Dev Studio MITM CA fingerprint, proxy host:port, and the BrightScript snippet needed to trust the proxy so HTTPS request/response bodies become visible to the Network Inspector. Use when network_inspector_list_events shows TLS handshakes but no decrypted HTTP bodies, to guide the user through enabling HTTPS decryption for their sideloaded dev channel.',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+    annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
+    handler: async () => networkInspectorGetCaInfoTool()
+  }
+];
+
 // ============================================================================
 // Tool registry
 // ============================================================================
@@ -681,6 +816,7 @@ const BESPOKE_TOOLS: Tool[] = [
 // propagate automatically. In practice there's no overlap today.
 const byName: Map<string, Tool> = new Map();
 for (const t of BESPOKE_TOOLS) byName.set(t.name, t);
+for (const t of NETWORK_INSPECTOR_TOOLS) byName.set(t.name, t);
 for (const t of OP_BACKED_TOOLS) byName.set(t.name, t);
 
 export const TOOLS: Tool[] = Array.from(byName.values());

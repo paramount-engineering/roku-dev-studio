@@ -14,6 +14,7 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const { resolveUserPathUnderOneOf } = require('../../lib/path-safe.js');
+const { userProfileDirectories } = require('roku-dev-studio-platform/node');
 
 const {
   captureRokuScreenshot,
@@ -29,21 +30,22 @@ function errMsg(e: unknown): string {
 const SIDELOAD_PACKAGE_EXTENSIONS = new Set(['zip', 'pkg']);
 
 function getSideloadAllowedBases(): string[] {
-  return [os.homedir(), process.platform === 'win32' ? process.env.USERPROFILE || '' : os.homedir()].filter(Boolean);
+  return userProfileDirectories();
 }
+
+// Paths the user explicitly chose this session via the OS file picker or by
+// dragging a file onto the drop zone. Those gestures are the trust boundary —
+// the user picked a real file — so we let them sideload even if it lives outside
+// the home directory (external drives, /Volumes, /tmp, shared folders, etc.).
+// A renderer still can't sideload an arbitrary path it invents: `RokuSideload`
+// only accepts paths under the home dir OR ones recorded here.
+const approvedSideloadPaths = new Set<string>();
 
 type ResolvedSideloadFile =
   | { success: true; filePath: string; fileName: string; fileSize: number }
   | { success: false; error: string };
 
-function resolveSideloadPackageFile(filePath: string): ResolvedSideloadFile {
-  if (!filePath || typeof filePath !== 'string') {
-    return { success: false, error: 'File path required' };
-  }
-  const resolved = resolveUserPathUnderOneOf(getSideloadAllowedBases(), filePath);
-  if (!resolved) {
-    return { success: false, error: 'Path is not under an allowed directory' };
-  }
+function inspectPackageFile(resolved: string): ResolvedSideloadFile {
   if (!fs.existsSync(resolved)) {
     return { success: false, error: 'File not found' };
   }
@@ -61,6 +63,45 @@ function resolveSideloadPackageFile(filePath: string): ResolvedSideloadFile {
     fileName: path.basename(resolved),
     fileSize: stats.size
   };
+}
+
+/**
+ * Resolve a file the user explicitly selected (native picker) or dropped onto the
+ * Dev App. These are user-initiated OS-level gestures, so the file's location is
+ * trusted and the home-directory restriction is intentionally skipped. On success
+ * the resolved path is recorded so the matching `RokuSideload` call can accept it.
+ */
+function resolveTrustedSideloadFile(filePath: string): ResolvedSideloadFile {
+  if (!filePath || typeof filePath !== 'string') {
+    return { success: false, error: 'File path required' };
+  }
+  const resolved = path.resolve(filePath);
+  const result = inspectPackageFile(resolved);
+  if (result.success) {
+    approvedSideloadPaths.add(resolved);
+  }
+  return result;
+}
+
+/**
+ * Resolve a sideload path that arrives over IPC (e.g. the install action). Accepts
+ * the path only if it lives under an allowed base directory OR was previously
+ * approved this session through the trusted picker/drop flow above — so a buggy or
+ * compromised renderer can't sideload an arbitrary path it never had the user pick.
+ */
+function resolveSideloadPackageFile(filePath: string): ResolvedSideloadFile {
+  if (!filePath || typeof filePath !== 'string') {
+    return { success: false, error: 'File path required' };
+  }
+  const resolvedAbs = path.resolve(filePath);
+  let resolved = resolveUserPathUnderOneOf(getSideloadAllowedBases(), filePath);
+  if (!resolved && approvedSideloadPaths.has(resolvedAbs)) {
+    resolved = resolvedAbs;
+  }
+  if (!resolved) {
+    return { success: false, error: 'Path is not under an allowed directory' };
+  }
+  return inspectPackageFile(resolved);
 }
 
 /**
@@ -83,26 +124,26 @@ function setupDevAppHandlers(mainWindow: BrowserWindow | undefined, dialog: Dial
       return { success: false, canceled: true };
     }
 
-    return resolveSideloadPackageFile(result.filePaths[0]);
+    // The OS picker is the trust boundary — accept the chosen file wherever it lives.
+    return resolveTrustedSideloadFile(result.filePaths[0]);
   });
 
-  // Resolve a dropped or pasted sideload package path (same validation as the file picker).
+  // Resolve a dropped or pasted sideload package path. A drag-drop is a user-initiated
+  // gesture (the path comes from the dropped File via the preload bridge), so it's
+  // trusted the same way the native picker is.
   ipcMain.handle(IPC.RokuResolveSideloadFile, async (_event: IpcMainInvokeEvent, { filePath }: SideloadFilePathPayload) => {
-    return resolveSideloadPackageFile(filePath);
+    return resolveTrustedSideloadFile(filePath);
   });
 
   // Sideload a channel package (shared logic in lib/roku-plugin-install.js). filePath must be under allowed dirs.
   ipcMain.handle(IPC.RokuSideload, async (_event: IpcMainInvokeEvent, { ip, filePath, password }: IpFilePasswordPayload) => {
-    if (!filePath || typeof filePath !== 'string') {
-      return { success: false, error: 'File path required' };
+    // Go through the same validation as the picker/drag paths so a direct IPC
+    // call can't sideload a non-package (or a file outside the allowed dirs).
+    const resolvedFile = resolveSideloadPackageFile(filePath);
+    if (!resolvedFile.success) {
+      return resolvedFile;
     }
-    const resolved = resolveUserPathUnderOneOf(getSideloadAllowedBases(), filePath);
-    if (!resolved) {
-      return { success: false, error: 'Path is not under an allowed directory' };
-    }
-    if (!fs.existsSync(resolved)) {
-      return { success: false, error: 'File not found' };
-    }
+    const resolved = resolvedFile.filePath;
     return sideloadChannel({ ip, filePath: resolved, password });
   });
 

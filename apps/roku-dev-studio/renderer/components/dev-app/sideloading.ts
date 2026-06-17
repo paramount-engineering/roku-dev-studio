@@ -86,6 +86,11 @@ export function setupSideloading(
     const result = await window.roku.selectSideloadFile();
     if (result && result.success) {
       applySelectedFile(result);
+      statusDiv.innerHTML = '';
+    } else if (result && !result.canceled && result.error) {
+      // Surface validation failures (wrong type, missing file, etc.) instead of
+      // silently dropping the selection so the user knows why nothing appeared.
+      showStatusMessage(statusDiv, result.error, 'error');
     }
   });
 

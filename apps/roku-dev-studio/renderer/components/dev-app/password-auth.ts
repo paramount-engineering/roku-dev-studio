@@ -1,6 +1,6 @@
 // Password authentication management
 
-import { icon, setSafeHTML } from '../../modules/utils/index.js';
+import { icon, setSafeHTML, escapeHtml } from '../../modules/utils/index.js';
 import { getStoredPassword, savePassword, removePassword } from '../../modules/utils/storage.js';
 import type { DevAppApi, DevicePanelRoot, PasswordAuthElements } from './dev-app-types.js';
 
@@ -33,7 +33,10 @@ export function setupPasswordAuth(
     }
     const base = icon('circle', 'icon-xs', 'icon-red') + ' Not Authenticated';
     if (detail) {
-      return `${base} — ${detail}`;
+      // `detail` can be a device/API-supplied error string — escape it before
+      // it lands in the HTML passed to `setSafeHTML` (the title attribute path
+      // uses textContent and is already safe).
+      return `${base} — ${escapeHtml(detail)}`;
     }
     return base;
   }

@@ -117,14 +117,19 @@ async function sideloadChannel({ ip, filePath, password, log = (_m: string) => u
     }
     return parsed;
   } catch (error: unknown) {
-    const mapped = mapDeviceHttpError(error, 'Upload');
-    if (mapped.error.includes('Connection refused')) {
+    // Branch on the original error code/message — `mapDeviceHttpError` collapses
+    // these into a single generic string, so matching its output for
+    // "Connection refused" / "timed out" would never hit (the cause of the
+    // misdiagnosed sideload failures after the curl → native-HTTP migration).
+    const code = (error as NodeJS.ErrnoException)?.code;
+    const rawMsg = error instanceof Error ? error.message : String(error);
+    if (code === 'ECONNREFUSED' || /connection refused/i.test(rawMsg)) {
       return { success: false, error: 'Connection refused. Make sure Developer Mode is enabled.' };
     }
-    if (mapped.error.includes('timed out')) {
+    if (code === 'ETIMEDOUT' || /timed out|timeout/i.test(rawMsg)) {
       return { success: false, error: 'Connection timed out. Check the device IP address.' };
     }
-    return mapped;
+    return mapDeviceHttpError(error, 'Upload');
   }
 }
 

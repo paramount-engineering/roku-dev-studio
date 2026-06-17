@@ -6,6 +6,7 @@
 import type { BrowserWindow, Clipboard, IpcMain, IpcMainInvokeEvent, Shell } from 'electron';
 import { IPC } from '../shared/ipc/channels';
 import { openExternalUrl } from './open-external-url';
+import { isMacOS, platformLabel } from 'roku-dev-studio-platform';
 
 const path = require('path');
 const os = require('os');
@@ -33,7 +34,7 @@ function showAboutDialog(mainWindow: BrowserWindow) {
     return;
   }
 
-  const isMac = process.platform === 'darwin';
+  const isMac = isMacOS();
   const packageJson = require('../package.json');
   const appVersion = packageJson.version;
   let rokuDevStudioApiVersion = 'unknown';
@@ -49,7 +50,7 @@ function showAboutDialog(mainWindow: BrowserWindow) {
   const platform = os.platform();
   const arch = os.arch();
   const osRelease = os.release();
-  const osType = platform === 'darwin' ? 'macOS' : platform === 'win32' ? 'Windows' : platform === 'linux' ? 'Linux' : platform;
+  const osType = platformLabel(platform);
   const iconPath = path.join(__dirname, 'assets', 'icon-256.png');
   const iconUrl = `file://${iconPath.replace(/\\/g, '/')}`;
   const authorUrl = packageJson.author?.url || 'https://github.com/hdonapati';

@@ -191,8 +191,17 @@ async function disconnectDebugTelnetInternal(ip: string): Promise<{ success: boo
 
 export async function bounceDebugTelnet(ip: string): Promise<{ success: boolean; error?: string }> {
   console.log('[Telnet] bounceDebugTelnet: disconnect + reconnect', ip);
+  // Snapshot logical holders before the bounce. Destroying the socket fires the
+  // `close` handler, which wipes `debugTelnetHoldersByIp` for this IP; without
+  // restoring them the socket would re-open with zero holders, breaking the
+  // lease invariant (a leaked socket nothing will ever close, or one that
+  // `disconnectDebugTelnetIfUnheld` tears down out from under Fiddle).
+  const preservedHolders = new Set(debugTelnetHoldersByIp.get(ip) ?? []);
   await disconnectDebugTelnetInternal(ip);
   const result = await connectDebugTelnetInternal(ip);
+  if (result.success) {
+    for (const holder of preservedHolders) addDebugTelnetHolder(ip, holder);
+  }
   return { success: result.success, error: result.error };
 }
 

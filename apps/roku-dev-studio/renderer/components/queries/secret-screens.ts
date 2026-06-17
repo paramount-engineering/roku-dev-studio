@@ -4,6 +4,7 @@ import {
   openModalOverlayActiveFromOpener,
   closeModalWithOriginMotion
 } from '../../modules/utils/modal-origin-motion.js';
+import { attachBackdropClickToClose } from '../../modules/utils/modal-backdrop-click.js';
 
 interface SecretSegment {
   label: string;
@@ -325,9 +326,7 @@ export function setupSecretScreens(panel: HTMLElement) {
     const closeBtn = modalEl.querySelector('.secret-screens-modal-close');
     closeBtn?.addEventListener('click', () => closeSecretScreensModal(modalEl));
 
-    modalEl.addEventListener('click', (e) => {
-      if (e.target === modalEl) closeSecretScreensModal(modalEl);
-    });
+    attachBackdropClickToClose(modalEl, () => closeSecretScreensModal(modalEl));
 
     modalEl.addEventListener('click', (e) => {
       const btn = (e.target as HTMLElement).closest('.secret-sequence-btn') as HTMLButtonElement | null;

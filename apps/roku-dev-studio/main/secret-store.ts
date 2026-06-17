@@ -48,6 +48,7 @@
  */
 
 import type { App } from 'electron';
+import { isMacOS, isWindows } from 'roku-dev-studio-platform';
 
 const fs = require('fs');
 const path = require('path');
@@ -118,9 +119,9 @@ function readBackend(): string {
   } catch {
     /* not available on every platform */
   }
-  // macOS / Windows don't expose backend name; infer from process.platform.
-  if (process.platform === 'darwin') return 'keychain';
-  if (process.platform === 'win32') return 'dpapi';
+  // macOS / Windows don't expose backend name; infer from the host platform.
+  if (isMacOS()) return 'keychain';
+  if (isWindows()) return 'dpapi';
   return 'unknown';
 }
 

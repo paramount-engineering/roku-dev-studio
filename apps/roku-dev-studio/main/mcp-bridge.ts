@@ -47,6 +47,12 @@ import type {
 } from '../shared/mcp-bridge-state';
 import { hashParamsForAudit, recordMcpAudit, setMcpAuditLogDir } from './mcp-audit-log';
 import { rateBudgetForRequest, take as takeRateToken } from './mcp-rate-limit';
+import {
+  getNetworkInspectorService,
+  type NetworkInspectorService,
+  type NetworkEventQuery,
+  type ParsedNetworkEvent
+} from './network-inspector/index';
 
 const rokuApi = require('roku-dev-studio-api') as {
   query: (ip: string, endpoint: string) => Promise<unknown>;
@@ -786,6 +792,113 @@ function seedAuditFromPath(audit: AuditDraft, method: string, pathname: string):
   }
 }
 
+/**
+ * Bridge-side accessor for the Network Inspector singleton. The service is constructed at app
+ * startup by `setupNetworkInspectorHandlers` (which runs before `startMcpBridge`), so passing this
+ * forwarding `safeSend` just returns the existing instance — it never clobbers the renderer wiring.
+ */
+function networkInspectorService(): NetworkInspectorService {
+  return getNetworkInspectorService((channel, data) => {
+    const wc = getRendererSender();
+    if (!wc) return;
+    try {
+      wc.send(channel, data);
+    } catch {
+      /* renderer gone; drop */
+    }
+  });
+}
+
+/**
+ * Resolve an agent-supplied `device` (IP or serial) to the IP the Network Inspector keys captured
+ * traffic under (a Roku's hotspot lease IP == its ECP IP). Returns undefined when no device was
+ * supplied (caller treats that as "all connected Rokus"). Falls back to a raw IP literal so capture
+ * still works for a device that has traffic but no open Dev Studio tab.
+ */
+function resolveNetworkInspectorDeviceIp(deviceArg: unknown): string | undefined {
+  if (typeof deviceArg !== 'string') return undefined;
+  const s = deviceArg.trim();
+  if (!s) return undefined;
+  const ip = resolveIp(resolveTarget(s));
+  if (ip) return ip;
+  return s.includes('.') ? s : undefined;
+}
+
+/**
+ * Gate every Network Inspector read on the feature being enabled. When disabled we return a
+ * structured 409 with copy-pasteable remediation (per the permission-remediation UX rule) so the
+ * agent can tell the user exactly how to turn it on rather than reporting an opaque empty result.
+ */
+function networkInspectorGate(res: http.ServerResponse): NetworkInspectorService | null {
+  const svc = networkInspectorService();
+  if (!svc.isEnabled()) {
+    sendJson(res, 409, {
+      error: 'Network Inspector is disabled in Roku Dev Studio.',
+      code: 'network-inspector-disabled',
+      remediation: [
+        'In Roku Dev Studio open Settings → Network Inspector.',
+        'Enable Network Inspector. Keep the HTTPS proxy (MITM) on so request/response bodies from sideloaded dev channels are decrypted; otherwise only HTTP plus DNS/TLS metadata is visible.',
+        'Make sure the Roku is on this machine\'s hotspot / shared connection so its traffic is captured.',
+        'Return and retry. Call network_inspector_status to confirm capture is active before reading events.'
+      ]
+    });
+    return null;
+  }
+  return svc;
+}
+
+/** Status fields most relevant to an agent deciding whether reads will return anything useful. */
+function networkInspectorReadiness(svc: NetworkInspectorService): {
+  ready: boolean;
+  notice?: string;
+  remediation?: string[];
+} {
+  const status = svc.getStatus();
+  if (status.captureToolAvailable === false) {
+    const prereq = (status.prerequisites || []).find((p) => !p.ok);
+    return {
+      ready: false,
+      notice: prereq?.message || status.capturePermissionHint || 'Packet capture is not available.',
+      remediation: prereq?.remediation
+    };
+  }
+  if (!status.captureActive) {
+    return {
+      ready: false,
+      notice:
+        'Network Inspector is enabled but not capturing yet — no active hotspot/shared connection was detected. Connect the Roku to this machine\'s hotspot or Internet Sharing.',
+      remediation: status.capturePermissionHint ? [status.capturePermissionHint] : undefined
+    };
+  }
+  return { ready: true };
+}
+
+/** Cap large request/response bodies on a detail read so a single entry can't blow the agent's context. */
+function sanitizeEventDetail(
+  event: ParsedNetworkEvent | null,
+  opts: { includeFullBody: boolean; maxBodyChars: number }
+): { event: ParsedNetworkEvent | null; warnings: string[] } {
+  if (!event) return { event, warnings: [] };
+  const warnings: string[] = [];
+  const clone: ParsedNetworkEvent = { ...event };
+  const trimSide = (side: 'httpRequest' | 'httpResponse'): void => {
+    const msg = event[side];
+    if (!msg) return;
+    const next = { ...msg };
+    if (!opts.includeFullBody && typeof next.body === 'string' && next.body.length > opts.maxBodyChars) {
+      next.body = next.body.slice(0, opts.maxBodyChars);
+      next.bodyTruncated = true;
+      warnings.push(
+        `${side} body truncated to ${opts.maxBodyChars} chars. Pass includeFullBody=true (or a larger maxBodyChars) to read the rest.`
+      );
+    }
+    clone[side] = next;
+  };
+  trimSide('httpRequest');
+  trimSide('httpResponse');
+  return { event: clone, warnings };
+}
+
 async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
   // Origin/Host check runs before the bearer check so a DNS-rebinding
   // attempt is rejected without the attacker getting a 401-vs-403 oracle
@@ -1499,6 +1612,105 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
     const result = await handleDropScript(body);
     if (result.ok) sendJson(res, 200, { delivered: true });
     else sendJson(res, 502, { error: result.error || 'Drop failed' });
+    return;
+  }
+
+  // ============================================================
+  // Network Inspector (read-only). Whole-hotspot capture lives in the main
+  // process, so these are bespoke main-direct routes (not /op/<id>): the
+  // op framework can't reach the Electron-main NetworkInspectorService
+  // singleton. Every route is gated on the feature being enabled.
+  // ============================================================
+
+  if (method === 'GET' && pathname === '/network-inspector/status') {
+    const svc = networkInspectorService();
+    const status = svc.getStatus();
+    const readiness = networkInspectorReadiness(svc);
+    sendJson(res, 200, { status, ready: readiness.ready, notice: readiness.notice, remediation: readiness.remediation });
+    return;
+  }
+
+  if (method === 'POST' && pathname === '/network-inspector/events') {
+    const svc = networkInspectorGate(res);
+    if (!svc) return;
+    const body = await readJsonLoose(req);
+    if (!send400IfJsonErr(res, body)) return;
+    const deviceIp = resolveNetworkInspectorDeviceIp(body.device);
+    const query: NetworkEventQuery = {
+      deviceIp,
+      host: typeof body.host === 'string' ? body.host : undefined,
+      method: typeof body.method === 'string' ? body.method : undefined,
+      type: typeof body.type === 'string' ? (body.type as NetworkEventQuery['type']) : undefined,
+      errorsOnly: body.errorsOnly === true,
+      mitmOnly: body.mitmOnly === true,
+      limit: typeof body.limit === 'number' ? body.limit : undefined
+    };
+    const events = svc.queryEventSummaries(query);
+    const readiness = networkInspectorReadiness(svc);
+    const payload: Record<string, unknown> = { events, count: events.length, deviceIp: deviceIp ?? null };
+    if (events.length === 0 && !readiness.ready) {
+      payload.notice = readiness.notice;
+      payload.remediation = readiness.remediation;
+    }
+    sendJson(res, 200, payload);
+    return;
+  }
+
+  if (method === 'POST' && pathname === '/network-inspector/event-detail') {
+    const svc = networkInspectorGate(res);
+    if (!svc) return;
+    const body = await readJsonLoose(req);
+    if (!send400IfJsonErr(res, body)) return;
+    const id = typeof body.id === 'string' ? body.id.trim() : '';
+    if (!id) return void sendJson(res, 400, { error: 'Missing required `id` (from network_inspector_list_events).' });
+    const includeFullBody = body.includeFullBody === true;
+    const maxBodyChars =
+      typeof body.maxBodyChars === 'number' && body.maxBodyChars > 0 ? Math.floor(body.maxBodyChars) : 4096;
+    const detail = await svc.getEventDetail(id);
+    if (!detail) {
+      sendJson(res, 404, {
+        error: `No stored detail for event "${id}". It may be a DNS/TLS event (no body), or it was evicted from the buffer. Re-list events and use a current id.`
+      });
+      return;
+    }
+    const { event, warnings } = sanitizeEventDetail(detail, { includeFullBody, maxBodyChars });
+    sendJson(res, 200, { event, warnings });
+    return;
+  }
+
+  if (method === 'POST' && pathname === '/network-inspector/analyze') {
+    const svc = networkInspectorGate(res);
+    if (!svc) return;
+    const body = await readJsonLoose(req);
+    if (!send400IfJsonErr(res, body)) return;
+    const deviceIp = resolveNetworkInspectorDeviceIp(body.device);
+    const analysis = svc.analyzeEvents({
+      deviceIp,
+      host: typeof body.host === 'string' ? body.host : undefined,
+      method: typeof body.method === 'string' ? body.method : undefined,
+      type: typeof body.type === 'string' ? (body.type as NetworkEventQuery['type']) : undefined,
+      errorsOnly: body.errorsOnly === true,
+      mitmOnly: body.mitmOnly === true
+    });
+    const readiness = networkInspectorReadiness(svc);
+    const payload: Record<string, unknown> = { analysis, deviceIp: deviceIp ?? null };
+    if (analysis.totalMatched === 0 && !readiness.ready) {
+      payload.notice = readiness.notice;
+      payload.remediation = readiness.remediation;
+    }
+    sendJson(res, 200, payload);
+    return;
+  }
+
+  if (method === 'GET' && pathname === '/network-inspector/ca-info') {
+    const svc = networkInspectorService();
+    const status = svc.getStatus();
+    sendJson(res, 200, {
+      caInfo: svc.getCaInfo(),
+      mitmEnabled: status.mitmEnabled === true,
+      mitmActive: status.mitmActive === true,
+      mitmListenAddress: status.mitmListenAddress
+    });
     return;
   }
 

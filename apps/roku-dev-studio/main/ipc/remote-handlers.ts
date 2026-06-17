@@ -32,11 +32,33 @@ const WebSocket = require('ws');
 const FormData = require('form-data');
 const fs = require('fs');
 const path = require('path');
-const os = require('os');
 const { resolveUserPathUnderOneOf } = require('../../lib/path-safe.js');
+const { userProfileDirectories } = require('roku-dev-studio-platform/node');
 
 function errMsg(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
+}
+
+/**
+ * Reject anything that is not a well-formed http(s) URL. `serverUrl` arrives
+ * from the renderer (user-added relay locations); validating the protocol here
+ * keeps the main process from being driven to `file://` and other schemes via
+ * IPC (SSRF / local-file read hardening).
+ */
+function isSafeRelayUrl(serverUrl: unknown): serverUrl is string {
+  if (!serverUrl || typeof serverUrl !== 'string') return false;
+  try {
+    const u = new URL(serverUrl);
+    return u.protocol === 'http:' || u.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
+/** Build a `/device/<ip>...` path with the IP encoded as a single path segment
+ * so addresses containing reserved characters can't break out of the segment. */
+function devicePath(ip: string, suffix = ''): string {
+  return `/device/${encodeURIComponent(ip)}${suffix}`;
 }
 
 /**
@@ -50,6 +72,10 @@ function remoteHttpRequest(
   timeout = 15000
 ) {
   return new Promise((resolve) => {
+    if (!isSafeRelayUrl(serverUrl)) {
+      resolve({ success: false, error: 'Invalid relay server URL' });
+      return;
+    }
     const url = new URL(pathStr, serverUrl);
     const isHttps = url.protocol === 'https:';
     const httpModule = isHttps ? require('https') : require('http');
@@ -66,7 +92,9 @@ function remoteHttpRequest(
     } = {
       hostname: url.hostname,
       port: url.port || (isHttps ? 443 : 80),
-      path: url.pathname,
+      // Preserve the query string — `new URL('/network/events?…', base)` parses
+      // it into `url.search`, which `url.pathname` alone drops.
+      path: url.pathname + url.search,
       method: method,
       headers,
       timeout: timeout
@@ -170,8 +198,13 @@ async function closeRemoteTelnetConnection(connectionId: string): Promise<void> 
       headers: {
         'Content-Type': 'application/json',
         'Content-Length': Buffer.byteLength(postData)
-      }
+      },
+      timeout: 5000
     });
+    // Fire-and-forget, but bound it: swallow errors and destroy on timeout so a
+    // dead relay can't leak a hung socket on every disconnect.
+    req.on('error', () => { /* ignore */ });
+    req.on('timeout', () => req.destroy());
     req.write(postData);
     req.end();
   } catch (e: unknown) {
@@ -252,6 +285,9 @@ function establishRemoteTelnetConnection(
 
   return (async () => {
     try {
+      if (!isSafeRelayUrl(serverUrl)) {
+        return { success: false, error: 'Invalid relay server URL' };
+      }
       const response = await new Promise<{ success?: boolean; error?: string; sessionId?: string }>((resolve, reject) => {
         const url = new URL('/telnet/connect', serverUrl);
         const isHttps = url.protocol === 'https:';
@@ -364,11 +400,20 @@ function establishRemoteTelnetConnection(
         });
 
         ws.on('close', () => {
-          console.log('[Remote Telnet] WebSocket closed');
           const rt = remoteTelnetConnections.get(connectionId);
-          const aliveMs = rt ? Date.now() - rt.openedAtMs : -1;
-          const bytesReceived = rt ? rt.bytesReceived : -1;
-          const hadError = wsCloseHadError || !!rt?.relayCloseHadError;
+          // Only the socket that currently owns this connection slot may tear
+          // down holders and emit a disconnect. A socket that was replaced by
+          // an intentional reconnect (its map entry was already deleted/reused)
+          // must NOT wipe `remoteTelnetHoldersByConnId` — doing so dropped
+          // other holders (e.g. a Fiddle window) on every explicit Connect.
+          if (!rt || rt.ws !== ws) {
+            console.log('[Remote Telnet] WebSocket closed (superseded — ignoring)');
+            return;
+          }
+          console.log('[Remote Telnet] WebSocket closed');
+          const aliveMs = Date.now() - rt.openedAtMs;
+          const bytesReceived = rt.bytesReceived;
+          const hadError = wsCloseHadError || !!rt.relayCloseHadError;
           flushCoalescedMapNow(remoteTelnetConnections, connectionId, (live, slice) => {
             safeSendToRenderer(IPC.TelnetData, { ip: live.ip, connectionId, data: slice, isRemote: true });
           });
@@ -451,9 +496,62 @@ function setupRemoteHandlers(mainWindow: BrowserWindow | undefined, safeSendToRe
     return await remoteHttpRequest(serverUrl, '/capabilities');
   });
 
+  // ============================================
+  // Remote Network Inspector (proxy to server /network/* endpoints)
+  // ============================================
+  ipcMain.handle(IPC.RemoteNetworkStatus, async (_event: IpcMainInvokeEvent, { serverUrl }: ServerUrlPayload) => {
+    return await remoteHttpRequest(serverUrl, '/network/status');
+  });
+
+  ipcMain.handle(IPC.RemoteNetworkGetConfig, async (_event: IpcMainInvokeEvent, { serverUrl }: ServerUrlPayload) => {
+    return await remoteHttpRequest(serverUrl, '/network/config');
+  });
+
+  ipcMain.handle(
+    IPC.RemoteNetworkSetConfig,
+    async (
+      _event: IpcMainInvokeEvent,
+      { serverUrl, config }: ServerUrlPayload & { config: Record<string, unknown> }
+    ) => {
+      return await remoteHttpRequest(serverUrl, '/network/config', 'PUT', config || {});
+    }
+  );
+
+  ipcMain.handle(
+    IPC.RemoteNetworkEvents,
+    async (
+      _event: IpcMainInvokeEvent,
+      { serverUrl, deviceIp, limit }: ServerUrlPayload & { deviceIp: string; limit?: number }
+    ) => {
+      const q = `deviceIp=${encodeURIComponent(deviceIp || '')}&limit=${encodeURIComponent(String(limit || 500))}`;
+      return await remoteHttpRequest(serverUrl, `/network/events?${q}`);
+    }
+  );
+
+  ipcMain.handle(
+    IPC.RemoteNetworkEventDetail,
+    async (_event: IpcMainInvokeEvent, { serverUrl, id }: ServerUrlPayload & { id: string }) => {
+      return await remoteHttpRequest(serverUrl, `/network/event/${encodeURIComponent(id)}`);
+    }
+  );
+
+  ipcMain.handle(
+    IPC.RemoteNetworkClear,
+    async (
+      _event: IpcMainInvokeEvent,
+      { serverUrl, deviceIps }: ServerUrlPayload & { deviceIps?: string[] }
+    ) => {
+      return await remoteHttpRequest(serverUrl, '/network/clear', 'POST', { deviceIps: deviceIps || [] });
+    }
+  );
+
+  ipcMain.handle(IPC.RemoteNetworkSetupCapture, async (_event: IpcMainInvokeEvent, { serverUrl }: ServerUrlPayload) => {
+    return await remoteHttpRequest(serverUrl, '/network/setup-capture', 'POST');
+  });
+
   // Get device info from remote location
   ipcMain.handle(IPC.RemoteDeviceInfo, async (_event: IpcMainInvokeEvent, { serverUrl, ip }: RemoteDevicePayload) => {
-    return await remoteHttpRequest(serverUrl, `/device/${ip}/info`);
+    return await remoteHttpRequest(serverUrl, devicePath(ip, '/info'));
   });
 
   // Send key press via remote server. Encode path segments so Lit_ keys with
@@ -468,17 +566,17 @@ function setupRemoteHandlers(mainWindow: BrowserWindow | undefined, safeSendToRe
 
   // Launch app via remote server
   ipcMain.handle(IPC.RemoteLaunch, async (_event: IpcMainInvokeEvent, { serverUrl, ip, appId, params }: RemoteLaunchPayload) => {
-    return await remoteHttpRequest(serverUrl, `/device/${ip}/launch/${appId}`, 'POST', { params });
+    return await remoteHttpRequest(serverUrl, devicePath(ip, `/launch/${encodeURIComponent(appId)}`), 'POST', { params });
   });
 
   // Query device via remote server
   ipcMain.handle(IPC.RemoteQuery, async (_event: IpcMainInvokeEvent, { serverUrl, ip, endpoint }: RemoteEndpointPayload) => {
-    return await remoteHttpRequest(serverUrl, `/device/${ip}${endpoint}`);
+    return await remoteHttpRequest(serverUrl, devicePath(ip, endpoint));
   });
 
   // POST to device via remote server
   ipcMain.handle(IPC.RemotePost, async (_event: IpcMainInvokeEvent, { serverUrl, ip, endpoint }: RemoteEndpointPayload) => {
-    return await remoteHttpRequest(serverUrl, `/device/${ip}/post${endpoint}`, 'POST');
+    return await remoteHttpRequest(serverUrl, devicePath(ip, `/post${endpoint}`), 'POST');
   });
 
   // Input text via remote server — scale HTTP timeout with string length so long
@@ -486,36 +584,36 @@ function setupRemoteHandlers(mainWindow: BrowserWindow | undefined, safeSendToRe
   // sending Lit_ keypresses on the LAN.
   ipcMain.handle(IPC.RemoteInputText, async (_event: IpcMainInvokeEvent, { serverUrl, ip, text }: RemoteTextPayload) => {
     const timeoutMs = computeInputTextRelayHttpTimeoutMs(text);
-    return await remoteHttpRequest(serverUrl, `/device/${ip}/input-text`, 'POST', { text }, timeoutMs);
+    return await remoteHttpRequest(serverUrl, devicePath(ip, '/input-text'), 'POST', { text }, timeoutMs);
   });
 
   // Deep link via remote server
   ipcMain.handle(IPC.RemoteDeeplink, async (_event: IpcMainInvokeEvent, payload: RemoteDeeplinkPayload) => {
     const { serverUrl, ip, appId, contentId, mediaType } = payload;
-    return await remoteHttpRequest(serverUrl, `/device/${ip}/deeplink`, 'POST', { appId, contentId, mediaType });
+    return await remoteHttpRequest(serverUrl, devicePath(ip, '/deeplink'), 'POST', { appId, contentId, mediaType });
   });
 
   // Get app icon via remote server
   ipcMain.handle(IPC.RemoteGetIcon, async (_event: IpcMainInvokeEvent, { serverUrl, ip, appId }: RemoteAppIdPayload) => {
-    return await remoteHttpRequest(serverUrl, `/device/${ip}/icon/${appId}`);
+    return await remoteHttpRequest(serverUrl, devicePath(ip, `/icon/${encodeURIComponent(appId)}`));
   });
 
   // Screenshot via remote server
   ipcMain.handle(IPC.RemoteScreenshot, async (_event: IpcMainInvokeEvent, payload: RemoteScreenshotPayload) => {
     const { serverUrl, ip, password, waitAfterTriggerMs } = payload;
-    return await remoteHttpRequest(serverUrl, `/device/${ip}/screenshot`, 'POST', { password, waitAfterTriggerMs });
+    return await remoteHttpRequest(serverUrl, devicePath(ip, '/screenshot'), 'POST', { password, waitAfterTriggerMs });
   });
 
   // Developer Digest auth check via remote server (no screenshot)
   ipcMain.handle(IPC.RemoteVerifyDevAuth, async (_event: IpcMainInvokeEvent, payload: RemoteVerifyDevAuthPayload) => {
     const { serverUrl, ip, password } = payload;
-    return await remoteHttpRequest(serverUrl, `/device/${ip}/verify-dev-auth`, 'POST', { password });
+    return await remoteHttpRequest(serverUrl, devicePath(ip, '/verify-dev-auth'), 'POST', { password });
   });
 
   // Sideload via remote server (file must be on remote server)
   ipcMain.handle(IPC.RemoteSideload, async (_event: IpcMainInvokeEvent, payload: RemoteSideloadPayload) => {
     const { serverUrl, ip, filePath, password } = payload;
-    return await remoteHttpRequest(serverUrl, `/device/${ip}/sideload`, 'POST', { filePath, password });
+    return await remoteHttpRequest(serverUrl, devicePath(ip, '/sideload'), 'POST', { filePath, password });
   });
 
   // Sideload via remote server with file upload from local machine. filePath must be under allowed dirs.
@@ -525,7 +623,10 @@ function setupRemoteHandlers(mainWindow: BrowserWindow | undefined, safeSendToRe
       if (!filePath || typeof filePath !== 'string') {
         return { success: false, error: 'File path required' };
       }
-      const allowedBases = [os.homedir(), process.platform === 'win32' ? process.env.USERPROFILE || '' : os.homedir()].filter(Boolean);
+      if (!isSafeRelayUrl(serverUrl)) {
+        return { success: false, error: 'Invalid relay server URL' };
+      }
+      const allowedBases = userProfileDirectories();
       const resolved = resolveUserPathUnderOneOf(allowedBases, filePath);
       if (!resolved) {
         return { success: false, error: 'Path is not under an allowed directory' };
@@ -549,7 +650,7 @@ function setupRemoteHandlers(mainWindow: BrowserWindow | undefined, safeSendToRe
       const options = {
         hostname: urlObj.hostname,
         port: urlObj.port || 80,
-        path: `/device/${ip}/sideload`,
+        path: devicePath(ip, '/sideload'),
         method: 'POST',
         headers: form.getHeaders(),
         timeout: 180000 // 3 minutes timeout for upload + install
@@ -593,20 +694,20 @@ function setupRemoteHandlers(mainWindow: BrowserWindow | undefined, safeSendToRe
   // Delete sideload via remote server
   ipcMain.handle(IPC.RemoteDeleteSideload, async (_event: IpcMainInvokeEvent, payload: RemoteSideloadPayload) => {
     const { serverUrl, ip, password } = payload;
-    return await remoteHttpRequest(serverUrl, `/device/${ip}/delete-sideload`, 'POST', { password });
+    return await remoteHttpRequest(serverUrl, devicePath(ip, '/delete-sideload'), 'POST', { password });
   });
 
   // RALE wake via remote server
   ipcMain.handle(IPC.RemoteRaleWake, async (_event: IpcMainInvokeEvent, payload: RemoteRaleWakePayload) => {
     const { serverUrl, ip, port } = payload;
-    return await remoteHttpRequest(serverUrl, `/device/${ip}/rale/wake`, 'POST', { port });
+    return await remoteHttpRequest(serverUrl, devicePath(ip, '/rale/wake'), 'POST', { port });
   });
 
   // RALE connect via remote server (longer timeout for socket operations)
   ipcMain.handle(IPC.RemoteRaleConnect, async (_event: IpcMainInvokeEvent, payload: RemoteRaleWakePayload) => {
     const { serverUrl, ip, port } = payload;
     // Use 20s timeout (longer than server's 10s socket timeout)
-    return await remoteHttpRequest(serverUrl, `/device/${ip}/rale/connect`, 'POST', { port }, 20000);
+    return await remoteHttpRequest(serverUrl, devicePath(ip, '/rale/connect'), 'POST', { port }, 20000);
   });
 
   // RALE command via remote server (longer timeout for socket operations)
@@ -615,14 +716,14 @@ function setupRemoteHandlers(mainWindow: BrowserWindow | undefined, safeSendToRe
     // Extract IP from connectionId (format: ip:port)
     const ip = connectionId.split(':')[0];
     // Use 45s timeout (longer than server's 30s socket timeout)
-    return await remoteHttpRequest(serverUrl, `/device/${ip}/rale/command`, 'POST', { connectionId, command, args }, 45000);
+    return await remoteHttpRequest(serverUrl, devicePath(ip, '/rale/command'), 'POST', { connectionId, command, args }, 45000);
   });
 
   // RALE disconnect via remote server
   ipcMain.handle(IPC.RemoteRaleDisconnect, async (_event: IpcMainInvokeEvent, payload: RemoteRaleDisconnectPayload) => {
     const { serverUrl, connectionId } = payload;
     const ip = connectionId.split(':')[0];
-    return await remoteHttpRequest(serverUrl, `/device/${ip}/rale/disconnect`, 'POST', { connectionId });
+    return await remoteHttpRequest(serverUrl, devicePath(ip, '/rale/disconnect'), 'POST', { connectionId });
   });
 
   // ============================================
@@ -680,7 +781,7 @@ function setupRemoteHandlers(mainWindow: BrowserWindow | undefined, safeSendToRe
   });
 
   ipcMain.handle(IPC.RemoteTelnetClearBuffer, async (_event: IpcMainInvokeEvent, { serverUrl, ip }: RemoteDevicePayload) => {
-    return await remoteHttpRequest(serverUrl, `/device/${ip}/telnet/clear-buffer`, 'POST');
+    return await remoteHttpRequest(serverUrl, devicePath(ip, '/telnet/clear-buffer'), 'POST');
   });
 
   // ============================================
@@ -689,12 +790,12 @@ function setupRemoteHandlers(mainWindow: BrowserWindow | undefined, safeSendToRe
 
   // Connect to remote telnet system (port 8080)
   ipcMain.handle(IPC.RemoteTelnetSystemConnect, async (_event: IpcMainInvokeEvent, { serverUrl, ip }: RemoteDevicePayload) => {
-    return await remoteHttpRequest(serverUrl, `/device/${ip}/telnet-system/connect`, 'POST');
+    return await remoteHttpRequest(serverUrl, devicePath(ip, '/telnet-system/connect'), 'POST');
   });
 
   // Disconnect from remote telnet system
   ipcMain.handle(IPC.RemoteTelnetSystemDisconnect, async (_event: IpcMainInvokeEvent, { serverUrl, ip }: RemoteDevicePayload) => {
-    return await remoteHttpRequest(serverUrl, `/device/${ip}/telnet-system/disconnect`, 'POST');
+    return await remoteHttpRequest(serverUrl, devicePath(ip, '/telnet-system/disconnect'), 'POST');
   });
 
   // Send command to remote telnet system
@@ -702,17 +803,17 @@ function setupRemoteHandlers(mainWindow: BrowserWindow | undefined, safeSendToRe
     _event: IpcMainInvokeEvent,
     { serverUrl, ip, command }: RemoteDevicePayload & { command: string }
   ) => {
-    return await remoteHttpRequest(serverUrl, `/device/${ip}/telnet-system/send`, 'POST', { command });
+    return await remoteHttpRequest(serverUrl, devicePath(ip, '/telnet-system/send'), 'POST', { command });
   });
 
   // Get remote telnet system status
   ipcMain.handle(IPC.RemoteTelnetSystemStatus, async (_event: IpcMainInvokeEvent, { serverUrl, ip }: RemoteDevicePayload) => {
-    return await remoteHttpRequest(serverUrl, `/device/${ip}/telnet-system/status`, 'GET');
+    return await remoteHttpRequest(serverUrl, devicePath(ip, '/telnet-system/status'), 'GET');
   });
 
   // Poll data from remote telnet system
   ipcMain.handle(IPC.RemoteTelnetSystemPollData, async (_event: IpcMainInvokeEvent, { serverUrl, ip }: RemoteDevicePayload) => {
-    return await remoteHttpRequest(serverUrl, `/device/${ip}/telnet-system/data`, 'GET');
+    return await remoteHttpRequest(serverUrl, devicePath(ip, '/telnet-system/data'), 'GET');
   });
 }
 

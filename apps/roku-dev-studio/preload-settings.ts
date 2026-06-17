@@ -9,5 +9,12 @@ contextBridge.exposeInMainWorld('settingsApi', {
   save: (payload: unknown) => ipcRenderer.invoke(IPC.SettingsWindowSave, payload),
   pickFolder: () => ipcRenderer.invoke(IPC.SettingsWindowPickFolder),
   openMcpConfig: (id: string) => ipcRenderer.invoke(IPC.SettingsWindowOpenMcpConfig, { id }),
-  closeWindow: () => ipcRenderer.send(IPC.SettingsWindowClose)
+  closeWindow: () => ipcRenderer.send(IPC.SettingsWindowClose),
+  getNetworkInspectorStatus: () => ipcRenderer.invoke(IPC.NetworkInspectorGetStatus),
+  installBpfAccess: () => ipcRenderer.invoke(IPC.NetworkInspectorInstallBpfAccess),
+  // Remote Network Inspector (per-location): probe capability + config, and apply config.
+  remoteNetworkProbe: (serverUrl: string) =>
+    ipcRenderer.invoke(IPC.SettingsWindowRemoteNetworkProbe, { serverUrl }),
+  remoteNetworkSetConfig: (serverUrl: string, config: unknown) =>
+    ipcRenderer.invoke(IPC.SettingsWindowRemoteNetworkSetConfig, { serverUrl, config })
 });

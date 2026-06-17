@@ -104,25 +104,50 @@ export function copyTanstackVirtualVendor(appDir: string, rendererRoot: string, 
 /** Emit renderer-imported modules from `shared/` into `renderer/dist/shared/` (runtime ESM). */
 function transpileSharedForRenderer(appDir: string, rendererDist: string): void {
   const sharedRoot = path.join(appDir, 'shared');
-  const entryPoints = [
+  const sharedOut = path.join(rendererDist, 'shared');
+
+  // 1) Local shared modules with no external dependencies: a plain per-file transpile is enough
+  //    (their relative imports resolve as-is in the renderer dist tree).
+  const plainEntries = [
     path.join(sharedRoot, 'ipc', 'debug-telnet-connection-id.ts'),
   ].filter((p) => fs.existsSync(p));
-  if (entryPoints.length === 0) return;
+  if (plainEntries.length > 0) {
+    fs.mkdirSync(sharedOut, { recursive: true });
+    esbuild.buildSync({
+      absWorkingDir: appDir,
+      entryPoints: plainEntries,
+      outdir: sharedOut,
+      outbase: sharedRoot,
+      bundle: false,
+      platform: 'browser',
+      format: 'esm',
+      target: 'es2022',
+      logLevel: 'info',
+    });
+  }
 
-  const sharedOut = path.join(rendererDist, 'shared');
-  fs.mkdirSync(sharedOut, { recursive: true });
-
-  esbuild.buildSync({
-    absWorkingDir: appDir,
-    entryPoints,
-    outdir: sharedOut,
-    outbase: sharedRoot,
-    bundle: false,
-    platform: 'browser',
-    format: 'esm',
-    target: 'es2022',
-    logLevel: 'info',
-  });
+  // 2) `shared/network-inspector/*` are shims that re-export runtime content from the
+  //    `roku-dev-studio-network-inspector` package (e.g. setup-guide). These MUST be bundled so the
+  //    bare package specifier is inlined into a browser-loadable module — a plain transpile would
+  //    leave an unresolvable `import … from 'roku-dev-studio-network-inspector/…'` that 404s at
+  //    runtime and takes down the whole ESM graph (every button/scan dies). Bundling *every* .ts in
+  //    this dir means new shared shims are emitted automatically without editing this script.
+  const niDir = path.join(sharedRoot, 'network-inspector');
+  const niEntries = walkTsFiles(niDir);
+  if (niEntries.length > 0) {
+    fs.mkdirSync(sharedOut, { recursive: true });
+    esbuild.buildSync({
+      absWorkingDir: appDir,
+      entryPoints: niEntries,
+      outdir: sharedOut,
+      outbase: sharedRoot,
+      bundle: true,
+      platform: 'browser',
+      format: 'esm',
+      target: 'es2022',
+      logLevel: 'info',
+    });
+  }
 }
 
 /** Fail fast when renderer/dist is missing modules the HTML shell loads at runtime. */
@@ -130,6 +155,8 @@ function verifyRendererDist(appDir: string, rendererDist: string): void {
   const required = [
     path.join(rendererDist, 'app.js'),
     path.join(rendererDist, 'shared', 'ipc', 'debug-telnet-connection-id.js'),
+    // Runtime shared shim imported by the Network Inspector — a 404 here breaks the whole ESM graph.
+    path.join(rendererDist, 'shared', 'network-inspector', 'setup-guide.js'),
   ];
   const missing = required.filter((p) => !fs.existsSync(p));
   if (missing.length > 0) {
@@ -167,6 +194,7 @@ export function transpileRenderer(appDir: string): void {
     path.join(rendererRoot, 'components', 'modals'),
     path.join(rendererRoot, 'components', 'log-file-viewer'),
     path.join(rendererRoot, 'components', 'fiddle'),
+    path.join(rendererRoot, 'components', 'network-inspector'),
   ];
   const entryPoints = roots.flatMap((r) => walkTsFiles(r));
   const appTs = path.join(rendererRoot, 'app.ts');

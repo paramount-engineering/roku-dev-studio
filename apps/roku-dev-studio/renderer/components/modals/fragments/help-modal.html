@@ -16,6 +16,7 @@
           <button type="button" class="help-nav-item" data-target="help-section-app-connector"><span class="icon icon-sm icon-teal"><svg><use href="#icon-plug"/></svg></span><span class="help-nav-label">App Connector</span></button>
           <button type="button" class="help-nav-item" data-target="help-section-action-scripts"><span class="icon icon-sm icon-blue"><svg><use href="#icon-code"/></svg></span><span class="help-nav-label">Action Scripts</span></button>
           <button type="button" class="help-nav-item" data-target="help-section-device-performance"><span class="icon icon-sm icon-accent"><svg><use href="#icon-cpu"/></svg></span><span class="help-nav-label">Device Performance</span></button>
+          <button type="button" class="help-nav-item" data-target="help-section-network-inspector"><span class="icon icon-sm icon-cyan"><svg><use href="#icon-wifi"/></svg></span><span class="help-nav-label">Network Inspector</span></button>
           <button type="button" class="help-nav-item" data-target="help-section-ai-agents"><span class="icon icon-sm icon-orange"><svg><use href="#icon-bot"/></svg></span><span class="help-nav-label">AI Agents (MCP)</span></button>
           <button type="button" class="help-nav-item" data-target="help-section-fiddle"><span class="icon icon-sm icon-pink"><svg><use href="#icon-edit-3"/></svg></span><span class="help-nav-label">BrightScript Fiddle</span></button>
           <button type="button" class="help-nav-item" data-target="help-section-log-viewer"><span class="icon icon-sm icon-green"><svg><use href="#icon-file-text"/></svg></span><span class="help-nav-label">Log File Viewer</span></button>
@@ -113,7 +114,7 @@
           </ul>
           <p>Requires Developer Mode enabled. Only one telnet connection can be active at a time per device.</p>
         </div>
-        
+
         <div class="help-section" id="help-section-app-connector">
           <h3><span class="icon icon-sm icon-teal"><svg><use href="#icon-plug"/></svg></span> App Connector</h3>
           <p>Connect to Roku apps that implement the TrackerTask component for two-way communication:</p>
@@ -169,6 +170,30 @@
             <li><strong>Settings → Device Performance</strong> tunes chart sample interval and history window; turn on <strong>Remember 'Show Device Performance'</strong> to restore the quad layout per device between sessions</li>
             <li>Inside Action Scripts, <strong>Device Performance</strong> steps capture chart cards into run results (and PDF export)</li>
           </ul>
+        </div>
+
+        <div class="help-section" id="help-section-network-inspector">
+          <h3><span class="icon icon-sm icon-cyan"><svg><use href="#icon-wifi"/></svg></span> Network Inspector</h3>
+          <p>Inspect the HTTP(S) traffic your dev channel makes. Roku Dev Studio runs a local <strong>MITM proxy</strong> that decrypts dev-channel HTTPS routed through it, so you can see full request/response headers and bodies.</p>
+          <p><strong>Getting started</strong></p>
+          <ul>
+            <li>Enable the <strong>MITM proxy</strong> in <strong>Settings → Network Inspector</strong>, then have your dev channel route its requests through the proxy address shown — use <code>host:port</code> (e.g. <code>192.168.1.50:8888</code>). How the channel applies that proxy is up to your app's networking code.</li>
+            <li>Optional <strong>hotspot capture</strong> records SNI/DNS metadata for all of the device's traffic; it needs OS packet-capture access (macOS BPF, Windows Npcap). Settings → Network Inspector walks through the per-platform setup.</li>
+          </ul>
+          <p><strong>Toolbar</strong> (top-right of the panel): <strong>Start / Stop capture</strong>, <strong>panes layout</strong> (stack vs. side-by-side request/response), and <strong>Configure traffic rules</strong>.</p>
+          <ul>
+            <li><strong>Session list</strong> - Filter with <code>host:</code>, <code>method:</code>, <code>status:</code>, <code>type:</code>, <code>kind:</code>, <code>path:</code> (separate terms with commas for OR); group by host; toggle <em>Proxied</em> to hide hotspot-only metadata. Jump-to-error and scroll-to-latest shortcuts appear when relevant.</li>
+            <li><strong>Inspect</strong> - View request / response overview, headers, and bodies (JSON / XML / raw). <strong>Copy</strong> a body, or export the transaction as <strong>cURL</strong> or <strong>HAR</strong>.</li>
+            <li><strong>Save .pcap</strong> - Export the device's captured packets; <strong>Clear</strong> empties the session list.</li>
+          </ul>
+          <p><strong>Traffic Rules</strong> (the gear in the toolbar) shape this device's proxied traffic; changes take effect immediately:</p>
+          <ul>
+            <li><strong>Block all proxied traffic</strong> - Reject every proxied request. This wins over per-host rules and the device throttle.</li>
+            <li><strong>Device throttle</strong> - Cap bandwidth and/or add latency for every proxied request. Pick a preset or type a custom value (e.g. <code>3 Mbps</code>, <code>1500 kbps</code>).</li>
+            <li><strong>Per-host rules</strong> - Add a <strong>hostname</strong> to target every request to that host, or a <strong>host + path</strong> (e.g. <code>api.example.com/v1/play</code>) to target only that path. Each rule can <em>Block</em>, <em>Reset</em> the connection (simulate a network failure), <em>Mock</em> a canned response (status / content-type / delay / body), and/or throttle.</li>
+            <li><strong>Bounds</strong> - A host can't be faster than the device's bandwidth cap, and its latency can't drop below the device latency floor.</li>
+          </ul>
+          <p>Network Inspector is available for locally connected devices.</p>
         </div>
 
         <div class="help-section" id="help-section-ai-agents">

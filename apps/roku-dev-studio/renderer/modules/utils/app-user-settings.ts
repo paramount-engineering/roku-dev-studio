@@ -33,6 +33,9 @@ export const SETTINGS_KEY_AUTO_CONNECT_LAST_DEVICE = 'autoConnectLastDeviceEnabl
 /** When true, title-bar primary sidebar show/hide is saved in localStorage between sessions. Default off. */
 export const SETTINGS_KEY_REMEMBER_SIDEBAR_TOGGLE = 'rememberSidebarToggle';
 
+/** When true, Network Inspector watches hotspot traffic for local devices. */
+export const SETTINGS_KEY_NETWORK_INSPECTOR_ENABLED = 'networkInspectorEnabled';
+
 /**
  * When true, a draggable Floating Remote is shown over the current device
  * panel whenever the active inner tab is not `remote` or `devapp`. Toggled
@@ -54,6 +57,8 @@ export let KEYBOARD_REMOTE_SHORTCUTS_ENABLED = false;
 export let AUTO_CONNECT_LAST_DEVICE_ENABLED = false;
 
 export let REMEMBER_SIDEBAR_TOGGLE = false;
+
+export let NETWORK_INSPECTOR_ENABLED = false;
 
 export let FLOATING_REMOTE_ENABLED = false;
 
@@ -173,6 +178,13 @@ export async function loadPersistedAppSettings(): Promise<void> {
       REMEMBER_SIDEBAR_TOGGLE = rememberSidebarRes.value;
     } else {
       REMEMBER_SIDEBAR_TOGGLE = false;
+    }
+
+    const networkInspectorRes = await window.roku.getSetting(SETTINGS_KEY_NETWORK_INSPECTOR_ENABLED);
+    if (networkInspectorRes && networkInspectorRes.success && typeof networkInspectorRes.value === 'boolean') {
+      NETWORK_INSPECTOR_ENABLED = networkInspectorRes.value;
+    } else {
+      NETWORK_INSPECTOR_ENABLED = false;
     }
 
     const floatingRemoteRes = await window.roku.getSetting(SETTINGS_KEY_FLOATING_REMOTE_ENABLED);

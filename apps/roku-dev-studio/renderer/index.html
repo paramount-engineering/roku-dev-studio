@@ -5320,6 +5320,13 @@
 
     ::highlight(telnet-find-current) {
       background-color: rgba(255, 213, 0, 0.7);
+      /*
+       * Force dark text on the active match. The strong yellow fill is opaque
+       * enough that light line colours (white text, cyan .telnet-log-url spans,
+       * structured pill text) wash out against it. A near-black colour keeps the
+       * match legible regardless of the underlying token colour.
+       */
+      color: #1a1a1a;
     }
 
     /*
@@ -7137,9 +7144,16 @@
       --pane-dur-out: 0.14s;
       --pane-off-y: 4px;
     }
+    .inner-tab-content[data-inner-content="network"].active {
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      overflow: hidden;
+    }
     /* Apps + Action Scripts: light horizontal cue (browsing / sequences) */
     .inner-tab-content[data-inner-content="apps"],
-    .inner-tab-content[data-inner-content="actionscripts"] {
+    .inner-tab-content[data-inner-content="actionscripts"],
+    .inner-tab-content[data-inner-content="network"] {
       --pane-off-x: 12px;
       --pane-off-y: 5px;
     }
@@ -7161,6 +7175,1559 @@
       }
     }
     
+    /* Network Inspector tab — match Telnet / Action Scripts full-bleed card stretch */
+    .network-inspector-container {
+      padding: 0;
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .network-inspector-card {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      height: 100%;
+      max-height: 100%;
+    }
+    .network-inspector-card .card-body {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      padding: 0;
+      overflow: hidden;
+    }
+    .network-inspector-card .card-header {
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      align-items: center;
+      gap: 10px;
+    }
+    .ni-header-start {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+    }
+    .ni-header-center {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      min-width: 0;
+      justify-self: center;
+      width: 100%;
+      max-width: 520px;
+    }
+    .ni-filter-wrap {
+      position: relative;
+      display: flex;
+      align-items: center;
+      flex: 1;
+      min-width: 0;
+      max-width: 400px;
+    }
+    .ni-header-center .ni-filter-input {
+      flex: 1;
+      min-width: 0;
+      width: 100%;
+      /* Room for the help icon (always) + clear icon (when filtering) on the right. */
+      padding-right: 50px;
+    }
+    .ni-filter-clear,
+    .ni-filter-help {
+      position: absolute;
+      top: 50%;
+      transform: translateY(-50%);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 20px;
+      height: 20px;
+      padding: 0;
+      border: none;
+      border-radius: 50%;
+      background: transparent;
+      color: var(--text-muted);
+      cursor: pointer;
+    }
+    /* Help icon sits at the far right and is always visible; clear sits just left of it. */
+    .ni-filter-help { right: 4px; }
+    .ni-filter-clear { right: 26px; }
+    .ni-filter-clear:hover,
+    .ni-filter-help:hover { color: var(--text-primary); background: rgba(255,255,255,0.08); }
+    .ni-filter-clear[hidden] { display: none; }
+    .ni-filter-clear .icon,
+    .ni-filter-help .icon { pointer-events: none; }
+    .ni-session-count {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 28px;
+      height: 24px;
+      padding: 0 8px;
+      border-radius: 999px;
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border);
+      color: var(--text-secondary);
+      font-size: 12px;
+      font-variant-numeric: tabular-nums;
+      font-weight: 600;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .ni-header-tools {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      margin-left: 8px;
+    }
+    .ni-header-tools .btn {
+      padding: 4px 8px;
+    }
+    .ni-header-controls {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .ni-capture-count {
+      display: none;
+    }
+    .ni-icon-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 30px;
+      height: 30px;
+      padding: 0;
+    }
+    .ni-icon-btn .icon {
+      pointer-events: none;
+    }
+    .ni-capture-toggle.is-capturing {
+      border-color: rgba(248, 113, 113, 0.45);
+      color: #fca5a5;
+    }
+    /* Blocked state: a Network Inspector problem (e.g. proxy port in use) — amber, distinct from
+       the red "capturing" accent so it reads as "needs attention" rather than "recording". */
+    .ni-capture-toggle.has-ni-issue,
+    .ni-btn-group .ni-capture-toggle.has-ni-issue {
+      border-color: rgba(251, 191, 36, 0.6);
+      color: #fbbf24;
+      background: rgba(251, 191, 36, 0.12);
+    }
+    .ni-btn-group .ni-capture-toggle.has-ni-issue:hover:not(:disabled) {
+      background: rgba(251, 191, 36, 0.2);
+      color: #fcd34d;
+    }
+    /* Segmented control: the header buttons read as one connected panel rather than
+       three detached buttons. The container owns the border + radius; each button is
+       borderless and separated only by a thin internal divider. */
+    .ni-btn-group {
+      display: inline-flex;
+      align-items: stretch;
+      gap: 0;
+      padding: 2px;
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border);
+      border-radius: 9px;
+    }
+    .ni-btn-group .ni-icon-btn {
+      width: 34px;
+      height: 28px;
+      border: none;
+      border-radius: 6px;
+      background: transparent;
+      color: var(--text-secondary);
+    }
+    .ni-btn-group .ni-icon-btn:hover:not(:disabled) {
+      background: var(--accent-purple-dim);
+      border-color: var(--border);
+      color: var(--text-primary);
+    }
+    .ni-btn-group .ni-icon-btn:active:not(:disabled) {
+      background: rgba(139, 92, 246, 0.22);
+    }
+    /* Thin divider between segments so the three controls read as one connected panel. */
+    .ni-btn-group .ni-icon-btn + .ni-icon-btn {
+      margin-left: 5px;
+      border-left: 1px solid var(--border);
+    }
+    .ni-btn-group .ni-capture-toggle.is-capturing {
+      border-color: transparent;
+      background: rgba(248, 113, 113, 0.14);
+      color: #fca5a5;
+    }
+    .ni-btn-group .ni-capture-toggle.is-capturing:hover:not(:disabled) {
+      background: rgba(248, 113, 113, 0.22);
+      color: #fecaca;
+    }
+    .ni-mitm-banner {
+      display: none !important;
+    }
+    /* Hotspot-capture setup badge — sits in the header, left of the filter box. Click opens the
+       setup modal. Severity: yellow (needs setup) / red (capture actively blocked). */
+    .ni-setup-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      flex: 0 0 auto;
+      padding: 3px 10px 3px 7px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 600;
+      line-height: 1.2;
+      white-space: nowrap;
+      cursor: pointer;
+      border: 1px solid transparent;
+      transition: background 0.15s ease, border-color 0.15s ease, filter 0.15s ease;
+    }
+    .ni-setup-badge[hidden] { display: none !important; }
+    .ni-setup-badge:hover { filter: brightness(1.12); }
+    .ni-setup-badge .ni-setup-badge-dot {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 15px;
+      height: 15px;
+      border-radius: 50%;
+      font-size: 10px;
+      font-weight: 800;
+      line-height: 1;
+    }
+    .ni-setup-badge.is-warn {
+      background: rgba(245, 158, 11, 0.14);
+      border-color: rgba(245, 158, 11, 0.5);
+      color: #f59e0b;
+    }
+    .ni-setup-badge.is-warn .ni-setup-badge-dot { background: rgba(245, 158, 11, 0.25); color: #f59e0b; }
+    .ni-setup-badge.is-error {
+      background: rgba(248, 113, 113, 0.14);
+      border-color: rgba(248, 113, 113, 0.55);
+      color: #fca5a5;
+    }
+    .ni-setup-badge.is-error .ni-setup-badge-dot { background: rgba(248, 113, 113, 0.25); color: #fca5a5; }
+    /* Hotspot Capture Setup modal (shares the per-platform guide content with Settings). */
+    .ni-setup-modal {
+      width: 100%;
+      max-width: 560px;
+      max-height: 86vh;
+      display: flex;
+      flex-direction: column;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+      overflow: hidden;
+    }
+    .ni-setup-modal-header {
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--border);
+    }
+    .ni-setup-modal-header h3 { margin: 0; font-size: 15px; font-weight: 600; color: var(--text-primary); }
+    .ni-setup-modal-close { background: transparent; border: none; color: var(--text-secondary); font-size: 22px; line-height: 1; cursor: pointer; }
+    .ni-setup-modal-close:hover { color: var(--text-primary); }
+    .ni-setup-modal-body { padding: 16px 18px; overflow-y: auto; }
+    /* Guide typography — mirrors the Settings window's .help-blurb / .mcp-* classes so the same
+       shared HTML renders identically in both places. */
+    .ni-setup-guide .help-blurb {
+      font-size: 12px;
+      color: var(--text-secondary);
+      margin: 0 0 10px;
+      line-height: 1.5;
+    }
+    .ni-setup-guide ol.help-blurb { padding-left: 18px; line-height: 1.6; }
+    .ni-setup-guide ol.help-blurb li { margin-bottom: 2px; }
+    .ni-setup-guide .help-blurb:last-child { margin-bottom: 0; }
+    .ni-setup-guide .mcp-link {
+      color: var(--accent-cyan);
+      text-decoration: none;
+      border-bottom: 1px dashed rgba(34, 211, 238, 0.4);
+    }
+    .ni-setup-guide .mcp-link:hover { border-bottom-color: var(--accent-cyan); }
+    .ni-setup-guide .mcp-inline-code {
+      font-family: 'JetBrains Mono', ui-monospace, Menlo, Monaco, monospace;
+      font-size: 11px;
+      background: var(--bg-primary);
+      border: 1px solid var(--border);
+      padding: 1px 6px;
+      border-radius: 4px;
+      color: var(--text-primary);
+    }
+    .ni-setup-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-top: 12px;
+      flex-wrap: wrap;
+    }
+    .ni-setup-status { font-size: 12px; color: var(--text-muted); }
+    .ni-setup-status.is-error { color: #fca5a5; }
+    .ni-toolbar {
+      display: none;
+    }
+    /* Traffic-rules (block/throttle) modal */
+    .ni-rules-modal,
+    .ni-filter-help-modal {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      width: min(560px, 92vw);
+      max-height: 86vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+    }
+    .ni-filter-help-header { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; border-bottom: 1px solid var(--border); }
+    .ni-filter-help-header h3 { margin: 0; font-size: 15px; font-weight: 600; }
+    .ni-filter-help-close { background: transparent; border: none; color: var(--text-secondary); font-size: 20px; cursor: pointer; line-height: 1; }
+    .ni-filter-help-close:hover { color: var(--text-primary); }
+    .ni-filter-help-body { padding: 16px 18px; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; }
+    .ni-filter-help-intro, .ni-filter-help-note { margin: 0; font-size: 12px; line-height: 1.55; color: var(--text-secondary); }
+    .ni-filter-help-note { color: var(--text-muted); }
+    .ni-filter-help-intro code, .ni-filter-help-note code { font-family: ui-monospace, monospace; font-size: 11px; background: var(--bg-deep); border: 1px solid var(--border); border-radius: 4px; padding: 1px 5px; }
+    .ni-filter-help-table { width: 100%; border-collapse: collapse; }
+    .ni-filter-help-table td { padding: 8px 8px; border-top: 1px solid var(--border); vertical-align: top; }
+    .ni-filter-help-table tr:first-child td { border-top: none; }
+    .ni-filter-help-field { white-space: nowrap; }
+    .ni-filter-help-field code { font-family: ui-monospace, monospace; font-size: 12px; color: var(--accent-cyan); }
+    .ni-filter-help-desc { font-size: 12px; color: var(--text-secondary); }
+    .ni-filter-help-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+    .ni-filter-help-chip { font-family: ui-monospace, monospace; font-size: 11px; color: var(--text-primary); background: var(--bg-deep); border: 1px solid var(--border-hover); border-radius: 999px; padding: 3px 9px; cursor: pointer; transition: background 0.12s, border-color 0.12s; }
+    .ni-filter-help-chip:hover { border-color: rgba(139, 92, 246, 0.5); background: rgba(139, 92, 246, 0.12); }
+    .ni-rules-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 16px 18px; border-bottom: 1px solid var(--border); background: linear-gradient(180deg, rgba(139, 92, 246, 0.05), transparent); }
+    .ni-rules-header-info { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+    .ni-rules-title { margin: 0; font-size: 17px; font-weight: 600; color: var(--text-primary); line-height: 1.2; }
+    .ni-rules-device-line { display: flex; align-items: center; gap: 7px; min-width: 0; font-size: 12px; color: var(--text-secondary); }
+    .ni-rules-device-dot { flex: 0 0 auto; width: 8px; height: 8px; border-radius: 50%; background: var(--accent-green); box-shadow: 0 0 6px rgba(16, 185, 129, 0.6); }
+    .ni-rules-device-name { font-weight: 600; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .ni-rules-device-sep { color: var(--text-muted); }
+    .ni-rules-device-ip { font-family: 'JetBrains Mono', ui-monospace, Menlo, Monaco, monospace; color: var(--text-secondary); white-space: nowrap; }
+    .ni-rules-close { background: transparent; border: none; color: var(--text-secondary); font-size: 20px; cursor: pointer; line-height: 1; flex: 0 0 auto; }
+    .ni-rules-close:hover { color: var(--text-primary); }
+    .ni-rules-body { padding: 16px 18px; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; }
+    .ni-rules-note { font-size: 12px; color: var(--text-muted); margin: 0; line-height: 1.5; }
+    /* Card sections — mirror the app's grouped settings look */
+    .ni-rules-card { display: flex; flex-direction: column; gap: 12px; background: var(--bg-deep); border: 1px solid var(--border); border-radius: 10px; padding: 14px; }
+    /* Section header band: full-width tinted strip with an accent bar so each section reads as its
+       own titled group rather than loose text. */
+    .ni-rules-card-head { display: flex; flex-direction: column; gap: 3px; margin: -14px -14px 0; padding: 11px 14px; background: rgba(139, 92, 246, 0.07); border-bottom: 1px solid var(--border); border-radius: 10px 10px 0 0; }
+    .ni-rules-card-title { display: flex; align-items: center; gap: 8px; font-size: 13.5px; font-weight: 600; color: var(--text-primary); letter-spacing: 0.01em; }
+    .ni-rules-card-title::before { content: ''; flex: 0 0 auto; width: 3px; height: 14px; border-radius: 2px; background: var(--accent-purple); }
+    .ni-rules-card-sub { font-size: 11px; color: var(--text-muted); line-height: 1.4; padding-left: 11px; }
+    .ni-rules-toggle-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; cursor: pointer; }
+    .ni-rules-toggle-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+    .ni-rules-toggle-title { font-size: 13px; font-weight: 500; color: var(--text-primary); }
+    .ni-rules-toggle-desc { font-size: 11px; color: var(--text-muted); line-height: 1.4; }
+    /* Pill switch built from a checkbox so existing [data-block-all] read logic is untouched */
+    .ni-rules-switch { appearance: none; -webkit-appearance: none; flex: 0 0 auto; position: relative; width: 38px; height: 22px; border-radius: 999px; background: var(--bg-tertiary); border: 1px solid var(--border-hover); cursor: pointer; transition: background 0.15s ease, border-color 0.15s ease; }
+    .ni-rules-switch::after { content: ''; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: var(--text-secondary); transition: transform 0.15s ease, background 0.15s ease; }
+    .ni-rules-switch:checked { background: var(--accent-purple); border-color: var(--accent-purple); }
+    .ni-rules-switch:checked::after { transform: translateX(16px); background: #fff; }
+    .ni-rules-field-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    /* Device throttle + per-host rules go inert while "Block all proxied traffic" is on, since the
+       proxy blocks everything before they'd ever apply. */
+    .ni-rules-field-grid.is-disabled { opacity: 0.4; }
+    .ni-rules-select:disabled, .ni-rules-latency:disabled { cursor: not-allowed; }
+    [data-hosts-section].is-hosts-blocked .ni-rules-add,
+    [data-hosts-section].is-hosts-blocked .ni-host-rule-list { opacity: 0.4; pointer-events: none; }
+    .ni-rules-blocked-note { margin: 0; font-size: 12px; line-height: 1.45; color: var(--accent-amber); background: var(--accent-amber-dim); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: 8px; padding: 8px 10px; }
+    .ni-rules-blocked-note[hidden] { display: none; }
+    .ni-rules-throttle-note { margin: 0; font-size: 11.5px; line-height: 1.45; color: var(--accent-cyan); background: rgba(34, 211, 238, 0.08); border: 1px solid rgba(34, 211, 238, 0.25); border-radius: 8px; padding: 7px 10px; }
+    .ni-rules-throttle-note[hidden] { display: none; }
+    .ni-rules-field { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+    .ni-rules-field-label { font-size: 11px; font-weight: 600; color: var(--text-secondary); }
+    .ni-rules-input-suffix { display: flex; align-items: center; gap: 0; }
+    .ni-rules-input-suffix .ni-rules-latency { width: 100%; border-top-right-radius: 0; border-bottom-right-radius: 0; }
+    .ni-rules-suffix-unit { flex: 0 0 auto; padding: 6px 10px; font-size: 12px; color: var(--text-muted); background: var(--bg-tertiary); border: 1px solid var(--border-hover); border-left: none; border-top-right-radius: 6px; border-bottom-right-radius: 6px; }
+    .ni-rules-select { width: 100%; box-sizing: border-box; background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-hover); border-radius: 6px; padding: 6px 8px; font: inherit; font-size: 12px; }
+    /* Bandwidth combobox: editable field + caret that opens the floating preset menu. */
+    .ni-bw-combo { position: relative; display: inline-flex; align-items: center; width: 100%; }
+    .ni-bw-combo .ni-rules-bw { width: 100%; padding-right: 28px; }
+    .ni-bw-caret { position: absolute; right: 1px; top: 1px; bottom: 1px; width: 26px; display: inline-flex; align-items: center; justify-content: center; background: transparent; border: none; color: var(--text-muted); cursor: pointer; border-radius: 0 6px 6px 0; }
+    .ni-bw-caret:hover { color: var(--text-secondary); }
+    .ni-bw-combo:has(.ni-rules-bw:disabled) .ni-bw-caret { opacity: 0.4; pointer-events: none; }
+    .ni-bw-menu { position: fixed; z-index: 1100; max-height: 240px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; padding: 4px; background: var(--bg-elevated); border: 1px solid var(--border-hover); border-radius: 8px; box-shadow: 0 14px 34px rgba(0, 0, 0, 0.55); }
+    .ni-bw-menu[hidden] { display: none; }
+    .ni-bw-opt { text-align: left; background: transparent; border: none; color: var(--text-primary); font: inherit; font-size: 12px; padding: 7px 10px; border-radius: 6px; cursor: pointer; white-space: nowrap; }
+    .ni-bw-opt:hover { background: var(--accent-purple-dim); }
+    .ni-rules-latency { width: 60px; background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-hover); border-radius: 6px; padding: 6px 8px; font: inherit; font-size: 12px; box-sizing: border-box; }
+    .ni-rules-select:focus, .ni-rules-latency:focus, .ni-rules-add-input:focus, .ni-rules-path:focus, .ni-rules-ct:focus, .ni-mock-num:focus, .ni-rules-mock-body:focus { outline: none; border-color: var(--accent-purple); }
+    .ni-rules-unit { color: var(--text-muted); font-size: 11px; }
+    .ni-rules-empty-hint { margin: 0; font-size: 12px; color: var(--text-muted); text-align: center; padding: 10px; border: 1px dashed var(--border-hover); border-radius: 8px; }
+    .ni-rules-empty-hint[hidden] { display: none; }
+    .ni-host-rule-flash { animation: niHostFlash 0.6s ease; }
+    @keyframes niHostFlash { 0%, 100% { border-color: var(--border); } 35% { border-color: var(--accent-purple); box-shadow: 0 0 0 2px var(--accent-purple-dim); } }
+    /* The rules list scrolls inside the card (the modal body itself stays put) so long rule sets
+       don't push the footer off-screen. */
+    .ni-host-rule-list { display: flex; flex-direction: column; gap: 8px; max-height: 300px; overflow-y: auto; padding-right: 4px; }
+    .ni-host-rule-list:empty { display: none; }
+    .ni-host-rule { display: flex; flex-direction: column; gap: 0; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+    /* Grouped header band: the host/path identity sits on its own row so it's always visible, and
+       doubles as the expand/collapse toggle for the rule's controls. */
+    .ni-host-rule-header { display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: rgba(139, 92, 246, 0.08); border-bottom: 1px solid var(--border); cursor: pointer; transition: background 0.12s ease; }
+    .ni-host-rule-header:hover { background: rgba(139, 92, 246, 0.14); }
+    .ni-host-rule-header:focus-visible { outline: 2px solid var(--accent-purple); outline-offset: -2px; }
+    .ni-host-rule-caret { flex: 0 0 auto; display: inline-flex; align-items: center; color: var(--text-muted); transition: transform 0.15s ease; }
+    .ni-host-rule.is-collapsed .ni-host-rule-caret { transform: rotate(-90deg); }
+    .ni-host-rule.is-collapsed .ni-host-rule-header { border-bottom: none; }
+    .ni-host-rule.is-collapsed .ni-host-rule-controls,
+    .ni-host-rule.is-collapsed .ni-host-rule-mock { display: none; }
+    .ni-host-rule-id { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; }
+    .ni-host-rule-name { min-width: 0; font-size: 12.5px; font-weight: 600; font-family: 'JetBrains Mono', ui-monospace, Menlo, Monaco, monospace; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .ni-host-rule-scope { flex: 0 0 auto; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; padding: 2px 7px; border-radius: 999px; }
+    .ni-host-rule-scope[data-scope="all"] { color: var(--accent-cyan); background: rgba(34, 211, 238, 0.12); border: 1px solid rgba(34, 211, 238, 0.3); }
+    .ni-host-rule-scope[data-scope="path"] { color: var(--accent-amber); background: var(--accent-amber-dim); border: 1px solid rgba(245, 158, 11, 0.3); }
+    .ni-host-rule-controls { display: flex; align-items: center; gap: 10px; padding: 10px; }
+    .ni-host-rule-block, .ni-host-rule-flag { flex: 0 0 auto; }
+    /* Bandwidth comes first and fills the gap after the checkboxes; latency is a fixed field next to
+       it on the right (mirrors the device-level Bandwidth → Latency order). */
+    .ni-host-rule-controls > .ni-bw-combo { flex: 1 1 auto; width: auto; min-width: 140px; }
+    .ni-host-latency-wrap { flex: 0 0 auto; width: 104px; }
+    .ni-host-latency-wrap .ni-rules-latency { width: 100%; }
+    /* Native number steppers are cramped inside unit-suffixed fields and render to the left of the
+       unit — drop them across the modal for clean, typed numeric inputs with clear units/labels. */
+    .ni-rules-modal input[type="number"]::-webkit-inner-spin-button,
+    .ni-rules-modal input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+    .ni-rules-modal input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
+    .ni-host-rule-block, .ni-host-rule-flag { display: flex; align-items: center; gap: 5px; font-size: 12px; color: var(--text-secondary); white-space: nowrap; cursor: pointer; }
+    /* Block / Reset / Mock behave as a single-select group (mutually exclusive), so they render as
+       radio dials. They stay <input type=checkbox> on purpose so the active one can be clicked again
+       to clear the selection (none is a valid state) — plain radios can't be unchecked. */
+    .ni-host-rule-controls input[data-host-block],
+    .ni-host-rule-controls input[data-host-reset],
+    .ni-host-rule-controls input[data-host-mock] {
+      appearance: none; -webkit-appearance: none; margin: 0;
+      flex: 0 0 auto; width: 15px; height: 15px; border-radius: 50%;
+      border: 1.5px solid var(--border-hover); background: var(--bg-deep);
+      position: relative; cursor: pointer;
+      transition: border-color 0.12s ease, background 0.12s ease;
+    }
+    .ni-host-rule-controls input[data-host-block]:hover,
+    .ni-host-rule-controls input[data-host-reset]:hover,
+    .ni-host-rule-controls input[data-host-mock]:hover { border-color: var(--text-secondary); }
+    .ni-host-rule-controls input[data-host-block]:checked::after,
+    .ni-host-rule-controls input[data-host-reset]:checked::after,
+    .ni-host-rule-controls input[data-host-mock]:checked::after {
+      content: ''; position: absolute; inset: 3px; border-radius: 50%;
+    }
+    .ni-host-rule-controls input[data-host-block]:checked { border-color: var(--accent-red); }
+    .ni-host-rule-controls input[data-host-block]:checked::after { background: var(--accent-red); }
+    .ni-host-rule-controls input[data-host-reset]:checked { border-color: var(--accent-amber); }
+    .ni-host-rule-controls input[data-host-reset]:checked::after { background: var(--accent-amber); }
+    .ni-host-rule-controls input[data-host-mock]:checked { border-color: var(--accent-purple); }
+    .ni-host-rule-controls input[data-host-mock]:checked::after { background: var(--accent-purple); }
+    /* Throttle disabled when a terminal action (block/reset/mock) is active. */
+    .ni-host-latency-wrap.is-disabled { opacity: 0.4; }
+    .ni-host-rule-controls .ni-rules-select:disabled,
+    .ni-host-rule-controls .ni-rules-latency:disabled { opacity: 0.4; cursor: not-allowed; }
+    .ni-host-rule-remove { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; background: transparent; border: none; border-radius: 6px; color: var(--text-muted); cursor: pointer; line-height: 1; padding: 0; transition: background 0.12s ease, color 0.12s ease; }
+    .ni-host-rule-remove:hover { color: var(--accent-red); background: var(--accent-red-dim); }
+    .ni-host-rule-mock { display: flex; flex-direction: column; gap: 6px; margin: 0 10px 10px; padding: 8px; border: 1px dashed var(--border-hover); border-radius: 6px; background: rgba(255,255,255,0.02); }
+    .ni-host-rule-mock[hidden] { display: none; }
+    .ni-mock-row { display: flex; align-items: flex-end; gap: 8px; }
+    .ni-mock-field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+    .ni-mock-field-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; color: var(--text-muted); }
+    .ni-mock-field-status { flex: 0 0 auto; width: 76px; }
+    .ni-mock-field-ct { flex: 1 1 auto; min-width: 0; }
+    .ni-mock-field-delay { flex: 0 0 auto; width: 104px; }
+    .ni-mock-field .ni-rules-input-suffix { width: 100%; }
+    .ni-mock-num { width: 100%; box-sizing: border-box; background: var(--bg-deep); color: var(--text-primary); border: 1px solid var(--border-hover); border-radius: 6px; padding: 5px 8px; font: inherit; font-size: 12px; }
+    .ni-rules-ct { width: 100%; box-sizing: border-box; background: var(--bg-deep); color: var(--text-primary); border: 1px solid var(--border-hover); border-radius: 6px; padding: 5px 8px; font: inherit; font-size: 12px; }
+    .ni-rules-mock-body { width: 100%; box-sizing: border-box; background: var(--bg-deep); color: var(--text-primary); border: 1px solid var(--border-hover); border-radius: 6px; padding: 6px 8px; font-family: ui-monospace, monospace; font-size: 12px; resize: vertical; }
+    .ni-rules-add { display: flex; gap: 8px; }
+    .ni-rules-add-input { flex: 1; background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-hover); border-radius: 6px; padding: 6px 10px; font: inherit; font-size: 12px; }
+    .ni-rules-footer { display: flex; align-items: center; gap: 10px; justify-content: flex-end; padding: 12px 18px; border-top: 1px solid var(--border); }
+    .ni-rules-status { margin-right: auto; font-size: 12px; color: var(--accent-red); }
+    .ni-sidebar-head {
+      display: flex;
+      align-items: stretch;
+      padding: 0;
+      border-bottom: 1px solid var(--border);
+      border-right: 1px solid var(--border);
+      background: var(--bg-tertiary);
+      flex-shrink: 0;
+      min-height: 40px;
+      box-sizing: border-box;
+    }
+    .ni-sidebar-options {
+      display: flex;
+      align-items: stretch;
+      gap: 0;
+      width: 100%;
+    }
+    /* When only one option is shown (e.g. Proxied hidden in MITM-only mode), keep that control at
+     * its usual ~half width but center it instead of letting it stretch full-width (which spread
+     * the label and control far apart). */
+    .ni-sidebar-options.ni-options-single {
+      justify-content: center;
+    }
+    .ni-sidebar-options.ni-options-single .ni-sidebar-option {
+      flex: 0 1 50%;
+    }
+    .ni-sidebar-option {
+      flex: 1 1 50%;
+      width: 50%;
+      min-width: 0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 0 12px;
+      border-right: 1px solid var(--border);
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--text-secondary);
+      user-select: none;
+      white-space: nowrap;
+      box-sizing: border-box;
+    }
+    .ni-sidebar-option:last-child {
+      border-right: none;
+    }
+    .ni-sidebar-option:hover {
+      color: var(--text-primary);
+      background: rgba(255, 255, 255, 0.03);
+    }
+    .ni-sidebar-option:has(input:checked) {
+      color: var(--text-primary);
+      background: rgba(139, 92, 246, 0.08);
+    }
+    .ni-sidebar-option input {
+      appearance: none;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      border: 2px solid var(--text-muted);
+      margin: 0;
+      flex-shrink: 0;
+      background: transparent;
+      order: 2;
+    }
+    .ni-sidebar-option input:checked {
+      border-color: #a78bfa;
+      background: #a78bfa;
+      box-shadow: inset 0 0 0 2px var(--bg-tertiary);
+    }
+    /* Locked "Proxied" state in MITM-only mode: shown checked but non-interactive. Dim it and
+     * suppress the hover affordance so it reads as informational rather than clickable. */
+    .ni-sidebar-option.is-disabled {
+      cursor: default;
+      opacity: 0.6;
+    }
+    .ni-sidebar-option.is-disabled:hover {
+      color: var(--text-secondary);
+      background: transparent;
+    }
+    .ni-sidebar-option.is-disabled:has(input:checked) {
+      color: var(--text-secondary);
+    }
+    .ni-sidebar-option input:disabled {
+      cursor: default;
+    }
+    .ni-sidebar-option-label {
+      flex: 1;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .ni-sidebar-foot {
+      display: none;
+    }
+    .ni-seq-row-mitm .ni-seq-col-ssl { color: #4ade80; }
+    .ni-sidebar[data-view="structure"] .ni-sidebar-scroll { display: none; }
+    .ni-sidebar[data-view="sequence"] .ni-structure-wrap { display: none; }
+    .ni-session-empty {
+      padding: 32px 16px;
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 12px;
+    }
+    .ni-charles-workspace {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: row;
+      gap: 0;
+      border: none;
+      border-radius: 0;
+      overflow: hidden;
+      background: var(--bg-deep);
+    }
+    .ni-sidebar {
+      flex: 0 0 300px;
+      min-width: 240px;
+      max-width: 38%;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      border-right: 1px solid var(--border);
+      background: var(--bg-secondary);
+      position: relative;
+    }
+    /* Floating list affordances: jump-to-error + scroll-to-latest, mirroring the telnet FAB. */
+    .ni-list-fabs {
+      position: absolute;
+      right: 14px;
+      bottom: 16px;
+      z-index: 5;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      pointer-events: none;
+    }
+    .ni-fab {
+      pointer-events: auto;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 34px;
+      height: 34px;
+      padding: 0;
+      border-radius: 999px;
+      border: 1px solid rgba(167, 139, 250, 0.65);
+      background: #18181f;
+      color: #ddd6fe;
+      box-shadow:
+        0 6px 22px rgba(0, 0, 0, 0.62),
+        0 0 0 1px rgba(0, 0, 0, 0.45),
+        inset 0 1px 0 rgba(255, 255, 255, 0.08);
+      cursor: pointer;
+      transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease,
+        box-shadow 0.15s ease, transform 0.15s ease;
+    }
+    .ni-fab[hidden] {
+      display: none !important;
+    }
+    .ni-fab:hover {
+      background: #7c3aed;
+      border-color: #c4b5fd;
+      color: #ffffff;
+      transform: translateY(-2px);
+    }
+    .ni-fab:active {
+      transform: translateY(0);
+    }
+    .ni-fab:focus-visible {
+      outline: 2px solid var(--accent-purple);
+      outline-offset: 2px;
+    }
+    /* Error FAB uses a warning hue so it reads as "there are failures". */
+    .ni-fab-error {
+      border-color: rgba(248, 113, 113, 0.7);
+      color: #fecaca;
+    }
+    .ni-fab-error:hover {
+      background: #dc2626;
+      border-color: #fca5a5;
+      color: #ffffff;
+    }
+    .ni-fab .icon { pointer-events: none; }
+    .ni-sidebar-list {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .ni-sidebar-scroll,
+    .ni-structure-wrap {
+      flex: 1;
+      min-height: 0;
+      overflow: auto;
+      overscroll-behavior: contain;
+      scroll-behavior: auto;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-gutter: stable;
+    }
+    .ni-sidebar-row {
+      display: grid;
+      grid-template-columns: minmax(44px, auto) 20px 1fr minmax(44px, auto);
+      grid-template-rows: auto auto auto;
+      gap: 2px 10px;
+      padding: 7px 8px 7px 10px;
+      cursor: pointer;
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+      font-size: 12px;
+      /* Off-screen rows skip layout/paint (cheap windowing for large lists). The intrinsic-size
+         estimate keeps the scrollbar stable; `auto` lets the browser remember the real height. */
+      content-visibility: auto;
+      contain-intrinsic-size: auto 64px;
+    }
+    .ni-sidebar-seq {
+      grid-column: 1;
+      grid-row: 1 / span 3;
+      align-self: center;
+      justify-self: start;
+      flex-shrink: 0;
+    }
+    .ni-sidebar-row:hover { background: rgba(255,255,255,0.04); }
+    .ni-sidebar-row-selected {
+      background: rgba(139,92,246,0.22);
+    }
+    .ni-sidebar-row-mitm .ni-sidebar-ssl { color: #4ade80; }
+    .ni-sidebar-ssl {
+      grid-column: 2;
+      grid-row: 1 / span 3;
+      align-self: center;
+      justify-self: center;
+      font-size: 11px;
+    }
+    .ni-sidebar-host {
+      grid-column: 3;
+      font-weight: 600;
+      color: var(--text-primary);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .ni-sidebar-path {
+      grid-column: 3;
+      color: var(--text-muted);
+      font-size: 11px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .ni-row-meta {
+      grid-column: 3;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 10px;
+      color: var(--text-muted);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+    .ni-row-dur {
+      color: #a78bfa;
+    }
+    .ni-sidebar-status {
+      grid-column: 4;
+      grid-row: 1 / span 3;
+      align-self: center;
+      justify-self: end;
+      min-width: 44px;
+      text-align: right;
+    }
+    .ni-inspector-pane {
+      flex: 1;
+      min-width: 0;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      background: var(--bg-secondary);
+    }
+    .ni-inspector-pane.is-empty .ni-contents-split { display: none; }
+    .ni-inspector-pane:not(.is-empty) .ni-inspector-empty { display: none; }
+    .ni-inspector-empty {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--text-muted);
+      font-size: 12px;
+      padding: 16px;
+      text-align: center;
+    }
+    .ni-view-tabs {
+      display: flex;
+      gap: 2px;
+      padding: 2px;
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+    }
+    .ni-view-tab {
+      border: none;
+      background: transparent;
+      color: var(--text-muted);
+      font-size: 12px;
+      padding: 6px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .ni-view-tab.active {
+      background: rgba(139,92,246,0.25);
+      color: var(--text-primary);
+    }
+    .ni-filter-input {
+      flex: 1;
+      min-width: 180px;
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text-primary);
+      padding: 8px 10px;
+      font-family: inherit;
+      font-size: 13px;
+    }
+    .ni-sidebar-foot .ni-filter-input {
+      width: 100%;
+      min-width: 0;
+    }
+    .ni-filter-decrypted {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      color: var(--text-secondary);
+      padding: 4px 8px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--bg-tertiary);
+      cursor: pointer;
+      user-select: none;
+    }
+    .ni-seq-row-mitm .ni-seq-col-ssl { color: #4ade80; }
+    .ni-sequence-wrap {
+      flex: 1;
+      min-height: 0;
+      overflow: auto;
+    }
+    .ni-sequence-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+      table-layout: fixed;
+    }
+    .ni-sequence-table thead {
+      position: sticky;
+      top: 0;
+      z-index: 1;
+      background: var(--bg-tertiary);
+    }
+    .ni-sequence-table th {
+      text-align: left;
+      padding: 6px 8px;
+      color: var(--text-muted);
+      font-weight: 600;
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+    }
+    .ni-sequence-table td {
+      padding: 4px 8px;
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      color: var(--text-primary);
+    }
+    .ni-seq-row { cursor: pointer; }
+    .ni-seq-row:hover { background: rgba(255,255,255,0.04); }
+    .ni-seq-row-selected { background: rgba(139,92,246,0.22) !important; }
+    .ni-seq-col-num { width: 36px; color: var(--text-muted); }
+    .ni-seq-col-ssl { width: 36px; text-align: center; }
+    .ni-seq-col-method { width: 64px; }
+    .ni-seq-col-host { width: 28%; }
+    .ni-seq-col-path { width: 22%; }
+    .ni-seq-col-status { width: 64px; }
+    .ni-seq-col-size { width: 64px; color: var(--text-muted); }
+    .ni-seq-col-time { width: 96px; font-family: ui-monospace, monospace; font-size: 11px; color: var(--text-muted); }
+    .ni-seq-ssl { font-size: 11px; }
+    .ni-seq-ssl-none { color: var(--text-muted); opacity: 0.5; }
+    .ni-status-pill {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 36px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+      text-align: center;
+      box-sizing: border-box;
+      white-space: nowrap;
+    }
+    .ni-seq-pill {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 36px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+      text-align: center;
+      box-sizing: border-box;
+      white-space: nowrap;
+      background: rgba(148, 163, 184, 0.2);
+      color: var(--text-secondary);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+    .ni-sidebar-row-selected .ni-seq-pill,
+    .ni-struct-leaf-selected .ni-seq-pill {
+      background: rgba(167, 139, 250, 0.22);
+      color: #e9d5ff;
+    }
+    .ni-status-spin {
+      display: inline-block;
+      width: 9px;
+      height: 9px;
+      margin-right: 5px;
+      border: 1.5px solid currentColor;
+      border-top-color: transparent;
+      border-radius: 50%;
+      animation: ni-status-spin 0.7s linear infinite;
+      vertical-align: -1px;
+    }
+    @keyframes ni-status-spin { to { transform: rotate(360deg); } }
+    @media (prefers-reduced-motion: reduce) {
+      .ni-status-spin { animation: none; }
+    }
+    .ni-status-ok { background: rgba(34, 197, 94, 0.22); color: #4ade80; }
+    .ni-status-info { background: rgba(56, 189, 248, 0.2); color: #7dd3fc; }
+    .ni-status-redirect { background: rgba(45, 212, 191, 0.2); color: #5eead4; }
+    .ni-status-client { background: rgba(251, 146, 60, 0.22); color: #fdba74; }
+    .ni-status-server { background: rgba(239, 68, 68, 0.24); color: #f87171; }
+    .ni-status-pending { background: rgba(234, 179, 8, 0.2); color: #facc15; }
+    .ni-status-err { background: rgba(239, 68, 68, 0.24); color: #f87171; }
+    .ni-status-warn { background: rgba(234, 179, 8, 0.2); color: #facc15; }
+    .ni-status-ssl { background: rgba(167, 139, 250, 0.22); color: #c4b5fd; }
+    .ni-status-dns { background: rgba(45, 212, 191, 0.2); color: #2dd4bf; }
+    .ni-status-unknown { background: rgba(148, 163, 184, 0.15); color: var(--text-muted); }
+    .ni-structure-wrap {
+      flex: 1;
+      min-height: 0;
+      overflow: auto;
+      padding: 6px 0;
+      font-size: 12px;
+    }
+    .ni-struct-host-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 10px;
+      cursor: pointer;
+      color: var(--text-primary);
+    }
+    .ni-struct-host-row:hover { background: rgba(255,255,255,0.04); }
+    .ni-struct-chevron { width: 14px; color: var(--text-muted); font-size: 10px; }
+    .ni-struct-host-name { flex: 1; font-weight: 600; }
+    .ni-struct-host-count {
+      font-size: 11px;
+      color: var(--text-muted);
+      background: var(--bg-tertiary);
+      padding: 1px 6px;
+      border-radius: 8px;
+    }
+    .ni-struct-children { padding-left: 12px; }
+    .ni-struct-leaf {
+      display: grid;
+      grid-template-columns: minmax(44px, auto) 1fr minmax(44px, auto);
+      grid-template-rows: auto auto;
+      gap: 2px 10px;
+      padding: 6px 10px 6px 8px;
+      cursor: pointer;
+      border-radius: 4px;
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+      align-items: center;
+      content-visibility: auto;
+      contain-intrinsic-size: auto 46px;
+    }
+    .ni-struct-leaf:hover { background: rgba(255,255,255,0.04); }
+    .ni-struct-leaf-selected { background: rgba(139,92,246,0.22); }
+    .ni-struct-leaf-seq {
+      grid-column: 1;
+      grid-row: 1 / span 2;
+      align-self: center;
+      justify-self: start;
+      flex-shrink: 0;
+    }
+    .ni-struct-leaf-label {
+      grid-column: 2;
+      grid-row: 1;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-weight: 500;
+      color: var(--text-primary);
+    }
+    .ni-struct-leaf-status {
+      grid-column: 3;
+      grid-row: 1 / span 2;
+      justify-self: end;
+      align-self: center;
+      min-width: 44px;
+      text-align: right;
+    }
+    .ni-struct-leaf .ni-row-meta {
+      grid-column: 2;
+      grid-row: 2;
+      padding-left: 0;
+    }
+    .ni-split {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .ni-list-pane {
+      flex: 1;
+      min-height: 120px;
+      max-height: 42%;
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
+    .ni-output {
+      flex: 1;
+      min-height: 240px;
+      overflow: auto;
+      background: var(--bg-deep);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 12px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 12px;
+      line-height: 1.5;
+    }
+    .ni-placeholder {
+      color: var(--text-muted);
+      text-align: center;
+      padding: 48px 16px;
+    }
+    .ni-placeholder .icon { opacity: 0.35; margin-bottom: 12px; }
+    .ni-hint { font-size: 12px; margin-top: 8px; color: var(--text-muted); }
+    .ni-hint-error { color: #f87171; }
+    .ni-hint-warn { color: #fbbf24; }
+    /* MITM proxy port-conflict modal (Network tab). Shown when Roku Dev Studio can't bind its proxy
+       port because another process holds it — names the offender and offers a quick port change. */
+    .ni-port-modal {
+      width: 100%;
+      max-width: 480px;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+      overflow: hidden;
+    }
+    .ni-port-modal-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--border);
+    }
+    .ni-port-modal-icon { color: #fca5a5; flex: 0 0 auto; display: inline-flex; }
+    .ni-port-modal-header h3 { margin: 0; font-size: 14px; font-weight: 700; flex: 1 1 auto; color: var(--text-primary); }
+    .ni-port-modal-close {
+      border: none;
+      background: transparent;
+      color: var(--text-secondary);
+      font-size: 20px;
+      line-height: 1;
+      cursor: pointer;
+      padding: 0 4px;
+    }
+    .ni-port-modal-close:hover { color: var(--text-primary); }
+    .ni-port-modal-body { padding: 14px 16px; }
+    .ni-port-modal-msg { margin: 0 0 12px; font-size: 12.5px; line-height: 1.5; color: var(--text-secondary); }
+    .ni-port-modal-inline {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 11.5px;
+      color: #c4b5fd;
+      background: rgba(139, 92, 246, 0.14);
+      border: 1px solid rgba(139, 92, 246, 0.32);
+      border-radius: 5px;
+      padding: 1px 6px;
+    }
+    .ni-port-modal-holder {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      padding: 8px 10px;
+      margin-bottom: 12px;
+      border-radius: 8px;
+      background: rgba(248, 113, 113, 0.1);
+      border: 1px solid rgba(248, 113, 113, 0.4);
+    }
+    .ni-port-modal-holder-name { font-size: 13px; font-weight: 700; color: #fca5a5; }
+    .ni-port-modal-holder-cmd {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 10.5px;
+      color: var(--text-secondary);
+      word-break: break-all;
+    }
+    .ni-port-modal-steps {
+      margin: 0 0 14px;
+      padding-left: 18px;
+      font-size: 12px;
+      line-height: 1.6;
+      color: var(--text-secondary);
+    }
+    .ni-port-modal-footer {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 8px;
+      padding: 12px 16px;
+      border-top: 1px solid var(--border);
+    }
+    /* Refresh sits on the left; Close / Open Settings stay on the right. */
+    .ni-port-modal-refresh { margin-right: auto; display: inline-flex; align-items: center; gap: 6px; }
+    .ni-port-modal-refresh.is-checking svg { animation: ni-port-spin 0.7s linear infinite; }
+    @keyframes ni-port-spin { to { transform: rotate(360deg); } }
+    .ni-hint code,
+    .ni-hint-code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 11px;
+      color: #c4b5fd;
+      background: rgba(139, 92, 246, 0.14);
+      border: 1px solid rgba(139, 92, 246, 0.32);
+      border-radius: 5px;
+      padding: 1px 6px;
+      white-space: nowrap;
+    }
+    .ni-event-row { padding: 2px 0; white-space: nowrap; cursor: pointer; border-radius: 4px; }
+    .ni-event-row:hover { background: rgba(255,255,255,0.04); }
+    .ni-event-row-selected { background: rgba(139,92,246,0.18); }
+    .ni-event-dns { color: #2dd4bf; }
+    .ni-event-tls { color: #a78bfa; }
+    .ni-event-http { color: #60a5fa; }
+    .ni-event-other { color: var(--text-secondary); }
+    .ni-detail-pane {
+      display: none !important;
+    }
+    .ni-format-tabs {
+      display: flex;
+      gap: 4px;
+      padding: 6px 8px;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg-tertiary);
+      flex-wrap: wrap;
+    }
+    .ni-format-tab {
+      border: none;
+      background: transparent;
+      color: var(--text-muted);
+      font-size: 12px;
+      padding: 4px 10px;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    .ni-format-tab.active {
+      background: rgba(139,92,246,0.2);
+      color: var(--text-primary);
+    }
+    .ni-contents-split {
+      flex: 1;
+      min-height: 0;
+      display: grid;
+      grid-template-rows: 1fr 1fr;
+      grid-template-columns: 1fr;
+      overflow: hidden;
+    }
+    .ni-charles-workspace[data-detail-layout="columns"] .ni-contents-split {
+      grid-template-rows: 1fr;
+      grid-template-columns: 1fr 1fr;
+    }
+    .ni-charles-workspace[data-detail-layout="columns"] .ni-contents-pane {
+      border-top: none;
+      border-left: 1px solid var(--border);
+    }
+    .ni-charles-workspace[data-detail-layout="columns"] .ni-contents-pane:first-child {
+      border-left: none;
+    }
+    .ni-contents-pane {
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      border-top: 1px solid var(--border);
+      overflow: hidden;
+    }
+    .ni-contents-pane:first-child { border-top: none; }
+    .ni-contents-scroll,
+    [data-ni-request-body],
+    [data-ni-response-body] {
+      flex: 1;
+      min-height: 0;
+      overflow: auto;
+      overscroll-behavior: contain;
+      scroll-behavior: auto;
+      background: #0a0a10;
+    }
+    .ni-contents-scroll .ni-code-block,
+    [data-ni-request-body] .ni-code-block,
+    [data-ni-response-body] .ni-code-block {
+      min-height: min-content;
+    }
+    .ni-format-tabs-footer {
+      border-top: 1px solid var(--border);
+      border-bottom: none;
+      flex-shrink: 0;
+    }
+    .ni-contents-pane-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px 10px;
+      /* Wrap to a second row instead of overlapping when the pane is narrow (e.g. columns layout
+         with the sidebar open). Children below keep their own intrinsic size; the row reflows. */
+      flex-wrap: wrap;
+      flex-shrink: 0;
+      min-height: 40px;
+      box-sizing: border-box;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg-tertiary);
+      padding: 6px 8px 6px 12px;
+    }
+    .ni-charles-workspace[data-detail-layout="columns"] [data-ni-request-pane] > .ni-contents-pane-head {
+      border-right: 1px solid var(--border);
+    }
+    .ni-contents-label {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text-primary);
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .ni-pane-head-left {
+      display: inline-flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 6px 10px;
+      min-width: 0;
+      /* Take the available row width and let it shrink so the right group can sit beside it until
+         there isn't room, at which point the whole header wraps. */
+      flex: 1 1 auto;
+    }
+    .ni-pane-head-right {
+      display: inline-flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 6px 10px;
+      margin-left: auto;
+      flex-shrink: 0;
+    }
+    .ni-pane-head-right[hidden] {
+      display: none !important;
+    }
+    .ni-pane-head-format {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .ni-pane-tabs {
+      display: flex;
+      gap: 2px;
+      padding: 4px;
+      background: var(--bg-deep);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      flex-shrink: 0;
+    }
+    .ni-pane-tool-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 26px;
+      height: 26px;
+      padding: 0;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--bg-deep);
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: color 0.12s, border-color 0.12s, background 0.12s;
+    }
+    .ni-pane-tool-btn:hover {
+      color: var(--text-primary);
+      border-color: rgba(139, 92, 246, 0.45);
+    }
+    .ni-pane-tool-btn.is-active {
+      color: #c4b5fd;
+      border-color: rgba(139, 92, 246, 0.5);
+      background: rgba(139, 92, 246, 0.12);
+    }
+    .ni-pane-tool-btn.is-copied {
+      color: var(--accent-green);
+      border-color: rgba(34, 197, 94, 0.5);
+      background: rgba(34, 197, 94, 0.12);
+    }
+    .ni-pane-tool-btn .icon { pointer-events: none; }
+    /* Split "copy" control: a primary copy-body button + a caret that opens a menu for the
+       transaction exports (cURL / HAR). Replaces the separate cURL/HAR buttons so the toolbar
+       stays compact and identical whether the sidebar is open or closed. */
+    .ni-copy-menu {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+    }
+    .ni-copy-menu.has-caret .ni-copy-main {
+      border-top-right-radius: 0;
+      border-bottom-right-radius: 0;
+    }
+    .ni-copy-caret {
+      width: 18px;
+      margin-left: -1px;
+      border-top-left-radius: 0;
+      border-bottom-left-radius: 0;
+    }
+    .ni-copy-caret[hidden] {
+      display: none !important;
+    }
+    .ni-copy-dropdown {
+      position: absolute;
+      top: calc(100% + 5px);
+      left: 0;
+      z-index: 40;
+      min-width: 156px;
+      padding: 4px;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      box-shadow: 0 14px 34px rgba(0, 0, 0, 0.5);
+    }
+    .ni-copy-dropdown[hidden] {
+      display: none !important;
+    }
+    .ni-copy-dropdown-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+      padding: 7px 10px;
+      border: none;
+      border-radius: 6px;
+      background: transparent;
+      color: var(--text-secondary);
+      font-size: 12px;
+      text-align: left;
+      white-space: nowrap;
+      cursor: pointer;
+      transition: background 0.12s, color 0.12s;
+    }
+    .ni-copy-dropdown-item:hover {
+      background: var(--bg-deep);
+      color: var(--text-primary);
+    }
+    .ni-copy-dropdown-item .ni-copy-item-icon {
+      color: var(--text-muted);
+      display: inline-flex;
+    }
+    .ni-copy-dropdown-item:hover .ni-copy-item-icon {
+      color: var(--text-primary);
+    }
+    .ni-pane-tab {
+      border: none;
+      background: transparent;
+      color: var(--text-muted);
+      font-size: 11px;
+      padding: 4px 10px;
+      border-radius: 4px;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .ni-pane-tab.active {
+      background: rgba(139,92,246,0.22);
+      color: var(--text-primary);
+    }
+    .ni-body-format-label {
+      font-size: 11px;
+      color: var(--text-muted);
+      white-space: nowrap;
+    }
+    .ni-body-format-select {
+      appearance: none;
+      background: var(--bg-deep);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text-primary);
+      font-size: 12px;
+      padding: 5px 28px 5px 10px;
+      cursor: pointer;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2394a3b8' d='M3 5l3 3 3-3'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 8px center;
+      width: auto;
+      min-width: 0;
+    }
+    .ni-body-format-select:focus {
+      outline: none;
+      border-color: rgba(139, 92, 246, 0.55);
+    }
+    .ni-overview-scroll {
+      flex: 1;
+      min-height: 0;
+      overflow: auto;
+    }
+    .ni-overview-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+    .ni-overview-table th {
+      text-align: left;
+      color: var(--text-muted);
+      padding: 6px 10px;
+      width: 140px;
+      vertical-align: top;
+      font-weight: 500;
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+      white-space: nowrap;
+    }
+    .ni-overview-table td {
+      padding: 6px 10px;
+      color: var(--text-primary);
+      word-break: break-all;
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+    }
+    .ni-overview-table tr:nth-child(even):not(.ni-overview-section) {
+      background: rgba(255,255,255,0.02);
+    }
+    .ni-overview-section th {
+      width: auto;
+      color: var(--text-primary);
+      font-weight: 600;
+      background: rgba(0,0,0,0.2);
+      padding: 8px 10px;
+      border-top: 1px solid var(--border);
+    }
+    .ni-overview-url-link {
+      display: inline;
+      margin: 0;
+      padding: 0;
+      border: none;
+      background: none;
+      color: #93c5fd;
+      font: inherit;
+      text-align: left;
+      cursor: pointer;
+      word-break: break-all;
+      text-decoration: underline;
+      text-decoration-color: rgba(147, 197, 253, 0.35);
+    }
+    .ni-overview-url-link:hover {
+      color: #bfdbfe;
+      text-decoration-color: rgba(191, 219, 254, 0.6);
+    }
+    .ni-overview-url-link:focus-visible {
+      outline: 2px solid rgba(139, 92, 246, 0.55);
+      outline-offset: 2px;
+      border-radius: 2px;
+    }
+    .ni-pane-empty {
+      padding: 16px;
+      color: var(--text-muted);
+      font-size: 12px;
+    }
+    .ni-cap-notice {
+      position: sticky;
+      top: 0;
+      z-index: 1;
+      padding: 6px 10px;
+      font-size: 11px;
+      color: var(--text-secondary);
+      background: rgba(234, 179, 8, 0.12);
+      border-bottom: 1px solid rgba(234, 179, 8, 0.3);
+    }
+    .ni-body-large-note {
+      padding: 6px 12px;
+      font-size: 11px;
+      color: #facc15;
+      background: rgba(234, 179, 8, 0.1);
+      border-bottom: 1px solid rgba(234, 179, 8, 0.25);
+    }
+    .ni-format-tabs-inline {
+      display: none;
+    }
+    .ni-code-block {
+      margin: 0;
+      padding: 10px 12px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 12px;
+      line-height: 1.45;
+      color: #e2e8f0;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .ni-contents-scroll.ni-body-nowrap .ni-code-block {
+      white-space: pre;
+      word-break: normal;
+      /* Grow the <pre> to its widest line so the scroll container detects horizontal
+         overflow and shows a horizontal scrollbar; min-width keeps short bodies full-width. */
+      width: max-content;
+      min-width: 100%;
+    }
+    /* content-visibility:auto skips off-screen chunks from layout, which reports them as
+       zero-width and prevents the <pre> from sizing to its widest line. In nowrap mode we
+       need every chunk laid out so horizontal width (and the scrollbar) is correct. */
+    .ni-contents-scroll.ni-body-nowrap .ni-code-chunk {
+      content-visibility: visible;
+      width: max-content;
+      min-width: 100%;
+    }
+    /* Large bodies are split into line-chunks (see codeBlockHtml). Each chunk is a
+       block-level span so the browser can skip painting off-screen chunks — this is
+       what keeps scrolling a huge JSON/XML body smooth instead of flashing blank
+       while raster catches up. white-space/word-break inherit from .ni-code-block,
+       so wrap/nowrap mode still applies. */
+    .ni-code-chunk {
+      display: block;
+      content-visibility: auto;
+    }
+    .ni-media-wrap {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+      padding: 16px;
+      min-height: 0;
+    }
+    .ni-media-el {
+      max-width: 100%;
+      max-height: 70vh;
+      height: auto;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      /* Checkerboard so transparent PNGs are legible on the dark pane. */
+      background-color: #1a1a22;
+      background-image:
+        linear-gradient(45deg, #2a2a35 25%, transparent 25%),
+        linear-gradient(-45deg, #2a2a35 25%, transparent 25%),
+        linear-gradient(45deg, transparent 75%, #2a2a35 75%),
+        linear-gradient(-45deg, transparent 75%, #2a2a35 75%);
+      background-size: 16px 16px;
+      background-position: 0 0, 0 8px, 8px -8px, -8px 0;
+    }
+    .ni-media-audio {
+      width: 100%;
+      max-width: 420px;
+    }
+    .ni-media-caption {
+      font-size: 11px;
+      color: var(--text-muted);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+    .ni-json-key { color: #7dd3fc; }
+    .ni-json-string { color: #fbbf24; }
+    .ni-json-num { color: #a78bfa; }
+    .ni-json-lit { color: #f472b6; }
+    .ni-code-xml { color: #fdba74; }
+
     /* Action Scripts – single card, tabs in header */
     .action-scripts-container { display: flex; flex-direction: column; flex: 1; min-height: 0; overflow: hidden; padding: 0; }
     .action-scripts-card { flex: 1; display: flex; flex-direction: column; min-height: 0; }
@@ -8252,10 +9819,9 @@
     .apps-tab-layout > .card,
     .apps-tab-layout-col-left .card,
     .devapp-layout .card,
-    .action-scripts-container .card {
-      margin-bottom: 0;
-    }
-    .telnet-console-container .card {
+    .action-scripts-container .card,
+    .telnet-console-container .card,
+    .network-inspector-container .card {
       margin-bottom: 0;
     }
     
@@ -9200,6 +10766,10 @@
       color: var(--text-secondary);
       line-height: 1.8;
     }
+    /* Network Inspector help: clear separation between its subsections (Getting started, Toolbar,
+       Traffic Rules, …) so a heading never hugs the previous list. */
+    #help-section-network-inspector ul { margin-bottom: 4px; }
+    #help-section-network-inspector ul + p { margin-top: 16px; }
 
     .help-section table.help-shortcuts {
       border-collapse: collapse;
@@ -10274,6 +11844,12 @@
     </div>
   </header>
   <svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+    <symbol id="icon-wrap-text" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <line x1="4" y1="6" x2="20" y2="6"/>
+      <path d="M4 12h13a3.5 3.5 0 0 1 0 7h-6"/>
+      <polyline points="14 16 11 19 14 22"/>
+      <line x1="4" y1="18" x2="9" y2="18"/>
+    </symbol>
     <symbol id="icon-scan" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>
     </symbol>
@@ -10375,6 +11951,12 @@
     </symbol>
     <symbol id="icon-stop" viewBox="0 0 24 24" fill="currentColor" stroke="none">
       <rect x="4" y="4" width="16" height="16" rx="2"/>
+    </symbol>
+    <symbol id="icon-layout-rows" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="3" y="4" width="18" height="7" rx="1"/><rect x="3" y="13" width="18" height="7" rx="1"/>
+    </symbol>
+    <symbol id="icon-layout-columns" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="3" y="4" width="8" height="16" rx="1"/><rect x="13" y="4" width="8" height="16" rx="1"/>
     </symbol>
     <symbol id="icon-grip-vertical" viewBox="0 0 24 24" fill="currentColor" stroke="none">
       <circle cx="9" cy="4" r="1.5"/><circle cx="15" cy="4" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="9" cy="20" r="1.5"/><circle cx="15" cy="20" r="1.5"/>
@@ -11105,6 +12687,7 @@
             <button class="inner-tab" data-inner-tab="telnet"><span class="icon icon-sm"><svg><use href="#icon-terminal"/></svg></span> Console</button>
             <button class="inner-tab" data-inner-tab="inspector"><span class="icon icon-sm"><svg><use href="#icon-plug"/></svg></span> App Connector</button>
             <button class="inner-tab" data-inner-tab="actionscripts"><span class="icon icon-sm"><svg><use href="#icon-code"/></svg></span> Action Scripts</button>
+            <button class="inner-tab" data-inner-tab="network" style="display: none;"><span class="icon icon-sm"><svg><use href="#icon-wifi"/></svg></span> Network</button>
           </div>
         </div>
         <div class="device-panel-right">
@@ -12087,6 +13670,167 @@
           </div>
         </div>
       </div>
+
+      <!-- Network Inspector Tab (shown when device is on hotspot) -->
+      <div class="inner-tab-content" data-inner-content="network">
+        <div class="network-inspector-container">
+          <div class="card network-inspector-card">
+            <div class="card-header ni-card-header">
+              <div class="ni-header-start">
+                <span class="card-icon"><span class="icon icon-sm"><svg><use href="#icon-wifi"/></svg></span></span>
+                <span class="card-title">Network Inspector</span>
+                <div class="ni-header-tools">
+                  <button type="button" class="btn btn-secondary btn-sm ni-icon-btn" data-ni-save-pcap title="Save packet capture (.pcap)">
+                    <span class="icon icon-sm"><svg><use href="#icon-download"/></svg></span>
+                  </button>
+                  <button type="button" class="btn btn-secondary btn-sm ni-icon-btn" data-ni-clear title="Clear session list">
+                    <span class="icon icon-sm"><svg><use href="#icon-trash"/></svg></span>
+                  </button>
+                </div>
+              </div>
+              <div class="ni-header-center">
+                <button type="button" class="ni-setup-badge" data-ni-setup-badge hidden title="Hotspot capture setup needed — click for instructions">
+                  <span class="ni-setup-badge-dot" aria-hidden="true">!</span>
+                  <span data-ni-setup-badge-label>Capture setup</span>
+                </button>
+                <button type="button" class="ni-setup-badge is-error" data-ni-port-badge hidden title="Proxy Port unavailable — click for details">
+                  <span class="ni-setup-badge-dot" aria-hidden="true">!</span>
+                  <span>Proxy Port unavailable</span>
+                </button>
+                <div class="ni-filter-wrap">
+                  <input type="text" class="ni-filter-input" data-ni-filter placeholder="Filter sessions…" title="Filter sessions — click the info icon for supported syntax." />
+                  <button type="button" class="ni-filter-clear" data-ni-filter-clear title="Clear filter" aria-label="Clear filter" hidden>
+                    <span class="icon icon-xs"><svg><use href="#icon-x"/></svg></span>
+                  </button>
+                  <button type="button" class="ni-filter-help" data-ni-filter-help title="Filtering help &amp; supported syntax" aria-label="Filtering help">
+                    <span class="icon icon-xs"><svg><use href="#icon-info"/></svg></span>
+                  </button>
+                </div>
+                <span class="ni-session-count" data-ni-session-count title="Captured sessions">0</span>
+              </div>
+              <div class="card-header-actions ni-header-controls ni-btn-group" role="group" aria-label="Network Inspector controls">
+                <button type="button" class="btn btn-secondary btn-sm ni-icon-btn ni-capture-toggle is-capturing" data-ni-capture-toggle title="Stop capturing" aria-label="Stop capturing">
+                  <span class="icon icon-sm"><svg><use href="#icon-pause"/></svg></span>
+                </button>
+                <button type="button" class="btn btn-secondary btn-sm ni-icon-btn" data-ni-layout-toggle title="Stack request and response vertically" aria-label="Toggle detail layout" aria-pressed="true">
+                  <span class="icon icon-sm"><svg><use href="#icon-layout-rows"/></svg></span>
+                </button>
+                <button type="button" class="btn btn-secondary btn-sm ni-icon-btn" data-ni-configure title="Configure block &amp; throttle rules" aria-label="Configure traffic rules">
+                  <span class="icon icon-sm"><svg><use href="#icon-settings"/></svg></span>
+                </button>
+              </div>
+            </div>
+            <div class="card-body">
+              <div class="ni-charles-workspace" data-ni-workspace data-detail-layout="columns">
+                <aside class="ni-sidebar" data-ni-session-pane data-view="sequence">
+                  <div class="ni-sidebar-head">
+                    <div class="ni-sidebar-options">
+                      <label class="ni-sidebar-option" title="Group sessions by hostname">
+                        <span class="ni-sidebar-option-label">Group by Host</span>
+                        <input type="checkbox" data-ni-group-by-host />
+                      </label>
+                      <label class="ni-sidebar-option" data-ni-proxied-filter title="Show only requests proxied through RDS (full headers + body), hiding hotspot-capture SNI/DNS metadata">
+                        <span class="ni-sidebar-option-label">Proxied</span>
+                        <input type="checkbox" data-ni-decrypted-only checked />
+                      </label>
+                    </div>
+                  </div>
+                  <div class="ni-sidebar-list" data-ni-session-list>
+                    <div class="ni-session-empty">Waiting for traffic…</div>
+                  </div>
+                  <div class="ni-list-fabs" data-ni-list-fabs>
+                    <button type="button" class="ni-fab ni-fab-error" data-ni-jump-error hidden title="Jump to latest error (4xx / 5xx)" aria-label="Jump to latest error">
+                      <span class="icon icon-sm"><svg><use href="#icon-warning"/></svg></span>
+                    </button>
+                    <button type="button" class="ni-fab ni-fab-bottom" data-ni-scroll-bottom hidden title="Scroll to latest sessions" aria-label="Scroll to latest sessions">
+                      <span class="icon icon-sm"><svg><use href="#icon-chevron-down"/></svg></span>
+                    </button>
+                  </div>
+                </aside>
+                <div class="ni-inspector-pane is-empty" data-ni-detail>
+                  <div class="ni-inspector-empty">Select a session to inspect request and response.</div>
+                  <div class="ni-contents-split">
+                    <div class="ni-contents-pane" data-ni-request-pane>
+                      <div class="ni-contents-pane-head">
+                        <div class="ni-pane-head-left">
+                          <div class="ni-contents-label">Request</div>
+                          <div class="ni-pane-tabs" data-ni-pane-tabs="request">
+                            <button type="button" class="ni-pane-tab active" data-ni-req-tab="overview">Overview</button>
+                            <button type="button" class="ni-pane-tab" data-ni-req-tab="body">Body</button>
+                          </div>
+                          <div class="ni-copy-menu" data-ni-copy-menu>
+                            <button type="button" class="ni-pane-tool-btn ni-copy-main" data-ni-copy="request" title="Copy request body" aria-label="Copy request body">
+                              <span class="icon icon-xs"><svg><use href="#icon-copy"/></svg></span>
+                            </button>
+                            <button type="button" class="ni-pane-tool-btn ni-copy-caret" data-ni-copy-menu-toggle title="More copy options" aria-haspopup="true" aria-expanded="false" aria-label="More copy options" hidden>
+                              <span class="icon icon-xs"><svg><use href="#icon-chevron-down"/></svg></span>
+                            </button>
+                            <div class="ni-copy-dropdown" data-ni-copy-dropdown role="menu" hidden>
+                              <button type="button" class="ni-copy-dropdown-item" data-ni-copy-item="body" role="menuitem">
+                                <span class="ni-copy-item-icon icon icon-xs"><svg><use href="#icon-copy"/></svg></span>Copy body
+                              </button>
+                              <button type="button" class="ni-copy-dropdown-item" data-ni-copy-item="curl" role="menuitem">
+                                <span class="ni-copy-item-icon icon icon-xs"><svg><use href="#icon-terminal"/></svg></span>Copy as cURL
+                              </button>
+                              <button type="button" class="ni-copy-dropdown-item" data-ni-copy-item="har" role="menuitem">
+                                <span class="ni-copy-item-icon icon icon-xs"><svg><use href="#icon-download"/></svg></span>Copy as HAR
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                        <div class="ni-pane-head-right" data-ni-req-format-wrap hidden>
+                          <button type="button" class="ni-pane-tool-btn is-active" data-ni-wrap-toggle="request" title="Disable word wrap" aria-pressed="true" aria-label="Toggle word wrap">
+                            <span class="icon icon-xs"><svg><use href="#icon-wrap-text"/></svg></span>
+                          </button>
+                          <div class="ni-pane-head-format">
+                            <label class="ni-body-format-label">Format</label>
+                            <select class="ni-body-format-select" data-ni-body-format="request">
+                              <option value="auto" selected>Auto</option>
+                              <option value="json">JSON</option>
+                              <option value="xml">XML</option>
+                              <option value="raw">Raw</option>
+                            </select>
+                          </div>
+                        </div>
+                      </div>
+                      <div class="ni-contents-scroll" data-ni-request-body tabindex="0"></div>
+                    </div>
+                    <div class="ni-contents-pane" data-ni-response-pane>
+                      <div class="ni-contents-pane-head">
+                        <div class="ni-pane-head-left">
+                          <div class="ni-contents-label">Response</div>
+                          <div class="ni-pane-tabs" data-ni-pane-tabs="response">
+                            <button type="button" class="ni-pane-tab active" data-ni-res-tab="headers">Headers</button>
+                            <button type="button" class="ni-pane-tab" data-ni-res-tab="body">Body</button>
+                          </div>
+                          <button type="button" class="ni-pane-tool-btn" data-ni-copy="response" title="Copy response body" aria-label="Copy response body">
+                            <span class="icon icon-xs"><svg><use href="#icon-copy"/></svg></span>
+                          </button>
+                        </div>
+                        <div class="ni-pane-head-right" data-ni-res-format-wrap hidden>
+                          <button type="button" class="ni-pane-tool-btn is-active" data-ni-wrap-toggle="response" title="Disable word wrap" aria-pressed="true" aria-label="Toggle word wrap">
+                            <span class="icon icon-xs"><svg><use href="#icon-wrap-text"/></svg></span>
+                          </button>
+                          <div class="ni-pane-head-format">
+                            <label class="ni-body-format-label">Format</label>
+                            <select class="ni-body-format-select" data-ni-body-format="response">
+                              <option value="auto" selected>Auto</option>
+                              <option value="json">JSON</option>
+                              <option value="xml">XML</option>
+                              <option value="raw">Raw</option>
+                            </select>
+                          </div>
+                        </div>
+                      </div>
+                      <div class="ni-contents-scroll" data-ni-response-body tabindex="0"></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
       </div>
       
     </div>
@@ -12131,6 +13875,8 @@
       </li>
       <li class="titlebar-hamburger-menu-sep" role="separator" aria-hidden="true"></li>
       <li role="none"><button type="button" class="titlebar-hamburger-menu-item" role="menuitem" data-menu-action="about"><span class="titlebar-hamburger-menu-icon icon icon-sm" aria-hidden="true"><svg><use href="#icon-info"/></svg></span>About Roku Dev Studio</button></li>
+      <li class="titlebar-hamburger-menu-sep" role="separator" aria-hidden="true"></li>
+      <li role="none"><button type="button" class="titlebar-hamburger-menu-item" role="menuitem" data-menu-action="quit"><span class="titlebar-hamburger-menu-icon icon icon-sm" aria-hidden="true"><svg><use href="#icon-x"/></svg></span>Quit Roku Dev Studio</button></li>
     </ul>
   </nav>
 

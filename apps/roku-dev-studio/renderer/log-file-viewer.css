@@ -865,6 +865,13 @@ body {
 
 ::highlight(telnet-find-current) {
   background-color: rgba(255, 213, 0, 0.7);
+  /*
+   * Force dark text on the active match. The strong yellow fill is opaque enough
+   * that light line colours (white text, cyan `.telnet-log-url` spans, structured
+   * pill text) wash out against it and become unreadable. A near-black colour
+   * keeps the match legible regardless of the underlying token colour.
+   */
+  color: #1a1a1a;
 }
 
 /*

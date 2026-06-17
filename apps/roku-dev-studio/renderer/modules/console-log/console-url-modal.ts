@@ -205,12 +205,17 @@ const urlModal = createSingletonConsoleModal({
  * Preview URL in a modal: full URL in a highlighted block; query params in one or more tables
  * (multiple tables for FreeWheel-style queries: major breaks at `;ptgt=` / `;slid=`, else `;` groups.)
  */
-export function openConsoleUrlViewer(opener: HTMLElement | null, url: string): void {
+export function openConsoleUrlViewer(
+  opener: HTMLElement | null,
+  url: string,
+  options?: { titlePrefix?: string }
+): void {
   urlModal.open(opener, (overlay) => {
     const title = overlay.querySelector('#telnetUrlViewerTitle');
     overlay.dataset.currentUrl = url.trim();
     if (title) {
-      title.textContent = consoleViewerModalTitle('URL');
+      const prefix = options?.titlePrefix?.trim();
+      title.textContent = prefix ? `${prefix}: URL` : consoleViewerModalTitle('URL');
     }
     populateUrlModalBody(overlay, url);
   });

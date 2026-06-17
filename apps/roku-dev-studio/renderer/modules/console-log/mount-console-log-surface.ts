@@ -65,6 +65,17 @@ export type MountConsoleLogSurfaceOpts = {
    *  panel uses this to preserve a "Connect to Roku…" placeholder element
    *  that's removed on the first batch. */
   preservePlaceholder?: boolean;
+  /**
+   * Override for the find bar's "scroll a match into view" path. Defaults to
+   * `view.scrollToIndex(idx, { align: 'center' })`.
+   *
+   * The live Console passes its own implementation so a find navigation also
+   * *unpins* auto-scroll: otherwise the stick-to-bottom tail-follow keeps
+   * yanking the view back to the newest line while the find bar pulls it to
+   * the match — two scroll controllers fighting, visible as flicker. The
+   * static Log Viewer has no tail-follow, so it uses the default.
+   */
+  scrollLineIntoView?: (index: number) => void;
 };
 
 export type ConsoleLogSurfaceHandle = {
@@ -154,7 +165,10 @@ export function mountConsoleLogSurface(opts: MountConsoleLogSurfaceOpts): Consol
       // Find's "scroll into view on next/prev" must use the virtualizer's
       // scroll-to-index path (it mounts the row first, then scrolls) instead
       // of the DOM `scrollIntoView` which assumes the row is already in DOM.
-      scrollLineIntoView: (idx) => view.scrollToIndex(idx, { align: 'center' })
+      // Consumers can override (live Console unpins auto-scroll here so the
+      // tail-follow doesn't fight the find navigation — see opts doc).
+      scrollLineIntoView:
+        opts.scrollLineIntoView ?? ((idx) => view.scrollToIndex(idx, { align: 'center' }))
     });
   }
 

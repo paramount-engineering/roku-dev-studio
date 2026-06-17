@@ -594,6 +594,15 @@ app.whenReady().then(() => {
   registerFiddleIpc(ipcMain, () => (mainWindow && !mainWindow.isDestroyed() ? mainWindow.webContents : null));
   registerBsFiddleIpc(ipcMain);
 
+  // Main renderer (e.g. the Network Inspector port-conflict modal) asks to open Settings, optionally
+  // navigated straight to a section.
+  ipcMain.on(IPC.SettingsOpen, (event: import('electron').IpcMainEvent, payload: { section?: unknown }) => {
+    const parent = BrowserWindow.fromWebContents(event.sender) || mainWindow;
+    if (!parent) return;
+    const section = typeof payload?.section === 'string' ? payload.section : undefined;
+    showSettingsDialog(parent, section);
+  });
+
   // Renderer replies to the "Open Fiddle" menu click with the device snapshot.
   ipcMain.on(IPC.FiddleOpen, (event: import('electron').IpcMainEvent, payload: { devices?: unknown; initialDeviceId?: string | null }) => {
     const parent = BrowserWindow.fromWebContents(event.sender) || mainWindow;

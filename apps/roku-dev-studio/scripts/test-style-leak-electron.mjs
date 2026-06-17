@@ -45,6 +45,9 @@ app.whenReady().then(async () => {
 
   console.log(JSON.stringify(result, null, 2));
   win.destroy();
+  // Fail the process so CI actually gates on a regression instead of just
+  // logging the leak count and passing.
+  process.exitCode = result.cssLeakCount > 0 ? 1 : 0;
   app.quit();
 });
 

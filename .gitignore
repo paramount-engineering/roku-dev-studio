@@ -48,3 +48,4 @@ npm-debug.log*
 # Per-developer Claude Code session worktrees (project-level .claude/settings.local.json is tracked)
 .claude/worktrees/
 .discussion-docs/
+.cursor/

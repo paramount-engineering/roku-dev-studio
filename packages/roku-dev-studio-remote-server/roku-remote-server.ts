@@ -127,6 +127,126 @@ function storeRelayQueryCache(ip: string, endpoint: string, result: unknown): vo
 // Configuration
 const PORT = parseInt(process.argv[2]) || 4951;
 
+// ============================================
+// Network Inspector (capture + MITM) — engine integration
+// ============================================
+// Raw packet capture (BPF on macOS / AF_PACKET on Linux) requires root on a headless server —
+// there's no GUI to show an elevation prompt the way the desktop app does. So the feature is only
+// advertised as supported when the server process is running as root.
+function isRunningAsRoot(): boolean {
+  try {
+    return typeof process.getuid === 'function' && process.getuid() === 0;
+  } catch {
+    return false;
+  }
+}
+
+// The /network/* endpoints below are wired to the engine, so the feature is available (gated on
+// root via `/capabilities`).
+const NETWORK_INSPECTOR_ENDPOINTS_AVAILABLE = true;
+
+// Default MITM proxy port the engine binds for Roku devices on the server's shared network.
+const NETWORK_INSPECTOR_MITM_PORT = 8888;
+
+// The engine is transport-agnostic: it pushes events/status into a NetworkInspectorListener. Here
+// the listener fans out to Server-Sent-Events subscribers (the desktop app's remote view) and
+// keeps the latest status for new subscribers.
+const networkInspectorPkg =
+  require('roku-dev-studio-network-inspector') as typeof import('roku-dev-studio-network-inspector');
+const { NetworkInspectorService, initCaStore } = networkInspectorPkg;
+
+const networkSseClients = new Set<any>();
+let latestNetworkStatus: unknown = null;
+
+function networkBroadcast(type: string, payload: unknown): void {
+  const line = `data: ${JSON.stringify({ type, payload })}\n\n`;
+  for (const client of networkSseClients) {
+    try {
+      client.write(line);
+    } catch {
+      /* drop dead subscribers on next close event */
+    }
+  }
+}
+
+const networkListener: import('roku-dev-studio-network-inspector').NetworkInspectorListener = {
+  onEvents: (batch) => networkBroadcast('events', batch),
+  onStatus: (status) => {
+    latestNetworkStatus = status;
+    networkBroadcast('status', status);
+  },
+  onDeviceJoined: (payload) => networkBroadcast('device-joined', payload),
+  onDeviceLeft: (payload) => networkBroadcast('device-left', payload),
+  onDeviceDiscovered: (device) => networkBroadcast('device-discovered', device),
+  onClientsCleared: () => networkBroadcast('clients-cleared', {})
+};
+
+const networkInspector = new NetworkInspectorService(networkListener);
+
+// Persist enable/port config on the server so it survives restarts (the systemd/launchd service
+// re-reads it on boot), mirroring how the desktop app persists Network Inspector settings.
+const NETWORK_DATA_DIR = path.join(os.homedir(), '.roku-dev-studio-remote');
+const NETWORK_CONFIG_FILE = path.join(NETWORK_DATA_DIR, 'network-inspector.json');
+
+type NetworkRemoteConfig = {
+  enabled?: boolean;
+  mitmEnabled?: boolean;
+  mitmPort?: number;
+  maxRawPacketsPerDevice?: number;
+};
+
+function loadNetworkConfig(): NetworkRemoteConfig {
+  try {
+    if (fs.existsSync(NETWORK_CONFIG_FILE)) {
+      const raw = JSON.parse(fs.readFileSync(NETWORK_CONFIG_FILE, 'utf8'));
+      if (raw && typeof raw === 'object') return raw as NetworkRemoteConfig;
+    }
+  } catch {
+    /* fall through to defaults */
+  }
+  return {};
+}
+
+function saveNetworkConfig(cfg: NetworkRemoteConfig): void {
+  try {
+    fs.mkdirSync(NETWORK_DATA_DIR, { recursive: true });
+    fs.writeFileSync(NETWORK_CONFIG_FILE, JSON.stringify(cfg, null, 2), 'utf8');
+  } catch (e) {
+    log(`[Network Inspector] Could not persist config: ${errMsg(e)}`);
+  }
+}
+
+function sanitizeNetworkConfig(input: Record<string, unknown>): NetworkRemoteConfig {
+  const out: NetworkRemoteConfig = {};
+  if (typeof input.enabled === 'boolean') out.enabled = input.enabled;
+  if (typeof input.mitmEnabled === 'boolean') out.mitmEnabled = input.mitmEnabled;
+  if (typeof input.mitmPort === 'number' && input.mitmPort > 0 && input.mitmPort < 65536) {
+    out.mitmPort = Math.floor(input.mitmPort);
+  }
+  if (typeof input.maxRawPacketsPerDevice === 'number') {
+    out.maxRawPacketsPerDevice = input.maxRawPacketsPerDevice;
+  }
+  return out;
+}
+
+function applyNetworkConfig(cfg: NetworkRemoteConfig): void {
+  if (typeof cfg.mitmPort === 'number') networkInspector.setMitmPort(cfg.mitmPort);
+  if (typeof cfg.maxRawPacketsPerDevice === 'number') {
+    networkInspector.setMaxRawPacketsPerDevice(cfg.maxRawPacketsPerDevice);
+  }
+  // MITM defaults on (matches the desktop app); capture only runs when explicitly enabled.
+  networkInspector.setMitmEnabled(cfg.mitmEnabled !== false);
+  networkInspector.setEnabled(cfg.enabled === true);
+}
+
+try {
+  initCaStore(NETWORK_DATA_DIR);
+  networkInspector.setUserDataPath(NETWORK_DATA_DIR);
+  applyNetworkConfig(loadNetworkConfig());
+} catch (e) {
+  log(`[Network Inspector] Init failed: ${errMsg(e)}`);
+}
+
 // Store active Telnet sessions: sessionId -> { socket, wsClients, deviceIP, buffer, lastActivity }
 const telnetSessions = new Map();
 
@@ -540,7 +660,7 @@ function telnetStatus(sessionId) {
  *   in-memory gap buffer on attach (live-only tail). The buffer is left intact
  *   for a later Connect with replay or until the user clears it explicitly.
  */
-function handleTelnetWebSocket(req, socket, head, sessionId, opts = {}) {
+function handleTelnetWebSocket(req, socket, head, sessionId, opts: { skipBuffer?: boolean } = {}) {
   const session = telnetSessions.get(sessionId);
   
   if (!session) {
@@ -986,6 +1106,17 @@ async function handleRequest(req, res) {
           // Advanced features
           appConnector: true,     // RALE App Connector / Inspector
           deepLink: true,         // Deep linking support
+
+          // Network Inspector (capture + MITM). Only "supported" when the server runs as root
+          // (headless capture needs raw-socket privilege) AND the engine endpoints are wired in.
+          // The app uses this to enable/disable the Remote entry in the Network Inspector place
+          // dropdown and to show the "run the server as root" remediation when it can't.
+          networkInspector: {
+            supported: isRunningAsRoot() && NETWORK_INSPECTOR_ENDPOINTS_AVAILABLE,
+            requiresRoot: true,
+            isRoot: isRunningAsRoot(),
+            mitmPort: NETWORK_INSPECTOR_MITM_PORT
+          },
         },
         serverInfo: {
           hostname: os.hostname(),
@@ -993,6 +1124,90 @@ async function handleRequest(req, res) {
           nodeVersion: process.version
         }
       });
+    }
+
+    // ============================================
+    // Network Inspector Endpoints
+    // ============================================
+    if (pathname === '/network/status' && method === 'GET') {
+      return sendJson(res, { success: true, status: networkInspector.getStatus() });
+    }
+
+    if (pathname === '/network/config' && method === 'GET') {
+      return sendJson(res, {
+        success: true,
+        config: loadNetworkConfig(),
+        status: networkInspector.getStatus()
+      });
+    }
+
+    if (pathname === '/network/config' && (method === 'PUT' || method === 'POST')) {
+      const body = await readBody(req);
+      const params = (parseBody(body as string, req.headers['content-type']) || {}) as Record<string, unknown>;
+      const merged = { ...loadNetworkConfig(), ...sanitizeNetworkConfig(params) };
+      saveNetworkConfig(merged);
+      applyNetworkConfig(merged);
+      return sendJson(res, { success: true, config: merged, status: networkInspector.getStatus() });
+    }
+
+    if (pathname === '/network/events' && method === 'GET') {
+      const deviceIp = parsedUrl.searchParams.get('deviceIp') || '';
+      const limitRaw = parseInt(parsedUrl.searchParams.get('limit') || '500', 10);
+      const limit = Number.isFinite(limitRaw) && limitRaw > 0 ? limitRaw : 500;
+      if (!deviceIp) return sendError(res, 'deviceIp query param required', 400);
+      return sendJson(res, { success: true, events: networkInspector.getEventsForDevice(deviceIp, limit) });
+    }
+
+    const networkEventMatch = pathname.match(/^\/network\/event\/(.+)$/);
+    if (networkEventMatch && method === 'GET') {
+      const event = await networkInspector.getEventDetail(decodeURIComponent(networkEventMatch[1]));
+      return sendJson(res, { success: true, event });
+    }
+
+    if (pathname === '/network/clear' && method === 'POST') {
+      const body = await readBody(req);
+      const params = (parseBody(body as string, req.headers['content-type']) || {}) as { deviceIps?: unknown };
+      const deviceIps = Array.isArray(params.deviceIps)
+        ? params.deviceIps.filter((ip: unknown): ip is string => typeof ip === 'string')
+        : undefined;
+      const result = networkInspector.clearEventsForDevices(deviceIps);
+      return sendJson(res, { success: true, ...result });
+    }
+
+    // Best-effort capture-access grant. On a root server capture already works, so this is mostly a
+    // no-op; on a non-root Linux server it returns structured remediation the app surfaces.
+    if (pathname === '/network/setup-capture' && method === 'POST') {
+      const result = await networkInspector.installCaptureAccess();
+      return sendJson(res, result);
+    }
+
+    // Live event/status stream (Server-Sent Events). The app subscribes here for the remote
+    // Network Inspector view; only lightweight summaries cross the wire (bodies are fetched on
+    // demand via /network/event/:id).
+    if (pathname === '/network/stream' && method === 'GET') {
+      const sseHeaders: Record<string, string> = {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        Connection: 'keep-alive',
+        'X-Accel-Buffering': 'no'
+      };
+      if (res._corsOrigin) sseHeaders['Access-Control-Allow-Origin'] = res._corsOrigin;
+      res.writeHead(200, sseHeaders);
+      const initial = latestNetworkStatus ?? networkInspector.getStatus();
+      res.write(`data: ${JSON.stringify({ type: 'status', payload: initial })}\n\n`);
+      networkSseClients.add(res);
+      const heartbeat = setInterval(() => {
+        try {
+          res.write(': ping\n\n');
+        } catch {
+          /* ignore */
+        }
+      }, 25000);
+      req.on('close', () => {
+        clearInterval(heartbeat);
+        networkSseClients.delete(res);
+      });
+      return;
     }
 
     // ============================================

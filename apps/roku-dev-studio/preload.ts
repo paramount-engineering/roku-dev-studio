@@ -229,6 +229,22 @@ contextBridge.exposeInMainWorld('roku', {
   remoteCapabilities: (serverUrl: string) => 
     ipcRenderer.invoke(IPC.RemoteCapabilities, { serverUrl }),
 
+  // Remote Network Inspector (proxies the server's /network/* endpoints)
+  remoteNetworkStatus: (serverUrl: string) =>
+    ipcRenderer.invoke(IPC.RemoteNetworkStatus, { serverUrl }),
+  remoteNetworkGetConfig: (serverUrl: string) =>
+    ipcRenderer.invoke(IPC.RemoteNetworkGetConfig, { serverUrl }),
+  remoteNetworkSetConfig: (serverUrl: string, config: Record<string, unknown>) =>
+    ipcRenderer.invoke(IPC.RemoteNetworkSetConfig, { serverUrl, config }),
+  remoteNetworkEvents: (serverUrl: string, deviceIp: string, limit?: number) =>
+    ipcRenderer.invoke(IPC.RemoteNetworkEvents, { serverUrl, deviceIp, limit }),
+  remoteNetworkEventDetail: (serverUrl: string, id: string) =>
+    ipcRenderer.invoke(IPC.RemoteNetworkEventDetail, { serverUrl, id }),
+  remoteNetworkClear: (serverUrl: string, deviceIps?: string[]) =>
+    ipcRenderer.invoke(IPC.RemoteNetworkClear, { serverUrl, deviceIps }),
+  remoteNetworkSetupCapture: (serverUrl: string) =>
+    ipcRenderer.invoke(IPC.RemoteNetworkSetupCapture, { serverUrl }),
+
   // Get device info from remote location
   remoteDeviceInfo: (serverUrl: string, ip: string) => 
     ipcRenderer.invoke(IPC.RemoteDeviceInfo, { serverUrl, ip }),
@@ -475,6 +491,60 @@ contextBridge.exposeInMainWorld('roku', {
     const handler = (_event: IpcRendererEvent, data: unknown) => callback(data);
     ipcRenderer.on(IPC.AppSettingsUpdated, handler);
     return () => ipcRenderer.removeListener(IPC.AppSettingsUpdated, handler);
+  },
+
+  // ============================================
+  // Network Inspector (local hotspot traffic capture)
+  // ============================================
+  networkInspectorGetStatus: () => ipcRenderer.invoke(IPC.NetworkInspectorGetStatus),
+  networkInspectorGetEvents: (deviceIp: string, limit?: number, sinceSeq?: number) =>
+    ipcRenderer.invoke(IPC.NetworkInspectorGetEvents, { deviceIp, limit, sinceSeq }),
+  networkInspectorGetEventDetail: (id: string) =>
+    ipcRenderer.invoke(IPC.NetworkInspectorGetEventDetail, { id }),
+  networkInspectorClearEvents: (deviceIps?: string[]) =>
+    ipcRenderer.invoke(IPC.NetworkInspectorClearEvents, { deviceIps }),
+  networkInspectorSetRecording: (payload: { deviceIps: string[]; recording: boolean }) =>
+    ipcRenderer.invoke(IPC.NetworkInspectorSetRecording, payload),
+  networkInspectorExportPcap: (deviceIps?: string[]) =>
+    ipcRenderer.invoke(IPC.NetworkInspectorExportPcap, { deviceIps }),
+  networkInspectorGetCaInfo: () => ipcRenderer.invoke(IPC.NetworkInspectorGetCaInfo),
+  networkInspectorExportCaPem: () => ipcRenderer.invoke(IPC.NetworkInspectorExportCaPem),
+  networkInspectorExportCaCert: () => ipcRenderer.invoke(IPC.NetworkInspectorExportCaCert),
+  networkInspectorInstallBpfAccess: () => ipcRenderer.invoke(IPC.NetworkInspectorInstallBpfAccess),
+  networkInspectorGetTrafficRules: () => ipcRenderer.invoke(IPC.NetworkInspectorGetTrafficRules),
+  /** Open the Settings window, optionally navigated to a section (e.g. 'network-inspector'). */
+  openSettings: (section?: string) => ipcRenderer.send(IPC.SettingsOpen, { section }),
+  networkInspectorSetDeviceTrafficRules: (deviceIp: string, rules: unknown) =>
+    ipcRenderer.invoke(IPC.NetworkInspectorSetDeviceTrafficRules, { deviceIp, rules }),
+  onNetworkInspectorStatus: (callback: (status: unknown) => void) => {
+    const handler = (_event: IpcRendererEvent, status: unknown) => callback(status);
+    ipcRenderer.on(IPC.NetworkInspectorStatus, handler);
+    return () => ipcRenderer.removeListener(IPC.NetworkInspectorStatus, handler);
+  },
+  onNetworkInspectorCaptureEvents: (callback: (events: unknown) => void) => {
+    const handler = (_event: IpcRendererEvent, events: unknown) => callback(events);
+    ipcRenderer.on(IPC.NetworkInspectorCaptureEvents, handler);
+    return () => ipcRenderer.removeListener(IPC.NetworkInspectorCaptureEvents, handler);
+  },
+  onNetworkInspectorDeviceJoined: (callback: (payload: unknown) => void) => {
+    const handler = (_event: IpcRendererEvent, payload: unknown) => callback(payload);
+    ipcRenderer.on(IPC.NetworkInspectorDeviceJoined, handler);
+    return () => ipcRenderer.removeListener(IPC.NetworkInspectorDeviceJoined, handler);
+  },
+  onNetworkInspectorDeviceLeft: (callback: (payload: unknown) => void) => {
+    const handler = (_event: IpcRendererEvent, payload: unknown) => callback(payload);
+    ipcRenderer.on(IPC.NetworkInspectorDeviceLeft, handler);
+    return () => ipcRenderer.removeListener(IPC.NetworkInspectorDeviceLeft, handler);
+  },
+  onNetworkInspectorDeviceDiscovered: (callback: (payload: unknown) => void) => {
+    const handler = (_event: IpcRendererEvent, payload: unknown) => callback(payload);
+    ipcRenderer.on(IPC.NetworkInspectorDeviceDiscovered, handler);
+    return () => ipcRenderer.removeListener(IPC.NetworkInspectorDeviceDiscovered, handler);
+  },
+  onNetworkInspectorClientsCleared: (callback: () => void) => {
+    const handler = () => callback();
+    ipcRenderer.on(IPC.NetworkInspectorClientsCleared, handler);
+    return () => ipcRenderer.removeListener(IPC.NetworkInspectorClientsCleared, handler);
   },
 
   // ============================================

@@ -104,7 +104,8 @@ const RENDERER_READABLE_KEYS = new Set<string>([
   'keyboardRemoteShortcutsEnabled',
   'autoConnectLastDeviceEnabled',
   'rememberSidebarToggle',
-  'rememberPasswordsInKeychain'
+  'rememberPasswordsInKeychain',
+  'networkInspectorEnabled'
 ]);
 
 function isValidSettingsKey(key: unknown): key is string {

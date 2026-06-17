@@ -3,11 +3,50 @@
  */
 
 import type { BrowserWindow, Event } from 'electron';
+import {
+  DEFAULT_MAX_RAW_PACKETS_PER_DEVICE,
+  MIN_MAX_RAW_PACKETS_PER_DEVICE,
+  MAX_MAX_RAW_PACKETS_PER_DEVICE
+} from '../shared/network-inspector/types';
+import {
+  networkInspectorSetupTitle as sharedNetworkInspectorSetupTitle,
+  networkInspectorSetupGuideBodyHtml,
+  networkInspectorHasCaptureSetupAction,
+  type NiSetupPlatform
+} from '../shared/network-inspector/setup-guide';
+import { desktopPlatform } from 'roku-dev-studio-platform';
 
 const path = require('path');
 const { BrowserWindow: BrowserWindowConstructor, dialog } = require('electron');
 
-function settingsHtml(): string {
+function settingsHostPlatform(): NodeJS.Platform {
+  return process.platform;
+}
+
+function settingsSetupPlatform(): NiSetupPlatform {
+  return desktopPlatform(settingsHostPlatform());
+}
+
+function networkInspectorSetupTitle(): string {
+  return sharedNetworkInspectorSetupTitle(settingsSetupPlatform());
+}
+
+function networkInspectorSetupModalBodyHtml(): string {
+  const platform = settingsSetupPlatform();
+  let html = networkInspectorSetupGuideBodyHtml(platform);
+  // macOS/Linux expose an in-app one-click capture-access grant; append the wired action button.
+  if (networkInspectorHasCaptureSetupAction(platform)) {
+    html += `
+        <div class="settings-section-actions" id="niBpfActions">
+          <button type="button" class="btn btn-secondary btn-sm" id="btnInstallBpfAccess">Setup Packet Capture</button>
+          <span class="settings-row-desc" id="niBpfInstallStatus" aria-live="polite"></span>
+        </div>`;
+  }
+  return html;
+}
+
+function settingsHtml(initialSection?: string): string {
+  const hostPlatform = settingsHostPlatform();
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -40,6 +79,10 @@ function settingsHtml(): string {
       --toggle-thumb: #f4f4f5;
     }
     * { margin: 0; padding: 0; box-sizing: border-box; }
+    /* The hidden attribute must win over component display rules (e.g.
+     * .settings-section-actions sets display:flex, which would otherwise
+     * defeat [hidden] on the packet-capture setup button). */
+    [hidden] { display: none !important; }
     html, body { height: 100%; }
     body {
       font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica Neue', sans-serif;
@@ -278,6 +321,15 @@ function settingsHtml(): string {
       margin-bottom: 10px;
       line-height: 1.5;
     }
+    ol.help-blurb,
+    ul.help-blurb {
+      padding-left: 18px;
+      line-height: 1.6;
+    }
+    ol.help-blurb li,
+    ul.help-blurb li {
+      margin-bottom: 2px;
+    }
     .timing-row {
       display: flex;
       align-items: center;
@@ -401,6 +453,210 @@ function settingsHtml(): string {
       color: var(--text-secondary);
       margin-top: 3px;
       line-height: 1.4;
+    }
+    /* Bold heading used at the top of a settings card (e.g. Network Inspector
+     * sub-sections). Replaces ad-hoc bare <strong> tags so every card header
+     * reads the same. */
+    .settings-section-head {
+      margin-bottom: 4px;
+    }
+    .settings-section-title {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-primary);
+      letter-spacing: -0.01em;
+      margin-bottom: 6px;
+    }
+    .settings-section-head .help-blurb:last-child {
+      margin-bottom: 0;
+    }
+    /* Status / hint line shown beneath the rows of a card (e.g. Network
+     * Inspector enabled state). The preceding row's bottom border is the
+     * divider, so this only adds top padding — reads as a footnote to the
+     * rows, not another row. */
+    .settings-status-line {
+      display: block;
+      font-size: 12px;
+      color: var(--text-muted);
+      line-height: 1.45;
+      padding-top: 12px;
+    }
+    /* Network Inspector place switcher — a distinct bar above the settings rows that lets the user
+     * pick Local vs a connected remote location. A segmented control with the active place
+     * highlighted (Local by default). */
+    .ni-place-bar {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      padding: 10px 12px;
+      margin-bottom: 14px;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+    }
+    .ni-place-bar-label {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+    }
+    .ni-place-select {
+      flex: 0 0 auto;
+      width: auto;
+      min-width: 180px;
+      max-width: 320px;
+      appearance: none;
+      background: var(--bg-deep);
+      color: var(--text-primary);
+      border: 1px solid var(--border-hover);
+      border-radius: 8px;
+      padding: 8px 32px 8px 12px;
+      font: inherit;
+      font-size: 13px;
+      cursor: pointer;
+      /* Chevron indicator so it clearly reads as a dropdown. */
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 10px center;
+    }
+    .ni-place-select:focus { outline: none; border-color: var(--accent-purple); }
+    .ni-place-hint { padding-top: 0; margin-bottom: 12px; color: var(--accent-purple); }
+    /* Warning block shown when the MITM proxy can't bind its port (another process holds it). */
+    .ni-port-conflict-warn {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      padding: 12px 14px;
+      margin-bottom: 14px;
+      border-radius: 10px;
+      background: rgba(248, 113, 113, 0.1);
+      border: 1px solid rgba(248, 113, 113, 0.5);
+    }
+    .ni-port-conflict-warn[hidden] { display: none; }
+    .ni-port-conflict-warn-icon {
+      flex: 0 0 auto;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: rgba(248, 113, 113, 0.25);
+      color: #fca5a5;
+      font-weight: 700;
+      font-size: 12px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      margin-top: 1px;
+    }
+    .ni-port-conflict-warn-body { flex: 1 1 auto; min-width: 0; }
+    .ni-port-conflict-warn-body strong { display: block; color: #fca5a5; font-size: 13px; margin-bottom: 3px; }
+    .ni-port-conflict-warn-msg { display: block; font-size: 12px; line-height: 1.45; color: var(--text-secondary); }
+    .ni-port-conflict-steps {
+      margin: 8px 0 0;
+      padding-left: 18px;
+      font-size: 12px;
+      line-height: 1.55;
+      color: var(--text-secondary);
+    }
+    .ni-port-conflict-steps li { margin: 0; }
+    /* Greys out the Network Inspector rows when the selected remote location can't run it. */
+    .settings-section.is-ni-unsupported {
+      opacity: 0.45;
+      pointer-events: none;
+      filter: grayscale(0.4);
+    }
+    /* A row with a text label on the left and a single text/number input on
+     * the right — mirrors .settings-row-toggle so inputs line up with toggles
+     * across the panel instead of floating in a folder-action-row. */
+    .settings-row-input {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 12px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .settings-row-toggle:last-child,
+    .settings-row-input:last-child {
+      border-bottom: none;
+    }
+    /* Draws the eye to an unmet prerequisite (e.g. macOS packet capture not
+     * yet set up) right in the row, so the user knows to open the setup
+     * modal. Amber accent + inline badge; cleared once the check passes. */
+    .settings-row-input.needs-attention {
+      margin: 0 -16px;
+      padding-left: 16px;
+      padding-right: 16px;
+      border-left: 3px solid #e0b341;
+      background: rgba(201, 162, 39, 0.08);
+    }
+    .ni-attention-badge {
+      display: inline-block;
+      vertical-align: middle;
+      margin-left: 8px;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      text-transform: uppercase;
+      color: #e0b341;
+      background: rgba(201, 162, 39, 0.15);
+      border: 1px solid rgba(201, 162, 39, 0.4);
+    }
+    .settings-row-input.needs-attention .btn-secondary {
+      border-color: rgba(201, 162, 39, 0.5);
+      color: var(--text-primary);
+    }
+    .settings-text-input {
+      box-sizing: border-box;
+      padding: 8px 10px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      font-size: 12px;
+      font-family: 'JetBrains Mono', ui-monospace, Menlo, Monaco, monospace;
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+    .settings-text-input:focus {
+      outline: none;
+      border-color: var(--accent-purple);
+      box-shadow: 0 0 0 2px var(--accent-purple-dim);
+    }
+    .settings-row-input .settings-text-input {
+      flex: 0 0 auto;
+      width: 120px;
+    }
+    /* A labelled, full-width text input stacked vertically (Windows hotspot
+     * SSID / password). The label sits above the field like other forms. */
+    .settings-field-stack {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      padding: 12px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .settings-field-stack:last-child {
+      border-bottom: none;
+    }
+    .settings-field-stack > label {
+      font-size: 13px;
+      color: var(--text-primary);
+      font-weight: 500;
+    }
+    .settings-field-stack .settings-text-input {
+      width: 100%;
+    }
+    .settings-section-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      padding-top: 12px;
     }
     .settings-toggle-wrap {
       flex: 1 1 0;
@@ -726,6 +982,119 @@ function settingsHtml(): string {
       color: var(--text-muted);
       padding: 8px 0 0;
     }
+    /* Setup info modal (Network Inspector → View setup). Fixed overlay so it
+     * floats above the panel; lives outside .settings-animate-root so the
+     * open/close scale animation doesn't offset its fixed positioning. */
+    .ni-modal-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      background: rgba(0, 0, 0, 0.6);
+    }
+    .ni-modal-overlay[hidden] {
+      display: none;
+    }
+    .ni-modal {
+      width: 100%;
+      max-width: 540px;
+      max-height: 100%;
+      display: flex;
+      flex-direction: column;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+      overflow: hidden;
+    }
+    .ni-modal-header {
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--border);
+    }
+    .ni-modal-header h2 {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--text-primary);
+      letter-spacing: -0.01em;
+      margin: 0;
+    }
+    .ni-modal-title-wrap {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+    }
+    /* Packet-capture access status shown in the modal header (enabled / needs setup). */
+    .ni-setup-header-badge {
+      font-size: 11px;
+      font-weight: 600;
+      padding: 3px 9px;
+      border-radius: 999px;
+      border: 1px solid transparent;
+      white-space: nowrap;
+    }
+    .ni-setup-header-badge[data-state="ok"] {
+      background: var(--accent-green-dim);
+      color: var(--accent-green);
+      border-color: var(--accent-green);
+    }
+    .ni-setup-header-badge[data-state="blocked"] {
+      background: rgba(245, 158, 11, 0.15);
+      color: #f59e0b;
+      border-color: rgba(245, 158, 11, 0.5);
+    }
+    .ni-modal-body {
+      padding: 16px 18px;
+      overflow-y: auto;
+      overflow-x: hidden;
+    }
+    .ni-modal-body::-webkit-scrollbar { width: 8px; }
+    .ni-modal-body::-webkit-scrollbar-track { background: var(--bg-primary); border-radius: 4px; }
+    .ni-modal-body::-webkit-scrollbar-thumb { background: var(--bg-elevated); border-radius: 4px; border: 1px solid var(--border); }
+    .ni-modal-body .help-blurb:last-child { margin-bottom: 0; }
+    .ni-modal-body .settings-section-actions { padding-top: 4px; }
+    /* Packet-capture readiness pill — green when /dev/bpf* is accessible,
+     * amber (with the setup button shown) when it still needs the one-time
+     * fix. Driven by detectBpfCaptureAvailable() in main. */
+    .ni-bpf-state {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 12px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 600;
+      border: 1px solid var(--border);
+      color: var(--text-secondary);
+      margin-bottom: 10px;
+    }
+    .ni-bpf-dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      background: var(--text-muted);
+      flex-shrink: 0;
+    }
+    .ni-bpf-state[data-state="ok"] {
+      color: var(--accent-green);
+      background: var(--accent-green-dim);
+      border-color: rgba(16, 185, 129, 0.35);
+    }
+    .ni-bpf-state[data-state="ok"] .ni-bpf-dot { background: var(--accent-green); }
+    .ni-bpf-state[data-state="blocked"] {
+      color: #e0b341;
+      background: rgba(201, 162, 39, 0.15);
+      border-color: rgba(201, 162, 39, 0.4);
+    }
+    .ni-bpf-state[data-state="blocked"] .ni-bpf-dot { background: #e0b341; }
   </style>
 </head>
 <body>
@@ -748,6 +1117,7 @@ function settingsHtml(): string {
       <button type="button" class="settings-nav-item" role="tab" aria-selected="false" data-target="action-scripts" id="nav-action-scripts">Action Scripts</button>
       <button type="button" class="settings-nav-item" role="tab" aria-selected="false" data-target="device-performance" id="nav-device-performance">Device Performance</button>
       <button type="button" class="settings-nav-item" role="tab" aria-selected="false" data-target="timing" id="nav-timing">Timing &amp; Network</button>
+      <button type="button" class="settings-nav-item" role="tab" aria-selected="false" data-target="network-inspector" id="nav-network-inspector">Network Inspector</button>
       <button type="button" class="settings-nav-item" role="tab" aria-selected="false" data-target="mcp-server" id="nav-mcp-server">MCP Server</button>
     </nav>
     <div class="settings-content">
@@ -910,11 +1280,88 @@ function settingsHtml(): string {
           </div>
         </div>
       </div>
+      <div class="settings-panel" data-section="network-inspector" id="panel-network-inspector" role="tabpanel" aria-labelledby="nav-network-inspector" aria-hidden="true">
+        <div class="settings-panel-fill">
+          <div class="settings-panel-scroll">
+            <div class="ni-place-bar" id="niPlaceRow" hidden>
+              <label class="ni-place-bar-label" for="niPlace">Location</label>
+              <select id="niPlace" class="ni-place-select" aria-label="Network Inspector location"></select>
+            </div>
+            <span class="settings-status-line ni-place-hint" id="niPlaceHint" aria-live="polite" hidden></span>
+            <div class="ni-port-conflict-warn" id="niPortConflictWarn" role="alert" hidden>
+              <span class="ni-port-conflict-warn-icon" aria-hidden="true">!</span>
+              <div class="ni-port-conflict-warn-body">
+                <strong id="niPortConflictTitle">Proxy port unavailable</strong>
+                <span class="ni-port-conflict-warn-msg" id="niPortConflictMsg"></span>
+                <ul class="ni-port-conflict-steps" id="niPortConflictSteps"></ul>
+              </div>
+            </div>
+            <div class="settings-section" id="niSection">
+              <div class="settings-row-toggle">
+                <div class="settings-row-text">
+                  <strong>Enable Network Inspector</strong>
+                  <span class="settings-row-desc">Inspect a device's network traffic. Decrypts your dev channel's HTTPS via the local proxy (any network); a hotspot also captures DNS/SNI. Stored locally only.</span>
+                </div>
+                <label class="settings-toggle-wrap" for="optNetworkInspector">
+                  <input type="checkbox" id="optNetworkInspector" class="settings-toggle-input" role="switch" aria-label="Enable Network Inspector" aria-checked="false" />
+                  <span class="settings-toggle-ui" aria-hidden="true"></span>
+                </label>
+              </div>
+              <div class="settings-row-input">
+                <div class="settings-row-text">
+                  <strong>MITM proxy port</strong>
+                  <span class="settings-row-desc">Port the local decrypting proxy listens on. Route your sideloaded dev channel through it — works on any network (stock channels can't be intercepted).</span>
+                </div>
+                <input type="number" id="niMitmPort" class="settings-text-input" min="1" max="65535" value="8888" aria-label="MITM proxy port" />
+              </div>
+              <div class="settings-row-input">
+                <div class="settings-row-text">
+                  <strong>Per-device packet limit</strong>
+                  <span class="settings-row-desc">Max captured frames kept per device for the pcap export. Higher = longer history, more memory. ${MIN_MAX_RAW_PACKETS_PER_DEVICE}–${MAX_MAX_RAW_PACKETS_PER_DEVICE}.</span>
+                </div>
+                <input type="number" id="niMaxRawPackets" class="settings-text-input" min="${MIN_MAX_RAW_PACKETS_PER_DEVICE}" max="${MAX_MAX_RAW_PACKETS_PER_DEVICE}" step="100" value="${DEFAULT_MAX_RAW_PACKETS_PER_DEVICE}" aria-label="Per-device packet limit" />
+              </div>
+              <div class="settings-row-input" id="niSetupRow">
+                <div class="settings-row-text">
+                  <strong>Hotspot &amp; Capture Setup <span class="ni-attention-badge" id="niSetupBadge" hidden>Setup needed</span></strong>
+                  <span class="settings-row-desc" id="niSetupRowDesc">Optional — only for hotspot DNS/SNI capture. Proxying needs no setup.</span>
+                </div>
+                <button type="button" class="btn btn-secondary btn-sm" id="btnOpenNiSetup">View setup</button>
+              </div>
+            </div>
+          </div>
+          <div class="section-save-dock">
+            <button type="button" class="btn-timing-reset" id="btnResetNetworkInspector">Reset to Defaults</button>
+            <span class="section-save-status" id="saveStatusNetworkInspector" aria-live="polite"></span>
+            <button type="button" class="btn btn-primary" id="btnSaveNetworkInspector">Save</button>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
   </div>
+  <div class="ni-modal-overlay" id="niSetupModal" hidden>
+    <div class="ni-modal" role="dialog" aria-modal="true" aria-labelledby="niSetupModalTitle">
+      <div class="ni-modal-header">
+        <div class="ni-modal-title-wrap">
+          <h2 id="niSetupModalTitle">${networkInspectorSetupTitle()}</h2>
+          <span class="ni-setup-header-badge" id="niSetupHeaderBadge" data-state="unknown" hidden></span>
+        </div>
+        <button type="button" class="modal-close" id="niSetupModalClose" title="Close" aria-label="Close">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </div>
+      <div class="ni-modal-body">
+${networkInspectorSetupModalBodyHtml()}
+      </div>
+    </div>
+  </div>
   <script>
     (function () {
+      var HOST_PLATFORM = ${JSON.stringify(hostPlatform)};
+      var INITIAL_SECTION = ${JSON.stringify(initialSection || '')};
       var api = window.settingsApi;
       if (!api) {
         document.body.innerHTML = '<p class="settings-fatal">Settings API unavailable.</p>';
@@ -935,6 +1382,14 @@ function settingsHtml(): string {
         'TELNET_TIMEOUT',
         'CONNECTION_CHECK_INTERVAL'
       ];
+      var NI_MAX_RAW_PACKETS_DEFAULT = ${DEFAULT_MAX_RAW_PACKETS_PER_DEVICE};
+      var NI_MAX_RAW_PACKETS_MIN = ${MIN_MAX_RAW_PACKETS_PER_DEVICE};
+      var NI_MAX_RAW_PACKETS_MAX = ${MAX_MAX_RAW_PACKETS_PER_DEVICE};
+      function clampNiMaxRawPackets(v) {
+        var n = parseInt(v, 10);
+        if (!isFinite(n)) return NI_MAX_RAW_PACKETS_DEFAULT;
+        return Math.min(NI_MAX_RAW_PACKETS_MAX, Math.max(NI_MAX_RAW_PACKETS_MIN, n));
+      }
 
       var folderPath = '';
       var compileDefaults = {};
@@ -965,6 +1420,10 @@ function settingsHtml(): string {
         });
         var headerSection = document.getElementById('settingsHeaderSection');
         if (headerSection && activeLabel) headerSection.textContent = activeLabel;
+        // Refresh the proxy port-conflict warning whenever the Network Inspector section is shown.
+        if (targetId === 'network-inspector' && typeof refreshNiPortConflict === 'function') {
+          refreshNiPortConflict();
+        }
       }
 
       document.querySelectorAll('.settings-nav-item').forEach(function (btn) {
@@ -1377,7 +1836,7 @@ function settingsHtml(): string {
       }
 
       function setSectionStatus(targetId, msg, isErr) {
-        var ids = ['saveStatusGeneral', 'saveStatusActionScripts', 'saveStatusDevicePerf', 'saveStatusTiming', 'saveStatusMcpServer'];
+        var ids = ['saveStatusGeneral', 'saveStatusActionScripts', 'saveStatusDevicePerf', 'saveStatusTiming', 'saveStatusMcpServer', 'saveStatusNetworkInspector'];
         ids.forEach(function (id) {
           var s = el(id);
           if (!s) return;
@@ -1565,6 +2024,26 @@ function settingsHtml(): string {
         keychainSnap = state.secretStoreStatus || null;
         updateKeychainStatusHint(state.rememberPasswordsInKeychain === true, keychainSnap);
         setToggle('optDevicePerfRememberQuad', state.devicePerformanceRememberQuadPerDevice === true);
+        setToggle('optNetworkInspector', state.networkInspectorEnabled === true);
+        if (el('niMitmPort')) el('niMitmPort').value = String(state.networkInspectorMitmPort || 8888);
+        if (el('niMaxRawPackets')) {
+          el('niMaxRawPackets').value = String(
+            typeof state.networkInspectorMaxRawPacketsPerDevice === 'number'
+              ? clampNiMaxRawPackets(state.networkInspectorMaxRawPacketsPerDevice)
+              : NI_MAX_RAW_PACKETS_DEFAULT
+          );
+        }
+        updateNetworkInspectorStatusLine(state);
+        updateBpfCaptureUi(state.captureToolAvailable === true || state.bpfCaptureAvailable === true);
+        niSavedLocations = Array.isArray(state.remoteLocations) ? state.remoteLocations : [];
+        niLocalSnapshot = {
+          enabled: state.networkInspectorEnabled === true,
+          mitmPort: state.networkInspectorMitmPort || 8888,
+          maxRawPackets: (typeof state.networkInspectorMaxRawPacketsPerDevice === 'number'
+            ? clampNiMaxRawPackets(state.networkInspectorMaxRawPacketsPerDevice)
+            : NI_MAX_RAW_PACKETS_DEFAULT)
+        };
+        refreshConnectedPlaces();
         if (state.logFilePath && el('logPathHint')) {
           el('logPathHint').textContent = 'Log file: ' + state.logFilePath;
         }
@@ -1669,9 +2148,368 @@ function settingsHtml(): string {
         });
       }
       wireToggleAria('optDevicePerfRememberQuad');
+      wireToggleAria('optNetworkInspector');
+      function updateNetworkInspectorStatusLine(state) {
+        var line = el('niStatusLine');
+        if (!line) return;
+        if (!state || !state.networkInspectorEnabled) {
+          line.textContent = 'Status: disabled — save after enabling to start watching for hotspot clients.';
+          return;
+        }
+        var platformHint = HOST_PLATFORM === 'darwin'
+          ? 'bridge100 on macOS'
+          : HOST_PLATFORM === 'win32'
+            ? 'virtual adapter on Windows'
+            : 'hotspot interface on Linux';
+        var mitm = ' · MITM proxy on port ' + (state.networkInspectorMitmPort || 8888);
+        line.textContent = 'Status: enabled — waiting for hotspot interface (' + platformHint + ').' + mitm;
+      }
+
+      /**
+       * Reflect the real /dev/bpf* readiness (detectBpfCaptureAvailable in
+       * main) in the setup modal: green "enabled" pill with the setup button
+       * hidden when capture works, amber "needs setup" pill with the button
+       * shown otherwise. macOS only.
+       */
+      function updateBpfCaptureUi(available) {
+        // macOS (BPF) and Linux (tcpdump capabilities) both expose an in-app one-time setup;
+        // Windows capture depends on the external Npcap installer, so it has no setup pill here.
+        if (HOST_PLATFORM !== 'darwin' && HOST_PLATFORM !== 'linux') return;
+        var ok = available === true;
+        // Status now lives as a badge in the modal HEADER; the body keeps only the explanation +
+        // the "Setup Packet Capture" button, shown only when access still needs to be granted.
+        var headerBadge = el('niSetupHeaderBadge');
+        if (headerBadge) {
+          headerBadge.hidden = false;
+          headerBadge.setAttribute('data-state', ok ? 'ok' : 'blocked');
+          headerBadge.textContent = ok ? 'Capture access enabled' : 'Setup needed';
+        }
+        var headingEl = el('niBpfHeading');
+        var explainEl = el('niBpfExplain');
+        var actionsEl = el('niBpfActions');
+        if (headingEl) headingEl.hidden = ok;
+        if (explainEl) explainEl.hidden = ok;
+        if (actionsEl) actionsEl.hidden = ok;
+        // Surface the blocked state on the panel row itself so the user
+        // notices before opening the modal.
+        var rowEl = el('niSetupRow');
+        if (rowEl) rowEl.classList.toggle('needs-attention', !ok);
+        var badgeEl = el('niSetupBadge');
+        if (badgeEl) badgeEl.hidden = ok;
+        var rowDescEl = el('niSetupRowDesc');
+        if (rowDescEl) {
+          rowDescEl.textContent = ok
+            ? 'Optional — only for hotspot DNS/SNI capture. Proxying needs no setup.'
+            : 'Hotspot capture needs setup — open to enable it. (Proxying still works.)';
+        }
+      }
+
+      // ---- Network Inspector place picker (Local vs CONNECTED remote locations) ----
+      var niSavedLocations = [];     // all added remote locations (from settings)
+      var niConnectedLocations = []; // subset that responded to a probe (i.e. connected)
+      var niProbeCache = {};         // serverUrl -> last probe result
+      var niSelectedPlace = 'local'; // 'local' or a serverUrl
+      var niLocalSnapshot = null;
+
+      function currentNiPlace() {
+        return niSelectedPlace || 'local';
+      }
+
+      function setNiControlsDisabled(disabled) {
+        ['optNetworkInspector', 'niMitmPort', 'niMaxRawPackets'].forEach(function (id) {
+          var elx = el(id);
+          if (elx) elx.disabled = !!disabled;
+        });
+      }
+
+      function setNiPlaceHint(text, show) {
+        var hint = el('niPlaceHint');
+        if (!hint) return;
+        hint.hidden = !show;
+        hint.textContent = text || '';
+      }
+
+      function applyLocalNiValues() {
+        if (!niLocalSnapshot) return;
+        setToggle('optNetworkInspector', niLocalSnapshot.enabled === true);
+        if (el('niMitmPort')) el('niMitmPort').value = String(niLocalSnapshot.mitmPort || 8888);
+        if (el('niMaxRawPackets')) el('niMaxRawPackets').value = String(niLocalSnapshot.maxRawPackets || NI_MAX_RAW_PACKETS_DEFAULT);
+      }
+
+      // Grey out (and lock) the Network Inspector rows + Save when the selected remote location
+      // can't run the feature (older server without support, or not running as root).
+      function setNiSectionUnsupported(unsupported) {
+        var section = el('niSection');
+        if (section) section.classList.toggle('is-ni-unsupported', !!unsupported);
+        var save = el('btnSaveNetworkInspector');
+        if (save) save.disabled = !!unsupported;
+      }
+
+      // Populate the Location dropdown: Local + each CONNECTED remote location (shown with its IP).
+      // The bar appears only when at least one remote location is connected (reachable).
+      function renderPlaceSelect() {
+        var bar = el('niPlaceRow');
+        var sel = el('niPlace');
+        if (!bar || !sel) return;
+        var show = niConnectedLocations.length > 0;
+        bar.hidden = !show;
+        if (!show) {
+          niSelectedPlace = 'local';
+          applyNiPlace();
+          return;
+        }
+        if (niSelectedPlace !== 'local' && !niConnectedLocations.some(function (l) { return l.serverUrl === niSelectedPlace; })) {
+          niSelectedPlace = 'local';
+        }
+        var places = [{ value: 'local', label: 'Local (This Machine)' }].concat(
+          niConnectedLocations.map(function (l) {
+            var label = l.host ? ((l.name || 'Remote') + ' (' + l.host + ')') : (l.name || l.serverUrl);
+            return { value: l.serverUrl, label: label };
+          })
+        );
+        sel.innerHTML = '';
+        places.forEach(function (p) {
+          var opt = document.createElement('option');
+          opt.value = p.value;
+          opt.textContent = p.label;
+          sel.appendChild(opt);
+        });
+        sel.value = niSelectedPlace;
+        if (!sel.value) { sel.value = 'local'; niSelectedPlace = 'local'; }
+        applyNiPlace();
+      }
+
+      // Probe all added locations in parallel; reachable ones count as "connected" and populate the
+      // dropdown (unsupported ones still appear but grey out when selected). Results are cached.
+      function refreshConnectedPlaces() {
+        if (!api.remoteNetworkProbe || niSavedLocations.length === 0) {
+          niConnectedLocations = [];
+          renderPlaceSelect();
+          return;
+        }
+        Promise.all(niSavedLocations.map(function (loc) {
+          return api.remoteNetworkProbe(loc.serverUrl).then(function (res) {
+            niProbeCache[loc.serverUrl] = res;
+            return (res && res.reachable) ? loc : null;
+          }).catch(function () { return null; });
+        })).then(function (results) {
+          niConnectedLocations = results.filter(function (l) { return !!l; });
+          renderPlaceSelect();
+        });
+      }
+
+      function applyRemoteProbeResult(place, res) {
+        if (currentNiPlace() !== place) return; // user switched while in flight
+        var ni = res && res.networkInspector;
+        if (!res || !res.success || !ni || ni.supported !== true) {
+          var reason = (ni && ni.requiresRoot && ni.isRoot === false)
+            ? 'This location requires the remote server to run as root to enable Network Inspector.'
+            : 'This location does not support Network Inspector. Update this Remote Server for Network Inspector functionality.';
+          setNiPlaceHint(reason, true);
+          setNiControlsDisabled(true);
+          setNiSectionUnsupported(true);
+          setToggle('optNetworkInspector', false);
+          renderNiPortConflict(null);
+          return;
+        }
+        setNiSectionUnsupported(false);
+        setNiControlsDisabled(false);
+        if (el('niMaxRawPackets')) el('niMaxRawPackets').disabled = true; // not configurable remotely
+        var cfg = res.config || {};
+        var status = res.status || {};
+        setToggle('optNetworkInspector', cfg.enabled === true || status.enabled === true);
+        if (el('niMitmPort')) el('niMitmPort').value = String(cfg.mitmPort || status.mitmPort || 8888);
+        setNiPlaceHint('Editing remote location settings. Capture runs on the remote server.', true);
+        renderNiPortConflict(status && status.mitmPortConflict ? status.mitmPortConflict : null);
+      }
+
+      // Render (or hide) the proxy port-conflict warning block. The conflict arg is the structured
+      // MitmPortConflict from the Network Inspector status (local or remote), or null when clear.
+      function renderNiPortConflict(conflict) {
+        var box = el('niPortConflictWarn');
+        if (!box) return;
+        if (!conflict) { box.hidden = true; return; }
+        box.hidden = false;
+        if (el('niPortConflictTitle')) el('niPortConflictTitle').textContent = conflict.title || 'Proxy port unavailable';
+        if (el('niPortConflictMsg')) el('niPortConflictMsg').textContent = conflict.message || '';
+        var steps = el('niPortConflictSteps');
+        if (steps) {
+          steps.innerHTML = '';
+          (conflict.remediation || []).forEach(function (s) {
+            var li = document.createElement('li');
+            li.textContent = s;
+            steps.appendChild(li);
+          });
+        }
+      }
+
+      // Pull the current proxy port-conflict for the selected place: live local status via IPC, or
+      // the cached remote probe's status. Safe to call repeatedly (used on section open + a poll).
+      function refreshNiPortConflict() {
+        var place = currentNiPlace();
+        if (place === 'local') {
+          if (!api.getNetworkInspectorStatus) { renderNiPortConflict(null); return; }
+          api.getNetworkInspectorStatus().then(function (res) {
+            if (currentNiPlace() !== 'local') return;
+            var status = res && res.status;
+            renderNiPortConflict(status && status.mitmPortConflict ? status.mitmPortConflict : null);
+          }).catch(function () { renderNiPortConflict(null); });
+          return;
+        }
+        var cached = niProbeCache[place];
+        var rstatus = cached && cached.status;
+        renderNiPortConflict(rstatus && rstatus.mitmPortConflict ? rstatus.mitmPortConflict : null);
+      }
+
+      function applyNiPlace() {
+        var place = currentNiPlace();
+        var setupRow = el('niSetupRow');
+        var maxRawRow = el('niMaxRawPackets');
+        if (place === 'local') {
+          setNiSectionUnsupported(false);
+          setNiControlsDisabled(false);
+          setNiPlaceHint('', false);
+          if (setupRow) setupRow.hidden = false;
+          if (maxRawRow) maxRawRow.disabled = false;
+          applyLocalNiValues();
+          refreshNiPortConflict();
+          return;
+        }
+        // Remote location selected. Per-device packet limit + local capture-setup are local-only.
+        if (setupRow) setupRow.hidden = true;
+        if (maxRawRow) maxRawRow.disabled = true;
+        setNiControlsDisabled(true);
+        // Clear any stale (local/previous-remote) warning until this place's probe resolves.
+        renderNiPortConflict(null);
+        if (!api.remoteNetworkProbe) {
+          setNiPlaceHint('Remote Network Inspector is not available in this build.', true);
+          setNiSectionUnsupported(true);
+          return;
+        }
+        if (niProbeCache[place]) {
+          applyRemoteProbeResult(place, niProbeCache[place]);
+          return;
+        }
+        setNiPlaceHint('Checking remote location…', true);
+        api.remoteNetworkProbe(place).then(function (res) {
+          niProbeCache[place] = res;
+          applyRemoteProbeResult(place, res);
+        }).catch(function () {
+          if (currentNiPlace() !== place) return;
+          setNiPlaceHint('Could not reach the remote location.', true);
+          setNiControlsDisabled(true);
+          setNiSectionUnsupported(true);
+        });
+      }
+
+      if (el('niPlace')) {
+        el('niPlace').addEventListener('change', function () {
+          niSelectedPlace = el('niPlace').value || 'local';
+          applyNiPlace();
+        });
+      }
+
+      var optNi = el('optNetworkInspector');
+      if (optNi) {
+        optNi.addEventListener('change', function () {
+          if (optNi.checked) {
+            var ok = window.confirm(
+              'Network Inspector will capture Roku traffic and store it locally on this machine — through the MITM proxy and, if set up, hotspot/shared-network capture. Continue?'
+            );
+            if (!ok) {
+              optNi.checked = false;
+              setToggle('optNetworkInspector', false);
+            }
+          }
+          updateNetworkInspectorStatusLine({ networkInspectorEnabled: !!optNi.checked });
+        });
+      }
+
+      var btnResetNi = el('btnResetNetworkInspector');
+      if (btnResetNi) {
+        btnResetNi.addEventListener('click', function () {
+          setToggle('optNetworkInspector', false);
+          if (el('niMitmPort')) el('niMitmPort').value = '8888';
+          if (el('niMaxRawPackets')) el('niMaxRawPackets').value = String(NI_MAX_RAW_PACKETS_DEFAULT);
+          updateNetworkInspectorStatusLine({ networkInspectorEnabled: false });
+        });
+      }
+
+      var niSetupModal = el('niSetupModal');
+      var niSetupLastFocus = null;
+      function isNiSetupOpen() {
+        return !!(niSetupModal && !niSetupModal.hidden);
+      }
+      function openNiSetup() {
+        if (!niSetupModal) return;
+        niSetupLastFocus = document.activeElement;
+        niSetupModal.hidden = false;
+        var closeBtn = el('niSetupModalClose');
+        if (closeBtn) closeBtn.focus();
+        // Re-check capture access each open so returning from System Settings
+        // (or a prior install) reflects the current state without reopening
+        // the whole Settings window.
+        if ((HOST_PLATFORM === 'darwin' || HOST_PLATFORM === 'linux') && api.getState) {
+          api.getState().then(function (state) {
+            // captureToolAvailable is the cross-platform readiness flag (BPF on macOS, tcpdump
+            // capabilities on Linux); fall back to the macOS-era field for older main builds.
+            var ready = state && (state.captureToolAvailable === true || state.bpfCaptureAvailable === true);
+            updateBpfCaptureUi(!!ready);
+          }).catch(function () {});
+        }
+      }
+      function closeNiSetup() {
+        if (!niSetupModal) return;
+        niSetupModal.hidden = true;
+        if (niSetupLastFocus && typeof niSetupLastFocus.focus === 'function') {
+          niSetupLastFocus.focus();
+        }
+        niSetupLastFocus = null;
+      }
+      var btnOpenNiSetup = el('btnOpenNiSetup');
+      if (btnOpenNiSetup) btnOpenNiSetup.addEventListener('click', openNiSetup);
+      var niSetupClose = el('niSetupModalClose');
+      if (niSetupClose) niSetupClose.addEventListener('click', closeNiSetup);
+      if (niSetupModal) {
+        // Close on backdrop click — but only when the press STARTED on the backdrop too. Without
+        // this, selecting text inside the modal and releasing the drag outside it would close it
+        // (the click event targets the overlay = common ancestor of mousedown+mouseup).
+        var niSetupPressOnOverlay = false;
+        niSetupModal.addEventListener('mousedown', function (e) {
+          niSetupPressOnOverlay = e.target === niSetupModal;
+        });
+        niSetupModal.addEventListener('click', function (e) {
+          if (e.target === niSetupModal && niSetupPressOnOverlay) closeNiSetup();
+        });
+      }
+
+      var btnInstallBpf = el('btnInstallBpfAccess');
+      if (btnInstallBpf && api.installBpfAccess) {
+        btnInstallBpf.addEventListener('click', function () {
+          btnInstallBpf.disabled = true;
+          var statusEl = el('niBpfInstallStatus');
+          if (statusEl) statusEl.textContent = 'Waiting for administrator approval…';
+          api.installBpfAccess().then(function (res) {
+            btnInstallBpf.disabled = false;
+            if (res && res.success) {
+              setSectionStatus('saveStatusNetworkInspector', 'Packet capture access installed.', false);
+              if (statusEl) statusEl.textContent = 'Installed — return to the Network tab.';
+              updateBpfCaptureUi(res.bpfCaptureAvailable !== false);
+            } else if (res && res.error === 'cancelled') {
+              if (statusEl) statusEl.textContent = 'Cancelled.';
+            } else {
+              setSectionStatus('saveStatusNetworkInspector', (res && res.error) || 'Setup failed', true);
+              if (statusEl) statusEl.textContent = '';
+            }
+          }).catch(function (e) {
+            btnInstallBpf.disabled = false;
+            setSectionStatus('saveStatusNetworkInspector', String(e && e.message ? e.message : e), true);
+          });
+        });
+      }
 
       function buildPayload() {
-        return {
+        var payload = {
           developerModeEnabled: boolFromToggle('optDevMode'),
           privacyModeEnabled: boolFromToggle('optPrivacy'),
           debugLoggingEnabled: boolFromToggle('optDebugLog'),
@@ -1682,6 +2520,21 @@ function settingsHtml(): string {
           autoConnectLastDeviceEnabled: boolFromToggle('optAutoConnectLast'),
           rememberSidebarToggle: boolFromToggle('optRememberSidebarToggle'),
           rememberPasswordsInKeychain: boolFromToggle('optRememberPasswordsInKeychain'),
+          // When a remote location is selected in the place dropdown, the form shows that
+          // location's values — so persist the cached LOCAL snapshot here instead, so saving any
+          // section never clobbers local Network Inspector settings with remote ones.
+          networkInspectorEnabled: (currentNiPlace() === 'local')
+            ? boolFromToggle('optNetworkInspector')
+            : (niLocalSnapshot ? niLocalSnapshot.enabled === true : false),
+          networkInspectorMitmEnabled: true,
+          networkInspectorMitmPort: (currentNiPlace() === 'local')
+            ? (el('niMitmPort') ? parseInt(el('niMitmPort').value, 10) || 8888 : 8888)
+            : (niLocalSnapshot ? niLocalSnapshot.mitmPort : 8888),
+          networkInspectorMaxRawPacketsPerDevice: clampNiMaxRawPackets(
+            (currentNiPlace() === 'local')
+              ? (el('niMaxRawPackets') ? el('niMaxRawPackets').value : NI_MAX_RAW_PACKETS_DEFAULT)
+              : (niLocalSnapshot ? niLocalSnapshot.maxRawPackets : NI_MAX_RAW_PACKETS_DEFAULT)
+          ),
           mcpClients: (function () {
             var out = {};
             MCP_CLIENT_IDS.forEach(function (id) {
@@ -1690,6 +2543,7 @@ function settingsHtml(): string {
             return out;
           })()
         };
+        return payload;
       }
 
       function panelKeyForStatusId(statusId) {
@@ -1740,6 +2594,57 @@ function settingsHtml(): string {
       wireSaveButton('btnSaveDevicePerf', 'Device Performance settings saved.', 'saveStatusDevicePerf');
       wireSaveButton('btnSaveTiming', 'Timing & Network settings saved.', 'saveStatusTiming');
       wireSaveButton('btnSaveMcpServer', 'MCP Server settings saved.', 'saveStatusMcpServer');
+      // Network Inspector save is place-aware: Local persists app settings (global save), Remote
+      // applies the config to that location's server via the probe/set-config IPC.
+      (function wireNetworkInspectorSave() {
+        var btn = el('btnSaveNetworkInspector');
+        if (!btn) return;
+        btn.addEventListener('click', function () {
+          var place = currentNiPlace();
+          btn.disabled = true;
+          setSectionStatus('saveStatusNetworkInspector', '', false);
+          if (place === 'local') {
+            api.save(buildPayload()).then(function (res) {
+              btn.disabled = false;
+              if (res && res.success && !res.warning) {
+                niLocalSnapshot = {
+                  enabled: boolFromToggle('optNetworkInspector'),
+                  mitmPort: el('niMitmPort') ? parseInt(el('niMitmPort').value, 10) || 8888 : 8888,
+                  maxRawPackets: clampNiMaxRawPackets(el('niMaxRawPackets') ? el('niMaxRawPackets').value : NI_MAX_RAW_PACKETS_DEFAULT)
+                };
+                setSectionStatus('saveStatusNetworkInspector', 'Network Inspector settings saved.', false);
+              } else {
+                setSectionStatus('saveStatusNetworkInspector', (res && (res.warning || res.error)) || 'Save failed', true);
+              }
+            }).catch(function (e) {
+              btn.disabled = false;
+              setSectionStatus('saveStatusNetworkInspector', String(e && e.message ? e.message : e), true);
+            });
+            return;
+          }
+          if (!api.remoteNetworkSetConfig) {
+            btn.disabled = false;
+            setSectionStatus('saveStatusNetworkInspector', 'Remote Network Inspector is not available in this build.', true);
+            return;
+          }
+          var cfg = {
+            enabled: boolFromToggle('optNetworkInspector'),
+            mitmEnabled: true,
+            mitmPort: el('niMitmPort') ? parseInt(el('niMitmPort').value, 10) || 8888 : 8888
+          };
+          api.remoteNetworkSetConfig(place, cfg).then(function (res) {
+            btn.disabled = false;
+            if (res && res.success) {
+              setSectionStatus('saveStatusNetworkInspector', 'Saved to remote location.', false);
+            } else {
+              setSectionStatus('saveStatusNetworkInspector', (res && res.error) || 'Remote save failed', true);
+            }
+          }).catch(function (e) {
+            btn.disabled = false;
+            setSectionStatus('saveStatusNetworkInspector', String(e && e.message ? e.message : e), true);
+          });
+        });
+      })();
 
       var headerClose = el('btnHeaderClose');
       if (headerClose) {
@@ -1748,10 +2653,31 @@ function settingsHtml(): string {
         });
       }
       document.addEventListener('keydown', function (e) {
-        if (e.key === 'Escape') requestCloseSettingsWindow();
+        if (e.key !== 'Escape') return;
+        if (isNiSetupOpen()) {
+          closeNiSetup();
+          return;
+        }
+        requestCloseSettingsWindow();
       });
 
+      // Keep the port-conflict warning fresh while the Network Inspector section is open (the
+      // offending process may quit, or the proxy may bind, without a section re-entry).
+      setInterval(function () {
+        var panel = document.querySelector('.settings-panel[data-section="network-inspector"]');
+        if (panel && panel.classList.contains('active')) refreshNiPortConflict();
+      }, 5000);
+
       window.requestCloseSettingsWindow = requestCloseSettingsWindow;
+      // When opened programmatically toward a specific section (e.g. the Network Inspector
+      // port-conflict modal's "Open Settings" button), jump straight there.
+      if (INITIAL_SECTION) {
+        try { selectSection(INITIAL_SECTION); } catch (e) {}
+      }
+      // Allow the same window to be re-navigated to a section while already open.
+      window.rdsNavigateSettingsSection = function (id) {
+        if (id) { try { selectSection(id); } catch (e) {} }
+      };
       animateOpen();
     })();
   </script>
@@ -1759,12 +2685,31 @@ function settingsHtml(): string {
 </html>`;
 }
 
+/** The currently-open Settings window, so a second open request focuses/navigates it instead of
+ *  stacking another modal. */
+let settingsWindowRef: (BrowserWindow & { __rdsDestroying?: boolean }) | null = null;
+
 /**
- * Show the Settings dialog (modal, parent = mainWindow).
+ * Show the Settings dialog (modal, parent = mainWindow). When `initialSection` is given, the window
+ * opens navigated to that section (e.g. 'network-inspector'); if Settings is already open it's
+ * focused and navigated instead of opening a duplicate.
  */
-function showSettingsDialog(mainWindow: BrowserWindow) {
+function showSettingsDialog(mainWindow: BrowserWindow, initialSection?: string) {
   if (!mainWindow) {
     console.error('Main window not available');
+    return;
+  }
+
+  // Already open: focus it and (optionally) navigate to the requested section.
+  if (settingsWindowRef && !settingsWindowRef.isDestroyed()) {
+    settingsWindowRef.focus();
+    if (initialSection) {
+      settingsWindowRef.webContents
+        .executeJavaScript(
+          `window.rdsNavigateSettingsSection && window.rdsNavigateSettingsSection(${JSON.stringify(initialSection)})`
+        )
+        .catch(() => undefined);
+    }
     return;
   }
 
@@ -1791,8 +2736,13 @@ function showSettingsDialog(mainWindow: BrowserWindow) {
     title: 'Settings'
   });
 
+  settingsWindowRef = settingsWindow as BrowserWindow & { __rdsDestroying?: boolean };
   settingsWindow.once('ready-to-show', () => {
     settingsWindow.show();
+  });
+
+  settingsWindow.on('closed', () => {
+    if (settingsWindowRef === settingsWindow) settingsWindowRef = null;
   });
 
   settingsWindow.on('close', (e: Event) => {
@@ -1808,7 +2758,7 @@ function showSettingsDialog(mainWindow: BrowserWindow) {
   });
 
   try {
-    const html = settingsHtml();
+    const html = settingsHtml(initialSection);
     settingsWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
   } catch (error) {
     console.error('Error loading Settings dialog:', error);

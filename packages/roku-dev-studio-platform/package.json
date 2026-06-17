@@ -1,0 +1,33 @@
+{
+  "name": "roku-dev-studio-platform",
+  "version": "1.0.0",
+  "description": "Shared host-platform helpers for Roku Dev Studio — OS identity, human labels, modifier keys (renderer-safe), plus node-only filesystem helpers. Used by the desktop app and other packages so platform logic lives in one place.",
+  "main": "index.ts",
+  "types": "index.ts",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/paramount-engineering/roku-dev-studio.git",
+    "directory": "packages/roku-dev-studio-platform"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": [
+    "roku",
+    "platform",
+    "os",
+    "cross-platform"
+  ],
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.7.3"
+  },
+  "exports": {
+    ".": "./index.ts",
+    "./node": "./node.ts"
+  }
+}

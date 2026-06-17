@@ -20,6 +20,7 @@ import {
   KEYBOARD_REMOTE_SHORTCUTS_ENABLED,
   AUTO_CONNECT_LAST_DEVICE_ENABLED,
   REMEMBER_SIDEBAR_TOGGLE,
+  NETWORK_INSPECTOR_ENABLED,
   QUERY_ENDPOINTS
 } from './modules/index.js';
 import { errMessage } from './modules/utils/err-message.js';
@@ -35,6 +36,10 @@ import { setupQueries as setupQueriesComponent } from './components/queries/inde
 import { setupInspector as setupInspectorComponent } from './components/inspector/index.js';
 import { setupDevApp as setupDevAppComponent } from './components/dev-app/index.js';
 import { setupActionScripts as setupActionScriptsComponent } from './components/action-scripts/index.js';
+import {
+  setupNetworkTab,
+  initNetworkInspectorBridge
+} from './components/network-inspector/network-tab.js';
 import { setupRemoteTabMetrics } from './components/dev-app/device-metrics.js';
 import { dispatchDevAppForegroundFromActiveAppXml } from './components/dev-app/dev-app-foreground-sync.js';
 import { registerKeyboardRemoteAutoScreenshotRemote, scheduleKeyboardRemoteAutoScreenshotForActiveInnerTab } from './modules/utils/keyboard-remote-auto-screenshot-registry.js';
@@ -138,6 +143,289 @@ const state = {
   scanningLocations: new Set(), // locationIds currently being scanned
   collapsedLocations: new Set() // locationIds that are collapsed in sidebar
 };
+
+/** Per device tab panel: Network Inspector UI controller. */
+const networkTabControllers = new Map();
+/** Serial numbers currently seen on the hotspot (local devices only). */
+const hotspotSerialsActive = new Set<string>();
+const hotspotSerialIps = new Map<string, string>();
+/**
+ * Tab ids whose Network tab has already been revealed because the MITM proxy is active. The
+ * proxy captures dev-channel HTTPS for any reachable device (no hotspot required), so on a shared
+ * Wi-Fi the tab must be shown even though the device was never discovered on a hotspot subnet.
+ */
+const mitmRevealedTabIds = new Set<string>();
+
+/** Reveal the Network tab for every connected local device when the MITM proxy is active. */
+function revealLocalNetworkTabsForMitm(): void {
+  if (!NETWORK_INSPECTOR_ENABLED) return;
+  for (const conn of state.connectedDevices.values()) {
+    if (conn.isRemote) continue;
+    if (mitmRevealedTabIds.has(conn.tabId)) continue;
+    const ctrl = networkTabControllers.get(conn.tabId);
+    if (!ctrl) continue;
+    mitmRevealedTabIds.add(conn.tabId);
+    const ip = typeof conn.device.ip === 'string' ? conn.device.ip.trim() : '';
+    ctrl.setVisible(true);
+    if (ip) {
+      ctrl.setHotspotIp(ip);
+      ctrl.setDeviceIp(ip);
+      void loadNetworkTabBufferedEvents(ip, ctrl);
+    }
+  }
+}
+
+function applyNetworkTabForSerial(serial: string, hotspotIp: string | null, visible: boolean): void {
+  if (!serial) return;
+  for (const conn of state.connectedDevices.values()) {
+    if (conn.isRemote) continue;
+    const devSerial =
+      typeof conn.device.serialNumber === 'string' ? conn.device.serialNumber.trim() : '';
+    if (devSerial !== serial) continue;
+    const ctrl = networkTabControllers.get(conn.tabId);
+    if (ctrl) {
+      ctrl.setVisible(visible && NETWORK_INSPECTOR_ENABLED);
+      ctrl.setHotspotIp(hotspotIp);
+      if (hotspotIp) ctrl.setDeviceIp(hotspotIp);
+      if (visible && hotspotIp) void loadNetworkTabBufferedEvents(hotspotIp, ctrl);
+    }
+  }
+}
+
+function syncNetworkTabsForLocalDevice(device: {
+  ip?: string;
+  serialNumber?: string;
+}): void {
+  if (!NETWORK_INSPECTOR_ENABLED) return;
+  const serial = typeof device.serialNumber === 'string' ? device.serialNumber.trim() : '';
+  const ip = typeof device.ip === 'string' ? device.ip.trim() : '';
+  if (!ip) return;
+  for (const conn of state.connectedDevices.values()) {
+    if (conn.isRemote) continue;
+    const devSerial =
+      typeof conn.device.serialNumber === 'string' ? conn.device.serialNumber.trim() : '';
+    const sameDevice =
+      (serial && devSerial === serial) ||
+      conn.device.ip === ip ||
+      (devSerial && hotspotSerialIps.get(devSerial) === ip);
+    if (!sameDevice) continue;
+    conn.device.ip = ip;
+    Object.assign(conn.device, device);
+    const ctrl = networkTabControllers.get(conn.tabId);
+    if (!ctrl) continue;
+    if (serial) {
+      hotspotSerialsActive.add(serial);
+      hotspotSerialIps.set(serial, ip);
+    }
+    if (/^192\.168\.2\.\d{1,3}$/.test(ip)) {
+      ctrl.setVisible(true);
+      ctrl.setHotspotIp(ip);
+      ctrl.setDeviceIp(ip);
+      void loadNetworkTabBufferedEvents(ip, ctrl);
+    }
+  }
+}
+
+function reconcileConnectedDeviceIp(
+  oldIp: string,
+  device: { ip: string; serialNumber?: string; deviceName?: string; modelName?: string }
+): void {
+  const newIp = device.ip?.trim();
+  if (!newIp || !oldIp || oldIp === newIp) return;
+  const connection = state.connectedDevices.get(oldIp);
+  if (!connection || connection.isRemote) return;
+
+  state.connectedDevices.delete(oldIp);
+  state.connectedDevices.set(newIp, connection);
+  connection.device = { ...connection.device, ...device, ip: newIp };
+
+  const panel = document.getElementById(connection.tabId);
+  if (panel) {
+    const ipEl = panel.querySelector('.device-ip');
+    if (ipEl) ipEl.textContent = newIp;
+  }
+
+  const ctrl = networkTabControllers.get(connection.tabId);
+  if (ctrl) {
+    ctrl.setDeviceIp(newIp);
+    if (/^192\.168\.2\.\d{1,3}$/.test(newIp)) {
+      ctrl.setHotspotIp(newIp);
+      ctrl.setVisible(true);
+      void loadNetworkTabBufferedEvents(newIp, ctrl);
+    }
+  }
+
+  const serial =
+    typeof device.serialNumber === 'string' ? device.serialNumber.trim() : '';
+  if (serial) {
+    hotspotSerialIps.set(serial, newIp);
+    hotspotSerialsActive.add(serial);
+  }
+}
+
+function refreshAllNetworkTabVisibility(): void {
+  for (const serial of hotspotSerialsActive) {
+    applyNetworkTabForSerial(serial, hotspotSerialIps.get(serial) || null, true);
+  }
+}
+
+async function syncNetworkTabForConnectedDevice(
+  tabId: string,
+  device: { ip: string; serialNumber?: string },
+  networkCtrl: ReturnType<typeof setupNetworkTab>,
+  isRemote: boolean
+): Promise<void> {
+  if (isRemote || !NETWORK_INSPECTOR_ENABLED || !window.roku?.networkInspectorGetStatus) return;
+  try {
+    const res = await window.roku.networkInspectorGetStatus();
+    const status = res?.status as
+      | {
+          connectedClients?: Array<{ ip?: string; serialNumber?: string }>;
+          mitmActive?: boolean;
+          mitmEnabled?: boolean;
+        }
+      | undefined;
+    const clients = status?.connectedClients || [];
+    const serial = typeof device.serialNumber === 'string' ? device.serialNumber.trim() : '';
+    const match = clients.find(
+      (c) =>
+        (serial && c.serialNumber === serial) ||
+        (c.ip && device.ip && c.ip === device.ip)
+    );
+    if (match?.ip) {
+      hotspotSerialsActive.add(serial || match.ip);
+      hotspotSerialIps.set(serial || match.ip, match.ip);
+      networkCtrl.setVisible(true);
+      networkCtrl.setHotspotIp(match.ip);
+      void loadNetworkTabBufferedEvents(match.ip, networkCtrl);
+      return;
+    }
+    // macOS Internet Sharing default — show tab when already on hotspot range
+    if (/^192\.168\.2\.\d{1,3}$/.test(device.ip)) {
+      if (serial) {
+        hotspotSerialsActive.add(serial);
+        hotspotSerialIps.set(serial, device.ip);
+      }
+      networkCtrl.setVisible(true);
+      networkCtrl.setHotspotIp(device.ip);
+      void loadNetworkTabBufferedEvents(device.ip, networkCtrl);
+      return;
+    }
+    // Shared Wi-Fi (no hotspot): the MITM proxy still records dev-channel HTTPS for any reachable
+    // device, so reveal the tab whenever the proxy is active/enabled even though this device was
+    // never discovered on a hotspot subnet. Watch the device's own IP.
+    if ((status?.mitmActive || status?.mitmEnabled) && device.ip) {
+      mitmRevealedTabIds.add(tabId);
+      networkCtrl.setVisible(true);
+      networkCtrl.setHotspotIp(device.ip);
+      void loadNetworkTabBufferedEvents(device.ip, networkCtrl);
+    }
+  } catch (e) {
+    devLog('[Network Inspector] status sync failed:', e);
+  }
+}
+
+async function loadNetworkTabBufferedEvents(
+  deviceIp: string,
+  networkCtrl: ReturnType<typeof setupNetworkTab>
+): Promise<void> {
+  if (!window.roku?.networkInspectorGetEvents) return;
+  try {
+    const res = await window.roku.networkInspectorGetEvents(deviceIp, 500);
+    if (res?.success && Array.isArray(res.events) && res.events.length > 0) {
+      networkCtrl.loadBufferedEvents(res.events);
+    }
+  } catch {
+    /* ignore */
+  }
+}
+
+function setupNetworkInspectorListeners(): void {
+  initNetworkInspectorBridge({
+    onDeviceDiscovered: (device) => {
+      if (!NETWORK_INSPECTOR_ENABLED) return;
+      addDiscoveredDevice(device);
+      syncNetworkTabsForLocalDevice(device as { ip?: string; serialNumber?: string });
+    },
+    onDeviceJoined: (payload) => {
+      if (!NETWORK_INSPECTOR_ENABLED) return;
+      const serial = payload.serialNumber?.trim();
+      const ip = payload.ip?.trim();
+      if (!serial || !ip) return;
+      hotspotSerialsActive.add(serial);
+      hotspotSerialIps.set(serial, ip);
+      applyNetworkTabForSerial(serial, ip, true);
+    },
+    onDeviceLeft: (payload) => {
+      const serial = payload.serialNumber?.trim();
+      if (!serial) return;
+      hotspotSerialsActive.delete(serial);
+      hotspotSerialIps.delete(serial);
+      applyNetworkTabForSerial(serial, null, false);
+    },
+    onClientsCleared: () => {
+      hotspotSerialsActive.clear();
+      hotspotSerialIps.clear();
+      for (const ctrl of networkTabControllers.values()) {
+        ctrl.setVisible(false);
+        ctrl.setHotspotIp(null);
+        ctrl.clearEvents();
+      }
+    },
+    onStatus: (status) => {
+      const s = status as {
+        packetsCaptured?: number;
+        captureActive?: boolean;
+        hotspotInterfaceDetected?: boolean;
+        lastError?: string;
+        captureInterface?: string;
+        connectedClients?: Array<{ ip?: string; serialNumber?: string }>;
+        eventsBuffered?: number;
+        mitmActive?: boolean;
+        mitmEnabled?: boolean;
+        // Readiness + structured remediation — forwarded so each tab's blocked
+        // state renders the main-process prerequisite steps instead of going
+        // stale until a manual status refresh.
+        platform?: string;
+        captureToolAvailable?: boolean;
+        bpfCaptureAvailable?: boolean;
+        bpfLaunchDaemonInstalled?: boolean;
+        mitmListenAddress?: string;
+        mitmLastError?: string;
+        mitmTransactions?: number;
+        prerequisites?: Array<{
+          ok: boolean;
+          code: string;
+          title: string;
+          message: string;
+          remediation: string[];
+          docsPath?: string;
+          persistentFixInstalled?: boolean;
+        }>;
+      };
+      const clients = s.connectedClients || [];
+      for (const client of clients) {
+        if (client.serialNumber && client.ip) {
+          hotspotSerialIps.set(client.serialNumber.trim(), client.ip.trim());
+          hotspotSerialsActive.add(client.serialNumber.trim());
+          applyNetworkTabForSerial(client.serialNumber.trim(), client.ip.trim(), true);
+        }
+      }
+      // Shared Wi-Fi (no hotspot): reveal connected local devices' Network tabs once the proxy is
+      // active, since they won't appear in connectedClients (that list comes from hotspot scans).
+      if (s.mitmActive || s.mitmEnabled) revealLocalNetworkTabsForMitm();
+      for (const ctrl of networkTabControllers.values()) {
+        ctrl.setCaptureStatus(s);
+      }
+    },
+    onCaptureEvents: (events) => {
+      if (!NETWORK_INSPECTOR_ENABLED || !Array.isArray(events)) return;
+      for (const ctrl of networkTabControllers.values()) {
+        ctrl.appendEvents(events);
+      }
+    }
+  });
+}
 
 /**
  * Snapshot connectedDevices and push to the MCP bridge so external agents can
@@ -861,8 +1149,8 @@ function createRemoteLocationSection(location) {
         <span class="location-toggle">${icon('chevron-down', 'icon-sm')}</span>
       </div>
       <div class="location-header-bottom">
-        <span class="location-device-count">${location.devices.size} device${location.devices.size !== 1 ? 's' : ''}</span>
         <span class="location-server-url">${escapeHtml(location.host)}:${location.port}</span>
+        <span class="location-device-count">${location.devices.size} device${location.devices.size !== 1 ? 's' : ''}</span>
       </div>
     </div>
     <div class="location-body">
@@ -958,21 +1246,36 @@ function showServerCapabilities(location, opener?: HTMLElement | null) {
     screenshot: { label: 'Screenshot', desc: 'Capture device screen' },
     console: { label: 'Console', desc: 'BrightScript debug output' },
     appConnector: { label: 'App Connector', desc: 'RALE TrackerTask integration' },
-    deepLink: { label: 'Deep Link', desc: 'Launch content with parameters' }
+    deepLink: { label: 'Deep Link', desc: 'Launch content with parameters' },
+    networkInspector: { label: 'Network Inspector', desc: 'Capture DNS/SNI/HTTP + MITM proxy' }
   };
-  
+
+  // Most capabilities are plain booleans. Network Inspector is an object
+  // ({ supported, requiresRoot, isRoot }) because it needs root on the server, so it has a
+  // third "Needs root" state. Older servers omit it entirely → Not Supported.
+  function capStatus(key: string): { cls: string; text: string } {
+    if (key === 'networkInspector') {
+      const ni = (caps as Record<string, unknown>)['networkInspector'] as
+        | { supported?: boolean; requiresRoot?: boolean; isRoot?: boolean }
+        | undefined;
+      if (ni && ni.supported === true) return { cls: 'supported', text: 'Supported' };
+      if (ni && ni.requiresRoot && ni.isRoot === false) return { cls: 'not-supported', text: 'Needs root' };
+      return { cls: 'not-supported', text: 'Not Supported' };
+    }
+    const enabled = (caps as Record<string, unknown>)[key] === true;
+    return { cls: enabled ? 'supported' : 'not-supported', text: enabled ? 'Supported' : 'Not Supported' };
+  }
+
   let capList = '';
   for (const [key, info] of Object.entries(capabilityLabels)) {
-    const enabled = caps[key] === true;
-    const statusClass = enabled ? 'supported' : 'not-supported';
-    const statusText = enabled ? 'Supported' : 'Not Supported';
-    capList += `<div class="capability-item ${statusClass}">
+    const status = capStatus(key);
+    capList += `<div class="capability-item ${status.cls}">
       <span class="cap-indicator"></span>
       <div class="cap-info">
         <span class="cap-label">${info.label}</span>
         <span class="cap-desc">${info.desc}</span>
       </div>
-      <span class="cap-status-text">${statusText}</span>
+      <span class="cap-status-text">${status.text}</span>
     </div>`;
   }
   
@@ -1014,9 +1317,7 @@ function showServerCapabilities(location, opener?: HTMLElement | null) {
   };
 
   modal.querySelector('.close-modal-btn')?.addEventListener('click', requestClose);
-  modal.addEventListener('click', (e) => {
-    if (e.target === modal) requestClose();
-  });
+  attachBackdropClickToClose(modal, requestClose);
 
   const escHandler = (e: KeyboardEvent) => {
     if (e.key === 'Escape' && modal.isConnected) requestClose();
@@ -1506,15 +1807,6 @@ async function tryAutoConnectRememberedMatchesAfterUserScan() {
   }
 }
 
-function setScanButtonsScanningNetworkLabel(): void {
-  if (elements.scanBtn) {
-    const scanText = elements.scanBtn.querySelector('.scan-text');
-    if (scanText) scanText.textContent = 'Scanning Network...';
-  }
-  const titleText = elements.titlebarScanBtn?.querySelector('.titlebar-scan-text');
-  if (titleText) titleText.textContent = 'Scanning Network...';
-}
-
 /** SSDP + optional subnet fallback; clears non-connected locals first; always removes onDeviceFound listener. */
 async function executeLocalDiscoveryScan(): Promise<void> {
   state.devices.forEach((device, deviceId) => {
@@ -1540,10 +1832,17 @@ async function executeLocalDiscoveryScan(): Promise<void> {
     console.error('Discovery error:', error);
   }
 
-  if (state.devices.size === 0) {
-    devLog('SSDP found no devices, trying subnet scan...');
+  const shouldSubnetScan = state.devices.size === 0 || NETWORK_INSPECTOR_ENABLED;
+  if (shouldSubnetScan) {
+    // Keep the button label as a single "Scanning..." for the whole operation; the SSDP →
+    // subnet-sweep phase distinction is dev-only noise, so it lives in devLog (dev/debug mode),
+    // not the UI.
+    devLog(
+      state.devices.size === 0
+        ? 'Scan phase: SSDP found no devices, running subnet sweep...'
+        : 'Scan phase: Network Inspector enabled — subnet sweep includes hotspot subnet when active...'
+    );
     try {
-      setScanButtonsScanningNetworkLabel();
       const subnetResult = await window.roku.scanSubnet();
       devLog('Subnet scan result:', subnetResult.success, 'devices:', subnetResult.devices?.length);
 
@@ -1677,9 +1976,11 @@ function addDiscoveredDevice(device) {
         oldIP: existingByKey.ip,
         newIP: device.ip
       });
+      const oldIp = existingByKey.ip;
       existingByKey.ip = device.ip;
       existingByKey.port = device.port;
       Object.assign(existingByKey, device);
+      reconcileConnectedDeviceIp(oldIp, device);
     } else {
       Object.assign(existingByKey, device);
     }
@@ -2110,7 +2411,17 @@ function disconnectDevice(deviceKey) {
     }
     panel.remove();
   }
-  
+
+  // Tear down the Network Inspector controller: clears its 2s poll interval, debounce
+  // timers, rAF, and all DOM listeners (via AbortController), then drops the buffered
+  // events so a closed tab can't keep merging pushed capture events into dead state.
+  const networkCtrl = networkTabControllers.get(tabId);
+  if (networkCtrl) {
+    try { networkCtrl.destroy?.(); } catch (_) {}
+    networkTabControllers.delete(tabId);
+    mitmRevealedTabIds.delete(tabId);
+  }
+
   // Remove from state
   state.connectedDevices.delete(deviceKey);
 
@@ -2833,6 +3144,9 @@ function createDevicePanel(device, tabId, isRemote = false, serverUrl = null, lo
     setupInspector(panel, device, api);
     setupTelnet(panel, device, api, { devLog });
     setupActionScripts(panel, device, api);
+    const networkCtrl = setupNetworkTab(panel, device, isRemote);
+    networkTabControllers.set(tabId, networkCtrl);
+    void syncNetworkTabForConnectedDevice(tabId, device, networkCtrl, isRemote);
     
     // Update dev mode warnings based on device status
     updateDevModeWarnings(panel, device.developerEnabled === true);
@@ -3404,6 +3718,10 @@ function shouldSuppressGlobalRemoteShortcuts(): boolean {
   if (document.querySelector('.add-location-modal.active')) return true;
   // Server info lightbox uses flex without `.active`; treat connected overlay as open.
   if (document.querySelector('.server-info-overlay')) return true;
+  // Title-bar hamburger (app) menu open — its own Escape handler closes it, so
+  // don't also map Escape → Home (or any keymap key) to the device. This guard
+  // runs in the global handler that fires *before* the menu's own listener.
+  if (document.querySelector('#titlebarHamburgerBtn[aria-expanded="true"]')) return true;
   return false;
 }
 
@@ -3796,9 +4114,7 @@ function setupKeyboardRemoteHelpModal(): void {
   };
 
   closeBtn.addEventListener('click', closeKeyboardRemoteHelpModal);
-  modal.addEventListener('click', (e) => {
-    if (e.target === modal) closeKeyboardRemoteHelpModal();
-  });
+  attachBackdropClickToClose(modal, closeKeyboardRemoteHelpModal);
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && modal.classList.contains('active')) {
       closeKeyboardRemoteHelpModal();
@@ -3977,6 +4293,11 @@ function setupTitlebarHamburgerMenu(shell: NonNullable<Window['rdsShell']>): voi
           await shell.showAboutDialog();
         }
         break;
+      case 'quit':
+        if (typeof shell.appMenuAction === 'function') {
+          await shell.appMenuAction('quit');
+        }
+        break;
       default:
         break;
     }
@@ -4026,7 +4347,14 @@ function setupTitlebarHamburgerMenu(shell: NonNullable<Window['rdsShell']>): voi
   });
 
   document.addEventListener('keydown', (event) => {
-    if (event.key === 'Escape') closeMenu();
+    if (event.key !== 'Escape') return;
+    // Only act (and swallow the key) when the menu is actually open. Otherwise
+    // a global keyboard-remote handler maps Escape → Home and would fire a Home
+    // keypress to the device while the menu closes.
+    if (btn.getAttribute('aria-expanded') !== 'true') return;
+    event.preventDefault();
+    event.stopPropagation();
+    closeMenu();
   });
 }
 
@@ -4299,6 +4627,7 @@ async function init() {
   setupSidebarTitlebarToggle();
   mountFloatingRemote();
   syncFloatingRemoteToggleButtons();
+  setupNetworkInspectorListeners();
 
   // The shared bus performs `loadPersistedAppSettings()` once and fans out to
   // every subscriber, so the global shell and each device-metrics panel no
@@ -4307,6 +4636,7 @@ async function init() {
   onAppSettingsChanged(() => {
     cachedRememberedDeviceList = undefined;
     cancelPostStartupSidebarGraceTimer();
+    refreshAllNetworkTabVisibility();
     if (!REMEMBER_SIDEBAR_TOGGLE) {
       postStartupSidebarDecisionComplete = true;
       sidebarSessionKeepExpandedOverride = false;

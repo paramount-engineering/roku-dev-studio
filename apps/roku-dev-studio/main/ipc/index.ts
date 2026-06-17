@@ -9,6 +9,7 @@ import { setupDevAppHandlers } from './dev-app-handlers';
 import { setupTelnetHandlers } from './telnet-handlers';
 import { setupRemoteHandlers } from './remote-handlers';
 import { setupSystemHandlers } from './system-handlers';
+import { setupNetworkInspectorHandlers } from './network-inspector-handlers';
 
 type AppWindowState = {
   developerModeEnabled: boolean;
@@ -44,6 +45,7 @@ function setupIpcHandlers(
   setupTelnetHandlers(mainWindow, safeSendToRenderer);
   setupRemoteHandlers(mainWindow, safeSendToRenderer);
   setupSystemHandlers(mainWindow, dialog, Menu, clipboard, app, state);
+  setupNetworkInspectorHandlers(mainWindow, safeSendToRenderer, dialog, app.getPath('userData'));
 }
 
 export { setupIpcHandlers };

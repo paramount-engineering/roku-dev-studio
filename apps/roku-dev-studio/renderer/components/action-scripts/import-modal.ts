@@ -4,6 +4,7 @@
  * Validates script (parse + schema), establishes App Connector when required, then loads into executor.
  */
 
+import { attachBackdropClickToClose } from '../../modules/utils/modal-backdrop-click.js';
 import { scriptHasSaveActions, scriptNeedsPassword, scriptNeedsRaleConnection } from './action-registry.js';
 import { parseAndValidateScript } from './validator.js';
 import { ensureRaleFunctionsWhenScriptNeedsRale } from './script-rale-validation.js';
@@ -652,9 +653,7 @@ export function setupImportModal(container, device, api, context) {
       importValidateBtn.addEventListener('click', handleValidateAndImport);
     }
     if (importModalCloseBtn) importModalCloseBtn.addEventListener('click', closeImportModal);
-    modalRoot.addEventListener('click', (e) => {
-      if (e.target === modalRoot) closeImportModal();
-    });
+    attachBackdropClickToClose(modalRoot, closeImportModal);
   }
 
   return { openImportModal, closeImportModal };

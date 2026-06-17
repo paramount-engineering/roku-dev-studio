@@ -28,6 +28,8 @@ type SubnetScanOpts = {
   log?: (m: string) => void;
   requestTimeout?: number;
   concurrency?: number;
+  /** Additional /24 prefixes to probe (e.g. hotspot subnet `192.168.2`). Deduped with LAN subnets. */
+  extraSubnetPrefixes?: string[];
 };
 
 function upsertDevice(devices, ipToDeviceId, ip, port, deviceInfo, onDeviceFound) {
@@ -230,22 +232,32 @@ function subnetScan(opts: SubnetScanOpts = {}) {
   const concurrency = opts.concurrency != null ? opts.concurrency : 50;
 
   const interfaces = os.networkInterfaces();
-  const subnets: string[] = [];
+  const subnetSet = new Set<string>();
 
   for (const name of Object.keys(interfaces)) {
     for (const iface of interfaces[name] || []) {
       if (iface.family === 'IPv4' && !iface.internal) {
         const parts = iface.address.split('.');
         if (parts.length === 4) {
-          subnets.push(parts[0] + '.' + parts[1] + '.' + parts[2]);
+          subnetSet.add(parts[0] + '.' + parts[1] + '.' + parts[2]);
         }
       }
     }
   }
 
+  for (const prefix of opts.extraSubnetPrefixes || []) {
+    if (typeof prefix === 'string' && /^\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(prefix.trim())) {
+      subnetSet.add(prefix.trim());
+    }
+  }
+
+  const subnets = Array.from(subnetSet);
   if (subnets.length === 0) {
     log('No subnets to scan');
     return Promise.resolve([]);
+  }
+  if ((opts.extraSubnetPrefixes || []).length > 0) {
+    log('Subnet scan prefixes: ' + subnets.join(', '));
   }
 
   const devices = new Map();

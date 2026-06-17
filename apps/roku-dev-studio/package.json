@@ -25,7 +25,7 @@
     "build:mac": "npm run build:bundle && npm run clean:dist && electron-builder --mac",
     "build:win": "npm run build:bundle && npm run clean:dist && electron-builder --win",
     "build:linux": "npm run build:bundle && npm run clean:dist && electron-builder --linux",
-    "build:all": "npm run build:bundle && npm run clean:dist && concurrently --names mac,linux,win --prefix-colors cyan,green,magenta \"electron-builder --mac\" \"electron-builder --linux\" \"electron-builder --win\""
+    "build:all": "npm run build:bundle && npm run clean:dist && concurrently --names mac,linux,win --prefix-colors cyan,green,magenta \"electron-builder --mac -c.npmRebuild=false\" \"electron-builder --linux -c.npmRebuild=false\" \"electron-builder --win -c.npmRebuild=false\""
   },
   "author": {
     "name": "Hareendra Donapati",
@@ -36,20 +36,28 @@
   "license": "MIT",
   "dependencies": {
     "@tanstack/virtual-core": "^3.14.0",
+    "adm-zip": "^0.5.17",
     "brighterscript": "^0.68.5",
     "form-data": "^4.0.0",
     "modern-screenshot": "^4.6.8",
     "monaco-editor": "^0.52.2",
+    "node-forge": "^1.4.0",
     "pdf-lib": "^1.17.1",
     "roku-dev-studio-api": "file:../../packages/roku-dev-studio-api",
     "roku-dev-studio-mcp": "file:../../packages/roku-dev-studio-mcp",
+    "roku-dev-studio-platform": "file:../../packages/roku-dev-studio-platform",
     "solid-js": "^1.9.5",
     "ws": "^8.18.0"
   },
+  "optionalDependencies": {
+    "cap": "^0.2.1"
+  },
   "devDependencies": {
     "@electron/notarize": "^2.2.1",
+    "@types/adm-zip": "^0.5.8",
     "@types/jsdom": "^21.1.7",
     "@types/node": "^22.10.0",
+    "@types/node-forge": "^1.3.14",
     "@types/ws": "^8.18.1",
     "concurrently": "^9.1.2",
     "cross-env": "^7.0.3",
@@ -90,10 +98,17 @@
       "!scripts/**",
       "!*.md"
     ],
-    "asarUnpack": [],
+    "asarUnpack": [
+      "**/node_modules/cap/**"
+    ],
     "compression": "maximum",
     "mac": {
       "category": "public.app-category.developer-tools",
+      "files": [
+        "!assets/icon.ico",
+        "!assets/ico-parts/**",
+        "!assets/icon.iconset/**"
+      ],
       "target": [
         {
           "target": "dmg",
@@ -133,6 +148,13 @@
       ]
     },
     "win": {
+      "files": [
+        "!assets/icon.icns",
+        "!assets/icon.iconset/**",
+        "!assets/ico-parts/**",
+        "!entitlements.mac.plist",
+        "!scripts/notarize.cjs"
+      ],
       "target": [
         {
           "target": "nsis",
@@ -150,6 +172,13 @@
       "icon": "assets/icon.ico"
     },
     "linux": {
+      "files": [
+        "!assets/icon.icns",
+        "!assets/icon.ico",
+        "!assets/icon.iconset/**",
+        "!entitlements.mac.plist",
+        "!scripts/notarize.cjs"
+      ],
       "target": [
         {
           "target": "deb",
