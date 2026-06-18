@@ -91,7 +91,7 @@ async function main() {
       return;
     }
     const pct = totalBytes > 0 ? Math.min(100, Math.round((doneBytes / totalBytes) * 100)) : 0;
-    statusEl.textContent = `${entries.length.toLocaleString()} lines (loading ${pct}%)`;
+    statusEl.textContent = `${entries.length.toLocaleString()} lines (Loading ${pct}%)`;
   }
 
   /**
@@ -242,7 +242,7 @@ async function main() {
   // the chunk handler — the explicit update here is a no-op for that case
   // because `streamComplete` already gated to the final form.
   if (!receivedAnyChunk && !streamErrored && !streamComplete) {
-    setStatus(`0 lines (loading 0%)`);
+    setStatus(`0 lines (Loading 0%)`);
   }
 
   // Copy / Save header buttons — file-viewer-specific chrome (the Console

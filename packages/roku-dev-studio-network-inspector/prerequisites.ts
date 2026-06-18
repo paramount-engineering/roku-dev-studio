@@ -47,7 +47,7 @@ export function buildBpfPrerequisiteCheck(opts: {
     return {
       ok: true,
       code: 'bpf-ok',
-      title: 'Packet capture ready',
+      title: 'Packet Capture Ready',
       message: 'BPF devices are writable.',
       remediation: [],
       persistentFixInstalled: installed
@@ -56,7 +56,7 @@ export function buildBpfPrerequisiteCheck(opts: {
   return {
     ok: false,
     code: installed ? 'bpf-denied-after-install' : 'bpf-denied',
-    title: 'Packet capture blocked',
+    title: 'Packet Capture Blocked',
     message:
       'macOS restricts /dev/bpf* to root by default. Manual chmod fixes it only until the OS recreates those devices (often after reboot or sleep).',
     remediation: [...MACOS_BPF_REMEDIATION_STEPS],
@@ -72,7 +72,7 @@ export function buildLinuxCapturePrerequisiteCheck(opts: {
     return {
       ok: true,
       code: 'linux-capture-ok',
-      title: 'Packet capture ready',
+      title: 'Packet Capture Ready',
       message: 'tcpdump is available for capture.',
       remediation: []
     };
@@ -80,7 +80,7 @@ export function buildLinuxCapturePrerequisiteCheck(opts: {
   return {
     ok: false,
     code: 'linux-capture-denied',
-    title: 'Packet capture needs setup',
+    title: 'Packet Capture Needs Setup',
     message:
       'Linux captures via tcpdump, which needs raw-socket privileges (root, or the cap_net_raw/cap_net_admin capabilities).',
     remediation: [...LINUX_CAPTURE_REMEDIATION_STEPS],
@@ -119,7 +119,7 @@ export function buildNetworkInspectorPrerequisites(status: {
       // This is optional, not a hard failure: MITM proxying (the default) records proxied
       // requests without Npcap. Npcap only adds *hotspot* capture of DNS/TLS SNI from all of
       // the Roku's traffic, so the copy must not read like the feature is broken.
-      title: 'Hotspot capture needs Npcap (optional)',
+      title: 'Hotspot Capture Needs Npcap (Optional)',
       message:
         'MITM proxying already works without it. Npcap only adds hotspot capture of DNS/TLS SNI from all of the Roku’s traffic.',
       remediation: [
@@ -140,7 +140,7 @@ export function buildNetworkInspectorPrerequisites(status: {
     checks.push({
       ok: false,
       code: 'cap-module-missing',
-      title: 'Capture module unavailable',
+      title: 'Capture Module Unavailable',
       message: 'The native packet-capture module could not be loaded in this build.',
       remediation: [...WINDOWS_CAP_MODULE_REMEDIATION_STEPS],
       docsPath: 'network-inspector'

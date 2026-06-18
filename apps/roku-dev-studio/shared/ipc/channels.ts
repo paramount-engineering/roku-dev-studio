@@ -47,7 +47,7 @@ export const IPC = {
   McpBridgeAgentAction: 'mcp-bridge:agent-action',
   /** Main broadcasts an agent-captured screenshot so the matching device tab's screenshot pane can render it. */
   McpBridgeAgentScreenshot: 'mcp-bridge:agent-screenshot',
-  /** Main asks the renderer for the dev password remembered for a device serial (localStorage). */
+  /** Main asks the renderer for the Dev Password remembered for a device serial (localStorage). */
   McpBridgeStoredPasswordRequest: 'mcp-bridge:stored-password-request',
   /** Renderer returns remembered password (or omits it) for a prior stored-password request. */
   McpBridgeStoredPasswordResult: 'mcp-bridge:stored-password-result',

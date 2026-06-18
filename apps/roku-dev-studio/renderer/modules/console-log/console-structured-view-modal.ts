@@ -127,7 +127,7 @@ const structuredModal = createSingletonConsoleModal({
       <div class="modal-header">
         <span class="modal-title" id="telnetStructuredViewerTitle">Console</span>
         <div class="telnet-structured-view-modal-actions">
-          <button type="button" class="btn btn-secondary telnet-structured-view-copy" title="Copy formatted text">Copy</button>
+          <button type="button" class="btn btn-secondary telnet-structured-view-copy" title="Copy Formatted Text">Copy</button>
           <button type="button" class="modal-close telnet-structured-view-close" aria-label="Close"><span class="icon icon-sm"><svg><use href="#icon-x"/></svg></span></button>
         </div>
       </div>

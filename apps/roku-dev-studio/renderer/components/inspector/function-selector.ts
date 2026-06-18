@@ -70,7 +70,7 @@ export function setupFunctionSelector(
       const raleCount = Object.keys(RALE_BUILTIN_COMMANDS).length;
       setSafeHTML(
         funcParamHint,
-        `<span style="color: var(--accent-green);">${appCount} app function(s), ${raleCount} RALE command(s)</span>`
+        `<span style="color: var(--accent-green);">${appCount} App Function(s), ${raleCount} RALE command(s)</span>`
       );
     }
   }
@@ -88,7 +88,7 @@ export function setupFunctionSelector(
         const raleCount = Object.keys(RALE_BUILTIN_COMMANDS).length;
         setSafeHTML(
           funcParamHint,
-          `<span style="color: var(--accent-green);">${appCount} app function(s), ${raleCount} RALE command(s)</span>`
+          `<span style="color: var(--accent-green);">${appCount} App Function(s), ${raleCount} RALE command(s)</span>`
         );
       }
       return;

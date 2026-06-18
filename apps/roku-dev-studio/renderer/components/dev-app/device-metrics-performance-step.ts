@@ -366,7 +366,7 @@ export async function runDevicePerformanceCaptureStep(
   if (!developerEnabled) {
     return {
       success: false,
-      error: 'Developer mode must be enabled on this device to capture performance metrics.'
+      error: 'Developer Mode must be enabled on this device to capture performance metrics.'
     };
   }
 

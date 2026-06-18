@@ -81,8 +81,8 @@ function stateToLabel(state: string): string {
     case 'R': return 'Running';
     case 'S': return 'Sleeping';
     case 'I': return 'Idle';
-    case 't': return 'Tracing stop';
-    case 'D': return 'Disk wait';
+    case 't': return 'Tracing Stop';
+    case 'D': return 'Disk Wait';
     case 'T': return 'Stopped';
     case 'Z': return 'Zombie';
     case 'X': return 'Dead';
@@ -296,7 +296,7 @@ function renderObjectsResourceMonitor(
     if (mode === 'memory' && !hasDevTotalBytes && !hasRowBytes && channelMemBytes > 0 && totalCount > 0) {
       memHint.hidden = false;
       memHint.textContent =
-        'Memory is estimated from object counts and chanperf “used” memory when the device does not send per-type bytes.';
+        'Memory is estimated from object counts and chanperf (“used”) memory when the device does not send per-type bytes.';
     } else {
       memHint.hidden = true;
       memHint.textContent = '';
@@ -801,7 +801,7 @@ export function setupRemoteTabMetrics(
       }
 
     if (btn instanceof HTMLButtonElement) {
-      btn.title = 'Latest Device Performance [Click to Open Remote]';
+      btn.title = 'Latest Device Performance (Click to Open Remote)';
     }
   }
 
@@ -960,7 +960,7 @@ export function setupRemoteTabMetrics(
       'Channel uptime',
       `Stable for ${formatSecondsCompact(uptimeSec)}`,
       {
-        valueSecondary: 'since first observed',
+        valueSecondary: 'Since first observed',
         flicker: flickerUptime
       }
     );
@@ -976,14 +976,14 @@ export function setupRemoteTabMetrics(
       const cUserSec = ps.cutime / clk;
       const cSysSec = ps.cstime / clk;
       addInfoRow('Child CPU time', `${(cUserSec + cSysSec).toFixed(2)} s`, {
-        valueSecondary: `user ${cUserSec.toFixed(2)} · kernel ${cSysSec.toFixed(2)}`
+        valueSecondary: `User ${cUserSec.toFixed(2)} · Kernel ${cSysSec.toFixed(2)}`
       });
     }
     if (ps.cminflt > 0 || ps.cmajflt > 0) {
       addInfoRow(
         'Child faults',
         `${ps.cminflt.toLocaleString()} / ${ps.cmajflt.toLocaleString()}`,
-        { valueSecondary: 'minor / major' }
+        { valueSecondary: 'Minor/Major' }
       );
     }
 
@@ -1207,8 +1207,8 @@ export function setupRemoteTabMetrics(
         devAppForeground === false
           ? 'No BrightScript object breakdown while the Dev App is in the background. Launch or switch to the Dev App on the device — metrics and object counts update only when it is in the foreground.'
           : devAppForeground !== true
-            ? 'No BrightScript object breakdown yet. After the connection reports the foreground channel, launch the Dev App if you need sideloaded dev object counts.'
-            : 'No BrightScript object breakdown yet. Ensure Control by mobile apps (network access) is enabled and the foreground channel exposes object counts.';
+            ? 'No BrightScript object breakdown yet. After the connection reports the foreground channel, launch the Dev App if you need sideloaded Dev App object counts.'
+            : 'No BrightScript object breakdown yet. Ensure Control by Mobile Apps (Network Access) is enabled and the foreground channel exposes object counts.';
       elObjRm.innerHTML = `<div class="remote-objects-rm-empty">${emptyMsg}</div>`;
       if (elObjFooter) {
         elObjFooter.hidden = true;
@@ -1255,7 +1255,7 @@ export function setupRemoteTabMetrics(
       } else if (!full) {
         chanperfErr =
           extractChanperfFailureMessage(chanperfXml) ||
-          'Could not parse channel performance (developer mode / ECP / chanperf).';
+          'Could not parse Channel Performance (Dev Mode / ECP / chanperf).';
       }
 
       const activeId =
@@ -1310,7 +1310,7 @@ export function setupRemoteTabMetrics(
       if (!full && !objectOk) {
         failStreak += 1;
         setError(
-          [chanperfErr, ocErr].filter(Boolean).join(' · ') || 'Device metrics unavailable'
+          [chanperfErr, ocErr].filter(Boolean).join(' · ') || 'Device Metrics unavailable'
         );
       } else {
         failStreak = 0;
@@ -1509,9 +1509,9 @@ export function setupRemoteTabMetrics(
       };
     }
     return {
-      full: 'Device performance paused — bring the Dev App to the foreground to resume.',
-      short: 'Performance paused',
-      title: 'Device performance paused — bring the Dev App to the foreground to resume.'
+      full: 'Device Performance Paused — bring the Dev App to the foreground to resume.',
+      short: 'Device Performance paused',
+      title: 'Device Performance Paused — bring the Dev App to the foreground to resume.'
     };
   }
 

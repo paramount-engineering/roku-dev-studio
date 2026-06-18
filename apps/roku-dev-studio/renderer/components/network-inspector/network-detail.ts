@@ -377,7 +377,7 @@ export function renderRequestOverview(ev: ParsedNetworkEvent, allEvents: ParsedN
           .map((d) =>
             d.type === 'dns-response'
               ? `${d.hostname} → ${(d.resolvedIps || []).join(', ')}`
-              : `query ${d.hostname}`
+              : `Query ${d.hostname}`
           )
           .join('; ')
       )
@@ -438,7 +438,7 @@ export function renderResponsePane(
   if (ev.type === 'dns-query' || ev.type === 'dns-response') {
     if (tab === 'headers') return `<div class="ni-pane-empty">(DNS — no HTTP headers)</div>`;
     const ips = (ev.resolvedIps || []).join('\n');
-    return `<pre class="ni-code-block">${escapeHtml(ev.type === 'dns-response' ? `;; ANSWER\n${ips || '(empty)'}` : '(pending)')}</pre>`;
+    return `<pre class="ni-code-block">${escapeHtml(ev.type === 'dns-response' ? `;; ANSWER\n${ips || '(empty)'}` : '(Pending)')}</pre>`;
   }
   if (tab === 'headers') return renderHeadersTable(ev.httpResponse);
   const code = ev.httpResponse?.statusCode;

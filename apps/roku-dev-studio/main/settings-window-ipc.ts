@@ -52,11 +52,11 @@ const TIMING_LABELS: Record<TimingKey, { title: string; hint: string }> = {
   DEFAULT_RALE_PORT: { title: 'RALE / App Connector Port', hint: 'TCP Port (Default 49200).' },
   SCREENSHOT_DEBOUNCE_DELAY: {
     title: 'Screenshot Debounce (ms)',
-    hint: 'Delay after KeyPress before Auto-Screenshot.'
+    hint: 'Delay after key press before auto-screenshot.'
   },
   SCREENSHOT_AFTER_LAUNCH_DELAY: {
     title: 'Screenshot After Launch (ms)',
-    hint: 'Wait After Dev App Launch Before Screenshot.'
+    hint: 'Wait after Dev App launch before screenshot.'
   },
   TELNET_TIMEOUT: { title: 'Telnet Connect Timeout (ms)', hint: 'Debug Console / System Telnet.' },
   CONNECTION_CHECK_INTERVAL: {
@@ -67,13 +67,13 @@ const TIMING_LABELS: Record<TimingKey, { title: string; hint: string }> = {
   DEVICE_METRICS_SAMPLE_INTERVAL_MS: {
     title: 'Sampling Rate (ms)',
     hint:
-      'Chanperf + object-count poll cadence. Lower = fresher data, more ECP traffic; needs developer mode and Control by mobile apps.'
+      'Chanperf + object-count poll cadence. Lower = fresher data, more ECP traffic; needs Developer Mode and Control by Mobile Apps.'
   },
   DEVICE_METRICS_CHART_HISTORY_MS: {
     title: 'Chart History Time (minutes)',
-    hint: 'How far back the CPU and System memory charts plot'
+    hint: 'How far back the CPU and System Memory charts plot'
   },
-  TOAST_DISPLAY_DURATION: { title: 'Toast Duration (s)', hint: 'Success/Error Toast Visibility.' },
+  TOAST_DISPLAY_DURATION: { title: 'Toast Duration (s)', hint: 'Success/error toast visibility.' },
   STATUS_MESSAGE_DURATION: { title: 'Status Message Duration (s)', hint: 'Header Status Line Visibility.' }
 };
 
@@ -130,10 +130,10 @@ export type SettingsWindowSavePayload = {
   /** When true, persist primary sidebar collapsed state (localStorage). Default off. */
   rememberSidebarToggle: boolean;
   /**
-   * When true, dev passwords are persisted across launches via the OS
+   * When true, Dev Passwords are persisted across launches via the OS
    * keychain (`safeStorage`). Default **off** — on macOS this causes a
    * one-time system password prompt the first time the keychain entry is
-   * accessed, which we want to keep opt-in. When off, dev passwords are
+   * accessed, which we want to keep opt-in. When off, Dev Passwords are
    * remembered only for the current session (in-memory).
    */
   rememberPasswordsInKeychain: boolean;

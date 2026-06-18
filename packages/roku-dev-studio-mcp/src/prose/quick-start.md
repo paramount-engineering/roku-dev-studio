@@ -171,7 +171,7 @@ never be a one-step script.
    script into the Builder UI for the human to review and run — it does not
    auto-execute.
 
-Never embed the dev password in script JSON. Dev Studio supplies it from
+Never embed the Dev Password in script JSON. Dev Studio supplies it from
 local storage at run time.
 
 ## 6. Live read-only lookups

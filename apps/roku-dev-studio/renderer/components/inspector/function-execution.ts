@@ -72,7 +72,7 @@ export function setupFunctionExecution(
   async function executeRaleBuiltin(selectionKey: string, functionParams: unknown[]) {
     const def = RALE_BUILTIN_COMMANDS[selectionKey as keyof typeof RALE_BUILTIN_COMMANDS];
     if (!def) {
-      displayResponseFn({ error: 'Unknown RALE builtin' }, true);
+      displayResponseFn({ error: 'Unknown RALE Builtin' }, true);
       return;
     }
     const cmd = def.command;
@@ -209,7 +209,7 @@ export function setupFunctionExecution(
       } else if (!inner.success) {
         displayResponseFn(
           {
-            error: 'getExternalControlFunctions returned false - make sure scene implements this function',
+            error: 'getExternalControlFunctions returned false — make sure the SceneGraph scene implements this function',
             data: inner
           },
           true

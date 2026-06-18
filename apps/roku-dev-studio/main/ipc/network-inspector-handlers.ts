@@ -138,7 +138,7 @@ function setupNetworkInspectorHandlers(
       const primaryIp = deviceIps?.find((ip) => !ip.endsWith('.1'));
       const namePart = primaryIp ? primaryIp.replace(/\./g, '-') : 'hotspot';
       const pcapOpts = {
-        title: 'Save packet capture',
+        title: 'Save Packet Capture',
         defaultPath: `network-inspector-${namePart}-${Date.now()}.pcap`,
         filters: [{ name: 'Wireshark PCAP', extensions: ['pcap'] }]
       };

@@ -1257,7 +1257,7 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
     if (!password) {
       return void sendJson(res, 400, {
         error:
-          'Missing `password` and no remembered dev password for this device. Save it in the device panel (Remember) or pass `password`.'
+          'Missing `password` and no remembered Dev Password for this device. Save it in the device panel (Remember) or pass `password`.'
       });
     }
     try {
@@ -1287,7 +1287,7 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
     if (!password) {
       return void sendJson(res, 400, {
         error:
-          'Missing `password` and no remembered dev password for this device. Save it in the device panel (Remember) or pass `password`.'
+          'Missing `password` and no remembered Dev Password for this device. Save it in the device panel (Remember) or pass `password`.'
       });
     }
     try {
@@ -1317,7 +1317,7 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
     if (!password) {
       return void sendJson(res, 400, {
         error:
-          'Missing `password` and no remembered dev password for this device. Save it in the device panel (Remember) or pass `password`.'
+          'Missing `password` and no remembered Dev Password for this device. Save it in the device panel (Remember) or pass `password`.'
       });
     }
     const waitAfterTriggerMs =

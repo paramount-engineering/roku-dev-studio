@@ -11,7 +11,7 @@ export const ACTION_SCRIPT_DEV_APP_ERROR =
   'The Roku Developer Application must be launched to establish an App Connector connection. Please open the Developer Application on your Roku device (or launch your sideloaded channel from the Dev App tab), then try again.';
 
 export const ACTION_SCRIPT_RALE_CONNECTION_ERROR =
-  'The tool could not establish an App Connector connection. Ensure your dev app is running with Developer Mode on and the correct port is set in the App Connector tab, then try again. The script cannot be executed until a connection is available.';
+  'The tool could not establish an App Connector connection. Ensure your Dev App is running with Developer Mode on and the correct port is set in the App Connector tab, then try again. The script cannot be executed until a connection is available.';
 
 /**
  * When the script needs RALE: require Dev App, live connection, return normalized app functions list.

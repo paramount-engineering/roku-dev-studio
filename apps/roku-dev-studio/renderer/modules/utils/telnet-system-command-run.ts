@@ -130,7 +130,7 @@ export async function runTelnetSystemCommandSession(
     if (!connectResult.success) {
       return {
         ok: false,
-        error: `Failed to connect to telnet (port 8080): ${connectResult.error || 'unknown'}`
+        error: `Failed to connect to Telnet (port 8080): ${connectResult.error || 'Unknown'}`
       };
     }
 
@@ -140,7 +140,7 @@ export async function runTelnetSystemCommandSession(
       const roku = window.roku;
       if (!roku?.remoteTelnetSystemPollData) {
         await api.telnetSystemDisconnect().catch(() => {});
-        return { ok: false, error: 'Remote telnet poll not available' };
+        return { ok: false, error: 'Remote Telnet poll not available' };
       }
       const pollData = async () => {
         try {
@@ -215,7 +215,7 @@ export async function runTelnetSystemCommandSession(
     if (!sendResult.success) {
       if (dataCleanup) dataCleanup();
       await api.telnetSystemDisconnect();
-      return { ok: false, error: `Failed to send command: ${sendResult.error || 'unknown'}` };
+      return { ok: false, error: `Failed to send command: ${sendResult.error || 'Unknown'}` };
     }
 
     onStatus?.('Waiting for output...');

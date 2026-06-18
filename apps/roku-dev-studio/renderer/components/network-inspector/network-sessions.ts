@@ -72,7 +72,7 @@ function formatTimestamp(ts: string | undefined): string {
 
 function formatDuration(ev: ParsedNetworkEvent): string {
   const pending = ev.type === 'http-transaction' && ev.httpResponse?.statusCode === 0;
-  if (pending) return 'pending…';
+  if (pending) return 'Pending…';
   if (typeof ev.durationMs === 'number' && ev.durationMs >= 0) {
     if (ev.durationMs < 1000) return `${ev.durationMs} ms`;
     return `${(ev.durationMs / 1000).toFixed(2)} s`;

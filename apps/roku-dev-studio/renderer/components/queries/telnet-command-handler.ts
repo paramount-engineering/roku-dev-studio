@@ -32,7 +32,7 @@ export function setupTelnetCommands(
         }
       }
 
-      outputArea.display('<span style="color: var(--accent-yellow);">Connecting to telnet (port 8080)...</span>', true);
+      outputArea.display('<span style="color: var(--accent-yellow);">Connecting to Telnet (port 8080)...</span>', true);
 
       try {
         await api.telnetSystemDisconnect();
@@ -40,7 +40,7 @@ export function setupTelnetCommands(
 
         const connectResult = await api.telnetSystemConnect();
         if (!connectResult.success) {
-          const errorContent = `Error: Failed to connect to telnet (port 8080): ${connectResult.error}`;
+          const errorContent = `Error: Failed to connect to Telnet (port 8080): ${connectResult.error}`;
           outputArea.display(
             `<span style="color: var(--accent-red);">Error: ${escapeHtml(connectResult.error || '')}</span>`,
             true

@@ -30,7 +30,7 @@ This repository is an **npm workspace** monorepo. Run **`npm install`** and **`n
 | **RALE** | Roku Advanced Layout Editor — Roku's SceneGraph inspection protocol over a TCP socket (default port `49200`), spoken by the `TrackerTask` component. |
 | **TrackerTask** | The BrightScript component channel developers add to their app to make it reachable from RALE / App Connector — see [`roku-components/README.md`](roku-components/README.md). |
 | **App Connector** | The Dev Studio tab that talks RALE: list / call your channel's `GetExternalControlFunctions`, plus built-ins (node lookup, registry editor, update node). |
-| **Sideload** | Uploading and installing a `.zip` / `.pkg` dev channel onto a Developer-Mode Roku via its dev password. |
+| **Sideload** | Uploading and installing a `.zip` / `.pkg` dev channel onto a Developer-Mode Roku via its Dev Password. |
 | **Action Script** | JSON-described automation that chains keypresses, queries, sideload, App Connector calls, screenshots, conditionals, waits, and variables. Built and run from the *Action Scripts* tab; also runnable headless via `rds`. |
 | **MCP server** | Roku Dev Studio's **Model Context Protocol** server — lets Cursor / Claude Desktop / VS Code drive a real device through this app while it's open. Toggle clients in **Settings → MCP Server**. |
 | **Fiddle** | The BrightScript scratch editor (Monaco + brighterscript lint) that wraps your snippet into a temporary channel and runs it on a selected device. |
@@ -195,7 +195,7 @@ Open with `Ctrl/Cmd+,` (or *Roku Dev Studio → Settings* on macOS, *File → Se
 - **Developer Mode:** Enhanced debugging and development features (`Ctrl/Cmd+Shift+D`)
 - **Privacy Mode:** Mask IP addresses and serial numbers in UI (`Ctrl/Cmd+Shift+P`)
 - **Debug Logging to file:** Optional file-based debug logging in app userData (`Ctrl/Cmd+Shift+L`)
-- **Encrypted dev-password storage:** "Remember password" persists the dev password through Electron `safeStorage` — backed by macOS Keychain, Windows DPAPI, secret-service, or kwallet where available; UI shows the storage backend status (`encrypted` / `unencrypted` / `unavailable`)
+- **Encrypted dev-password storage:** "Remember password" persists the Dev Password through Electron `safeStorage` — backed by macOS Keychain, Windows DPAPI, secret-service, or kwallet where available; UI shows the storage backend status (`encrypted` / `unencrypted` / `unavailable`)
 - **Settings persistence:** Preferences and device connections saved between sessions
 - **Quick Remote (Dev App tab):** Compact remote strip plus drag-drop sideload right next to the screenshot pane
 - **Secret Screens modal:** One-click presets for Roku's hidden screens — Developer Settings, Secret Screens 1–3, Wi-Fi info, Channel Info, Reboot variants — opened from the Remote tab and Query footer

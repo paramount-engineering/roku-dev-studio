@@ -42,7 +42,7 @@ export function setupScreenshots(
   let devAppAllowsCapture = false;
   let captureInProgress = false;
 
-  const CAPTURE_DISABLED_TITLE = 'Launch the sideloaded dev app on the device to capture a screenshot.';
+  const CAPTURE_DISABLED_TITLE = 'Launch the sideloaded Dev App on the device to capture a screenshot.';
 
   function updateScreenshotCaptureButtonState() {
     if (!screenshotBtn) return;
@@ -69,7 +69,7 @@ export function setupScreenshots(
   if (screenshotBtn) {
     screenshotBtn.addEventListener('click', async () => {
       if (!devAppAllowsCapture) {
-        showStatusMessage(screenshotStatus, 'Launch the dev app on the device before capturing a screenshot.', 'warning');
+        showStatusMessage(screenshotStatus, 'Launch the Dev App on the device before capturing a screenshot.', 'warning');
         return;
       }
       const password = getPassword();

@@ -143,7 +143,7 @@ export function scriptHasSaveActions(script) {
 }
 
 /**
- * Check if any step in the script needs a dev password that isn't already provided
+ * Check if any step in the script needs a Dev Password that isn't already provided
  * in the step itself or at the script level (devPassword).
  */
 export function scriptNeedsPassword(script) {

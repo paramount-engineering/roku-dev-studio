@@ -105,7 +105,7 @@ export function setupExecutor(panel, api, context) {
     } else {
       // Idle: show play icon
       if (useEl) useEl.setAttribute('href', '#icon-play');
-      executorRunBtn.title = 'Run action script';
+      executorRunBtn.title = 'Run Action Script';
     }
     if (executorStopBtn) {
       executorStopBtn.disabled = !isRunning;
@@ -445,7 +445,7 @@ export function setupExecutor(panel, api, context) {
           const img = document.createElement('img');
           img.className = 'executor-result-screenshot executor-result-performance-chart';
           img.src = url;
-          img.alt = cap || 'Device performance chart';
+          img.alt = cap || 'Device Performance Chart';
           if (url.startsWith('data:')) {
             img.setAttribute('data-rtf-src', url);
           }
@@ -724,7 +724,7 @@ export function setupExecutor(panel, api, context) {
     } else {
       hidePasswordPrompt();
       if (needsPw && hasPw && executorValidationMessage) {
-        executorValidationMessage.innerHTML += ' <span class="validation-muted" style="font-size:11px;">(using dev password from Auth)</span>';
+        executorValidationMessage.innerHTML += ' <span class="validation-muted" style="font-size:11px;">(using Dev Password from Auth)</span>';
       }
     }
 
@@ -959,7 +959,7 @@ export function setupExecutor(panel, api, context) {
           const step = flat[i] ? flat[i].step : (lastValidScript.steps || [])[i];
           const failed = result && result.success === false;
           const skipped = result && result.skipped === true;
-          const isPasswordError = failed && result && result.error && String(result.error).includes('Developer password');
+          const isPasswordError = failed && result && result.error && String(result.error).toLowerCase().includes('developer password');
           if (isPasswordError) {
             showPasswordPrompt();
             if (executorPasswordPrompt) {
@@ -1199,7 +1199,7 @@ export function setupExecutor(panel, api, context) {
           const res = await window.roku.saveResultsPdf(payload);
           if (res && res.success) {
             executorResultsSaveBtn.title = 'Saved!';
-            setTimeout(() => { executorResultsSaveBtn.title = 'Save results as PDF'; }, 2000);
+            setTimeout(() => { executorResultsSaveBtn.title = 'Save Results as PDF'; }, 2000);
           }
         }
       } catch (e) {

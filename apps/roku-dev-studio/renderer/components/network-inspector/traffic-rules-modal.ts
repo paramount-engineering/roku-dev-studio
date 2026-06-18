@@ -120,7 +120,7 @@ function hostRowHtml(rule: HostTrafficRule): string {
       <label class="ni-host-rule-flag" title="Return a canned response instead of forwarding upstream"><input type="checkbox" data-host-mock${mockOn} /> Mock</label>
       ${bwComboHtml(kbps, 'data-host-bw')}
       <div class="ni-rules-input-suffix ni-host-latency-wrap" title="Added latency (ms)">
-        <input type="number" class="ni-rules-latency" data-host-latency min="0" max="10000" step="10" placeholder="latency" value="${latency}" />
+        <input type="number" class="ni-rules-latency" data-host-latency min="0" max="10000" step="10" placeholder="Latency" value="${latency}" />
         <span class="ni-rules-suffix-unit">ms</span>
       </div>
     </div>
@@ -142,7 +142,7 @@ function hostRowHtml(rule: HostTrafficRule): string {
           </div>
         </label>
       </div>
-      <textarea class="ni-rules-mock-body" data-mock-body rows="3" placeholder="Response body (e.g. {&quot;error&quot;:&quot;forced&quot;})">${mockBody}</textarea>
+      <textarea class="ni-rules-mock-body" data-mock-body rows="3" placeholder="Response Body (e.g. {&quot;error&quot;:&quot;forced&quot;})">${mockBody}</textarea>
     </div>
   </div>`;
 }
@@ -205,14 +205,14 @@ export async function openTrafficRulesModal(opts: {
   // mono-styled chip beneath it. Serial is demoted to a hover title so the header stays clean
   // while the value is still discoverable.
   const deviceName = (opts.deviceName || '').trim();
-  const primaryName = deviceName || 'Roku device';
+  const primaryName = deviceName || 'Roku Device';
   const serialTitle = opts.deviceSerial ? `Serial ${opts.deviceSerial}` : '';
 
   const overlay = document.createElement('div');
   // `.modal-overlay` is display:none until `.active` is added.
   overlay.className = 'modal-overlay ni-rules-overlay active';
   overlay.innerHTML = `
-    <div class="ni-rules-modal" role="dialog" aria-modal="true" aria-label="Traffic rules">
+    <div class="ni-rules-modal" role="dialog" aria-modal="true" aria-label="Traffic Rules">
       <div class="ni-rules-header">
         <div class="ni-rules-header-info">
           <h3 class="ni-rules-title">Traffic Rules</h3>
@@ -230,7 +230,7 @@ export async function openTrafficRulesModal(opts: {
 
         <section class="ni-rules-card">
           <div class="ni-rules-card-head">
-            <span class="ni-rules-card-title">Device traffic</span>
+            <span class="ni-rules-card-title">Device Traffic</span>
           </div>
           <label class="ni-rules-toggle-row">
             <span class="ni-rules-toggle-text">
@@ -241,11 +241,11 @@ export async function openTrafficRulesModal(opts: {
           </label>
           <div class="ni-rules-field-grid" data-dev-throttle>
             <div class="ni-rules-field">
-              <label class="ni-rules-field-label" for="niDevBw">Bandwidth limit</label>
+              <label class="ni-rules-field-label" for="niDevBw">Bandwidth Limit</label>
               ${bwComboHtml(devKbps, 'data-dev-bw id="niDevBw"')}
             </div>
             <div class="ni-rules-field">
-              <label class="ni-rules-field-label" for="niDevLatency">Added latency</label>
+              <label class="ni-rules-field-label" for="niDevLatency">Added Latency</label>
               <div class="ni-rules-input-suffix">
                 <input type="number" class="ni-rules-latency" id="niDevLatency" data-dev-latency min="0" max="10000" step="10" placeholder="0" value="${devLatency}" title="Added latency (ms)" />
                 <span class="ni-rules-suffix-unit">ms</span>
@@ -258,7 +258,7 @@ export async function openTrafficRulesModal(opts: {
         <p class="ni-rules-throttle-note" data-hosts-throttle-note hidden></p>
         <section class="ni-rules-card" data-hosts-section>
           <div class="ni-rules-card-head">
-            <span class="ni-rules-card-title">Per-host rules</span>
+            <span class="ni-rules-card-title">Per-Host Rules</span>
           </div>
           <div class="ni-rules-add">
             <input type="text" class="ni-rules-add-input" data-add-host list="niHostSuggest" placeholder="api.example.com  or  api.example.com/v1/play" />
@@ -467,7 +467,7 @@ export async function openTrafficRulesModal(opts: {
       const lat = row.querySelector('[data-host-latency]') as HTMLInputElement | null;
       if (lat) {
         lat.min = devLatency > 0 ? String(devLatency) : '0';
-        lat.placeholder = devLatency > 0 ? String(devLatency) : 'latency';
+        lat.placeholder = devLatency > 0 ? String(devLatency) : 'Latency';
       }
     });
     if (hostsThrottleNote) {
@@ -475,9 +475,9 @@ export async function openTrafficRulesModal(opts: {
       hostsThrottleNote.hidden = !active;
       if (active) {
         const parts: string[] = [];
-        if (devKbps > 0) parts.push(`speed is capped to the device limit (${kbpsToLabel(devKbps)})`);
-        if (devLatency > 0) parts.push(`latency is floored to the device latency (${devLatency} ms)`);
-        hostsThrottleNote.textContent = `Host ${parts.join(', and ')}.`;
+        if (devKbps > 0) parts.push(`speed is capped to the Device Limit (${kbpsToLabel(devKbps)})`);
+        if (devLatency > 0) parts.push(`latency is floored to the Device Latency (${devLatency} ms)`);
+        hostsThrottleNote.textContent = `Per-Host ${parts.join(', and ')}.`;
       }
     }
   };
@@ -579,7 +579,7 @@ export async function openTrafficRulesModal(opts: {
         if (res?.success) {
           close();
         } else if (statusEl) {
-          statusEl.textContent = 'Save failed';
+          statusEl.textContent = 'Failed to save Traffic Rules.';
         }
       } catch (err) {
         if (statusEl) statusEl.textContent = err instanceof Error ? err.message : String(err);

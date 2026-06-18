@@ -249,7 +249,7 @@ export function setupSideloading(
         showStatusMessage(delStatus, 'Please enter your developer password', 'warning');
         return;
       }
-      if (!confirm('Delete sideloaded channel?')) return;
+      if (!confirm('Delete Sideloaded Channel?')) return;
 
       deleteBtn.disabled = true;
       deleteBtn.style.opacity = '0.5';

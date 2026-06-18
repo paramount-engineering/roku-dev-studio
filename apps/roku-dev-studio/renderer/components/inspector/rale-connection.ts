@@ -117,7 +117,7 @@ export function setupRaleConnection(
       if (!devAppActive) {
         displayResponseFn(
           {
-            error: 'Dev App is not running on the Roku device. Please launch the sideloaded app first.',
+            error: 'Dev App is not running on the Roku device. Please launch the Sideloaded Dev App first.',
             hint: 'Go to the Dev App tab and click "Launch" to start your sideloaded channel.'
           },
           true

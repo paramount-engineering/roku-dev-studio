@@ -181,7 +181,7 @@ export function createRenderStepFields(ctx) {
         </div>
         <div class="builder-field-group">
           <label>Password</label>
-          <input type="password" class="builder-field-password" placeholder="dev password">
+          <input type="password" class="builder-field-password" placeholder="Dev Password">
         </div>
       `
       );
@@ -201,7 +201,7 @@ export function createRenderStepFields(ctx) {
         `
         <div class="builder-field-group">
           <label>Password</label>
-          <input type="password" class="builder-field-password" placeholder="dev password">
+          <input type="password" class="builder-field-password" placeholder="Dev Password">
         </div>
       `
       );
@@ -386,7 +386,7 @@ export function createRenderStepFields(ctx) {
         builderStepFields,
         `
         <div class="builder-field-group builder-wait-grid-slot-wait-mode">
-          <label>Wait type</label>
+          <label>Wait Type</label>
           <select class="builder-field-wait-mode action-scripts-select">${waitModeOptions}</select>
         </div>
         <div class="builder-field-group builder-wait-delay-row builder-wait-grid-slot-delay">
@@ -396,7 +396,7 @@ export function createRenderStepFields(ctx) {
         <div class="builder-field-group builder-wait-condition-rows builder-wait-grid-slot-source" style="display: none;">
           <label>Source</label>
           <select class="builder-field-wait-source action-scripts-select" data-wait-prev-src="">
-            <option value="media-player">media-player</option>
+            <option value="media-player">Media Player</option>
             <option value="rale-node-field">RALE Node Field</option>
           </select>
         </div>
@@ -414,7 +414,7 @@ export function createRenderStepFields(ctx) {
               <input type="number" class="builder-field-timeoutMs builder-wait-timeout--mp" value="300000" placeholder="300000" min="0">
             </div>
             <div class="builder-field-group">
-              <label>Poll interval (ms)</label>
+              <label>Poll Interval (ms)</label>
               <input type="number" class="builder-field-pollIntervalMs builder-wait-poll--mp" value="2000" placeholder="2000" min="0">
             </div>
           </div>
@@ -427,12 +427,12 @@ export function createRenderStepFields(ctx) {
                 <textarea class="builder-field-wait-path action-scripts-select" rows="2" spellcheck="false">[]</textarea>
               </div>
               <div class="builder-field-group">
-                <label>Node id</label>
-                <input type="text" class="builder-field-wait-node-id action-scripts-select" placeholder="node id">
+                <label>Node ID</label>
+                <input type="text" class="builder-field-wait-node-id action-scripts-select" placeholder="Node ID">
               </div>
               <div class="builder-field-group">
                 <label>Field name</label>
-                <input type="text" class="builder-field-wait-field action-scripts-select" placeholder="field in fieldlist">
+                <input type="text" class="builder-field-wait-field action-scripts-select" placeholder="Field in FieldList">
               </div>
               <div class="builder-field-group">
                 <label>Operator</label>
@@ -442,7 +442,7 @@ export function createRenderStepFields(ctx) {
             <div class="builder-wait-rale-row-bottom">
               <div class="builder-field-group builder-wait-rale-value-cell">
                 <label class="builder-field-wait-value-label">Value (is)</label>
-                <input type="text" class="builder-field-wait-value action-scripts-select" placeholder="compare string">
+                <input type="text" class="builder-field-wait-value action-scripts-select" placeholder="Compare string">
               </div>
               <div class="builder-field-group builder-wait-rale-ci-cell">
                 <span class="builder-wait-rale-ci-label-spacer" aria-hidden="true">&nbsp;</span>
@@ -458,7 +458,7 @@ export function createRenderStepFields(ctx) {
                 <input type="number" class="builder-field-timeoutMs builder-wait-timeout--rale" value="300000" placeholder="300000" min="0">
               </div>
               <div class="builder-field-group">
-                <label>Poll interval (ms)</label>
+                <label>Poll Interval (ms)</label>
                 <input type="number" class="builder-field-pollIntervalMs builder-wait-poll--rale" value="2000" placeholder="2000" min="0">
               </div>
             </div>
@@ -539,12 +539,12 @@ export function createRenderStepFields(ctx) {
                 <textarea class="builder-field-if-rale-path action-scripts-select" rows="2" spellcheck="false">[]</textarea>
               </div>
               <div class="builder-field-group">
-                <label>Node id</label>
-                <input type="text" class="builder-field-if-rale-node-id action-scripts-select" placeholder="node id">
+                <label>Node ID</label>
+                <input type="text" class="builder-field-if-rale-node-id action-scripts-select" placeholder="Node ID">
               </div>
               <div class="builder-field-group">
                 <label>Field name</label>
-                <input type="text" class="builder-field-if-rale-field action-scripts-select" placeholder="field in fieldlist">
+                <input type="text" class="builder-field-if-rale-field action-scripts-select" placeholder="Field in FieldList">
               </div>
               <div class="builder-field-group">
                 <label>Operator</label>
@@ -554,7 +554,7 @@ export function createRenderStepFields(ctx) {
             <div class="builder-wait-rale-row-bottom builder-if-rale-row-bottom--two-cols">
               <div class="builder-field-group builder-if-rale-value-cell builder-wait-rale-value-cell">
                 <label class="builder-field-if-rale-value-label">Value (is)</label>
-                <input type="text" class="builder-field-if-rale-value action-scripts-select" placeholder="compare string">
+                <input type="text" class="builder-field-if-rale-value action-scripts-select" placeholder="Compare string">
               </div>
               <div class="builder-field-group builder-if-rale-ci-cell builder-wait-rale-ci-cell">
                 <span class="builder-wait-rale-ci-label-spacer" aria-hidden="true">&nbsp;</span>
@@ -597,7 +597,7 @@ export function createRenderStepFields(ctx) {
         </div>
         <div class="builder-if-vars-panel builder-if-panel" style="display:none">
           <div class="builder-field-group">
-            <label>Variable path</label>
+            <label>Variable Path</label>
             <input type="text" class="builder-field-if-variablePath action-scripts-select" placeholder="myVar or data.items.0.id">
           </div>
           <div class="builder-if-compare-row builder-if-vars-compare-row">
@@ -607,7 +607,7 @@ export function createRenderStepFields(ctx) {
             </div>
             <div class="builder-field-group builder-if-vars-value-cell">
               <label class="builder-field-if-vars-value-label">Value (is)</label>
-              <input type="text" class="builder-field-if-vars-value action-scripts-select" placeholder="compare value">
+              <input type="text" class="builder-field-if-vars-value action-scripts-select" placeholder="Compare Value">
             </div>
             <div class="builder-field-group builder-if-vars-ci-cell builder-wait-rale-ci-cell">
               <span class="builder-wait-rale-ci-label-spacer" aria-hidden="true">&nbsp;</span>

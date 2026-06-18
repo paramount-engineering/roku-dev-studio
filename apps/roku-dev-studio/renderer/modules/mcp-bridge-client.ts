@@ -181,7 +181,7 @@ function getApi(): McpBridgeApi | null {
 }
 
 /**
- * Lets the MCP bridge read the per-serial dev password the user saved in the
+ * Lets the MCP bridge read the per-serial Dev Password the user saved in the
  * device panel (same localStorage as Remember). Call once at app boot.
  */
 export function ensureMcpStoredPasswordBridge(): void {

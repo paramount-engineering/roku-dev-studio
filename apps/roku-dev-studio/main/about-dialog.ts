@@ -248,7 +248,7 @@ function showAboutDialog(mainWindow: BrowserWindow) {
   <div class="copyright">
     <a href="#" onclick="openLink('${repoUrl}'); return false;">roku-dev-studio</a>
     <span class="sep">·</span>
-    built by <a href="#" onclick="openLink('${authorUrl}'); return false;">Hareendra Donapati</a>
+    Built by <a href="#" onclick="openLink('${authorUrl}'); return false;">Hareendra Donapati</a>
   </div>
   <div class="buttons">
     <button class="btn-copy" onclick="copyVersionInfo()">Copy</button>
@@ -263,7 +263,7 @@ function showAboutDialog(mainWindow: BrowserWindow) {
     }
     function copyVersionInfo() {
       const info = \`Roku Dev Studio Version: \${versionInfo.appVersion}
-roku-dev-studio-api Version: \${versionInfo.rokuDevStudioApiVersion}
+Roku Dev Studio API Version: \${versionInfo.rokuDevStudioApiVersion}
 Electron Version: \${versionInfo.electronVersion}
 Node.js Version: \${versionInfo.nodeVersion}
 Chromium Version: \${versionInfo.chromiumVersion}

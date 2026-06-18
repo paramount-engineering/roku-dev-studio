@@ -206,7 +206,7 @@ function renderSecretScreensList(mountEl: HTMLElement) {
     const row = document.createElement('div');
     row.className = 'secret-screen-segments';
     row.setAttribute('role', 'group');
-    row.setAttribute('aria-label', `${def.title} key sequence`);
+    row.setAttribute('aria-label', `${def.title} Key Sequence`);
 
     for (const seg of def.segments) {
       const box = document.createElement('span');

@@ -12547,7 +12547,7 @@
             <!-- Hero Section (text-only) -->
             <div class="welcome-hero">
               <h1 class="welcome-title">Roku Dev Studio</h1>
-              <p class="welcome-subtitle">Discover Roku devices locally or via remote relays, sideload and deep-link channels, debug live BrightScript with a streaming telnet console, automate end-to-end test flows, and bring AI agents into your dev loop over MCP.</p>
+              <p class="welcome-subtitle">Discover Roku devices locally or via remote relays, sideload and deep-link channels, debug live BrightScript with a streaming Telnet console, automate end-to-end test flows, and bring AI agents into your dev loop over MCP.</p>
             </div>
 
             <!--
@@ -12589,7 +12589,7 @@
                 </div>
                 <div class="feature-title">Dev App</div>
                 </div>
-                <div class="feature-desc">Sideload dev apps/channels, control the App and auto-capture screenshots.</div>
+                <div class="feature-desc">Sideload dev apps/channels, control the Dev App and auto-capture screenshots.</div>
               </div>
               <div class="welcome-feature">
                 <div class="feature-header">
@@ -12636,7 +12636,7 @@
                 </div>
                 <div class="feature-title">Fiddle</div>
                 </div>
-                <div class="feature-desc">Run BrightScript snippets on a connected device — Monaco editor, live linting, one-click run.</div>
+                <div class="feature-desc">Run BrightScript snippets on a connected device — Monaco Editor, live linting, one-click run.</div>
               </div>
               <div class="welcome-feature">
                 <div class="feature-header">
@@ -12722,9 +12722,9 @@
         </div>
           <div class="device-panel-paused-nav" data-device-panel-paused-nav hidden>
             <span class="device-panel-paused-nav-icon icon icon-xs" aria-hidden="true"><svg><use href="#icon-warning"/></svg></span>
-            <span class="device-panel-paused-nav-text" title="Device performance paused — bring the Dev App to the foreground to resume.">
-              <span class="device-panel-paused-nav-text-full" data-paused-text-full>Device performance paused — bring the Dev App to the foreground to resume.</span>
-              <span class="device-panel-paused-nav-text-short" data-paused-text-short>Performance paused</span>
+            <span class="device-panel-paused-nav-text" title="Device Performance Paused — bring the Dev App to the foreground to resume.">
+              <span class="device-panel-paused-nav-text-full" data-paused-text-full>Device Performance Paused — bring the Dev App to the foreground to resume.</span>
+              <span class="device-panel-paused-nav-text-short" data-paused-text-short>Device Performance paused</span>
             </span>
             <button type="button" class="btn btn-secondary btn-sm device-panel-nav-action-btn" data-paused-launch-dev hidden>Launch</button>
             <button type="button" class="btn btn-secondary btn-sm device-panel-nav-action-btn device-panel-sideload-btn" data-paused-goto-sideload hidden title="Sideload Dev App">
@@ -13098,7 +13098,7 @@
                   </div>
                   <label class="devapp-auto-screenshot">
                     <input type="checkbox" class="auto-screenshot-checkbox">
-                    <span><span class="icon icon-sm"><svg><use href="#icon-camera"/></svg></span> Auto screenshot</span>
+                    <span><span class="icon icon-sm"><svg><use href="#icon-camera"/></svg></span> Auto Screenshot</span>
                   </label>
                 </div>
               </div>
@@ -13356,7 +13356,7 @@
                   <div class="telnet-placeholder">
                     <span class="icon icon-lg"><svg><use href="#icon-terminal"/></svg></span>
                     <p>Connect to view BrightScript debug output</p>
-                    <p class="telnet-hint">Requires Developer Mode enabled on the Roku device.<br>Only one telnet connection to a Roku device can be active at a time.</p>
+                    <p class="telnet-hint">Requires Developer Mode enabled on the Roku device.<br>Only one Telnet connection to a Roku device can be active at a time.</p>
                   </div>
                 </div>
                 <button type="button" class="telnet-scroll-to-bottom" hidden title="Jump to latest logs" aria-label="Jump to latest logs">
@@ -13403,7 +13403,7 @@
                       <input type="number" class="rale-port-input" value="49200" min="49152" max="65535">
                     </label>
                     <label class="rale-connect-field">
-                      <span class="rale-connect-field-label">Log verbosity</span>
+                      <span class="rale-connect-field-label">Log Verbosity</span>
                       <select class="rale-log-verbosity-select" title="RALE logger level applied on connect">
                         <option value="0" selected>Off</option>
                         <option value="1">Error</option>
@@ -13504,9 +13504,9 @@
                   <div class="rale-update-label" style="display: flex; flex-direction: column; gap: 8px; font-size: 12px;">
                     <span style="font-weight: 600; color: var(--text-secondary);">Action</span>
                     <div class="rale-node-action-group" role="group" aria-label="Field action">
-                      <button type="button" class="rale-node-action-btn rale-node-action-btn--active" data-action="update" aria-pressed="true">Update field</button>
-                      <button type="button" class="rale-node-action-btn" data-action="add" aria-pressed="false">Add field</button>
-                      <button type="button" class="rale-node-action-btn" data-action="remove" aria-pressed="false">Remove field</button>
+                      <button type="button" class="rale-node-action-btn rale-node-action-btn--active" data-action="update" aria-pressed="true">Update Field</button>
+                      <button type="button" class="rale-node-action-btn" data-action="add" aria-pressed="false">Add Field</button>
+                      <button type="button" class="rale-node-action-btn" data-action="remove" aria-pressed="false">Remove Field</button>
                     </div>
                   </div>
                   <label class="rale-update-label rale-node-row-field-select" style="display: flex; flex-direction: column; gap: 6px; font-size: 12px;">
@@ -13520,13 +13520,13 @@
                   <label class="rale-update-label rale-node-row-type" style="display: flex; flex-direction: column; gap: 6px; font-size: 12px;">
                     <span>Field Type</span>
                     <select class="rale-node-field-type select" style="padding: 8px 10px; border-radius: 6px;">
-                      <option value="string">string</option>
-                      <option value="integer">integer</option>
-                      <option value="float">float</option>
-                      <option value="boolean">boolean</option>
-                      <option value="color">color</option>
-                      <option value="array">array</option>
-                      <option value="assocarray">assocarray</option>
+                      <option value="string">String</option>
+                      <option value="integer">Integer</option>
+                      <option value="float">Float</option>
+                      <option value="boolean">Boolean</option>
+                      <option value="color">Color</option>
+                      <option value="array">Array</option>
+                      <option value="assocarray">AssocArray</option>
                     </select>
                   </label>
                   <label class="rale-update-label rale-node-row-value" style="display: flex; flex-direction: column; gap: 6px; font-size: 12px;">
@@ -13597,12 +13597,12 @@
                           </div>
                         </div>
                         <div class="action-scripts-builder-step-fields-container">
-                          <label>Action type</label>
+                          <label>Action Type</label>
                           <select class="action-scripts-builder-type-select action-scripts-select"></select>
                         </div>
                         <div class="action-scripts-builder-step-fields"></div>
                         <div class="action-scripts-builder-add-step-wrap">
-                          <span class="builder-add-step-label-spacer" aria-hidden="true">Action type</span>
+                          <span class="builder-add-step-label-spacer" aria-hidden="true">Action Type</span>
                           <button type="button" class="btn btn-primary action-scripts-builder-add-step">Add Action</button>
                           <button type="button" class="btn btn-secondary action-scripts-builder-cancel-edit" style="display: none;">Cancel</button>
                         </div>
@@ -13623,7 +13623,7 @@
                 <div class="executor-import-section" style="display: none;" aria-hidden="true">
                   <div class="executor-input-row">
                     <button type="button" class="btn btn-secondary action-script-executor-upload">Upload JSON</button>
-                    <span class="executor-input-hint">or paste below</span>
+                    <span class="executor-input-hint">Or Paste below</span>
                   </div>
                   <p class="executor-builder-nudge">Use the <strong>Builder</strong> tab to add and edit steps with guided fields. Use this area to validate, import, or run JSON.</p>
                   <textarea class="action-script-executor-textarea" placeholder='{"version":"1","steps":[{"type":"keypress","key":"Home"}]}' rows="6"></textarea>
@@ -13691,11 +13691,11 @@
               <div class="ni-header-center">
                 <button type="button" class="ni-setup-badge" data-ni-setup-badge hidden title="Hotspot capture setup needed — click for instructions">
                   <span class="ni-setup-badge-dot" aria-hidden="true">!</span>
-                  <span data-ni-setup-badge-label>Capture setup</span>
+                  <span data-ni-setup-badge-label>Capture Setup</span>
                 </button>
-                <button type="button" class="ni-setup-badge is-error" data-ni-port-badge hidden title="Proxy Port unavailable — click for details">
+                <button type="button" class="ni-setup-badge is-error" data-ni-port-badge hidden title="Proxy Port Unavailable — click for details">
                   <span class="ni-setup-badge-dot" aria-hidden="true">!</span>
-                  <span>Proxy Port unavailable</span>
+                  <span>Proxy Port Unavailable</span>
                 </button>
                 <div class="ni-filter-wrap">
                   <input type="text" class="ni-filter-input" data-ni-filter placeholder="Filter sessions…" title="Filter sessions — click the info icon for supported syntax." />
@@ -13709,13 +13709,13 @@
                 <span class="ni-session-count" data-ni-session-count title="Captured sessions">0</span>
               </div>
               <div class="card-header-actions ni-header-controls ni-btn-group" role="group" aria-label="Network Inspector controls">
-                <button type="button" class="btn btn-secondary btn-sm ni-icon-btn ni-capture-toggle is-capturing" data-ni-capture-toggle title="Stop capturing" aria-label="Stop capturing">
+                <button type="button" class="btn btn-secondary btn-sm ni-icon-btn ni-capture-toggle is-capturing" data-ni-capture-toggle title="Stop Capturing" aria-label="Stop Capturing">
                   <span class="icon icon-sm"><svg><use href="#icon-pause"/></svg></span>
                 </button>
-                <button type="button" class="btn btn-secondary btn-sm ni-icon-btn" data-ni-layout-toggle title="Stack request and response vertically" aria-label="Toggle detail layout" aria-pressed="true">
+                <button type="button" class="btn btn-secondary btn-sm ni-icon-btn" data-ni-layout-toggle title="Stack Request and Response vertically" aria-label="Toggle Detail Layout" aria-pressed="true">
                   <span class="icon icon-sm"><svg><use href="#icon-layout-rows"/></svg></span>
                 </button>
-                <button type="button" class="btn btn-secondary btn-sm ni-icon-btn" data-ni-configure title="Configure block &amp; throttle rules" aria-label="Configure traffic rules">
+                <button type="button" class="btn btn-secondary btn-sm ni-icon-btn" data-ni-configure title="Configure Traffic Rules" aria-label="Configure Traffic Rules">
                   <span class="icon icon-sm"><svg><use href="#icon-settings"/></svg></span>
                 </button>
               </div>
@@ -13767,7 +13767,7 @@
                             </button>
                             <div class="ni-copy-dropdown" data-ni-copy-dropdown role="menu" hidden>
                               <button type="button" class="ni-copy-dropdown-item" data-ni-copy-item="body" role="menuitem">
-                                <span class="ni-copy-item-icon icon icon-xs"><svg><use href="#icon-copy"/></svg></span>Copy body
+                                <span class="ni-copy-item-icon icon icon-xs"><svg><use href="#icon-copy"/></svg></span>Copy Body
                               </button>
                               <button type="button" class="ni-copy-dropdown-item" data-ni-copy-item="curl" role="menuitem">
                                 <span class="ni-copy-item-icon icon icon-xs"><svg><use href="#icon-terminal"/></svg></span>Copy as cURL

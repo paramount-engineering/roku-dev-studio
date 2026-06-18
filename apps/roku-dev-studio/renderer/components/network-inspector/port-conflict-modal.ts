@@ -98,7 +98,7 @@ export function showPortConflictModal(conflict: PortConflictInfo, opts?: { force
       </div>
       <div class="ni-port-modal-body" data-ni-port-modal-body>${bodyHtml(conflict)}</div>
       <div class="ni-port-modal-footer">
-        <button type="button" class="btn btn-secondary btn-sm ni-port-modal-refresh" data-ni-port-modal-refresh title="Re-check status" aria-label="Re-check status">
+        <button type="button" class="btn btn-secondary btn-sm ni-port-modal-refresh" data-ni-port-modal-refresh title="Re-check Status" aria-label="Re-check Status">
           <span class="icon icon-sm"><svg><use href="#icon-refresh"/></svg></span>
           <span>Refresh</span>
         </button>

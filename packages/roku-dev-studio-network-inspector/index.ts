@@ -1080,7 +1080,7 @@ export class NetworkInspectorService {
       remediation.push(`Close the app or process currently using port ${port}.`);
     }
     remediation.push(
-      `Or change the proxy port in Roku Dev Studio: Settings → Network Inspector → Proxy port.`
+      `Or change the proxy port in Roku Dev Studio: Settings → Network Inspector → MITM Proxy Port.`
     );
     remediation.push('Roku Dev Studio retries automatically once the port is free.');
     return {
@@ -1088,7 +1088,7 @@ export class NetworkInspectorService {
       pid: holder?.pid,
       processName: holder?.processName,
       command: holder?.command,
-      title: 'Proxy Port unavailable',
+      title: 'Proxy Port Unavailable',
       message: `An App or a Process is already using port ${port}, so the MITM proxy can't start. Decrypted HTTPS capture is paused until the port is free.`,
       remediation
     };

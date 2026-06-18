@@ -310,7 +310,7 @@ export function setupBuilder(panel, api, context) {
     addFormVisible = false;
     resetAddPlacementToRoot();
     if (builderFormHeading) {
-      builderFormHeading.textContent = `Update step ${index + 1}`;
+      builderFormHeading.textContent = `Update Step ${index + 1}`;
       builderFormHeading.classList.add('builder-form-heading-update');
     }
     if (builderAddStepBtn) {
@@ -388,7 +388,7 @@ export function setupBuilder(panel, api, context) {
         return;
       }
       if (isPathInsideSubtree(targetPath, fromPath)) {
-        showToast('Cannot move a step into its own if branch.', 'error');
+        showToast('Cannot move a step into its own If branch.', 'error');
         return;
       }
       const targetLoc = getParentArrayAndIndex(steps, targetPath);

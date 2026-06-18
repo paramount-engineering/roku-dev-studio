@@ -132,7 +132,7 @@ function normalizeQueryEndpoint(ep: unknown): string {
 /**
  * @param {object} options
  * @param {string} options.ip
- * @param {string} options.password - default dev password for steps
+ * @param {string} options.password - default Dev Password for steps
  * @param {object} [options.relayClient] - return value of createRelayClient()
  * @param {number} [options.ecpTimeout] — default QUERY_TIMEOUT from shared-constants
  * @param {number} [options.ralePort] — default `DEFAULT_RALE_PORT` from shared-constants

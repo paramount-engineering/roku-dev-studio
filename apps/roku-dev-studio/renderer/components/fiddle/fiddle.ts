@@ -479,7 +479,7 @@ function renderDeviceOptions(
   // The snapshot coming from the main window is already filtered to
   // dev-enabled devices (Fiddle can't sideload anywhere else), so an empty
   // list means the user has no dev-enabled Rokus on the LAN / remote relays.
-  placeholder.textContent = devices.length ? 'Select a device' : 'No dev-enabled devices found';
+  placeholder.textContent = devices.length ? 'Select a device' : 'No Dev Mode–enabled devices found';
   placeholder.disabled = true;
   sel.appendChild(placeholder);
 
@@ -544,12 +544,12 @@ function applyDiagnostics(ctx: FiddleCtx, diagnostics: FiddleDiagnostic[]): void
   const diagEl = ctx.els.diagStatus;
   diagEl.classList.remove('clean');
   if (errCount === 0 && warnCount === 0) {
-    diagEl.textContent = 'No issues';
+    diagEl.textContent = 'No Issues';
     diagEl.classList.add('clean');
   } else if (errCount === 0) {
-    diagEl.textContent = `${warnCount} warning${warnCount === 1 ? '' : 's'}`;
+    diagEl.textContent = `${warnCount} Warning${warnCount === 1 ? '' : 's'}`;
   } else {
-    diagEl.textContent = `${errCount} error${errCount === 1 ? '' : 's'}${warnCount ? `, ${warnCount} warning${warnCount === 1 ? '' : 's'}` : ''}`;
+    diagEl.textContent = `${errCount} Error${errCount === 1 ? '' : 's'}${warnCount ? `, ${warnCount} Warning${warnCount === 1 ? '' : 's'}` : ''}`;
   }
   diagEl.onclick = () => {
     if (!diagnostics.length) return;
@@ -588,7 +588,7 @@ function scheduleLint(ctx: FiddleCtx): () => void {
 }
 
 /**
- * Resolve a dev password for the selected device. Resolution order:
+ * Resolve a Dev Password for the selected device. Resolution order:
  *   1. snapshot.password — a password persisted in the main window's
  *      localStorage (the only place Fiddle reads persisted creds from).
  *   2. session cache — a modal-entered password from earlier in this
@@ -793,7 +793,7 @@ async function handleStop(ctx: FiddleCtx): Promise<void> {
   try {
     const res = await getWindowFiddle().stop({ deviceId, password: session });
     if (res && res.success) {
-      setStatus(ctx, 'Fiddle channel removed.', 'success');
+      setStatus(ctx, 'BrightScript Fiddle channel removed.', 'success');
       if (ctx.activeFiddleDeviceId === deviceId) {
         ctx.hasActiveFiddle = false;
         ctx.activeFiddleDeviceId = null;

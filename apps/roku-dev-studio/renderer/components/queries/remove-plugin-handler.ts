@@ -39,7 +39,7 @@ export function setupRemovePlugin(panel: HTMLElement, api: QueriesDeviceApi, out
 
     if (
       !confirm(
-        `Remove plugin "${appId}"?\n\nThis will remove the app from this device and all devices linked to the same Roku account.`
+        `Remove Plugin "${appId}"?\n\nThis will remove the app from this device and all devices linked to the same Roku account.`
       )
     ) {
       return;
@@ -52,7 +52,7 @@ export function setupRemovePlugin(panel: HTMLElement, api: QueriesDeviceApi, out
     }
 
     outputArea.display(
-      '<span style="color: var(--accent-yellow);">Connecting to telnet (port 8080)...</span>',
+      '<span style="color: var(--accent-yellow);">Connecting to Telnet (port 8080)...</span>',
       true
     );
 

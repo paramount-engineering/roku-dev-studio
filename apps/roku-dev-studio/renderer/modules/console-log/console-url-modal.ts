@@ -155,7 +155,7 @@ const urlModal = createSingletonConsoleModal({
       <div class="modal-header">
         <span class="modal-title" id="telnetUrlViewerTitle">Console</span>
         <div class="telnet-url-view-modal-actions">
-          <button type="button" class="btn btn-secondary telnet-url-view-open" title="Open in default browser">Open in browser</button>
+          <button type="button" class="btn btn-secondary telnet-url-view-open" title="Open in Default Browser">Open in Browser</button>
           <button type="button" class="btn btn-secondary telnet-url-view-copy" title="Copy URL">Copy</button>
           <button type="button" class="modal-close telnet-url-view-close" aria-label="Close"><span class="icon icon-sm"><svg><use href="#icon-x"/></svg></span></button>
         </div>

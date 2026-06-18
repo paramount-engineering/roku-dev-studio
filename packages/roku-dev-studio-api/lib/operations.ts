@@ -292,7 +292,7 @@ function requireDevPasswordParam(value: unknown, name = 'password'): string {
       `Missing \`${name}\`. Save the developer password for this device in Roku Dev Studio (device tab, verify with Remember checked), or pass \`${name}\` in the request.`,
       {
         suggestion:
-          'Open the device panel, enter the dev password, authenticate, and enable Remember — or pass password explicitly for this call.'
+          'Open the device panel, enter the Dev Password, authenticate, and enable Remember — or pass password explicitly for this call.'
       }
     );
   }
@@ -710,7 +710,7 @@ const DELETE_SIDELOAD: RokuOp<{ ip: string; password?: string }, unknown> = {
       ip: { type: 'string' },
       password: {
         type: 'string',
-        description: 'Omit if Roku Dev Studio has saved the dev password for this device (Remember on the device tab).'
+        description: 'Omit if Roku Dev Studio has saved the Dev Password for this device (Remember on the device tab).'
       }
     },
     required: ['ip'],
@@ -751,7 +751,7 @@ const SCREENSHOT: RokuOp<
       ip: { type: 'string' },
       password: {
         type: 'string',
-        description: 'Omit if Roku Dev Studio has saved the dev password for this device (Remember on the device tab).'
+        description: 'Omit if Roku Dev Studio has saved the Dev Password for this device (Remember on the device tab).'
       },
       waitAfterTriggerMs: { type: 'number' },
       returnImageBase64: {

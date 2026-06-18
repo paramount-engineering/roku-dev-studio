@@ -494,9 +494,9 @@ export function attachConsoleFindBar(opts: AttachConsoleFindBarOpts): ConsoleFin
     // (Next/Prev) still covers all of them. Without this annotation users see
     // "200 of 1200" but only some matches glow, which reads as broken paint.
     const cappedNote =
-      flatHits.length > HIGHLIGHT_PAINT_CAP ? ' (highlights capped)' : '';
+      flatHits.length > HIGHLIGHT_PAINT_CAP ? ' (Highlights capped)' : '';
     const navPart = `${base}${cappedNote}`;
-    findCountEl.textContent = scanPercent != null ? `${navPart} (searching ${scanPercent}%)` : navPart;
+    findCountEl.textContent = scanPercent != null ? `${navPart} (Searching ${scanPercent}%)` : navPart;
   }
 
   function applyFilter(): void {

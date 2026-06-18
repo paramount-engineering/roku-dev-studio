@@ -153,7 +153,7 @@ export function setupImportModal(container, device, api, context) {
     }
   }
 
-  /** Show dev password section only when script needs password and none from cache or script. */
+  /** Show Dev Password section only when script needs password and none from cache or script. */
   function updateDevPasswordVisibility(raw) {
     if (!importDevPasswordSection) return;
     if (modalRoot._importTarget === 'builder') {
@@ -277,7 +277,7 @@ export function setupImportModal(container, device, api, context) {
     modalRoot._importTarget = options?.target === 'builder' ? 'builder' : 'executor';
     if (importModalTitleEl) {
       importModalTitleEl.textContent =
-        modalRoot._importTarget === 'builder' ? 'Import script into Builder' : defaultImportTitle;
+        modalRoot._importTarget === 'builder' ? 'Import Script into Builder' : defaultImportTitle;
     }
     if (importValidateBtn) {
       importValidateBtn.textContent =
@@ -408,7 +408,7 @@ export function setupImportModal(container, device, api, context) {
       const needsSaveFolder = scriptHasSaveActions(parsed);
       const hasSaveFolder = modalRoot._importOutputFolder && String(modalRoot._importOutputFolder).trim() !== '';
       if (!importToBuilder && needsSaveFolder && !hasSaveFolder) {
-        setImportError('Save folder is required for this script (e.g. screenshot step). Please choose a save folder.');
+        setImportError('Save folder is required for this Script (e.g. Screenshot step). Please choose a save folder.');
         return;
       }
 

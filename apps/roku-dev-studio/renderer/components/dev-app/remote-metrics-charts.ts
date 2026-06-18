@@ -148,7 +148,7 @@ export function extractChanperfFailureMessage(xml: string): string | null {
   const stM = xml.match(/<status>([^<]*)<\/status>/i);
   const st = stM?.[1]?.trim() ?? '';
   if (/^failed$/i.test(st)) {
-    return 'Channel performance unavailable (chanperf status failed).';
+    return 'Channel Performance unavailable (status failed).';
   }
   return null;
 }

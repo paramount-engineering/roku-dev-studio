@@ -112,7 +112,7 @@ const FILTER_HELP_FIELDS: Array<{ field: string; desc: string; examples: string[
   { field: 'host:', desc: 'Match the hostname (substring).', examples: ['host:roku.com', 'host:googlevideo'] },
   { field: 'method:', desc: 'HTTP method.', examples: ['method:POST', 'method:GET'] },
   { field: 'status:', desc: 'Status code, or a class like 4xx / 5xx.', examples: ['status:404', 'status:4xx', 'status:5xx'] },
-  { field: 'type:', desc: 'Response content-type (alias content-type:).', examples: ['type:json', 'type:image'] },
+  { field: 'type:', desc: 'Response Content-Type (alias content-type:).', examples: ['type:json', 'type:image'] },
   { field: 'kind:', desc: 'Session kind.', examples: ['kind:https', 'kind:dns', 'kind:tcp'] },
   { field: 'path:', desc: 'URL path (substring; alias url:).', examples: ['path:/v1/play'] }
 ];
@@ -129,7 +129,7 @@ function openFilterHelpModal(onPick: (term: string) => void): void {
     const chips = f.examples
       .map(
         (ex) =>
-          `<button type="button" class="ni-filter-help-chip" data-filter-term="${escapeHtml(ex)}" title="Add to filter">${escapeHtml(ex)}</button>`
+          `<button type="button" class="ni-filter-help-chip" data-filter-term="${escapeHtml(ex)}" title="Add to Filter">${escapeHtml(ex)}</button>`
       )
       .join('');
     return `<tr>
@@ -138,15 +138,15 @@ function openFilterHelpModal(onPick: (term: string) => void): void {
     </tr>`;
   }).join('');
   overlay.innerHTML = `
-    <div class="ni-filter-help-modal" role="dialog" aria-modal="true" aria-label="Filter help">
+    <div class="ni-filter-help-modal" role="dialog" aria-modal="true" aria-label="Filter Help">
       <div class="ni-filter-help-header">
-        <h3>Filtering sessions</h3>
+        <h3>Filtering Sessions</h3>
         <button type="button" class="modal-close ni-filter-help-close" title="Close" aria-label="Close">×</button>
       </div>
       <div class="ni-filter-help-body">
-        <p class="ni-filter-help-intro">Type free text to match host, path, method, status, kind, or content-type. Use <code>field:value</code> for precise matches, and separate terms with <strong>commas</strong> to match <strong>any</strong> of them (OR).</p>
+        <p class="ni-filter-help-intro">Type free text to match host, path, method, status, kind, or Content-Type. Use <code>field:value</code> for precise matches, and separate terms with <strong>commas</strong> to match <strong>any</strong> of them (OR).</p>
         <table class="ni-filter-help-table"><tbody>${rows}</tbody></table>
-        <p class="ni-filter-help-note">Example: <code>host:roku.com, status:4xx, method:POST</code> shows any session on roku.com <em>or</em> with a 4xx status <em>or</em> using POST. Click an example to add it.</p>
+        <p class="ni-filter-help-note">Example: <button type="button" class="ni-filter-help-chip" data-filter-term="host:roku.com, status:4xx, method:POST" title="Add to Filter">host:roku.com, status:4xx, method:POST</button> shows any session on roku.com <em>or</em> with a 4xx status <em>or</em> using POST. Click any example to add it.</p>
       </div>
     </div>`;
   document.body.appendChild(overlay);
@@ -761,11 +761,11 @@ export function setupNetworkTab(
     let mitmLine: string;
     if (state.mitmActive) {
       mitmLine =
-        `MITM proxy is active at <strong>${escapeHtml(proxyAddr)}</strong> — route your dev channel's requests through it to capture them.`;
+        `MITM proxy is active at <strong>${escapeHtml(proxyAddr)}</strong> — route your Dev channel's requests through it to capture them.`;
     } else if (state.mitmPortConflict) {
       const c = state.mitmPortConflict;
       const who = c.processName ? `${escapeHtml(c.processName)}${c.pid ? ` (PID ${c.pid})` : ''}` : 'another app';
-      mitmLine = `MITM proxy can't use port ${c.port} — ${who} is using it. Click <strong>Proxy Port unavailable</strong> above to close it or change the port.`;
+      mitmLine = `MITM proxy can't use port ${c.port} — ${who} is using it. Click <strong>Proxy Port Unavailable</strong> above to close it or change the port.`;
     } else if (state.mitmLastError) {
       mitmLine = `MITM proxy failed to start: ${escapeHtml(state.mitmLastError)}.`;
     } else if (state.mitmEnabled) {
@@ -930,13 +930,13 @@ export function setupNetworkTab(
         // Shared Wi-Fi / no hotspot: only the MITM proxy is recording. Guide the user to point
         // their dev channel at the proxy address (host:port only, the machine's LAN IP).
         const proxyAddr = state.mitmListenAddress || 'machine-ip:8888';
-        body = `<p class="ni-hint">MITM proxy is active at <code class="ni-hint-code">${escapeHtml(proxyAddr)}</code>. Route your dev channel through it to capture Network requests.</p>`;
+        body = `<p class="ni-hint">MITM proxy is active at <code class="ni-hint-code">${escapeHtml(proxyAddr)}</code>. Route your dev channel through it to capture Network Requests.</p>`;
       } else if (state.captureActive || state.mitmActive) {
         const mitmHint = state.mitmActive
           ? ' MITM proxy is decrypting dev-channel HTTPS routed through Roku Dev Studio.'
-          : ' HTTPS bodies are encrypted in hotspot capture mode — enable MITM in Settings for dev channels.';
+          : ' HTTPS bodies are encrypted in hotspot capture mode — enable MITM in Settings for Dev channels.';
         body =
-          '<p class="ni-hint">Capturing on hotspot. Browse or play content on the Roku.</p>' +
+          '<p class="ni-hint">Capturing on Hotspot. Browse or play content on the Roku.</p>' +
           `<p class="ni-hint">${mitmHint}</p>`;
       } else {
         body =
@@ -1229,14 +1229,14 @@ export function setupNetworkTab(
       captureToggleBtn.innerHTML =
         '<span class="icon icon-sm"><svg><use href="#icon-pause"/></svg></span>';
       captureToggleBtn.classList.add('is-capturing');
-      captureToggleBtn.title = 'Stop capturing';
-      captureToggleBtn.setAttribute('aria-label', 'Stop capturing');
+      captureToggleBtn.title = 'Stop Capturing';
+      captureToggleBtn.setAttribute('aria-label', 'Stop Capturing');
     } else {
       captureToggleBtn.innerHTML =
         '<span class="icon icon-sm"><svg><use href="#icon-play"/></svg></span>';
       captureToggleBtn.classList.remove('is-capturing');
-      captureToggleBtn.title = 'Start capturing';
-      captureToggleBtn.setAttribute('aria-label', 'Start capturing');
+      captureToggleBtn.title = 'Start Capturing';
+      captureToggleBtn.setAttribute('aria-label', 'Start Capturing');
     }
   }
 
@@ -1370,14 +1370,14 @@ export function setupNetworkTab(
     const isError = !!state.captureError;
     setupBadgeBtn.classList.toggle('is-error', isError);
     setupBadgeBtn.classList.toggle('is-warn', !isError);
-    if (setupBadgeLabel) setupBadgeLabel.textContent = isError ? 'Capture blocked' : 'Capture setup';
+    if (setupBadgeLabel) setupBadgeLabel.textContent = isError ? 'Capture Blocked' : 'Capture Setup';
     setupBadgeBtn.title = failedPrereq
       ? `${failedPrereq.title} — click for setup instructions`
-      : 'Hotspot capture setup — click for instructions';
+      : 'Hotspot Capture Setup — Click for Instructions';
   }
 
   /**
-   * The header "Proxy Port unavailable" badge is the persistent, in-context indicator that the MITM
+   * The header "Proxy Port Unavailable" badge is the persistent, in-context indicator that the MITM
    * proxy can't bind its port. It's shown whenever a conflict exists and opens the full modal on
    * click. (The prominent warning itself is the modal — see {@link showPortConflictModal}.)
    */

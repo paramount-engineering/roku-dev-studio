@@ -52,7 +52,7 @@ function guideBlocks(platform: NiSetupPlatform): GuideBlock[] {
           `Connect your Roku to the Mac's shared Wi-Fi network`
         ]
       },
-      { kind: 'subhead', text: 'Packet capture access' },
+      { kind: 'subhead', text: 'Packet Capture Access' },
       {
         kind: 'p',
         html: `macOS creates <code class="mcp-inline-code">/dev/bpf*</code> as root-only. Run the one-time setup below to restore access across reboots (admin password required, like Wireshark's ChmodBPF). Or install <a href="https://www.wireshark.org/download.html" target="_blank" rel="noopener noreferrer" class="mcp-link">Wireshark</a> and run its ChmodBPF installer.`
@@ -77,7 +77,7 @@ function guideBlocks(platform: NiSetupPlatform): GuideBlock[] {
           `Connect your Roku to that hotspot — RDS auto-detects the virtual adapter`
         ]
       },
-      { kind: 'subhead', text: 'Hotspot capture access (Npcap)' },
+      { kind: 'subhead', text: 'Hotspot Capture Access (Npcap)' },
       {
         kind: 'p',
         html: `Hotspot capture (DNS/TLS SNI from all of the Roku's traffic) needs the <a href="https://npcap.com/" target="_blank" rel="noopener noreferrer" class="mcp-link">Npcap</a> driver. This is optional — leave it out and MITM proxying still records your sideloaded dev channel.`
@@ -112,7 +112,7 @@ function guideBlocks(platform: NiSetupPlatform): GuideBlock[] {
         `Connect your Roku to that shared network — RDS auto-detects the gateway interface`
       ]
     },
-    { kind: 'subhead', text: 'Packet capture access' },
+    { kind: 'subhead', text: 'Packet Capture Access' },
     {
       kind: 'p',
       html: `Linux captures via <code class="mcp-inline-code">tcpdump</code>, which needs raw-socket privileges. Run the one-time setup below (admin prompt) to grant the <code class="mcp-inline-code">cap_net_raw</code>/<code class="mcp-inline-code">cap_net_admin</code> capabilities — or manually: <code class="mcp-inline-code">sudo setcap cap_net_raw,cap_net_admin=eip $(which tcpdump)</code>.`

@@ -262,7 +262,7 @@ export function setupActionScripts(panel: DevicePanelRoot, device, api) {
     try {
       const res = await Promise.resolve(load.call(apiRef, jsonScript));
       if (res && res.ok) {
-        showToast('AI agent loaded a script into the Builder', 'success');
+        showToast('AI Agent loaded a Script into the Builder', 'success');
         return { ok: true };
       }
       const msg = (res && res.message) || 'Could not load script';
@@ -396,7 +396,7 @@ export function setupActionScripts(panel: DevicePanelRoot, device, api) {
           error?: string;
         };
         if (!fnRes || !fnRes.success) {
-          return { ok: false, error: (fnRes && fnRes.error) || 'Could not fetch app function list from the channel.' };
+          return { ok: false, error: (fnRes && fnRes.error) || 'Could not fetch App Function list from the channel.' };
         }
         const allFns = connector.getFunctions() || [];
         const fn = allFns.find((f) => f && f.name === functionName);
@@ -464,7 +464,7 @@ export function setupActionScripts(panel: DevicePanelRoot, device, api) {
         if (res && res.success) {
           return { ok: true, data: { result: res.data, functionName, paramCount: positional.length } };
         }
-        return { ok: false, error: (res && res.error) || 'App function returned no result.' };
+        return { ok: false, error: (res && res.error) || 'App Function returned no result.' };
       } catch (e) {
         return { ok: false, error: e instanceof Error ? e.message : String(e) };
       }

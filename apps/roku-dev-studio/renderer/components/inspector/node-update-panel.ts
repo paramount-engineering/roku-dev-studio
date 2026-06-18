@@ -40,17 +40,17 @@ export function parseValueForRaleFieldType(
   }
   if (t === 'integer') {
     const n = Number.parseInt(raw.trim(), 10);
-    if (Number.isNaN(n)) return { ok: false, error: 'integer: invalid number' };
+    if (Number.isNaN(n)) return { ok: false, error: 'Integer: invalid number' };
     return { ok: true, value: n };
   }
   if (t === 'float') {
     const n = Number.parseFloat(raw.trim());
-    if (Number.isNaN(n)) return { ok: false, error: 'float: invalid number' };
+    if (Number.isNaN(n)) return { ok: false, error: 'Float: invalid number' };
     return { ok: true, value: n };
   }
   if (t === 'color') {
     const n = Number.parseInt(raw.trim(), 10);
-    if (Number.isNaN(n)) return { ok: false, error: 'color: use integer (e.g. -16777216)' };
+    if (Number.isNaN(n)) return { ok: false, error: 'Color: use integer (e.g. -16777216)' };
     return { ok: true, value: n };
   }
   if (t === 'vector2d' || t === 'rect2d') {
@@ -60,10 +60,10 @@ export function parseValueForRaleFieldType(
         return { ok: false, error: `${t}: JSON array required` };
       }
       if (t === 'vector2d' && v.length < 2) {
-        return { ok: false, error: 'vector2d: at least two elements, e.g. [0,0]' };
+        return { ok: false, error: 'Vector2d: at least two elements, e.g. [0,0]' };
       }
       if (t === 'rect2d' && v.length < 4) {
-        return { ok: false, error: 'rect2d: four elements, e.g. [0,0,100,100]' };
+        return { ok: false, error: 'Rect2d: four elements, e.g. [0,0,100,100]' };
       }
       return { ok: true, value: v };
     } catch (e) {
@@ -77,7 +77,7 @@ export function parseValueForRaleFieldType(
         const v = JSON.parse(s);
         if (Array.isArray(v)) return { ok: true, value: v };
       } catch (e) {
-        return { ok: false, error: 'array: invalid JSON array' };
+        return { ok: false, error: 'Array: invalid JSON array' };
       }
     }
     return { ok: true, value: s.split(',').map((x: string) => x.trim()) };
@@ -321,11 +321,11 @@ export function setupNodeUpdatePanel(panel: DevicePanelRoot, options: NodeUpdate
     }
 
     if (a === 'remove') {
-      apply.textContent = 'Remove field';
+      apply.textContent = 'Remove Field';
     } else if (a === 'add') {
-      apply.textContent = 'Add field';
+      apply.textContent = 'Add Field';
     } else {
-      apply.textContent = 'Update field';
+      apply.textContent = 'Update Field';
     }
   }
 

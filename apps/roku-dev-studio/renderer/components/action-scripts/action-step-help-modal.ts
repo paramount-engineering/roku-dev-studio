@@ -96,7 +96,7 @@ export function collectActionStepHelpContext(
     const src = selValue(root, '.builder-field-wait-source') || 'media-player';
     const srcLabel =
       src === 'rale-node-field'
-        ? 'RALE node field'
+        ? 'RALE Node Field'
         : src === 'media-player'
           ? 'Media player'
           : src;
@@ -111,8 +111,8 @@ export function collectActionStepHelpContext(
     const src = selValue(root, '.builder-field-if-source') || 'media-player';
     const labels: Record<string, string> = {
       'media-player': 'Media player',
-      'active-app': 'Active app',
-      'rale-node-field': 'RALE node field',
+      'active-app': 'Active App',
+      'rale-node-field': 'RALE Node Field',
       variables: 'Variables'
     };
     return { actionType: type, variantKey: `if:${src}`, subtitle: labels[src] || src };
@@ -238,7 +238,7 @@ const VARIANT_HELP_BODIES: Record<string, string> = {
     <p>Requires script version 2 and earlier steps that populate the variable.</p>
   `,
   'raleCommand:__none__': `
-    <p>Select a <strong>RALE command</strong> from the list. Parameters and optional “Set var” appear after a command is chosen.</p>
+    <p>Select a <strong>RALE command</strong> from the list. Parameters and optional “Set Var” appear after a command is chosen.</p>
   `,
   'appFunction:__none__': `
     <p>
@@ -305,7 +305,7 @@ const ACTION_FALLBACK_BODIES: Record<string, string> = {
   appFunction: `
     <p>
       Calls a <strong>BrightScript function</strong> over App Connector. The subtitle shows the <strong>selected
-      function</strong>. Parameters match the channel’s exported signature; use <strong>Set var</strong> to capture a
+      function</strong>. Parameters match the channel’s exported signature; use <strong>Set Var</strong> to capture a
       return value for later steps.
     </p>
   `,

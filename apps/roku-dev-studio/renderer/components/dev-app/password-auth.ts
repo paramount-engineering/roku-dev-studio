@@ -92,7 +92,7 @@ export function setupPasswordAuth(
       const result = await api.verifyDevAuth(password);
 
       if (!result) {
-        updateAuthStatus(false, 'Verification failed — no response from the app.');
+        updateAuthStatus(false, 'Verification failed — no response from the Dev App.');
         if (verifyPasswordBtn) {
           verifyPasswordBtn.disabled = false;
           verifyPasswordBtn.textContent = 'Verify';

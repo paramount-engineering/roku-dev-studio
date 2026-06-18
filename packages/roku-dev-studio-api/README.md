@@ -139,7 +139,7 @@ Pure data — no I/O, safe to import anywhere. Every consumer in this repo (vali
 | `RALE_BUILTINS` | Built-in RALE commands the Inspector / Builder expose (`getNodeById`, registry CRUD, …). |
 | `RALE_READ_ONLY_COMMANDS` | Subset of `RALE_BUILTINS` that don't mutate device state. |
 | `AUTHORING_RULES` | Hard rules the agent must obey when generating scripts (version, password handling, wait vs delay, …). |
-| `SAVE_ACTION_TYPES`, `PASSWORD_STEP_TYPES` | Which step types write artifacts / require a dev password. |
+| `SAVE_ACTION_TYPES`, `PASSWORD_STEP_TYPES` | Which step types write artifacts / require a Dev Password. |
 
 ### Operations registry (`lib/operations.js`)
 

@@ -49,14 +49,14 @@ export function registerHamburgerMenuIpc(ipcMain: IpcMain, deps: HamburgerMenuDe
       }
       case 'open-log-file-picker': {
         const res = await deps.dialog.showOpenDialog(win, {
-          title: 'Open log file',
+          title: 'Open Log File',
           properties: ['openFile'],
           filters: [
             {
-              name: 'Log & text',
+              name: 'Log & Text',
               extensions: ['log', 'txt', 'text', 'out', 'err', 'trace', 'rtf']
             },
-            { name: 'All files', extensions: ['*'] }
+            { name: 'All Files', extensions: ['*'] }
           ]
         });
         if (res.canceled || !res.filePaths?.length) {

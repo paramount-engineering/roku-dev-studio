@@ -1157,8 +1157,8 @@ function settingsHtml(initialSection?: string): string {
               </div>
               <div class="settings-row-toggle">
                 <div class="settings-row-text">
-                  <strong>Roku Remote - Use Keyboard </strong>
-                  <span class="settings-row-desc">When On, you can use Keyboard to control the Roku. Keyboard Shortcuts can be found in Remote Help Modal.</span>
+                  <strong>Use Keyboard for Roku Remote</strong>
+                  <span class="settings-row-desc">When on, you can use the keyboard to control the Roku. Keyboard shortcuts are listed in the Remote Help modal.</span>
                 </div>
                 <label class="settings-toggle-wrap" for="optKeyboardRemote">
                   <input type="checkbox" id="optKeyboardRemote" class="settings-toggle-input" role="switch" aria-label="Roku Remote - Use Keyboard " aria-checked="false" />
@@ -1177,18 +1177,18 @@ function settingsHtml(initialSection?: string): string {
               </div>
               <div class="settings-row-toggle">
                 <div class="settings-row-text">
-                  <strong>Auto Hide SideBar</strong>
-                  <span class="settings-row-desc">When On, the SideBar which presents the Devices List will auto-toggle if SideBar is hidden in previous session.</span>
+                  <strong>Auto-Hide Sidebar</strong>
+                  <span class="settings-row-desc">When on, the Sidebar, which presents the devices list, will auto-toggle if the Sidebar was hidden in the previous session.</span>
                 </div>
                 <label class="settings-toggle-wrap" for="optRememberSidebarToggle">
-                  <input type="checkbox" id="optRememberSidebarToggle" class="settings-toggle-input" role="switch" aria-label="Auto Hide SideBar" aria-checked="false" />
+                  <input type="checkbox" id="optRememberSidebarToggle" class="settings-toggle-input" role="switch" aria-label="Auto-Hide Sidebar" aria-checked="false" />
                   <span class="settings-toggle-ui" aria-hidden="true"></span>
                 </label>
               </div>
               <div class="settings-row-toggle">
                 <div class="settings-row-text">
                   <strong>Encrypt Saved Passwords with System Keychain</strong>
-                  <span class="settings-row-desc">When On, each device's "Remember password" entry is encrypted via the OS keychain — your OS may prompt the first time. When Off, remembered passwords still persist across quit/relaunch but are stored unencrypted on disk.</span>
+                  <span class="settings-row-desc">When On, each device's "Remember password" entry is encrypted via the OS Keychain — your OS may prompt the first time. When Off, remembered passwords still persist across quit/relaunch but are stored unencrypted on disk.</span>
                   <span class="settings-row-desc settings-keychain-status" id="keychainStorageStatus" aria-live="polite"></span>
                 </div>
                 <label class="settings-toggle-wrap" for="optRememberPasswordsInKeychain">
@@ -1234,7 +1234,7 @@ function settingsHtml(initialSection?: string): string {
               <div class="settings-row-toggle">
                 <div class="settings-row-text">
                   <strong>Remember 'Show Device Performance'</strong>
-                  <span class="settings-row-desc">Restore whether <strong>Show Device Performance</strong> was on for each device. Turn off to always start with the just the remote until you enable it again.</span>
+                  <span class="settings-row-desc">Restore whether <strong>Show Device Performance</strong> was on for each device. Turn off to always start with just the Remote tab until you enable it again.</span>
                 </div>
                 <label class="settings-toggle-wrap" for="optDevicePerfRememberQuad">
                   <input type="checkbox" id="optDevicePerfRememberQuad" class="settings-toggle-input" role="switch" aria-label="Remember Device Performance show or hide per device" aria-checked="false" />
@@ -1268,7 +1268,7 @@ function settingsHtml(initialSection?: string): string {
       <div class="settings-panel" data-section="mcp-server" id="panel-mcp-server" role="tabpanel" aria-labelledby="nav-mcp-server" aria-hidden="true">
         <div class="settings-panel-fill">
           <div class="settings-panel-scroll">
-            <p class="help-blurb">Expose Roku Dev Studio to AI agents via the <a href="https://modelcontextprotocol.io" target="_blank" rel="noopener noreferrer" class="mcp-link">Model Context Protocol</a>. Toggle a client to add or remove its <code class="mcp-inline-code">roku-dev-studio</code> MCP Server entry; other entries are left untouched.</p>
+            <p class="help-blurb">Expose Roku Dev Studio to AI agents via the <a href="https://modelcontextprotocol.io" target="_blank" rel="noopener noreferrer" class="mcp-link">Model Context Protocol</a>. Toggle a client to add or remove its <code class="mcp-inline-code">roku-dev-studio</code> MCP server entry; other entries are left untouched.</p>
             <div class="settings-section">
               <div id="mcpClientsList" class="mcp-clients-list" aria-live="polite"></div>
             </div>
@@ -1291,7 +1291,7 @@ function settingsHtml(initialSection?: string): string {
             <div class="ni-port-conflict-warn" id="niPortConflictWarn" role="alert" hidden>
               <span class="ni-port-conflict-warn-icon" aria-hidden="true">!</span>
               <div class="ni-port-conflict-warn-body">
-                <strong id="niPortConflictTitle">Proxy port unavailable</strong>
+                  <strong id="niPortConflictTitle">Proxy Port Unavailable</strong>
                 <span class="ni-port-conflict-warn-msg" id="niPortConflictMsg"></span>
                 <ul class="ni-port-conflict-steps" id="niPortConflictSteps"></ul>
               </div>
@@ -1309,24 +1309,24 @@ function settingsHtml(initialSection?: string): string {
               </div>
               <div class="settings-row-input">
                 <div class="settings-row-text">
-                  <strong>MITM proxy port</strong>
+                  <strong>MITM Proxy Port</strong>
                   <span class="settings-row-desc">Port the local decrypting proxy listens on. Route your sideloaded dev channel through it — works on any network (stock channels can't be intercepted).</span>
                 </div>
                 <input type="number" id="niMitmPort" class="settings-text-input" min="1" max="65535" value="8888" aria-label="MITM proxy port" />
               </div>
               <div class="settings-row-input">
                 <div class="settings-row-text">
-                  <strong>Per-device packet limit</strong>
-                  <span class="settings-row-desc">Max captured frames kept per device for the pcap export. Higher = longer history, more memory. ${MIN_MAX_RAW_PACKETS_PER_DEVICE}–${MAX_MAX_RAW_PACKETS_PER_DEVICE}.</span>
+                  <strong>Per-Device Packet Limit</strong>
+                  <span class="settings-row-desc">Max captured frames kept per device for the PCAP export. Higher = longer history, more memory. ${MIN_MAX_RAW_PACKETS_PER_DEVICE}–${MAX_MAX_RAW_PACKETS_PER_DEVICE}.</span>
                 </div>
                 <input type="number" id="niMaxRawPackets" class="settings-text-input" min="${MIN_MAX_RAW_PACKETS_PER_DEVICE}" max="${MAX_MAX_RAW_PACKETS_PER_DEVICE}" step="100" value="${DEFAULT_MAX_RAW_PACKETS_PER_DEVICE}" aria-label="Per-device packet limit" />
               </div>
               <div class="settings-row-input" id="niSetupRow">
                 <div class="settings-row-text">
-                  <strong>Hotspot &amp; Capture Setup <span class="ni-attention-badge" id="niSetupBadge" hidden>Setup needed</span></strong>
+                  <strong>Hotspot &amp; Capture Setup <span class="ni-attention-badge" id="niSetupBadge" hidden>Setup Needed</span></strong>
                   <span class="settings-row-desc" id="niSetupRowDesc">Optional — only for hotspot DNS/SNI capture. Proxying needs no setup.</span>
                 </div>
-                <button type="button" class="btn btn-secondary btn-sm" id="btnOpenNiSetup">View setup</button>
+                <button type="button" class="btn btn-secondary btn-sm" id="btnOpenNiSetup">View Setup</button>
               </div>
             </div>
           </div>
@@ -1707,7 +1707,7 @@ ${networkInspectorSetupModalBodyHtml()}
               '</div>' +
               '<div class="timing-field">' +
               '<div class="timing-field-stack">' +
-              '<span class="bound-label">min: ' +
+              '<span class="bound-label">Min: ' +
               CHART_HISTORY_MIN_MINUTES +
               ' min</span>' +
               '<input type="number" class="input-num" data-timing-key="' +
@@ -1719,7 +1719,7 @@ ${networkInspectorSetupModalBodyHtml()}
               '" max="' +
               CHART_HISTORY_MAX_MINUTES +
               '" step="1" />' +
-              '<span class="bound-label">max: ' +
+              '<span class="bound-label">Max: ' +
               CHART_HISTORY_MAX_MINUTES +
               ' min</span>' +
               '</div></div>';
@@ -1732,7 +1732,7 @@ ${networkInspectorSetupModalBodyHtml()}
               '</div>' +
               '<div class="timing-field">' +
               '<div class="timing-field-stack">' +
-              '<span class="bound-label">min: ' +
+              '<span class="bound-label">Min: ' +
               TOAST_STATUS_SEC_MIN +
               '</span>' +
               '<input type="number" class="input-num" data-timing-key="' +
@@ -1744,7 +1744,7 @@ ${networkInspectorSetupModalBodyHtml()}
               '" max="' +
               TOAST_STATUS_SEC_MAX +
               '" step="1" />' +
-              '<span class="bound-label">max: ' +
+              '<span class="bound-label">Max: ' +
               TOAST_STATUS_SEC_MAX +
               '</span>' +
               '</div></div>';
@@ -1756,7 +1756,7 @@ ${networkInspectorSetupModalBodyHtml()}
               '</div>' +
               '<div class="timing-field">' +
               '<div class="timing-field-stack">' +
-              '<span class="bound-label">min: ' + escapeHtml(String(m.min)) + '</span>' +
+              '<span class="bound-label">Min: ' + escapeHtml(String(m.min)) + '</span>' +
               '<input type="number" class="input-num" data-timing-key="' +
               escapeHtml(key) +
               '" value="' +
@@ -1766,7 +1766,7 @@ ${networkInspectorSetupModalBodyHtml()}
               '" max="' +
               m.max +
               '" />' +
-              '<span class="bound-label">max: ' + escapeHtml(String(m.max)) + '</span>' +
+              '<span class="bound-label">Max: ' + escapeHtml(String(m.max)) + '</span>' +
               '</div></div>';
           }
           container.appendChild(row);
@@ -1993,10 +1993,10 @@ ${networkInspectorSetupModalBodyHtml()}
           return 'Encryption toggle is off — remembered passwords are stored as plaintext on disk.';
         }
         if (status === 'encrypted') {
-          return 'Storage: encrypted via ' + (backend || 'system keychain') + '.';
+          return 'Storage: encrypted via ' + (backend || 'System Keychain') + '.';
         }
         if (status === 'unencrypted') {
-          return 'Warning: toggle is on but this system uses basic_text — passwords are base64 plaintext on disk. Use a Linux keyring (Secret Service/KWallet) for real encryption.';
+          return 'Warning: toggle is on but this system uses basic text — passwords are Base64-encoded plaintext on disk. Use a Linux keyring (Secret Service/KWallet) for real encryption.';
         }
         if (status === 'unavailable') {
           return 'Warning: toggle is on but the OS keychain is unavailable — passwords stay in memory for this session only.';
@@ -2182,7 +2182,7 @@ ${networkInspectorSetupModalBodyHtml()}
         if (headerBadge) {
           headerBadge.hidden = false;
           headerBadge.setAttribute('data-state', ok ? 'ok' : 'blocked');
-          headerBadge.textContent = ok ? 'Capture access enabled' : 'Setup needed';
+          headerBadge.textContent = ok ? 'Capture Access Enabled' : 'Setup Needed';
         }
         var headingEl = el('niBpfHeading');
         var explainEl = el('niBpfExplain');
@@ -2330,7 +2330,7 @@ ${networkInspectorSetupModalBodyHtml()}
         if (!box) return;
         if (!conflict) { box.hidden = true; return; }
         box.hidden = false;
-        if (el('niPortConflictTitle')) el('niPortConflictTitle').textContent = conflict.title || 'Proxy port unavailable';
+        if (el('niPortConflictTitle')) el('niPortConflictTitle').textContent = conflict.title || 'Proxy Port Unavailable';
         if (el('niPortConflictMsg')) el('niPortConflictMsg').textContent = conflict.message || '';
         var steps = el('niPortConflictSteps');
         if (steps) {
@@ -2493,12 +2493,12 @@ ${networkInspectorSetupModalBodyHtml()}
             btnInstallBpf.disabled = false;
             if (res && res.success) {
               setSectionStatus('saveStatusNetworkInspector', 'Packet capture access installed.', false);
-              if (statusEl) statusEl.textContent = 'Installed — return to the Network tab.';
+              if (statusEl) statusEl.textContent = 'Installed — return to the Network Inspector tab.';
               updateBpfCaptureUi(res.bpfCaptureAvailable !== false);
             } else if (res && res.error === 'cancelled') {
               if (statusEl) statusEl.textContent = 'Cancelled.';
             } else {
-              setSectionStatus('saveStatusNetworkInspector', (res && res.error) || 'Setup failed', true);
+              setSectionStatus('saveStatusNetworkInspector', (res && res.error) || 'Setup failed.', true);
               if (statusEl) statusEl.textContent = '';
             }
           }).catch(function (e) {

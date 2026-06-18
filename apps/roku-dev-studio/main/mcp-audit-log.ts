@@ -90,7 +90,7 @@ export function setMcpAuditLogDir(dir: string): void {
  * Hash redacted params for the `paramsHash` field. We always strip
  * obviously-secret fields *before* hashing so the hash itself doesn't
  * encode them — every call with the same non-secret payload hashes the
- * same regardless of whether the agent included the dev password.
+ * same regardless of whether the agent included the Dev Password.
  */
 const SECRET_KEYS = new Set(['password', 'devPassword', 'token', 'authorization', 'imageBase64']);
 

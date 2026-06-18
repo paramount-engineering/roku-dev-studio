@@ -68,7 +68,7 @@ The contract on each hop:
 3. **Discover surface.** The agent (or user via the host UI) lists `tools/list`, `resources/list`, `prompts/list`. For first-session priming the agent typically reads `roku-dev-studio://quick-start.md` once and (only if it's authoring a script) `roku-dev-studio://capability-bundle.json`.
 4. **Probe the bridge.** First live action calls `probe_bridge`. The server reads `<userData>/mcp-bridge.json`, verifies the listed `pid` is alive, and either returns `{ live: true, port, pid, startedAt }` or `{ live: false, reason }`. If `false`, the agent stops and tells the user to open Dev Studio.
 5. **Pick a surface and execute.**
-   - **Single action:** the agent calls a direct op (e.g. `keypress`). The server posts to `POST /op/<id>` on the bridge with bearer auth. The bridge resolves `device` → `ip`, may fill a remembered dev password from the renderer, runs the op via `roku-dev-studio-api`, and returns the result. Destructive ops (`launch_app`, `ecp_post`, `sideload`, `delete_sideload`, `screenshot`, destructive `rale_command`s) emit a non-blocking toast back to the renderer (`McpBridgeAgentAction`) so the user always sees what the agent did.
+   - **Single action:** the agent calls a direct op (e.g. `keypress`). The server posts to `POST /op/<id>` on the bridge with bearer auth. The bridge resolves `device` → `ip`, may fill a remembered Dev Password from the renderer, runs the op via `roku-dev-studio-api`, and returns the result. Destructive ops (`launch_app`, `ecp_post`, `sideload`, `delete_sideload`, `screenshot`, destructive `rale_command`s) emit a non-blocking toast back to the renderer (`McpBridgeAgentAction`) so the user always sees what the agent did.
    - **Action Script:** the agent calls `validate_script`. If `ok: false` the response is `isError: true` with structured `errors[]` (path / code / expected) for self-correction. Once `ok`, the agent calls `send_script_to_builder`. The bridge IPCs the script to the renderer, the Builder UI opens with the script staged for review, and the human runs it.
 6. **Shutdown.** When Dev Studio quits it removes `mcp-bridge.json` and closes the HTTP server. Subsequent `probe_bridge` calls return `live: false`.
 
@@ -208,9 +208,9 @@ For tools that need live RALE / App Connector / Builder access, the bridge IPCs 
 
 ### Password handling
 
-Dev passwords are never sent through the protocol unless the agent explicitly passes one. For `sideload`, `delete_sideload`, and `screenshot` the bridge asks the renderer for the saved password keyed by the device's serial (same storage as the device panel's "Remember" toggle). If no password is remembered and none was passed, the bridge returns 400 with a clear hint.
+Dev Passwords are never sent through the protocol unless the agent explicitly passes one. For `sideload`, `delete_sideload`, and `screenshot` the bridge asks the renderer for the saved password keyed by the device's serial (same storage as the device panel's "Remember" toggle). If no password is remembered and none was passed, the bridge returns 400 with a clear hint.
 
-The dev password is **never** allowed inside Action Script JSON — `validate_script` rejects scripts containing literal `password` / `devPassword` values.
+The Dev Password is **never** allowed inside Action Script JSON — `validate_script` rejects scripts containing literal `password` / `devPassword` values.
 
 ## Build, run, develop
 

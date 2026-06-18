@@ -258,10 +258,10 @@ async function runWaitStep(
           ? `state: ${row.state}`
           : 'state: (none)';
       } else {
-        pollStatus = 'invalid media player response';
+        pollStatus = 'Invalid media-player response';
       }
     } else {
-      pollStatus = res && res.error ? `query failed: ${res.error}` : 'no response';
+      pollStatus = res && res.error ? `Query failed: ${res.error}` : 'No Response';
     }
     const elapsed = Math.round((Date.now() - start) / 1000);
     onLog && onLog(`Polling... (${elapsed}s) — ${pollStatus}`);
@@ -327,7 +327,7 @@ async function runTelnetSystemScriptStep(api, telnetCommand, onLog, shouldStop) 
     telnetSystemConnect: api.telnetSystemConnect.bind(api),
     telnetSystemSend: api.telnetSystemSend.bind(api)
   };
-  onLog && onLog('Connecting to telnet (port 8080)...');
+  onLog && onLog('Connecting to Telnet (port 8080)...');
   const session = await runTelnetSystemCommandSession(tApi, telnetCommand, {
     onStatus: (m) => onLog && onLog(m),
     shouldStop
@@ -385,7 +385,7 @@ export function formatIfStepListDetails(step) {
     } else if (attr) {
       tail = ` · ${op}`;
     }
-    return attr ? `Active app · ${attr}${tail}` : 'Active app · …';
+    return attr ? `Active App · ${attr}${tail}` : 'Active App · …';
   }
   return `if · ${src}`;
 }
@@ -397,35 +397,35 @@ export function stepDescription(step, index) {
   if (!step || !step.type) return '?';
   switch (step.type) {
     case 'query':
-      return `query ${queryEndpointLabel(step.endpoint)}`;
+      return `Query ${queryEndpointLabel(step.endpoint)}`;
     case 'systemTelnet':
-      return `telnet ${step.telnetCommand || '?'}`;
+      return `Telnet ${step.telnetCommand || '?'}`;
     case 'post':
-      return `post ${step.endpoint || '?'}`;
+      return `POST ${step.endpoint || '?'}`;
     case 'keypress':
-      return `keypress ${step.key || '?'}`;
+      return `Keypress ${step.key || '?'}`;
     case 'inputText':
-      return `send text "${(step.text || '').slice(0, 30)}${(step.text && step.text.length > 30) ? '…' : ''}"`;
+      return `Send text "${(step.text || '').slice(0, 30)}${(step.text && step.text.length > 30) ? '…' : ''}"`;
     case 'launch':
-      return `launch app ${step.appId || '?'}`;
+      return `Launch app ${step.appId || '?'}`;
     case 'sideload':
-      return `sideload ${step.filePath ? step.filePath.split(/[/\\]/).pop() : '?'}`;
+      return `Sideload ${step.filePath ? step.filePath.split(/[/\\]/).pop() : '?'}`;
     case 'deleteSideload':
-      return 'delete sideload';
+      return 'Delete sideload';
     case 'appFunction': {
       const o = getAssignToVarName(step);
-      return `app function ${step.functionName || '?'}` + (o ? ` → $${o}` : '');
+      return `App Function ${step.functionName || '?'}` + (o ? ` → $${o}` : '');
     }
     case 'raleCommand': {
       const o = getAssignToVarName(step);
       return `RALE ${step.command || '?'}` + (o ? ` → $${o}` : '');
     }
     case 'screenshot':
-      if (step.label) return `screenshot (${step.label})`;
+      if (step.label) return `Screenshot (${step.label})`;
       if (step.waitAfterTriggerMs != null && Number(step.waitAfterTriggerMs) >= 0) {
-        return `screenshot (wait after: ${step.waitAfterTriggerMs}ms)`;
+        return `Screenshot (wait after: ${step.waitAfterTriggerMs}ms)`;
       }
-      return 'screenshot';
+      return 'Screenshot';
     case 'devicePerformance': {
       const chart = step.chart != null ? String(step.chart) : '';
       const chartLab =
@@ -444,11 +444,11 @@ export function stepDescription(step, index) {
     }
     case 'wait': {
       const w = formatWaitStepListDetails(step);
-      return w ? `wait · ${w}` : 'wait';
+      return w ? `Wait · ${w}` : 'Wait';
     }
     case 'if': {
       const line = formatIfStepListDetails(step);
-      return line ? `if · ${line}` : 'if (…)';
+      return line ? `If · ${line}` : 'If (…)';
     }
     default:
       return step.type;
@@ -620,7 +620,7 @@ export async function runScript(script, context, callbacks) {
           if (telnetCmd) {
             onLog &&
               onLog(
-                `Device query "${ep}" uses dev telnet "${telnetCmd}" (same as the Query tab).`
+                `Device Query "${ep}" uses dev Telnet "${telnetCmd}" (same as the Query tab).`
               );
             result = await runTelnetSystemScriptStep(api, telnetCmd, onLog, shouldStop);
           } else {
@@ -734,7 +734,7 @@ export async function runScript(script, context, callbacks) {
           const skipReason = 'App Connector not available';
           const vr = validateAndNormalizeRaleCommandArgs(step.command, step.args);
           if (!vr.ok) {
-            result = { success: false, error: vr.error || 'Invalid raleCommand' };
+            result = { success: false, error: vr.error || 'Invalid RALE command' };
             break;
           }
           if (!engineRaleCommand) {
@@ -763,7 +763,7 @@ export async function runScript(script, context, callbacks) {
           }
           const password = resolvePassword(step);
           if (!password) {
-            result = { success: false, error: 'Developer password required for screenshot. Specify it in the script (devPassword) or enter it during validation.' };
+            result = { success: false, error: 'Developer Password required for Screenshot. Specify it in the script (devPassword) or enter it during validation.' };
           } else {
             const activeAppRes = await api.query('/query/active-app');
             const activeAppQueryOk = activeAppRes.success && typeof activeAppRes.data === 'string';
@@ -773,7 +773,7 @@ export async function runScript(script, context, callbacks) {
               // that we'd report if query error and dev-backgrounded were collapsed.
               result = {
                 success: false,
-                error: `Could not verify Dev App status before screenshot: ${activeAppRes.error || 'active-app query failed'}`
+                error: `Could not verify Dev App status before screenshot: ${activeAppRes.error || 'Active App query failed'}`
               };
             } else if (!devAppActive) {
               result = {

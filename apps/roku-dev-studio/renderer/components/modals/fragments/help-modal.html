@@ -96,7 +96,7 @@
             <li><strong>Auth</strong> - Enter and validate your Roku Developer password. Enable "Remember" to persist it across sessions</li>
             <li><strong>Sideload</strong> - Install .zip or .pkg channel packages</li>
             <li><strong>Remote</strong> - View the device's web installer page for additional dev options</li>
-            <li><strong>Screenshot</strong> - Capture screenshots from your running dev app</li>
+            <li><strong>Screenshot</strong> - Capture screenshots from your running Dev App</li>
             <li><strong>Delete</strong> - Remove the sideloaded channel</li>
           </ul>
           <p>You'll need your Roku Developer password (set during Developer Mode setup).</p>
@@ -119,7 +119,7 @@
           <h3><span class="icon icon-sm icon-teal"><svg><use href="#icon-plug"/></svg></span> App Connector</h3>
           <p>Connect to Roku apps that implement the TrackerTask component for two-way communication:</p>
           <ul>
-            <li><strong>Connect</strong> - Establishes a socket connection to your running dev app (default port <code>49200</code>)</li>
+            <li><strong>Connect</strong> - Establishes a socket connection to your running Dev App (default port <code>49200</code>)</li>
             <li><strong>Execute Function</strong> - Call custom functions exposed by your scene's <code>GetExternalControlFunctions</code></li>
             <li><strong>Response</strong> - View return values and debug output</li>
             <li><strong>Update Node</strong> - After running <em>Get Node by ID</em>, the response panel offers a node-update modal where you can <code>selectNode</code>, <code>setField</code>, or <code>removeField</code> on the matched node</li>
@@ -158,7 +158,7 @@
           </ul>
           <p><strong>Developer Password</strong> - Actions like Screenshot, Sideload, and Delete Sideload require a developer password. The password is resolved in order: action-level <code>"password"</code> → script-level <code>"devPassword"</code> → password from the Dev App Auth section. If none is found, you'll be prompted during validation.</p>
           <p><strong>Save Folder</strong> - The default save folder lives under <strong>Settings → Action Scripts → Default folder</strong>. Per run you can pick another folder. Artifacts (screenshots, performance chart PNGs, exported PDFs) land in a timestamped subfolder, created only when something is actually produced.</p>
-          <p><strong>AI agents</strong> - Action Scripts you build in the Builder can also be authored by AI agents through the MCP server (see the <em>AI Agents (MCP)</em> section below); the agent's script always lands in the Builder for human review before running.</p>
+          <p><strong>AI Agents</strong> - Action Scripts you build in the Builder can also be authored by AI agents through the MCP server (see the <em>AI Agents (MCP)</em> section below); the agent's script always lands in the Builder for human review before running.</p>
         </div>
 
         <div class="help-section" id="help-section-device-performance">
@@ -166,7 +166,7 @@
           <p>Toggle <strong>Show Device Performance</strong> on the Remote tab to expand a quad with live charts:</p>
           <ul>
             <li><strong>CPU usage</strong>, <strong>system memory</strong>, and <strong>BrightScript object</strong> charts (count or memory view where available)</li>
-            <li>Charts reflect the running app — for representative readings, the device should have <strong>Developer Mode</strong> on and your <strong>sideloaded dev channel</strong> in the foreground</li>
+            <li>Charts reflect the running app — for representative readings, the device should have <strong>Developer Mode</strong> on and your <strong>sideloaded Dev channel</strong> in the foreground</li>
             <li><strong>Settings → Device Performance</strong> tunes chart sample interval and history window; turn on <strong>Remember 'Show Device Performance'</strong> to restore the quad layout per device between sessions</li>
             <li>Inside Action Scripts, <strong>Device Performance</strong> steps capture chart cards into run results (and PDF export)</li>
           </ul>
@@ -174,13 +174,13 @@
 
         <div class="help-section" id="help-section-network-inspector">
           <h3><span class="icon icon-sm icon-cyan"><svg><use href="#icon-wifi"/></svg></span> Network Inspector</h3>
-          <p>Inspect the HTTP(S) traffic your dev channel makes. Roku Dev Studio runs a local <strong>MITM proxy</strong> that decrypts dev-channel HTTPS routed through it, so you can see full request/response headers and bodies.</p>
+          <p>Inspect the HTTP(S) traffic your Dev channel makes. Roku Dev Studio runs a local <strong>MITM proxy</strong> that decrypts dev-channel HTTPS routed through it, so you can see full request/response headers and bodies.</p>
           <p><strong>Getting started</strong></p>
           <ul>
             <li>Enable the <strong>MITM proxy</strong> in <strong>Settings → Network Inspector</strong>, then have your dev channel route its requests through the proxy address shown — use <code>host:port</code> (e.g. <code>192.168.1.50:8888</code>). How the channel applies that proxy is up to your app's networking code.</li>
-            <li>Optional <strong>hotspot capture</strong> records SNI/DNS metadata for all of the device's traffic; it needs OS packet-capture access (macOS BPF, Windows Npcap). Settings → Network Inspector walks through the per-platform setup.</li>
+            <li>Optional <strong>Hotspot Capture</strong> records SNI/DNS metadata for all of the device's traffic; it needs OS packet-capture access (macOS BPF, Windows Npcap). Settings → Network Inspector walks through the per-platform setup.</li>
           </ul>
-          <p><strong>Toolbar</strong> (top-right of the panel): <strong>Start / Stop capture</strong>, <strong>panes layout</strong> (stack vs. side-by-side request/response), and <strong>Configure traffic rules</strong>.</p>
+          <p><strong>Toolbar</strong> (top-right of the panel): <strong>Start/Stop Capture</strong>, <strong>Panes Layout</strong> (stack vs. side-by-side request/response), and <strong>Configure Traffic Rules</strong>.</p>
           <ul>
             <li><strong>Session list</strong> - Filter with <code>host:</code>, <code>method:</code>, <code>status:</code>, <code>type:</code>, <code>kind:</code>, <code>path:</code> (separate terms with commas for OR); group by host; toggle <em>Proxied</em> to hide hotspot-only metadata. Jump-to-error and scroll-to-latest shortcuts appear when relevant.</li>
             <li><strong>Inspect</strong> - View request / response overview, headers, and bodies (JSON / XML / raw). <strong>Copy</strong> a body, or export the transaction as <strong>cURL</strong> or <strong>HAR</strong>.</li>
@@ -190,7 +190,7 @@
           <ul>
             <li><strong>Block all proxied traffic</strong> - Reject every proxied request. This wins over per-host rules and the device throttle.</li>
             <li><strong>Device throttle</strong> - Cap bandwidth and/or add latency for every proxied request. Pick a preset or type a custom value (e.g. <code>3 Mbps</code>, <code>1500 kbps</code>).</li>
-            <li><strong>Per-host rules</strong> - Add a <strong>hostname</strong> to target every request to that host, or a <strong>host + path</strong> (e.g. <code>api.example.com/v1/play</code>) to target only that path. Each rule can <em>Block</em>, <em>Reset</em> the connection (simulate a network failure), <em>Mock</em> a canned response (status / content-type / delay / body), and/or throttle.</li>
+            <li><strong>Per-host rules</strong> - Add a <strong>hostname</strong> to target every request to that host, or a <strong>host + path</strong> (e.g. <code>api.example.com/v1/play</code>) to target only that path. Each rule can <em>Block</em>, <em>Reset</em> the connection (simulate a network failure), <em>Mock</em> a canned response (status / Content-Type / delay / body), and/or throttle.</li>
             <li><strong>Bounds</strong> - A host can't be faster than the device's bandwidth cap, and its latency can't drop below the device latency floor.</li>
           </ul>
           <p>Network Inspector is available for locally connected devices.</p>
@@ -212,11 +212,11 @@
           <h3><span class="icon icon-sm icon-pink"><svg><use href="#icon-edit-3"/></svg></span> BrightScript Fiddle</h3>
           <p>Open via <strong>File → Open Fiddle</strong> (<span class="help-kbd">Ctrl</span>/<span class="help-kbd">Cmd</span>+<span class="help-kbd">Shift</span>+<span class="help-kbd">B</span>) or the <em>Open Fiddle</em> button on the Query tab.</p>
           <ul>
-            <li><strong>Editor</strong> - Monaco editor with BrightScript highlighting and live <em>brighterscript</em> linting; the Run button is disabled while errors are present</li>
+            <li><strong>Editor</strong> - Monaco editor with BrightScript highlighting and live <em>BrighterScript</em> linting; the Run button is disabled while errors are present</li>
             <li><strong>Run</strong> - Wraps your snippet into a minimal SceneGraph channel, sideloads it on the selected device, and streams the BrightScript debug console (8085) into the Fiddle window's terminal</li>
             <li><strong>Stop / window close</strong> - Removes the Fiddle channel from the device automatically</li>
           </ul>
-          <p>Requires a Developer Mode-enabled device with a known dev password (use the Dev App tab once to remember it, or you'll be prompted in Fiddle).</p>
+          <p>Requires a Developer Mode-enabled device with a known Dev Password (use the Dev App tab once to remember it, or you'll be prompted in Fiddle).</p>
         </div>
 
         <div class="help-section" id="help-section-log-viewer">
@@ -226,14 +226,14 @@
 
         <div class="help-section" id="help-section-secret-screens">
           <h3><span class="icon icon-sm icon-indigo"><svg><use href="#icon-key"/></svg></span> Secret Screens</h3>
-          <p>The <em>Secret Screens</em> link (Remote tab and the Query tab footer) opens a modal listing the standard Roku key sequences for hidden settings — <strong>Developer Settings</strong>, <strong>Secret Screen 1/2/3</strong>, <strong>Wi-Fi info</strong>, <strong>Channel Info</strong>, <strong>Reboot</strong>, etc. Click a sequence to send the keypresses to the connected device.</p>
+          <p>The <em>Secret Screens</em> link (Remote tab and the Query tab footer) opens a modal listing the standard Roku key sequences for hidden settings — <strong>Developer Settings</strong>, <strong>Secret Screen 1/2/3</strong>, <strong>Wi-Fi Info</strong>, <strong>Channel Info</strong>, <strong>Reboot</strong>, etc. Click a sequence to send the keypresses to the connected device.</p>
         </div>
 
         <div class="help-section" id="help-section-settings">
           <h3><span class="icon icon-sm icon-red"><svg><use href="#icon-settings"/></svg></span> Settings</h3>
           <p>Open with <span class="help-kbd">Ctrl</span>/<span class="help-kbd">Cmd</span>+<span class="help-kbd">,</span> or <em>Roku Dev Studio → Settings</em> (macOS) / <em>File → Settings</em> (Windows / Linux). Five sections:</p>
           <ul>
-            <li><strong>General</strong> - Developer Mode, Privacy Mode (mask IPs / serials), Debug Logging to file, Roku Remote - Use Keyboard, Auto Connect to Devices, Auto Hide SideBar, Encrypt Saved Passwords (status line shows whether the OS keychain is really encrypting — on some Linux setups it is not)</li>
+            <li><strong>General</strong> - Developer Mode, Privacy Mode (mask IPs / serials), Debug Logging to file, Roku Remote - Use Keyboard, Auto Connect to Devices, Auto Hide Sidebar, Encrypt Saved Passwords (status line shows whether the OS keychain is really encrypting — on some Linux setups it is not)</li>
             <li><strong>Action Scripts</strong> - Default folder for run artifacts (screenshots, exported PDFs)</li>
             <li><strong>Device Performance</strong> - Chart sample interval, chart history window, Remember 'Show Device Performance' per device</li>
             <li><strong>Timing &amp; Network</strong> - Connection / query / telnet timeouts and other network knobs (with Reset to Defaults)</li>
