@@ -126,8 +126,22 @@ export interface RemoteRaleDisconnectPayload {
   serverUrl: string;
   connectionId: string;
 }
-export interface SaveConsoleLogsPayload {
+export interface SaveTextFilePayload {
   content: string;
+  /** Suggested file name shown in the save dialog (e.g. `ecp-response.xml`). */
+  defaultName?: string;
+  /** Save dialog title (e.g. `Save Response`). */
+  dialogTitle?: string;
+}
+export interface SaveBinaryFilePayload {
+  /** Base64-encoded file bytes (no data-URL prefix). */
+  base64: string;
+  defaultName?: string;
+  dialogTitle?: string;
+}
+export interface CopyImagePayload {
+  /** `data:<mime>;base64,<data>` URL for the image to place on the clipboard. */
+  dataUrl: string;
 }
 export interface ActionScriptWriteFilePayload {
   filePath?: string;

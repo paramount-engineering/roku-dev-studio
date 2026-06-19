@@ -16,7 +16,9 @@ import { initNetworkInspectorFromSettings } from './network-inspector/index';
 import { getCapturePlatform } from './network-inspector/index';
 import {
   DEFAULT_MAX_RAW_PACKETS_PER_DEVICE,
-  clampMaxRawPacketsPerDevice
+  clampMaxRawPacketsPerDevice,
+  DEFAULT_MAX_BODY_RETAINED_BYTES,
+  clampMaxBodyRetainedBytes
 } from '../shared/network-inspector/types';
 
 const sharedConstants = require('roku-dev-studio-api/lib/shared-constants') as Record<string, number>;
@@ -149,6 +151,8 @@ export type SettingsWindowSavePayload = {
   networkInspectorMitmPort?: number;
   /** Max raw frames retained per device for the per-device pcap export. */
   networkInspectorMaxRawPacketsPerDevice?: number;
+  /** Max bytes of each body retained for display (snapshot-only; never affects forwarded traffic). */
+  networkInspectorMaxBodyRetainedBytes?: number;
   /** Host OS for the running app (`darwin` | `win32` | `linux`). */
   hostPlatform: string;
 };
@@ -399,6 +403,10 @@ function registerSettingsWindowIpc(
       'networkInspectorMaxRawPacketsPerDevice' in settings
         ? clampMaxRawPacketsPerDevice(settings['networkInspectorMaxRawPacketsPerDevice'])
         : DEFAULT_MAX_RAW_PACKETS_PER_DEVICE;
+    const networkInspectorMaxBodyRetainedBytes =
+      'networkInspectorMaxBodyRetainedBytes' in settings
+        ? clampMaxBodyRetainedBytes(settings['networkInspectorMaxBodyRetainedBytes'])
+        : DEFAULT_MAX_BODY_RETAINED_BYTES;
 
     const mcpDetections = detectMcpClients();
     const mcpEnabledRaw = settings['mcpEnabledClients'];
@@ -437,6 +445,7 @@ function registerSettingsWindowIpc(
       networkInspectorMitmEnabled,
       networkInspectorMitmPort,
       networkInspectorMaxRawPacketsPerDevice,
+      networkInspectorMaxBodyRetainedBytes,
       hostPlatform: process.platform,
       remoteLocations: readRemoteLocations(settings),
       // Capture readiness comes from the per-OS capture worker — no platform branching here. Off-
@@ -513,6 +522,11 @@ function registerSettingsWindowIpc(
             ? clampMaxRawPacketsPerDevice(payload.networkInspectorMaxRawPacketsPerDevice)
             : DEFAULT_MAX_RAW_PACKETS_PER_DEVICE;
         settings['networkInspectorMaxRawPacketsPerDevice'] = niMaxRawPackets;
+        const niMaxBodyRetainedBytes =
+          typeof payload.networkInspectorMaxBodyRetainedBytes === 'number'
+            ? clampMaxBodyRetainedBytes(payload.networkInspectorMaxBodyRetainedBytes)
+            : DEFAULT_MAX_BODY_RETAINED_BYTES;
+        settings['networkInspectorMaxBodyRetainedBytes'] = niMaxBodyRetainedBytes;
         settings.debugLoggingEnabled = !!payload.debugLoggingEnabled;
 
         const mcpRequested = sanitizeMcpClientsPayload(payload.mcpClients);
@@ -558,6 +572,7 @@ function registerSettingsWindowIpc(
                 ? payload.networkInspectorMitmPort
                 : 8888,
             maxRawPacketsPerDevice: niMaxRawPackets,
+            maxBodyRetainedBytes: niMaxBodyRetainedBytes,
             userDataPath: app.getPath('userData')
           }
         );

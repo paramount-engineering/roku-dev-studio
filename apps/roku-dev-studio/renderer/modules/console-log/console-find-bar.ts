@@ -30,6 +30,11 @@ import {
   type FlatHit,
   type ConsoleFindOptions
 } from './console-find-helpers.js';
+import {
+  supportsCssHighlights,
+  HIGHLIGHT_PRIORITY_MATCHES,
+  setCurrentMatchHighlight
+} from '../ui/find-highlight.js';
 
 // Re-export so existing callers that imported these from the find-bar module
 // keep working after the helpers were extracted.
@@ -123,16 +128,10 @@ export type AttachConsoleFindBarOpts = {
   scrollLineIntoView?: (lineIndex: number) => void;
 };
 
-const supportsCssHighlights =
-  typeof CSS !== 'undefined' &&
-  typeof (CSS as unknown as { highlights?: unknown }).highlights !== 'undefined' &&
-  typeof (globalThis as unknown as { Highlight?: unknown }).Highlight === 'function';
-
 export function attachConsoleFindBar(opts: AttachConsoleFindBarOpts): ConsoleFindBarHandle | null {
   const { outputEl, model } = opts;
   const root = opts.root instanceof Document ? opts.root.documentElement : opts.root;
   const highlightId = opts.highlightId ?? 'telnet-find';
-  const highlightCurrentId = `${highlightId}-current`;
 
   const findBarCandidate = root.querySelector('.telnet-find-bar');
   const modeSelectCandidate = root.querySelector('.telnet-mode-select');
@@ -229,9 +228,8 @@ export function attachConsoleFindBar(opts: AttachConsoleFindBarOpts): ConsoleFin
       }
     }
     lineBindings.clear();
-    if (!supportsCssHighlights) return;
-    CSS.highlights.delete(highlightCurrentId);
-    if (!allHighlight) return;
+    setCurrentMatchHighlight(highlightId, null);
+    if (!supportsCssHighlights || !allHighlight) return;
     // Drop the empty Highlight; lazy-recreate on next paint.
     CSS.highlights.delete(highlightId);
     allHighlight = null;
@@ -294,7 +292,7 @@ export function attachConsoleFindBar(opts: AttachConsoleFindBarOpts): ConsoleFin
     allHighlight = new Highlight();
     // Higher than the JSON+ inline tint (default priority 0) so search hits
     // always paint over JSON+ regions instead of disappearing into them.
-    allHighlight.priority = 10;
+    allHighlight.priority = HIGHLIGHT_PRIORITY_MATCHES;
     CSS.highlights.set(highlightId, allHighlight);
     return allHighlight;
   }
@@ -354,7 +352,7 @@ export function attachConsoleFindBar(opts: AttachConsoleFindBarOpts): ConsoleFin
     // If the active match was on this line, drop the current highlight too —
     // it'll be re-painted by `paintCurrentHighlight` if the line re-mounts.
     if (currentHitIndex >= 0 && flatHits[currentHitIndex]?.lineIndex === lineIndex) {
-      if (supportsCssHighlights) CSS.highlights.delete(highlightCurrentId);
+      setCurrentMatchHighlight(highlightId, null);
     }
   }
 
@@ -377,7 +375,7 @@ export function attachConsoleFindBar(opts: AttachConsoleFindBarOpts): ConsoleFin
   function paintCurrentHighlight(): void {
     if (!supportsCssHighlights) return;
     if (currentHitIndex < 0 || currentHitIndex >= flatHits.length) {
-      CSS.highlights.delete(highlightCurrentId);
+      setCurrentMatchHighlight(highlightId, null);
       return;
     }
     const hit = flatHits[currentHitIndex]!;
@@ -386,19 +384,13 @@ export function attachConsoleFindBar(opts: AttachConsoleFindBarOpts): ConsoleFin
       // The current match's line isn't mounted yet (e.g. virtualization hasn't
       // scrolled to it). The caller's scroll-into-view will trigger a mount,
       // and the eventual `bindLineHighlights` will repaint via this same path.
-      CSS.highlights.delete(highlightCurrentId);
+      setCurrentMatchHighlight(highlightId, null);
       return;
     }
-    const r = buildRangeForHit(hit);
-    if (r) {
-      const h = new Highlight(r);
-      // One above the all-hits highlight so the active match is unambiguous when
-      // it overlaps a non-current hit (and one above the JSON+ tint by extension).
-      h.priority = 11;
-      CSS.highlights.set(highlightCurrentId, h);
-    } else {
-      CSS.highlights.delete(highlightCurrentId);
-    }
+    // `buildRangeForHit` may return null (offsets didn't resolve); the shared helper treats null
+    // as "clear", which matches the prior else-branch. The current match sits one priority above
+    // the all-hits highlight so it stays unambiguous when ranges overlap.
+    setCurrentMatchHighlight(highlightId, buildRangeForHit(hit));
   }
 
   /**

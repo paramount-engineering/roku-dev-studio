@@ -32,6 +32,7 @@ import {
   type ModalFocusTrapHandle
 } from '../utils/modal-focus-trap.js';
 import { attachBackdropClickToClose } from '../utils/modal-backdrop-click.js';
+import { attachModalResize } from '../utils/modal-resize.js';
 import {
   resetConsoleModalScrollInOverlay,
   scheduleConsoleModalScrollReset
@@ -149,6 +150,10 @@ export function createSingletonConsoleModal(opts: SingletonConsoleModalOpts): Si
         true
       );
     }
+
+    // Make the dialog surface user-resizable (bottom-right grip, center-anchored).
+    const dialog = el.querySelector('[role="dialog"]');
+    if (dialog instanceof HTMLElement) attachModalResize(dialog);
 
     opts.onMount?.(el, { close });
     return el;

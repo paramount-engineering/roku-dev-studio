@@ -8,7 +8,10 @@ import {
   type NetworkInspectorBootConfig
 } from '../network-inspector/index';
 import type { NetworkTrafficRules } from '../../shared/network-inspector/types';
-import { clampMaxRawPacketsPerDevice } from '../../shared/network-inspector/types';
+import {
+  clampMaxRawPacketsPerDevice,
+  clampMaxBodyRetainedBytes
+} from '../../shared/network-inspector/types';
 
 type DialogLike = Pick<Dialog, 'showSaveDialog' | 'showOpenDialog'>;
 
@@ -37,6 +40,9 @@ function readBootConfig(settings: Record<string, unknown>, userDataPath?: string
     mitmPort,
     maxRawPacketsPerDevice: clampMaxRawPacketsPerDevice(
       settings['networkInspectorMaxRawPacketsPerDevice']
+    ),
+    maxBodyRetainedBytes: clampMaxBodyRetainedBytes(
+      settings['networkInspectorMaxBodyRetainedBytes']
     ),
     trafficRules: readTrafficRules(settings),
     userDataPath
@@ -220,6 +226,7 @@ function setupNetworkInspectorHandlers(
         mitmEnabled?: boolean;
         mitmPort?: number;
         maxRawPacketsPerDevice?: number;
+        maxBodyRetainedBytes?: number;
       }
     ) => {
       const settings = loadSettings();
@@ -235,6 +242,11 @@ function setupNetworkInspectorHandlers(
       if (typeof payload?.maxRawPacketsPerDevice === 'number') {
         settings['networkInspectorMaxRawPacketsPerDevice'] = clampMaxRawPacketsPerDevice(
           payload.maxRawPacketsPerDevice
+        );
+      }
+      if (typeof payload?.maxBodyRetainedBytes === 'number') {
+        settings['networkInspectorMaxBodyRetainedBytes'] = clampMaxBodyRetainedBytes(
+          payload.maxBodyRetainedBytes
         );
       }
       saveSettings(settings);

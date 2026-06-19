@@ -1,13 +1,9 @@
 import { createSingletonConsoleModal } from './singleton-console-modal.js';
 import { consoleViewerModalTitle } from './console-modal-title.js';
 import type { StructuredConsolePayload } from './structured-log-detect.js';
-import {
-  applyJsonFoldStructure,
-  applyJsonSyntaxHighlight,
-  applyXmlFoldStructure,
-  applyXmlSyntaxHighlight,
-  toggleFoldGroup
-} from './console-structured-syntax.js';
+import { toggleFoldGroup } from './console-structured-syntax.js';
+import { renderStructuredInto, structuredBodyText } from '../ui/structured-body.js';
+import { attachSelectAll } from '../ui/select-all.js';
 
 const OVERLAY_ID = 'telnetStructuredViewerOverlay';
 
@@ -158,13 +154,14 @@ const structuredModal = createSingletonConsoleModal({
         e.stopPropagation();
         toggleFoldGroup(group);
       });
+      // Cmd/Ctrl+A selects all the formatted text within the viewer (not the whole page).
+      attachSelectAll(preForFold);
     }
 
     const copyBtn = overlay.querySelector('.telnet-structured-view-copy');
     copyBtn?.addEventListener('click', async () => {
       const pre = overlay.querySelector('.telnet-structured-view-pre');
-      const text =
-        (pre instanceof HTMLElement && pre.dataset.formatted) || pre?.textContent || '';
+      const text = pre instanceof HTMLElement ? structuredBodyText(pre) : '';
       try {
         await window.roku.copyToClipboard(text);
         if (copyBtn instanceof HTMLElement) {
@@ -186,32 +183,29 @@ const structuredModal = createSingletonConsoleModal({
  */
 export function openConsoleStructuredViewer(
   opener: HTMLElement | null,
-  payload: StructuredConsolePayload
+  payload: StructuredConsolePayload,
+  options?: { titlePrefix?: string }
 ): void {
   structuredModal.open(opener, (overlay) => {
     const title = overlay.querySelector('#telnetStructuredViewerTitle');
     const pre = overlay.querySelector('.telnet-structured-view-pre');
 
     if (title) {
-      title.textContent = consoleViewerModalTitle(payload.kind === 'json' ? 'JSON' : 'XML');
+      const label = payload.kind === 'json' ? 'JSON' : 'XML';
+      const prefix = options?.titlePrefix?.trim();
+      // The structured viewer is a shared singleton (Console + Network Inspector). Honor an explicit
+      // prefix so a payload opened from the Network Inspector isn't mislabeled "Console".
+      title.textContent = prefix ? `${prefix}: ${label}` : consoleViewerModalTitle(label);
     }
     if (pre instanceof HTMLElement) {
+      // `pre.dataset.formatted` backs the Copy button and stays decoupled from the rendered DOM
+      // regardless of which fold groups the user collapses. `payload.formatted` is already
+      // pretty-printed by detection, so the shared renderer runs in `preformatted` mode.
       pre.dataset.formatted = payload.formatted;
       pre.replaceChildren();
       const code = document.createElement('code');
       code.className = `telnet-hl-root telnet-hl-${payload.kind}`;
-      // Syntax highlight first → flat token stream; then layer fold scaffold
-      // over it. The two-pass split keeps the tokenizer free of fold/UX
-      // concerns and means `pre.dataset.formatted` (which the Copy button
-      // uses) stays decoupled from the rendered DOM regardless of which
-      // groups the user collapses.
-      if (payload.kind === 'json') {
-        applyJsonSyntaxHighlight(code, payload.formatted);
-        applyJsonFoldStructure(code);
-      } else {
-        applyXmlSyntaxHighlight(code, payload.formatted);
-        applyXmlFoldStructure(code);
-      }
+      renderStructuredInto(code, payload.formatted, { kind: payload.kind, preformatted: true });
       pre.appendChild(code);
     }
   });

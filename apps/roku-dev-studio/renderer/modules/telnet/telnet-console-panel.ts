@@ -179,9 +179,9 @@ export function setupTelnet(
   // DOM cost stays bounded — the default builder's sync detection would
   // pile up under 350-line bursts.
   //
-  // `selectAllAction` (Cmd/Ctrl+A) routes through `getVisibleLogsBody` so
-  // the full scrollback model lands on the clipboard regardless of which
-  // rows are currently virtualized into the DOM.
+  // `onSelectAll` (Cmd/Ctrl+A) lays a native selection Range over the
+  // virtualizer's content element — it selects (so the user can Cmd+C), it
+  // does not auto-copy. Only mounted rows are natively selectable.
   const surface = mountConsoleLogSurface({
     outputEl,
     entries: logLines,
@@ -203,12 +203,19 @@ export function setupTelnet(
       virt.scrollToIndex(idx, { align: 'center' });
     },
     onSelectAll: () => {
-      // Async because Cmd+A copy includes the disk spill (if any).
-      // Fire-and-forget — the shortcut handler's contract doesn't await.
-      void getVisibleLogsBody().then((text) => {
-        if (!text) return;
-        void window.roku.copyToClipboard(text);
-      });
+      // Cmd+A selects (it does NOT copy) — leaving the actual Cmd+C to the
+      // user, like a normal text region. We scope the native selection to the
+      // console output container (rather than letting the browser select the
+      // whole page) by laying a Range over the virtualizer's content element.
+      // Note: only the virtualized rows currently mounted in the DOM can be
+      // highlighted; off-screen scrollback isn't selectable natively.
+      const sel = window.getSelection();
+      if (!sel) return;
+      const container = surface.view.getContainerEl();
+      const range = document.createRange();
+      range.selectNodeContents(container);
+      sel.removeAllRanges();
+      sel.addRange(range);
     }
   });
   // Aliases so the rest of this file (which predates the surface refactor)
@@ -393,6 +400,7 @@ export function setupTelnet(
       lineCountEl.removeAttribute('title');
     }
   }
+
 
   /** Relay split menus use fixed coords; portal to body so inner-tab transforms don't offset them. */
   function wireTelnetSplitMenu(
@@ -945,6 +953,26 @@ export function setupTelnet(
           pendingTelnetLines.length = 0;
           cancelTelnetFlush();
           clearDeferredTelnetHeavyLines();
+          // Start every Connect with a clean view. Previously the in-memory
+          // scrollback survived a disconnect → reconnect (or a brief drop),
+          // so reconnecting showed a stale mix of the old session's lines plus
+          // whatever Roku streamed next. The console should only show what the
+          // device emits from this connection onward. Clear in place — the
+          // surface holds the same `logLines` array reference (see
+          // `clearConsoleLocal`), so reassigning would orphan the virtualizer.
+          logLines.length = 0;
+          virt.setCount(0);
+          findBarHandle?.resetFindState();
+          // Discard the previous session's disk spill before opening the fresh
+          // one below, otherwise its old trimmed history could be auto-loaded
+          // back into the clean view on scroll-up.
+          if (spillId) {
+            const stale = spillId;
+            spillId = null;
+            void window.roku.consoleSpillClear(stale).catch(() => {
+              /* best effort */
+            });
+          }
           // Open a fresh disk-spill session for this Connect. Tag with the
           // device IP so co-existing tab spills are distinguishable in the
           // temp dir (purely a debugging convenience). Fire-and-forget; if
@@ -1153,7 +1181,11 @@ export function setupTelnet(
         setSafeHTML(saveBtn, icon('refresh', 'icon-xs') + ' Saving...');
         
         // Save to file
-        const result = await window.roku.saveConsoleLogs(content);
+        const result = await window.roku.saveTextFile({
+          content,
+          defaultName: `roku-console-logs-${Date.now()}.txt`,
+          dialogTitle: 'Save Console Logs'
+        });
         
         if (result.success) {
           setSafeHTML(saveBtn, icon('check', 'icon-xs') + ' Saved!');

@@ -9,6 +9,9 @@ import { renderParamInputs } from './parameter-inputs.js';
 import { RALE_BUILTIN_COMMANDS, isRaleBuiltinSelection } from './rale-builtins.js';
 import { displayResponse } from './response-display.js';
 import { setupCopyButton } from '../../modules/ui/copy-button.js';
+import { createFindBar, buildFindBarElement, bindFindShortcut } from '../../modules/ui/find-bar.js';
+import { attachFoldToggle, structuredBodyText, structuredFileExtension } from '../../modules/ui/structured-body.js';
+import { attachSelectAll } from '../../modules/ui/select-all.js';
 import { icon, setSafeHTML, DEFAULT_RALE_PORT } from '../../modules/utils/index.js';
 import { errMessage } from '../../modules/utils/err-message.js';
 import { setupNodeUpdatePanel } from './node-update-panel.js';
@@ -46,6 +49,7 @@ export function setupInspector(panel: DevicePanelRoot, _device: InspectorDevice,
   const executeQ = panel.querySelector('.rale-execute-btn');
   const responseOutputQ = panel.querySelector('.rale-response-output');
   const copyBtn = panel.querySelector('.rale-copy-btn');
+  const saveBtn = panel.querySelector('.rale-save-btn');
   const clearQ = panel.querySelector('.rale-clear-btn');
   const funcParamHint = panel.querySelector('.func-param-hint');
   const paramsContainerQ = panel.querySelector('.rale-params-container');
@@ -80,6 +84,35 @@ export function setupInspector(panel: DevicePanelRoot, _device: InspectorDevice,
   const clearBtn = clearQ;
 
   const copyBtnEl = copyBtn instanceof HTMLElement ? copyBtn : null;
+  const saveBtnEl = saveBtn instanceof HTMLElement ? saveBtn : null;
+
+  // Shared simple find bar, hosted inline in the Response card header to save vertical space. Shown
+  // only while a response is present.
+  const responseFindBarEl = buildFindBarElement('Find in Response');
+  responseFindBarEl.classList.add('find-bar-header');
+  const responseCardHeader = responseOutput.closest('.card')?.querySelector(':scope > .card-header');
+  if (responseCardHeader instanceof HTMLElement) {
+    responseCardHeader.appendChild(responseFindBarEl);
+  } else {
+    responseOutput.insertAdjacentElement('beforebegin', responseFindBarEl);
+  }
+  const responseFindBar = createFindBar({
+    bodyEl: responseOutput,
+    barEl: responseFindBarEl,
+    highlightId: 'rale-find'
+  });
+  if (responseFindBar) {
+    // Bind Ctrl/Cmd+F within the App Connector tab so the shortcut works anywhere in the pane,
+    // not only when focus is inside the response box.
+    const inspectorTab = panel.querySelector('[data-inner-content="inspector"]');
+    bindFindShortcut(inspectorTab instanceof HTMLElement ? inspectorTab : responseOutput, responseFindBar);
+  }
+
+  // Collapsible JSON/XML nodes in the response (delegated twisty handler survives re-renders).
+  attachFoldToggle(responseOutput);
+
+  // Cmd/Ctrl+A selects all the response text (when the output is focused) instead of the page.
+  attachSelectAll(responseOutput);
 
   portInput.value = String(DEFAULT_RALE_PORT);
 
@@ -104,6 +137,10 @@ export function setupInspector(panel: DevicePanelRoot, _device: InspectorDevice,
 
   const displayResponseCore = (data: unknown, isError?: boolean) => {
     displayResponse(responseOutput, copyBtnEl, data, isError);
+    if (saveBtnEl) saveBtnEl.style.display = 'inline-flex';
+    clearBtn.style.display = 'inline-flex';
+    responseFindBar?.setVisible(true);
+    responseFindBar?.refresh();
   };
 
   const displayResponseFn = (data: unknown, isError = false) => {
@@ -146,9 +183,19 @@ export function setupInspector(panel: DevicePanelRoot, _device: InspectorDevice,
     displayResponseFn(data, isError);
   };
 
-  setupCopyButton(copyBtnEl, () => responseOutput.innerText || responseOutput.textContent || '', {
+  setupCopyButton(copyBtnEl, () => structuredBodyText(responseOutput), {
     successText: '✓ Copied!',
     duration: 2000
+  });
+
+  saveBtnEl?.addEventListener('click', () => {
+    const content = structuredBodyText(responseOutput);
+    if (!content) return;
+    void window.roku?.saveTextFile?.({
+      content,
+      defaultName: `app-connector-response-${Date.now()}.${structuredFileExtension(content)}`,
+      dialogTitle: 'Save Response'
+    });
   });
 
   const connection = setupRaleConnection(
@@ -199,7 +246,10 @@ export function setupInspector(panel: DevicePanelRoot, _device: InspectorDevice,
   clearBtn.addEventListener('click', () => {
     responseOutput.innerHTML = '';
     if (copyBtnEl) copyBtnEl.style.display = 'none';
+    if (saveBtnEl) saveBtnEl.style.display = 'none';
+    clearBtn.style.display = 'none';
     hideNodeUpdateUi?.();
+    responseFindBar?.setVisible(false);
   });
 
   const renderParamInputsFn = (params: unknown[], opts: Record<string, unknown> = {}) => {

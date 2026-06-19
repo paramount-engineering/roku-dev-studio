@@ -89,7 +89,9 @@ const RENDERER_WRITABLE_KEYS = new Set<string>([
   // toggle button; `position` is persisted on drag-end. Both are read back by
   // `loadPersistedAppSettings()` so they survive across sessions.
   'floating-remote.enabled',
-  'floating-remote.position'
+  'floating-remote.position',
+  'deeplink-custom-media-types',
+  'deeplink-saved-presets'
 ]);
 
 /**

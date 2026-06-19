@@ -1,6 +1,6 @@
 // POST button handlers
 
-import { formatQueryResult, escapeHtml } from '../../modules/utils/index.js';
+import { escapeHtml } from '../../modules/utils/index.js';
 import type { OutputArea } from '../../modules/ui/output-area.js';
 
 export function setupPostButtons(
@@ -29,9 +29,7 @@ export function setupPostButtons(
         const result = await api.post(endpoint);
 
         if (result.success && result.data) {
-          const originalContent = result.data.replace(/></g, '>\n<').replace(/\n\s*\n/g, '\n');
-          outputArea.display(formatQueryResult(result.data), true);
-          outputArea.originalContent = originalContent;
+          outputArea.displayStructured(result.data);
         } else {
           const err = result.error || 'Unknown error';
           const errorContent = `Error: ${err}`;

@@ -20,7 +20,10 @@ export async function ensureGlobalModalsMounted() {
     'dev-mode-modal',
     'ecp-mode-modal',
     'integration-guide-modal',
-    'secret-screens-modal'
+    'secret-screens-modal',
+    'deeplink-media-types-modal',
+    'deeplink-save-preset-modal',
+    'deeplink-delete-media-type-modal'
   ];
   const base = new URL('./fragments/', import.meta.url);
   const parts = await Promise.all(

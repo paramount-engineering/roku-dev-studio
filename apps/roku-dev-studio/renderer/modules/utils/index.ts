@@ -1,7 +1,6 @@
 // Utils module index - exports all utility functions
 
 export * from './dom.js';
-export * from './formatting.js';
 export * from './storage.js';
 export * from './ui.js';
 export * from './constants.js';

@@ -10,7 +10,7 @@ export interface TelnetOutputCompleteOptions {
 /**
  * Detects if telnet output contains a command prompt
  */
-export function hasTelnetPrompt(trimmedNewData: string): boolean {
+function hasTelnetPrompt(trimmedNewData: string): boolean {
   return (
     trimmedNewData.endsWith('>') ||
     (trimmedNewData.includes('\n>') &&

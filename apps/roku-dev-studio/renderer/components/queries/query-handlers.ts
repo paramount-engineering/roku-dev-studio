@@ -1,19 +1,16 @@
 // Query button handlers (GET requests)
 
-import { formatQueryResult, escapeHtml } from '../../modules/utils/index.js';
+import { escapeHtml } from '../../modules/utils/index.js';
 import type { OutputArea } from '../../modules/ui/output-area.js';
 
 export function setupQueryButtons(
   panel: HTMLElement,
   api: QueriesDeviceApi,
   outputArea: OutputArea,
-  searchInput: HTMLInputElement,
   removePluginSection: HTMLElement | null
 ): { runQuery: (endpoint: string, btn?: HTMLButtonElement | null) => Promise<void> } {
   async function runQuery(endpoint: string, btn: HTMLButtonElement | null = null) {
     if (btn) btn.disabled = true;
-    searchInput.value = '';
-    searchInput.style.borderColor = '';
 
     if (removePluginSection) {
       removePluginSection.style.display = 'none';
@@ -23,9 +20,7 @@ export function setupQueryButtons(
       const result = await api.query(endpoint);
 
       if (result.success && result.data) {
-        const originalContent = result.data.replace(/></g, '>\n<').replace(/\n\s*\n/g, '\n');
-        outputArea.display(formatQueryResult(result.data), true);
-        outputArea.originalContent = originalContent;
+        outputArea.displayStructured(result.data);
       } else {
         const err = result.error || 'Unknown error';
         const errorContent = `Error: ${err}`;

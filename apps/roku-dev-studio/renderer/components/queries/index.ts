@@ -5,10 +5,12 @@ import { setupPostButtons } from './post-handlers.js';
 import { setupTelnetCommands } from './telnet-command-handler.js';
 import { setupRemovePlugin } from './remove-plugin-handler.js';
 import { setupCustomQuery } from './custom-query-handler.js';
-import { setupQuerySearch } from './query-search.js';
 import { setupSecretScreens } from './secret-screens.js';
 import { OutputArea } from '../../modules/ui/output-area.js';
 import { setupCopyButton } from '../../modules/ui/copy-button.js';
+import { createFindBar, buildFindBarElement, bindFindShortcut } from '../../modules/ui/find-bar.js';
+import { attachFoldToggle, structuredBodyText, structuredFileExtension } from '../../modules/ui/structured-body.js';
+import { attachSelectAll } from '../../modules/ui/select-all.js';
 import type { DevicePanelRoot } from '../../types/device-panel-dom.js';
 
 export function setupQueries(panel: DevicePanelRoot, api: QueriesDeviceApi): void {
@@ -16,14 +18,11 @@ export function setupQueries(panel: DevicePanelRoot, api: QueriesDeviceApi): voi
 
   const queryOutput = panel.querySelector<HTMLElement>('.query-output');
   const copyBtn = panel.querySelector<HTMLButtonElement>('.copy-query-btn');
-  const searchInput = panel.querySelector<HTMLInputElement>('.query-search-input');
+  const saveBtn = panel.querySelector<HTMLButtonElement>('.save-query-btn');
+  const clearBtn = panel.querySelector<HTMLButtonElement>('.clear-query-btn');
   const customQueryInput = panel.querySelector<HTMLInputElement | HTMLTextAreaElement>('.custom-query-input');
   const runCustomQueryBtn = panel.querySelector<HTMLButtonElement>('.run-custom-query-btn');
   const removePluginSection = panel.querySelector<HTMLElement>('.remove-plugin-section');
-  const searchPrevBtn = panel.querySelector<HTMLButtonElement>('.search-prev-btn');
-  const searchNextBtn = panel.querySelector<HTMLButtonElement>('.search-next-btn');
-  const matchCountSpan = panel.querySelector<HTMLElement>('.search-match-count');
-  const querySearchRow = panel.querySelector<HTMLElement>('.query-search-row');
   const openFiddleBtn = panel.querySelector<HTMLButtonElement>('.open-fiddle-btn');
 
   if (openFiddleBtn) {
@@ -46,11 +45,10 @@ export function setupQueries(panel: DevicePanelRoot, api: QueriesDeviceApi): voi
     });
   }
 
-  if (!queryOutput || !copyBtn || !searchInput || !customQueryInput || !runCustomQueryBtn) {
+  if (!queryOutput || !copyBtn || !customQueryInput || !runCustomQueryBtn) {
     console.error('Query elements not found:', {
       queryOutput,
       copyBtn,
-      searchInput,
       customQueryInput,
       runCustomQueryBtn
     });
@@ -61,16 +59,57 @@ export function setupQueries(panel: DevicePanelRoot, api: QueriesDeviceApi): voi
     removePluginSection.style.display = 'none';
   }
 
-  const outputArea = new OutputArea(queryOutput, copyBtn, querySearchRow);
+  // Shared simple find bar, hosted inline in the Results card header to save vertical space. Shown
+  // only when results are present (driven by OutputArea display/clear).
+  const findBarEl = buildFindBarElement('Find in Results');
+  findBarEl.classList.add('find-bar-header');
+  const resultsHeader = panel.querySelector('.query-results-card-header');
+  if (resultsHeader instanceof HTMLElement) resultsHeader.appendChild(findBarEl);
+  else queryOutput.insertAdjacentElement('beforebegin', findBarEl);
+  const findBar = createFindBar({ bodyEl: queryOutput, barEl: findBarEl, highlightId: 'ecp-find' });
+  if (findBar) bindFindShortcut(queryOutput, findBar);
 
-  setupCopyButton(copyBtn, () => outputArea.getOriginalContent() || outputArea.getText(), {
+  // Collapsible JSON/XML nodes in the results (delegated twisty handler survives re-renders).
+  attachFoldToggle(queryOutput);
+
+  // Cmd/Ctrl+A selects all the results text (when the output is focused) instead of the page.
+  attachSelectAll(queryOutput);
+
+  // Manage the Copy/Save/Clear icon buttons here (not via OutputArea's copyButton) so all three
+  // toggle together and keep the `.btn` inline-flex centering for their icons.
+  const outputArea = new OutputArea(queryOutput, null, (hasContent) => {
+    findBar?.setVisible(hasContent);
+    if (hasContent) findBar?.refresh();
+    const display = hasContent ? 'inline-flex' : 'none';
+    copyBtn.style.display = display;
+    if (saveBtn) saveBtn.style.display = display;
+    if (clearBtn) clearBtn.style.display = display;
+  });
+
+  // Copy/Save operate on the visible text (or the structured source for JSON/XML) — never the
+  // rendered HTML, so plain-text command output (e.g. `free -m`) isn't mistaken for markup.
+  setupCopyButton(copyBtn, () => structuredBodyText(queryOutput), {
     successText: '✓ Copied!',
     duration: 2000
   });
 
+  saveBtn?.addEventListener('click', () => {
+    const content = structuredBodyText(queryOutput);
+    if (!content) return;
+    void window.roku?.saveTextFile?.({
+      content,
+      defaultName: `ecp-response-${Date.now()}.${structuredFileExtension(content)}`,
+      dialogTitle: 'Save Results'
+    });
+  });
+
+  clearBtn?.addEventListener('click', () => {
+    outputArea.clear();
+  });
+
   setupSecretScreens(panel);
 
-  const { runQuery } = setupQueryButtons(panel, api, outputArea, searchInput, removePluginSection);
+  const { runQuery } = setupQueryButtons(panel, api, outputArea, removePluginSection);
 
   setupPostButtons(panel, api, outputArea, removePluginSection);
 
@@ -79,31 +118,4 @@ export function setupQueries(panel: DevicePanelRoot, api: QueriesDeviceApi): voi
   setupRemovePlugin(panel, api, outputArea);
 
   setupCustomQuery(customQueryInput, runCustomQueryBtn, removePluginSection, runQuery);
-
-  setupQuerySearch(
-    searchInput,
-    queryOutput,
-    searchPrevBtn,
-    searchNextBtn,
-    matchCountSpan,
-    () => outputArea.originalContent || '',
-    (content) => {
-      outputArea.originalContent = content;
-    }
-  );
-
-  panel.addEventListener('keydown', (e) => {
-    if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
-      const queryTab = panel.querySelector('[data-inner-content="query"]');
-      if (
-        queryTab &&
-        queryTab.classList.contains('active') &&
-        copyBtn.style.display === 'block'
-      ) {
-        e.preventDefault();
-        searchInput.focus();
-        searchInput.select();
-      }
-    }
-  });
 }

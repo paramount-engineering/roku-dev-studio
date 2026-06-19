@@ -28,9 +28,6 @@ type LogViewerRokuApi = {
   onLogViewerError: (cb: (data: { error: string }) => void) => () => void;
   copyToClipboard: (text: string) => Promise<unknown>;
   openExternal: (url: string) => Promise<unknown>;
-  saveConsoleLogs: (
-    content: string
-  ) => Promise<{ success: boolean; error?: string; filePath?: string }>;
 };
 
 const rokuApi = window.roku as unknown as LogViewerRokuApi;
@@ -47,7 +44,6 @@ async function main() {
   const findHostEl = document.getElementById('logViewerFindHost');
   const actionsEl = document.getElementById('logViewerActions');
   const copyBtn = actionsEl?.querySelector<HTMLButtonElement>('.log-viewer-copy-btn') ?? null;
-  const saveBtn = actionsEl?.querySelector<HTMLButtonElement>('.log-viewer-save-btn') ?? null;
 
   if (!(outputEl instanceof HTMLElement)) return;
 
@@ -245,8 +241,8 @@ async function main() {
     setStatus(`0 lines (Loading 0%)`);
   }
 
-  // Copy / Save header buttons — file-viewer-specific chrome (the Console
-  // panel exposes the same actions via different markup). Both go through
+  // Copy header button — file-viewer-specific chrome (the Console panel
+  // exposes the same action via different markup). Goes through
   // `surface.getVisibleText()` so a future filter-rule change lands in
   // exactly one place.
   copyBtn?.addEventListener('click', async () => {
@@ -264,38 +260,6 @@ async function main() {
       flashStatus('Copied to clipboard');
     } catch {
       flashStatus('Copy failed');
-    }
-  });
-
-  saveBtn?.addEventListener('click', async () => {
-    if (!surface) {
-      flashStatus('Still loading…');
-      return;
-    }
-    const text = surface.getVisibleText();
-    if (!text) {
-      flashStatus('Nothing to save');
-      return;
-    }
-    // Header block matches the live Console save format so log files dropped
-    // by either surface look the same to downstream tools.
-    const headerBlock = [
-      '='.repeat(80),
-      'Roku Log File',
-      `Source: ${fileName}`,
-      `Saved: ${new Date().toLocaleString()}`,
-      `Total Lines: ${text.split('\n').length}`,
-      '='.repeat(80),
-      ''
-    ].join('\n');
-    saveBtn.disabled = true;
-    try {
-      const result = await rokuApi.saveConsoleLogs(headerBlock + text);
-      flashStatus(result.success ? 'Saved' : `Save failed: ${result.error ?? 'Unknown'}`);
-    } catch (e) {
-      flashStatus(e instanceof Error ? `Save failed: ${e.message}` : 'Save failed');
-    } finally {
-      saveBtn.disabled = false;
     }
   });
 }

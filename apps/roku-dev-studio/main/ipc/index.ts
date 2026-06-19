@@ -10,6 +10,7 @@ import { setupTelnetHandlers } from './telnet-handlers';
 import { setupRemoteHandlers } from './remote-handlers';
 import { setupSystemHandlers } from './system-handlers';
 import { setupNetworkInspectorHandlers } from './network-inspector-handlers';
+import { cleanupStaleTempFiles } from '../startup-temp-cleanup';
 
 type AppWindowState = {
   developerModeEnabled: boolean;
@@ -38,6 +39,9 @@ function setupIpcHandlers(
 ) {
   if (ipcHandlersRegistered) return;
   ipcHandlersRegistered = true;
+  // Wipe stale temp artifacts (screenshots, fiddle zips) left by a prior crashed run before any
+  // handler can write new ones. Guarded once via `ipcHandlersRegistered`.
+  cleanupStaleTempFiles();
   setupDeviceDiscovery(mainWindow, getDeviceInfo, getDeviceId, safeSendToRenderer);
   setupRokuCommands(mainWindow, getDeviceInfo);
   setupRaleHandlers(mainWindow, safeSendToRenderer);

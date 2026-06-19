@@ -11,6 +11,7 @@ import {
 import { getAssignToVarName } from './action-script-variables-client.js';
 import { queryEndpointLabel } from './action-registry.js';
 import { escapeHtml, setSafeHTML } from '../../modules/utils/index.js';
+import { escapeAttr } from './builder-step-helpers.js';
 import {
   flattenStepsPreorder,
   stepPathToDisplayId,
@@ -60,10 +61,6 @@ interface ExecutorStepsRenderOptions {
   onReorder?: (from: number, to: number) => void;
   validationErrorIndices?: Set<number> | null;
   readOnlyList?: boolean;
-}
-
-function escapeAttr(s) {
-  return String(s).replace(/"/g, '&quot;').replace(/</g, '&lt;');
 }
 
 /**

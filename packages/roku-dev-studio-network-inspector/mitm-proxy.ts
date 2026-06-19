@@ -3,6 +3,7 @@ import * as http from 'http';
 import * as https from 'https';
 import * as net from 'net';
 import * as tls from 'tls';
+import * as zlib from 'zlib';
 import { createLeafCert, type CaMaterial } from './ca-store';
 import { parseRokuProxyTarget, normalizeProxyHostPort } from './roku-proxy-url';
 import type { MockResponse, NetworkHttpMessage, TrafficDecision, TrafficThrottle } from './types';
@@ -336,6 +337,70 @@ function isTextualContentType(ct: string): boolean {
   return /(json|xml|javascript|ecmascript|graphql|csv|x-www-form-urlencoded|svg)/.test(ct);
 }
 
+// Cap on the *decompressed* size we materialize for the Inspector snapshot. The capture cap
+// (`MAX_BODY_BYTES`) bounds the compressed bytes; this bounds the inflated copy so a highly
+// compressible (or maliciously crafted) response can't balloon renderer memory. Past this the
+// decode is skipped and the raw bytes are kept (shown as base64 / marked truncated).
+const MAX_DECODED_BODY_BYTES = 16_000_000;
+
+const DECODE_OPTS = { maxOutputLength: MAX_DECODED_BODY_BYTES } as const;
+// Codecs we know how to undo. A chain containing anything else is left raw (we can't safely peel
+// past an unknown layer to reach the inner content).
+const KNOWN_ENCODINGS = new Set(['gzip', 'x-gzip', 'br', 'deflate', 'identity']);
+
+/** Undo a single content coding. Throws on corrupt/truncated input (caller catches). */
+function decodeOneEncoding(buf: Buffer, codec: string): Buffer {
+  switch (codec) {
+    case 'br':
+      return zlib.brotliDecompressSync(buf, DECODE_OPTS);
+    case 'gzip':
+    case 'x-gzip':
+      return zlib.gunzipSync(buf, DECODE_OPTS);
+    case 'deflate':
+      // zlib-wrapped first; fall back to raw DEFLATE (some servers omit the zlib header).
+      try {
+        return zlib.inflateSync(buf, DECODE_OPTS);
+      } catch {
+        return zlib.inflateRawSync(buf, DECODE_OPTS);
+      }
+    default: // 'identity'
+      return buf;
+  }
+}
+
+/**
+ * Decompress a captured body for *display* per its `Content-Encoding` (gzip / br / deflate),
+ * including stacked encodings ("gzip, br"). Codings are listed in the order applied, so we undo
+ * them outermost-first (right to left). The proxy forwards the original compressed bytes to the
+ * device untouched — this only affects the snapshot the Network Inspector shows, mirroring what a
+ * browser renders. Decompression is best-effort: a truncated capture, an unknown codec anywhere in
+ * the chain, or oversized inflation falls back to the raw bytes so we never throw on the response
+ * path.
+ */
+function decodeContentEncoding(
+  buf: Buffer,
+  headers: Record<string, string>
+): { buffer: Buffer; decoded: boolean } {
+  const enc = (headers['content-encoding'] || headers['Content-Encoding'] || '').toLowerCase().trim();
+  if (!enc || enc === 'identity' || !buf.length) return { buffer: buf, decoded: false };
+  const codecs = enc.split(',').map((c) => c.trim()).filter(Boolean);
+  // Any unknown coding in the chain → keep the raw bytes; a partially-peeled body would be
+  // mislabeled as decoded text.
+  if (codecs.some((c) => !KNOWN_ENCODINGS.has(c))) return { buffer: buf, decoded: false };
+  let current = buf;
+  let decoded = false;
+  try {
+    for (const codec of codecs.reverse()) {
+      if (codec === 'identity') continue;
+      current = decodeOneEncoding(current, codec);
+      decoded = true;
+    }
+  } catch {
+    return { buffer: buf, decoded: false };
+  }
+  return { buffer: current, decoded };
+}
+
 /** Encode a captured body: text via charset, binary (images/video/etc.) as base64. */
 function encodeBody(
   buf: Buffer,
@@ -344,10 +409,13 @@ function encodeBody(
 ): Pick<NetworkHttpMessage, 'body' | 'bodyEncoding' | 'bodyTruncated'> {
   if (!buf.length) return {};
   const truncated = hitCap ? { bodyTruncated: true } : {};
+  // Decompress for display so gzip/br/deflate responses (e.g. tiqcdn's utag.js) read as the real
+  // text/asset instead of raw compressed bytes. The forwarded body is unaffected.
+  const { buffer: decoded } = decodeContentEncoding(buf, headers);
   if (isTextualContentType(contentTypeOf(headers))) {
-    return { body: bodyToText(buf, headers), bodyEncoding: 'text', ...truncated };
+    return { body: bodyToText(decoded, headers), bodyEncoding: 'text', ...truncated };
   }
-  return { body: buf.toString('base64'), bodyEncoding: 'base64', ...truncated };
+  return { body: decoded.toString('base64'), bodyEncoding: 'base64', ...truncated };
 }
 
 export class RokuMitmProxy {

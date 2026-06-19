@@ -12,12 +12,16 @@ import {
 import {
   renderRequestPane,
   renderResponsePane,
+  getLargeBodyKb,
+  getLargeBodyDowngraded,
   type BodyFormatMode,
   type RequestPaneTab,
   type ResponsePaneTab
 } from './network-detail.js';
 import { buildSessions, buildStructureGroups, filterSessions } from './network-sessions.js';
 import { openConsoleUrlViewer } from '../../modules/console-log/console-url-modal.js';
+import { openConsoleStructuredViewer } from '../../modules/console-log/console-structured-view-modal.js';
+import { getEmbeddedStructuredPayload } from './network-embedded-structured.js';
 import { openTrafficRulesModal } from './traffic-rules-modal.js';
 import { buildCurlCommand, buildHarArchive, isExportableEvent } from './network-export.js';
 import { openHotspotCaptureSetupModal } from './hotspot-setup-modal.js';
@@ -26,6 +30,14 @@ import {
   networkInspectorHasCaptureSetupAction,
   type NiSetupPlatform
 } from '../../shared/network-inspector/setup-guide.js';
+import {
+  createFindBar,
+  buildFindBarElement,
+  bindFindShortcut,
+  type FindBarHandle
+} from '../../modules/ui/find-bar.js';
+import { renderStructuredInto, attachFoldToggle, MAX_STRUCTURED_BYTES } from '../../modules/ui/structured-body.js';
+import { attachSelectAll } from '../../modules/ui/select-all.js';
 
 // Caps resident DOM rows so an extreme session count can't bloat the list. The event
 // buffer is already capped (MAX_EVENTS), so this only engages in heavy-capture sessions.
@@ -168,6 +180,42 @@ function openFilterHelpModal(onPick: (term: string) => void): void {
       close();
     }
   });
+}
+
+/**
+ * Explainer for the "shown as raw text" case: a JSON/XML body too large to render as a collapsible
+ * tree. Opened from the small amber "i" beside the Format selector (set by `setFormatInfo`), so it
+ * only ever appears for a genuine structured→raw downgrade — never for natively-raw bodies. Reuses
+ * the filter-help modal's shell styling for consistency.
+ */
+function openLargeBodyInfoModal(kb: number): void {
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay ni-filter-help-overlay ni-large-body-overlay active';
+  const sizeLabel = kb > 0 ? `${kb.toLocaleString()} KB` : 'This body';
+  const limitKb = Math.round(MAX_STRUCTURED_BYTES / 1024).toLocaleString();
+  overlay.innerHTML = `
+    <div class="ni-filter-help-modal" role="dialog" aria-modal="true" aria-label="Shown as Raw Text">
+      <div class="ni-filter-help-header">
+        <h3>Shown as Raw Text</h3>
+        <button type="button" class="modal-close ni-large-body-close" title="Close" aria-label="Close">×</button>
+      </div>
+      <div class="ni-filter-help-body">
+        <p class="ni-filter-help-intro">This body is <strong>${escapeHtml(sizeLabel)}</strong> — larger than the ${escapeHtml(limitKb)} KB limit for rendering a collapsible, syntax-highlighted JSON/XML tree. To keep the inspector responsive, the <strong>entire</strong> body is shown as raw text instead. Nothing is truncated or hidden.</p>
+        <p class="ni-filter-help-note">Copy, Save, and Find still operate on the full body. Embedded JSON/XML fragments remain clickable. Select a smaller response to see the formatted tree.</p>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+
+  const close = (): void => {
+    overlay.remove();
+    document.removeEventListener('keydown', onKey);
+  };
+  const onKey = (e: KeyboardEvent): void => {
+    if (e.key === 'Escape') close();
+  };
+  document.addEventListener('keydown', onKey);
+  attachBackdropClickToClose(overlay, close);
+  overlay.querySelector('.ni-large-body-close')?.addEventListener('click', close);
 }
 
 function eventMatchesTab(ev: ParsedNetworkEvent, state: NetworkTabState): boolean {
@@ -315,11 +363,23 @@ export function setupNetworkTab(
   const copyCaretEl = panel.querySelector('[data-ni-copy-menu-toggle]') as HTMLElement | null;
   const copyDropdownEl = panel.querySelector('[data-ni-copy-dropdown]') as HTMLElement | null;
   const scrollBottomFab = panel.querySelector('[data-ni-scroll-bottom]') as HTMLButtonElement | null;
-  const jumpErrorFab = panel.querySelector('[data-ni-jump-error]') as HTMLButtonElement | null;
   const requestBodyEl = panel.querySelector('[data-ni-request-body]');
   const responseBodyEl = panel.querySelector('[data-ni-response-body]');
+  // Per-pane find-in-body controllers (shared simple find bar). The bars are built + inserted in
+  // the init block below; null when the body elements are missing (defensive).
+  let requestSearch: FindBarHandle | null = null;
+  let responseSearch: FindBarHandle | null = null;
   const requestFormatWrapEl = panel.querySelector('[data-ni-req-format-wrap]');
   const responseFormatWrapEl = panel.querySelector('[data-ni-res-format-wrap]');
+  const requestTruncatedBadgeEl = panel.querySelector('[data-ni-req-truncated]');
+  const responseTruncatedBadgeEl = panel.querySelector('[data-ni-res-truncated]');
+  const requestFormatInfoEl = panel.querySelector('[data-ni-req-format-info]');
+  const responseFormatInfoEl = panel.querySelector('[data-ni-res-format-info]');
+  // Whether the currently-selected event's request/response body was truncated during capture.
+  // Set in `renderDetail`, consumed by `syncPaneChrome` so the header badge tracks tab switches and
+  // unchanged-signature repaints (both of which route through `syncPaneChrome`).
+  let reqBodyTruncated = false;
+  let resBodyTruncated = false;
   const requestFormatSelect = panel.querySelector(
     '[data-ni-body-format="request"]'
   ) as HTMLSelectElement | null;
@@ -331,6 +391,7 @@ export function setupNetworkTab(
   const decryptedOnlyInput = panel.querySelector('[data-ni-decrypted-only]') as HTMLInputElement | null;
   const proxiedFilterLabel = panel.querySelector('[data-ni-proxied-filter]') as HTMLElement | null;
   const sidebarOptionsEl = panel.querySelector('.ni-sidebar-options') as HTMLElement | null;
+  const groupToggleBtn = panel.querySelector('[data-ni-toggle-all-groups]') as HTMLButtonElement | null;
   const clearBtn = panel.querySelector('[data-ni-clear]');
   const saveBtn = panel.querySelector('[data-ni-save-pcap]');
   const configureBtn = panel.querySelector('[data-ni-configure]');
@@ -447,9 +508,16 @@ export function setupNetworkTab(
   function updateSelectionHighlight(): void {
     if (!(sessionListEl instanceof HTMLElement)) return;
     sessionListEl
-      .querySelectorAll('.ni-sidebar-row-selected, .ni-seq-row-selected, .ni-struct-leaf-selected')
+      .querySelectorAll(
+        '.ni-sidebar-row-selected, .ni-seq-row-selected, .ni-struct-leaf-selected, .ni-struct-host-row-selected'
+      )
       .forEach((el) => {
-        el.classList.remove('ni-sidebar-row-selected', 'ni-seq-row-selected', 'ni-struct-leaf-selected');
+        el.classList.remove(
+          'ni-sidebar-row-selected',
+          'ni-seq-row-selected',
+          'ni-struct-leaf-selected',
+          'ni-struct-host-row-selected'
+        );
       });
     if (!state.selectedEventId) return;
     const row = sessionListEl.querySelector(
@@ -458,7 +526,15 @@ export function setupNetworkTab(
     if (!row) return;
     if (row.classList.contains('ni-sidebar-row')) row.classList.add('ni-sidebar-row-selected');
     else if (row.classList.contains('ni-seq-row')) row.classList.add('ni-seq-row-selected');
-    else if (row.classList.contains('ni-struct-leaf')) row.classList.add('ni-struct-leaf-selected');
+    else if (row.classList.contains('ni-struct-leaf')) {
+      row.classList.add('ni-struct-leaf-selected');
+      // If the leaf's group is collapsed, the leaf itself is hidden — surface
+      // the selection on the (visible) group header instead/as well.
+      const host = row.closest('.ni-struct-host');
+      if (host?.classList.contains('ni-struct-host-collapsed')) {
+        host.querySelector(':scope > .ni-struct-host-row')?.classList.add('ni-struct-host-row-selected');
+      }
+    }
   }
 
   function listScrollWrap(): HTMLElement | null {
@@ -532,21 +608,13 @@ export function setupNetworkTab(
     scrollRowWithinWrap(wrap, row);
   }
 
-  function isErrorSession(s: ReturnType<typeof filteredSessions>[number]): boolean {
-    return typeof s.statusCode === 'number' && s.statusCode >= 400;
-  }
-
-  /** Toggle the floating list affordances: scroll-to-latest (when scrolled up) and jump-to-error
-   *  (when the filtered list has any 4xx/5xx response). Cheap: one scroll read + one array scan. */
+  /** Toggle the scroll-to-latest floating affordance (shown only when scrolled up off the bottom). */
   function updateListFabs(): void {
     if (scrollBottomFab) {
       const wrap = listScrollWrap();
       const atBottom = !wrap || wrap.scrollHeight - wrap.scrollTop - wrap.clientHeight < 8;
       const scrollable = !!wrap && wrap.scrollHeight - wrap.clientHeight > 8;
       scrollBottomFab.hidden = !scrollable || atBottom;
-    }
-    if (jumpErrorFab) {
-      jumpErrorFab.hidden = !filteredSessions().some(isErrorSession);
     }
   }
 
@@ -555,23 +623,6 @@ export function setupNetworkTab(
     if (!wrap) return;
     wrap.scrollTop = wrap.scrollHeight;
     updateListFabs();
-  }
-
-  /** Select + reveal the latest error session (4xx/5xx) in the filtered list. */
-  function jumpToLatestError(): void {
-    const sessions = filteredSessions();
-    let target: string | null = null;
-    for (const s of sessions) {
-      if (isErrorSession(s)) target = s.eventId;
-    }
-    if (!target) return;
-    if (state.selectedEventId !== target) {
-      state.selectedEventId = target;
-      updateSelectionHighlight();
-      lastListSignature = listSignature(sessions);
-      renderDetail('both');
-    }
-    scrollSelectedRowIntoView();
   }
 
   function navigableEventIds(): string[] {
@@ -650,6 +701,19 @@ export function setupNetworkTab(
     }
   }
 
+  /** Show/hide the small amber "i" beside the Format selector. It appears ONLY when a JSON/XML body
+   *  was too large to render as a collapsible tree and is shown as raw text instead (`downgraded`) —
+   *  i.e. the one case where "why is this raw?" needs explaining. Natively-raw bodies (JS/CSS/text)
+   *  get no affordance, since raw is their expected rendering. The KB size is stashed on the button
+   *  for the click-opened explainer modal. */
+  function setFormatInfo(btnEl: Element | null, kb: number, downgraded: boolean): void {
+    if (!(btnEl instanceof HTMLElement)) return;
+    const show = kb > 0 && downgraded;
+    btnEl.hidden = !show;
+    if (show) btnEl.dataset.kb = String(kb);
+    else delete btnEl.dataset.kb;
+  }
+
   function syncPaneChrome(which: 'request' | 'response' | 'both' = 'both'): void {
     if (which !== 'response') {
       panel.querySelectorAll('[data-ni-req-tab]').forEach((btn) => {
@@ -664,6 +728,16 @@ export function setupNetworkTab(
       if (requestFormatSelect && requestFormatSelect.value !== state.requestBodyFormat) {
         requestFormatSelect.value = state.requestBodyFormat;
       }
+      if (requestTruncatedBadgeEl instanceof HTMLElement) {
+        requestTruncatedBadgeEl.hidden = !(reqBodyTruncated && state.requestTab === 'body');
+      }
+      setFormatInfo(
+        requestFormatInfoEl,
+        state.requestTab === 'body' ? getLargeBodyKb('request') : 0,
+        getLargeBodyDowngraded('request')
+      );
+      // Find visibility is decided in afterBodyRender (it depends on the rendered content —
+      // only text bodies are searchable, not image/video previews).
     }
     if (which !== 'request') {
       panel.querySelectorAll('[data-ni-res-tab]').forEach((btn) => {
@@ -678,6 +752,57 @@ export function setupNetworkTab(
       if (responseFormatSelect && responseFormatSelect.value !== state.responseBodyFormat) {
         responseFormatSelect.value = state.responseBodyFormat;
       }
+      if (responseTruncatedBadgeEl instanceof HTMLElement) {
+        responseTruncatedBadgeEl.hidden = !(resBodyTruncated && state.responseTab === 'body');
+      }
+      setFormatInfo(
+        responseFormatInfoEl,
+        state.responseTab === 'body' ? getLargeBodyKb('response') : 0,
+        getLargeBodyDowngraded('response')
+      );
+      // Find visibility is decided in afterBodyRender (depends on rendered content).
+    }
+  }
+
+  /** Upgrade any `[data-ni-fold]` placeholder into the collapsible, syntax-highlighted JSON/XML
+   *  tree using the shared Console fold renderer (same markup the "Console: JSON" viewer uses, so
+   *  the look, twisties, and performance match). The placeholder's textContent is the pretty text. */
+  function upgradeStructuredBodies(bodyEl: Element | null): void {
+    if (!(bodyEl instanceof HTMLElement)) return;
+    bodyEl.querySelectorAll('[data-ni-fold]').forEach((el) => {
+      if (!(el instanceof HTMLElement) || el.dataset.niFoldReady === '1') return;
+      const kind = el.dataset.niFold;
+      if (kind !== 'json' && kind !== 'xml') return;
+      // The placeholder holds the raw body; the shared renderer pretty-prints + highlights + folds.
+      renderStructuredInto(el, el.textContent || '', { kind });
+      el.dataset.niFoldReady = '1';
+    });
+  }
+
+  /** Find only makes sense for text bodies. Image/video/audio previews and empty/placeholder
+   *  states have nothing to search — so the bar stays hidden there (but appears for the same
+   *  binary body when viewed as Raw, which renders the bytes as text). */
+  function bodyIsSearchable(bodyEl: Element | null): boolean {
+    if (!(bodyEl instanceof HTMLElement)) return false;
+    if (bodyEl.querySelector('.ni-media-wrap')) return false;
+    if (bodyEl.children.length === 1 && bodyEl.firstElementChild?.classList.contains('ni-pane-empty')) {
+      return false;
+    }
+    return (bodyEl.textContent?.trim().length ?? 0) > 0;
+  }
+
+  /** After a body render: upgrade any fold tree, then show/hide + refresh the find bar based on the
+   *  active tab AND whether the rendered content is searchable text. */
+  function afterBodyRender(which: 'request' | 'response' | 'both'): void {
+    if (which !== 'response') {
+      upgradeStructuredBodies(requestBodyEl);
+      requestSearch?.setVisible(state.requestTab === 'body' && bodyIsSearchable(requestBodyEl));
+      requestSearch?.refresh();
+    }
+    if (which !== 'request') {
+      upgradeStructuredBodies(responseBodyEl);
+      responseSearch?.setVisible(state.responseTab === 'body' && bodyIsSearchable(responseBodyEl));
+      responseSearch?.refresh();
     }
   }
 
@@ -694,11 +819,21 @@ export function setupNetworkTab(
       lastDetailSignature = '';
       if (which !== 'response' && requestBodyEl instanceof HTMLElement) requestBodyEl.innerHTML = '';
       if (which !== 'request' && responseBodyEl instanceof HTMLElement) responseBodyEl.innerHTML = '';
+      requestSearch?.setVisible(false);
+      responseSearch?.setVisible(false);
+      reqBodyTruncated = false;
+      resBodyTruncated = false;
+      if (requestTruncatedBadgeEl instanceof HTMLElement) requestTruncatedBadgeEl.hidden = true;
+      if (responseTruncatedBadgeEl instanceof HTMLElement) responseTruncatedBadgeEl.hidden = true;
       return;
     }
     detailPane.classList.remove('is-empty');
     const loaded = selectedDetail?.id === summary.id;
     const ev = detailRenderEvent() ?? summary;
+    // Drive the header "Body Truncated" badges (toggled in `syncPaneChrome`). The summary carries
+    // `bodyTruncated` even before the full detail loads, so this is correct on first paint too.
+    reqBodyTruncated = !!ev.httpRequest?.bodyTruncated;
+    resBodyTruncated = !!ev.httpResponse?.bodyTruncated;
     // cURL/HAR export only applies to full HTTP transactions (DNS/TLS/TCP rows have no request).
     // Those exports live in the copy-button dropdown, so the caret only appears when exportable;
     // otherwise the plain copy-body button stands alone.
@@ -752,6 +887,7 @@ export function setupNetworkTab(
     }
     lastDetailSignature = sig;
     syncPaneChrome(which);
+    afterBodyRender(which);
     if (needsDetail) void ensureDetailLoaded(summary);
   }
 
@@ -983,6 +1119,7 @@ export function setupNetworkTab(
 
     renderDetail('both');
     applyListScrollAfterPaint(result, savedScroll, options);
+    syncGroupToggleButton();
   }
 
   function scheduleSessionListPaint(options?: {
@@ -1083,6 +1220,26 @@ export function setupNetworkTab(
     }
     // Both controls are always shown now, so the single-option centering no longer applies.
     if (sidebarOptionsEl) sidebarOptionsEl.classList.remove('ni-options-single');
+    syncGroupToggleButton();
+  }
+
+  /** Show the single expand/collapse-all-groups control only in "Group by Host" view (animated in/
+   *  out via CSS). Its triangle mirrors a group's own toggle — ▼ when groups are expanded, ▶ when
+   *  all are collapsed — and clicking flips the whole set. */
+  function syncGroupToggleButton(): void {
+    if (!(groupToggleBtn instanceof HTMLButtonElement)) return;
+    const hosts = lastStructureHosts;
+    const show = state.viewMode === 'structure' && hosts.length > 0;
+    groupToggleBtn.classList.toggle('is-visible', show);
+    groupToggleBtn.setAttribute('aria-hidden', show ? 'false' : 'true');
+    groupToggleBtn.tabIndex = show ? 0 : -1;
+    if (!show) return;
+    const allCollapsed = hosts.every((h) => state.collapsedHosts.has(h));
+    const chevron = groupToggleBtn.querySelector('.ni-struct-chevron');
+    if (chevron) chevron.textContent = allCollapsed ? '▶' : '▼';
+    const label = allCollapsed ? 'Expand all groups' : 'Collapse all groups';
+    groupToggleBtn.title = label;
+    groupToggleBtn.setAttribute('aria-label', label);
   }
 
   function syncFilterClear(): void {
@@ -1106,6 +1263,55 @@ export function setupNetworkTab(
       btn.classList.toggle('is-active', on);
       (btn as HTMLElement).title = on ? 'Disable word wrap' : 'Enable word wrap';
     });
+  }
+
+  // Map a media MIME to a sensible download extension.
+  function mimeToExt(mime: string): string {
+    const map: Record<string, string> = {
+      'image/jpeg': 'jpg',
+      'image/jpg': 'jpg',
+      'image/png': 'png',
+      'image/gif': 'gif',
+      'image/webp': 'webp',
+      'image/svg+xml': 'svg',
+      'image/bmp': 'bmp',
+      'video/mp4': 'mp4',
+      'video/webm': 'webm',
+      'audio/mpeg': 'mp3',
+      'audio/mp4': 'm4a',
+      'audio/wav': 'wav',
+      'audio/ogg': 'ogg'
+    };
+    return map[mime] || mime.split('/')[1]?.replace(/[^a-z0-9]/gi, '') || 'bin';
+  }
+
+  /** Native right-click menu for a media preview: Copy Image (images) + Save File… The raw
+   *  bytes/base64 are available via the Raw format view, so there's no Copy-as-Data-URL item. */
+  async function showMediaContextMenu(dataUrl: string, isImage: boolean): Promise<void> {
+    const api = window.roku;
+    if (!api?.showContextMenu) return;
+    const match = /^data:([^;,]*)[^,]*,(.*)$/s.exec(dataUrl);
+    const mime = match?.[1] || 'application/octet-stream';
+    const base64 = match?.[2] || '';
+    const items: Array<Record<string, unknown>> = [];
+    if (isImage) items.push({ label: 'Copy Image', action: 'ni-copy-image' });
+    items.push({ label: isImage ? 'Save Image As…' : 'Save File…', action: 'ni-save-media' });
+    let res: { action?: string } | null = null;
+    try {
+      res = (await api.showContextMenu(items)) as { action?: string } | null;
+    } catch {
+      return;
+    }
+    if (!res) return;
+    if (res.action === 'ni-copy-image') {
+      await api.copyImage?.({ dataUrl });
+    } else if (res.action === 'ni-save-media') {
+      await api.saveBinaryFile?.({
+        base64,
+        defaultName: `response-${Date.now()}.${mimeToExt(mime)}`,
+        dialogTitle: isImage ? 'Save Image' : 'Save File'
+      });
+    }
   }
 
   async function copyPaneContent(btn: HTMLElement, which: string): Promise<void> {
@@ -1618,6 +1824,19 @@ export function setupNetworkTab(
   groupByHostInput?.addEventListener('change', () => {
     state.viewMode = groupByHostInput.checked ? 'structure' : 'sequence';
     lastListSignature = '';
+    syncGroupToggleButton();
+    refreshSessionList({ force: true });
+  }, listenerOpts);
+
+  // Single expand/collapse-all-groups control (shown only in "Group by Host" view).
+  groupToggleBtn?.addEventListener('click', () => {
+    if (state.viewMode !== 'structure') return;
+    const hosts = lastStructureHosts;
+    if (hosts.length === 0) return;
+    const allCollapsed = hosts.every((h) => state.collapsedHosts.has(h));
+    if (allCollapsed) state.collapsedHosts.clear();
+    else for (const h of hosts) state.collapsedHosts.add(h);
+    lastListSignature = '';
     refreshSessionList({ force: true });
   }, listenerOpts);
 
@@ -1650,10 +1869,6 @@ export function setupNetworkTab(
     scrollListToBottom();
   }, listenerOpts);
 
-  jumpErrorFab?.addEventListener('click', () => {
-    jumpToLatestError();
-  }, listenerOpts);
-
   sessionListEl?.addEventListener('click', (e) => {
     const target = e.target as HTMLElement | null;
     const toggle = target?.closest('[data-struct-toggle]') as HTMLElement | null;
@@ -1677,12 +1892,37 @@ export function setupNetworkTab(
     }
   }, listenerOpts);
 
+  // Enter/Space activates a focused embedded JSON/XML highlight (it's role="button").
+  detailPane?.addEventListener('keydown', (e) => {
+    const ke = e as KeyboardEvent;
+    if (ke.key !== 'Enter' && ke.key !== ' ') return;
+    const target = e.target as HTMLElement | null;
+    const embBtn = target?.closest('.ni-embedded-structured') as HTMLElement | null;
+    if (!embBtn?.dataset.niEmbIdx) return;
+    e.preventDefault();
+    const pane = embBtn.closest('[data-ni-response-body]') ? 'response' : 'request';
+    const payload = getEmbeddedStructuredPayload(pane, parseInt(embBtn.dataset.niEmbIdx, 10));
+    if (payload) openConsoleStructuredViewer(embBtn, payload, { titlePrefix: 'Network Inspector' });
+  }, listenerOpts);
+
   detailPane?.addEventListener('click', (e) => {
     const target = e.target as HTMLElement | null;
     const urlBtn = target?.closest('[data-ni-url]') as HTMLElement | null;
     if (urlBtn?.dataset.niUrl) {
       e.preventDefault();
       openConsoleUrlViewer(urlBtn, urlBtn.dataset.niUrl, { titlePrefix: 'Network Inspector' });
+      return;
+    }
+    // JSON/XML embedded inside a raw text body → open the shared formatted viewer. Skip when the
+    // user is selecting text (a drag), so highlighting a fragment to copy doesn't pop the modal.
+    const embBtn = target?.closest('.ni-embedded-structured') as HTMLElement | null;
+    if (embBtn?.dataset.niEmbIdx) {
+      const sel = window.getSelection();
+      if (sel && !sel.isCollapsed) return;
+      e.preventDefault();
+      const pane = embBtn.closest('[data-ni-response-body]') ? 'response' : 'request';
+      const payload = getEmbeddedStructuredPayload(pane, parseInt(embBtn.dataset.niEmbIdx, 10));
+      if (payload) openConsoleStructuredViewer(embBtn, payload, { titlePrefix: 'Network Inspector' });
       return;
     }
     const copyMenuToggle = target?.closest('[data-ni-copy-menu-toggle]') as HTMLElement | null;
@@ -1734,6 +1974,25 @@ export function setupNetworkTab(
     }
   }, listenerOpts);
 
+  // Right-click on a media preview (image/video/audio) → native menu to copy the actual picture
+  // or save the file, instead of the text-only Copy button. The element's `src` is the data URL.
+  detailPane?.addEventListener('contextmenu', (e) => {
+    const target = e.target as HTMLElement | null;
+    const mediaEl = target?.closest('.ni-media-img, .ni-media-el, .ni-media-audio') as
+      | HTMLImageElement
+      | HTMLMediaElement
+      | null;
+    const dataUrl = mediaEl?.getAttribute('src') || '';
+    if (!dataUrl.startsWith('data:')) return;
+    e.preventDefault();
+    void showMediaContextMenu(dataUrl, mediaEl instanceof HTMLImageElement);
+  }, listenerOpts);
+
+  // Collapsible JSON/XML fold twisties in the body panes (delegated; shared helper).
+  if (detailPane instanceof HTMLElement) {
+    listenerAc.signal.addEventListener('abort', attachFoldToggle(detailPane));
+  }
+
   // Dismiss the copy dropdown on an outside click or Escape so it behaves like a normal menu.
   document.addEventListener(
     'click',
@@ -1771,6 +2030,19 @@ export function setupNetworkTab(
       if (state.responseBodyFormat === value) return;
       state.responseBodyFormat = value;
       renderDetail('response');
+    }
+  }, listenerOpts);
+
+  // The amber "i" beside each Format selector explains the structured→raw downgrade for a too-large
+  // body. Visibility is driven by `setFormatInfo`; the click just opens the explainer with the size.
+  requestFormatInfoEl?.addEventListener('click', () => {
+    if (requestFormatInfoEl instanceof HTMLElement) {
+      openLargeBodyInfoModal(Number(requestFormatInfoEl.dataset.kb) || getLargeBodyKb('request'));
+    }
+  }, listenerOpts);
+  responseFormatInfoEl?.addEventListener('click', () => {
+    if (responseFormatInfoEl instanceof HTMLElement) {
+      openLargeBodyInfoModal(Number(responseFormatInfoEl.dataset.kb) || getLargeBodyKb('response'));
     }
   }, listenerOpts);
 
@@ -1854,6 +2126,30 @@ export function setupNetworkTab(
     tabContent?.remove();
   }
 
+  // Build + insert the find bar just above each body scroll area, then wire it. Visibility is
+  // driven by the Body tab in syncPaneChrome (no search on Overview / Headers).
+  if (requestBodyEl instanceof HTMLElement) {
+    const bar = buildFindBarElement('Find in Body');
+    requestBodyEl.insertAdjacentElement('beforebegin', bar);
+    requestSearch = createFindBar({ bodyEl: requestBodyEl, barEl: bar, highlightId: 'ni-find-request' });
+    if (requestSearch) {
+      const unbind = bindFindShortcut(requestBodyEl, requestSearch);
+      listenerAc.signal.addEventListener('abort', unbind);
+    }
+    // Cmd/Ctrl+A selects all text in the focused body pane (not the whole page).
+    listenerAc.signal.addEventListener('abort', attachSelectAll(requestBodyEl));
+  }
+  if (responseBodyEl instanceof HTMLElement) {
+    const bar = buildFindBarElement('Find in Body');
+    responseBodyEl.insertAdjacentElement('beforebegin', bar);
+    responseSearch = createFindBar({ bodyEl: responseBodyEl, barEl: bar, highlightId: 'ni-find-response' });
+    if (responseSearch) {
+      const unbind = bindFindShortcut(responseBodyEl, responseSearch);
+      listenerAc.signal.addEventListener('abort', unbind);
+    }
+    listenerAc.signal.addEventListener('abort', attachSelectAll(responseBodyEl));
+  }
+
   updateCaptureButton();
   updateSetupBadge();
   updatePortBadge();
@@ -1865,6 +2161,8 @@ export function setupNetworkTab(
   return {
     destroy() {
       listenerAc.abort();
+      requestSearch?.dispose();
+      responseSearch?.dispose();
       if (networkTabForeground) hidePortConflictModal();
       stopPolling();
       if (filterDebounceTimer) {

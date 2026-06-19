@@ -37,7 +37,6 @@ export type {
   RemoteVerifyDevAuthPayload,
   RemoteSideloadPayload,
   RemoteTextPayload,
-  SaveConsoleLogsPayload,
   SaveResultsPdfPayload,
   SaveScreenshotPayload,
   ServerUrlPayload,

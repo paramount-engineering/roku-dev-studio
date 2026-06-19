@@ -1,5 +1,11 @@
 import type { NetworkHttpMessage, ParsedNetworkEvent } from '../../../shared/network-inspector/types';
 import { escapeHtml } from '../../modules/utils/dom.js';
+import {
+  buildEmbeddedBodyHtml,
+  clearEmbeddedStructured,
+  type EmbeddedPane
+} from './network-embedded-structured.js';
+import { MAX_STRUCTURED_BYTES } from '../../modules/ui/structured-body.js';
 
 export type BodyFormatMode = 'auto' | 'json' | 'xml' | 'raw';
 export type RequestPaneTab = 'overview' | 'body';
@@ -70,66 +76,34 @@ function formatHeaders(msg: NetworkHttpMessage | undefined): string {
   return lines.join('\n') || '(no headers)';
 }
 
-function prettyXml(xml: string): string {
-  const trimmed = xml.trim();
-  if (!trimmed) return trimmed;
-  try {
-    const doc = new DOMParser().parseFromString(trimmed, 'application/xml');
-    if (doc.querySelector('parsererror')) return trimmed;
-    const serializer = new XMLSerializer();
-    const raw = serializer.serializeToString(doc.documentElement);
-    const lines = raw.replace(/(>)(<)(\/*)/g, '$1\n$2$3').split('\n');
-    let pad = 0;
-    return lines
-      .map((line) => {
-        const t = line.trim();
-        if (!t) return '';
-        if (t.match(/^<\//)) pad = Math.max(0, pad - 1);
-        const indented = `${'  '.repeat(pad)}${t}`;
-        if (t.match(/^<[^!?][^>]*[^/]>/) && !t.includes('</')) pad += 1;
-        return indented;
-      })
-      .filter(Boolean)
-      .join('\n');
-  } catch {
-    return trimmed;
-  }
-}
-
-function formatBodyText(msg: NetworkHttpMessage | undefined, format: ResolvedBodyFormat): string {
-  if (!msg?.body) return '';
-  const body = msg.body;
-  if (format === 'json') {
-    try {
-      return JSON.stringify(JSON.parse(body), null, 2);
-    } catch {
-      return body;
-    }
-  }
-  if (format === 'xml') return prettyXml(body);
-  return body;
-}
-
-function highlightJsonText(text: string): string {
-  return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(
-      /("(?:\\.|[^"\\])*")(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?/g,
-      (match, _q, colon) => {
-        if (colon) return `<span class="ni-json-key">${match}</span>`;
-        if (/^"/.test(match)) return `<span class="ni-json-string">${match}</span>`;
-        if (/^(true|false|null)$/.test(match)) return `<span class="ni-json-lit">${match}</span>`;
-        return `<span class="ni-json-num">${match}</span>`;
-      }
-    );
-}
-
 // Above this size we skip JSON.parse / syntax highlighting / XML pretty-printing, which
-// are O(n) (or worse) over the whole string and produce a huge DOM. The raw head is shown
-// instead; the Copy button still yields the full body straight from the event model.
-const MAX_FORMAT_BYTES = 256 * 1024;
+// are O(n) (or worse) over the whole string and produce a huge DOM. The FULL body is still
+// shown — as raw (chunked) text rather than a structured tree — so nothing is hidden. Shares the
+// single shared-renderer threshold (`MAX_STRUCTURED_BYTES`) so a JSON/XML body renders as a tree at
+// the same size here as in ECP / App Connector, rather than a stricter Network-only cap.
+const MAX_FORMAT_BYTES = MAX_STRUCTURED_BYTES;
+
+// Per-pane "large body" state, so network-tab can surface it as a header badge instead of an inline
+// note. `kb === 0` = not large / not applicable. Set when the raw-text large-body path renders;
+// cleared at the top of every `renderBodyContent`. `downgraded` distinguishes a forced raw render
+// from a structured view (JSON/XML) vs a natively-raw body, so the badge tooltip stays honest.
+type LargeBodyState = { kb: number; downgraded: boolean };
+const largeBody: { request: LargeBodyState; response: LargeBodyState } = {
+  request: { kb: 0, downgraded: false },
+  response: { kb: 0, downgraded: false }
+};
+
+/** KB size to show on the "Large Body" header badge for `pane`, or 0 when it doesn't apply. */
+export function getLargeBodyKb(pane: EmbeddedPane): number {
+  return largeBody[pane].kb;
+}
+
+/** True when the large body is a *downgrade* — size forced raw text where we'd otherwise have built
+ *  a collapsible JSON/XML tree. False for natively-raw bodies (JS / CSS / HTML / plain text, or
+ *  user-selected Raw), where raw text is the expected rendering and nothing was traded for speed. */
+export function getLargeBodyDowngraded(pane: EmbeddedPane): boolean {
+  return largeBody[pane].downgraded;
+}
 
 const MIME_RE = /^[a-z0-9][a-z0-9.+-]*\/[a-z0-9][a-z0-9.+-]*$/;
 
@@ -206,11 +180,39 @@ function codeBlockHtml(innerHtml: string, extraClass = ''): string {
   return `<pre class="${cls} ni-code-chunked">${chunks}</pre>`;
 }
 
+// Placeholder for a foldable JSON/XML body. Holds the RAW body (escaped) so the upgrade pass can
+// read it back via textContent and hand it to the shared `renderStructuredInto` (which pretty-prints
+// + highlights + folds). Uses `.ni-code-block` so word-wrap / nowrap toggling apply uniformly.
+function structuredBodyHtml(kind: 'json' | 'xml', body: string): string {
+  return `<pre class="ni-code-block" data-ni-fold="${kind}" tabindex="0">${escapeHtml(body)}</pre>`;
+}
+
+/** Render a raw (non-structured) body, wrapping any JSON/XML fragments embedded in the text as
+ *  clickable highlights (opens the shared formatted viewer). Falls back to the plain chunked code
+ *  block when nothing is embedded (or the body is too large to scan). */
+function renderRawBody(body: string, pane: EmbeddedPane): string {
+  // Drop trailing newline(s) so the <pre> doesn't render a stray blank last line (a body that
+  // ends in "\n" otherwise splits into a final empty line).
+  body = body.replace(/[\r\n]+$/, '');
+  const embedded = buildEmbeddedBodyHtml(body, pane);
+  if (embedded.count > 0) {
+    // Single (un-chunked) <pre> so embedded spans can't straddle a chunk boundary; only bodies
+    // small enough to scan reach here, so a single block paints fine.
+    return `<pre class="ni-code-block ni-code-embedded">${embedded.html}</pre>`;
+  }
+  return codeBlockHtml(escapeHtml(body));
+}
+
 function renderBodyContent(
   msg: NetworkHttpMessage | undefined,
   mode: BodyFormatMode,
-  fallback: string
+  fallback: string,
+  pane: EmbeddedPane
 ): string {
+  // Clear stale embedded payloads + large-body state for this pane up front; the raw paths below
+  // repopulate them.
+  clearEmbeddedStructured(pane);
+  largeBody[pane] = { kb: 0, downgraded: false };
   if (!msg?.body?.trim()) {
     return `<div class="ni-pane-empty">${escapeHtml(fallback)}</div>`;
   }
@@ -221,26 +223,38 @@ function renderBodyContent(
     const media = renderMediaPreview(msg);
     if (media) return media;
   }
-  const truncatedNote = msg.bodyTruncated
-    ? `<div class="ni-body-large-note">Body was truncated during capture.</div>`
-    : '';
+  // Note: the "body truncated during capture" indicator is surfaced as a centered badge in the
+  // pane header (toggled by network-tab from `bodyTruncated`), not inline here, so it stays visible
+  // regardless of how far the body is scrolled.
   if (msg.body.length > MAX_FORMAT_BYTES) {
-    const kb = Math.round(msg.body.length / 1024);
-    const head = msg.body.slice(0, MAX_FORMAT_BYTES);
-    return (
-      `<div class="ni-body-large-note">Large body (${kb} KB) — showing the first 256 KB as raw text for performance. Use Copy for the full body.</div>` +
-      codeBlockHtml(escapeHtml(head))
-    );
+    // We already hold the whole captured body, so show ALL of it — never a truncated head. Only the
+    // expensive structured rendering (JSON.parse + syntax highlight + fold tree, which can explode
+    // into millions of DOM nodes) is skipped above this size; the full body is rendered as raw text
+    // with embedded JSON/XML fragments still made clickable. The "large body" notice is surfaced as
+    // a header badge by network-tab (via `getLargeBodyKb`), not inline here.
+    largeBody[pane] = {
+      kb: Math.round(msg.body.length / 1024),
+      // Only a *downgrade* when we'd otherwise have built a JSON/XML tree (auto-detected structured,
+      // or the user explicitly picked JSON/XML). A natively-raw body (JS/CSS/text, or Raw mode) loses
+      // nothing to size, so the badge must not claim a performance trade-off for it.
+      downgraded: resolveBodyFormat(mode, msg) !== 'raw'
+    };
+    return renderRawBody(msg.body, pane);
   }
   const resolved = resolveBodyFormat(mode, msg);
-  const formatted = formatBodyText(msg, resolved);
+  // For JSON/XML (already gated to ≤256 KB above), emit a placeholder carrying the RAW body. A
+  // post-render pass in network-tab (`upgradeStructuredBodies`) hands it to the shared
+  // `renderStructuredInto`, which pretty-prints + builds the collapsible, syntax-highlighted tree —
+  // the same renderer the Console viewer and ECP/App Connector use. (The whole body is the
+  // structure here, so no embedded-fragment highlighting applies.)
   if (resolved === 'json') {
-    return `${truncatedNote}${codeBlockHtml(highlightJsonText(formatBodyText(msg, 'json')), 'ni-code-json')}`;
+    return structuredBodyHtml('json', msg.body);
   }
   if (resolved === 'xml') {
-    return `${truncatedNote}${codeBlockHtml(escapeHtml(formatted), 'ni-code-xml')}`;
+    return structuredBodyHtml('xml', msg.body);
   }
-  return `${truncatedNote}${codeBlockHtml(escapeHtml(formatted))}`;
+  // Plain text body: highlight any JSON/XML nested inside it.
+  return renderRawBody(msg.body, pane);
 }
 
 function renderHeadersTable(msg: NetworkHttpMessage | undefined): string {
@@ -423,7 +437,7 @@ export function renderRequestPane(
     return `<pre class="ni-code-block">${escapeHtml(`DNS ${ev.type === 'dns-query' ? 'Query' : 'Response'}: ${ev.hostname || '—'}`)}</pre>`;
   }
   if (tab === 'overview') return renderRequestOverview(ev, allEvents);
-  return renderBodyContent(ev.httpRequest, bodyFormat, '(no request body)');
+  return renderBodyContent(ev.httpRequest, bodyFormat, '(no request body)', 'request');
 }
 
 export function renderResponsePane(
@@ -444,7 +458,7 @@ export function renderResponsePane(
   const code = ev.httpResponse?.statusCode;
   const fallback =
     code === 0 ? '(waiting for response…)' : code == null ? '(no response body)' : '(empty response body)';
-  return renderBodyContent(ev.httpResponse, bodyFormat, fallback);
+  return renderBodyContent(ev.httpResponse, bodyFormat, fallback, 'response');
 }
 
 export function renderNetworkEventSummary(ev: ParsedNetworkEvent, allEvents: ParsedNetworkEvent[]): string {

@@ -169,8 +169,16 @@ contextBridge.exposeInMainWorld('roku', {
   // Save TrackerTask.xml file
   saveTrackerTask: () => ipcRenderer.invoke(IPC.RokuSaveTrackerTask),
   
-  // Save console logs to file
-  saveConsoleLogs: (content: string) => ipcRenderer.invoke(IPC.RokuSaveConsoleLogs, { content }),
+  // Save arbitrary text (e.g. console logs, a query / App Connector response) to a file.
+  saveTextFile: (opts: { content: string; defaultName?: string; dialogTitle?: string }) =>
+    ipcRenderer.invoke(IPC.RokuSaveTextFile, opts),
+
+  // Save raw binary bytes (base64) to a file — e.g. an image/video response body.
+  saveBinaryFile: (opts: { base64: string; defaultName?: string; dialogTitle?: string }) =>
+    ipcRenderer.invoke(IPC.RokuSaveBinaryFile, opts),
+
+  // Copy an image (data URL) to the clipboard as an actual picture.
+  copyImage: (opts: { dataUrl: string }) => ipcRenderer.invoke(IPC.RokuCopyImage, opts),
 
   // Console scrollback spill — disk-backed history past the in-memory cap.
   // See `main/console-spill.ts` for the file lifecycle. The renderer calls

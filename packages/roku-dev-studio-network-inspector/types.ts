@@ -16,6 +16,24 @@ export function clampMaxRawPacketsPerDevice(value: unknown): number {
   return Math.min(MAX_MAX_RAW_PACKETS_PER_DEVICE, Math.max(MIN_MAX_RAW_PACKETS_PER_DEVICE, n));
 }
 
+/**
+ * How much of each captured request/response body the Inspector RETAINS for display. This bounds
+ * the snapshot stored/shown only — it never affects the bytes the proxy forwards to the Roku (the
+ * proxy keeps its own fixed safety cap for buffering/forwarding). Larger = inspect bigger bodies
+ * (e.g. multi-MB JS bundles) whole, at the cost of more per-detail memory + on-disk detail size.
+ * Bytes; surfaced in the settings UI as KB.
+ */
+export const DEFAULT_MAX_BODY_RETAINED_BYTES = 4 * 1024 * 1024; // 4 MiB
+export const MIN_MAX_BODY_RETAINED_BYTES = 64 * 1024; // 64 KiB
+export const MAX_MAX_BODY_RETAINED_BYTES = 16 * 1024 * 1024; // 16 MiB
+
+/** Clamp an arbitrary value to the supported retained-body-size range (bytes). */
+export function clampMaxBodyRetainedBytes(value: unknown): number {
+  const n = typeof value === 'number' && Number.isFinite(value) ? Math.floor(value) : NaN;
+  if (Number.isNaN(n)) return DEFAULT_MAX_BODY_RETAINED_BYTES;
+  return Math.min(MAX_MAX_BODY_RETAINED_BYTES, Math.max(MIN_MAX_BODY_RETAINED_BYTES, n));
+}
+
 export type NetworkInspectorHotspotState =
   | 'disabled'
   | 'waiting'
@@ -192,6 +210,8 @@ export type NetworkInspectorStatus = {
   mitmTransactions?: number;
   /** Max raw frames retained per device for the pcap export (see DEFAULT_MAX_RAW_PACKETS_PER_DEVICE). */
   maxRawPacketsPerDevice?: number;
+  /** Max bytes of each body retained for display (see DEFAULT_MAX_BODY_RETAINED_BYTES). Snapshot-only. */
+  maxBodyRetainedBytes?: number;
   /** Per-device block/throttle rules currently in effect (keyed by device IP). */
   trafficRules?: NetworkTrafficRules;
 };

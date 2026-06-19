@@ -1,0 +1,44 @@
+<div class="modal-overlay deeplink-media-types-modal" id="deeplinkMediaTypesModal" aria-hidden="true">
+  <div class="modal deeplink-media-types-modal-box">
+    <div class="modal-header">
+      <span class="modal-title"><span class="icon icon-md"><svg><use href="#icon-link"/></svg></span> Manage Media Types</span>
+      <button type="button" class="modal-close deeplink-media-types-modal-close" aria-label="Close"><span class="icon icon-sm"><svg><use href="#icon-x"/></svg></span></button>
+    </div>
+    <div class="modal-body">
+      <p class="deeplink-media-types-hint">
+        Built-in media types are always available. Custom entries are saved globally and appear in every device tab.
+      </p>
+
+      <div class="deeplink-media-types-section">
+        <h4 class="deeplink-media-types-section-title">Built-in</h4>
+        <ul class="deeplink-media-types-builtin-list">
+          <li><span class="deeplink-media-type-entry-label">Movie</span><span class="deeplink-media-type-entry-value">movie</span></li>
+          <li><span class="deeplink-media-type-entry-label">Series</span><span class="deeplink-media-type-entry-value">series</span></li>
+          <li><span class="deeplink-media-type-entry-label">Episode</span><span class="deeplink-media-type-entry-value">episode</span></li>
+          <li><span class="deeplink-media-type-entry-label">Live</span><span class="deeplink-media-type-entry-value">live</span></li>
+        </ul>
+      </div>
+
+      <div class="deeplink-media-types-section">
+        <h4 class="deeplink-media-types-section-title">Custom</h4>
+        <div id="deeplinkMediaTypesCustomList" class="deeplink-media-types-custom-list"></div>
+      </div>
+
+      <div class="deeplink-media-types-section deeplink-media-types-add-section">
+        <h4 class="deeplink-media-types-section-title">Add Media Type</h4>
+        <div class="deeplink-media-types-add-form">
+          <label class="deeplink-media-type-add-field">
+            <span class="deeplink-media-type-add-label">Display name</span>
+            <input type="text" id="deeplinkMediaTypeLabel" placeholder="e.g., Short Film" maxlength="64" />
+          </label>
+          <label class="deeplink-media-type-add-field">
+            <span class="deeplink-media-type-add-label">ECP value</span>
+            <input type="text" id="deeplinkMediaTypeValue" placeholder="e.g., short-film" maxlength="64" />
+          </label>
+          <button type="button" class="btn btn-primary" id="deeplinkMediaTypeAddBtn">Add</button>
+        </div>
+        <p id="deeplinkMediaTypesError" class="deeplink-media-types-error" hidden></p>
+      </div>
+    </div>
+  </div>
+</div>

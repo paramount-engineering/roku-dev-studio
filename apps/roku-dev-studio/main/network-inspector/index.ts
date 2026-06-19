@@ -38,6 +38,9 @@ export function initNetworkInspectorFromSettings(
   if (typeof boot.maxRawPacketsPerDevice === 'number') {
     svc.setMaxRawPacketsPerDevice(boot.maxRawPacketsPerDevice);
   }
+  if (typeof boot.maxBodyRetainedBytes === 'number') {
+    svc.setMaxBodyRetainedBytes(boot.maxBodyRetainedBytes);
+  }
   if (boot.trafficRules) svc.setAllTrafficRules(boot.trafficRules);
   svc.setEnabled(boot.enabled);
   svc.setMitmEnabled(boot.mitmEnabled === true);

@@ -33,7 +33,7 @@ function firstNonSpaceIndex(s: string): number {
 }
 
 /** Extract balanced `{...}` or `[...]` from start index; respects JSON string escapes. */
-export function extractBalancedJsonFragment(s: string, start: number): string | null {
+function extractBalancedJsonFragment(s: string, start: number): string | null {
   const open = s[start];
   if (open !== '{' && open !== '[') return null;
   const close = open === '{' ? '}' : ']';

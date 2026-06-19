@@ -5,11 +5,9 @@
 import { raleArgsToParamStrings } from './rale-command-param-ui.js';
 import { OPS_NEED_VALUE } from './action-script-if-client.js';
 
-export function escapeHtml(s) {
-  const div = document.createElement('div');
-  div.textContent = s;
-  return div.innerHTML;
-}
+// Canonical HTML escaper lives in modules/utils/dom; re-exported here so existing action-script
+// imports keep working without a second implementation.
+export { escapeHtml } from '../../modules/utils/dom.js';
 
 export function escapeAttr(s) {
   return String(s).replace(/"/g, '&quot;').replace(/</g, '&lt;');

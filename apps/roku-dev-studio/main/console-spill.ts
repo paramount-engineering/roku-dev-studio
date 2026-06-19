@@ -131,6 +131,25 @@ export function registerConsoleSpillIpc(ipcMain: IpcMain, app: App): void {
     });
   }
 
+  // Startup wipe: a previous run that crashed (or was killed before
+  // `will-quit` fired) can leave stale spill files in the temp dir. A fresh
+  // launch must never inherit old console history, so clear them now. No
+  // sessions exist yet on a cold process, so this only removes stragglers.
+  try {
+    const dir = ensureBaseDir(app);
+    if (fs.existsSync(dir)) {
+      for (const entry of fs.readdirSync(dir)) {
+        try {
+          fs.unlinkSync(path.join(dir, entry));
+        } catch {
+          /* best effort */
+        }
+      }
+    }
+  } catch {
+    /* best effort — temp dir not yet present is fine */
+  }
+
   ipcMain.handle(IPC_ConsoleSpillStart, (event: IpcMainInvokeEvent, payload: { tag?: string }) => {
     void event;
     const dir = ensureBaseDir(app);

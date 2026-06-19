@@ -104,7 +104,6 @@ var init_channels = __esm({
       RokuRaleStatus: "roku:rale-status",
       RaleDisconnected: "rale-disconnected",
       ShowContextMenu: "show-context-menu",
-      CopyToClipboard: "copy-to-clipboard",
       ClipboardWrite: "clipboard:write",
       ShellOpenExternal: "shell:open-external",
       IsDebugEnabled: "is-debug-enabled",
@@ -141,7 +140,9 @@ var init_channels = __esm({
       /** Main → renderer: read failed mid-stream. Payload `{ error: string }`. */
       LogViewerStreamError: "log-viewer:stream-error",
       RokuSaveTrackerTask: "roku:save-tracker-task",
-      RokuSaveConsoleLogs: "roku:save-console-logs",
+      RokuSaveTextFile: "roku:save-text-file",
+      RokuSaveBinaryFile: "roku:save-binary-file",
+      RokuCopyImage: "roku:copy-image",
       RokuActionScriptShowSaveFolder: "roku:action-script-show-save-folder",
       RokuActionScriptWriteFile: "roku:action-script-write-file",
       RokuActionScriptShowSaveScriptDialog: "roku:action-script-show-save-script-dialog",

@@ -2,7 +2,6 @@
 // This allows gradual migration from global functions to modules
 
 export * from './utils/dom.js';
-export * from './utils/formatting.js';
 export * from './utils/storage.js';
 export * from './utils/ui.js';
 export * from './utils/constants.js';

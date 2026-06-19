@@ -6,7 +6,10 @@ import type { BrowserWindow, Event } from 'electron';
 import {
   DEFAULT_MAX_RAW_PACKETS_PER_DEVICE,
   MIN_MAX_RAW_PACKETS_PER_DEVICE,
-  MAX_MAX_RAW_PACKETS_PER_DEVICE
+  MAX_MAX_RAW_PACKETS_PER_DEVICE,
+  DEFAULT_MAX_BODY_RETAINED_BYTES,
+  MIN_MAX_BODY_RETAINED_BYTES,
+  MAX_MAX_BODY_RETAINED_BYTES
 } from '../shared/network-inspector/types';
 import {
   networkInspectorSetupTitle as sharedNetworkInspectorSetupTitle,
@@ -1321,6 +1324,13 @@ function settingsHtml(initialSection?: string): string {
                 </div>
                 <input type="number" id="niMaxRawPackets" class="settings-text-input" min="${MIN_MAX_RAW_PACKETS_PER_DEVICE}" max="${MAX_MAX_RAW_PACKETS_PER_DEVICE}" step="100" value="${DEFAULT_MAX_RAW_PACKETS_PER_DEVICE}" aria-label="Per-device packet limit" />
               </div>
+              <div class="settings-row-input">
+                <div class="settings-row-text">
+                  <strong>Max Body Size (KB)</strong>
+                  <span class="settings-row-desc">How much of each request/response body is kept for viewing in the inspector. Larger = inspect big bodies (e.g. multi-MB JS) whole; over this, the body shows a "Body Truncated" badge. This never affects what the device receives. Applies to new traffic only — raising it won't restore bodies already captured and truncated. ${Math.round(MIN_MAX_BODY_RETAINED_BYTES / 1024)}–${Math.round(MAX_MAX_BODY_RETAINED_BYTES / 1024)} KB.</span>
+                </div>
+                <input type="number" id="niMaxBodyKb" class="settings-text-input" min="${Math.round(MIN_MAX_BODY_RETAINED_BYTES / 1024)}" max="${Math.round(MAX_MAX_BODY_RETAINED_BYTES / 1024)}" step="64" value="${Math.round(DEFAULT_MAX_BODY_RETAINED_BYTES / 1024)}" aria-label="Max retained body size in KB" />
+              </div>
               <div class="settings-row-input" id="niSetupRow">
                 <div class="settings-row-text">
                   <strong>Hotspot &amp; Capture Setup <span class="ni-attention-badge" id="niSetupBadge" hidden>Setup Needed</span></strong>
@@ -1389,6 +1399,25 @@ ${networkInspectorSetupModalBodyHtml()}
         var n = parseInt(v, 10);
         if (!isFinite(n)) return NI_MAX_RAW_PACKETS_DEFAULT;
         return Math.min(NI_MAX_RAW_PACKETS_MAX, Math.max(NI_MAX_RAW_PACKETS_MIN, n));
+      }
+      // Retained-body cap. Stored/persisted in BYTES (the package's unit); the input is in KB.
+      var NI_MAX_BODY_BYTES_DEFAULT = ${DEFAULT_MAX_BODY_RETAINED_BYTES};
+      var NI_MAX_BODY_KB_DEFAULT = ${Math.round(DEFAULT_MAX_BODY_RETAINED_BYTES / 1024)};
+      var NI_MAX_BODY_KB_MIN = ${Math.round(MIN_MAX_BODY_RETAINED_BYTES / 1024)};
+      var NI_MAX_BODY_KB_MAX = ${Math.round(MAX_MAX_BODY_RETAINED_BYTES / 1024)};
+      function clampNiMaxBodyKb(v) {
+        var n = parseInt(v, 10);
+        if (!isFinite(n)) return NI_MAX_BODY_KB_DEFAULT;
+        return Math.min(NI_MAX_BODY_KB_MAX, Math.max(NI_MAX_BODY_KB_MIN, n));
+      }
+      // bytes -> KB for the input; KB -> bytes for the persisted payload.
+      function niBodyBytesToKb(bytes) {
+        var n = parseInt(bytes, 10);
+        if (!isFinite(n) || n <= 0) return NI_MAX_BODY_KB_DEFAULT;
+        return clampNiMaxBodyKb(Math.round(n / 1024));
+      }
+      function niBodyKbToBytes(kb) {
+        return clampNiMaxBodyKb(kb) * 1024;
       }
 
       var folderPath = '';
@@ -2033,6 +2062,13 @@ ${networkInspectorSetupModalBodyHtml()}
               : NI_MAX_RAW_PACKETS_DEFAULT
           );
         }
+        if (el('niMaxBodyKb')) {
+          el('niMaxBodyKb').value = String(
+            typeof state.networkInspectorMaxBodyRetainedBytes === 'number'
+              ? niBodyBytesToKb(state.networkInspectorMaxBodyRetainedBytes)
+              : NI_MAX_BODY_KB_DEFAULT
+          );
+        }
         updateNetworkInspectorStatusLine(state);
         updateBpfCaptureUi(state.captureToolAvailable === true || state.bpfCaptureAvailable === true);
         niSavedLocations = Array.isArray(state.remoteLocations) ? state.remoteLocations : [];
@@ -2041,7 +2077,10 @@ ${networkInspectorSetupModalBodyHtml()}
           mitmPort: state.networkInspectorMitmPort || 8888,
           maxRawPackets: (typeof state.networkInspectorMaxRawPacketsPerDevice === 'number'
             ? clampNiMaxRawPackets(state.networkInspectorMaxRawPacketsPerDevice)
-            : NI_MAX_RAW_PACKETS_DEFAULT)
+            : NI_MAX_RAW_PACKETS_DEFAULT),
+          maxBodyKb: (typeof state.networkInspectorMaxBodyRetainedBytes === 'number'
+            ? niBodyBytesToKb(state.networkInspectorMaxBodyRetainedBytes)
+            : NI_MAX_BODY_KB_DEFAULT)
         };
         refreshConnectedPlaces();
         if (state.logFilePath && el('logPathHint')) {
@@ -2216,7 +2255,7 @@ ${networkInspectorSetupModalBodyHtml()}
       }
 
       function setNiControlsDisabled(disabled) {
-        ['optNetworkInspector', 'niMitmPort', 'niMaxRawPackets'].forEach(function (id) {
+        ['optNetworkInspector', 'niMitmPort', 'niMaxRawPackets', 'niMaxBodyKb'].forEach(function (id) {
           var elx = el(id);
           if (elx) elx.disabled = !!disabled;
         });
@@ -2234,6 +2273,7 @@ ${networkInspectorSetupModalBodyHtml()}
         setToggle('optNetworkInspector', niLocalSnapshot.enabled === true);
         if (el('niMitmPort')) el('niMitmPort').value = String(niLocalSnapshot.mitmPort || 8888);
         if (el('niMaxRawPackets')) el('niMaxRawPackets').value = String(niLocalSnapshot.maxRawPackets || NI_MAX_RAW_PACKETS_DEFAULT);
+        if (el('niMaxBodyKb')) el('niMaxBodyKb').value = String(niLocalSnapshot.maxBodyKb || NI_MAX_BODY_KB_DEFAULT);
       }
 
       // Grey out (and lock) the Network Inspector rows + Save when the selected remote location
@@ -2315,6 +2355,7 @@ ${networkInspectorSetupModalBodyHtml()}
         setNiSectionUnsupported(false);
         setNiControlsDisabled(false);
         if (el('niMaxRawPackets')) el('niMaxRawPackets').disabled = true; // not configurable remotely
+        if (el('niMaxBodyKb')) el('niMaxBodyKb').disabled = true; // not configurable remotely
         var cfg = res.config || {};
         var status = res.status || {};
         setToggle('optNetworkInspector', cfg.enabled === true || status.enabled === true);
@@ -2431,6 +2472,7 @@ ${networkInspectorSetupModalBodyHtml()}
           setToggle('optNetworkInspector', false);
           if (el('niMitmPort')) el('niMitmPort').value = '8888';
           if (el('niMaxRawPackets')) el('niMaxRawPackets').value = String(NI_MAX_RAW_PACKETS_DEFAULT);
+          if (el('niMaxBodyKb')) el('niMaxBodyKb').value = String(NI_MAX_BODY_KB_DEFAULT);
           updateNetworkInspectorStatusLine({ networkInspectorEnabled: false });
         });
       }
@@ -2535,6 +2577,11 @@ ${networkInspectorSetupModalBodyHtml()}
               ? (el('niMaxRawPackets') ? el('niMaxRawPackets').value : NI_MAX_RAW_PACKETS_DEFAULT)
               : (niLocalSnapshot ? niLocalSnapshot.maxRawPackets : NI_MAX_RAW_PACKETS_DEFAULT)
           ),
+          networkInspectorMaxBodyRetainedBytes: niBodyKbToBytes(
+            (currentNiPlace() === 'local')
+              ? (el('niMaxBodyKb') ? el('niMaxBodyKb').value : NI_MAX_BODY_KB_DEFAULT)
+              : (niLocalSnapshot ? niLocalSnapshot.maxBodyKb : NI_MAX_BODY_KB_DEFAULT)
+          ),
           mcpClients: (function () {
             var out = {};
             MCP_CLIENT_IDS.forEach(function (id) {
@@ -2610,7 +2657,8 @@ ${networkInspectorSetupModalBodyHtml()}
                 niLocalSnapshot = {
                   enabled: boolFromToggle('optNetworkInspector'),
                   mitmPort: el('niMitmPort') ? parseInt(el('niMitmPort').value, 10) || 8888 : 8888,
-                  maxRawPackets: clampNiMaxRawPackets(el('niMaxRawPackets') ? el('niMaxRawPackets').value : NI_MAX_RAW_PACKETS_DEFAULT)
+                  maxRawPackets: clampNiMaxRawPackets(el('niMaxRawPackets') ? el('niMaxRawPackets').value : NI_MAX_RAW_PACKETS_DEFAULT),
+                  maxBodyKb: clampNiMaxBodyKb(el('niMaxBodyKb') ? el('niMaxBodyKb').value : NI_MAX_BODY_KB_DEFAULT)
                 };
                 setSectionStatus('saveStatusNetworkInspector', 'Network Inspector settings saved.', false);
               } else {

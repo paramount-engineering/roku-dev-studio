@@ -34,7 +34,11 @@
       
       --border: rgba(139, 92, 246, 0.12);
       --border-hover: rgba(139, 92, 246, 0.25);
-      
+
+      /* Radius of the OS-drawn rounded window corners (macOS `hiddenInset`). Single source of
+       * truth for the "Window-corner focus-ring policy" — search that heading for the full rules. */
+      --window-corner-radius: 11px;
+
       --sidebar-width: 340px;
       /*
        * --titlebar-height-base is the design value at 100% zoom (38 screen px).
@@ -530,6 +534,38 @@
       display: flex;
       flex: 1;
       overflow: hidden;
+    }
+
+    /* ===================================================================================
+     * Window-corner focus-ring policy
+     * -----------------------------------------------------------------------------------
+     * macOS draws the app window with rounded corners (`hiddenInset`). When a focusable
+     * element sits flush in a window corner, its rectangular focus ring gets sliced by the
+     * native window mask and looks squared-off / cut. A CSS `overflow` clip can't fix this
+     * (clipping only cuts the ring — it can't make the browser draw a rounded one); the
+     * element itself must carry `border-radius` on that corner so Chromium paints the
+     * outline following the curve.
+     *
+     * In practice this only affects panes that are FULL-BLEED to the window edge. Every
+     * other focusable control lives inside a padded card, so its ring never reaches the
+     * curve. The only such panes today are the Network Inspector's full-bleed surfaces:
+     *   - Response body  -> always at the window's bottom-RIGHT corner.
+     *   - Session list   -> at the window's bottom-LEFT corner ONLY when the app sidebar is
+     *                       collapsed (otherwise the app sidebar owns that corner).
+     *
+     * Round ONLY the corner that actually meets the window edge (rounding an internal corner
+     * would bow the ring inward / leave a notch). Use `--window-corner-radius` so the value
+     * stays in one place. macOS-only — Win/Linux run frameless with square corners.
+     *
+     * Adding a new full-bleed pane that touches a window corner? Add its corner here.
+     * =================================================================================== */
+    body.platform-darwin [data-ni-response-body] {
+      border-bottom-right-radius: var(--window-corner-radius);
+    }
+    body.platform-darwin.sidebar-collapsed .ni-sidebar-scroll,
+    body.platform-darwin.sidebar-collapsed .ni-sequence-wrap,
+    body.platform-darwin.sidebar-collapsed .ni-structure-wrap {
+      border-bottom-left-radius: var(--window-corner-radius);
     }
     
     /* Sidebar */
@@ -4398,40 +4434,40 @@
       display: flex;
       flex-direction: column;
       min-height: 0;
+      /* Frameless: results fill the card body edge-to-edge (like Console / App Connector). */
+      padding: 0;
       /* Contain flex children so the scroll node cannot grow past the card */
       overflow: hidden;
     }
+    /* Keep the (rarely shown) Remove Plugin row inset now that the body has no padding. */
+    .query-bottom .remove-plugin-section {
+      margin: 12px 12px 0;
+    }
     
-    /* Same node has .output-area + .query-output — override global max/min height so flex + scroll reach the card bottom */
+    /* Same node has .output-area + .query-output — fill the card body and drop the inner frame
+       (border / rounded box) so the results read as one seamless surface. */
     .query-bottom .output-area.query-output {
       flex: 1 1 0;
       min-height: 0;
       max-height: none;
       overflow-y: auto;
       overflow-x: auto;
+      border: none;
+      border-radius: 0;
       scroll-padding-bottom: 16px;
       /* Extra bottom inset so last lines stay above the card edge when scrolled to end */
       padding-bottom: 22px;
     }
-    .query-bottom .card-header .copy-query-btn {
-      margin-left: auto;
-      padding: 4px 10px;
-      font-size: 11px;
-      font-weight: 600;
-      gap: 4px;
-    }
-    /* Results: search in header — centered in middle band (~60% of that band), Copy fixed right */
+    /* Results header: icon | title | actions (Copy/Save/Clear, left) | find bar (fills the rest). */
     .card-header.query-results-card-header {
       display: grid;
-      grid-template-columns: auto auto 1fr auto;
+      grid-template-columns: auto auto auto 1fr;
       align-items: center;
-      /* icon→title gap = base .card-header gap (10px) so the title row matches Device/Developer Queries; */
-      /* the search row sits in column 3 with its own breathing room from the title */
       column-gap: 10px;
       row-gap: 0;
       min-width: 0;
-      /* Same horizontal padding as other query cards (.card-header) */
       padding: 14px 18px;
+      position: relative;
     }
     .card-header.query-results-card-header .card-icon {
       grid-column: 1;
@@ -4440,46 +4476,8 @@
       grid-column: 2;
       flex-shrink: 0;
     }
-    .card-header.query-results-card-header .query-search-row {
+    .card-header.query-results-card-header .card-header-actions {
       grid-column: 3;
-      justify-self: center;
-      width: 60%;
-      min-width: 0;
-      max-width: min(520px, 100%);
-      margin-bottom: 0;
-      align-items: center;
-      max-height: 30px;
-      gap: 8px;
-    }
-    .card-header.query-results-card-header .query-search-input {
-      height: 28px;
-      min-height: 28px;
-      max-height: 28px;
-      padding: 0 10px;
-      line-height: 28px;
-      font-size: 12px;
-      min-width: 0;
-      box-sizing: border-box;
-    }
-    .card-header.query-results-card-header .search-prev-btn,
-    .card-header.query-results-card-header .search-next-btn {
-      height: 26px;
-      min-height: 26px;
-      max-height: 26px;
-      padding: 0 8px;
-      box-sizing: border-box;
-      align-items: center;
-    }
-    .card-header.query-results-card-header .search-match-count {
-      font-size: 11px;
-      line-height: 1;
-      white-space: nowrap;
-      min-width: 0;
-    }
-    .card-header.query-results-card-header .copy-query-btn {
-      grid-column: 4;
-      margin-left: 0;
-      justify-self: end;
     }
     
     /* App Connector Tab Layout - Two Row Design (fills pane like Console; no vh calc dead zone) */
@@ -5116,6 +5114,13 @@
       font-size: 12px;
       margin-right: 12px;
     }
+    /* The Connect / Disconnect button already conveys these steady states, so the redundant
+       "Connected" badge and "Disconnected" label are hidden. Transient "Connecting…" and error
+       states stay visible (they carry info the button doesn't). */
+    .telnet-status.connected,
+    .telnet-status.disconnected {
+      display: none;
+    }
     .telnet-status.connected {
       padding: 4px 10px;
       border-radius: 6px;
@@ -5170,14 +5175,25 @@
       background: var(--danger);
     }
     
-    .telnet-toolbar {
+    /* Telnet header hosts everything: Copy/Save/Clear icon actions (left, next to the title),
+       the find/filter bar (centered), and the connection group + Port badge (right). */
+    .telnet-header {
+      flex-wrap: nowrap;
+    }
+    .telnet-header .card-header-actions {
+      margin-left: 0;
+    }
+    .telnet-header .telnet-port-badge {
+      margin-left: 0;
+    }
+    .telnet-find-slot {
+      flex: 1 1 auto;
+      min-width: 0;
       display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 12px 16px;
-      background: var(--bg-tertiary);
-      border-bottom: 1px solid var(--border);
-      gap: 16px;
+      justify-content: center;
+    }
+    .telnet-header .telnet-find-bar {
+      flex: 0 1 520px;
     }
     
     /* Find bar - VS Code style */
@@ -5788,6 +5804,37 @@
       max-width: 920px;
       width: 92vw;
       min-height: 0;
+      position: relative;
+    }
+    /* Bottom-right resize grip (added to singleton console/Network Inspector modals). The modal is
+       flex-centered, so growing width/height expands it symmetrically about its center. */
+    .modal-resize-handle {
+      position: absolute;
+      right: 3px;
+      bottom: 3px;
+      width: 18px;
+      height: 18px;
+      z-index: 3;
+      cursor: nwse-resize;
+      opacity: 0.45;
+      border-bottom-right-radius: 14px;
+      background-image: repeating-linear-gradient(
+        135deg,
+        transparent 0 3px,
+        var(--text-muted) 3px 4px
+      );
+      transition: opacity 0.12s;
+    }
+    .modal-resize-handle:hover { opacity: 0.85; }
+    /* When the user has dragged to resize, the explicit inline width/height must win over the
+       default caps, and the scroll body must be free to grow with the box. */
+    .modal.is-resized {
+      max-width: none;
+      max-height: none;
+    }
+    .telnet-structured-view-modal.is-resized .telnet-structured-view-body,
+    .telnet-url-view-modal.is-resized .telnet-url-view-body {
+      max-height: none;
     }
 
     .telnet-structured-view-modal-actions {
@@ -5971,34 +6018,35 @@
       color: #fcd34d;
     }
 
-    /* XML */
+    /* XML — vibrant palette (Material-ish). Element text content is the actual data, so it gets the
+       brightest, highest-contrast color; tags/attrs/brackets are clearly distinct but secondary. */
     .telnet-hl-xml-punct {
-      color: #94a3b8;
+      color: #89ddff;
     }
 
     .telnet-hl-xml-tagname {
-      color: #c4b5fd;
+      color: #c792ea;
       font-weight: 600;
     }
 
     .telnet-hl-xml-attr-name {
-      color: #7dd3fc;
+      color: #ffcb6b;
     }
 
     .telnet-hl-xml-attr-value {
-      color: #86efac;
+      color: #c3e88d;
     }
 
     .telnet-hl-xml-text {
-      color: var(--text-secondary);
+      color: #f1f5f9;
     }
 
     .telnet-hl-xml-decl {
-      color: #f9a8d4;
+      color: #f78c6c;
     }
 
     .telnet-hl-xml-comment {
-      color: #64748b;
+      color: #6b7a8d;
       font-style: italic;
     }
 
@@ -6018,6 +6066,7 @@
     .telnet-url-view-modal {
       max-width: 920px;
       width: 92vw;
+      position: relative;
     }
 
     .telnet-url-view-modal-actions {
@@ -7353,9 +7402,10 @@
     .ni-btn-group .ni-icon-btn:active:not(:disabled) {
       background: rgba(139, 92, 246, 0.22);
     }
-    /* Thin divider between segments so the three controls read as one connected panel. */
+    /* Flush segments separated only by a 1px hairline, so the three controls read as one connected
+       panel with no floating gaps — without the gap, an unfilled button (e.g. the gear) no longer
+       looks detached from the filled capture/layout buttons beside it. */
     .ni-btn-group .ni-icon-btn + .ni-icon-btn {
-      margin-left: 5px;
       border-left: 1px solid var(--border);
     }
     .ni-btn-group .ni-capture-toggle.is-capturing {
@@ -7665,8 +7715,40 @@
       display: flex;
       align-items: stretch;
       gap: 0;
-      width: 100%;
+      flex: 1 1 auto;
+      min-width: 0;
     }
+    /* Expand/Collapse-all-groups control: sits at the LEFT of the header (aligned with the per-host
+       group triangles in the list below) and is only present in "Group by Host" view. Animates its
+       width + opacity in/out so it slides in next to "Group by Host" instead of popping. */
+    .ni-group-toggle {
+      flex: 0 0 0;
+      width: 0;
+      min-width: 0;
+      padding: 0;
+      overflow: hidden;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border: none;
+      border-right: 1px solid transparent;
+      background: transparent;
+      cursor: pointer;
+      opacity: 0;
+      transition: width 0.2s ease, opacity 0.2s ease, border-color 0.2s ease, background 0.12s ease;
+    }
+    .ni-group-toggle.is-visible {
+      flex: 0 0 34px;
+      width: 34px;
+      opacity: 1;
+      border-right-color: var(--border);
+    }
+    .ni-group-toggle .ni-struct-chevron {
+      width: auto;
+      pointer-events: none;
+      transition: color 0.12s ease;
+    }
+    .ni-group-toggle:hover .ni-struct-chevron { color: var(--text-primary); }
     /* When only one option is shown (e.g. Proxied hidden in MITM-only mode), keep that control at
      * its usual ~half width but center it instead of letting it stretch full-width (which spread
      * the label and control far apart). */
@@ -7676,13 +7758,15 @@
     .ni-sidebar-options.ni-options-single .ni-sidebar-option {
       flex: 0 1 50%;
     }
+    /* Each option starts at its content width (so the long "Group by Host" label isn't truncated)
+       and then grows to share the remaining width equally — the two cells fill the whole header
+       with their label+control centered, instead of a fixed 50/50 split that squished one side. */
     .ni-sidebar-option {
-      flex: 1 1 50%;
-      width: 50%;
+      flex: 1 1 auto;
       min-width: 0;
       display: flex;
       align-items: center;
-      justify-content: space-between;
+      justify-content: center;
       gap: 8px;
       padding: 0 12px;
       border-right: 1px solid var(--border);
@@ -7824,16 +7908,6 @@
       outline: 2px solid var(--accent-purple);
       outline-offset: 2px;
     }
-    /* Error FAB uses a warning hue so it reads as "there are failures". */
-    .ni-fab-error {
-      border-color: rgba(248, 113, 113, 0.7);
-      color: #fecaca;
-    }
-    .ni-fab-error:hover {
-      background: #dc2626;
-      border-color: #fca5a5;
-      color: #ffffff;
-    }
     .ni-fab .icon { pointer-events: none; }
     .ni-sidebar-list {
       flex: 1;
@@ -7851,6 +7925,33 @@
       scroll-behavior: auto;
       -webkit-overflow-scrolling: touch;
       scrollbar-gutter: stable;
+    }
+    /* The grouped (Structure) view doesn't stream row-by-row like the sequence
+       list, so it doesn't need a reserved gutter to avoid scroll jitter. Letting
+       the gutter collapse removes the dark strip on the right of full-bleed group
+       headers (most visible behind a selected/collapsed group's highlight). */
+    .ni-structure-wrap { scrollbar-gutter: auto; }
+    /* Keyboard-focus ring COLOR/THICKNESS policy for scrollable content surfaces.
+       These surfaces are focusable (tabindex) so the keyboard can scroll them. With no explicit
+       outline they inherit Chromium's default focus ring, which paints in the OS accent color —
+       on some systems that reads as a thick, two-tone ring. Draw one thin, single-color accent
+       ring instead, inset so it sits cleanly inside the surface. (Corner-curve handling for panes
+       flush with the window edge is separate — see the "Window-corner focus-ring policy" block.)
+       Keep this list in sync with any new focusable scroll/content pane. */
+    .ni-sidebar-scroll:focus-visible,
+    .ni-sequence-wrap:focus-visible,
+    .ni-structure-wrap:focus-visible,
+    .ni-contents-scroll:focus-visible,
+    [data-ni-request-body]:focus-visible,
+    [data-ni-response-body]:focus-visible,
+    .ni-code-block:focus-visible,
+    .telnet-structured-view-pre:focus-visible,
+    .telnet-url-view-full-url:focus-visible,
+    .rale-response-output:focus-visible,
+    .executor-results:focus-visible,
+    .output-area:focus-visible {
+      outline: 2px solid var(--accent-purple);
+      outline-offset: -2px;
     }
     .ni-sidebar-row {
       display: grid;
@@ -8117,6 +8218,19 @@
       color: var(--text-primary);
     }
     .ni-struct-host-row:hover { background: rgba(255,255,255,0.04); }
+    /* Collapsed groups get a faint "closed folder" fill + a touch more weight so
+       the folded state is obvious at a glance. */
+    .ni-struct-host-collapsed > .ni-struct-host-row { background: rgba(255,255,255,0.03); }
+    .ni-struct-host-collapsed > .ni-struct-host-row:hover { background: rgba(255,255,255,0.06); }
+    .ni-struct-host-collapsed > .ni-struct-host-row .ni-struct-host-name { font-weight: 700; }
+    /* Selected request inside a collapsed group → highlight the header the same
+       way the leaf row would be highlighted. Specificity is bumped past the
+       collapsed-fill rule above so the selection tint always wins. */
+    .ni-struct-host-row-selected,
+    .ni-struct-host-collapsed > .ni-struct-host-row.ni-struct-host-row-selected,
+    .ni-struct-host-collapsed > .ni-struct-host-row.ni-struct-host-row-selected:hover {
+      background: rgba(139,92,246,0.22);
+    }
     .ni-struct-chevron { width: 14px; color: var(--text-muted); font-size: 10px; }
     .ni-struct-host-name { flex: 1; font-weight: 600; }
     .ni-struct-host-count {
@@ -8388,7 +8502,60 @@
       border-bottom: 1px solid var(--border);
       background: var(--bg-tertiary);
       padding: 6px 8px 6px 12px;
+      /* Positioning context for the centered "Body Truncated" badge. */
+      position: relative;
     }
+    /* Body-status indicators, centered in the pane header (shown only when relevant). The container
+       is overlaid + absolutely centered so badges sit at the header's true midpoint between the left
+       tab group and the right format controls. Each badge is width-limited with an ellipsis; the
+       full message lives in its tooltip. pointer-events are off on the (transparent) container so it
+       never blocks the controls it spans, and back on per-badge for tooltips. */
+    .ni-pane-badges {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      max-width: 56%;
+      pointer-events: none;
+    }
+    .ni-pane-badge {
+      pointer-events: auto;
+      display: inline-flex;
+      align-items: center;
+      max-width: 240px;
+      padding: 2px 9px;
+      border-radius: 999px;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      cursor: default;
+    }
+    .ni-pane-badge[hidden] { display: none; }
+    .ni-pane-badge--truncated {
+      color: #fbbf24;
+      background: rgba(250, 204, 21, 0.12);
+      border: 1px solid rgba(250, 204, 21, 0.4);
+    }
+    /* Small amber "i" next to the Format selector, shown only when a JSON/XML body was too large to
+       render as a collapsible tree and is shown as raw text instead. Click opens an explainer modal. */
+    .ni-format-info-btn {
+      color: #fbbf24;
+      background: rgba(250, 204, 21, 0.12);
+      border-color: rgba(250, 204, 21, 0.4);
+    }
+    .ni-format-info-btn:hover {
+      color: #fde68a;
+      border-color: rgba(250, 204, 21, 0.7);
+      background: rgba(250, 204, 21, 0.18);
+    }
+    .ni-format-info-btn[hidden] { display: none !important; }
     .ni-charles-workspace[data-detail-layout="columns"] [data-ni-request-pane] > .ni-contents-pane-head {
       border-right: 1px solid var(--border);
     }
@@ -8689,6 +8856,25 @@
       display: block;
       content-visibility: auto;
     }
+    /* JSON/XML fragment detected embedded inside an otherwise-raw text body. Clickable affordance
+       (opens the shared formatted viewer); the underlying monospace text is preserved so the body
+       still reads/searches normally. */
+    .ni-embedded-structured {
+      cursor: pointer;
+      border-radius: 3px;
+      /* Subtle tint only — no per-line border box-shadow (which draws a jagged outline around every
+         wrapped line of a large fragment) and no full underline (too busy over a multi-KB block).
+         Hover/focus reveal the affordance more strongly. */
+      background: rgba(139, 92, 246, 0.08);
+      transition: background 0.12s;
+    }
+    .ni-embedded-structured:hover {
+      background: rgba(139, 92, 246, 0.18);
+    }
+    .ni-embedded-structured:focus-visible {
+      outline: 2px solid rgba(167, 139, 250, 0.7);
+      outline-offset: 1px;
+    }
     .ni-media-wrap {
       display: flex;
       flex-direction: column;
@@ -8722,11 +8908,143 @@
       color: var(--text-muted);
       font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
     }
-    .ni-json-key { color: #7dd3fc; }
-    .ni-json-string { color: #fbbf24; }
-    .ni-json-num { color: #a78bfa; }
-    .ni-json-lit { color: #f472b6; }
-    .ni-code-xml { color: #fdba74; }
+    /* ── Shared simple find bar (ECP Results, App Connector, Network Inspector) ──────
+       Match highlights are painted via the CSS Custom Highlight API; their `::highlight()`
+       rules are injected per-surface by modules/ui/find-bar.ts, so only structural styles
+       live here. */
+    .find-bar {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 8px;
+      flex-shrink: 0;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg-tertiary);
+    }
+    .find-bar[hidden] { display: none !important; }
+    .find-bar-icon { color: var(--text-muted); flex: 0 0 auto; }
+    /* One bordered box that holds the input + (flush-right) count and nav/clear buttons. */
+    .find-bar-field {
+      flex: 1 1 auto;
+      min-width: 0;
+      display: flex;
+      align-items: center;
+      gap: 2px;
+      padding-right: 4px;
+      background: var(--bg-deep);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+    }
+    .find-bar-field:focus-within { border-color: rgba(139, 92, 246, 0.55); }
+    .find-bar-input {
+      flex: 1 1 auto;
+      min-width: 0;
+      background: transparent;
+      border: none;
+      outline: none;
+      color: var(--text-primary);
+      font-size: 12px;
+      padding: 4px 8px;
+    }
+    .find-bar-count {
+      flex: 0 0 auto;
+      font-size: 11px;
+      color: var(--text-muted);
+      white-space: nowrap;
+      padding: 0 2px 0 4px;
+    }
+    .find-bar-count:empty { display: none; }
+    .find-bar.find-bar-empty .find-bar-count { color: #f87171; }
+    .find-bar.find-bar-empty .find-bar-field { border-color: rgba(248, 113, 113, 0.5); }
+    .find-bar-btn {
+      width: 22px;
+      height: 22px;
+      flex: 0 0 auto;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+      border: none;
+      border-radius: 4px;
+      background: transparent;
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: color 0.12s, background 0.12s;
+    }
+    .find-bar-btn:hover {
+      color: var(--text-primary);
+      background: rgba(255, 255, 255, 0.07);
+    }
+    /* Inline variant: blends into a card header (no separator row / panel background). The bar is
+       overlaid on the header and centered across its full width (see the absolute rule below). */
+    .find-bar.find-bar-header {
+      border-bottom: none;
+      background: transparent;
+      padding: 0;
+      min-width: 0;
+      justify-content: center;
+    }
+    .find-bar.find-bar-header .find-bar-field {
+      max-width: 460px;
+    }
+    .find-bar.find-bar-header .find-bar-input {
+      height: 28px;
+    }
+    /* Positioning context so the overlaid find bar can center against the header. */
+    .inspector-bottom-row .card-header {
+      position: relative;
+    }
+    /* Both consuming headers keep the title + action group pinned left, so the find bar is overlaid
+       and centered across the FULL header width (not just the residual band after the actions) — this
+       keeps the search box at the card's true horizontal center. `pointer-events` is dropped on the
+       transparent bar so it never blocks the underlying left-pinned buttons, and restored on the field. */
+    .card-header.query-results-card-header .find-bar.find-bar-header,
+    .inspector-bottom-row .card-header .find-bar.find-bar-header {
+      position: absolute;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 100%;
+      max-width: 460px;
+      padding-left: 18px;
+      padding-right: 18px;
+      pointer-events: none;
+    }
+    .card-header.query-results-card-header .find-bar.find-bar-header .find-bar-field,
+    .inspector-bottom-row .card-header .find-bar.find-bar-header .find-bar-field {
+      pointer-events: auto;
+    }
+    /* Header action group pinned to the left (next to the title) instead of the default right. */
+    .card-header-actions.is-left {
+      margin-left: 0;
+    }
+    /* Icon-only header action button (Copy / Save / Clear). */
+    .card-header-actions .btn.btn-icon {
+      padding: 5px 8px;
+      line-height: 1;
+    }
+    .card-header-actions .btn.btn-icon .icon {
+      margin: 0;
+    }
+    /* Collapsible JSON/XML response tree (ECP Results, App Connector Response). The fold + token
+       colors come from the shared `.telnet-fold-*` / `.telnet-hl-*` rules. */
+    .structured-body {
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 12px;
+      line-height: 1.5;
+      color: var(--text-secondary);
+    }
+    /* Network Inspector word-wrap toggle: the structured tree lives in a `.structured-body` nested
+       inside the `.ni-code-block` pre, so honor nowrap on it too. */
+    .ni-body-nowrap .structured-body {
+      white-space: pre;
+      word-break: normal;
+    }
+    .rale-response-timestamp {
+      margin-bottom: 8px;
+      font-size: 10px;
+    }
 
     /* Action Scripts – single card, tabs in header */
     .action-scripts-container { display: flex; flex-direction: column; flex: 1; min-height: 0; overflow: hidden; padding: 0; }
@@ -9840,6 +10158,7 @@
       display: flex;
       align-items: center;
       gap: 8px;
+      overflow: visible;
     }
     
     .card-header-actions .btn {
@@ -10158,14 +10477,6 @@
     .query-section-label { font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--text-muted); margin: 20px 0 10px; }
     .query-section-label:first-child { margin-top: 0; }
     
-    .query-search-row { display: flex; gap: 10px; align-items: center; margin-bottom: 12px; }
-    .query-search-input { flex: 1; padding: 10px 14px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-primary); color: var(--text-primary); font-size: 13px; font-family: inherit; }
-    .query-search-input:focus { outline: none; border-color: var(--accent-purple); }
-    
-    .search-match-count { font-size: 12px; color: var(--text-muted); min-width: 70px; text-align: center; }
-    .search-match-count.has-matches { color: var(--accent-green); }
-    .search-match-count.no-matches { color: var(--accent-red); }
-    
     .output-area {
       background: #0d1117;
       border-radius: 8px;
@@ -10238,18 +10549,6 @@
       display: none !important;
     }
     
-    .output-area .xml-tag { color: #c792ea; font-weight: 500; }
-    .output-area .xml-bracket { color: #89ddff; }
-    .output-area .xml-attr { color: #ffcb6b; }
-    .output-area .xml-value { color: #c3e88d; }
-    .output-area .xml-content { color: #f1f5f9; }
-    /* Search highlights overlay the existing xml-* syntax colors: only the
-       background changes so the underlying token color stays readable. The
-       active match adds a stronger background + outline (still no color
-       override) so the existing colors stay intact. */
-    .output-area .search-highlight { background: rgba(255, 203, 107, 0.35); color: inherit; border-radius: 2px; }
-    .output-area .search-highlight.current { background: rgba(199, 146, 234, 0.55); color: inherit; outline: 1px solid var(--accent-purple); border-radius: 2px; }
-    
     .custom-query-row { display: flex; gap: 10px; margin-top: 12px; }
     .custom-query-input { flex: 1; padding: 10px 14px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-primary); color: var(--text-primary); font-size: 13px; font-family: 'JetBrains Mono', monospace; }
     
@@ -10301,6 +10600,358 @@
     
     /* Deep Link Form */
     .deeplink-form { display: grid; gap: 14px; }
+    .deeplink-media-type-field {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      min-width: 0;
+    }
+    .deeplink-media-type-field .deeplink-media-type {
+      flex: 1;
+      min-width: 0;
+    }
+    .deeplink-media-type-manage-btn {
+      flex-shrink: 0;
+      padding: 4px 6px !important;
+    }
+    .deeplink-saved-field {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      min-width: 0;
+    }
+    .deeplink-saved-field .deeplink-saved-select {
+      flex: 1;
+      min-width: 0;
+    }
+    .deeplink-saved-delete-btn {
+      flex-shrink: 0;
+      padding: 4px 6px !important;
+    }
+    .deeplink-saved-delete-btn:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+    .deeplink-delete-media-type-modal .deeplink-delete-media-type-modal-box {
+      max-width: 460px;
+    }
+    .deeplink-delete-media-type-lead {
+      margin: 0 0 10px;
+      font-size: 13px;
+      line-height: 1.5;
+      color: var(--text-primary);
+    }
+    .deeplink-delete-media-type-preset-list {
+      margin: 0 0 12px;
+      padding: 10px 12px 10px 28px;
+      border-radius: 8px;
+      background: var(--bg-tertiary);
+      color: var(--text-secondary);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+    .deeplink-delete-media-type-preset-list li + li {
+      margin-top: 4px;
+    }
+    .deeplink-delete-media-type-hint {
+      margin: 0 0 16px;
+      font-size: 12px;
+      line-height: 1.5;
+      color: var(--text-secondary);
+    }
+    .deeplink-delete-media-type-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+    }
+    .deeplink-media-types-modal .deeplink-media-types-modal-box {
+      max-width: 520px;
+    }
+    .deeplink-media-types-modal .modal-body {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      overflow-y: auto;
+    }
+    .deeplink-media-types-hint {
+      margin: 0;
+      font-size: 12px;
+      line-height: 1.5;
+      color: var(--text-secondary);
+    }
+    .deeplink-media-types-section-title {
+      margin: 0 0 8px;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .deeplink-media-types-builtin-list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .deeplink-media-types-builtin-list li {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 8px 10px;
+      border-radius: 8px;
+      background: var(--bg-tertiary);
+      font-size: 12px;
+    }
+    .deeplink-media-types-custom-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      min-height: 24px;
+    }
+    .deeplink-media-types-empty {
+      margin: 0;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+    .deeplink-media-type-entry {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 8px 10px;
+      border-radius: 8px;
+      background: var(--bg-tertiary);
+    }
+    .deeplink-media-type-entry--editing {
+      align-items: flex-start;
+      flex-direction: column;
+    }
+    .deeplink-media-type-entry-main {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      min-width: 0;
+    }
+    .deeplink-media-type-entry-label {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-primary);
+    }
+    .deeplink-media-type-entry-value {
+      font-size: 11px;
+      color: var(--text-muted);
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .deeplink-media-type-entry-actions {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-shrink: 0;
+    }
+    .deeplink-media-type-edit-fields {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      width: 100%;
+    }
+    .deeplink-media-type-edit-field,
+    .deeplink-media-type-add-field {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      min-width: 0;
+    }
+    .deeplink-media-type-edit-label,
+    .deeplink-media-type-add-label {
+      font-size: 11px;
+      color: var(--text-secondary);
+    }
+    .deeplink-media-type-edit-field input,
+    .deeplink-media-type-add-field input {
+      padding: 8px 10px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      font-size: 12px;
+      font-family: inherit;
+    }
+    .deeplink-media-types-add-form {
+      display: grid;
+      grid-template-columns: 1fr 1fr auto;
+      gap: 8px;
+      align-items: end;
+    }
+    .deeplink-media-types-add-form .btn {
+      height: 34px;
+      white-space: nowrap;
+    }
+    .deeplink-media-types-error {
+      margin: 8px 0 0;
+      font-size: 12px;
+      color: var(--accent-red);
+    }
+    .deeplink-launch-split {
+      position: relative;
+      display: inline-flex;
+      vertical-align: middle;
+    }
+    .deeplink-launch-split-buttons {
+      display: inline-flex;
+      align-items: stretch;
+      border-radius: 6px;
+      overflow: hidden;
+      background: var(--accent-purple);
+      transition: background 0.15s ease;
+    }
+    .deeplink-launch-split:hover .deeplink-launch-split-buttons:not(:has(.deeplink-launch-main:disabled)),
+    .deeplink-launch-split:focus-within .deeplink-launch-split-buttons:not(:has(.deeplink-launch-main:disabled)),
+    .deeplink-launch-split:has(.deeplink-launch-caret[aria-expanded="true"]) .deeplink-launch-split-buttons {
+      background: #7c3aed;
+    }
+    .deeplink-launch-split .deeplink-launch-main,
+    .deeplink-launch-split .deeplink-launch-caret {
+      margin: 0;
+      border: none;
+      border-radius: 0;
+      background: transparent;
+      color: white;
+      font-size: 11px;
+      line-height: 1.2;
+    }
+    .deeplink-launch-split .deeplink-launch-main {
+      padding: 4px 12px;
+      border-right: 1px solid rgba(255, 255, 255, 0.22);
+    }
+    .deeplink-launch-split .deeplink-launch-caret {
+      padding: 4px 7px;
+      min-width: 28px;
+      justify-content: center;
+    }
+    .deeplink-launch-split .btn-primary:hover:not(:disabled),
+    .deeplink-launch-split .btn-primary:focus-visible:not(:disabled) {
+      background: transparent;
+    }
+    .deeplink-launch-split .deeplink-launch-caret:focus {
+      outline: none;
+    }
+    .deeplink-launch-split .deeplink-launch-caret:focus-visible {
+      outline: 2px solid rgba(255, 255, 255, 0.65);
+      outline-offset: -2px;
+      z-index: 1;
+    }
+    .apps-tab-layout-col-left .card:has(.deeplink-launch-split) {
+      overflow: visible;
+    }
+    .apps-tab-layout-col-left .card:has(.deeplink-launch-split) .card-header {
+      overflow: visible;
+      position: relative;
+      z-index: 2;
+    }
+    .deeplink-launch-dropdown {
+      position: absolute;
+      top: calc(100% + 4px);
+      right: 0;
+      left: auto;
+      z-index: 200;
+      width: max-content;
+      min-width: 100%;
+      padding: 4px;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      background: var(--accent-purple);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: 6px;
+      box-shadow: 0 10px 28px rgba(0, 0, 0, 0.42);
+      box-sizing: border-box;
+    }
+    .deeplink-launch-dropdown[hidden] {
+      display: none !important;
+    }
+    .deeplink-launch-dropdown-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+      margin: 0;
+      padding: 4px 12px;
+      border: none;
+      border-radius: 4px;
+      background: transparent;
+      color: white;
+      font-family: inherit;
+      font-size: 11px;
+      font-weight: 500;
+      line-height: 1.2;
+      text-align: left;
+      white-space: nowrap;
+      cursor: pointer;
+      transition: background 0.15s ease;
+      box-sizing: border-box;
+    }
+    .deeplink-launch-dropdown-item:hover,
+    .deeplink-launch-dropdown-item:focus-visible {
+      background: rgba(255, 255, 255, 0.14);
+      color: white;
+      outline: none;
+    }
+    .deeplink-launch-dropdown-item .icon {
+      color: rgba(255, 255, 255, 0.88);
+      pointer-events: none;
+    }
+    .deeplink-launch-dropdown-item:hover .icon,
+    .deeplink-launch-dropdown-item:focus-visible .icon {
+      color: white;
+    }
+    .deeplink-saved-row[hidden] {
+      display: none !important;
+    }
+    .deeplink-save-preset-modal .deeplink-save-preset-modal-box {
+      max-width: 420px;
+    }
+    .deeplink-save-preset-hint {
+      margin: 0 0 12px;
+      font-size: 12px;
+      line-height: 1.5;
+      color: var(--text-secondary);
+    }
+    .deeplink-save-preset-field {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .deeplink-save-preset-label {
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+    .deeplink-save-preset-field input {
+      padding: 10px 12px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      font-size: 13px;
+      font-family: inherit;
+    }
+    .deeplink-save-preset-field input:focus {
+      outline: none;
+      border-color: var(--accent-purple);
+    }
+    .deeplink-save-preset-error {
+      margin: 10px 0 0;
+      font-size: 12px;
+      color: var(--accent-red);
+    }
+    .deeplink-save-preset-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      margin-top: 16px;
+    }
     .form-row { display: grid; grid-template-columns: 110px 1fr; gap: 12px; align-items: center; }
     .form-row label { color: var(--text-secondary); font-size: 13px; }
     .form-row input, .form-row select { padding: 10px 14px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-primary); color: var(--text-primary); font-size: 13px; font-family: inherit; }
@@ -12917,10 +13568,33 @@
                 <span class="card-icon"><span class="icon icon-sm"><svg><use href="#icon-link"/></svg></span></span>
                 <span class="card-title">Deep Link</span>
                 <div class="card-header-actions">
-                  <button class="btn btn-primary deeplink-btn" style="padding: 4px 12px; font-size: 11px;"><span class="icon icon-xs"><svg><use href="#icon-link"/></svg></span> Launch</button>
+                  <div class="deeplink-launch-split">
+                    <div class="deeplink-launch-split-buttons">
+                      <button type="button" class="btn btn-primary deeplink-launch-main"><span class="icon icon-xs"><svg><use href="#icon-link"/></svg></span> Launch</button>
+                      <button type="button" class="btn btn-primary deeplink-launch-caret" data-deeplink-launch-menu-toggle title="More launch options" aria-haspopup="menu" aria-expanded="false" aria-label="More launch options">
+                        <span class="icon icon-xs"><svg><use href="#icon-chevron-down"/></svg></span>
+                      </button>
+                    </div>
+                    <div class="deeplink-launch-dropdown" role="menu" hidden>
+                      <button type="button" class="deeplink-launch-dropdown-item" data-deeplink-save-launch role="menuitem">
+                        <span class="icon icon-xs"><svg><use href="#icon-save"/></svg></span> Save and Launch
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </div>
               <div class="card-body" style="display: flex; flex-direction: column; gap: 8px; padding: 10px 12px 10px 12px;">
+                <div class="form-row deeplink-saved-row" style="grid-template-columns: 80px 1fr; margin: 0; gap: 8px;" hidden>
+                  <label style="font-size: 11px;">Saved</label>
+                  <div class="deeplink-saved-field">
+                    <select class="deeplink-saved-select" style="padding: 6px 10px; font-size: 12px;">
+                      <option value="">-- Select saved deep link --</option>
+                    </select>
+                    <button type="button" class="btn btn-danger btn-icon deeplink-saved-delete-btn" title="Delete saved deep link" aria-label="Delete saved deep link" disabled>
+                      <span class="icon icon-xs"><svg><use href="#icon-trash"/></svg></span>
+                    </button>
+                  </div>
+                </div>
                 <div class="form-row" style="grid-template-columns: 80px 1fr; margin: 0; gap: 8px;">
                   <label style="font-size: 11px;">App ID</label>
                   <input type="text" class="deeplink-app-id" placeholder="e.g., 31440" style="padding: 6px 10px; font-size: 12px;">
@@ -12929,15 +13603,20 @@
                   <label style="font-size: 11px;">Content ID</label>
                   <input type="text" class="deeplink-content-id" placeholder="Content identifier" style="padding: 6px 10px; font-size: 12px;">
                 </div>
-                <div class="form-row" style="grid-template-columns: 80px 1fr; margin: 0; gap: 8px;">
+                <div class="form-row deeplink-media-type-row" style="grid-template-columns: 80px 1fr; margin: 0; gap: 8px;">
                   <label style="font-size: 11px;">Media Type</label>
-                  <select class="deeplink-media-type" style="padding: 6px 10px; font-size: 12px;">
-                    <option value="">-- Select --</option>
-                    <option value="movie">Movie</option>
-                    <option value="series">Series</option>
-                    <option value="episode">Episode</option>
-                    <option value="live">Live</option>
-                  </select>
+                  <div class="deeplink-media-type-field">
+                    <select class="deeplink-media-type" style="padding: 6px 10px; font-size: 12px;">
+                      <option value="">-- Select --</option>
+                      <option value="movie">Movie</option>
+                      <option value="series">Series</option>
+                      <option value="episode">Episode</option>
+                      <option value="live">Live</option>
+                    </select>
+                    <button type="button" class="btn btn-secondary btn-icon deeplink-media-type-manage-btn" title="Manage media types" aria-label="Manage media types">
+                      <span class="icon icon-xs"><svg><use href="#icon-plus"/></svg></span>
+                    </button>
+                  </div>
                 </div>
                 <div class="deeplink-status" style="min-height: 16px; font-size: 10px; line-height: 1.2;"></div>
               </div>
@@ -13250,20 +13929,18 @@
               <div class="card-header query-results-card-header">
                 <span class="card-icon"><span class="icon icon-sm"><svg><use href="#icon-terminal"/></svg></span></span>
                 <span class="card-title">Results</span>
-                <div class="query-search-row" style="display: none;">
-                  <input type="text" class="query-search-input" placeholder="Search...">
-                  <span class="search-match-count" style="display: none;"></span>
-                  <button class="btn btn-secondary search-prev-btn" style="display: none;"><span class="icon icon-xs"><svg><use href="#icon-chevron-up"/></svg></span></button>
-                  <button class="btn btn-secondary search-next-btn" style="display: none;"><span class="icon icon-xs"><svg><use href="#icon-chevron-down"/></svg></span></button>
+                <div class="card-header-actions is-left">
+                  <button class="btn btn-secondary btn-icon copy-query-btn" title="Copy" aria-label="Copy" style="display: none;"><span class="icon icon-xs"><svg><use href="#icon-copy"/></svg></span></button>
+                  <button class="btn btn-secondary btn-icon save-query-btn" title="Save" aria-label="Save" style="display: none;"><span class="icon icon-xs"><svg><use href="#icon-download"/></svg></span></button>
+                  <button class="btn btn-secondary btn-icon clear-query-btn" title="Clear" aria-label="Clear" style="display: none;"><span class="icon icon-xs"><svg><use href="#icon-clear-results"/></svg></span></button>
                 </div>
-                <button class="btn btn-secondary copy-query-btn" style="display: none;"><span class="icon icon-xs"><svg><use href="#icon-copy"/></svg></span> Copy</button>
               </div>
               <div class="card-body">
                 <div class="remove-plugin-section" style="display: none; gap: 8px; align-items: center; padding: 12px; background: var(--bg-tertiary); border-radius: 8px; margin-bottom: 12px;">
                   <input type="text" class="remove-plugin-input" placeholder="App ID (e.g., 987654_cf9a)" style="flex: 1; padding: 8px 12px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-primary); color: var(--text-primary); font-size: 12px; font-family: 'JetBrains Mono', monospace;">
                   <button class="btn btn-danger remove-plugin-btn" style="padding: 8px 16px; white-space: nowrap;"><span class="icon icon-xs"><svg><use href="#icon-trash"/></svg></span> Remove Plugin</button>
                 </div>
-                <div class="output-area query-output hidden"></div>
+                <div class="output-area query-output hidden" tabindex="0"></div>
               </div>
             </div>
           </div>
@@ -13274,16 +13951,60 @@
       <div class="inner-tab-content" data-inner-content="telnet">
         <div class="telnet-console-container">
           <div class="card telnet-card">
-            <div class="card-header">
+            <div class="card-header telnet-header">
               <span class="card-icon"><span class="icon icon-sm"><svg><use href="#icon-terminal"/></svg></span></span>
               <span class="card-title">Telnet Console</span>
-              <span class="telnet-port-badge">Port 8085</span>
+              <div class="telnet-actions">
+                <button class="btn btn-secondary btn-icon telnet-copy-btn" title="Copy all logs" aria-label="Copy all logs">
+                  <span class="icon icon-xs"><svg><use href="#icon-copy"/></svg></span>
+                </button>
+                <button class="btn btn-secondary btn-icon telnet-save-btn" title="Save logs to file" aria-label="Save logs to file">
+                  <span class="icon icon-xs"><svg><use href="#icon-download"/></svg></span>
+                </button>
+                <div class="telnet-split-control telnet-clear-split">
+                  <button type="button" class="btn btn-secondary btn-icon telnet-clear-btn telnet-split-main" title="Clear console" aria-label="Clear console">
+                    <span class="icon icon-xs"><svg><use href="#icon-clear-results"/></svg></span>
+                  </button>
+                  <button type="button" class="btn btn-secondary telnet-clear-menu-btn telnet-split-menu-btn" title="Clear options" aria-label="Clear options" aria-haspopup="menu" aria-expanded="false" hidden>
+                    <span class="icon icon-xs"><svg><use href="#icon-chevron-down"/></svg></span>
+                  </button>
+                  <div class="telnet-split-menu telnet-clear-menu" role="menu" hidden>
+                    <button type="button" class="telnet-split-menu-item telnet-clear-menu-item" role="menuitem" data-clear-action="relay-buffer">
+                      Clear (on Relay Server only)
+                    </button>
+                    <button type="button" class="telnet-split-menu-item telnet-clear-menu-item" role="menuitem" data-clear-action="local-and-relay">
+                      Clear (Local and on Relay Server)
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <div class="telnet-find-slot">
+                <div class="telnet-find-bar">
+                  <select class="telnet-mode-select">
+                    <option value="find">Find</option>
+                    <option value="filter">Filter</option>
+                  </select>
+                  <div class="telnet-find-input-wrapper">
+                    <input type="text" class="telnet-find-input" placeholder="Find...">
+                    <div class="telnet-find-options">
+                      <button class="telnet-option-btn" data-option="case" title="Match Case (Alt+C)">Aa</button>
+                      <button class="telnet-option-btn" data-option="word" title="Match Whole Word (Alt+W)">ab</button>
+                      <button class="telnet-option-btn" data-option="regex" title="Use Regular Expression (Alt+R)">.*</button>
+                    </div>
+                  </div>
+                  <span class="telnet-find-count"></span>
+                  <button class="btn btn-icon telnet-find-prev" title="Previous (Shift+Enter)"><span class="icon icon-xs"><svg><use href="#icon-chevron-up"/></svg></span></button>
+                  <button class="btn btn-icon telnet-find-next" title="Next (Enter)"><span class="icon icon-xs"><svg><use href="#icon-chevron-down"/></svg></span></button>
+                  <button class="btn btn-icon telnet-find-clear" title="Clear"><span class="icon icon-xs"><svg><use href="#icon-x"/></svg></span></button>
+                </div>
+              </div>
               <div class="card-header-actions">
                 <!-- Live line counter; hidden until first batch arrives so the
                      "Disconnected" state stays uncluttered. Updated by the
                      panel's `addLogLinesBatch` / `ensureTelnetScrollbackRoom`
                      paths so trim is reflected too. -->
                 <span class="telnet-line-count" aria-live="polite" hidden></span>
+                <span class="telnet-port-badge">Port 8085</span>
                 <span class="telnet-status disconnected">
                   <span class="telnet-status-dot"></span>
                   <span class="telnet-status-text">Disconnected</span>
@@ -13307,50 +14028,6 @@
               </div>
             </div>
             <div class="card-body telnet-body">
-              <div class="telnet-toolbar">
-                <div class="telnet-find-bar">
-                  <select class="telnet-mode-select">
-                    <option value="find">Find</option>
-                    <option value="filter">Filter</option>
-                  </select>
-                  <div class="telnet-find-input-wrapper">
-                    <input type="text" class="telnet-find-input" placeholder="Find...">
-                    <div class="telnet-find-options">
-                      <button class="telnet-option-btn" data-option="case" title="Match Case (Alt+C)">Aa</button>
-                      <button class="telnet-option-btn" data-option="word" title="Match Whole Word (Alt+W)">ab</button>
-                      <button class="telnet-option-btn" data-option="regex" title="Use Regular Expression (Alt+R)">.*</button>
-                    </div>
-                  </div>
-                  <span class="telnet-find-count"></span>
-                  <button class="btn btn-icon telnet-find-prev" title="Previous (Shift+Enter)"><span class="icon icon-xs"><svg><use href="#icon-chevron-up"/></svg></span></button>
-                  <button class="btn btn-icon telnet-find-next" title="Next (Enter)"><span class="icon icon-xs"><svg><use href="#icon-chevron-down"/></svg></span></button>
-                  <button class="btn btn-icon telnet-find-clear" title="Clear"><span class="icon icon-xs"><svg><use href="#icon-x"/></svg></span></button>
-                </div>
-                <div class="telnet-actions">
-                  <button class="btn btn-secondary telnet-copy-btn" title="Copy all logs">
-                    <span class="icon icon-xs"><svg><use href="#icon-copy"/></svg></span> Copy
-                  </button>
-                  <button class="btn btn-secondary telnet-save-btn" title="Save logs to file">
-                    <span class="icon icon-xs"><svg><use href="#icon-download"/></svg></span> Save
-                  </button>
-                  <div class="telnet-split-control telnet-clear-split">
-                    <button type="button" class="btn btn-secondary telnet-clear-btn telnet-split-main" title="Clear console">
-                      <span class="icon icon-sm"><svg><use href="#icon-trash"/></svg></span> Clear
-                    </button>
-                    <button type="button" class="btn btn-secondary telnet-clear-menu-btn telnet-split-menu-btn" title="Clear options" aria-label="Clear options" aria-haspopup="menu" aria-expanded="false" hidden>
-                      <span class="icon icon-xs"><svg><use href="#icon-chevron-down"/></svg></span>
-                    </button>
-                    <div class="telnet-split-menu telnet-clear-menu" role="menu" hidden>
-                      <button type="button" class="telnet-split-menu-item telnet-clear-menu-item" role="menuitem" data-clear-action="relay-buffer">
-                        Clear (on Relay Server only)
-                      </button>
-                      <button type="button" class="telnet-split-menu-item telnet-clear-menu-item" role="menuitem" data-clear-action="local-and-relay">
-                        Clear (Local and on Relay Server)
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
               <div class="telnet-output-container">
                 <div class="telnet-output">
                   <div class="telnet-placeholder">
@@ -13473,14 +14150,15 @@
               <div class="card-header">
                 <span class="card-icon"><span class="icon icon-sm"><svg><use href="#icon-terminal"/></svg></span></span>
                 <span class="card-title">Response</span>
-                <div class="card-header-actions">
+                <div class="card-header-actions is-left">
                   <button type="button" class="btn btn-secondary rale-update-node-btn" style="display: none;" title="After Get Node by ID: selectNode then setField, removeField, or add field via setField">Update Node</button>
-                  <button class="btn btn-secondary rale-copy-btn" style="display: none;"><span class="icon icon-xs"><svg><use href="#icon-copy"/></svg></span> Copy</button>
-                  <button class="btn btn-secondary rale-clear-btn"><span class="icon icon-sm"><svg><use href="#icon-trash"/></svg></span> Clear</button>
+                  <button class="btn btn-secondary btn-icon rale-copy-btn" title="Copy" aria-label="Copy" style="display: none;"><span class="icon icon-xs"><svg><use href="#icon-copy"/></svg></span></button>
+                  <button class="btn btn-secondary btn-icon rale-save-btn" title="Save" aria-label="Save" style="display: none;"><span class="icon icon-xs"><svg><use href="#icon-download"/></svg></span></button>
+                  <button class="btn btn-secondary btn-icon rale-clear-btn" title="Clear" aria-label="Clear" style="display: none;"><span class="icon icon-xs"><svg><use href="#icon-clear-results"/></svg></span></button>
                 </div>
               </div>
               <div class="card-body">
-                <div class="rale-response-output"></div>
+                <div class="rale-response-output" tabindex="0"></div>
               </div>
             </div>
           </div>
@@ -13661,7 +14339,7 @@
                         <button type="button" class="btn btn-icon btn-secondary executor-results-clear-btn" title="Clear results and free memory (Save will have nothing until next run)" disabled><svg width="14" height="14"><use href="#icon-trash"/></svg></button>
                       </div>
                     </div>
-                    <div class="executor-results"></div>
+                    <div class="executor-results" tabindex="0"></div>
                   </div>
                 </div>
                 </div>
@@ -13684,7 +14362,7 @@
                     <span class="icon icon-sm"><svg><use href="#icon-download"/></svg></span>
                   </button>
                   <button type="button" class="btn btn-secondary btn-sm ni-icon-btn" data-ni-clear title="Clear session list">
-                    <span class="icon icon-sm"><svg><use href="#icon-trash"/></svg></span>
+                    <span class="icon icon-sm"><svg><use href="#icon-clear-results"/></svg></span>
                   </button>
                 </div>
               </div>
@@ -13724,6 +14402,9 @@
               <div class="ni-charles-workspace" data-ni-workspace data-detail-layout="columns">
                 <aside class="ni-sidebar" data-ni-session-pane data-view="sequence">
                   <div class="ni-sidebar-head">
+                    <button type="button" class="ni-group-toggle" data-ni-toggle-all-groups tabindex="-1" aria-hidden="true" title="Collapse all groups" aria-label="Collapse all groups">
+                      <span class="ni-struct-chevron" aria-hidden="true">▼</span>
+                    </button>
                     <div class="ni-sidebar-options">
                       <label class="ni-sidebar-option" title="Group sessions by hostname">
                         <span class="ni-sidebar-option-label">Group by Host</span>
@@ -13739,9 +14420,6 @@
                     <div class="ni-session-empty">Waiting for traffic…</div>
                   </div>
                   <div class="ni-list-fabs" data-ni-list-fabs>
-                    <button type="button" class="ni-fab ni-fab-error" data-ni-jump-error hidden title="Jump to latest error (4xx / 5xx)" aria-label="Jump to latest error">
-                      <span class="icon icon-sm"><svg><use href="#icon-warning"/></svg></span>
-                    </button>
                     <button type="button" class="ni-fab ni-fab-bottom" data-ni-scroll-bottom hidden title="Scroll to latest sessions" aria-label="Scroll to latest sessions">
                       <span class="icon icon-sm"><svg><use href="#icon-chevron-down"/></svg></span>
                     </button>
@@ -13778,6 +14456,9 @@
                             </div>
                           </div>
                         </div>
+                        <span class="ni-pane-badges">
+                          <span class="ni-pane-badge ni-pane-badge--truncated" data-ni-req-truncated hidden title="The captured copy of this body exceeded the inspector's display cap, so what's shown here is incomplete. The full body was still delivered upstream. Use Copy for the captured portion.">Body Truncated</span>
+                        </span>
                         <div class="ni-pane-head-right" data-ni-req-format-wrap hidden>
                           <button type="button" class="ni-pane-tool-btn is-active" data-ni-wrap-toggle="request" title="Disable word wrap" aria-pressed="true" aria-label="Toggle word wrap">
                             <span class="icon icon-xs"><svg><use href="#icon-wrap-text"/></svg></span>
@@ -13790,6 +14471,9 @@
                               <option value="xml">XML</option>
                               <option value="raw">Raw</option>
                             </select>
+                            <button type="button" class="ni-pane-tool-btn ni-format-info-btn" data-ni-req-format-info hidden title="Why is this shown as raw text?" aria-label="Why is this shown as raw text?">
+                              <span class="icon icon-xs"><svg><use href="#icon-info"/></svg></span>
+                            </button>
                           </div>
                         </div>
                       </div>
@@ -13807,6 +14491,9 @@
                             <span class="icon icon-xs"><svg><use href="#icon-copy"/></svg></span>
                           </button>
                         </div>
+                        <span class="ni-pane-badges">
+                          <span class="ni-pane-badge ni-pane-badge--truncated" data-ni-res-truncated hidden title="The captured copy of this body exceeded the inspector's display cap, so what's shown here is incomplete. The full body was still delivered to the Roku. Use Copy for the captured portion.">Body Truncated</span>
+                        </span>
                         <div class="ni-pane-head-right" data-ni-res-format-wrap hidden>
                           <button type="button" class="ni-pane-tool-btn is-active" data-ni-wrap-toggle="response" title="Disable word wrap" aria-pressed="true" aria-label="Toggle word wrap">
                             <span class="icon icon-xs"><svg><use href="#icon-wrap-text"/></svg></span>
@@ -13819,6 +14506,9 @@
                               <option value="xml">XML</option>
                               <option value="raw">Raw</option>
                             </select>
+                            <button type="button" class="ni-pane-tool-btn ni-format-info-btn" data-ni-res-format-info hidden title="Why is this shown as raw text?" aria-label="Why is this shown as raw text?">
+                              <span class="icon icon-xs"><svg><use href="#icon-info"/></svg></span>
+                            </button>
                           </div>
                         </div>
                       </div>

@@ -374,6 +374,7 @@ body {
   max-width: 920px;
   width: 92vw;
   min-height: 0;
+  position: relative;
 }
 .telnet-structured-view-modal-actions {
   display: flex;
@@ -385,6 +386,36 @@ body {
   flex: 1 1 0%;
   min-height: 0;
   max-height: 70vh;
+}
+
+/* Bottom-right resize grip (added by the shared singleton-console-modal helper). The modal is
+   flex-centered, so growing width/height expands it symmetrically about its center. Mirrors the
+   main window's styles in index.html. */
+.modal-resize-handle {
+  position: absolute;
+  right: 3px;
+  bottom: 3px;
+  width: 18px;
+  height: 18px;
+  z-index: 3;
+  cursor: nwse-resize;
+  opacity: 0.45;
+  border-bottom-right-radius: 14px;
+  background-image: repeating-linear-gradient(
+    135deg,
+    transparent 0 3px,
+    var(--text-muted) 3px 4px
+  );
+  transition: opacity 0.12s;
+}
+.modal-resize-handle:hover { opacity: 0.85; }
+.modal.is-resized {
+  max-width: none;
+  max-height: none;
+}
+.telnet-structured-view-modal.is-resized .telnet-structured-view-body,
+.telnet-url-view-modal.is-resized .telnet-url-view-body {
+  max-height: none;
 }
 
 /*
@@ -554,6 +585,7 @@ body {
 .telnet-url-view-modal {
   max-width: 920px;
   width: 92vw;
+  position: relative;
 }
 .telnet-url-view-modal-actions {
   display: flex;

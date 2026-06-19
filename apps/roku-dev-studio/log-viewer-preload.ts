@@ -40,9 +40,5 @@ contextBridge.exposeInMainWorld('roku', {
     return () => ipcRenderer.removeListener(IPC.LogViewerStreamError, handler);
   },
   copyToClipboard: (text: string) => ipcRenderer.invoke(IPC.ClipboardWrite, text),
-  openExternal: (url: string) => ipcRenderer.invoke(IPC.ShellOpenExternal, url),
-  // Same IPC the live Console uses for its Save button. Reusing it means the
-  // Log Viewer gets the same Electron save dialog + write-to-file path; no
-  // separate main-process handler.
-  saveConsoleLogs: (content: string) => ipcRenderer.invoke(IPC.RokuSaveConsoleLogs, { content })
+  openExternal: (url: string) => ipcRenderer.invoke(IPC.ShellOpenExternal, url)
 });

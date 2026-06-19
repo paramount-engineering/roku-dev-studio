@@ -101,9 +101,16 @@ export function renderStructureTree(
     .map((g) => {
       const open = !collapsedHosts.has(g.host);
       const chevron = open ? '▼' : '▶';
+      // A collapsed group that contains the currently-open request carries the
+      // selection highlight on its header, so the active request is still
+      // discoverable without expanding the group.
+      const containsSelected =
+        selectedEventId != null && g.sessions.some((s) => s.eventId === selectedEventId);
+      const hostStateClass = open ? 'ni-struct-host-open' : 'ni-struct-host-collapsed';
+      const rowSel = !open && containsSelected ? ' ni-struct-host-row-selected' : '';
       const children = renderStructureLeaves(g.sessions, selectedEventId, 0);
-      return `<div class="ni-struct-host" data-struct-host="${escapeHtml(g.host)}">
-        <div class="ni-struct-host-row" data-struct-toggle="${escapeHtml(g.host)}">
+      return `<div class="ni-struct-host ${hostStateClass}" data-struct-host="${escapeHtml(g.host)}">
+        <div class="ni-struct-host-row${rowSel}" data-struct-toggle="${escapeHtml(g.host)}">
           <span class="ni-struct-chevron">${chevron}</span>
           <span class="ni-struct-host-name">${escapeHtml(g.host)}</span>
           <span class="ni-struct-host-count">${g.sessions.length}</span>

@@ -7,9 +7,11 @@ import type {
   CaptureViewRectPayload,
   ContextMenuItemLoose,
   ReadFileOrUrlPayload,
+  CopyImagePayload,
   ReadFilePayload,
-  SaveConsoleLogsPayload,
-  SaveResultsPdfPayload
+  SaveBinaryFilePayload,
+  SaveResultsPdfPayload,
+  SaveTextFilePayload
 } from '../../shared/ipc/payloads';
 
 // System handlers (menu, clipboard, file operations)
@@ -106,13 +108,7 @@ function setupSystemHandlers(
     });
   });
 
-  // Copy to clipboard
-  ipcMain.handle(IPC.CopyToClipboard, async (_event: IpcMainInvokeEvent, text: string) => {
-    clipboard.writeText(text);
-    return { success: true };
-  });
-
-  // Clipboard write (alias)
+  // Clipboard write — the single text-clipboard channel (renderer `copyToClipboard`).
   ipcMain.handle(IPC.ClipboardWrite, async (_event: IpcMainInvokeEvent, text: string) => {
     clipboard.writeText(text);
     return { success: true };
@@ -129,29 +125,67 @@ function setupSystemHandlers(
     }
   });
 
-  // Save console logs to file
-  ipcMain.handle(IPC.RokuSaveConsoleLogs, async (_event: IpcMainInvokeEvent, { content }: SaveConsoleLogsPayload) => {
-    try {
-      // Show save dialog
-      const result = await dialog.showSaveDialog(mainWindow!, {
-        title: 'Save Console Logs',
-        defaultPath: `roku-console-logs-${Date.now()}.txt`,
-        filters: [
-          { name: 'Text Files', extensions: ['txt', 'log'] },
-          { name: 'All Files', extensions: ['*'] }
-        ]
-      });
-      
-      if (result.canceled || !result.filePath) {
-        return { success: false, error: 'Save cancelled' };
+  // Save arbitrary text content (console logs, ECP / App Connector responses, …) to a file.
+  ipcMain.handle(
+    IPC.RokuSaveTextFile,
+    async (event: IpcMainInvokeEvent, { content, defaultName, dialogTitle }: SaveTextFilePayload) => {
+      try {
+        const win = mainWinFromEvent(event.sender);
+        if (!win) return { success: false, error: 'No window available' };
+        const result = await dialog.showSaveDialog(win, {
+          title: dialogTitle || 'Save',
+          defaultPath: defaultName || `response-${Date.now()}.txt`,
+          filters: [
+            { name: 'Text Files', extensions: ['txt', 'json', 'xml', 'log'] },
+            { name: 'All Files', extensions: ['*'] }
+          ]
+        });
+        if (result.canceled || !result.filePath) {
+          return { success: false, error: 'Save cancelled' };
+        }
+        fs.writeFileSync(result.filePath, content ?? '', 'utf-8');
+        return { success: true, filePath: result.filePath };
+      } catch (err) {
+        console.error('Error saving text file:', err);
+        return { success: false, error: errMsg(err) };
       }
-      
-      // Write the content to the file
-      fs.writeFileSync(result.filePath, content, 'utf-8');
-      
-      return { success: true, filePath: result.filePath };
+    }
+  );
+
+  // Save raw binary content (e.g. an image / video / arbitrary response body) to a file.
+  ipcMain.handle(
+    IPC.RokuSaveBinaryFile,
+    async (event: IpcMainInvokeEvent, { base64, defaultName, dialogTitle }: SaveBinaryFilePayload) => {
+      try {
+        const win = mainWinFromEvent(event.sender);
+        if (!win) return { success: false, error: 'No window available' };
+        const result = await dialog.showSaveDialog(win, {
+          title: dialogTitle || 'Save File',
+          defaultPath: defaultName || `download-${Date.now()}`,
+          filters: [{ name: 'All Files', extensions: ['*'] }]
+        });
+        if (result.canceled || !result.filePath) {
+          return { success: false, error: 'Save cancelled' };
+        }
+        fs.writeFileSync(result.filePath, Buffer.from(base64 ?? '', 'base64'));
+        return { success: true, filePath: result.filePath };
+      } catch (err) {
+        console.error('Error saving binary file:', err);
+        return { success: false, error: errMsg(err) };
+      }
+    }
+  );
+
+  // Copy an image (data URL) to the OS clipboard as an actual picture (not text).
+  ipcMain.handle(IPC.RokuCopyImage, async (_event: IpcMainInvokeEvent, { dataUrl }: CopyImagePayload) => {
+    try {
+      const { nativeImage } = require('electron') as typeof import('electron');
+      const img = nativeImage.createFromDataURL(String(dataUrl ?? ''));
+      if (img.isEmpty()) return { success: false, error: 'Unsupported or empty image' };
+      clipboard.writeImage(img);
+      return { success: true };
     } catch (err) {
-      console.error('Error saving console logs:', err);
+      console.error('Error copying image:', err);
       return { success: false, error: errMsg(err) };
     }
   });

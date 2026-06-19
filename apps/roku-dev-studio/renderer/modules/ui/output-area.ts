@@ -1,5 +1,6 @@
 // Reusable output area component with copy functionality
 import { setSafeHTML } from '../utils/dom.js';
+import { renderStructuredBody, type StructuredKind } from './structured-body.js';
 
 /**
  * OutputArea - Manages an output display area with copy functionality
@@ -7,18 +8,19 @@ import { setSafeHTML } from '../utils/dom.js';
 export class OutputArea {
   container: HTMLElement | null;
   copyButton: HTMLElement | null;
-  /** Optional toolbar row (e.g. query search) — shown/hidden with copyButton */
-  queryToolbarRow: HTMLElement | null;
+  /** Notified whenever content is displayed (`true`) or cleared (`false`). Used to show/hide the
+   *  attached find bar in lock-step with the output. */
+  onContentChange: ((hasContent: boolean) => void) | null;
   private _originalContent = '';
 
   constructor(
     container: HTMLElement | null,
     copyButton: HTMLElement | null = null,
-    queryToolbarRow: HTMLElement | null = null
+    onContentChange: ((hasContent: boolean) => void) | null = null
   ) {
     this.container = container;
     this.copyButton = copyButton;
-    this.queryToolbarRow = queryToolbarRow;
+    this.onContentChange = onContentChange;
   }
 
   get originalContent(): string {
@@ -46,9 +48,23 @@ export class OutputArea {
     if (this.copyButton) {
       this.copyButton.style.display = 'block';
     }
-    if (this.queryToolbarRow) {
-      this.queryToolbarRow.style.display = 'flex';
+    this.onContentChange?.(true);
+  }
+
+  /**
+   * Display a raw response string as a collapsible JSON/XML tree (falling back to plain text).
+   * Keeps `originalContent` as the raw source for Copy, and notifies `onContentChange`.
+   */
+  displayStructured(rawText: string): StructuredKind {
+    if (!this.container) return 'text';
+    this.originalContent = rawText;
+    this.show();
+    const kind = renderStructuredBody(this.container, rawText);
+    if (this.copyButton) {
+      this.copyButton.style.display = 'block';
     }
+    this.onContentChange?.(true);
+    return kind;
   }
 
   clear(): void {
@@ -60,9 +76,7 @@ export class OutputArea {
     if (this.copyButton) {
       this.copyButton.style.display = 'none';
     }
-    if (this.queryToolbarRow) {
-      this.queryToolbarRow.style.display = 'none';
-    }
+    this.onContentChange?.(false);
   }
 
   show(): void {
@@ -77,18 +91,5 @@ export class OutputArea {
     this.container.classList.add('hidden');
     this.container.classList.remove('visible');
     this.container.style.display = 'none';
-  }
-
-  getText(): string {
-    if (!this.container) return '';
-    return this.container.textContent || (this.container as HTMLElement & { innerText?: string }).innerText || '';
-  }
-
-  getOriginalContent(): string {
-    return this._originalContent;
-  }
-
-  setOriginalContent(content: string): void {
-    this._originalContent = content;
   }
 }

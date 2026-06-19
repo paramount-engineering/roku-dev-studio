@@ -16,6 +16,8 @@ import { detectPortHolder, isAddressInUseError } from './port-conflict';
 import {
   DEFAULT_MAX_RAW_PACKETS_PER_DEVICE,
   clampMaxRawPacketsPerDevice,
+  DEFAULT_MAX_BODY_RETAINED_BYTES,
+  clampMaxBodyRetainedBytes,
   resolveTrafficDecision
 } from './types';
 import { scanHotspotSubnet } from './device-matcher';
@@ -73,6 +75,8 @@ export type NetworkInspectorBootConfig = {
   mitmEnabled?: boolean;
   mitmPort?: number;
   maxRawPacketsPerDevice?: number;
+  /** Max bytes of each body retained for display (snapshot-only; never affects forwarded traffic). */
+  maxBodyRetainedBytes?: number;
   userDataPath?: string;
   /** Per-device block/throttle rules to hydrate on boot (persisted in settings). */
   trafficRules?: NetworkTrafficRules;
@@ -260,6 +264,7 @@ export class NetworkInspectorService {
   private readonly eventSeq = new Map<string, number>();
   private readonly maxEvents = 50_000;
   private maxRawPacketsPerDevice = DEFAULT_MAX_RAW_PACKETS_PER_DEVICE;
+  private maxBodyRetainedBytes = DEFAULT_MAX_BODY_RETAINED_BYTES;
   private lastError: string | undefined;
   // Set when a capture attempt fails with a blocking error (permission/missing tool) so the 4s
   // tick doesn't respawn the capture process in a loop. Cleared when readiness is restored
@@ -342,6 +347,19 @@ export class NetworkInspectorService {
 
   getMaxRawPacketsPerDevice(): number {
     return this.maxRawPacketsPerDevice;
+  }
+
+  /** Update the retained-body display cap (bytes). Snapshot-only — applies to transactions captured
+   *  from here on; never affects bytes forwarded to the device. */
+  setMaxBodyRetainedBytes(limit: number): void {
+    const next = clampMaxBodyRetainedBytes(limit);
+    if (next === this.maxBodyRetainedBytes) return;
+    this.maxBodyRetainedBytes = next;
+    this.broadcastStatus();
+  }
+
+  getMaxBodyRetainedBytes(): number {
+    return this.maxBodyRetainedBytes;
   }
 
   /** All per-device block/throttle rules (keyed by device IP). */
@@ -492,6 +510,7 @@ export class NetworkInspectorService {
       mitmCaFingerprint: ca?.fingerprintSha256,
       mitmTransactions: this.mitmTransactions,
       maxRawPacketsPerDevice: this.maxRawPacketsPerDevice,
+      maxBodyRetainedBytes: this.maxBodyRetainedBytes,
       trafficRules: this.getTrafficRules()
     };
   }
@@ -1027,7 +1046,7 @@ export class NetworkInspectorService {
         },
         onTransaction: (tx) => {
           this.mitmTransactions += 1;
-          this.enqueueEvents([mitmTransactionToEvent(tx)]);
+          this.enqueueEvents([mitmTransactionToEvent(tx, this.maxBodyRetainedBytes)]);
         }
       });
       const started = this.mitmProxy.start();

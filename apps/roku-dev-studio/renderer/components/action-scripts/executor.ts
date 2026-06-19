@@ -13,6 +13,8 @@ import {
   optionalRaleFunctionsForScript
 } from './script-rale-validation.js';
 import { escapeHtml, setSafeHTML } from '../../modules/utils/index.js';
+import { prettyJson, prettyXmlLenient } from '../../modules/ui/structured-body.js';
+import { attachSelectAll } from '../../modules/ui/select-all.js';
 import { getActionScriptDefaultSaveFolder } from '../../modules/utils/app-user-settings.js';
 import { renderExecutorSteps } from './actions-list-view.js';
 import { flattenStepsPreorder, stepPathToDisplayId } from './action-script-tree.js';
@@ -67,6 +69,9 @@ export function setupExecutor(panel, api, context) {
   const getRaleFunctionsFromBuilder = context.getRaleFunctions || null;
 
   if (!executorTextarea || !executorValidateBtn || !executorRunBtn) return;
+
+  // Cmd/Ctrl+A selects all the executor results text (when the results pane is focused).
+  if (executorResults instanceof HTMLElement) attachSelectAll(executorResults);
 
   let chosenSaveFolder: string | null = null;
   let lastValidScript: ExecutorScript | null = null;
@@ -485,38 +490,14 @@ export function setupExecutor(panel, api, context) {
     const s = data.trim();
     if (!s) return '';
     if (s.startsWith('{') || s.startsWith('[')) {
-      try {
-        return JSON.stringify(JSON.parse(s), null, 2);
-      } catch (_) {
-        return data;
-      }
+      return prettyJson(s) ?? data;
     }
     if (s.startsWith('<') || s.startsWith('<?xml')) {
-      return prettyPrintXml(s);
+      // Lenient (best-effort, never throws) — step output can be partial / non-well-formed, so the
+      // strict DOMParser `prettyXml` would bail. Shared with the PDF export via structured-body.
+      return prettyXmlLenient(s);
     }
     return data;
-  }
-
-  function prettyPrintXml(xmlStr) {
-    const s = xmlStr.trim();
-    if (!s) return '';
-    const parts = s.replace(/>\s*</g, '>\n<').split('\n');
-    let indent = 0;
-    const indentStr = '  ';
-    const out: string[] = [];
-    for (let i = 0; i < parts.length; i++) {
-      const line = parts[i].trim();
-      if (!line) continue;
-      const isClosing = line.startsWith('</');
-      const isSelfClosing = /\/\s*>$/.test(line) || line.startsWith('<?');
-      if (isClosing) indent = Math.max(0, indent - 1);
-      out.push(indentStr.repeat(indent) + line);
-      if (!isClosing && !isSelfClosing && line.startsWith('<') && !line.startsWith('<!')) {
-        const tagMatch = line.match(/^<([^\s/>]+)/);
-        if (tagMatch && !line.includes(`</${tagMatch[1]}>`)) indent++;
-      }
-    }
-    return out.join('\n');
   }
 
   function formatStepResult(step, result) {

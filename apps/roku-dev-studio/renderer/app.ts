@@ -7,7 +7,6 @@ import {
   decodeHtmlEntities,
   icon,
   setSafeHTML,
-  formatQueryResult,
   getStoredPassword,
   removePassword,
   hydrateSecretCache,
@@ -24,6 +23,9 @@ import {
   QUERY_ENDPOINTS
 } from './modules/index.js';
 import { errMessage } from './modules/utils/err-message.js';
+import { initDeeplinkMediaTypes } from './modules/deeplink/deeplink-media-types.js';
+import { initDeeplinkPresets } from './modules/deeplink/deeplink-presets.js';
+import { setupDeepLinkPanel } from './modules/deeplink/deeplink-panel.js';
 import {
   prepareModalOpenOrigin,
   playModalOpenMotion,
@@ -3139,7 +3141,7 @@ function createDevicePanel(device, tabId, isRemote = false, serverUrl = null, lo
     setupRemoteControls(panel, device, api);
     setupApps(panel, device, api);
     setupQueries(panel, api);
-    setupDeepLink(panel, api);
+    setupDeepLinkPanel(panel, api);
     setupDevApp(panel, device, api);
     setupInspector(panel, device, api);
     setupTelnet(panel, device, api, { devLog });
@@ -3627,42 +3629,8 @@ function setupActionScripts(panel, device, api) {
 // - components/inspector/index.js
 
 // ============================================
-// Deep Link
+// Deep Link — see modules/deeplink/deeplink-panel.ts
 // ============================================
-
-function setupDeepLink(panel, api) {
-  devLog('Setting up deep link for:', api.ip, api.isRemote ? '(via relay)' : '(direct)');
-  
-  const appIdInput = panel.querySelector('.deeplink-app-id');
-  const contentIdInput = panel.querySelector('.deeplink-content-id');
-  const mediaTypeSelect = panel.querySelector('.deeplink-media-type');
-  const deeplinkBtn = panel.querySelector('.deeplink-btn');
-  const statusDiv = panel.querySelector('.deeplink-status');
-  
-  if (!appIdInput || !contentIdInput || !mediaTypeSelect || !deeplinkBtn || !statusDiv) {
-    console.error('Deep link elements not found');
-    return;
-  }
-  
-  deeplinkBtn.addEventListener('click', async () => {
-    const appId = appIdInput.value.trim();
-    const contentId = contentIdInput.value.trim();
-    const mediaType = mediaTypeSelect.value;
-    
-    if (!appId) {
-      showStatusMessage(statusDiv, 'Please enter an App ID', 'warning');
-      return;
-    }
-    
-    const result = await api.deeplink(appId, contentId, mediaType);
-    
-    if (result.success) {
-      showStatusMessage(statusDiv, '✓ Deep link launched successfully', 'success');
-    } else {
-      showStatusMessage(statusDiv, `Deep link failed: ${result.error}`, 'error');
-    }
-  });
-}
 
 // ============================================
 // Sideload / Dev App Setup (Two-Column Layout)
@@ -3784,25 +3752,23 @@ function focusSendTextInDevicePanel(panel: HTMLElement): boolean {
 }
 
 document.addEventListener('keydown', async (e) => {
-  // Handle Ctrl+F / Cmd+F for search in query tab
+  // Handle Ctrl+F / Cmd+F for search in the ECP query Results tab. The find bar (shared
+  // simple find bar) lives just above the results output and is only present/visible once
+  // results have rendered — focus it when the Query tab is active.
   if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
     if (state.activeTabId) {
       const activePanel = document.getElementById(state.activeTabId);
       if (activePanel) {
         const queryTab = activePanel.querySelector('[data-inner-content="query"]');
-        const searchInput = activePanel.querySelector('.query-search-input');
-        const copyQueryBtn = activePanel.querySelector('.copy-query-btn');
-        const copyVisible =
-          copyQueryBtn instanceof HTMLElement && copyQueryBtn.style.display === 'block';
+        const findInput = activePanel.querySelector('.query-bottom .find-bar:not([hidden]) .find-bar-input');
         if (
           queryTab &&
           queryTab.classList.contains('active') &&
-          searchInput instanceof HTMLInputElement &&
-          copyVisible
+          findInput instanceof HTMLInputElement
         ) {
           e.preventDefault();
-          searchInput.focus();
-          searchInput.select();
+          findInput.focus();
+          findInput.select();
           return;
         }
       }
@@ -3980,7 +3946,7 @@ async function manualConnect() {
 // ============================================
 
 // Utility functions are now imported from modules/utils
-// escapeHtml, decodeHtmlEntities, formatQueryResult, showStatusMessage are imported above
+// escapeHtml, decodeHtmlEntities, showStatusMessage are imported above
 
 // ============================================
 // Remote Location Modal
@@ -4564,6 +4530,8 @@ async function init() {
   setupFramelessTitlebar();
   const { ensureGlobalModalsMounted } = await import('./components/modals/mount-global-modals.js');
   await ensureGlobalModalsMounted();
+  await initDeeplinkMediaTypes();
+  await initDeeplinkPresets();
   setupKeyboardRemoteHelpModal();
 
   // Initialize developer mode first
