@@ -43,6 +43,7 @@ import {
   initNetworkInspectorBridge
 } from './components/network-inspector/network-tab.js';
 import { setupRemoteTabMetrics } from './components/dev-app/device-metrics.js';
+import { wireRemoteTabSendText, wireRemoteTabKeyButtons } from './components/dev-app/quick-remote.js';
 import { dispatchDevAppForegroundFromActiveAppXml } from './components/dev-app/dev-app-foreground-sync.js';
 import { registerKeyboardRemoteAutoScreenshotRemote, scheduleKeyboardRemoteAutoScreenshotForActiveInnerTab } from './modules/utils/keyboard-remote-auto-screenshot-registry.js';
 import { registerPanelApi, getPanelApi } from './modules/device-api/panel-api-registry.js';
@@ -3262,107 +3263,11 @@ function setupRemoteControls(panel, device, api) {
   }
 
   registerKeyboardRemoteAutoScreenshotRemote(panel, scheduleAutoScreenshot);
-  
-  // Key press buttons - improved click handling
-  const keyButtons = panel.querySelectorAll('[data-key]');
-  devLog('Found', keyButtons.length, 'key buttons');
-  
-  keyButtons.forEach(btn => {
-    let isProcessing = false;
-    
-    const handlePress = async (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      
-      // Prevent double-clicks while processing
-      if (isProcessing) return;
-      isProcessing = true;
-      
-      const key = btn.dataset.key;
-      devLog('Key pressed:', key);
-      
-      // Visual feedback - add pressed class
-      btn.classList.add('pressed');
-      
-      try {
-        await api.keypress(key);
-        
-        // Schedule auto screenshot after successful keypress
-        scheduleAutoScreenshot();
-        
-        // If Home was pressed, notify Dev App section to check if dev app exited
-        if (key === 'Home') {
-          setTimeout(() => {
-            panel.dispatchEvent(new CustomEvent('homePressed', { bubbles: true }));
-          }, 300); // Small delay to let Roku process the Home press
-        }
-      } catch (error) {
-        console.error('Keypress error:', error);
-      }
-      
-      // Remove pressed class after short delay
-      setTimeout(() => {
-        btn.classList.remove('pressed');
-        isProcessing = false;
-      }, 100);
-    };
-    
-    // Use mousedown for faster response
-    btn.addEventListener('mousedown', handlePress);
-    
-    // Also handle touch events for touch screens
-    btn.addEventListener('touchstart', (e) => {
-      e.preventDefault();
-      handlePress(e);
-    }, { passive: false });
-    
-    // Prevent context menu on long press
-    btn.addEventListener('contextmenu', (e) => e.preventDefault());
-  });
-  
-  // Text input via shared `inputText` API (Lit_ sequence locally; relay JSON body remotely)
-  const textInput = panel.querySelector('.text-input');
-  const sendTextBtn = panel.querySelector('.send-text-btn');
-  
-  if (!textInput || !sendTextBtn) {
-    devLog('Remote Send Text: text input or button not found in panel');
-    return;
-  }
-  
-  const sendTextLabel = sendTextBtn.querySelector('.send-text-btn-label');
 
-  sendTextBtn.addEventListener('click', async () => {
-    const text = textInput.value;
-    if (!text) return;
-    
-    sendTextBtn.disabled = true;
-    if (sendTextLabel) sendTextLabel.textContent = 'Sending...';
-    
-    try {
-      // POST JSON to the relay (`/input-text`) so @, ?, #, & in emails/URLs
-      // are not mangled by URL path encoding on per-char Lit_ keypress hops.
-      const result = await api.inputText(text);
-      if (result && typeof result === 'object' && result.success === true) {
-        textInput.value = '';
-        // Screenshot only after the full Lit_ sequence finishes (local or relay).
-        scheduleAutoScreenshot(SCREENSHOT_DEBOUNCE_DELAY);
-      } else {
-        console.error('Remote Send Text failed:', result?.error || result);
-      }
-    } catch (error) {
-      console.error('Remote Send Text error:', error);
-    } finally {
-      sendTextBtn.disabled = false;
-      if (sendTextLabel) sendTextLabel.textContent = 'Send Text';
-    }
+  wireRemoteTabKeyButtons(panel, api, scheduleAutoScreenshot, () => {
+    panel.dispatchEvent(new CustomEvent('homePressed', { bubbles: true }));
   });
-  
-  textInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      sendTextBtn.click();
-    }
-  });
+  wireRemoteTabSendText(panel, api, scheduleAutoScreenshot);
 }
 
 // ============================================
