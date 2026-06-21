@@ -161,7 +161,7 @@ Each release will include the artifacts listed in the **Downloads** table below.
 
 | Platform | Intel/x64 | ARM64/Apple Silicon |
 |----------|-----------|----------------------|
-| **macOS** | Roku Dev Studio-VERSION.dmg | Roku Dev Studio-VERSION-arm64.dmg |
+| **macOS** | — (Intel builds disabled by default; `npm run build:mac:intel` locally) | Roku Dev Studio-VERSION-arm64.dmg |
 | **Windows** | Roku Dev Studio Setup VERSION.exe, Roku Dev Studio VERSION.exe (portable) | - |
 | **Linux** | roku-dev-studio_VERSION_amd64.deb, Roku Dev Studio-VERSION-x86_64.AppImage | roku-dev-studio_VERSION_arm64.deb, Roku Dev Studio-VERSION-arm64.AppImage |
 
@@ -170,7 +170,7 @@ Each release will include the artifacts listed in the **Downloads** table below.
 ### Installation
 
 **macOS**
-1. Download the appropriate `.dmg` file for your Mac
+1. Download the `-arm64.dmg` file (Apple Silicon)
 2. Open the disk image
 3. Drag the app to your Applications folder
 4. **IMPORTANT - Before first launch:**

@@ -35,8 +35,14 @@ Always run **`npm install` from the repository root** so workspaces link correct
 npm run build:mac
 ```
 This creates (under `apps/roku-dev-studio/dist/`):
-- `apps/roku-dev-studio/dist/mac/Roku Dev Studio-{version}.dmg` - macOS installer (x64 & arm64)
-- `apps/roku-dev-studio/dist/mac/Roku Dev Studio-{version}-mac.zip` - Portable macOS app (x64 & arm64)
+- `apps/roku-dev-studio/dist/mac/arm64/Roku Dev Studio-{version}-arm64.dmg` — Apple Silicon installer
+- `apps/roku-dev-studio/dist/mac/arm64/Roku Dev Studio-{version}-arm64-mac.zip` — portable Apple Silicon app
+
+Intel Mac builds are no longer produced by default. To build them locally (deprecated):
+
+```bash
+npm run build:mac:intel
+```
 
 ### For Windows:
 ```bash
@@ -84,14 +90,18 @@ npm run build:mac
 
 `apps/roku-dev-studio/scripts/notarize.cjs` is the `afterSign` hook that runs `@electron/notarize` against your build.
 
-#### Single-arch DMG (skip cross-build)
+#### Intel Mac builds (opt-in, deprecated)
 
-Building for both Intel + Apple Silicon doubles the artifact size and the time. To produce a DMG only for the architecture you're currently on:
+Default macOS builds target Apple Silicon (`arm64`) only. Intel/x64 artifacts are not produced in CI. To build them locally:
 
 ```bash
-# From apps/roku-dev-studio/
-npx electron-builder --mac --dmg --x64       # Intel
-npx electron-builder --mac --dmg --arm64     # Apple Silicon
+npm run build:mac:intel
+```
+
+Or, from `apps/roku-dev-studio/`:
+
+```bash
+npx electron-builder --mac dmg:x64 zip:x64
 ```
 
 ### Windows
