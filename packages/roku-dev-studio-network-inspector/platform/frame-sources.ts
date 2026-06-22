@@ -8,11 +8,11 @@
 
 import { spawn, type ChildProcessWithoutNullStreams } from 'child_process';
 import * as fs from 'fs';
-import * as os from 'os';
 import * as path from 'path';
 import { PcapByteStream } from '../pcap-byte-stream';
 import { resolveTcpdumpPath } from '../capture-engine';
 import { niLog, niWarn, niError, niDebug } from '../log';
+import { interfaceIpv4 } from './net-interfaces';
 import type { CaptureFrameSource, CaptureFrameSourceStartOptions } from './types';
 
 const PCAP_GLOBAL_HDR = 24;
@@ -133,31 +133,50 @@ const NPCAP_QUEUE_MAX = 5000;
 const NPCAP_PUMP_BATCH = 256;
 
 /**
- * Map an OS "friendly" interface name (e.g. "Wi-Fi", "Local Area Connection* 2", "Microsoft Wi-Fi
- * Direct Virtual Adapter") to the Npcap device name (`\Device\NPF_{GUID}`) that `cap.open()` requires.
+ * Map an OS "friendly" interface name (e.g. "Wi-Fi", "Local Area Connection* 2") to the Npcap
+ * device name (`\Device\NPF_{GUID}`) that `cap.open()` requires.
  *
- * This is the macOS/Windows divergence behind "capture works on Mac but not Windows": tcpdump's `-i`
- * accepts the friendly name directly, but Npcap identifies adapters only by device name. We look up
- * the interface's IPv4 address and ask Npcap which device owns it (`Cap.findDevice(ip)`).
+ * Primary strategy: enumerate `Cap.deviceList()` and match the device whose addresses include the
+ * interface's IPv4. This is more transparent than `Cap.findDevice()` — if two adapters share an IP
+ * (VPN tunnel, Hyper-V bridge) we warn instead of silently opening the wrong device.
+ * Fallback: `Cap.findDevice(ip)` for Npcap builds where deviceList() is incomplete.
+ *
+ * Throws are intentionally not caught — they propagate to NpcapFrameSource.start()'s outer catch
+ * so the actual Npcap error text (e.g. "Access is denied") reaches the user-facing error message.
  */
 function resolveNpcapDevice(
-  Cap: { findDevice: (ip?: string) => string | undefined },
+  Cap: {
+    findDevice: (ip?: string) => string | null | undefined;
+    deviceList: () => Array<{ name: string; addresses: Array<{ addr: string }> }>;
+  },
   interfaceName: string
 ): string | undefined {
-  const addrs = os.networkInterfaces()[interfaceName];
-  const ipv4 = addrs?.find((a) => a.family === 'IPv4' && !a.internal)?.address;
+  const ipv4 = interfaceIpv4(interfaceName);
   if (!ipv4) {
     niWarn(`Interface "${interfaceName}" has no external IPv4 address; cannot resolve its Npcap device.`);
     return undefined;
   }
-  try {
-    const device = Cap.findDevice(ipv4) || undefined;
-    niLog(`Resolved interface "${interfaceName}" (${ipv4}) to Npcap device ${device ?? '(none found)'}.`);
-    return device;
-  } catch (err) {
-    niError(`Cap.findDevice(${ipv4}) failed: ${err instanceof Error ? err.message : String(err)}`);
-    return undefined;
+  // Primary: explicit enumeration — detects (and warns about) duplicate-IP ambiguity.
+  const allDevices = Cap.deviceList();
+  const matches = allDevices.filter((d) => d.addresses.some((a) => a.addr === ipv4));
+  if (matches.length > 1) {
+    niWarn(
+      `Multiple Npcap devices share IP ${ipv4} (${matches.map((d) => d.name).join(', ')}); ` +
+        `using the first. If capture is on the wrong interface, check for duplicate adapter IPs.`
+    );
   }
+  if (matches.length >= 1) {
+    niLog(`Resolved interface "${interfaceName}" (${ipv4}) to Npcap device ${matches[0].name}.`);
+    return matches[0].name;
+  }
+  // Fallback: Cap.findDevice() for Npcap builds where deviceList() may be incomplete.
+  const device = Cap.findDevice(ipv4) ?? undefined;
+  if (device) {
+    niLog(`Resolved interface "${interfaceName}" (${ipv4}) to Npcap device ${device} (findDevice fallback).`);
+  } else {
+    niWarn(`No Npcap device found for IP ${ipv4} (interface "${interfaceName}").`);
+  }
+  return device;
 }
 
 /** Windows capture via the optional native `cap` (Npcap/libpcap) binding. */
@@ -167,6 +186,7 @@ export class NpcapFrameSource implements CaptureFrameSource {
   private pumpScheduled = false;
   private onFrame: ((frame: Buffer, timestampMs: number) => void) | null = null;
   private droppedFrames = 0;
+  private device: string | null = null;
 
   start(options: CaptureFrameSourceStartOptions): boolean {
     const npcapRoot = path.join(process.env.ProgramFiles || 'C:\\Program Files', 'Npcap');
@@ -203,6 +223,7 @@ export class NpcapFrameSource implements CaptureFrameSource {
         return false;
       }
       niLog(`Npcap capture started on "${options.interfaceName}" (device=${device}, linkType=${linkType}, filter="${filter}").`);
+      this.device = device;
       this.onFrame = options.onFrame;
       cap.on('packet', (nbytes: number) => {
         // Keep the native callback minimal: `buffer` is a single allocation Npcap reuses for every
@@ -225,17 +246,18 @@ export class NpcapFrameSource implements CaptureFrameSource {
       return true;
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      niError(`Failed to load/open the "cap" native module: ${msg}`);
+      niError(`Npcap capture setup failed for "${options.interfaceName}": ${msg}`);
       options.onError(
-        `Windows capture requires the optional "cap" native module (${msg}). Install Npcap first; see Settings → Network Inspector.`
+        `Npcap capture failed for "${options.interfaceName}": ${msg}. ` +
+          `Make sure Npcap is installed (npcap.com, WinPcap API-compatible mode) and the service is running.`
       );
       return false;
     }
   }
 
-  /** Diagnostics: current queue depth and total dropped frames (for the periodic status log). */
-  getStats(): { queued: number; dropped: number } {
-    return { queued: this.queue.length, dropped: this.droppedFrames };
+  /** Diagnostics: current queue depth, total dropped frames, and resolved Npcap device name. */
+  getStats(): { queued: number; dropped: number; device: string | null } {
+    return { queued: this.queue.length, dropped: this.droppedFrames, device: this.device };
   }
 
   private schedulePump(): void {
@@ -270,6 +292,7 @@ export class NpcapFrameSource implements CaptureFrameSource {
     }
     this.capInstance = null;
     this.onFrame = null;
+    this.device = null;
     this.queue.length = 0;
     this.pumpScheduled = false;
     this.droppedFrames = 0;
