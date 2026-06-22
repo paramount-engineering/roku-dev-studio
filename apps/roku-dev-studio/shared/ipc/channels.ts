@@ -81,6 +81,9 @@ export const IPC = {
   ShellOpenExternal: 'shell:open-external',
   IsDebugEnabled: 'is-debug-enabled',
   OpenLogFile: 'open-log-file',
+  /** Diagnostic build only — opens the userData folder containing all log files. */
+  IsDiagnosticBuild: 'is-diagnostic-build',
+  OpenDiagnosticLogFolder: 'open-diagnostic-log-folder',
   /**
    * Console scrollback spill — disk-backed history beyond the in-memory cap.
    *

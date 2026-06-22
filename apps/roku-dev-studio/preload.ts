@@ -161,6 +161,9 @@ contextBridge.exposeInMainWorld('roku', {
   
   // Open debug log file (only works if debug enabled)
   openLogFile: () => ipcRenderer.invoke(IPC.OpenLogFile),
+
+  isDiagnosticBuild: () => ipcRenderer.invoke(IPC.IsDiagnosticBuild),
+  openDiagnosticLogFolder: () => ipcRenderer.invoke(IPC.OpenDiagnosticLogFolder),
   
   // ============================================
   // TrackerTask Management

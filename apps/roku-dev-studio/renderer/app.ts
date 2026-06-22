@@ -4059,6 +4059,19 @@ function setupTitlebarHamburgerMenu(shell: NonNullable<Window['rdsShell']>): voi
   const menu = document.getElementById('titlebarHamburgerMenu');
   if (!(btn instanceof HTMLButtonElement) || !(menu instanceof HTMLElement)) return;
 
+  void window.roku
+    .isDiagnosticBuild?.()
+    .then((res) => {
+      if (!res?.enabled) return;
+      document.getElementById('titlebarDiagnosticLogFolderItem')?.removeAttribute('hidden');
+      const debugToggle = menu.querySelector('[data-menu-action="toggle-debug-logging"]');
+      if (debugToggle instanceof HTMLButtonElement) {
+        debugToggle.disabled = true;
+        debugToggle.setAttribute('aria-checked', 'true');
+      }
+    })
+    .catch(() => {});
+
   const toggleButtons = Array.from(
     menu.querySelectorAll<HTMLButtonElement>('[data-menu-action^="toggle-"]')
   );
@@ -4128,6 +4141,11 @@ function setupTitlebarHamburgerMenu(shell: NonNullable<Window['rdsShell']>): voi
       case 'toggle-debug-logging':
         if (typeof shell.appMenuAction === 'function') {
           await shell.appMenuAction('toggle-debug-logging');
+        }
+        break;
+      case 'open-diagnostic-log-folder':
+        if (typeof window.roku.openDiagnosticLogFolder === 'function') {
+          await window.roku.openDiagnosticLogFolder();
         }
         break;
       case 'open-log-file':
