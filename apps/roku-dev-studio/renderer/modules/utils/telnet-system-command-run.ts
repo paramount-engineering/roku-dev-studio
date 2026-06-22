@@ -5,6 +5,7 @@
 
 import { isTelnetOutputComplete } from './telnet-utils.js';
 import { TELNET_TIMEOUT } from './constants.js';
+import { rendererError } from './logger.js';
 
 export interface TelnetSystemRunApi {
   ip: string;
@@ -165,7 +166,7 @@ export async function runTelnetSystemCommandSession(
             }
           }
         } catch (e) {
-          console.error('[Telnet System] Poll error:', e);
+          rendererError('[Telnet System] Poll error:', e);
         }
       };
 

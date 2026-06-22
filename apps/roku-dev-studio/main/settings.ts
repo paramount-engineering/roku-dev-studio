@@ -8,6 +8,7 @@ import type { App, IpcMain, IpcMainInvokeEvent } from 'electron';
 const path = require('path');
 const fs = require('fs');
 const { resolveUnderBase } = require('../lib/path-safe');
+const { mainLog, mainWarn, mainError } = require('./log');
 const sharedConstants = require('roku-dev-studio-api/lib/shared-constants') as Record<string, number>;
 
 let settingsDir: string | null = null;
@@ -29,7 +30,7 @@ function ensureSettingsDir() {
       fs.mkdirSync(settingsDir, { recursive: true });
     }
   } catch (e) {
-    console.error('Failed to create settings directory:', e);
+    mainError('Failed to create settings directory:', e);
   }
 }
 
@@ -45,7 +46,7 @@ function loadSettings(): Record<string, unknown> {
       return JSON.parse(data);
     }
   } catch (e) {
-    console.error('Failed to load settings:', e);
+    mainError('Failed to load settings:', e);
   }
   return {};
 }
@@ -63,7 +64,7 @@ function saveSettings(settings: Record<string, unknown>) {
       return true;
     }
   } catch (e) {
-    console.error('Failed to save settings:', e);
+    mainError('Failed to save settings:', e);
   }
   return false;
 }
@@ -123,7 +124,7 @@ function registerSettingsIpc(ipcMain: IpcMain) {
   ipcMain.handle('settings:get', async (_event: IpcMainInvokeEvent, key: string) => {
     if (!isValidSettingsKey(key)) return { success: false, error: 'Invalid key' };
     if (!RENDERER_READABLE_KEYS.has(key)) {
-      console.warn('[Settings] Refused get for non-allowlisted key:', key);
+      mainWarn('[Settings] Refused get for non-allowlisted key:', key);
       return { success: false, error: 'Key is not accessible' };
     }
     const settings = loadSettings();
@@ -133,26 +134,26 @@ function registerSettingsIpc(ipcMain: IpcMain) {
   ipcMain.handle('settings:set', async (_event: IpcMainInvokeEvent, key: string, value: unknown) => {
     if (!isValidSettingsKey(key)) return { success: false, error: 'Invalid key' };
     if (!RENDERER_WRITABLE_KEYS.has(key)) {
-      console.warn('[Settings] Refused set for non-allowlisted key:', key);
+      mainWarn('[Settings] Refused set for non-allowlisted key:', key);
       return { success: false, error: 'Key is not writable' };
     }
     const settings = loadSettings();
     settings[key] = value;
     const saved = saveSettings(settings);
-    console.log('[Settings] Set:', key, '-> saved:', saved);
+    mainLog('[Settings] Set:', key, '-> saved:', saved);
     return { success: saved };
   });
 
   ipcMain.handle('settings:delete', async (_event: IpcMainInvokeEvent, key: string) => {
     if (!isValidSettingsKey(key)) return { success: false, error: 'Invalid key' };
     if (!RENDERER_WRITABLE_KEYS.has(key)) {
-      console.warn('[Settings] Refused delete for non-allowlisted key:', key);
+      mainWarn('[Settings] Refused delete for non-allowlisted key:', key);
       return { success: false, error: 'Key is not writable' };
     }
     const settings = loadSettings();
     delete settings[key];
     const saved = saveSettings(settings);
-    console.log('[Settings] Delete:', key, '-> saved:', saved);
+    mainLog('[Settings] Delete:', key, '-> saved:', saved);
     return { success: saved };
   });
 }

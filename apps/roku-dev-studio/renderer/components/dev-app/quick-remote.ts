@@ -3,6 +3,7 @@
 import type { DevAppApi, DevicePanelRoot } from './dev-app-types.js';
 import { SCREENSHOT_DEBOUNCE_DELAY } from '../../modules/utils/constants.js';
 import { scheduleAutoScreenshotAfterSendText } from '../../modules/utils/keyboard-remote-auto-screenshot-registry.js';
+import { rendererError } from '../../modules/utils/logger.js';
 
 /** Options for `attachQuickRemoteKeys` shared between the Dev App card and the Floating Remote. */
 export interface AttachQuickRemoteKeysOptions {
@@ -35,19 +36,19 @@ async function sendTextViaApi(api: InputTextApi, text: string): Promise<boolean>
   if (typeof api.inputText === 'function') {
     const result = await api.inputText(text);
     if (!result || result.success !== true) {
-      console.error('Send text failed:', result?.error || result);
+      rendererError('Send text failed:', result?.error || result);
       return false;
     }
     return true;
   }
   if (typeof api.keypress !== 'function') {
-    console.error('Send text failed: API has no inputText or keypress');
+    rendererError('Send text failed: API has no inputText or keypress');
     return false;
   }
   for (const char of text) {
     const result = await api.keypress(`Lit_${encodeURIComponent(char)}`);
     if (!result?.success) {
-      console.error('Send text failed:', result?.error || result);
+      rendererError('Send text failed:', result?.error || result);
       return false;
     }
   }
@@ -93,10 +94,10 @@ export function wireRemoteTabKeyButtons(
             setTimeout(onHomePressed, 300);
           }
         } else {
-          console.error('Remote keypress failed:', result.error);
+          rendererError('Remote keypress failed:', result.error);
         }
       } catch (error) {
-        console.error('Remote keypress error:', error);
+        rendererError('Remote keypress error:', error);
       }
 
       setTimeout(() => {
@@ -151,7 +152,7 @@ export function attachQuickRemoteKeys(
         try {
           const result = await api.keypress(key);
           if (!result.success) {
-            console.error('Quick remote keypress failed:', result.error);
+            rendererError('Quick remote keypress failed:', result.error);
           } else {
             if (scheduleAutoScreenshot) {
               scheduleAutoScreenshot();
@@ -164,7 +165,7 @@ export function attachQuickRemoteKeys(
             }
           }
         } catch (error) {
-          console.error('Quick remote keypress error:', error);
+          rendererError('Quick remote keypress error:', error);
         }
       },
       { signal }
@@ -249,7 +250,7 @@ function wireSendTextControls(
         scheduleAutoScreenshotAfterSendText(opts.devicePanel, screenshotDelay);
       }
     } catch (error) {
-      console.error('Send text error:', error);
+      rendererError('Send text error:', error);
     } finally {
       sendInFlight = false;
       opts.onSendingChange?.(false);

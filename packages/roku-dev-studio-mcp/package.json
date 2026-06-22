@@ -14,7 +14,8 @@
   },
   "license": "MIT",
   "dependencies": {
-    "roku-dev-studio-api": "file:../roku-dev-studio-api"
+    "roku-dev-studio-api": "file:../roku-dev-studio-api",
+    "roku-dev-studio-platform": "file:../roku-dev-studio-platform"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",

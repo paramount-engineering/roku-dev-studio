@@ -34,6 +34,7 @@
  */
 
 import type { App, IpcMain, IpcMainInvokeEvent } from 'electron';
+import { mainWarn, mainError } from './log.js';
 
 const fs = require('fs');
 const path = require('path');
@@ -74,7 +75,7 @@ function ensureBaseDir(app: App): string {
   try {
     fs.mkdirSync(dir, { recursive: true });
   } catch (e) {
-    console.error('[Console spill] Could not create base dir:', e);
+    mainError('[Console spill] Could not create base dir:', e);
   }
   baseDir = dir;
   return dir;
@@ -113,7 +114,7 @@ function deleteSpill(spillId: string): void {
     }
   } catch (e) {
     // Non-fatal — temp dir cleanup will catch any stragglers on app quit.
-    console.warn('[Console spill] Could not delete spill file:', session.filePath, e);
+    mainWarn('[Console spill] Could not delete spill file:', session.filePath, e);
   }
 }
 

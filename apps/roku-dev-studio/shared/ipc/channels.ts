@@ -191,6 +191,8 @@ export const IPC = {
   GetDeveloperMode: 'get-developer-mode',
   SetDeveloperMode: 'set-developer-mode',
   DeveloperModeChanged: 'developer-mode-changed',
+  /** Whether verbose logging is forced on by the `RDS_DEBUG`/`RDS_NI_DEBUG`-style env flags (read once at startup). */
+  GetVerboseDebug: 'get-verbose-debug',
   GetPrivacyMode: 'get-privacy-mode',
   SetPrivacyMode: 'set-privacy-mode',
   PrivacyModeChanged: 'privacy-mode-changed',

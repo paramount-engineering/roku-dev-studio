@@ -8,6 +8,7 @@ import {
   resetRdsTimingToCompileDefaults,
   type RdsTimingOverrides
 } from './constants.js';
+import { rendererError } from './logger.js';
 
 /** Persisted object: keys match `RdsTimingOverrideKey` in constants.ts */
 export const SETTINGS_KEY_RDS_TIMING_OVERRIDES = 'rds-timing-overrides';
@@ -97,7 +98,7 @@ export async function setDevicePerformanceQuadPref(deviceKey: string, quad: bool
     else delete prev[deviceKey];
     await window.roku.setSetting(SETTINGS_KEY_DEVICE_PERFORMANCE_QUAD, prev);
   } catch (e) {
-    console.error('[App settings] Failed to persist Device Performance view:', e);
+    rendererError('[App settings] Failed to persist Device Performance view:', e);
   }
 }
 
@@ -204,7 +205,7 @@ export async function loadPersistedAppSettings(): Promise<void> {
       document.body.classList.toggle('floating-remote-on', FLOATING_REMOTE_ENABLED);
     }
   } catch (e) {
-    console.error('[App settings] Failed to load persisted settings:', e);
+    rendererError('[App settings] Failed to load persisted settings:', e);
   }
 }
 
@@ -226,7 +227,7 @@ export async function setFloatingRemoteEnabled(enabled: boolean): Promise<void> 
   try {
     await window.roku.setSetting(SETTINGS_KEY_FLOATING_REMOTE_ENABLED, enabled);
   } catch (e) {
-    console.error('[App settings] Failed to persist floating remote enabled:', e);
+    rendererError('[App settings] Failed to persist floating remote enabled:', e);
   }
 }
 
@@ -237,7 +238,7 @@ export async function setFloatingRemotePosition(pos: FloatingRemotePosition): Pr
   try {
     await window.roku.setSetting(SETTINGS_KEY_FLOATING_REMOTE_POSITION, pos);
   } catch (e) {
-    console.error('[App settings] Failed to persist floating remote position:', e);
+    rendererError('[App settings] Failed to persist floating remote position:', e);
   }
 }
 

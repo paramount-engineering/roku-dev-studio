@@ -132,13 +132,18 @@ function transpileSharedForRenderer(appDir: string, rendererDist: string): void 
   //    leave an unresolvable `import … from 'roku-dev-studio-network-inspector/…'` that 404s at
   //    runtime and takes down the whole ESM graph (every button/scan dies). Bundling *every* .ts in
   //    this dir means new shared shims are emitted automatically without editing this script.
-  const niDir = path.join(sharedRoot, 'network-inspector');
-  const niEntries = walkTsFiles(niDir);
-  if (niEntries.length > 0) {
+  //    `shared/logging/*` is the same kind of shim: it re-exports the shared logger from the
+  //    `roku-dev-studio-platform` package, so it MUST be bundled to inline that bare specifier.
+  const bundledShimDirs = [
+    path.join(sharedRoot, 'network-inspector'),
+    path.join(sharedRoot, 'logging'),
+  ];
+  const shimEntries = bundledShimDirs.flatMap((d) => walkTsFiles(d));
+  if (shimEntries.length > 0) {
     fs.mkdirSync(sharedOut, { recursive: true });
     esbuild.buildSync({
       absWorkingDir: appDir,
-      entryPoints: niEntries,
+      entryPoints: shimEntries,
       outdir: sharedOut,
       outbase: sharedRoot,
       bundle: true,
@@ -157,6 +162,8 @@ function verifyRendererDist(appDir: string, rendererDist: string): void {
     path.join(rendererDist, 'shared', 'ipc', 'debug-telnet-connection-id.js'),
     // Runtime shared shim imported by the Network Inspector — a 404 here breaks the whole ESM graph.
     path.join(rendererDist, 'shared', 'network-inspector', 'setup-guide.js'),
+    // Shared logger shim — imported broadly across the renderer; a 404 takes down the ESM graph.
+    path.join(rendererDist, 'shared', 'logging', 'logger.js'),
   ];
   const missing = required.filter((p) => !fs.existsSync(p));
   if (missing.length > 0) {

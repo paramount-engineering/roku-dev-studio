@@ -2,6 +2,7 @@ import type { App, BrowserWindow, Clipboard, Dialog, IpcMainInvokeEvent, Rectang
 import { broadcastFiddlePrivacyMode } from '../fiddle-window';
 import { openExternalUrl } from '../open-external-url';
 import { IPC } from '../../shared/ipc/channels';
+import { mainLog, mainError } from '../log.js';
 import type {
   ActionScriptWriteFilePayload,
   CaptureViewRectPayload,
@@ -146,7 +147,7 @@ function setupSystemHandlers(
         fs.writeFileSync(result.filePath, content ?? '', 'utf-8');
         return { success: true, filePath: result.filePath };
       } catch (err) {
-        console.error('Error saving text file:', err);
+        mainError('Error saving text file:', err);
         return { success: false, error: errMsg(err) };
       }
     }
@@ -170,7 +171,7 @@ function setupSystemHandlers(
         fs.writeFileSync(result.filePath, Buffer.from(base64 ?? '', 'base64'));
         return { success: true, filePath: result.filePath };
       } catch (err) {
-        console.error('Error saving binary file:', err);
+        mainError('Error saving binary file:', err);
         return { success: false, error: errMsg(err) };
       }
     }
@@ -185,7 +186,7 @@ function setupSystemHandlers(
       clipboard.writeImage(img);
       return { success: true };
     } catch (err) {
-      console.error('Error copying image:', err);
+      mainError('Error copying image:', err);
       return { success: false, error: errMsg(err) };
     }
   });
@@ -216,7 +217,7 @@ function setupSystemHandlers(
         trackerTaskContent = fs.readFileSync(trackerTaskPath, 'utf-8');
       } catch (readErr) {
         // If not found, return error with helpful message
-        console.log('TrackerTask.xml not found at', trackerTaskPath);
+        mainLog('TrackerTask.xml not found at', trackerTaskPath);
         return { 
           success: false, 
           error: 'TrackerTask.xml not found in application bundle. Please ensure the file exists in roku-components folder.' 
@@ -228,7 +229,7 @@ function setupSystemHandlers(
       
       return { success: true, filePath: result.filePath };
     } catch (err) {
-      console.error('Error saving TrackerTask:', err);
+      mainError('Error saving TrackerTask:', err);
       return { success: false, error: errMsg(err) };
     }
   });
@@ -239,6 +240,13 @@ function setupSystemHandlers(
       enabled: state.debugLoggingEnabled,
       logFile: state.logFile
     };
+  });
+
+  // Whether verbose logging is forced on by the unified RDS_DEBUG env flag. Env can't change at
+  // runtime, so the renderer reads this once at startup and ORs it with the Developer Mode toggle.
+  ipcMain.handle(IPC.GetVerboseDebug, async () => {
+    const { debugEnvEnabled } = require('roku-dev-studio-platform/node') as typeof import('roku-dev-studio-platform/node');
+    return { enabled: debugEnvEnabled() };
   });
 
   // Get developer mode state
@@ -727,7 +735,7 @@ function setupSystemHandlers(
       fs.writeFileSync(result.filePath, pdfBytes);
       return { success: true, filePath: result.filePath };
     } catch (err) {
-      console.error('Error saving results PDF:', err);
+      mainError('Error saving results PDF:', err);
       return { success: false, error: errMsg(err) };
     }
   });

@@ -52,3 +52,92 @@ export function platformLabel(platform: HostPlatform = hostPlatform()): string {
 export function primaryModifierKey(platform: HostPlatform = hostPlatform()): 'Cmd' | 'Ctrl' {
   return platform === 'darwin' ? 'Cmd' : 'Ctrl';
 }
+
+// ============================================================================
+// Shared structured logger
+// ============================================================================
+//
+// The one place every part of Roku Dev Studio gets a logger from — main process,
+// renderer, and standalone packages. This core is intentionally **runtime-neutral**:
+// it touches only `console` and `new Date()`, no Node or DOM globals, so the same
+// implementation works in the Electron renderer, the main process, and headless
+// packages (network inspector, remote server). Callers supply the parts that differ
+// per runtime — the verbose gate (an env var in Node, the Developer-Mode toggle in the
+// renderer) is passed in via `debug`, and the output target via `sink`.
+//
+// `new Date()` is fine here — this is runtime app code, not a workflow script.
+
+/** The console-like sink a logger writes to. Defaults to the global `console`. */
+export interface LogSink {
+  log(...args: unknown[]): void;
+  warn(...args: unknown[]): void;
+  error(...args: unknown[]): void;
+}
+
+/**
+ * A leveled logger with a fixed prefix. `log`/`warn`/`error` are milestone events that
+ * always emit so a user can reproduce an issue and share the output; `debug` is verbose
+ * tracing that only emits when the logger's verbose gate is on.
+ */
+export interface Logger {
+  /** Always-emitted milestone log. */
+  log(...args: unknown[]): void;
+  /** Always-emitted warning. */
+  warn(...args: unknown[]): void;
+  /** Always-emitted error. */
+  error(...args: unknown[]): void;
+  /** Verbose trace — only emitted when the verbose gate is enabled. */
+  debug(...args: unknown[]): void;
+  /** Whether verbose (`debug`) output is currently enabled. */
+  isDebugEnabled(): boolean;
+  /** A nested logger whose prefix is appended to this one's (e.g. `[Network Inspector] [proxy]`). */
+  child(childPrefix: string): Logger;
+}
+
+export interface LoggerOptions {
+  /** Prefix tag shown on every line, e.g. `[Network Inspector]`. */
+  prefix: string;
+  /**
+   * Verbose gate for `debug()`. Pass a boolean for a fixed decision, or a getter for a
+   * live one (an env flag that can change, a Developer-Mode toggle, etc.). The getter is
+   * called on every `debug()` so toggles take effect immediately. Defaults to `false`.
+   */
+  debug?: boolean | (() => boolean);
+  /** Prefix every line with an ISO timestamp so lines are easy to correlate. Defaults to `true`. */
+  timestamp?: boolean;
+  /** Where lines are written. Defaults to the global `console`. */
+  sink?: LogSink;
+}
+
+function asDebugGetter(debug: LoggerOptions['debug']): () => boolean {
+  if (typeof debug === 'function') return debug;
+  const fixed = !!debug;
+  return () => fixed;
+}
+
+/**
+ * Create a leveled, prefixed logger. See {@link LoggerOptions}. The returned logger holds no
+ * mutable state of its own — re-evaluating the `debug` getter on each call is what lets a
+ * runtime toggle (env var, Developer Mode) flip verbosity live.
+ */
+export function createLogger(options: LoggerOptions): Logger {
+  const { prefix } = options;
+  const timestamp = options.timestamp !== false;
+  const sink: LogSink = options.sink ?? console;
+  const isDebug = asDebugGetter(options.debug);
+
+  // Lead each line with the prefix and (optionally) an ISO timestamp, then the caller's args.
+  const head = (): unknown[] => (timestamp ? [prefix, new Date().toISOString()] : [prefix]);
+
+  return {
+    log: (...args) => sink.log(...head(), ...args),
+    warn: (...args) => sink.warn(...head(), ...args),
+    error: (...args) => sink.error(...head(), ...args),
+    debug: (...args) => {
+      if (isDebug()) sink.log(...head(), '[debug]', ...args);
+    },
+    isDebugEnabled: () => isDebug(),
+    child: (childPrefix) =>
+      createLogger({ prefix: `${prefix} ${childPrefix}`, debug: isDebug, timestamp, sink }),
+  };
+}

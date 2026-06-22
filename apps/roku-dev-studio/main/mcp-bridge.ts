@@ -45,6 +45,7 @@ import type {
   McpBridgeDeviceSnapshot,
   McpBridgeSelectedDeviceSnapshot
 } from '../shared/mcp-bridge-state';
+import { mainLog, mainWarn } from './log.js';
 import { hashParamsForAudit, recordMcpAudit, setMcpAuditLogDir } from './mcp-audit-log';
 import { rateBudgetForRequest, take as takeRateToken } from './mcp-rate-limit';
 import {
@@ -288,11 +289,11 @@ const state: BridgeState = {
 };
 
 function logInfo(message: string, ...rest: unknown[]): void {
-  console.log(`[mcp-bridge] ${message}`, ...rest);
+  mainLog(`[mcp-bridge] ${message}`, ...rest);
 }
 
 function logWarn(message: string, ...rest: unknown[]): void {
-  console.warn(`[mcp-bridge] ${message}`, ...rest);
+  mainWarn(`[mcp-bridge] ${message}`, ...rest);
 }
 
 function generateToken(): string {

@@ -14,6 +14,7 @@ import {
   releaseAllRemoteTelnetHoldersForFiddleWindow
 } from './ipc/remote-handlers';
 import { setupZoomGuards } from './window-zoom';
+import { mainWarn, mainError } from './log.js';
 
 const fs = require('fs');
 const path = require('path');
@@ -125,11 +126,11 @@ export function openFiddleWindow(
   const htmlPath = path.join(__dirname, 'renderer', 'fiddle.html');
 
   if (!fs.existsSync(preloadPath)) {
-    console.error('[Fiddle] Preload bundle missing at', preloadPath, '— run build.');
+    mainError('[Fiddle] Preload bundle missing at', preloadPath, '— run build.');
     return;
   }
   if (!fs.existsSync(htmlPath)) {
-    console.error('[Fiddle] HTML shell missing at', htmlPath);
+    mainError('[Fiddle] HTML shell missing at', htmlPath);
     return;
   }
 
@@ -201,7 +202,7 @@ export function openFiddleWindow(
           }
         }
       } catch (err) {
-        console.warn('[Fiddle] telnet holder release failed:', err);
+        mainWarn('[Fiddle] telnet holder release failed:', err);
       }
     })();
 
@@ -209,9 +210,9 @@ export function openFiddleWindow(
       try {
         void Promise.resolve(
           fiddleCloseCleanup({ deviceId: activeId, device: matchingDevice, password: activePassword })
-        ).catch((err) => console.warn('[Fiddle] window-close cleanup failed:', err));
+        ).catch((err) => mainWarn('[Fiddle] window-close cleanup failed:', err));
       } catch (err) {
-        console.warn('[Fiddle] window-close cleanup threw:', err);
+        mainWarn('[Fiddle] window-close cleanup threw:', err);
       }
     }
   });
@@ -237,11 +238,11 @@ export function openFiddleWindow(
   });
 
   child.webContents.on('preload-error', (_e: unknown, failedPath: string, error: Error) => {
-    console.error('[Fiddle] Preload failed:', failedPath, error);
+    mainError('[Fiddle] Preload failed:', failedPath, error);
   });
 
   void child.loadFile(htmlPath).catch((err: unknown) => {
-    console.error('[Fiddle] loadFile failed:', err);
+    mainError('[Fiddle] loadFile failed:', err);
     fiddleWindowsById.delete(child.id);
     fiddleStateByWindowId.delete(child.id);
     if (!child.isDestroyed()) child.close();

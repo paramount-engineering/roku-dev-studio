@@ -11,6 +11,7 @@ import {
   type TelnetIpcCoalesceState
 } from './telnet-log-ipc-coalesce.js';
 import { getPersistedTimingValue } from '../settings';
+import { mainLog, mainWarn } from '../log.js';
 
 const {
   connectRokuDebugTelnet,
@@ -109,7 +110,7 @@ async function connectDebugTelnetInternal(ip: string): Promise<{ success: boolea
     connectTimeoutMs: getPersistedTimingValue('TELNET_TIMEOUT')
   });
   if (!conn.success) {
-    console.warn('[Telnet] connect failed for', ip, ':8085 →', conn.error);
+    mainWarn('[Telnet] connect failed for', ip, ':8085 →', conn.error);
     return { success: false, error: conn.error };
   }
 
@@ -121,7 +122,7 @@ async function connectDebugTelnetInternal(ip: string): Promise<{ success: boolea
     openedAtMs: Date.now(),
     bytesReceived: 0
   });
-  console.log('[Telnet] connected to', ip, ':8085 (readyState=' + (socket as unknown as { readyState?: string }).readyState + ')');
+  mainLog('[Telnet] connected to', ip, ':8085 (readyState=' + (socket as unknown as { readyState?: string }).readyState + ')');
   if (safeSend) safeSend(IPC.TelnetConnected, { ip, connectionId });
 
   socket.on('data', (data: Buffer) => {
@@ -136,7 +137,7 @@ async function connectDebugTelnetInternal(ip: string): Promise<{ success: boolea
   });
 
   socket.on('error', (error: Error) => {
-    console.warn('[Telnet] socket error for', ip, ':8085 →', error.message);
+    mainWarn('[Telnet] socket error for', ip, ':8085 →', error.message);
     if (safeSend) {
       safeSend(IPC.TelnetError, { ip, connectionId, error: error.message });
     }
@@ -149,12 +150,12 @@ async function connectDebugTelnetInternal(ip: string): Promise<{ success: boolea
     // binding (Roku 8085 is single-client and the rebind is racy — see
     // bs-fiddle-handlers.ts comments around the post-sideload bounce),
     // or (b) the channel exited / crashed immediately after we attached.
-    // The renderer surfaces this to the user; the console.log here is for
+    // The renderer surfaces this to the user; the log line here is for
     // the support log bundle.
     const conn = telnetConnections.get(connectionId);
     const aliveMs = conn ? Date.now() - conn.openedAtMs : -1;
     const bytes = conn ? conn.bytesReceived : -1;
-    console.log('[Telnet] socket close for', ip, ':8085',
+    mainLog('[Telnet] socket close for', ip, ':8085',
       '(hadError=' + hadError + ', aliveMs=' + aliveMs + ', bytesReceived=' + bytes + ')');
     flushCoalescedMapNow(telnetConnections, connectionId, (_live, slice) => {
       if (safeSend) safeSend(IPC.TelnetData, { ip, connectionId, data: slice });
@@ -190,7 +191,7 @@ async function disconnectDebugTelnetInternal(ip: string): Promise<{ success: boo
 }
 
 export async function bounceDebugTelnet(ip: string): Promise<{ success: boolean; error?: string }> {
-  console.log('[Telnet] bounceDebugTelnet: disconnect + reconnect', ip);
+  mainLog('[Telnet] bounceDebugTelnet: disconnect + reconnect', ip);
   // Snapshot logical holders before the bounce. Destroying the socket fires the
   // `close` handler, which wipes `debugTelnetHoldersByIp` for this IP; without
   // restoring them the socket would re-open with zero holders, breaking the
@@ -219,18 +220,18 @@ export async function ensureDebugTelnetConnected(
   const socket = existing?.socket as (Socket & { readyState?: string }) | undefined;
   const isHealthy = !!(existing && socket && !socket.destroyed && socket.readyState === 'open');
   if (isHealthy) {
-    console.log('[Telnet] ensureDebugTelnetConnected: reusing healthy socket for', ip);
+    mainLog('[Telnet] ensureDebugTelnetConnected: reusing healthy socket for', ip);
     if (options?.holder) addDebugTelnetHolder(ip, options.holder);
     return { success: true };
   }
   // Stale or missing — wipe it and open fresh.
   if (existing) {
-    console.log('[Telnet] ensureDebugTelnetConnected: stale entry for', ip,
+    mainLog('[Telnet] ensureDebugTelnetConnected: stale entry for', ip,
       '(destroyed=' + (socket?.destroyed ?? '?') + ', readyState=' + (socket?.readyState ?? '?') + ') — reconnecting');
     try { socket?.destroy(); } catch { /* ignore */ }
     telnetConnections.delete(ip);
   } else {
-    console.log('[Telnet] ensureDebugTelnetConnected: no existing socket for', ip, '— opening fresh');
+    mainLog('[Telnet] ensureDebugTelnetConnected: no existing socket for', ip, '— opening fresh');
   }
   const result = await connectDebugTelnetInternal(ip);
   if (result.success && options?.holder) addDebugTelnetHolder(ip, options.holder);
@@ -260,7 +261,7 @@ function setupTelnetHandlers(_mainWindow: BrowserWindow | undefined, safeSendToR
     // a renderer-driven reconnect doesn't help — the disconnect-cause
     // diagnostics on the close handler do.
     const result = await ensureDebugTelnetConnected(ip, { holder: 'main-ui' });
-    if (result.success) console.log('[Telnet] TelnetConnect OK for', ip, ':8085 (idempotent)');
+    if (result.success) mainLog('[Telnet] TelnetConnect OK for', ip, ':8085 (idempotent)');
     return result;
   });
 
@@ -309,7 +310,7 @@ function setupTelnetHandlers(_mainWindow: BrowserWindow | undefined, safeSendToR
     }
 
     const socket = conn.socket;
-    console.log('[Telnet System] Connected to', ip, ':8080');
+    mainLog('[Telnet System] Connected to', ip, ':8080');
 
     telnetSystemConnections.set(connectionId, {
       socket,
@@ -331,11 +332,11 @@ function setupTelnetHandlers(_mainWindow: BrowserWindow | undefined, safeSendToR
     });
 
     socket.on('error', (error: Error) => {
-      console.log('[Telnet System] Socket error:', error.message);
+      mainLog('[Telnet System] Socket error:', error.message);
     });
 
     socket.on('close', (hadError: boolean) => {
-      console.log('[Telnet System] Socket closed, hadError:', hadError);
+      mainLog('[Telnet System] Socket closed, hadError:', hadError);
       flushCoalescedMapNow(telnetSystemConnections, connectionId, (_live, slice) => {
         safeSendToRenderer(IPC.TelnetSystemData, {
           ip,

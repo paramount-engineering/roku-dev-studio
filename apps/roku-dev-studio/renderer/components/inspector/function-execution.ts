@@ -8,6 +8,7 @@ import { validateRaleBuiltinWireArgsForInspector } from './registry-validation.j
 import { buildRaleArgsFromParamValues } from '../action-scripts/rale-command-param-ui.js';
 import { validateAndNormalizeRaleCommandArgs } from '../action-scripts/rale-command-validator.js';
 import { getAppConnector } from '../../modules/app-connector/index.js';
+import { rendererError } from '../../modules/utils/logger.js';
 import type {
   DevicePanelRoot,
   DisplayResponseFn,
@@ -220,7 +221,7 @@ export function setupFunctionExecution(
         return [];
       }
     } else {
-      console.error('Fetch functions result:', result);
+      rendererError('Fetch functions result:', result);
       displayResponseFn(
         {
           error: result.error || 'Failed to fetch functions',

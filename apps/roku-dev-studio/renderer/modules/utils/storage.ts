@@ -25,6 +25,8 @@
  *      persistence as fire-and-forget already.
  */
 
+import { rendererWarn } from './logger.js';
+
 const LEGACY_PASSWORDS_KEY = 'roku-dev-passwords';
 
 /**
@@ -117,7 +119,7 @@ export async function hydrateSecretCache(): Promise<void> {
       try {
         await api.secretsMigrateLegacy(legacy);
       } catch (err) {
-        console.warn('[secrets] legacy migration failed:', err);
+        rendererWarn('[secrets] legacy migration failed:', err);
       }
     }
     if (legacy) {
@@ -136,7 +138,7 @@ export async function hydrateSecretCache(): Promise<void> {
       if (result?.status) storageStatus = result.status;
       if (result?.backend) storageBackend = result.backend;
     } catch (err) {
-      console.warn('[secrets] hydrate failed (cache stays empty for this session):', err);
+      rendererWarn('[secrets] hydrate failed (cache stays empty for this session):', err);
     }
   })();
   return hydrationPromise;
@@ -173,7 +175,7 @@ export function savePassword(serial: string, password: string): void {
   const api = rokuApi();
   if (api && typeof api.secretsSetPassword === 'function') {
     api.secretsSetPassword(serial, password).catch((err) => {
-      console.warn('[secrets] set failed:', err);
+      rendererWarn('[secrets] set failed:', err);
     });
   }
 }
@@ -198,7 +200,7 @@ export function removePassword(serial: string): void {
   const api = rokuApi();
   if (api && typeof api.secretsDeletePassword === 'function') {
     api.secretsDeletePassword(serial).catch((err) => {
-      console.warn('[secrets] delete failed:', err);
+      rendererWarn('[secrets] delete failed:', err);
     });
   }
 }

@@ -9,6 +9,7 @@ import type {
   SideloadFilePathPayload
 } from '../../shared/ipc/payloads';
 import { IPC } from '../../shared/ipc/channels';
+import { mainError } from '../log.js';
 
 const fs = require('fs');
 const path = require('path');
@@ -210,7 +211,7 @@ function setupDevAppHandlers(mainWindow: BrowserWindow | undefined, dialog: Dial
     try {
       fs.writeFileSync(tempFile, result.imageBuffer);
     } catch (err: unknown) {
-      console.error('Screenshot: failed to write temp file', errMsg(err));
+      mainError('Screenshot: failed to write temp file', errMsg(err));
       return { success: false, error: `Failed to save screenshot: ${errMsg(err)}` };
     }
     const dataUrl = `data:image/jpeg;base64,${result.imageBuffer.toString('base64')}`;

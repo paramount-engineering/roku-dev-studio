@@ -39,6 +39,7 @@
 import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
+import { mainWarn } from './log.js';
 
 const FILE_NAME = 'mcp-audit.log';
 const ROTATED_NAME = 'mcp-audit.log.1';
@@ -142,7 +143,7 @@ function rotateIfNeeded(filePath: string, nextWriteBytes: number): void {
   } catch (e) {
     // Rotation is best-effort. If it fails we keep appending to the live
     // file; better to bloat than to drop the audit record.
-    console.warn('[mcp-audit] rotation failed', e);
+    mainWarn('[mcp-audit] rotation failed', e);
   }
 }
 
@@ -164,7 +165,7 @@ export function recordMcpAudit(record: McpAuditRecord): void {
       fs.appendFileSync(filePath, line, { encoding: 'utf-8', mode: 0o600 });
       cachedSize += bytes;
     } catch (e) {
-      console.warn('[mcp-audit] append failed', e);
+      mainWarn('[mcp-audit] append failed', e);
     } finally {
       writesInFlight--;
     }

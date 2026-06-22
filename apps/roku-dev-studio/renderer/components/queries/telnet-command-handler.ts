@@ -1,6 +1,7 @@
 // Telnet command handler (plugins, free, etc.)
 
 import { escapeHtml } from '../../modules/utils/index.js';
+import { rendererWarn } from '../../modules/utils/logger.js';
 import {
   processTelnetSystemCommandOutput,
   runTelnetSystemCommandSession
@@ -88,7 +89,7 @@ export function setupTelnetCommands(
             true
           );
         } else if (output && output.length > 0) {
-          console.warn('[Telnet] Output was empty after processing, showing raw data');
+          rendererWarn('[Telnet] Output was empty after processing, showing raw data');
           outputArea.originalContent = output;
           outputArea.display(
             `<pre style="margin: 0; white-space: pre; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #e0e0e0; line-height: 1.5; overflow-x: auto;">${escapeHtml(output)}</pre>`,

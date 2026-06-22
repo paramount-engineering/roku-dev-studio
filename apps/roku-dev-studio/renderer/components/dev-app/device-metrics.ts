@@ -34,6 +34,7 @@ import {
   type MetricsRingSnapshot
 } from './device-metrics-performance-step.js';
 import { pollDevAppForegroundAfterLaunch } from './dev-app-foreground-sync.js';
+import { rendererWarn } from '../../modules/utils/logger.js';
 
 /** When active-app has no id, still query sideloaded dev package (often zero if another app is foreground). */
 const OBJECT_COUNTS_FALLBACK_APP_ID = 'dev';
@@ -446,23 +447,23 @@ export function setupRemoteTabMetrics(
   const objFallbackWrap = wrap.querySelector('[data-objects-fallback-wrap]');
 
   if (!(cpuSvg instanceof SVGSVGElement)) {
-    console.warn('[Remote metrics] Chart template elements missing');
+    rendererWarn('[Remote metrics] Chart template elements missing');
     return;
   }
   if (!(memSvg instanceof SVGSVGElement)) {
-    console.warn('[Remote metrics] Chart template elements missing');
+    rendererWarn('[Remote metrics] Chart template elements missing');
     return;
   }
   if (!(objTotalSvg instanceof SVGSVGElement)) {
-    console.warn('[Remote metrics] Chart template elements missing');
+    rendererWarn('[Remote metrics] Chart template elements missing');
     return;
   }
   if (!(objRm instanceof HTMLElement)) {
-    console.warn('[Remote metrics] Object chart template missing');
+    rendererWarn('[Remote metrics] Object chart template missing');
     return;
   }
   if (!(objFallbackWrap instanceof HTMLElement)) {
-    console.warn('[Remote metrics] Chart template elements missing');
+    rendererWarn('[Remote metrics] Chart template elements missing');
     return;
   }
 

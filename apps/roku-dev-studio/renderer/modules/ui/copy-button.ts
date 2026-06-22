@@ -1,5 +1,6 @@
 // Reusable copy button handler
 import { setSafeHTML } from '../utils/dom.js';
+import { rendererError } from '../utils/logger.js';
 
 export interface CopyButtonOptions {
   successText?: string;
@@ -41,7 +42,7 @@ export function setupCopyButton(
         restoreTimer = null;
       }, duration);
     } catch (error) {
-      console.error('Failed to copy to clipboard:', error);
+      rendererError('Failed to copy to clipboard:', error);
     }
   });
 }

@@ -158,7 +158,10 @@ contextBridge.exposeInMainWorld('roku', {
   
   // Check if debug logging is enabled
   isDebugEnabled: () => ipcRenderer.invoke(IPC.IsDebugEnabled),
-  
+
+  // Whether verbose logging is forced on by the RDS_DEBUG env flag (read once at startup).
+  getVerboseDebug: () => ipcRenderer.invoke(IPC.GetVerboseDebug),
+
   // Open debug log file (only works if debug enabled)
   openLogFile: () => ipcRenderer.invoke(IPC.OpenLogFile),
 

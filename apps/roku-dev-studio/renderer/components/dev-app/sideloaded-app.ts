@@ -9,6 +9,7 @@ import type {
   SideloadedAppElements
 } from './dev-app-types.js';
 import { pollDevAppForegroundAfterLaunch, pollDevAppForegroundOnce } from './dev-app-foreground-sync.js';
+import { rendererError } from '../../modules/utils/logger.js';
 
 /**
  * Setup sideloaded app display
@@ -114,7 +115,7 @@ export function setupSideloadedApp(
         );
       }
     } catch (e) {
-      console.error('Failed to check sideloaded app:', e);
+      rendererError('Failed to check sideloaded app:', e);
       sideloadedAppCard.style.display = 'block';
       setSafeHTML(sideloadedAppDetails, '<div class="sideloaded-none">No channel currently sideloaded</div>');
       if (deleteBtn) deleteBtn.style.display = 'none';
@@ -181,7 +182,7 @@ export function setupSideloadedApp(
           scheduleAutoScreenshot(SCREENSHOT_AFTER_LAUNCH_DELAY);
         }
       } catch (e) {
-        console.error('Failed to launch dev app:', e);
+        rendererError('Failed to launch dev app:', e);
       }
       launchSideloadBtn.disabled = false;
       setSafeHTML(launchSideloadBtn, icon('rocket', 'icon-xs') + ' Launch');

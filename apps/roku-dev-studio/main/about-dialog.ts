@@ -7,6 +7,7 @@ import type { BrowserWindow, Clipboard, IpcMain, IpcMainInvokeEvent, Shell } fro
 import { IPC } from '../shared/ipc/channels';
 import { openExternalUrl } from './open-external-url';
 import { isMacOS, platformLabel } from 'roku-dev-studio-platform';
+import { mainError } from './log.js';
 
 const path = require('path');
 const os = require('os');
@@ -30,7 +31,7 @@ function registerAboutIpc(ipcMain: IpcMain, clipboard: Clipboard, shell: Shell) 
  */
 function showAboutDialog(mainWindow: BrowserWindow) {
   if (!mainWindow) {
-    console.error('Main window not available');
+    mainError('Main window not available');
     return;
   }
 
@@ -310,7 +311,7 @@ Operating System: \${versionInfo.osType} \${versionInfo.arch} \${versionInfo.osR
   try {
     aboutWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(aboutContent)}`);
   } catch (error) {
-    console.error('Error loading About dialog:', error);
+    mainError('Error loading About dialog:', error);
     dialog.showErrorBox('Error', 'Failed to load About dialog. Please try again.');
   }
 }

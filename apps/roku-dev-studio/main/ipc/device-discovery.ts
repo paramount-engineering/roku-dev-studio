@@ -5,6 +5,7 @@ import type { GetDeviceIdFn, GetDeviceInfoFn, SafeSendFn } from '../../shared/ip
 import { IPC } from '../../shared/ipc/channels';
 import { detectHotspotInterface } from '../network-inspector/index';
 import { loadSettings } from '../settings';
+import { mainLog, mainError } from '../log.js';
 
 const { ssdpDiscover, subnetScan } = require('roku-dev-studio-api');
 
@@ -24,14 +25,14 @@ function setupDeviceDiscovery(
   const { ipcMain } = require('electron');
 
   ipcMain.handle(IPC.RokuDiscover, async () => {
-    console.log('=== SSDP Discovery Started ===');
+    mainLog('=== SSDP Discovery Started ===');
     try {
       const devices = await ssdpDiscover({
         onDeviceFound: (device: unknown) => safeSendToRenderer(IPC.RokuDeviceFound, device),
-        log: (msg: unknown) => console.log(msg)
+        log: (msg: unknown) => mainLog(msg)
       });
-      console.log('=== SSDP Discovery Complete ===');
-      console.log(
+      mainLog('=== SSDP Discovery Complete ===');
+      mainLog(
         'Found',
         devices.length,
         'devices:',
@@ -39,13 +40,13 @@ function setupDeviceDiscovery(
       );
       return { success: true, devices };
     } catch (err: unknown) {
-      console.error('SSDP discovery error:', err);
+      mainError('SSDP discovery error:', err);
       return { success: false, error: errMsg(err) || 'Discovery failed', devices: [] };
     }
   });
 
   ipcMain.handle(IPC.RokuScanSubnet, async () => {
-    console.log('=== Subnet Scan Started ===');
+    mainLog('=== Subnet Scan Started ===');
     try {
       const settings = loadSettings();
       const networkInspectorEnabled = settings['networkInspectorEnabled'] === true;
@@ -54,14 +55,14 @@ function setupDeviceDiscovery(
         const hotspot = detectHotspotInterface();
         if (hotspot) {
           extraSubnetPrefixes.push(hotspot.subnet);
-          console.log(
+          mainLog(
             'Network Inspector: including hotspot subnet',
             hotspot.subnet + '.0/24',
             'on',
             hotspot.name
           );
         } else {
-          console.log(
+          mainLog(
             'Network Inspector enabled but no hotspot interface detected — scanning LAN subnets only'
           );
         }
@@ -69,13 +70,13 @@ function setupDeviceDiscovery(
       const devices = await subnetScan({
         extraSubnetPrefixes,
         onDeviceFound: (device: unknown) => safeSendToRenderer(IPC.RokuDeviceFound, device),
-        log: (msg: unknown) => console.log(msg)
+        log: (msg: unknown) => mainLog(msg)
       });
-      console.log('=== Subnet Scan Complete ===');
-      console.log('Found', devices.length, 'devices');
+      mainLog('=== Subnet Scan Complete ===');
+      mainLog('Found', devices.length, 'devices');
       return { success: true, devices };
     } catch (err: unknown) {
-      console.error('Subnet scan error:', err);
+      mainError('Subnet scan error:', err);
       return { success: false, error: errMsg(err) || 'Scan failed', devices: [] };
     }
   });

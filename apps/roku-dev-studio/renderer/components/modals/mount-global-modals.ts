@@ -3,13 +3,15 @@
  * Keeps large modal HTML out of index.html; loads in parallel at startup.
  */
 
+import { rendererError } from '../../modules/utils/logger.js';
+
 let mounted = false;
 
 export async function ensureGlobalModalsMounted() {
   if (mounted) return;
   const root = document.getElementById('global-modals-root');
   if (!root) {
-    console.error('[mount-global-modals] #global-modals-root not found');
+    rendererError('[mount-global-modals] #global-modals-root not found');
     return;
   }
   const names = [

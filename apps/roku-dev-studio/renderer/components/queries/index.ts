@@ -12,6 +12,7 @@ import { createFindBar, buildFindBarElement, bindFindShortcut } from '../../modu
 import { attachFoldToggle, structuredBodyText, structuredFileExtension } from '../../modules/ui/structured-body.js';
 import { attachSelectAll } from '../../modules/ui/select-all.js';
 import type { DevicePanelRoot } from '../../types/device-panel-dom.js';
+import { rendererError } from '../../modules/utils/logger.js';
 
 export function setupQueries(panel: DevicePanelRoot, api: QueriesDeviceApi): void {
   panel.rokuDevStudioApi = api;
@@ -46,7 +47,7 @@ export function setupQueries(panel: DevicePanelRoot, api: QueriesDeviceApi): voi
   }
 
   if (!queryOutput || !copyBtn || !customQueryInput || !runCustomQueryBtn) {
-    console.error('Query elements not found:', {
+    rendererError('Query elements not found:', {
       queryOutput,
       copyBtn,
       customQueryInput,

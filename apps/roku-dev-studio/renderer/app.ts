@@ -23,6 +23,8 @@ import {
   QUERY_ENDPOINTS
 } from './modules/index.js';
 import { errMessage } from './modules/utils/err-message.js';
+import { devLog } from './modules/utils/dev-log.js';
+import { rendererWarn, rendererError } from './modules/utils/logger.js';
 import { initDeeplinkMediaTypes } from './modules/deeplink/deeplink-media-types.js';
 import { initDeeplinkPresets } from './modules/deeplink/deeplink-presets.js';
 import { setupDeepLinkPanel } from './modules/deeplink/deeplink-panel.js';
@@ -67,36 +69,9 @@ import { peekAppConnector } from './modules/app-connector/index.js';
 // ============================================
 // Developer Mode - Conditional Logging
 // ============================================
-
-let developerModeEnabled = false;
-
-// Developer-only logging function - only outputs when Developer Mode is enabled
-function devLog(...args: unknown[]) {
-  if (developerModeEnabled) {
-    console.log('[DEV]', ...args);
-  }
-}
-
-// Initialize developer mode on load
-async function initDeveloperMode() {
-  try {
-    const result = await window.roku.getDeveloperMode();
-    developerModeEnabled = result.enabled;
-    devLog('Developer Mode initialized:', developerModeEnabled);
-  } catch (e) {
-    // Developer mode not available, keep disabled
-  }
-  
-  // Listen for changes from the File menu
-  window.roku.onDeveloperModeChanged((enabled) => {
-    developerModeEnabled = enabled;
-    if (enabled) {
-      console.log('[DEV] Developer Mode ENABLED - console logging active');
-    } else {
-      console.log('[DEV] Developer Mode DISABLED');
-    }
-  });
-}
+// `devLog` and its Developer-Mode / RDS_DEBUG gating live in the shared dev-log module, which
+// routes through the shared logger and self-initializes from the preload bridge on import (it
+// subscribes to developer-mode changes and reads the RDS_DEBUG flag itself).
 
 // ============================================
 // Privacy Mode - Mask IPs and Serial Numbers
@@ -569,7 +544,7 @@ function pushDeviceListToMcpBridge(): void {
         : null
     });
   } catch (e) {
-    console.warn('[mcp-bridge] could not push device list', e);
+    rendererWarn('[mcp-bridge] could not push device list', e);
   }
 }
 
@@ -830,7 +805,7 @@ async function loadRemoteLocations() {
       devLog('[Remote Locations] No stored locations found');
     }
   } catch (e) {
-    console.error('Failed to load remote locations:', e);
+    rendererError('Failed to load remote locations:', e);
   }
 }
 
@@ -848,7 +823,7 @@ async function saveRemoteLocations() {
     const result = await window.roku.setSetting('remote-locations', locations);
     devLog('[Remote Locations] Save result:', result);
   } catch (e) {
-    console.error('Failed to save remote locations:', e);
+    rendererError('Failed to save remote locations:', e);
   }
 }
 
@@ -1052,13 +1027,13 @@ async function refreshRemoteLocation(locationId) {
     } catch (error) {
       const discoveryDuration = Date.now() - discoveryStartTime;
       devLog(`[Remote ${location.name}] Discovery ERROR (${discoveryDuration}ms):`, errMessage(error));
-      console.error('[Remote %s] Discovery error: %s', location.name, error);
+      rendererError('[Remote %s] Discovery error: %s', location.name, error);
     }
     
     state.scanningLocations.delete(locationId); // Delete BEFORE render so UI shows "complete"
     renderRemoteLocations();
   } catch (e) {
-    console.error('Failed to refresh remote location:', e);
+    rendererError('Failed to refresh remote location:', e);
     location.status = 'offline';
     location.capabilities = null;
     state.scanningLocations.delete(locationId); // Delete BEFORE render
@@ -1476,7 +1451,7 @@ function connectRemoteDevice(device, locationId) {
     if (location) {
       device.serverUrl = location.serverUrl;
     } else {
-      console.error('Cannot connect to remote device: location not found', locationId);
+      rendererError('Cannot connect to remote device: location not found', locationId);
       return;
     }
   }
@@ -1680,7 +1655,7 @@ async function addRememberedDeviceToListIfEnabled(
     await window.roku.setSetting(AUTO_CONNECT_DEVICE_LIST_KEY, list);
     cachedRememberedDeviceList = list;
   } catch (e) {
-    console.error('[Auto-connect] Failed to update remembered device list:', e);
+    rendererError('[Auto-connect] Failed to update remembered device list:', e);
   }
 }
 
@@ -1697,7 +1672,7 @@ async function removeRememberedDeviceFromListIfEnabled(conn: {
     await window.roku.setSetting(AUTO_CONNECT_DEVICE_LIST_KEY, list);
     cachedRememberedDeviceList = list;
   } catch (e) {
-    console.error('[Auto-connect] Failed to remove from remembered device list:', e);
+    rendererError('[Auto-connect] Failed to remove from remembered device list:', e);
   }
 }
 
@@ -1832,7 +1807,7 @@ async function executeLocalDiscoveryScan(): Promise<void> {
       result.devices.forEach(device => addDiscoveredDevice(device));
     }
   } catch (error) {
-    console.error('Discovery error:', error);
+    rendererError('Discovery error:', error);
   }
 
   const shouldSubnetScan = state.devices.size === 0 || NETWORK_INSPECTOR_ENABLED;
@@ -1853,7 +1828,7 @@ async function executeLocalDiscoveryScan(): Promise<void> {
         subnetResult.devices.forEach(device => addDiscoveredDevice(device));
       }
     } catch (error) {
-      console.error('Subnet scan error:', error);
+      rendererError('Subnet scan error:', error);
     }
   }
   cleanup();
@@ -1868,13 +1843,13 @@ async function startScan() {
   try {
     updateScanButton(true);
   } catch (err) {
-    console.error('Error updating scan button:', err);
+    rendererError('Error updating scan button:', err);
   }
 
   try {
     await executeLocalDiscoveryScan();
   } catch (error) {
-    console.error('Discovery error:', error);
+    rendererError('Discovery error:', error);
   }
 
   state.isScanning = false;
@@ -1882,7 +1857,7 @@ async function startScan() {
     updateScanButton(false);
     renderDeviceList();
   } catch (err) {
-    console.error('Error after scan:', err);
+    rendererError('Error after scan:', err);
   }
 
   startupLocalScanComplete = true;
@@ -1898,7 +1873,7 @@ async function runFullUserScan() {
   try {
     updateScanButton(true);
   } catch (err) {
-    console.error('Error updating scan button:', err);
+    rendererError('Error updating scan button:', err);
   }
 
   try {
@@ -1909,7 +1884,7 @@ async function runFullUserScan() {
         : Promise.resolve();
     await Promise.all([localPromise, remotePromise]);
   } catch (error) {
-    console.error('Full scan error:', error);
+    rendererError('Full scan error:', error);
   }
 
   state.isScanning = false;
@@ -1917,7 +1892,7 @@ async function runFullUserScan() {
     updateScanButton(false);
     renderDeviceList();
   } catch (err) {
-    console.error('Error after full scan:', err);
+    rendererError('Error after full scan:', err);
   }
 
   await tryAutoConnectRememberedMatchesAfterUserScan();
@@ -1938,13 +1913,13 @@ async function runLocalOnlyUserScan() {
   try {
     updateScanButton(true);
   } catch (err) {
-    console.error('Error updating scan button:', err);
+    rendererError('Error updating scan button:', err);
   }
 
   try {
     await executeLocalDiscoveryScan();
   } catch (error) {
-    console.error('Local scan error:', error);
+    rendererError('Local scan error:', error);
   }
 
   state.isScanning = false;
@@ -1952,7 +1927,7 @@ async function runLocalOnlyUserScan() {
     updateScanButton(false);
     renderDeviceList();
   } catch (err) {
-    console.error('Error after local scan:', err);
+    rendererError('Error after local scan:', err);
   }
 
   await tryAutoConnectRememberedMatchesAfterUserScan();
@@ -1990,7 +1965,7 @@ function addDiscoveredDevice(device) {
     try {
       renderDeviceList();
     } catch (err) {
-      console.error('Error rendering device list:', err);
+      rendererError('Error rendering device list:', err);
     }
     return;
   }
@@ -2042,7 +2017,7 @@ function addDiscoveredDevice(device) {
     try {
       renderDeviceList();
     } catch (err) {
-      console.error('Error rendering device list:', err);
+      rendererError('Error rendering device list:', err);
     }
     return;
   }
@@ -2053,7 +2028,7 @@ function addDiscoveredDevice(device) {
   try {
     renderDeviceList();
   } catch (err) {
-    console.error('Error rendering device list:', err);
+    rendererError('Error rendering device list:', err);
   }
 }
 
@@ -2114,7 +2089,7 @@ function renderDeviceList() {
   const localEmptyState = document.getElementById('localEmptyState');
   
   if (!localDevicesList) {
-    console.error('localDevicesList not found');
+    rendererError('localDevicesList not found');
     return;
   }
   
@@ -2148,7 +2123,7 @@ function renderDeviceList() {
       const card = createDeviceCard(device);
       localDevicesList.appendChild(card);
     } catch (err) {
-      console.error('Error creating device card:', err);
+      rendererError('Error creating device card:', err);
     }
   });
 }
@@ -2614,7 +2589,7 @@ async function checkDeviceConnection(
       } catch (err) {
         const checkDuration = Date.now() - checkStartTime;
         devLog(`[Device Active Check] Remote ERROR (${checkDuration}ms):`, errMessage(err));
-        console.error('Remote check error:', err);
+        rendererError('Remote check error:', err);
         result = { success: false, error: errMessage(err) };
       }
     } else {
@@ -2657,7 +2632,7 @@ async function checkDeviceConnection(
       }
     }
   } catch (error) {
-    console.error('Connection check failed for', ip, ':', error);
+    rendererError('Connection check failed for', ip, ':', error);
     updateDeviceOfflineState(deviceKey, true, !!serverUrl);
   }
 }
@@ -3076,7 +3051,7 @@ function createDevicePanel(device, tabId, isRemote = false, serverUrl = null, lo
   
   const template = elements.devicePanelTemplate;
   if (!template) {
-    console.error('Device panel template not found!');
+    rendererError('Device panel template not found!');
     return document.createElement('div');
   }
   
@@ -3158,7 +3133,7 @@ function createDevicePanel(device, tabId, isRemote = false, serverUrl = null, lo
     
     devLog('Device panel setup complete');
   } catch (error) {
-    console.error('Error setting up device panel:', error);
+    rendererError('Error setting up device panel:', error);
   }
   
   return panel;
@@ -3167,6 +3142,12 @@ function createDevicePanel(device, tabId, isRemote = false, serverUrl = null, lo
 // ============================================
 // Inner Tab Management
 // ============================================
+
+// Network Inspector recording is continuous while it's enabled from Settings: once enabled, the
+// engine captures every request regardless of which tab is foreground or whether the window is
+// visible. Recording only stops for a specific device when the user presses Pause on that device
+// (see pausedRecordingDeviceIps in the engine). The engine defaults to active, so the renderer no
+// longer drives a tab/visibility-based suspend — leaving the Network view never pauses capture.
 
 function setupInnerTabs(panel) {
   const innerTabs = panel.querySelectorAll('.inner-tab');
@@ -3195,7 +3176,7 @@ function setupInnerTabs(panel) {
       if (targetContent) {
         targetContent.classList.add('active');
       } else {
-        console.error('Tab content not found for:', target);
+        rendererError('Tab content not found for:', target);
       }
       
       // Dispatch custom event for tab switch
@@ -3249,7 +3230,7 @@ function setupRemoteControls(panel, device, api) {
         }
       }
     } catch (error) {
-      console.error('Auto screenshot error:', error);
+      rendererError('Auto screenshot error:', error);
     }
   }
   
@@ -3286,7 +3267,7 @@ function setupApps(panel, device, api) {
   const tvInputsRow = panel.querySelector('.tv-inputs-row');
   
   if (!appsGrid || !appsLoading || !appsEmpty || !refreshBtn) {
-    console.error('Apps elements not found:', { appsGrid, appsLoading, appsEmpty, refreshBtn });
+    rendererError('Apps elements not found:', { appsGrid, appsLoading, appsEmpty, refreshBtn });
     return;
   }
   
@@ -3793,7 +3774,7 @@ document.addEventListener('keydown', async (e) => {
       await panelApi.keypress(rokuKey);
       scheduleKeyboardRemoteAutoScreenshotForActiveInnerTab(activePanel);
     } catch (error) {
-      console.error('Keypress error:', error);
+      rendererError('Keypress error:', error);
     }
 
     if (btns.length > 0) {
@@ -3936,7 +3917,7 @@ function setupRemoteLocationModal() {
       await addRemoteLocation(name, host, port);
       closeModal();
     } catch (e) {
-      console.error('Failed to add remote location:', e);
+      rendererError('Failed to add remote location:', e);
       alert(errMessage(e) || 'Failed to connect to relay server');
     }
     
@@ -4457,8 +4438,7 @@ async function init() {
   await initDeeplinkPresets();
   setupKeyboardRemoteHelpModal();
 
-  // Initialize developer mode first
-  initDeveloperMode();
+  // Developer-mode logging self-initializes in the shared dev-log module on import.
   // Initialize privacy mode
   initPrivacyMode();
   
@@ -4501,7 +4481,7 @@ async function init() {
   });
   
   if (!window.roku) {
-    console.error('window.roku is not available! Preload might have failed.');
+    rendererError('window.roku is not available! Preload might have failed.');
     return;
   }
 
@@ -4626,7 +4606,7 @@ async function init() {
         setTimeout(refreshAllRemoteLocations, 500);
       })
       .catch((e) => {
-        console.error('Failed to load remote locations:', e);
+        rendererError('Failed to load remote locations:', e);
         startupRemoteScanComplete = true;
         void onStartupScansReady();
       });
@@ -4641,7 +4621,7 @@ async function init() {
     startScan().then(() => {
       devLog('Auto-scan complete, found', state.devices.size, 'device(s)');
     }).catch(err => {
-      console.error('Auto-scan failed:', err);
+      rendererError('Auto-scan failed:', err);
     });
   }, initialDelay);
   
@@ -4705,7 +4685,7 @@ async function init() {
       try {
         await runFullUserScan();
       } catch (err) {
-        console.error('[Fiddle] refresh scan failed:', err);
+        rendererError('[Fiddle] refresh scan failed:', err);
       } finally {
         try {
           window.roku.pushFiddleDevices({ devices: buildFiddleDeviceSnapshot() });
@@ -4732,7 +4712,7 @@ async function init() {
       try {
         removePassword(key);
       } catch (err) {
-        console.error('[Fiddle] removePassword failed:', err);
+        rendererError('[Fiddle] removePassword failed:', err);
       }
       // Re-push so the Fiddle window sees the now-empty password on its snapshot
       // and prompts the user on the next Run / Stop.
@@ -4786,7 +4766,7 @@ async function init() {
       }
       window.roku.openFiddle({ devices, initialDeviceId });
     } catch (err) {
-      console.warn('[Fiddle] __rdsOpenFiddleForDevice failed:', err);
+      rendererWarn('[Fiddle] __rdsOpenFiddleForDevice failed:', err);
     }
   };
 
@@ -5206,7 +5186,7 @@ window.saveTrackerTask = async function() {
       showToast('Failed to save TrackerTask.xml: ' + (result.error || 'Unknown error'), 'error');
     }
   } catch (err) {
-    console.error('Error saving TrackerTask:', err);
+    rendererError('Error saving TrackerTask:', err);
     showToast('Error saving TrackerTask: ' + errMessage(err), 'error');
   }
 };
@@ -5274,7 +5254,7 @@ End Sub
   navigator.clipboard.writeText(integrationInfo).then(() => {
     showToast('Integration info copied to clipboard!', 'success');
   }).catch(err => {
-    console.error('Failed to copy:', err);
+    rendererError('Failed to copy:', err);
     showToast('Failed to copy to clipboard', 'error');
   });
 };
@@ -5352,7 +5332,7 @@ function runInit() {
     showToast(payload.summary, variant);
   });
   init().catch((err) => {
-    console.error('App init failed:', err);
+    rendererError('App init failed:', err);
     alert('App initialization failed: ' + errMessage(err));
   });
 }
@@ -5363,6 +5343,6 @@ if (document.readyState === 'loading') {
 }
 
 } catch (err) {
-  console.error('=== FATAL ERROR IN APP.JS ===', err);
+  rendererError('=== FATAL ERROR IN APP.JS ===', err);
   alert('App initialization failed: ' + errMessage(err));
 }

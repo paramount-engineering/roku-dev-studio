@@ -1,6 +1,7 @@
 // Parameter input rendering and management
 
 import { escapeHtml, setSafeHTML } from '../../modules/utils/index.js';
+import { rendererWarn } from '../../modules/utils/logger.js';
 import { renderRegistryBuiltinParams, getRegistryBuiltinParamValues } from './registry-params-ui.js';
 import { syncBuilderRaleParamRowHeights } from './rale-builder-param-row-sync.js';
 import type { RenderParamInputsOptions } from './inspector-types.js';
@@ -287,7 +288,7 @@ export function getParamValues(paramsContainer: HTMLElement): unknown[] {
       try {
         parsed = JSON.parse(raw);
       } catch {
-        console.warn(`Parameter ${input.dataset.paramName}: kept as string (not valid JSON)`);
+        rendererWarn(`Parameter ${input.dataset.paramName}: kept as string (not valid JSON)`);
       }
     }
 

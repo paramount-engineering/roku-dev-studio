@@ -13,6 +13,7 @@ import {
   optionalRaleFunctionsForScript
 } from './script-rale-validation.js';
 import { escapeHtml, setSafeHTML } from '../../modules/utils/index.js';
+import { rendererError } from '../../modules/utils/logger.js';
 import { prettyJson, prettyXmlLenient } from '../../modules/ui/structured-body.js';
 import { attachSelectAll } from '../../modules/ui/select-all.js';
 import { getActionScriptDefaultSaveFolder } from '../../modules/utils/app-user-settings.js';
@@ -1165,7 +1166,7 @@ export function setupExecutor(panel, api, context) {
         executorResultsCopyBtn.title = 'Copied!';
         setTimeout(() => { executorResultsCopyBtn.title = 'Copy Results'; }, 2000);
       } catch (e) {
-        console.error('Copy results failed:', e);
+        rendererError('Copy results failed:', e);
       }
     });
   }
@@ -1184,7 +1185,7 @@ export function setupExecutor(panel, api, context) {
           }
         }
       } catch (e) {
-        console.error('Save results failed:', e);
+        rendererError('Save results failed:', e);
       }
     });
   }

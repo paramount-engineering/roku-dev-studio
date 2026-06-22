@@ -23,6 +23,7 @@ import { bridgeRequest, getBridgeStatus } from './bridge-client.js';
 import { wrapValidationForAgent, formatValidationErrorsForAgent } from './agent-contract.js';
 import { buildCapabilityBundle } from './resources.js';
 import { logOutputSchemaIssues, validateOutput } from './output-schema-validator.js';
+import { mcpError } from './log.js';
 
 // Single source of truth for catalogs + op descriptors.
 const catalogs = require('roku-dev-studio-api/lib/catalogs') as {
@@ -208,7 +209,7 @@ function warnOnOutputSchemaMismatch(op: RokuOpDescriptor, body: unknown): void {
   } catch (e) {
     // Validator should never throw; if it does, treat as warn-only.
     // eslint-disable-next-line no-console
-    console.error(`[output-schema] ${op.id}: validator threw`, e);
+    mcpError(`[output-schema] ${op.id}: validator threw`, e);
   }
 }
 

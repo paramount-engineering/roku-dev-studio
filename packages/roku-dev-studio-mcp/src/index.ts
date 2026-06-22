@@ -10,6 +10,7 @@
  * Spec reference: https://spec.modelcontextprotocol.io/
  */
 
+import { mcpError } from './log.js';
 import { TOOLS, findTool, type Tool } from './tools.js';
 import { listResources, readResource } from './resources.js';
 import { listPrompts, getPrompt } from './prompts.js';
@@ -47,8 +48,7 @@ const ERROR_CODES = {
 
 function logErr(message: string, ...rest: unknown[]): void {
   // Stderr only — stdout is reserved for MCP protocol traffic.
-  // eslint-disable-next-line no-console
-  console.error(`[roku-dev-studio-mcp] ${message}`, ...rest);
+  mcpError(message, ...rest);
 }
 
 function writeMessage(msg: JsonRpcResponse | object): void {

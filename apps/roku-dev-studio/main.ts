@@ -26,6 +26,7 @@ const { initSettings, loadSettings, saveSettings, registerSettingsIpc } = requir
 const secretStore = require('./main/secret-store') as typeof import('./main/secret-store');
 const { startMcpBridge } = require('./main/mcp-bridge');
 const { getDeviceInfo, getDeviceId } = require('roku-dev-studio-api');
+const { mainLog, mainWarn, mainError } = require('./main/log');
 
 // ============================================
 // File Logging for Debugging (File menu setting)
@@ -80,6 +81,19 @@ function disableFileLogging() {
   }
 }
 
+/** Append one line to the debug log without invoking the console wrapper (diagnostic renderer capture). */
+function appendDebugLogLine(line: string) {
+  if (!logFile || !app) return;
+  const userData = app.getPath('userData');
+  const logPathToUse = resolveUserPathUnderOneOf([userData], logFile);
+  if (!logPathToUse) return;
+  try {
+    fs.appendFileSync(logPathToUse, line.endsWith('\n') ? line : `${line}\n`);
+  } catch {
+    /* ignore */
+  }
+}
+
 let mainWindow: import('electron').BrowserWindow | undefined;
 let developerModeEnabled = false;
 let privacyModeEnabled = false;
@@ -95,6 +109,17 @@ let privacyModeEnabled = false;
 const { zoomIn, zoomOut, resetZoom, setupZoomGuards } = require('./main/window-zoom');
 const { registerHamburgerMenuIpc } = require('./main/hamburger-menu');
 const { registerStripAuxWindowMenus } = require('./main/strip-aux-window-menu');
+const {
+  isDiagnosticBuild,
+  applyDiagnosticCommandLineSwitches,
+  registerDiagnosticWebContents,
+  startDiagnosticTelemetry,
+  registerDiagnosticIpc
+} = require('./main/diagnostic-build');
+
+if (isDiagnosticBuild()) {
+  applyDiagnosticCommandLineSwitches(app, app.getPath('userData'));
+}
 
 // Helper function to safely send messages to renderer.
 //
@@ -150,24 +175,24 @@ function safeSendToRendererWithFiddleMirror(channel: string, data: unknown) {
 
 // Global error handlers to prevent crashes
 process.on('uncaughtException', (error) => {
-  console.error('Uncaught Exception:', error);
+  mainError('Uncaught Exception:', error);
   const code = error && typeof error === 'object' && 'code' in error ? (error as NodeJS.ErrnoException).code : undefined;
   // Don't crash the app for network errors
   if (code === 'EPIPE' || code === 'ECONNRESET' || code === 'ECONNREFUSED') {
-    console.log('Network error caught globally, continuing...');
+    mainLog('Network error caught globally, continuing...');
     return;
   }
 });
 
 process.on('unhandledRejection', (reason, promise) => {
-  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+  mainError('Unhandled Rejection at:', promise, 'reason:', reason);
 });
 
 /** Sandboxed preload may only require('electron'); API code is inlined in preload.bundled.cjs */
 function ensurePreloadBundle() {
   const bundled = path.join(__dirname, 'preload.bundled.cjs');
   if (fs.existsSync(bundled)) return;
-  console.log('[Roku Dev Studio] Running scripts/build (main, preload, HTML renderer)...');
+  mainLog('[Roku Dev Studio] Running scripts/build (main, preload, HTML renderer)...');
   const { execFileSync } = require('child_process');
   execFileSync(process.execPath, [path.join(__dirname, 'scripts', 'build', 'index.js')], {
     cwd: __dirname,
@@ -189,7 +214,7 @@ function loadMainRenderer(win: import('electron').BrowserWindow) {
 
   if (solidDev) {
     win.loadURL('http://127.0.0.1:5173/').catch((err: unknown) => {
-      console.error(
+      mainError(
         '[Roku Dev Studio] Vite dev server not reachable at http://127.0.0.1:5173/. Run `npm run dev:solid` in apps/roku-dev-studio (or `npm run start:solid` from repo root).',
         err
       );
@@ -251,8 +276,9 @@ function createWindow(appState: AppWindowState) {
   }
 
   win.webContents.on('preload-error', (_event: unknown, failedPath: string, error: Error) => {
-    console.error('[Roku Dev Studio] Preload failed:', failedPath, error);
+    mainError('[Roku Dev Studio] Preload failed:', failedPath, error);
   });
+  registerDiagnosticWebContents(win.webContents);
 
   // Show window as soon as it's ready (before content fully loads)
   win.once('ready-to-show', () => {
@@ -345,7 +371,9 @@ function createWindow(appState: AppWindowState) {
           type: 'checkbox',
           checked: debugLoggingEnabled,
           accelerator: 'CmdOrCtrl+Shift+L',
+          enabled: !isDiagnosticBuild(),
           click: (menuItem: import('electron').MenuItem) => {
+            if (isDiagnosticBuild()) return;
             debugLoggingEnabled = !!menuItem.checked;
             if (appState) {
               appState.debugLoggingEnabled = debugLoggingEnabled;
@@ -364,6 +392,16 @@ function createWindow(appState: AppWindowState) {
             }
           }
         },
+        ...(isDiagnosticBuild()
+          ? [
+              {
+                label: 'Open Diagnostic Logs Folder',
+                click: () => {
+                  void shell.openPath(app.getPath('userData'));
+                }
+              }
+            ]
+          : []),
         { type: 'separator' },
         {
           label: 'Open Log File',
@@ -625,7 +663,10 @@ app.whenReady().then(() => {
 
   // Load debug logging from settings (no file-on-Desktop needed)
   const settings = loadSettings();
-  debugLoggingEnabled = settings.debugLoggingEnabled === true;
+  debugLoggingEnabled = isDiagnosticBuild() ? true : settings.debugLoggingEnabled === true;
+  if (isDiagnosticBuild()) {
+    developerModeEnabled = true;
+  }
   const userDataPath = app.getPath('userData');
   const resolvedLogFile =
     resolveUnderBase(userDataPath, 'roku-dev-studio-debug.log') ?? path.join(userDataPath, 'roku-dev-studio-debug.log');
@@ -648,6 +689,7 @@ app.whenReady().then(() => {
     getMainWindow: () => mainWindow,
     getDebugLogging: () => debugLoggingEnabled,
     setDebugLogging: (enabled: boolean) => {
+      if (isDiagnosticBuild() && !enabled) return;
       debugLoggingEnabled = enabled;
       appState.debugLoggingEnabled = debugLoggingEnabled;
       appState.logFile = logFile;
@@ -677,6 +719,40 @@ app.whenReady().then(() => {
   });
 
   setupIpcHandlers(mainWindow, getDeviceInfo, getDeviceId, safeSendToRendererWithFiddleMirror, dialog, Menu, clipboard, app, appState);
+
+  if (isDiagnosticBuild()) {
+    registerDiagnosticIpc(ipcMain, shell, () => app.getPath('userData'));
+    startDiagnosticTelemetry({
+      userDataDir: userDataPath,
+      appendMainLog: appendDebugLogLine,
+      getMainWindow: () => mainWindow,
+      getExtraSnapshot: () => {
+        try {
+          const { getNetworkInspectorService } = require('./main/network-inspector/index');
+          const st = getNetworkInspectorService(safeSendToRenderer).getStatus();
+          return {
+            networkInspector: {
+              enabled: st.enabled,
+              captureActive: st.captureActive,
+              captureInterface: st.captureInterface,
+              mitmActive: st.mitmActive,
+              mitmEnabled: st.mitmEnabled,
+              packetsCaptured: st.packetsCaptured,
+              eventsBuffered: st.eventsBuffered,
+              hotspotInterfaceDetected: st.hotspotInterfaceDetected,
+              lastError: st.lastError
+            }
+          };
+        } catch {
+          return {};
+        }
+      }
+    });
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('developer-mode-changed', true);
+      mainWindow.webContents.send(IPC.DebugLoggingChanged, true);
+    }
+  }
 
   startMcpBridge({
     app,
@@ -767,7 +843,7 @@ async function clearCacheAndReload(appState: AppWindowState) {
     try {
       secretStore.clearAll();
     } catch (e) {
-      console.warn('[main] secretStore.clearAll failed:', e);
+      mainWarn('[main] secretStore.clearAll failed:', e);
     }
     // Keep in-memory/menu state in sync with the now-empty settings file so the
     // renderer can't read stale developer/privacy/debug flags from the main process.
@@ -787,7 +863,7 @@ async function clearCacheAndReload(appState: AppWindowState) {
       mainWindow.reload();
     }
   } catch (e) {
-    console.error('Clear Cache failed:', e);
+    mainError('Clear Cache failed:', e);
     const msg = e instanceof Error ? e.message : String(e);
     dialog.showErrorBox('Clear Cache failed', msg);
   }

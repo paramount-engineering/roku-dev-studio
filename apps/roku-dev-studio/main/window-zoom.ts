@@ -25,6 +25,7 @@
 
 import type { BrowserWindow as ElectronBrowserWindow } from 'electron';
 import { IPC } from '../shared/ipc/channels';
+import { mainWarn } from './log.js';
 
 export const ZOOM_MIN_FACTOR = 0.5;
 export const ZOOM_MAX_FACTOR = 2.0;
@@ -84,7 +85,7 @@ export function setupZoomGuards(win: ElectronBrowserWindow): void {
   if (!win || win.isDestroyed()) return;
 
   win.webContents.setVisualZoomLevelLimits(1, 1).catch((err: Error) => {
-    console.warn('[Zoom] setVisualZoomLevelLimits failed:', err.message);
+    mainWarn('[Zoom] setVisualZoomLevelLimits failed:', err.message);
   });
 
   win.webContents.on('zoom-changed', (_event: Electron.Event, _direction: 'in' | 'out') => {

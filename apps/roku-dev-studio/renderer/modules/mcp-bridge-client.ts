@@ -25,6 +25,7 @@ import type {
   McpBridgeDeviceSnapshot
 } from '../../shared/mcp-bridge-state.js';
 import { getStoredPassword } from './utils/storage.js';
+import { rendererWarn } from './utils/logger.js';
 
 export type SelectedDeviceState = McpBridgeDeviceSnapshot;
 
@@ -304,7 +305,7 @@ export function pushMcpBridgeState(payload: {
     api.reportState(payload);
     ensureMcpStoredPasswordBridge();
   } catch (e) {
-    console.warn('[mcp-bridge] reportState failed', e);
+    rendererWarn('[mcp-bridge] reportState failed', e);
   }
 }
 

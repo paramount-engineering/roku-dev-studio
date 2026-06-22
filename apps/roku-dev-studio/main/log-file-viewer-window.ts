@@ -15,6 +15,7 @@ import type { BrowserWindow as ElectronBrowserWindow, IpcMain, IpcMainInvokeEven
 import { TextDecoder } from 'util';
 import { IPC } from '../shared/ipc/channels';
 import { setupZoomGuards } from './window-zoom';
+import { mainError } from './log.js';
 
 const fs = require('fs');
 const path = require('path');
@@ -273,11 +274,11 @@ export function openLogFileViewerWindow(parent: ElectronBrowserWindow | undefine
   });
 
   child.webContents.on('preload-error', (_e: unknown, failedPath: string, error: Error) => {
-    console.error('[Log viewer] Preload failed:', failedPath, error);
+    mainError('[Log viewer] Preload failed:', failedPath, error);
   });
 
   void child.loadFile(htmlPath).catch((err: unknown) => {
-    console.error('[Log viewer] loadFile failed:', err);
+    mainError('[Log viewer] loadFile failed:', err);
     logViewerPathsByWindowId.delete(child.id);
     if (!child.isDestroyed()) child.close();
   });

@@ -40,6 +40,7 @@ const { promisify } = require('util');
 const fs = require('fs');
 const path = require('path');
 const { resolveUnderBase, isPathUnderOneOf, resolveUserPathUnderOneOf } = require('../../lib/path-safe.js');
+const { serverLog } = require('./log');
 
 const execPromise = promisify(exec);
 
@@ -280,8 +281,8 @@ function getAllowedOrigin(req) {
 }
 
 function log(message, ...args) {
-  const timestamp = new Date().toISOString();
-  console.log('[%s] %s', timestamp, message, ...args);
+  // Route through the shared logger (adds the `[Remote Server]` prefix + ISO timestamp).
+  serverLog(message, ...args);
 }
 
 function parseJson(str) {

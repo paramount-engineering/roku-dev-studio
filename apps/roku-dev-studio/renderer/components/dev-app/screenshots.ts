@@ -9,6 +9,7 @@ import {
 } from '../../modules/mcp-bridge-client.js';
 import type { DevAppApi, DevicePanelRoot, ScreenshotElements } from './dev-app-types.js';
 import { errMessage } from './dev-app-types.js';
+import { rendererError } from '../../modules/utils/logger.js';
 
 /**
  * Setup screenshot functionality
@@ -178,7 +179,7 @@ export function setupScreenshots(
         showScreenshotButtons(true);
       }
     } catch (error: unknown) {
-      console.error('Auto screenshot error:', error);
+      rendererError('Auto screenshot error:', error);
     }
   }
   

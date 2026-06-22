@@ -14,6 +14,7 @@ import {
   debugTelnetIpcTargetsDevice,
   type DebugTelnetDeviceRef
 } from '../../shared/ipc/debug-telnet-connection-id.js';
+import { rendererWarn, rendererError } from '../../modules/utils/logger.js';
 
 export {};
 
@@ -573,7 +574,7 @@ function scheduleLint(ctx: FiddleCtx): () => void {
         if (Array.isArray(diags)) applyDiagnostics(ctx, diags);
       })
       .catch((err: unknown) => {
-        console.error('[Fiddle] lint failed:', err);
+        rendererError('[Fiddle] lint failed:', err);
       });
   };
   const trigger = () => {
@@ -956,7 +957,7 @@ function bindPrivacyMode(ctx: FiddleCtx): void {
       .then((res) => applyPrivacyMode(ctx, !!res?.enabled))
       .catch((err: unknown) => {
         // Privacy mode handler not available (older main process) — leave off.
-        console.warn('[Fiddle] getPrivacyMode failed:', err);
+        rendererWarn('[Fiddle] getPrivacyMode failed:', err);
       });
   }
   if (typeof bridge.onPrivacyModeChanged === 'function') {
@@ -995,7 +996,7 @@ async function main(): Promise<void> {
     const msg = err instanceof Error ? err.message : String(err);
     els.status.textContent = `Editor failed to load: ${msg}`;
     els.status.classList.add('error');
-    console.error('[Fiddle] Monaco load failed:', err);
+    rendererError('[Fiddle] Monaco load failed:', err);
     return;
   }
 

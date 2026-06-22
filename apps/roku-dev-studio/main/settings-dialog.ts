@@ -18,6 +18,7 @@ import {
   type NiSetupPlatform
 } from '../shared/network-inspector/setup-guide';
 import { desktopPlatform } from 'roku-dev-studio-platform';
+import { mainError } from './log.js';
 
 const path = require('path');
 const { BrowserWindow: BrowserWindowConstructor, dialog } = require('electron');
@@ -2744,7 +2745,7 @@ let settingsWindowRef: (BrowserWindow & { __rdsDestroying?: boolean }) | null = 
  */
 function showSettingsDialog(mainWindow: BrowserWindow, initialSection?: string) {
   if (!mainWindow) {
-    console.error('Main window not available');
+    mainError('Main window not available');
     return;
   }
 
@@ -2809,7 +2810,7 @@ function showSettingsDialog(mainWindow: BrowserWindow, initialSection?: string) 
     const html = settingsHtml(initialSection);
     settingsWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
   } catch (error) {
-    console.error('Error loading Settings dialog:', error);
+    mainError('Error loading Settings dialog:', error);
     dialog.showErrorBox('Error', 'Failed to open Settings. Please try again.');
   }
 }

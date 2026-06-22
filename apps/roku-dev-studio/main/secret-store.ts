@@ -53,6 +53,7 @@ import { isMacOS, isWindows } from 'roku-dev-studio-platform';
 const fs = require('fs');
 const path = require('path');
 const { safeStorage } = require('electron') as typeof import('electron');
+const { mainLog, mainWarn } = require('./log');
 
 const FILE_VERSION = 1;
 const FILE_NAME = 'dev-passwords.json';
@@ -90,11 +91,11 @@ const cache: Record<string, string> = {};
 let backendName: string = 'unknown';
 
 function logInfo(msg: string, ...rest: unknown[]): void {
-  console.log(`[secret-store] ${msg}`, ...rest);
+  mainLog(`[secret-store] ${msg}`, ...rest);
 }
 
 function logWarn(msg: string, ...rest: unknown[]): void {
-  console.warn(`[secret-store] ${msg}`, ...rest);
+  mainWarn(`[secret-store] ${msg}`, ...rest);
 }
 
 function ensureDir(): void {

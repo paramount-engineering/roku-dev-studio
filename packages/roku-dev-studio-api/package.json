@@ -39,7 +39,8 @@
   },
   "dependencies": {
     "archiver": "^5.3.2",
-    "commander": "^9.5.0"
+    "commander": "^9.5.0",
+    "roku-dev-studio-platform": "^1.0.0"
   },
   "devDependencies": {
     "@types/archiver": "^5.3.4",

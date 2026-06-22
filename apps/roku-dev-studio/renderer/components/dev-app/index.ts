@@ -6,6 +6,7 @@ import { setupScreenshots } from './screenshots.js';
 import { setupSideloadedApp } from './sideloaded-app.js';
 import { setupQuickRemote } from './quick-remote.js';
 import { registerKeyboardRemoteAutoScreenshotDevApp } from '../../modules/utils/keyboard-remote-auto-screenshot-registry.js';
+import { rendererError } from '../../modules/utils/logger.js';
 import type {
   DevAppApi,
   DevAppDevice,
@@ -62,7 +63,7 @@ export function setupDevApp(panel: DevicePanelRoot, device: DevAppDevice, api: D
     !(sideloadedAppCard instanceof HTMLElement) ||
     !(sideloadedAppDetails instanceof HTMLElement)
   ) {
-    console.error('Dev app elements not found');
+    rendererError('Dev app elements not found');
     return;
   }
 

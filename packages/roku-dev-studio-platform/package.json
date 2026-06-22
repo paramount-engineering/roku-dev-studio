@@ -2,8 +2,8 @@
   "name": "roku-dev-studio-platform",
   "version": "1.0.0",
   "description": "Shared host-platform helpers for Roku Dev Studio — OS identity, human labels, modifier keys (renderer-safe), plus node-only filesystem helpers. Used by the desktop app and other packages so platform logic lives in one place.",
-  "main": "index.ts",
-  "types": "index.ts",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -20,14 +20,26 @@
     "cross-platform"
   ],
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "build": "node build.mjs && tsc --emitDeclarationOnly",
+    "typecheck": "tsc --noEmit",
+    "prepare": "node -e \"require('fs').existsSync('dist/index.js') || require('child_process').execSync('npm run build', { stdio: 'inherit' })\""
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
+    "esbuild": "^0.25.0",
     "typescript": "^5.7.3"
   },
+  "files": [
+    "dist"
+  ],
   "exports": {
-    ".": "./index.ts",
-    "./node": "./node.ts"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./node": {
+      "types": "./dist/node.d.ts",
+      "default": "./dist/node.js"
+    }
   }
 }

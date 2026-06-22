@@ -25,6 +25,7 @@ import {
 } from '../../modules/utils/app-user-settings.js';
 import { onAppSettingsChanged } from '../../modules/utils/app-settings-change-bus.js';
 import { getPanelApi } from '../../modules/device-api/panel-api-registry.js';
+import { rendererError } from '../../modules/utils/logger.js';
 import type { DevAppApi } from '../dev-app/dev-app-types.js';
 
 const ROOT_ID = 'floating-remote-root';
@@ -61,7 +62,7 @@ export function mountFloatingRemote(): void {
 
   const root = document.getElementById(ROOT_ID);
   if (!root) {
-    console.error('[FloatingRemote] root element not found');
+    rendererError('[FloatingRemote] root element not found');
     return;
   }
 
@@ -83,7 +84,7 @@ export function mountFloatingRemote(): void {
   shellEl = root.querySelector('.floating-remote-shell');
   cardSlotEl = root.querySelector<HTMLElement>('[data-floating-remote-slot]');
   if (!shellEl || !cardSlotEl) {
-    console.error('[FloatingRemote] shell or slot element missing after mount');
+    rendererError('[FloatingRemote] shell or slot element missing after mount');
     return;
   }
 

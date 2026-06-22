@@ -26,6 +26,7 @@ import {
   scheduleCoalescedMapFlush,
   type TelnetIpcCoalesceState
 } from './telnet-log-ipc-coalesce.js';
+import { mainLog } from '../log.js';
 
 const { computeInputTextRelayHttpTimeoutMs } = require('roku-dev-studio-api');
 const WebSocket = require('ws');
@@ -208,7 +209,7 @@ async function closeRemoteTelnetConnection(connectionId: string): Promise<void> 
     req.write(postData);
     req.end();
   } catch (e: unknown) {
-    console.log('[Remote Telnet] Error notifying relay of disconnect:', errMsg(e));
+    mainLog('[Remote Telnet] Error notifying relay of disconnect:', errMsg(e));
   }
   try {
     if (connection.ws) connection.ws.close();
@@ -335,7 +336,7 @@ function establishRemoteTelnetConnection(
         let wsCloseHadError = false;
 
         ws.on('open', () => {
-          console.log('[Remote Telnet] WebSocket connected to relay');
+          mainLog('[Remote Telnet] WebSocket connected to relay');
           remoteTelnetConnections.set(connectionId, {
             ws,
             sessionId,
@@ -394,7 +395,7 @@ function establishRemoteTelnetConnection(
         });
 
         ws.on('error', (error: Error) => {
-          console.log('[Remote Telnet] WebSocket error:', error.message);
+          mainLog('[Remote Telnet] WebSocket error:', error.message);
           wsCloseHadError = true;
           if (!resolved) { resolved = true; resolve({ success: false, error: error.message }); }
         });
@@ -407,10 +408,10 @@ function establishRemoteTelnetConnection(
           // must NOT wipe `remoteTelnetHoldersByConnId` — doing so dropped
           // other holders (e.g. a Fiddle window) on every explicit Connect.
           if (!rt || rt.ws !== ws) {
-            console.log('[Remote Telnet] WebSocket closed (superseded — ignoring)');
+            mainLog('[Remote Telnet] WebSocket closed (superseded — ignoring)');
             return;
           }
-          console.log('[Remote Telnet] WebSocket closed');
+          mainLog('[Remote Telnet] WebSocket closed');
           const aliveMs = Date.now() - rt.openedAtMs;
           const bytesReceived = rt.bytesReceived;
           const hadError = wsCloseHadError || !!rt.relayCloseHadError;
@@ -477,7 +478,7 @@ function setupRemoteHandlers(mainWindow: BrowserWindow | undefined, safeSendToRe
 
   // Discover devices on a remote location
   ipcMain.handle(IPC.RemoteDiscover, async (_event: IpcMainInvokeEvent, { serverUrl }: ServerUrlPayload) => {
-    console.log('Discovering devices on remote server:', serverUrl);
+    mainLog('Discovering devices on remote server:', serverUrl);
     return await remoteHttpRequest(serverUrl, '/devices');
   });
 

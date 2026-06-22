@@ -2,6 +2,7 @@
  * Global Deep Link media types: built-in defaults plus user-added entries persisted in app settings.
  */
 import { escapeHtml } from '../utils/dom.js';
+import { rendererError } from '../utils/logger.js';
 import { attachBackdropClickToClose } from '../utils/modal-backdrop-click.js';
 import {
   closeModalWithOriginMotion,
@@ -88,7 +89,7 @@ async function persistCustomTypes(): Promise<void> {
   try {
     await window.roku.setSetting(SETTINGS_KEY, customTypes);
   } catch (e) {
-    console.error('[Deep Link] Failed to save custom media types:', e);
+    rendererError('[Deep Link] Failed to save custom media types:', e);
   }
 }
 
@@ -478,7 +479,7 @@ export async function initDeeplinkMediaTypes(): Promise<void> {
           .filter((item) => item.value && item.label);
       }
     } catch (e) {
-      console.error('[Deep Link] Failed to load custom media types:', e);
+      rendererError('[Deep Link] Failed to load custom media types:', e);
     }
   }
 

@@ -14,6 +14,7 @@
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+const { mainWarn, mainError } = require('./log');
 
 export type McpClientId =
   | 'chatgpt'
@@ -84,7 +85,7 @@ function resolveMcpServerScript(): string {
     const pkgDir = path.dirname(pkgPath);
     return path.join(pkgDir, 'dist', 'index.cjs');
   } catch (e) {
-    console.warn('[MCP] Could not resolve roku-dev-studio-mcp package:', e);
+    mainWarn('[MCP] Could not resolve roku-dev-studio-mcp package:', e);
     return '';
   }
 }
@@ -394,7 +395,7 @@ function readConfigFile(filePath: string): Record<string, unknown> {
     }
     return {};
   } catch (e) {
-    console.warn('[MCP] Failed to read config:', filePath, e);
+    mainWarn('[MCP] Failed to read config:', filePath, e);
     return {};
   }
 }
@@ -405,7 +406,7 @@ function writeConfigFile(filePath: string, value: Record<string, unknown>): bool
     fs.writeFileSync(filePath, JSON.stringify(value, null, 2), 'utf-8');
     return true;
   } catch (e) {
-    console.error('[MCP] Failed to write config:', filePath, e);
+    mainError('[MCP] Failed to write config:', filePath, e);
     return false;
   }
 }

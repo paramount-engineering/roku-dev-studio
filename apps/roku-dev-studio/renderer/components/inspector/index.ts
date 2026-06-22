@@ -14,6 +14,7 @@ import { attachFoldToggle, structuredBodyText, structuredFileExtension } from '.
 import { attachSelectAll } from '../../modules/ui/select-all.js';
 import { icon, setSafeHTML, DEFAULT_RALE_PORT } from '../../modules/utils/index.js';
 import { errMessage } from '../../modules/utils/err-message.js';
+import { rendererError } from '../../modules/utils/logger.js';
 import { setupNodeUpdatePanel } from './node-update-panel.js';
 import { formatRaleCommandResponse } from './node-lookup.js';
 import {
@@ -67,7 +68,7 @@ export function setupInspector(panel: DevicePanelRoot, _device: InspectorDevice,
     !(paramsContainerQ instanceof HTMLElement) ||
     !(clearQ instanceof HTMLButtonElement)
   ) {
-    console.error('Inspector elements not found');
+    rendererError('Inspector elements not found');
     return;
   }
 
@@ -408,7 +409,7 @@ export function setupInspector(panel: DevicePanelRoot, _device: InspectorDevice,
           // No-op — the connector subscription updates the dropdown.
         });
       } catch (error: unknown) {
-        console.error('Auto-fetch functions error:', error);
+        rendererError('Auto-fetch functions error:', error);
         // Stay quiet on errors that look like a borrow-disconnect race
         // (the Builder's `fetchAppFunctionsForBuilder` connects, fetches,
         // then immediately disconnects). On the next reconnect the

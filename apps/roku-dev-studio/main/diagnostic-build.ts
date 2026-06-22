@@ -22,6 +22,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { IPC } from '../shared/ipc/channels';
+import { mainWarn } from './log.js';
 
 const SNAPSHOT_INTERVAL_MS = 30_000;
 
@@ -94,7 +95,7 @@ function appendSnapshot(record: Record<string, unknown>): void {
   try {
     fs.appendFileSync(snapshotLogPath, `${JSON.stringify(record)}\n`, 'utf-8');
   } catch (e) {
-    console.warn('[Diagnostic] snapshot append failed:', e);
+    mainWarn('[Diagnostic] snapshot append failed:', e);
   }
 }
 

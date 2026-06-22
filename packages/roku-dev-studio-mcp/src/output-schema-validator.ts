@@ -33,6 +33,8 @@
  * (`validateOutput`) won't change.
  */
 
+import { mcpError } from './log';
+
 type JsonSchemaType = 'string' | 'number' | 'boolean' | 'object' | 'array';
 
 type Schema = {
@@ -167,12 +169,12 @@ export function logOutputSchemaIssues(opId: string, issues: OutputSchemaIssue[])
   const sample = issues.slice(0, 5);
   for (const issue of sample) {
     // eslint-disable-next-line no-console
-    console.error(
+    mcpError(
       `[output-schema] ${opId}: ${issue.path} — ${issue.code}: ${issue.message}`
     );
   }
   if (issues.length > sample.length) {
     // eslint-disable-next-line no-console
-    console.error(`[output-schema] ${opId}: …and ${issues.length - sample.length} more issue(s)`);
+    mcpError(`[output-schema] ${opId}: …and ${issues.length - sample.length} more issue(s)`);
   }
 }

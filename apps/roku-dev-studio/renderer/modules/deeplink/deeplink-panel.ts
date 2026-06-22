@@ -2,6 +2,7 @@
  * Per-device Deep Link panel: launch, save-and-launch split control, and saved preset picker.
  */
 import { showStatusMessage } from '../utils/ui.js';
+import { rendererError } from '../utils/logger.js';
 import { populateMediaTypeSelect, wireDeepLinkMediaTypeManageBtn } from './deeplink-media-types.js';
 import {
   applyPresetToPanel,
@@ -241,7 +242,7 @@ export function setupDeepLinkPanel(panel: HTMLElement, api: DeeplinkApi): void {
   const savedRow = panel.querySelector('.deeplink-saved-row') as HTMLElement | null;
 
   if (!statusDiv || !mediaTypeSelect) {
-    console.error('Deep link elements not found');
+    rendererError('Deep link elements not found');
     return;
   }
 

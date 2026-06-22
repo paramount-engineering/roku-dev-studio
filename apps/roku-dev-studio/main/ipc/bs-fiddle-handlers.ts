@@ -24,6 +24,7 @@ import {
   bounceDebugTelnet
 } from './telnet-handlers';
 import { ensureRemoteTelnetConnected } from './remote-handlers';
+import { mainLog, mainWarn, mainError } from '../log.js';
 
 const fs = require('fs');
 const path = require('path');
@@ -52,7 +53,7 @@ function loadBrighterscript() {
   try {
     brighterscriptMod = require('brighterscript');
   } catch (err) {
-    console.error('[Fiddle] brighterscript not available — syntax diagnostics disabled.', err);
+    mainError('[Fiddle] brighterscript not available — syntax diagnostics disabled.', err);
     brighterscriptMod = false;
   }
   return brighterscriptMod;
@@ -173,7 +174,7 @@ function lintCode(code: string): LintOut {
 
     return { diagnostics: diags, engineAvailable: true };
   } catch (err) {
-    console.error('[Fiddle] lint error:', err);
+    mainError('[Fiddle] lint error:', err);
     return { diagnostics: [], engineAvailable: true };
   }
 }
@@ -279,7 +280,7 @@ async function sideloadRemoteUpload(opts: {
     last = await sideloadRemoteUploadOnce(opts);
     if (last.success) return last;
     if (!isTransientRemoteUploadError(last.error)) break;
-    console.warn(`[Fiddle] remote sideload attempt ${attempt} failed (transient): ${last.error}`);
+    mainWarn(`[Fiddle] remote sideload attempt ${attempt} failed (transient): ${last.error}`);
     // Small backoff so the relay/device has a breath before we hit it again.
     await new Promise((r) => setTimeout(r, 500 * attempt));
   }
@@ -304,7 +305,7 @@ async function isFiddleInstalled(ip: string, serverUrl: string | null | undefine
     if (!devTag || typeof devTag[1] !== 'string') return false;
     return devTag[1].trim() === FIDDLE_CHANNEL_TITLE;
   } catch (err) {
-    console.warn('[Fiddle] isFiddleInstalled check failed:', errMsg(err));
+    mainWarn('[Fiddle] isFiddleInstalled check failed:', errMsg(err));
     return false;
   }
 }
@@ -452,9 +453,9 @@ export function registerBsFiddleIpc(ipcMain: IpcMain): void {
       password: effectivePassword
     });
     if (result.skipped) {
-      console.log('[Fiddle] close cleanup: dev channel is not ours, leaving alone.');
+      mainLog('[Fiddle] close cleanup: dev channel is not ours, leaving alone.');
     } else if (!result.success) {
-      console.warn('[Fiddle] close cleanup delete failed:', result.error);
+      mainWarn('[Fiddle] close cleanup delete failed:', result.error);
       if (result.authFailed) {
         // The password we had stashed (session or persisted) no longer works.
         // Wipe the persisted copy so the user isn't silently locked out
@@ -462,7 +463,7 @@ export function registerBsFiddleIpc(ipcMain: IpcMain): void {
         requestMainRendererClearPassword(device.id);
       }
     } else {
-      console.log('[Fiddle] close cleanup: fiddle channel removed from', device.ip);
+      mainLog('[Fiddle] close cleanup: fiddle channel removed from', device.ip);
     }
   });
 
@@ -551,17 +552,17 @@ export function registerBsFiddleIpc(ipcMain: IpcMain): void {
           holder: fiddleTelnetHolder
         });
         if (!tRes.success) {
-          console.warn('[Fiddle] Remote telnet connect failed (continuing):', tRes.error);
+          mainWarn('[Fiddle] Remote telnet connect failed (continuing):', tRes.error);
         }
       } catch (err) {
-        console.warn('[Fiddle] Remote telnet connect threw (continuing):', errMsg(err));
+        mainWarn('[Fiddle] Remote telnet connect threw (continuing):', errMsg(err));
       }
     } else {
       try {
         const res = await ensureDebugTelnetConnected(device.ip, { holder: fiddleTelnetHolder });
-        console.log('[Fiddle] ensureDebugTelnetConnected (pre-sideload) →', res, 'for', device.ip);
+        mainLog('[Fiddle] ensureDebugTelnetConnected (pre-sideload) →', res, 'for', device.ip);
       } catch (err) {
-        console.warn('[Fiddle] Telnet connect failed (continuing):', errMsg(err));
+        mainWarn('[Fiddle] Telnet connect failed (continuing):', errMsg(err));
       }
     }
 
@@ -648,9 +649,9 @@ export function registerBsFiddleIpc(ipcMain: IpcMain): void {
         void (async () => {
           try {
             const bounceRes = await bounceDebugTelnet(ip);
-            console.log('[Fiddle] post-sideload telnet bounce →', bounceRes, 'for', ip);
+            mainLog('[Fiddle] post-sideload telnet bounce →', bounceRes, 'for', ip);
           } catch (e) {
-            console.warn('[Fiddle] post-sideload bounce threw:', errMsg(e));
+            mainWarn('[Fiddle] post-sideload bounce threw:', errMsg(e));
           }
         })();
       }

@@ -1,4 +1,5 @@
 import { errMessage } from '../utils/err-message.js';
+import { rendererWarn, rendererError } from '../utils/logger.js';
 import { type StructuredConsolePayload } from '../console-log/structured-log-detect.js';
 import {
   attachStructuredPillsToLine
@@ -120,7 +121,7 @@ export function setupTelnet(
     !maybeStatusText ||
     !maybeClearBtn
   ) {
-    console.error('Telnet console elements not found');
+    rendererError('Telnet console elements not found');
     return;
   }
 
@@ -601,7 +602,7 @@ export function setupTelnet(
     void window.roku.consoleSpillAppend(spillId, payload).then(
       (res: { success: boolean; entryCount?: number; dropped?: number; error?: string }) => {
         if (!res?.success) {
-          console.warn('[Console spill] append failed:', res?.error);
+          rendererWarn('[Console spill] append failed:', res?.error);
           return;
         }
         if (typeof res.entryCount === 'number') spilledEntryCount = res.entryCount;
@@ -611,7 +612,7 @@ export function setupTelnet(
         refreshLineCount();
       },
       (err: unknown) => {
-        console.warn('[Console spill] append rejected:', err);
+        rendererWarn('[Console spill] append rejected:', err);
       }
     );
   }
@@ -842,7 +843,7 @@ export function setupTelnet(
         error?: string;
       };
       if (!res?.success || !Array.isArray(res.entries) || res.entries.length === 0) {
-        if (!res?.success) console.warn('[Console spill] auto-load read failed:', res?.error);
+        if (!res?.success) rendererWarn('[Console spill] auto-load read failed:', res?.error);
         return;
       }
       // Decode NDJSON back to TelnetLogEntry. Same shape `loadAllEntriesIncludingSpill`
@@ -884,7 +885,7 @@ export function setupTelnet(
       refreshLineCount();
       spillAutoLoaded = true;
     } catch (e) {
-      console.warn('[Console spill] auto-load rejected:', e);
+      rendererWarn('[Console spill] auto-load rejected:', e);
     } finally {
       spillAutoLoadInFlight = false;
     }
@@ -988,11 +989,11 @@ export function setupTelnet(
               if (res?.success && res.spillId) {
                 spillId = res.spillId;
               } else {
-                console.warn('[Console spill] start failed:', res?.error);
+                rendererWarn('[Console spill] start failed:', res?.error);
               }
             })
             .catch((err: unknown) => {
-              console.warn('[Console spill] start rejected:', err);
+              rendererWarn('[Console spill] start rejected:', err);
             });
           updateConnectionState(true);
           const relayNote = api.isRemote
@@ -1031,7 +1032,7 @@ export function setupTelnet(
       updateConnectionState(false);
       addLogLine('--- Disconnected ---', false);
     } catch (error) {
-      console.error('Telnet disconnect error:', error);
+      rendererError('Telnet disconnect error:', error);
       throw error instanceof Error ? error : new Error(String(error));
     }
   }
@@ -1064,7 +1065,7 @@ export function setupTelnet(
         error?: string;
       };
       if (!res?.success || !Array.isArray(res.entries) || res.entries.length === 0) {
-        if (!res?.success) console.warn('[Console spill] read failed:', res?.error);
+        if (!res?.success) rendererWarn('[Console spill] read failed:', res?.error);
         return logLines;
       }
       const spilled: TelnetLogEntry[] = [];
@@ -1085,7 +1086,7 @@ export function setupTelnet(
       }
       return [...spilled, ...logLines];
     } catch (e) {
-      console.warn('[Console spill] read rejected:', e);
+      rendererWarn('[Console spill] read rejected:', e);
       return logLines;
     }
   }
@@ -1199,10 +1200,10 @@ export function setupTelnet(
             setSafeHTML(saveBtn, originalText);
             saveBtn.disabled = false;
           }, 2000);
-          console.error('Failed to save console logs:', result.error);
+          rendererError('Failed to save console logs:', result.error);
         }
       } catch (error) {
-        console.error('Error saving console logs:', error);
+        rendererError('Error saving console logs:', error);
         setSafeHTML(saveBtn, icon('x', 'icon-xs') + ' Error');
         saveBtn.disabled = false;
         setTimeout(() => {
@@ -1355,10 +1356,10 @@ export function setupTelnet(
   function clearRelayBufferOnServer(): void {
     void api.telnetClearRelayBuffer!().then((res) => {
       if (res?.success === false) {
-        console.warn('[Console] relay buffer clear failed:', res?.error);
+        rendererWarn('[Console] relay buffer clear failed:', res?.error);
       }
     }).catch((err: unknown) => {
-      console.warn('[Console] relay buffer clear rejected:', err);
+      rendererWarn('[Console] relay buffer clear rejected:', err);
     });
   }
 

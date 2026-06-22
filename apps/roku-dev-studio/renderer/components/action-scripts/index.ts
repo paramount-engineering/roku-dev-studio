@@ -16,6 +16,7 @@ import {
   pushMcpBridgeState
 } from '../../modules/mcp-bridge-client.js';
 import { getAppConnector } from '../../modules/app-connector/index.js';
+import { rendererWarn } from '../../modules/utils/logger.js';
 
 export function setupActionScripts(panel: DevicePanelRoot, device, api) {
   const container = panel.querySelector('.action-scripts-container');
@@ -256,7 +257,7 @@ export function setupActionScripts(panel: DevicePanelRoot, device, api) {
         await functionsHandler();
       }
     } catch (e) {
-      console.warn('[mcp-bridge] pre-drop functions refresh failed', e);
+      rendererWarn('[mcp-bridge] pre-drop functions refresh failed', e);
     }
     if (builderTab) builderTab.click();
     try {
@@ -583,7 +584,7 @@ export function setupActionScripts(panel: DevicePanelRoot, device, api) {
       }
     });
   } catch (e) {
-    console.warn('[mcp-bridge] could not push selectedDevice', e);
+    rendererWarn('[mcp-bridge] could not push selectedDevice', e);
   }
 
 

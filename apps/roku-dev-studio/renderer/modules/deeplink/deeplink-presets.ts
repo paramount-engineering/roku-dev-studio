@@ -1,6 +1,7 @@
 /**
  * Global saved Deep Link presets (App ID, Content ID, Media Type) persisted in app settings.
  */
+import { rendererError } from '../utils/logger.js';
 import { attachBackdropClickToClose } from '../utils/modal-backdrop-click.js';
 import {
   closeModalWithOriginMotion,
@@ -65,7 +66,7 @@ async function persistPresets(): Promise<void> {
   try {
     await window.roku.setSetting(SETTINGS_KEY, savedPresets);
   } catch (e) {
-    console.error('[Deep Link] Failed to save presets:', e);
+    rendererError('[Deep Link] Failed to save presets:', e);
   }
 }
 
@@ -337,7 +338,7 @@ export async function initDeeplinkPresets(): Promise<void> {
         savedPresets.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
       }
     } catch (e) {
-      console.error('[Deep Link] Failed to load saved presets:', e);
+      rendererError('[Deep Link] Failed to load saved presets:', e);
     }
   }
 
