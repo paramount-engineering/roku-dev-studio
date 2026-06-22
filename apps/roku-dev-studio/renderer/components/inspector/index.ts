@@ -13,7 +13,7 @@ import { createFindBar, buildFindBarElement, bindFindShortcut } from '../../modu
 import { attachFoldToggle, structuredBodyText, structuredFileExtension } from '../../modules/ui/structured-body.js';
 import { attachSelectAll } from '../../modules/ui/select-all.js';
 import { icon, setSafeHTML, DEFAULT_RALE_PORT } from '../../modules/utils/index.js';
-import { errMessage } from '../../modules/utils/err-message.js';
+import { errMessage } from '../../shared/platform/err-util.js';
 import { rendererError } from '../../modules/utils/logger.js';
 import { setupNodeUpdatePanel } from './node-update-panel.js';
 import { formatRaleCommandResponse } from './node-lookup.js';

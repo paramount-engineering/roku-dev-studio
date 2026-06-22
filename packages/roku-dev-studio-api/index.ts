@@ -13,7 +13,7 @@ const {
 const { getDeviceImageUrl, fetchDeviceHardwareImage } = require('./lib/device-hardware-image');
 
 const { ssdpDiscover, subnetScan } = require('./lib/discovery');
-const { isValidIp, validateDevPassword } = require('./lib/validate-input');
+const { isValidIp, validateDevPassword } = require('roku-dev-studio-platform/validation');
 const { captureRokuScreenshot } = require('./lib/screenshot');
 const { verifyDeveloperDigestAuth } = require('./lib/verify-dev-digest-auth');
 const { sideloadChannel, deleteSideload } = require('./lib/plugin-install');
@@ -37,7 +37,7 @@ const { runActionScript, validateScriptStructure } = require('./lib/script-runne
 const { validateScript: validateActionScript } = require('./lib/validate-action-script');
 const catalogs = require('./lib/catalogs');
 const errors = require('./lib/errors');
-const deviceRef = require('./lib/device-ref');
+const deviceRef = require('roku-dev-studio-platform/device-ref');
 const operations = require('./lib/operations');
 const raleDirect = require('./lib/rale-direct');
 const rokuTelnet = require('./lib/roku-telnet');

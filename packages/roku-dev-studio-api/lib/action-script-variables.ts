@@ -10,7 +10,7 @@
 'use strict';
 
 const { raleCommandSupportsAssignToVar } = require('./rale-command-assign-vars');
-const { errorMessage } = require('./err-util');
+const { errorMessage } = require('roku-dev-studio-platform');
 
 const OUTPUT_NAME_RE = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
 /** Inner content of {{ ... }}; validated per-segment in resolvePlaceholder */

@@ -7,7 +7,7 @@ import type { App, IpcMain, IpcMainInvokeEvent } from 'electron';
 
 const path = require('path');
 const fs = require('fs');
-const { resolveUnderBase } = require('../lib/path-safe');
+const { resolveUnderBase } = require('roku-dev-studio-platform/path-safe');
 const { mainLog, mainWarn, mainError } = require('./log');
 const sharedConstants = require('roku-dev-studio-api/lib/shared-constants') as Record<string, number>;
 

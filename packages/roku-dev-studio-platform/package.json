@@ -40,6 +40,26 @@
     "./node": {
       "types": "./dist/node.d.ts",
       "default": "./dist/node.js"
+    },
+    "./validation": {
+      "types": "./dist/validation.d.ts",
+      "default": "./dist/validation.js"
+    },
+    "./device-ref": {
+      "types": "./dist/device-ref.d.ts",
+      "default": "./dist/device-ref.js"
+    },
+    "./ttl-cache": {
+      "types": "./dist/ttl-cache.d.ts",
+      "default": "./dist/ttl-cache.js"
+    },
+    "./async-patterns": {
+      "types": "./dist/async-patterns.d.ts",
+      "default": "./dist/async-patterns.js"
+    },
+    "./path-safe": {
+      "types": "./dist/path-safe.d.ts",
+      "default": "./dist/path-safe.js"
     }
   }
 }

@@ -4,9 +4,6 @@ node_modules/
 # Build outputs
 dist/
 
-# Generated from repo-root lib/path-safe.ts (see apps/roku-dev-studio/scripts/sync-path-safe.js)
-lib/path-safe.js
-apps/roku-dev-studio/lib/path-safe.js
 
 # esbuild output (see apps/roku-dev-studio/scripts/bundle-electron.js); rebuilt by prepare / start / build:bundle
 apps/roku-dev-studio/preload-about.js

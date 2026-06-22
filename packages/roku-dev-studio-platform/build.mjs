@@ -8,13 +8,19 @@
  * runtime like any normal dependency.
  */
 import esbuild from 'esbuild';
+import { readdirSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 
 const root = dirname(fileURLToPath(import.meta.url));
 
+// Every top-level .ts module is a public entry (each gets a subpath export in package.json).
+const entryPoints = readdirSync(root)
+  .filter((f) => f.endsWith('.ts') && !f.endsWith('.d.ts'))
+  .map((f) => join(root, f));
+
 await esbuild.build({
-  entryPoints: [join(root, 'index.ts'), join(root, 'node.ts')],
+  entryPoints,
   outdir: join(root, 'dist'),
   outbase: root,
   platform: 'node',

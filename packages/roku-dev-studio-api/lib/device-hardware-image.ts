@@ -6,9 +6,9 @@
 'use strict';
 
 const http = require('http');
-const { isValidIp } = require('./validate-input');
+const { isValidIp } = require('roku-dev-studio-platform/validation');
 const { QUERY_TIMEOUT } = require('./shared-constants');
-const { errorMessage } = require('./err-util');
+const { errorMessage } = require('roku-dev-studio-platform');
 
 const ICON_LIST_BLOCK_RE = /<iconList>\s*([\s\S]*?)<\/iconList>/i;
 const FIRST_URL_IN_BLOCK_RE = /<url>\s*([^<]+?)\s*<\/url>/i;

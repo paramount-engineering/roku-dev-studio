@@ -1,4 +1,4 @@
-import { errMessage } from '../utils/err-message.js';
+import { errMessage } from '../../shared/platform/err-util.js';
 import { rendererWarn, rendererError } from '../utils/logger.js';
 import { type StructuredConsolePayload } from '../console-log/structured-log-detect.js';
 import {

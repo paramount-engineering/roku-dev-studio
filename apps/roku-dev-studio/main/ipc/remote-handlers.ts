@@ -33,7 +33,7 @@ const WebSocket = require('ws');
 const FormData = require('form-data');
 const fs = require('fs');
 const path = require('path');
-const { resolveUserPathUnderOneOf } = require('../../lib/path-safe.js');
+const { resolveUserPathUnderOneOf } = require('roku-dev-studio-platform/path-safe');
 const { userProfileDirectories } = require('roku-dev-studio-platform/node');
 
 function errMsg(e: unknown): string {

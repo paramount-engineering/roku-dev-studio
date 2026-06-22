@@ -4,12 +4,14 @@
  */
 import esbuild from 'esbuild';
 import { readdirSync, statSync, existsSync, mkdirSync, readFileSync, writeFileSync, cpSync } from 'fs';
-import { join, dirname } from 'path';
-import { fileURLToPath } from 'url';
+import { join, dirname, relative } from 'path';
+import { fileURLToPath, pathToFileURL } from 'url';
+import { createRequire } from 'module';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = __dirname;
 const dist = join(root, 'dist');
+const require = createRequire(import.meta.url);
 
 /** Single source of truth: package.json `version` → published as `PACKAGE_VERSION` on the API. */
 function writePackageVersionTs() {
@@ -56,6 +58,71 @@ await esbuild.build({
   logLevel: 'info',
   sourcemap: true,
 });
+
+/**
+ * Vendor the `roku-dev-studio-platform` subpaths this package uses into `dist/_platform/` and rewrite
+ * the emitted `require('roku-dev-studio-platform/...')` calls to point at the vendored, self-contained
+ * copies. This makes the published API package stand alone — `roku-dev-studio-platform` is a build-time
+ * (dev) dependency only and is never required from the registry at install/runtime.
+ *
+ * The platform package's .d.ts are not referenced by this package's emitted types (we consume it via
+ * CJS `require`), so only the runtime `.js` requires need rewiring.
+ */
+function vendorPlatform() {
+  const PKG = 'roku-dev-studio-platform';
+  const walkJs = (dir, acc = []) => {
+    for (const name of readdirSync(dir)) {
+      if (name === '_platform') continue;
+      const p = join(dir, name);
+      if (statSync(p).isDirectory()) walkJs(p, acc);
+      else if (p.endsWith('.js')) acc.push(p);
+    }
+    return acc;
+  };
+  const jsFiles = walkJs(dist);
+  const specRe = new RegExp(`require\\((['"])${PKG.replace(/[-/]/g, '\\$&')}(/[a-z-]+)?\\1\\)`, 'g');
+
+  // 1. Discover which platform subpaths are actually required across the emitted output.
+  const specifiers = new Set();
+  for (const file of jsFiles) {
+    const src = readFileSync(file, 'utf8');
+    let m;
+    while ((m = specRe.exec(src))) specifiers.add(PKG + (m[2] || ''));
+  }
+  if (specifiers.size === 0) return;
+
+  // 2. Bundle each subpath into a self-contained CJS module under dist/_platform/.
+  const vendorDir = join(dist, '_platform');
+  mkdirSync(vendorDir, { recursive: true });
+  const nameFor = (spec) => (spec === PKG ? 'index' : spec.slice(PKG.length + 1));
+  for (const spec of specifiers) {
+    const entry = require.resolve(spec); // resolves via platform's exports → its dist/*.js
+    esbuild.buildSync({
+      entryPoints: [entry],
+      outfile: join(vendorDir, `${nameFor(spec)}.js`),
+      bundle: true,
+      platform: 'node',
+      format: 'cjs',
+      target: 'node18',
+      logLevel: 'silent'
+    });
+  }
+
+  // 3. Rewrite each emitted require to the vendored copy (relative to the requiring file).
+  for (const file of jsFiles) {
+    const src = readFileSync(file, 'utf8');
+    if (!src.includes(PKG)) continue;
+    const out = src.replace(specRe, (_full, q, sub) => {
+      const target = join(vendorDir, `${nameFor(PKG + (sub || ''))}.js`);
+      let rel = relative(dirname(file), target).split('\\').join('/');
+      if (!rel.startsWith('.')) rel = `./${rel}`;
+      return `require(${q}${rel}${q})`;
+    });
+    if (out !== src) writeFileSync(file, out);
+  }
+  console.log(`build.mjs: vendored ${PKG} (${[...specifiers].map((s) => nameFor(s)).join(', ')}) → dist/_platform/`);
+}
+vendorPlatform();
 
 /** Copy the static Roku Fiddle assets (source/*.brs, components/*.brs|xml)
  * from the repo-root `roku-components/fiddle/` into `dist/roku-components/fiddle/`

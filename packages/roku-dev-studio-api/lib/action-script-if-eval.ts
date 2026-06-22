@@ -4,7 +4,7 @@
 
 'use strict';
 
-const { errorMessage } = require('./err-util');
+const { errorMessage } = require('roku-dev-studio-platform');
 const {
   parseMediaPlayerXml,
   evaluateWaitCheck,

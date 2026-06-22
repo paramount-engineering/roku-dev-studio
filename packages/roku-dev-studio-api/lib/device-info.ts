@@ -6,7 +6,7 @@
 const http = require('http');
 const { QUERY_TIMEOUT } = require('./shared-constants');
 const os = require('os');
-const { isValidIp } = require('./validate-input');
+const { isValidIp } = require('roku-dev-studio-platform/validation');
 
 /** Allowed tag names for device-info XML (ReDoS: use only pre-built regexes). */
 const DEVICE_INFO_TAGS = new Set([

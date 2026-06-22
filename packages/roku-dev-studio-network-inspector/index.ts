@@ -26,6 +26,7 @@ import { getCapturePlatform } from './platform';
 import type { CapturePlatform, HotspotInterfaceInfo } from './platform/types';
 import { getCaInfo, getOrCreateCa, warmLeafKeyPair } from './ca-store';
 import { niLog, niWarn } from './log';
+import { throttle, exponentialBackoff, type Cancellable, type BackoffStepper } from 'roku-dev-studio-platform/async-patterns';
 // Re-export the contract types from the package root so consumers (remote server, app) can import
 // them without reaching into the ./types subpath.
 export type {
@@ -285,15 +286,16 @@ export class NetworkInspectorService {
   // Subnet scan cadence with exponential backoff: stays at the floor while the discovered device set
   // keeps changing, and doubles up to the ceiling once the set is stable (or empty) so an idle
   // hotspot isn't probed with 254 HTTP gets every cycle.
-  private readonly minSubnetScanIntervalMs = 12_000;
-  private readonly maxSubnetScanIntervalMs = 60_000;
-  private subnetScanIntervalMs = 12_000;
+  private readonly subnetScanBackoff: BackoffStepper = exponentialBackoff({ baseMs: 12_000, maxMs: 60_000 });
   // Guards against overlapping ticks: a slow subnet scan can exceed the 4s timer, and `setInterval`
   // would otherwise stack a second tick (and a second scan) on top of the in-flight one.
   private tickInFlight = false;
-  // Trailing-edge debounce so a burst of state changes (a tick + many event flushes) coalesces into
-  // a single status emit instead of rebuilding+broadcasting getStatus() on every mutation.
-  private statusBroadcastTimer: ReturnType<typeof setTimeout> | null = null;
+  // Trailing throttle: a burst of state changes (a tick + many event flushes) collapses into one
+  // getStatus() rebuild + emit. The latest state is read at fire time, so nothing is lost.
+  private readonly broadcastStatus: Cancellable<[]> = throttle(
+    () => this.listener.onStatus(this.getStatus()),
+    STATUS_BROADCAST_DEBOUNCE_MS
+  );
   // Throttle for the periodic diagnostics line emitted from the tick (so logs stay readable).
   private lastStatsLogAt = 0;
   private readonly statsLogIntervalMs = 10_000;
@@ -303,7 +305,11 @@ export class NetworkInspectorService {
   private readonly clientMissCounts = new Map<string, number>();
   private readonly maxClientScanMisses = 2;
   private pendingEvents: ParsedNetworkEvent[] = [];
-  private flushTimer: ReturnType<typeof setTimeout> | null = null;
+  // Trailing throttle: batch enqueued events into one onEvents() emit per ~100ms.
+  private readonly scheduleEventFlush: Cancellable<[]> = throttle(() => {
+    const batch = this.pendingEvents.splice(0, this.pendingEvents.length);
+    if (batch.length > 0) this.listener.onEvents(batch);
+  }, 100);
   private trackedDeviceIps = new Set<string>();
   // On-disk store for full headers/bodies; memory keeps only lightweight summaries.
   private detailStore: NetworkDetailStore | null = null;
@@ -825,7 +831,7 @@ export class NetworkInspectorService {
     this.captureInterface = undefined;
     this.captureStartSuppressed = false;
     this.captureSuppressedAt = 0;
-    this.subnetScanIntervalMs = this.minSubnetScanIntervalMs;
+    this.subnetScanBackoff.reset();
     this.lastSubnetScanAt = 0;
     this.hotspotSubnet = undefined;
     this.clients.clear();
@@ -833,14 +839,8 @@ export class NetworkInspectorService {
     this.matchedSerials.clear();
     this.trackedDeviceIps.clear();
     this.pendingEvents = [];
-    if (this.flushTimer) {
-      clearTimeout(this.flushTimer);
-      this.flushTimer = null;
-    }
-    if (this.statusBroadcastTimer) {
-      clearTimeout(this.statusBroadcastTimer);
-      this.statusBroadcastTimer = null;
-    }
+    this.scheduleEventFlush.cancel();
+    this.broadcastStatus.cancel();
     // Drop captured detail and delete the temp cache file when capture stops / inspector disables.
     this.eventBuffer = [];
     this.eventSeq.clear();
@@ -901,7 +901,7 @@ export class NetworkInspectorService {
       }
       // Hotspot is gone — reset the scan backoff so the next time one appears we discover promptly
       // instead of waiting out a stretched (up to 60s) interval inherited from the previous session.
-      this.subnetScanIntervalMs = this.minSubnetScanIntervalMs;
+      this.subnetScanBackoff.reset();
       this.lastSubnetScanAt = 0;
       this.broadcastStatus();
       return;
@@ -937,7 +937,7 @@ export class NetworkInspectorService {
       this.startCapture(iface.name, subnet);
       this.broadcastStatus();
     }
-    const shouldScan = Date.now() - this.lastSubnetScanAt >= this.subnetScanIntervalMs;
+    const shouldScan = Date.now() - this.lastSubnetScanAt >= this.subnetScanBackoff.value;
     if (shouldScan) {
       this.lastSubnetScanAt = Date.now();
       const discovered = await scanHotspotSubnet(subnet);
@@ -1007,9 +1007,8 @@ export class NetworkInspectorService {
       }
       // Back off the scan cadence while the device set is stable/empty (doubling up to the ceiling);
       // any join/leave snaps it straight back to the floor for responsive discovery.
-      this.subnetScanIntervalMs = deviceSetChanged
-        ? this.minSubnetScanIntervalMs
-        : Math.min(this.maxSubnetScanIntervalMs, this.subnetScanIntervalMs * 2);
+      if (deviceSetChanged) this.subnetScanBackoff.reset();
+      else this.subnetScanBackoff.next();
     } else if (this.captureInterface) {
       this.capture.updateParseContext({
         deviceIps: this.trackedDeviceIps,
@@ -1031,7 +1030,7 @@ export class NetworkInspectorService {
       `stats: capture=${this.captureInterface ?? 'none'} ` +
         `clients=${this.clients.size} packets=${this.capture.getPacketsCaptured()} ` +
         `events=${this.eventBuffer.length} mitm=${this.mitmActiveLabel()} ` +
-        `mitmTx=${this.mitmTransactions} scanIntervalMs=${this.subnetScanIntervalMs}${npcap}` +
+        `mitmTx=${this.mitmTransactions} scanIntervalMs=${this.subnetScanBackoff.value}${npcap}` +
         `${this.lastError ? ` lastError="${this.lastError}"` : ''}`
     );
   }
@@ -1269,27 +1268,9 @@ export class NetworkInspectorService {
       this.upsertEvent(ev);
     }
     this.trimEventBuffer();
-    if (!this.flushTimer) {
-      this.flushTimer = setTimeout(() => {
-        this.flushTimer = null;
-        const batch = this.pendingEvents.splice(0, this.pendingEvents.length);
-        if (batch.length > 0) {
-          this.listener.onEvents(batch);
-        }
-      }, 100);
-    }
+    this.scheduleEventFlush();
   }
 
-  private broadcastStatus(): void {
-    // Trailing-edge debounce: the first call schedules an emit and subsequent calls within the
-    // window are absorbed, so a burst (a tick plus many event flushes) collapses into one
-    // getStatus() rebuild + emit. The latest state is captured at fire time, so nothing is lost.
-    if (this.statusBroadcastTimer) return;
-    this.statusBroadcastTimer = setTimeout(() => {
-      this.statusBroadcastTimer = null;
-      this.listener.onStatus(this.getStatus());
-    }, STATUS_BROADCAST_DEBOUNCE_MS);
-  }
 }
 
 /** RFC1918 private client IP (excluding the gateway `.1`) — used to recognize hotspot clients. */

@@ -9,7 +9,7 @@ const path = require('path');
 const { query, post, keypress, inputText, launch } = require('../ecp');
 const { sideloadChannel, deleteSideload } = require('./plugin-install');
 const { captureRokuScreenshot } = require('./screenshot');
-const { validateDevPassword } = require('./validate-input');
+const { validateDevPassword } = require('roku-dev-studio-platform/validation');
 const raleDirect = require('./rale-direct');
 const { DEFAULT_RALE_PORT, QUERY_TIMEOUT } = require('./shared-constants');
 const {
@@ -29,7 +29,7 @@ const {
 const { evaluateIfConditionOnce, validateIfConditionShape } = require('./action-script-if-eval');
 const { flattenStepsPreorder, preorderBlockSize } = require('./action-script-step-tree');
 const { MEDIA_STATES } = require('./action-script-wait-core');
-const { errorMessage } = require('./err-util');
+const { errorMessage } = require('roku-dev-studio-platform');
 const { validateScript: canonicalValidate } = require('./validate-action-script');
 const { normalizeRaleFunctions } = require('./rale-functions-normalize');
 

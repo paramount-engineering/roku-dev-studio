@@ -10,7 +10,7 @@ const net = require('net');
 const crypto = require('crypto');
 const { ecpRequest } = require('../ecp');
 const { DEFAULT_RALE_PORT } = require('./shared-constants');
-const { errorMessage } = require('./err-util');
+const { errorMessage } = require('roku-dev-studio-platform');
 
 const connections = new Map<string, Socket>();
 // Per-connection serial queue: concurrent raleCommand() calls on the same socket

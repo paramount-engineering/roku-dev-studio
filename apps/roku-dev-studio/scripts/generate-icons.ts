@@ -2,7 +2,7 @@ import sharp from 'sharp';
 import * as fs from 'fs';
 import * as path from 'path';
 import { execSync } from 'child_process';
-import { resolveUnderBase } from '../../../lib/path-safe';
+import { resolveUnderBase } from 'roku-dev-studio-platform/path-safe';
 
 const assetsDir = resolveUnderBase(__dirname, '..', 'assets') || path.join(__dirname, '..', 'assets');
 const svgPath = resolveUnderBase(assetsDir, 'icon.svg') || path.join(assetsDir, 'icon.svg');

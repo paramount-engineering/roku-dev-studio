@@ -9,6 +9,18 @@
  * `process`. Node-only helpers (filesystem paths) live in the `./node` entry.
  */
 
+/**
+ * Narrow an unknown thrown value to a message string — for `catch (e: unknown)` blocks and logging.
+ * The one canonical implementation; `errMessage` is a back-compat alias for renderer call sites that
+ * used that name before this was consolidated here.
+ */
+export function errorMessage(e: unknown): string {
+  return e instanceof Error ? e.message : String(e);
+}
+
+/** Alias of {@link errorMessage}. */
+export const errMessage = errorMessage;
+
 /** Any Node platform string. */
 export type HostPlatform = NodeJS.Platform;
 

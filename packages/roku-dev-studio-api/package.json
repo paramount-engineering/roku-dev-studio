@@ -39,14 +39,14 @@
   },
   "dependencies": {
     "archiver": "^5.3.2",
-    "commander": "^9.5.0",
-    "roku-dev-studio-platform": "^1.0.0"
+    "commander": "^9.5.0"
   },
   "devDependencies": {
     "@types/archiver": "^5.3.4",
     "@types/node": "^22.10.0",
     "esbuild": "^0.25.0",
-    "typescript": "^5.7.3"
+    "typescript": "^5.7.3",
+    "roku-dev-studio-platform": "^1.0.0"
   },
   "files": [
     "dist"

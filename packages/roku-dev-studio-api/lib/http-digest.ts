@@ -2,7 +2,7 @@ import type { IncomingMessage } from 'http';
 
 const { createHash, randomBytes } = require('crypto');
 const { request } = require('http');
-const { errorMessage } = require('./err-util');
+const { errorMessage } = require('roku-dev-studio-platform');
 
 const DEV_USERNAME = 'rokudev';
 const DEFAULT_TIMEOUT_MS = 15000;

@@ -40,6 +40,7 @@ import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
 import { IPC } from '../shared/ipc/channels';
+import { parseDeviceRef, deviceMatches, findDevice } from 'roku-dev-studio-platform/device-ref';
 import type {
   McpBridgeAppConnectorState,
   McpBridgeDeviceSnapshot,
@@ -160,22 +161,18 @@ type TargetRef = { targetSerial?: string; targetIp?: string };
  * connected, so "known but not connected" can be handled explicitly.
  */
 function resolveTarget(deviceArg: string | undefined): TargetRef | null {
-  if (!deviceArg) return null;
-  const s = deviceArg.trim();
-  if (!s) return null;
+  // Parse + match via the shared device-ref helpers (single source of truth for
+  // "what did the caller mean and which device is it?").
+  const ref = parseDeviceRef(deviceArg);
+  if (!ref) return null;
   // Search connectedDevices first (freshest data), then knownDevices as fallback.
   // Avoids a stale knownDevices entry winning over a live connectedDevices entry.
-  const all = [...state.connectedDevices, ...state.knownDevices];
-  // Exact serial match first — serials are stable and unique.
-  const bySerial = all.find((d) => d.serial === s);
-  if (bySerial) return { targetSerial: bySerial.serial || undefined, targetIp: bySerial.ip || undefined };
-  // Then IP.
-  const byIp = all.find((d) => d.ip === s);
-  if (byIp) return { targetSerial: byIp.serial || undefined, targetIp: byIp.ip || undefined };
+  // findDevice() matches serial before IP, so a live entry normalizes serial + ip together.
+  const match = findDevice([...state.connectedDevices, ...state.knownDevices], ref);
+  if (match) return { targetSerial: match.serial || undefined, targetIp: match.ip || undefined };
   // Nothing matched — still forward whatever the caller typed so the renderer
   // can produce a clear error.
-  if (s.includes('.')) return { targetIp: s };
-  return { targetSerial: s };
+  return { targetSerial: ref.serial, targetIp: ref.ip };
 }
 
 /**
@@ -184,11 +181,8 @@ function resolveTarget(deviceArg: string | undefined): TargetRef | null {
  */
 function isTargetConnected(target: TargetRef | null): boolean {
   if (!target) return state.connectedDevices.length > 0;
-  return state.connectedDevices.some((d) => {
-    if (target.targetSerial && d.serial === target.targetSerial) return true;
-    if (target.targetIp && d.ip === target.targetIp) return true;
-    return false;
-  });
+  const ref = { serial: target.targetSerial, ip: target.targetIp };
+  return state.connectedDevices.some((d) => deviceMatches(d, ref));
 }
 
 function notConnectedError(target: TargetRef): { error: string; suggestion: string } {
@@ -613,11 +607,7 @@ function notifyAgentScreenshot(payload: {
  */
 function resolveIp(target: TargetRef | null): string | null {
   if (target) {
-    const match = state.connectedDevices.find(
-      (d) =>
-        (target.targetSerial && d.serial === target.targetSerial) ||
-        (target.targetIp && d.ip === target.targetIp)
-    );
+    const match = findDevice(state.connectedDevices, { serial: target.targetSerial, ip: target.targetIp });
     return match?.ip || null;
   }
   return state.selectedDevice?.ip || null;

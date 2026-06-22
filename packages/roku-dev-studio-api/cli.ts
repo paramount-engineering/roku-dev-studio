@@ -16,7 +16,7 @@ const { DEFAULT_RALE_PORT } = raleDirect;
 const api = require('./index');
 const { runActionScript, validateScriptStructure, validateScriptStructureRich } = require('./lib/script-runner');
 const { parseGetExternalControlFunctionsResponse } = require('./lib/rale-functions-normalize');
-const { errorMessage } = require('./lib/err-util');
+const { errorMessage } = require('roku-dev-studio-platform');
 
 function collectGlobals(program) {
   const root = program.opts();

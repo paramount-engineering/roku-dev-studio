@@ -137,6 +137,7 @@ function transpileSharedForRenderer(appDir: string, rendererDist: string): void 
   const bundledShimDirs = [
     path.join(sharedRoot, 'network-inspector'),
     path.join(sharedRoot, 'logging'),
+    path.join(sharedRoot, 'platform'),
   ];
   const shimEntries = bundledShimDirs.flatMap((d) => walkTsFiles(d));
   if (shimEntries.length > 0) {

@@ -39,8 +39,9 @@ const { exec } = require('child_process');
 const { promisify } = require('util');
 const fs = require('fs');
 const path = require('path');
-const { resolveUnderBase, isPathUnderOneOf, resolveUserPathUnderOneOf } = require('../../lib/path-safe.js');
+const { resolveUnderBase, isPathUnderOneOf, resolveUserPathUnderOneOf } = require('roku-dev-studio-platform/path-safe');
 const { serverLog } = require('./log');
+import { TtlCache } from 'roku-dev-studio-platform/ttl-cache';
 
 const execPromise = promisify(exec);
 
@@ -81,10 +82,12 @@ const {
 /** GET `/query/*` cache TTL — matches Dev Studio minimum Device Performance sampling interval (ms). */
 const RELAY_QUERY_CACHE_TTL_MS = DEVICE_METRICS_SAMPLE_INTERVAL_MIN_MS;
 
-type RelayQueryCacheEntry = { at: number; payload: unknown };
-
 /** Coalesces concurrent Dev Studio pollers (chanperf, active-app, object-counts, …) into one ECP hit per TTL. */
-const relayQueryCache = new Map<string, RelayQueryCacheEntry>();
+const relayQueryCache = new TtlCache<string, unknown>({
+  ttlMs: RELAY_QUERY_CACHE_TTL_MS,
+  pruneThreshold: 400,
+  maxSize: 600
+});
 
 function relayQueryCacheKey(ip: string, endpoint: string): string {
   return `${ip}\u0000${endpoint}`;
@@ -94,35 +97,16 @@ function cloneJson<T>(x: T): T {
   return JSON.parse(JSON.stringify(x)) as T;
 }
 
-function pruneExpiredRelayQueryCache(now: number): void {
-  if (relayQueryCache.size < 400) return;
-  for (const [k, v] of relayQueryCache) {
-    if (now - v.at > RELAY_QUERY_CACHE_TTL_MS) relayQueryCache.delete(k);
-  }
-  if (relayQueryCache.size > 600) relayQueryCache.clear();
-}
-
 function tryRelayQueryCache(ip: string, endpoint: string): unknown | null {
-  const now = Date.now();
-  const key = relayQueryCacheKey(ip, endpoint);
-  const hit = relayQueryCache.get(key);
-  if (!hit) return null;
-  if (now - hit.at > RELAY_QUERY_CACHE_TTL_MS) {
-    relayQueryCache.delete(key);
-    return null;
-  }
-  return cloneJson(hit.payload);
+  const hit = relayQueryCache.get(relayQueryCacheKey(ip, endpoint));
+  // Return a defensive copy so callers can't mutate the cached payload.
+  return hit === undefined ? null : cloneJson(hit);
 }
 
 function storeRelayQueryCache(ip: string, endpoint: string, result: unknown): void {
   const r = result as { success?: boolean } | null;
   if (!r || r.success !== true) return;
-  const now = Date.now();
-  pruneExpiredRelayQueryCache(now);
-  relayQueryCache.set(relayQueryCacheKey(ip, endpoint), {
-    at: now,
-    payload: cloneJson(result)
-  });
+  relayQueryCache.set(relayQueryCacheKey(ip, endpoint), cloneJson(result));
 }
 
 // Configuration

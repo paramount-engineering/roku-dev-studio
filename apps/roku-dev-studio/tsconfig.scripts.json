@@ -8,6 +8,6 @@
     "skipLibCheck": true,
     "esModuleInterop": true
   },
-  "include": ["scripts/**/*.ts", "../../lib/path-safe.ts"],
+  "include": ["scripts/**/*.ts"],
   "exclude": ["scripts/verify-structured-pills.ts"]
 }

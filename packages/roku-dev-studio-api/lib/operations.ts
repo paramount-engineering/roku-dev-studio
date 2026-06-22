@@ -20,7 +20,7 @@ const { keypress, launch, query, post, inputText, deeplink, testConnection, getI
 const { sideloadChannel, deleteSideload: apiDeleteSideload } = require('./plugin-install');
 const { captureRokuScreenshot } = require('./screenshot');
 const { ssdpDiscover, subnetScan } = require('./discovery');
-const { isValidIp, validateDevPassword } = require('./validate-input');
+const { isValidIp, validateDevPassword } = require('roku-dev-studio-platform/validation');
 const {
   KEYPRESS_OPTIONS,
   DEVICE_PERFORMANCE_CHART_IDS

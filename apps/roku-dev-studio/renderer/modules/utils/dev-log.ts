@@ -12,7 +12,7 @@
  * the main process via the `get-verbose-debug` IPC, since the renderer can't read env vars).
  */
 
-import { createLogger } from '../../../shared/logging/logger.js';
+import { createLogger } from '../../shared/logging/logger.js';
 
 let devModeEnabled = false;
 let verboseEnv = false;

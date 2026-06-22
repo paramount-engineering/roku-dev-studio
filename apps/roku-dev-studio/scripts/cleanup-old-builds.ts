@@ -7,7 +7,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { resolveUnderBase } from '../../../lib/path-safe';
+import { resolveUnderBase } from 'roku-dev-studio-platform/path-safe';
 
 const distDir = resolveUnderBase(__dirname, '..', 'dist') || path.join(__dirname, '..', 'dist');
 

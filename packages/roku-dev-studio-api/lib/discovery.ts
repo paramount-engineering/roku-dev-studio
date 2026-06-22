@@ -12,7 +12,7 @@ const SSDP_ADDRESS = '239.255.255.250';
 const SSDP_PORT = 1900;
 const ROKU_SEARCH_TARGET = 'roku:ecp';
 
-const { errorMessage } = require('./err-util');
+const { errorMessage } = require('roku-dev-studio-platform');
 
 type SsdpDiscoverOpts = {
   onDeviceFound?: (d: unknown) => void;

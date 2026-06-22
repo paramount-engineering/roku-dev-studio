@@ -6,7 +6,7 @@ app.setName((pkg.build && pkg.build.productName) || pkg.name);
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
-const { resolveUnderBase, isPathUnderOneOf, resolveUserPathUnderOneOf } = require('./lib/path-safe');
+const { resolveUnderBase, isPathUnderOneOf, resolveUserPathUnderOneOf } = require('roku-dev-studio-platform/path-safe');
 
 // Import IPC handler modules
 const { setupIpcHandlers } = require('./main/ipc/index');

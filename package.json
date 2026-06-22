@@ -8,7 +8,7 @@
     "apps/*"
   ],
   "scripts": {
-    "start": "npx tsx apps/roku-dev-studio/scripts/sync-path-safe.ts && npx tsx apps/roku-dev-studio/scripts/build/index.ts && npx tsx apps/roku-dev-studio/scripts/run-electron.ts",
+    "start": "npx tsx apps/roku-dev-studio/scripts/build/index.ts && npx tsx apps/roku-dev-studio/scripts/run-electron.ts",
     "start:solid": "npm run dev:solid -w roku-dev-studio",
     "wiz:scan": "wizcli scan dir . --use-device-code --by-policy-hits=DISABLED --json-output-file=.wiz/wiz-results.json --sarif-output-file=.wiz/wiz-results.sarif --human-output-file=.wiz/wiz-results.txt",
     "wiz:export-findings": "node .wiz/wiz-findings-to-md.js",
@@ -21,11 +21,11 @@
     "build:all:diagnostic": "npm --prefix apps/roku-dev-studio run build:all:diagnostic",
     "build:linux": "npm --prefix apps/roku-dev-studio run build:linux",
     "build:all": "npm --prefix apps/roku-dev-studio run build:all",
-    "remote-server": "npx tsx apps/roku-dev-studio/scripts/sync-path-safe.ts && cd packages/roku-dev-studio-remote-server && node roku-remote-server.js",
+    "remote-server": "cd packages/roku-dev-studio-remote-server && node roku-remote-server.js",
     "rds": "node packages/roku-dev-studio-api/dist/cli.js",
     "ci:api": "node -e \"require('roku-dev-studio-api'); console.log('roku-dev-studio-api ok')\" && node packages/roku-dev-studio-api/dist/cli.js --help >/dev/null",
-    "ci:remote-check": "npx tsx apps/roku-dev-studio/scripts/sync-path-safe.ts && npm run build -w roku-dev-studio-remote-server && node --check packages/roku-dev-studio-remote-server/roku-remote-server.js",
-    "ci:app-check": "npx tsx apps/roku-dev-studio/scripts/sync-path-safe.ts && npx tsx apps/roku-dev-studio/scripts/build/index.ts && node --check apps/roku-dev-studio/main.bundled.cjs",
+    "ci:remote-check": "npm run build -w roku-dev-studio-remote-server && node --check packages/roku-dev-studio-remote-server/roku-remote-server.js",
+    "ci:app-check": "npx tsx apps/roku-dev-studio/scripts/build/index.ts && node --check apps/roku-dev-studio/main.bundled.cjs",
     "typecheck:api": "npm run typecheck -w roku-dev-studio-api",
     "typecheck:electron": "npm run typecheck:electron -w roku-dev-studio",
     "typecheck:renderer": "npm run typecheck:renderer -w roku-dev-studio",

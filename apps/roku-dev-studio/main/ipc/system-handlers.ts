@@ -21,7 +21,7 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const { fileURLToPath } = require('url');
-const { isPathUnderOneOf, resolveUnderBase, resolveUserPathUnderOneOf } = require('../../lib/path-safe.js');
+const { isPathUnderOneOf, resolveUnderBase, resolveUserPathUnderOneOf } = require('roku-dev-studio-platform/path-safe');
 
 function errMsg(e: unknown): string {
   return e instanceof Error ? e.message : String(e);

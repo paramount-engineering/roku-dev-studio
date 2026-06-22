@@ -1,4 +1,4 @@
-const { isValidIp, validateDevPassword } = require('./validate-input');
+const { isValidIp, validateDevPassword } = require('roku-dev-studio-platform/validation');
 const {
   buildMultipartBody,
   httpDigestRequest,

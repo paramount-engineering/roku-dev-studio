@@ -82,8 +82,8 @@ jobs:
         run: npm run build -w roku-dev-studio-mcp
 
       - name: Build desktop app
-        # `build:mac|win|linux` chains build:bundle (sync-path-safe +
-        # transpile main/preload/renderer) -> clean:dist -> electron-builder.
+        # `build:mac|win|linux` chains build:bundle (transpile
+        # main/preload/renderer) -> clean:dist -> electron-builder.
         # Publishing is disabled in `apps/roku-dev-studio/package.json`
         # (`"build": { "publish": null }`) — `softprops/action-gh-release`
         # in the `release` job below handles the GitHub Release.

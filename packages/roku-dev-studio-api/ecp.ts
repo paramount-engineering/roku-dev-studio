@@ -5,11 +5,11 @@
 import type { IncomingMessage } from 'http';
 
 const http = require('http');
-const { isValidIp } = require('./lib/validate-input');
+const { isValidIp } = require('roku-dev-studio-platform/validation');
 const { getDeviceInfo } = require('./lib/device-info');
 const { getDeviceImageUrl } = require('./lib/device-hardware-image');
 const { QUERY_TIMEOUT, INPUT_TEXT_KEY_DELAY_MS, INPUT_TEXT_PER_KEY_TIMEOUT_MS } = require('./lib/shared-constants');
-const { errorMessage } = require('./lib/err-util');
+const { errorMessage } = require('roku-dev-studio-platform');
 
 interface EcpRequestOptions {
   path: string;

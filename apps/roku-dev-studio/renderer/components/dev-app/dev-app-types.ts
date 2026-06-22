@@ -88,4 +88,4 @@ export interface DevPasswordVerifiedDetail {
   remember?: boolean;
 }
 
-export { errMessage } from '../../modules/utils/err-message.js';
+export { errMessage } from '../../shared/platform/err-util.js';

@@ -22,7 +22,7 @@ import {
   NETWORK_INSPECTOR_ENABLED,
   QUERY_ENDPOINTS
 } from './modules/index.js';
-import { errMessage } from './modules/utils/err-message.js';
+import { errMessage } from './shared/platform/err-util.js';
 import { devLog } from './modules/utils/dev-log.js';
 import { rendererWarn, rendererError } from './modules/utils/logger.js';
 import { initDeeplinkMediaTypes } from './modules/deeplink/deeplink-media-types.js';
