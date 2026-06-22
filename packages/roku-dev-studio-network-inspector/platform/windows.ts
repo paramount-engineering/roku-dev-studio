@@ -1,7 +1,7 @@
 /** Windows capture worker: ICS/Mobile Hotspot detection + Npcap (cap) packet capture. */
 
 import * as os from 'os';
-import { ifaceDescriptor, isPrivateGatewayIp } from './net-interfaces';
+import { ifaceDescriptor, isPrivateGatewayIp, firstIpv4 } from './net-interfaces';
 import { NpcapFrameSource } from './frame-sources';
 import {
   detectNpcapInstalled,
@@ -32,9 +32,8 @@ function scoreWindowsHotspotCandidate(): { name: string; subnet: string; gateway
   let best: { name: string; subnet: string; gatewayIp: string; score: number } | null = null;
   for (const [name, addrs] of Object.entries(ifaces)) {
     if (!addrs) continue;
-    const ipv4 = addrs.find((a) => a.family === 'IPv4' && !a.internal);
-    if (!ipv4) continue;
-    const ip = ipv4.address;
+    const ip = firstIpv4(addrs);
+    if (!ip) continue;
     if (ip.startsWith('169.254.')) continue;
     const lower = name.toLowerCase();
     const nameMatch =
