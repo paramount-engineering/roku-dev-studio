@@ -418,6 +418,17 @@ function encodeBody(
   return { body: decoded.toString('base64'), bodyEncoding: 'base64', ...truncated };
 }
 
+/**
+ * Syntactically-valid DNS hostname (RFC 1123-ish, labels of letters/digits/hyphen, ≤253 chars).
+ * Used to reject garbage/empty SNI values so the proxy only mints leaf certs for real hostnames.
+ */
+function isValidSniHostname(name: string | undefined | null): name is string {
+  if (typeof name !== 'string' || name.length === 0 || name.length > 253) return false;
+  return /^([a-zA-Z0-9_](?:[a-zA-Z0-9_-]{0,61}[a-zA-Z0-9_])?\.)*[a-zA-Z0-9_](?:[a-zA-Z0-9_-]{0,61}[a-zA-Z0-9_])?$/.test(
+    name
+  );
+}
+
 export class RokuMitmProxy {
   private server: http.Server | null = null;
   private readonly leafCache = new Map<string, { certPem: string; keyPem: string }>();
@@ -511,10 +522,17 @@ export class RokuMitmProxy {
     response: NetworkHttpMessage,
     startedAtMs?: number
   ): void {
-    const startMs = startedAtMs ?? this.transactionStarts.get(transactionId);
-    if (startMs == null) {
-      this.transactionStarts.set(transactionId, Date.now());
-    } else if (response.statusCode !== 0) {
+    const existingStart = this.transactionStarts.get(transactionId);
+    const startMs = startedAtMs ?? existingStart;
+    if (response.statusCode === 0) {
+      // Genuinely pending — remember the start so the terminal emit can compute a duration. Only
+      // track it when no start time is otherwise known (the HTTP path supplies startedAtMs and so
+      // never needs the map).
+      if (startMs == null) this.transactionStarts.set(transactionId, Date.now());
+    } else if (existingStart != null) {
+      // Terminal status for a previously-pending transaction — release its tracked start. One-shot
+      // terminal emits (blocked/mock/error/TLS-fail) carry a fresh id with no tracked start, so they
+      // no longer leave a dangling map entry that leaked for the process lifetime.
       this.transactionStarts.delete(transactionId);
     }
     const durationMs =
@@ -857,6 +875,22 @@ export class RokuMitmProxy {
         resolve();
       });
 
+      // If the device closes the connection before the response completes, abort the upstream
+      // request immediately instead of letting it run to completion (or the hard-timeout backstop) —
+      // otherwise an aborted stream leaks an upstream socket per disconnect. `finish` is idempotent
+      // (`settled`), so on a normal completion this close fires after finish() and is a no-op.
+      const onClientGone = () => {
+        if (settled) return;
+        try {
+          upstream.destroy();
+        } catch {
+          /* ignore */
+        }
+        finish({ statusCode: 499, statusText: 'Client Closed Request', body: '' }, 499, Buffer.alloc(0));
+        resolve();
+      };
+      req.on('close', onClientGone);
+
       if (reqBody.length) upstream.write(reqBody);
       upstream.end();
     });
@@ -908,7 +942,11 @@ export class RokuMitmProxy {
       key: leaf.keyPem,
       cert: leaf.certPem,
       SNICallback: (servername, cb) => {
-        const snLeaf = this.getLeaf(servername);
+        // Only mint a leaf for a syntactically valid hostname; for empty/garbage SNI reuse the
+        // CONNECT-target leaf. With the hotspot-client gate on CONNECT above, this keeps the proxy
+        // from being coaxed into signing certificates for arbitrary names and bounds cache churn.
+        const target = isValidSniHostname(servername) ? servername : hostname;
+        const snLeaf = this.getLeaf(target);
         const ctx = tls.createSecureContext({ key: snLeaf.keyPem, cert: snLeaf.certPem });
         cb(null, ctx);
       }
@@ -1216,6 +1254,21 @@ export class RokuMitmProxy {
 
     upstream.on('error', (err) => {
       failTunnel(502, 'Bad Gateway', err.message);
+    });
+
+    // Device closed the tunnel before the response completed — abort the upstream request so an
+    // aborted stream doesn't leak an upstream socket. On normal completion `settled` is already true
+    // (set before socket.end()), so this close handler is a no-op.
+    socket.on('close', () => {
+      if (settled) return;
+      settled = true;
+      settle();
+      try { upstream.destroy(); } catch { /* ignore */ }
+      this.emitTransaction(newTransactionId(), deviceIp, hostname, port, requestSnapshot, {
+        statusCode: 499,
+        statusText: 'Client Closed Request',
+        body: ''
+      });
     });
 
     if (reqBodyBuf.length) upstream.write(reqBodyBuf);

@@ -92,7 +92,6 @@ function detectUnix(port: number): PortHolder | null {
 function detectWindows(port: number): PortHolder | null {
   const out = run('netstat', ['-ano', '-p', 'TCP']);
   if (!out) return null;
-  const needle = `:${port}`;
   let pid: number | undefined;
   for (const raw of out.split('\n')) {
     const line = raw.trim();
@@ -100,7 +99,11 @@ function detectWindows(port: number): PortHolder | null {
     const parts = line.split(/\s+/);
     // Proto  Local Address  Foreign Address  State  PID
     const local = parts[1] || '';
-    if (!local.endsWith(needle)) continue;
+    // Parse the port from the local address by its last colon — robust across IPv4 (`0.0.0.0:8888`)
+    // and bracketed IPv6 (`[::]:8888`), and avoids matching a substring of a different port.
+    const colon = local.lastIndexOf(':');
+    if (colon < 0) continue;
+    if (Number(local.slice(colon + 1)) !== port) continue;
     const candidate = Number(parts[parts.length - 1]);
     if (Number.isFinite(candidate)) {
       pid = candidate;

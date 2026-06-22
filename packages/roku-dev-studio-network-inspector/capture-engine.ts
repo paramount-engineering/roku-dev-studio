@@ -160,6 +160,11 @@ export class CaptureEngine {
   getPacketsCaptured(): number {
     return this.packetsCaptured;
   }
+
+  /** Frame-source runtime stats for diagnostics (e.g. Windows Npcap queue depth / dropped). */
+  getSourceStats(): { queued: number; dropped: number } | undefined {
+    return this.source?.getStats?.();
+  }
 }
 
 export function detectNpcapInstalled(): boolean {

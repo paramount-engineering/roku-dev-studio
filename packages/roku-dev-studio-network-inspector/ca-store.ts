@@ -33,7 +33,9 @@ function ensureCaDir(): string {
     throw new Error('CA store not initialized — call initCaStore(userDataPath) first.');
   }
   if (!fs.existsSync(caDir)) {
-    fs.mkdirSync(caDir, { recursive: true });
+    // Owner-only (0700): the directory holds the CA private key, which must never be world-readable
+    // on a multi-user machine — anyone who can read it could forge certs for any host on the hotspot.
+    fs.mkdirSync(caDir, { recursive: true, mode: 0o700 });
   }
   return caDir;
 }
@@ -89,7 +91,16 @@ function generateCa(): CaMaterial {
 function persistCa(material: CaMaterial): void {
   const dir = ensureCaDir();
   fs.writeFileSync(path.join(dir, CA_FILE_CERT), material.certPem, 'utf8');
-  fs.writeFileSync(path.join(dir, CA_FILE_KEY), material.keyPem, 'utf8');
+  // The private key is the sensitive artifact: write it owner-read/write only (0600). `mode` only
+  // applies when the file is created, so chmod afterwards too in case a prior world-readable key
+  // already exists on disk (no-op on Windows, where POSIX modes don't apply).
+  const keyPath = path.join(dir, CA_FILE_KEY);
+  fs.writeFileSync(keyPath, material.keyPem, { encoding: 'utf8', mode: 0o600 });
+  try {
+    fs.chmodSync(keyPath, 0o600);
+  } catch {
+    /* best-effort — non-POSIX filesystems */
+  }
   fs.writeFileSync(path.join(dir, CA_FILE_PEM), material.certPem, 'utf8');
   fs.writeFileSync(path.join(dir, CA_FILE_CRT), material.certPem, 'utf8');
   const meta = {
@@ -164,10 +175,31 @@ export function getCaInfo(): {
   };
 }
 
+// A single RSA keypair shared by every per-host leaf cert. Generating a fresh 2048-bit keypair per
+// hostname was a ~50-200ms synchronous stall on the TLS handshake hot path (every new SNI name).
+// A MITM leaf does not need a unique key — only a unique certificate (subject/SAN, CA-signed) — so
+// one keypair is generated once and reused, turning each leaf into just a sign() call.
+let sharedLeafKeys: forge.pki.rsa.KeyPair | null = null;
+
+function getSharedLeafKeys(): forge.pki.rsa.KeyPair {
+  if (!sharedLeafKeys) {
+    sharedLeafKeys = forge.pki.rsa.generateKeyPair(2048);
+  }
+  return sharedLeafKeys;
+}
+
+/**
+ * Pre-generate the shared leaf keypair off the request hot path. The proxy calls this at start so
+ * the one unavoidable keygen happens at startup rather than stalling the first HTTPS handshake.
+ */
+export function warmLeafKeyPair(): void {
+  getSharedLeafKeys();
+}
+
 export function createLeafCert(hostname: string, ca: CaMaterial): { certPem: string; keyPem: string } {
   const caCert = forge.pki.certificateFromPem(ca.certPem);
   const caKey = forge.pki.privateKeyFromPem(ca.keyPem);
-  const keys = forge.pki.rsa.generateKeyPair(2048);
+  const keys = getSharedLeafKeys();
   const cert = forge.pki.createCertificate();
   cert.publicKey = keys.publicKey;
   cert.serialNumber = crypto.randomBytes(8).toString('hex');

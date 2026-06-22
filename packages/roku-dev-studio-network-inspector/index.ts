@@ -24,7 +24,8 @@ import { scanHotspotSubnet } from './device-matcher';
 import { CaptureEngine } from './capture-engine';
 import { getCapturePlatform } from './platform';
 import type { CapturePlatform, HotspotInterfaceInfo } from './platform/types';
-import { getCaInfo, getOrCreateCa } from './ca-store';
+import { getCaInfo, getOrCreateCa, warmLeafKeyPair } from './ca-store';
+import { niLog, niWarn } from './log';
 // Re-export the contract types from the package root so consumers (remote server, app) can import
 // them without reaching into the ./types subpath.
 export type {
@@ -229,6 +230,9 @@ function eventMatchesQuery(ev: ParsedNetworkEvent, q: NetworkEventQuery): boolea
   return true;
 }
 
+const CAPTURE_SUPPRESS_COOLDOWN_MS = 30_000;
+const STATUS_BROADCAST_DEBOUNCE_MS = 150;
+
 export class NetworkInspectorService {
   private enabled = false;
   private mitmEnabled = false;
@@ -270,11 +274,29 @@ export class NetworkInspectorService {
   // tick doesn't respawn the capture process in a loop. Cleared when readiness is restored
   // (macOS BPF re-check, Linux/Windows explicit setup) or when the inspector is re-enabled.
   private captureStartSuppressed = false;
+  // When capture was suppressed by a (possibly transient) error, so the tick can auto-retry after a
+  // cooldown — but only when the platform still reports the capture tool available (so a genuine
+  // permission failure stays suppressed instead of respawning tcpdump/Npcap in a loop).
+  private captureSuppressedAt = 0;
   private captureInterface: string | undefined;
   private hotspotSubnet: string | undefined;
   private hotspotSubnetPrefix: string | undefined;
   private lastSubnetScanAt = 0;
-  private readonly subnetScanIntervalMs = 12_000;
+  // Subnet scan cadence with exponential backoff: stays at the floor while the discovered device set
+  // keeps changing, and doubles up to the ceiling once the set is stable (or empty) so an idle
+  // hotspot isn't probed with 254 HTTP gets every cycle.
+  private readonly minSubnetScanIntervalMs = 12_000;
+  private readonly maxSubnetScanIntervalMs = 60_000;
+  private subnetScanIntervalMs = 12_000;
+  // Guards against overlapping ticks: a slow subnet scan can exceed the 4s timer, and `setInterval`
+  // would otherwise stack a second tick (and a second scan) on top of the in-flight one.
+  private tickInFlight = false;
+  // Trailing-edge debounce so a burst of state changes (a tick + many event flushes) coalesces into
+  // a single status emit instead of rebuilding+broadcasting getStatus() on every mutation.
+  private statusBroadcastTimer: ReturnType<typeof setTimeout> | null = null;
+  // Throttle for the periodic diagnostics line emitted from the tick (so logs stay readable).
+  private lastStatsLogAt = 0;
+  private readonly statsLogIntervalMs = 10_000;
   // Consecutive missed subnet scans per client key. A single missed probe (Wi‑Fi
   // hiccup, device asleep) shouldn't evict a Roku and fire onDeviceLeft — only
   // remove after this many consecutive misses (~2 scans ≈ 24s of silence).
@@ -300,6 +322,7 @@ export class NetworkInspectorService {
   }
 
   setEnabled(enabled: boolean): void {
+    niLog(`setEnabled(${enabled}) — platform=${this.platform.platform}, mitmEnabled=${this.mitmEnabled}`);
     this.enabled = enabled;
     if (!enabled) {
       this.stopAll();
@@ -443,12 +466,14 @@ export class NetworkInspectorService {
     if (result.captureToolAvailable) {
       this.lastError = undefined;
       this.captureStartSuppressed = false;
-      const iface = this.platform.detectHotspotInterface();
-      if (iface && this.enabled && !this.captureInterface) {
-        this.startCapture(iface.name, iface.subnet);
-        this.captureInterface = iface.name;
-        this.hotspotSubnet = `${iface.subnet}.0/24`;
-        this.hotspotSubnetPrefix = iface.subnet;
+      if (this.platform.isHotspotConfidentlyActive() && this.enabled && !this.captureInterface) {
+        const iface = this.platform.detectHotspotInterface();
+        if (iface) {
+          this.startCapture(iface.name, iface.subnet);
+          this.captureInterface = iface.name;
+          this.hotspotSubnet = `${iface.subnet}.0/24`;
+          this.hotspotSubnetPrefix = iface.subnet;
+        }
       }
     }
     this.broadcastStatus();
@@ -799,14 +824,22 @@ export class NetworkInspectorService {
     this.capture.stop();
     this.captureInterface = undefined;
     this.captureStartSuppressed = false;
+    this.captureSuppressedAt = 0;
+    this.subnetScanIntervalMs = this.minSubnetScanIntervalMs;
+    this.lastSubnetScanAt = 0;
     this.hotspotSubnet = undefined;
     this.clients.clear();
     this.clientMissCounts.clear();
     this.matchedSerials.clear();
+    this.trackedDeviceIps.clear();
     this.pendingEvents = [];
     if (this.flushTimer) {
       clearTimeout(this.flushTimer);
       this.flushTimer = null;
+    }
+    if (this.statusBroadcastTimer) {
+      clearTimeout(this.statusBroadcastTimer);
+      this.statusBroadcastTimer = null;
     }
     // Drop captured detail and delete the temp cache file when capture stops / inspector disables.
     this.eventBuffer = [];
@@ -820,36 +853,61 @@ export class NetworkInspectorService {
 
   private async tick(): Promise<void> {
     if (!this.enabled) return;
+    // A subnet scan can outlast the 4s timer; skip this tick rather than stacking a second scan on
+    // top of the in-flight one (overlapping scans race on client state and pile up sockets).
+    if (this.tickInFlight) return;
+    this.tickInFlight = true;
+    try {
+      await this.tickInner();
+    } finally {
+      this.tickInFlight = false;
+    }
+  }
+
+  private async tickInner(): Promise<void> {
     // Let the platform worker refresh any runtime-variable readiness it caches (e.g. Linux re-runs
     // getcap so capture only reports "ready" when tcpdump actually carries the capabilities).
     await this.platform.refreshCaptureAccess();
-    const iface = this.platform.detectHotspotInterface();
+
+    // MITM runs whenever enabled — including MITM-only on the same Wi-Fi (no hotspot). Keep
+    // retrying bind every tick so a transient port conflict can recover without user action.
+    if (this.mitmEnabled) {
+      const hint = this.platform.detectHotspotInterface();
+      if (hint?.gatewayIp) this.gatewayIp = hint.gatewayIp;
+      this.startMitm();
+    }
+
+    // Packet capture and subnet discovery require a confident hotspot (macOS bridge100, Windows
+    // ICS / Wi-Fi Direct, etc.). A normal home Wi-Fi adapter must not start capture on Windows.
+    const hotspotActive = this.platform.isHotspotConfidentlyActive();
+    const iface = hotspotActive ? this.platform.detectHotspotInterface() : null;
     if (!iface) {
       if (this.captureInterface) {
+        niLog(`Hotspot no longer detected — stopping capture on "${this.captureInterface}".`);
         this.capture.stop();
         this.captureInterface = undefined;
         this.hotspotSubnet = undefined;
+        this.hotspotSubnetPrefix = undefined;
+        // The hotspot's clients left with it. Clear discovery state and notify the UI so departed
+        // devices don't linger as stale entries — the miss-count eviction only runs while a hotspot
+        // is present, so without this they'd never be removed until the inspector is disabled. MITM
+        // is intentionally left running; it's driven independently of the hotspot above.
         this.gatewayIp = undefined;
-        this.stopMitm();
-        this.clearMitmError();
         this.clients.clear();
         this.clientMissCounts.clear();
         this.matchedSerials.clear();
+        this.trackedDeviceIps = new Set();
         this.listener.onClientsCleared();
-      } else if (this.mitmEnabled) {
-        // MITM-only setup (no hotspot — e.g. Roku + this machine on the same Wi-Fi): the proxy
-        // still runs here, so keep (re)trying to bind it every tick. Without this, a MITM-only
-        // setup that hit a port conflict (EADDRINUSE) would never recover after the offending
-        // process is closed, because startMitm() is otherwise only retried on the hotspot path
-        // below. startMitm() is a no-op when the proxy is already listening.
-        this.startMitm();
       }
+      // Hotspot is gone — reset the scan backoff so the next time one appears we discover promptly
+      // instead of waiting out a stretched (up to 60s) interval inherited from the previous session.
+      this.subnetScanIntervalMs = this.minSubnetScanIntervalMs;
+      this.lastSubnetScanAt = 0;
       this.broadcastStatus();
       return;
     }
     const subnet = iface.subnet;
     this.gatewayIp = iface.gatewayIp;
-    if (this.mitmEnabled) this.startMitm();
     // Retry capture once access is restored at runtime (macOS BPF becoming writable). The worker
     // decides whether its platform can recover detectably — Linux/Windows return false (their
     // privilege isn't observable before spawning), so recovery there stays explicit via Setup.
@@ -858,25 +916,35 @@ export class NetworkInspectorService {
       this.captureInterface = undefined;
       this.lastError = undefined;
       this.captureStartSuppressed = false;
+      this.captureSuppressedAt = 0;
+    }
+    // Auto-recover from a (likely transient) capture failure once a cooldown has elapsed — but only
+    // when the platform still reports the capture tool available. A genuine permission failure keeps
+    // captureToolAvailable === false, so it stays suppressed instead of respawning in a tight loop.
+    if (
+      this.captureStartSuppressed &&
+      this.captureSuppressedAt > 0 &&
+      Date.now() - this.captureSuppressedAt >= CAPTURE_SUPPRESS_COOLDOWN_MS &&
+      this.platform.getReadiness().captureToolAvailable
+    ) {
+      niLog('Capture suppression cooldown elapsed and capture tool still available — retrying capture.');
+      this.captureStartSuppressed = false;
+      this.captureSuppressedAt = 0;
+      this.lastError = undefined;
     }
     if (!this.captureStartSuppressed && this.captureInterface !== iface.name) {
+      niLog(`Hotspot detected on "${iface.name}" (subnet ${subnet}.0/24, gateway ${iface.gatewayIp}) — starting capture.`);
       this.startCapture(iface.name, subnet);
       this.broadcastStatus();
     }
-    const shouldScan =
-      this.clients.size === 0 || Date.now() - this.lastSubnetScanAt >= this.subnetScanIntervalMs;
+    const shouldScan = Date.now() - this.lastSubnetScanAt >= this.subnetScanIntervalMs;
     if (shouldScan) {
       this.lastSubnetScanAt = Date.now();
       const discovered = await scanHotspotSubnet(subnet);
-      for (const dev of discovered) {
-        this.trackedDeviceIps.add(dev.ip);
-      }
-      if (this.captureInterface) {
-        this.capture.updateParseContext({
-          deviceIps: this.trackedDeviceIps,
-          hotspotSubnetPrefix: subnet
-        });
-      }
+      niLog(`Subnet scan ${subnet}.0/24 found ${discovered.length} Roku device(s).`);
+      // Tracks whether the discovered device *set* changed this scan (a join or an eviction) so the
+      // scan cadence can back off while stable and snap back to the floor on any churn.
+      let deviceSetChanged = false;
       const prevKeys = new Set(this.clients.keys());
       for (const dev of discovered) {
         const key = dev.serialNumber || dev.ip;
@@ -888,6 +956,7 @@ export class NetworkInspectorService {
           existing.modelName = dev.modelName ?? existing.modelName;
         } else {
           this.clients.set(key, dev);
+          deviceSetChanged = true;
         }
         // Seen this scan — clear any accumulated miss count.
         this.clientMissCounts.delete(key);
@@ -916,6 +985,7 @@ export class NetworkInspectorService {
           this.clientMissCounts.delete(key);
           const removed = this.clients.get(key);
           this.clients.delete(key);
+          deviceSetChanged = true;
           if (removed?.serialNumber) {
             this.matchedSerials.delete(removed.serialNumber);
             this.listener.onDeviceLeft({
@@ -925,13 +995,50 @@ export class NetworkInspectorService {
           }
         }
       }
+      // Rebuild the tracked-IP set from the live client list so departed devices don't linger
+      // (stale frame attribution + unbounded growth). Hysteresis keeps a briefly-missed device in
+      // `clients`, so its IP is retained until it's actually evicted above.
+      this.trackedDeviceIps = new Set(Array.from(this.clients.values()).map((c) => c.ip));
+      if (this.captureInterface) {
+        this.capture.updateParseContext({
+          deviceIps: this.trackedDeviceIps,
+          hotspotSubnetPrefix: subnet
+        });
+      }
+      // Back off the scan cadence while the device set is stable/empty (doubling up to the ceiling);
+      // any join/leave snaps it straight back to the floor for responsive discovery.
+      this.subnetScanIntervalMs = deviceSetChanged
+        ? this.minSubnetScanIntervalMs
+        : Math.min(this.maxSubnetScanIntervalMs, this.subnetScanIntervalMs * 2);
     } else if (this.captureInterface) {
       this.capture.updateParseContext({
         deviceIps: this.trackedDeviceIps,
         hotspotSubnetPrefix: subnet
       });
     }
+    this.logStatsThrottled();
     this.broadcastStatus();
+  }
+
+  /** Emit a single-line runtime snapshot at most every statsLogIntervalMs, for shareable logs. */
+  private logStatsThrottled(): void {
+    const now = Date.now();
+    if (now - this.lastStatsLogAt < this.statsLogIntervalMs) return;
+    this.lastStatsLogAt = now;
+    const src = this.capture.getSourceStats();
+    const npcap = src ? ` npcapQueue=${src.queued} npcapDropped=${src.dropped}` : '';
+    niLog(
+      `stats: capture=${this.captureInterface ?? 'none'} ` +
+        `clients=${this.clients.size} packets=${this.capture.getPacketsCaptured()} ` +
+        `events=${this.eventBuffer.length} mitm=${this.mitmActiveLabel()} ` +
+        `mitmTx=${this.mitmTransactions} scanIntervalMs=${this.subnetScanIntervalMs}${npcap}` +
+        `${this.lastError ? ` lastError="${this.lastError}"` : ''}`
+    );
+  }
+
+  private mitmActiveLabel(): string {
+    if (!this.mitmEnabled) return 'off';
+    return this.mitmProxy?.isRunning() ? `:${this.mitmPort}` : 'starting';
   }
 
   private startCapture(interfaceName: string, subnet: string): void {
@@ -941,12 +1048,15 @@ export class NetworkInspectorService {
       hotspotSubnetPrefix: subnet,
       onEvents: (events) => this.enqueueEvents(events),
       onError: (message) => {
+        niWarn(`Capture error on "${interfaceName}": ${message} — suppressing retries until recovery.`);
         this.lastError = message;
         this.capture.stop();
         this.captureInterface = undefined;
         // Don't auto-respawn capture every tick after a blocking failure (e.g. missing privilege).
-        // Recovery is explicit: macOS BPF re-check in tick(), or the Setup action on Linux/Windows.
+        // Recovery is explicit: macOS BPF re-check in tick(), the Setup action on Linux/Windows, or
+        // the cooldown-gated transient retry in tick() (only when the capture tool stays available).
         this.captureStartSuppressed = true;
+        this.captureSuppressedAt = Date.now();
         this.broadcastStatus();
       },
       onRawPacket: (frame, timestampMs) => {
@@ -975,6 +1085,7 @@ export class NetworkInspectorService {
         this.captureInterface = undefined;
         setTimeout(() => {
           if (!this.enabled || this.captureStartSuppressed) return;
+          if (!this.platform.isHotspotConfidentlyActive()) return;
           const iface = this.platform.detectHotspotInterface();
           if (!iface || iface.name !== interfaceName) return;
           this.startCapture(iface.name, iface.subnet);
@@ -987,10 +1098,13 @@ export class NetworkInspectorService {
       }
     });
     if (started) {
+      niLog(`Capture engine started on "${interfaceName}" (subnet ${subnet}.0/24).`);
       this.captureInterface = interfaceName;
       this.hotspotSubnet = `${subnet}.0/24`;
       this.hotspotSubnetPrefix = subnet;
       this.lastError = undefined;
+    } else {
+      niWarn(`Capture engine failed to start on "${interfaceName}".`);
     }
   }
 
@@ -1020,6 +1134,9 @@ export class NetworkInspectorService {
     }
     try {
       const ca = getOrCreateCa();
+      // Pre-generate the shared leaf keypair so the one keygen happens here, not on the first
+      // HTTPS handshake the proxy serves.
+      warmLeafKeyPair();
       this.mitmProxy = new RokuMitmProxy({
         port: this.mitmPort,
         ca,
@@ -1032,6 +1149,7 @@ export class NetworkInspectorService {
         onListening: () => {
           // Reached "listening" — the port was free, so clear any stale conflict/error.
           if (this.mitmProxy?.isRunning()) {
+            niLog(`MITM proxy listening on 0.0.0.0:${this.mitmPort}.`);
             this.mitmLastError = undefined;
             this.mitmPortConflict = undefined;
           }
@@ -1040,6 +1158,7 @@ export class NetworkInspectorService {
         // Asynchronous listen failure (most commonly EADDRINUSE). Record the error and, when it's a
         // port conflict, resolve which process is squatting the port so the UI can name it.
         onError: (message) => {
+          niWarn(`MITM proxy error on port ${this.mitmPort}: ${message}`);
           this.mitmLastError = message || 'MITM proxy failed to start';
           this.mitmPortConflict = this.buildPortConflict(message);
           this.broadcastStatus();
@@ -1162,7 +1281,14 @@ export class NetworkInspectorService {
   }
 
   private broadcastStatus(): void {
-    this.listener.onStatus(this.getStatus());
+    // Trailing-edge debounce: the first call schedules an emit and subsequent calls within the
+    // window are absorbed, so a burst (a tick plus many event flushes) collapses into one
+    // getStatus() rebuild + emit. The latest state is captured at fire time, so nothing is lost.
+    if (this.statusBroadcastTimer) return;
+    this.statusBroadcastTimer = setTimeout(() => {
+      this.statusBroadcastTimer = null;
+      this.listener.onStatus(this.getStatus());
+    }, STATUS_BROADCAST_DEBOUNCE_MS);
   }
 }
 

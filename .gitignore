@@ -49,3 +49,4 @@ npm-debug.log*
 .claude/worktrees/
 .discussion-docs/
 .cursor/
+.claude/settings.json

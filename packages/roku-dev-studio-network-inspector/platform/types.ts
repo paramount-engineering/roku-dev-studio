@@ -54,6 +54,8 @@ export interface CaptureFrameSourceStartOptions {
 export interface CaptureFrameSource {
   start(options: CaptureFrameSourceStartOptions): boolean;
   stop(): void;
+  /** Optional runtime stats for diagnostics (e.g. Windows Npcap queue depth / dropped frames). */
+  getStats?(): { queued: number; dropped: number };
 }
 
 export interface CapturePlatform {

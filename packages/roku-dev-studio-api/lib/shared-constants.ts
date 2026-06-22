@@ -50,8 +50,8 @@ const TOAST_DISPLAY_DURATION = 5000;
 /** ms — header status line visibility (Settings → General; 2–10 s in UI) */
 const STATUS_MESSAGE_DURATION = 5000;
 
-/** ms — default pause between Lit_ keypresses in `inputText` (relay + local). */
-const INPUT_TEXT_KEY_DELAY_MS = 100;
+/** ms — default pause between Lit_ keypresses in `inputText` (relay + local). Lower = faster; 0 may drop chars on some devices. */
+const INPUT_TEXT_KEY_DELAY_MS = 40;
 
 /** ms — per-character ECP keypress socket timeout used by `inputText`. */
 const INPUT_TEXT_PER_KEY_TIMEOUT_MS = 2000;

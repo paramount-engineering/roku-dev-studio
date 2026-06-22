@@ -8,7 +8,7 @@ const http = require('http');
 const { isValidIp } = require('./lib/validate-input');
 const { getDeviceInfo } = require('./lib/device-info');
 const { getDeviceImageUrl } = require('./lib/device-hardware-image');
-const { QUERY_TIMEOUT } = require('./lib/shared-constants');
+const { QUERY_TIMEOUT, INPUT_TEXT_KEY_DELAY_MS, INPUT_TEXT_PER_KEY_TIMEOUT_MS } = require('./lib/shared-constants');
 const { errorMessage } = require('./lib/err-util');
 
 interface EcpRequestOptions {
@@ -24,6 +24,8 @@ interface EcpCallOpts {
   port?: number;
   inputKeyDelayMs?: number;
   includeSameSubnet?: boolean;
+  /** Reuse TCP connections across sequential ECP calls (used by `inputText`). */
+  agent?: import('http').Agent;
 }
 
 function ecpErrorFromStatus(statusCode: number): { error: string; authFailed?: boolean } {
@@ -56,12 +58,13 @@ function ecpRequest(ip: string, options: EcpRequestOptions, opts: EcpCallOpts = 
   const timeout = opts.timeout != null ? opts.timeout : (options.timeout != null ? options.timeout : 5000);
 
   return new Promise((resolve) => {
-    const reqOptions = {
+    const reqOptions: import('http').RequestOptions = {
       hostname: ip,
       port,
       path: options.path,
       method: options.method || 'GET',
-      headers: options.headers || {}
+      headers: options.headers || {},
+      agent: opts.agent
     };
 
     const req = http.request(reqOptions, (res: IncomingMessage) => {
@@ -147,7 +150,7 @@ function post(ip: string, endpoint: string, opts: EcpCallOpts = {}) {
  * @param {string} ip
  * @param {string} text
  * @param {{ timeout?: number, port?: number, inputKeyDelayMs?: number }} [opts]
- *   inputKeyDelayMs — pause between keys (default 100); set 0 for fastest (may drop chars).
+ *   inputKeyDelayMs — pause between keys (default {@link INPUT_TEXT_KEY_DELAY_MS}); set 0 for fastest (may drop chars).
  * @returns {Promise<{ success: true, status: number, results: object[] } | { success: false, error: string, results?: object[], index?: number, statusCode?: number, authFailed?: boolean }>}
  */
 async function inputText(ip: string, text: unknown, opts: EcpCallOpts = {}) {
@@ -158,35 +161,40 @@ async function inputText(ip: string, text: unknown, opts: EcpCallOpts = {}) {
   if (!str) {
     return { success: true, status: 200, results: [] };
   }
-  const delayMs = opts.inputKeyDelayMs != null ? opts.inputKeyDelayMs : 100;
-  const keyTimeout = opts.timeout != null ? opts.timeout : 2000;
+  const delayMs = opts.inputKeyDelayMs != null ? opts.inputKeyDelayMs : INPUT_TEXT_KEY_DELAY_MS;
+  const keyTimeout = opts.timeout != null ? opts.timeout : INPUT_TEXT_PER_KEY_TIMEOUT_MS;
   const port = opts.port;
   const results: unknown[] = [];
-  for (const char of str) {
-    const key = `Lit_${encodeURIComponent(char)}`;
-    const result = await keypress(ip, key, { timeout: keyTimeout, port });
-    results.push(result);
-    const r = result as {
-      success: boolean;
-      error?: string;
-      statusCode?: number;
-      authFailed?: boolean;
-    };
-    if (!r.success) {
-      return {
-        success: false,
-        error: r.error || 'inputText failed',
-        statusCode: r.statusCode,
-        authFailed: r.authFailed,
-        index: results.length - 1,
-        results
+  const agent = new http.Agent({ keepAlive: true, maxSockets: 1 });
+  try {
+    for (const char of str) {
+      const key = `Lit_${encodeURIComponent(char)}`;
+      const result = await keypress(ip, key, { timeout: keyTimeout, port, agent });
+      results.push(result);
+      const r = result as {
+        success: boolean;
+        error?: string;
+        statusCode?: number;
+        authFailed?: boolean;
       };
+      if (!r.success) {
+        return {
+          success: false,
+          error: r.error || 'inputText failed',
+          statusCode: r.statusCode,
+          authFailed: r.authFailed,
+          index: results.length - 1,
+          results
+        };
+      }
+      if (delayMs > 0) {
+        await new Promise((r) => setTimeout(r, delayMs));
+      }
     }
-    if (delayMs > 0) {
-      await new Promise((r) => setTimeout(r, delayMs));
-    }
+    return { success: true, status: 200, results };
+  } finally {
+    agent.destroy();
   }
-  return { success: true, status: 200, results };
 }
 
 function deeplink(
