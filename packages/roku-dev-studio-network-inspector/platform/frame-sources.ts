@@ -8,6 +8,7 @@
 
 import { spawn, type ChildProcessWithoutNullStreams } from 'child_process';
 import * as fs from 'fs';
+import * as os from 'os';
 import * as path from 'path';
 import { PcapByteStream } from '../pcap-byte-stream';
 import { resolveTcpdumpPath } from '../capture-engine';
@@ -131,6 +132,34 @@ export class TcpdumpFrameSource implements CaptureFrameSource {
 const NPCAP_QUEUE_MAX = 5000;
 const NPCAP_PUMP_BATCH = 256;
 
+/**
+ * Map an OS "friendly" interface name (e.g. "Wi-Fi", "Local Area Connection* 2", "Microsoft Wi-Fi
+ * Direct Virtual Adapter") to the Npcap device name (`\Device\NPF_{GUID}`) that `cap.open()` requires.
+ *
+ * This is the macOS/Windows divergence behind "capture works on Mac but not Windows": tcpdump's `-i`
+ * accepts the friendly name directly, but Npcap identifies adapters only by device name. We look up
+ * the interface's IPv4 address and ask Npcap which device owns it (`Cap.findDevice(ip)`).
+ */
+function resolveNpcapDevice(
+  Cap: { findDevice: (ip?: string) => string | undefined },
+  interfaceName: string
+): string | undefined {
+  const addrs = os.networkInterfaces()[interfaceName];
+  const ipv4 = addrs?.find((a) => a.family === 'IPv4' && !a.internal)?.address;
+  if (!ipv4) {
+    niWarn(`Interface "${interfaceName}" has no external IPv4 address; cannot resolve its Npcap device.`);
+    return undefined;
+  }
+  try {
+    const device = Cap.findDevice(ipv4) || undefined;
+    niLog(`Resolved interface "${interfaceName}" (${ipv4}) to Npcap device ${device ?? '(none found)'}.`);
+    return device;
+  } catch (err) {
+    niError(`Cap.findDevice(${ipv4}) failed: ${err instanceof Error ? err.message : String(err)}`);
+    return undefined;
+  }
+}
+
 /** Windows capture via the optional native `cap` (Npcap/libpcap) binding. */
 export class NpcapFrameSource implements CaptureFrameSource {
   private capInstance: { close: () => void } | null = null;
@@ -158,13 +187,22 @@ export class NpcapFrameSource implements CaptureFrameSource {
         : 'udp port 53 or tcp port 443 or tcp port 80';
       const bufSize = 10 * 1024 * 1024;
       const buffer = Buffer.alloc(65535);
-      const linkType = cap.open(options.interfaceName, filter, bufSize, buffer);
+      // Npcap needs the device name (\Device\NPF_{GUID}), not the OS friendly name we capture on.
+      const device = resolveNpcapDevice(Cap, options.interfaceName);
+      if (!device) {
+        niError(`No Npcap device found for interface "${options.interfaceName}"; capture cannot start.`);
+        options.onError(
+          `Could not find the Npcap capture device for "${options.interfaceName}". Make sure Npcap is installed in WinPcap API-compatible mode.`
+        );
+        return false;
+      }
+      const linkType = cap.open(device, filter, bufSize, buffer);
       if (linkType == null) {
-        niError(`cap.open returned null for "${options.interfaceName}" (filter="${filter}").`);
+        niError(`cap.open returned null for device "${device}" (interface="${options.interfaceName}", filter="${filter}").`);
         options.onError(`Could not open ${options.interfaceName} for capture. Check Npcap installation.`);
         return false;
       }
-      niLog(`Npcap capture started on "${options.interfaceName}" (linkType=${linkType}, filter="${filter}").`);
+      niLog(`Npcap capture started on "${options.interfaceName}" (device=${device}, linkType=${linkType}, filter="${filter}").`);
       this.onFrame = options.onFrame;
       cap.on('packet', (nbytes: number) => {
         // Keep the native callback minimal: `buffer` is a single allocation Npcap reuses for every
