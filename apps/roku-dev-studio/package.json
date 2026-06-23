@@ -43,6 +43,7 @@
     "@tanstack/virtual-core": "^3.14.0",
     "adm-zip": "^0.5.17",
     "brighterscript": "^0.68.5",
+    "electron-updater": "^6.8.9",
     "form-data": "^4.0.0",
     "modern-screenshot": "^4.6.8",
     "monaco-editor": "^0.52.2",
@@ -83,7 +84,11 @@
     "directories": {
       "output": "dist"
     },
-    "publish": null,
+    "publish": {
+      "provider": "github",
+      "owner": "paramount-engineering",
+      "repo": "roku-dev-studio"
+    },
     "afterSign": "./scripts/notarize.cjs",
     "afterAllArtifactBuild": "./scripts/build-hooks-entry.cjs",
     "files": [

@@ -3,6 +3,12 @@
  * Preload and main both import these so renames are caught by TypeScript.
  */
 export const IPC = {
+  // App updater
+  UpdaterCheck: 'updater:check',
+  UpdaterDownload: 'updater:download',
+  UpdaterInstall: 'updater:install',
+  /** Main → renderer: push updater status (checking / available / not-available / downloading / ready / error). */
+  UpdaterStatus: 'updater:status',
   // About
   AboutGetInfo: 'about:getInfo',
   AboutCopy: 'about:copy',

@@ -1,0 +1,4 @@
+provider: github
+owner: paramount-engineering
+repo: roku-dev-studio
+updaterCacheDirName: roku-dev-studio-updater

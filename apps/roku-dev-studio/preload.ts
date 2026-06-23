@@ -853,3 +853,15 @@ contextBridge.exposeInMainWorld('rdsMcpBridge', {
     return () => ipcRenderer.removeListener(IPC.McpBridgeStoredPasswordRequest, handler);
   }
 });
+
+contextBridge.exposeInMainWorld('rdsUpdater', {
+  check: () => ipcRenderer.invoke(IPC.UpdaterCheck),
+  download: () => ipcRenderer.invoke(IPC.UpdaterDownload),
+  install: () => ipcRenderer.invoke(IPC.UpdaterInstall),
+  getStatus: () => ipcRenderer.invoke(IPC.UpdaterStatus),
+  onStatus: (callback: (status: unknown) => void) => {
+    const handler = (_event: IpcRendererEvent, status: unknown) => callback(status);
+    ipcRenderer.on(IPC.UpdaterStatus, handler);
+    return () => ipcRenderer.removeListener(IPC.UpdaterStatus, handler);
+  }
+});

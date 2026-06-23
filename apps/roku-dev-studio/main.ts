@@ -20,6 +20,7 @@ const {
 } = require('./main/fiddle-window');
 const { registerBsFiddleIpc } = require('./main/ipc/bs-fiddle-handlers');
 const { showAboutDialog, registerAboutIpc } = require('./main/about-dialog');
+const { setupAutoUpdater } = require('./main/auto-updater');
 const { showSettingsDialog } = require('./main/settings-dialog');
 const { registerSettingsWindowIpc } = require('./main/settings-window-ipc');
 const { initSettings, loadSettings, saveSettings, registerSettingsIpc } = require('./main/settings');
@@ -625,6 +626,7 @@ app.whenReady().then(() => {
   const rememberPasswordsInKeychain = earlySettings.rememberPasswordsInKeychain === true;
   secretStore.init(app, { enabled: rememberPasswordsInKeychain });
   registerAboutIpc(ipcMain, clipboard, shell);
+  setupAutoUpdater(app, ipcMain, () => mainWindow);
   registerLogViewerIpc(ipcMain);
   registerConsoleSpillIpc(ipcMain, app);
   registerSettingsIpc(ipcMain);
