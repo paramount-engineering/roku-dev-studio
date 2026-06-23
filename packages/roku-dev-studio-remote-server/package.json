@@ -39,7 +39,7 @@
   "author": "Hareendra Donapati",
   "license": "MIT",
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=18.20.8"
   },
   "dependencies": {
     "roku-dev-studio-api": "^1.0.0"
