@@ -19,12 +19,13 @@
   "packageRules": [
     {
       "groupName": "type definitions",
-      "matchPackagePatterns": ["^@types/"]
+      "matchPackageNames": [
+        "/^@types//"
+      ]
     },
     {
       "groupName": "linting",
-      "matchPackageNames": ["eslint", "typescript-eslint"],
-      "matchPackagePatterns": ["^@typescript-eslint/", "^eslint-"]
+      "matchPackageNames": ["eslint", "typescript-eslint", "/^@typescript-eslint//", "/^eslint-/"]
     },
     {
       "groupName": "esbuild",
