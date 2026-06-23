@@ -58,7 +58,7 @@
     "cap": "^0.2.1"
   },
   "devDependencies": {
-    "@electron/notarize": "^2.2.1",
+    "@electron/notarize": "^2.5.0",
     "@types/adm-zip": "^0.5.8",
     "@types/jsdom": "^21.1.7",
     "@types/node": "^22.10.0",
