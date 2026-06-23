@@ -27,7 +27,7 @@
   "devDependencies": {
     "@types/node": "^22.10.0",
     "esbuild": "^0.25.0",
-    "typescript": "^5.7.3"
+    "typescript": "^6.0.0"
   },
   "files": [
     "dist"
