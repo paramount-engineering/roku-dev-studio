@@ -4,6 +4,7 @@
  */
 export const IPC = {
   // About
+  AboutGetInfo: 'about:getInfo',
   AboutCopy: 'about:copy',
   AboutOpenExternal: 'about:openExternal',
   // Settings window (modal)

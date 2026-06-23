@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>About Roku Dev Studio</title>
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' file:;">
+  <link rel="stylesheet" href="about.css">
+</head>
+<body>
+  <div class="header">
+    <img id="appLogo" alt="Roku Dev Studio" class="logo">
+    <div class="app-name">Roku Dev Studio</div>
+    <div class="app-version" id="appVersion">—</div>
+  </div>
+  <div class="info-section">
+    <div class="info-row">
+      <span class="info-label">roku-dev-studio-api Version:</span>
+      <span class="info-value" id="rdsApiVersion">—</span>
+    </div>
+    <div class="info-row">
+      <span class="info-label">Electron Version:</span>
+      <span class="info-value" id="electronVersion">—</span>
+    </div>
+    <div class="info-row">
+      <span class="info-label">Node.js Version:</span>
+      <span class="info-value" id="nodeVersion">—</span>
+    </div>
+    <div class="info-row">
+      <span class="info-label">Chromium Version:</span>
+      <span class="info-value" id="chromiumVersion">—</span>
+    </div>
+    <div class="info-row">
+      <span class="info-label">V8 Version:</span>
+      <span class="info-value" id="v8Version">—</span>
+    </div>
+    <div class="info-row">
+      <span class="info-label">Operating System:</span>
+      <span class="info-value" id="osInfo">—</span>
+    </div>
+  </div>
+  <div class="copyright">
+    <a id="repoLink" href="#">roku-dev-studio</a>
+    <span class="sep">·</span>
+    Built by <a id="authorLink" href="#">Hareendra Donapati</a>
+  </div>
+  <div class="buttons">
+    <button class="btn-copy" id="btnCopy">Copy</button>
+    <button class="btn-ok" id="btnOk">OK</button>
+  </div>
+  <script type="module" src="./dist/components/about/about.js"></script>
+</body>
+</html>

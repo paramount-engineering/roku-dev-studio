@@ -24,6 +24,8 @@
     "renderer/components/log-file-viewer/**/*.ts",
     "renderer/components/modals/**/*.ts",
     "renderer/components/fiddle/**/*.ts",
+    "renderer/components/about/**/*.ts",
+    "renderer/components/settings/**/*.ts",
     "renderer/vendor/modern-screenshot.d.ts",
     "renderer/vendor/tanstack-virtual-core.d.ts"
   ]

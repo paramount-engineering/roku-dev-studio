@@ -5,6 +5,7 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('aboutApi', {
+  getInfo: () => ipcRenderer.invoke('about:getInfo'),
   copy: (text: string) => ipcRenderer.invoke('about:copy', text),
   openExternal: (url: string) => ipcRenderer.invoke('about:openExternal', url)
 });

@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Settings — Roku Dev Studio</title>
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self';">
+  <link rel="stylesheet" href="settings.css">
+</head>
+<body>
+  <div id="settingsAnimateRoot" class="settings-animate-root">
+  <div class="settings-header">
+    <h1>
+      <span>Settings</span>
+      <span class="settings-header-delim" aria-hidden="true">›</span>
+      <span id="settingsHeaderSection" class="settings-header-section">General</span>
+    </h1>
+    <button type="button" class="modal-close" id="btnHeaderClose" title="Close" aria-label="Close">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      </svg>
+    </button>
+  </div>
+  <div class="settings-main">
+    <nav class="settings-nav" role="tablist" aria-label="Settings sections">
+      <button type="button" class="settings-nav-item active" role="tab" aria-selected="true" data-target="general" id="nav-general">General</button>
+      <button type="button" class="settings-nav-item" role="tab" aria-selected="false" data-target="action-scripts" id="nav-action-scripts">Action Scripts</button>
+      <button type="button" class="settings-nav-item" role="tab" aria-selected="false" data-target="device-performance" id="nav-device-performance">Device Performance</button>
+      <button type="button" class="settings-nav-item" role="tab" aria-selected="false" data-target="timing" id="nav-timing">Timing &amp; Network</button>
+      <button type="button" class="settings-nav-item" role="tab" aria-selected="false" data-target="network-inspector" id="nav-network-inspector">Network Inspector</button>
+      <button type="button" class="settings-nav-item" role="tab" aria-selected="false" data-target="mcp-server" id="nav-mcp-server">MCP Server</button>
+    </nav>
+    <div class="settings-content">
+      <div class="settings-panel active" data-section="general" id="panel-general" role="tabpanel" aria-labelledby="nav-general" aria-hidden="false">
+        <div class="settings-panel-fill">
+          <div class="settings-panel-scroll">
+            <div class="settings-section">
+              <div class="settings-row-toggle">
+                <div class="settings-row-text">
+                  <strong>Developer Mode</strong>
+                  <span class="settings-row-desc">Extra Logging in the Main Window (same as File → Developer Mode).</span>
+                </div>
+                <label class="settings-toggle-wrap" for="optDevMode">
+                  <input type="checkbox" id="optDevMode" class="settings-toggle-input" role="switch" aria-label="Developer mode" aria-checked="false" />
+                  <span class="settings-toggle-ui" aria-hidden="true"></span>
+                </label>
+              </div>
+              <div class="settings-row-toggle">
+                <div class="settings-row-text">
+                  <strong>Privacy Mode</strong>
+                  <span class="settings-row-desc">Mask IPs and Serial Numbers in the UI (same as File → Privacy Mode).</span>
+                </div>
+                <label class="settings-toggle-wrap" for="optPrivacy">
+                  <input type="checkbox" id="optPrivacy" class="settings-toggle-input" role="switch" aria-label="Privacy mode" aria-checked="false" />
+                  <span class="settings-toggle-ui" aria-hidden="true"></span>
+                </label>
+              </div>
+              <div class="settings-row-toggle">
+                <div class="settings-row-text">
+                  <strong>Debug Logging to File</strong>
+                  <span class="settings-row-desc" id="logPathHint">Writes to the log file under app user data when enabled.</span>
+                </div>
+                <label class="settings-toggle-wrap" for="optDebugLog">
+                  <input type="checkbox" id="optDebugLog" class="settings-toggle-input" role="switch" aria-label="Debug logging to file" aria-checked="false" />
+                  <span class="settings-toggle-ui" aria-hidden="true"></span>
+                </label>
+              </div>
+              <div class="settings-row-toggle">
+                <div class="settings-row-text">
+                  <strong>Use Keyboard for Roku Remote</strong>
+                  <span class="settings-row-desc">When on, you can use the keyboard to control the Roku. Keyboard shortcuts are listed in the Remote Help modal.</span>
+                </div>
+                <label class="settings-toggle-wrap" for="optKeyboardRemote">
+                  <input type="checkbox" id="optKeyboardRemote" class="settings-toggle-input" role="switch" aria-label="Roku Remote - Use Keyboard " aria-checked="false" />
+                  <span class="settings-toggle-ui" aria-hidden="true"></span>
+                </label>
+              </div>
+              <div class="settings-row-toggle">
+                <div class="settings-row-text">
+                  <strong>Auto Connect to Devices</strong>
+                  <span class="settings-row-desc">When On, the app will automatically connect to devices that were stayed connected when closing the App in the previous session.</span>
+                </div>
+                <label class="settings-toggle-wrap" for="optAutoConnectLast">
+                  <input type="checkbox" id="optAutoConnectLast" class="settings-toggle-input" role="switch" aria-label="Auto Connect to Devices" aria-checked="false" />
+                  <span class="settings-toggle-ui" aria-hidden="true"></span>
+                </label>
+              </div>
+              <div class="settings-row-toggle">
+                <div class="settings-row-text">
+                  <strong>Auto-Hide Sidebar</strong>
+                  <span class="settings-row-desc">When on, the Sidebar, which presents the devices list, will auto-toggle if the Sidebar was hidden in the previous session.</span>
+                </div>
+                <label class="settings-toggle-wrap" for="optRememberSidebarToggle">
+                  <input type="checkbox" id="optRememberSidebarToggle" class="settings-toggle-input" role="switch" aria-label="Auto-Hide Sidebar" aria-checked="false" />
+                  <span class="settings-toggle-ui" aria-hidden="true"></span>
+                </label>
+              </div>
+              <div class="settings-row-toggle">
+                <div class="settings-row-text">
+                  <strong>Encrypt Saved Passwords with System Keychain</strong>
+                  <span class="settings-row-desc">When On, each device's "Remember password" entry is encrypted via the OS Keychain — your OS may prompt the first time. When Off, remembered passwords still persist across quit/relaunch but are stored unencrypted on disk.</span>
+                  <span class="settings-row-desc settings-keychain-status" id="keychainStorageStatus" aria-live="polite"></span>
+                </div>
+                <label class="settings-toggle-wrap" for="optRememberPasswordsInKeychain">
+                  <input type="checkbox" id="optRememberPasswordsInKeychain" class="settings-toggle-input" role="switch" aria-label="Persist saved passwords in system keychain" aria-checked="false" />
+                  <span class="settings-toggle-ui" aria-hidden="true"></span>
+                </label>
+              </div>
+              <div id="generalTimingRows" class="general-timing-rows"></div>
+            </div>
+          </div>
+          <div class="section-save-dock">
+            <button type="button" class="btn-timing-reset" id="btnResetGeneral">Reset to Defaults</button>
+            <span class="section-save-status" id="saveStatusGeneral" aria-live="polite"></span>
+            <button type="button" class="btn btn-primary" id="btnSaveGeneral">Save</button>
+          </div>
+        </div>
+      </div>
+      <div class="settings-panel" data-section="action-scripts" id="panel-action-scripts" role="tabpanel" aria-labelledby="nav-action-scripts" aria-hidden="true">
+        <div class="settings-panel-fill">
+          <div class="settings-panel-scroll">
+            <div class="settings-section folder-scripts-block">
+              <p class="help-blurb">Default folder for screenshots and logs when a script needs saves. You can still pick another folder per run.</p>
+              <div class="folder-action-row">
+                <div class="folder-integrated">
+                  <div id="folderDisplay" class="folder-integrated-path empty">No folder set</div>
+                  <button type="button" class="folder-integrated-btn" id="btnBrowseFolder">Choose folder…</button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="section-save-dock">
+            <button type="button" class="btn-timing-reset" id="btnResetActionScripts">Reset to Defaults</button>
+            <span class="section-save-status" id="saveStatusActionScripts" aria-live="polite"></span>
+            <button type="button" class="btn btn-primary" id="btnSaveActionScripts">Save</button>
+          </div>
+        </div>
+      </div>
+      <div class="settings-panel" data-section="device-performance" id="panel-device-performance" role="tabpanel" aria-labelledby="nav-device-performance" aria-hidden="true">
+        <div class="settings-panel-fill">
+          <div class="settings-panel-scroll">
+            <p class="help-blurb">Applies while <strong>Show Device Performance</strong> is on, the Roku has Developer Mode, and the Dev App is in the foreground. When <strong>Remember 'Show Device Performance'</strong> is on below, the Remote tab restores the quad layout per device.</p>
+            <div class="settings-section device-perf-unified-list">
+              <div class="settings-row-toggle">
+                <div class="settings-row-text">
+                  <strong>Remember 'Show Device Performance'</strong>
+                  <span class="settings-row-desc">Restore whether <strong>Show Device Performance</strong> was on for each device. Turn off to always start with just the Remote tab until you enable it again.</span>
+                </div>
+                <label class="settings-toggle-wrap" for="optDevicePerfRememberQuad">
+                  <input type="checkbox" id="optDevicePerfRememberQuad" class="settings-toggle-input" role="switch" aria-label="Remember Device Performance show or hide per device" aria-checked="false" />
+                  <span class="settings-toggle-ui" aria-hidden="true"></span>
+                </label>
+              </div>
+              <div id="devicePerfRows" class="device-perf-timing-rows"></div>
+            </div>
+          </div>
+          <div class="section-save-dock">
+            <button type="button" class="btn-timing-reset" id="btnResetDevicePerf">Reset to Defaults</button>
+            <span class="section-save-status" id="saveStatusDevicePerf" aria-live="polite"></span>
+            <button type="button" class="btn btn-primary" id="btnSaveDevicePerf">Save</button>
+          </div>
+        </div>
+      </div>
+      <div class="settings-panel" data-section="timing" id="panel-timing" role="tabpanel" aria-labelledby="nav-timing" aria-hidden="true">
+        <div class="settings-panel-fill">
+          <div class="settings-panel-scroll">
+            <div class="settings-section">
+              <div id="timingRows"></div>
+            </div>
+          </div>
+          <div class="section-save-dock">
+            <button type="button" class="btn-timing-reset" id="btnResetTiming">Reset to Defaults</button>
+            <span class="section-save-status" id="saveStatusTiming" aria-live="polite"></span>
+            <button type="button" class="btn btn-primary" id="btnSaveTiming">Save</button>
+          </div>
+        </div>
+      </div>
+      <div class="settings-panel" data-section="mcp-server" id="panel-mcp-server" role="tabpanel" aria-labelledby="nav-mcp-server" aria-hidden="true">
+        <div class="settings-panel-fill">
+          <div class="settings-panel-scroll">
+            <p class="help-blurb">Expose Roku Dev Studio to AI agents via the <a href="https://modelcontextprotocol.io" target="_blank" rel="noopener noreferrer" class="mcp-link">Model Context Protocol</a>. Toggle a client to add or remove its <code class="mcp-inline-code">roku-dev-studio</code> MCP server entry; other entries are left untouched.</p>
+            <div class="settings-section">
+              <div id="mcpClientsList" class="mcp-clients-list" aria-live="polite"></div>
+            </div>
+          </div>
+          <div class="section-save-dock">
+            <button type="button" class="btn-timing-reset" id="btnResetMcpServer">Reset to Defaults</button>
+            <span class="section-save-status" id="saveStatusMcpServer" aria-live="polite"></span>
+            <button type="button" class="btn btn-primary" id="btnSaveMcpServer">Save</button>
+          </div>
+        </div>
+      </div>
+      <div class="settings-panel" data-section="network-inspector" id="panel-network-inspector" role="tabpanel" aria-labelledby="nav-network-inspector" aria-hidden="true">
+        <div class="settings-panel-fill">
+          <div class="settings-panel-scroll">
+            <div class="ni-place-bar" id="niPlaceRow" hidden>
+              <label class="ni-place-bar-label" for="niPlace">Location</label>
+              <select id="niPlace" class="ni-place-select" aria-label="Network Inspector location"></select>
+            </div>
+            <span class="settings-status-line ni-place-hint" id="niPlaceHint" aria-live="polite" hidden></span>
+            <div class="ni-port-conflict-warn" id="niPortConflictWarn" role="alert" hidden>
+              <span class="ni-port-conflict-warn-icon" aria-hidden="true">!</span>
+              <div class="ni-port-conflict-warn-body">
+                  <strong id="niPortConflictTitle">Proxy Port Unavailable</strong>
+                <span class="ni-port-conflict-warn-msg" id="niPortConflictMsg"></span>
+                <ul class="ni-port-conflict-steps" id="niPortConflictSteps"></ul>
+              </div>
+            </div>
+            <div class="settings-section" id="niSection">
+              <div class="settings-row-toggle">
+                <div class="settings-row-text">
+                  <strong>Enable Network Inspector</strong>
+                  <span class="settings-row-desc">Inspect a device's network traffic. Decrypts your dev channel's HTTPS via the local proxy (any network); a hotspot also captures DNS/SNI. Stored locally only.</span>
+                </div>
+                <label class="settings-toggle-wrap" for="optNetworkInspector">
+                  <input type="checkbox" id="optNetworkInspector" class="settings-toggle-input" role="switch" aria-label="Enable Network Inspector" aria-checked="false" />
+                  <span class="settings-toggle-ui" aria-hidden="true"></span>
+                </label>
+              </div>
+              <div class="settings-row-input">
+                <div class="settings-row-text">
+                  <strong>MITM Proxy Port</strong>
+                  <span class="settings-row-desc">Port the local decrypting proxy listens on. Route your sideloaded dev channel through it — works on any network (stock channels can't be intercepted).</span>
+                </div>
+                <input type="number" id="niMitmPort" class="settings-text-input" min="1" max="65535" value="8888" aria-label="MITM proxy port" />
+              </div>
+              <div class="settings-row-input">
+                <div class="settings-row-text">
+                  <strong>Per-Device Packet Limit</strong>
+                  <span class="settings-row-desc">Max captured frames kept per device for the PCAP export. Higher = longer history, more memory. 100–100000.</span>
+                </div>
+                <input type="number" id="niMaxRawPackets" class="settings-text-input" min="100" max="100000" step="100" value="5000" aria-label="Per-device packet limit" />
+              </div>
+              <div class="settings-row-input">
+                <div class="settings-row-text">
+                  <strong>Max Body Size (KB)</strong>
+                  <span class="settings-row-desc">How much of each request/response body is kept for viewing in the inspector. Larger = inspect big bodies (e.g. multi-MB JS) whole; over this, the body shows a "Body Truncated" badge. This never affects what the device receives. Applies to new traffic only — raising it won't restore bodies already captured and truncated. 64–16384 KB.</span>
+                </div>
+                <input type="number" id="niMaxBodyKb" class="settings-text-input" min="64" max="16384" step="64" value="4096" aria-label="Max retained body size in KB" />
+              </div>
+              <div class="settings-row-input" id="niSetupRow">
+                <div class="settings-row-text">
+                  <strong>Hotspot &amp; Capture Setup <span class="ni-attention-badge" id="niSetupBadge" hidden>Setup Needed</span></strong>
+                  <span class="settings-row-desc" id="niSetupRowDesc">Optional — only for hotspot DNS/SNI capture. Proxying needs no setup.</span>
+                </div>
+                <button type="button" class="btn btn-secondary btn-sm" id="btnOpenNiSetup">View Setup</button>
+              </div>
+            </div>
+          </div>
+          <div class="section-save-dock">
+            <button type="button" class="btn-timing-reset" id="btnResetNetworkInspector">Reset to Defaults</button>
+            <span class="section-save-status" id="saveStatusNetworkInspector" aria-live="polite"></span>
+            <button type="button" class="btn btn-primary" id="btnSaveNetworkInspector">Save</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  </div>
+  <div class="ni-modal-overlay" id="niSetupModal" hidden>
+    <div class="ni-modal" role="dialog" aria-modal="true" aria-labelledby="niSetupModalTitle">
+      <div class="ni-modal-header">
+        <div class="ni-modal-title-wrap">
+          <h2 id="niSetupModalTitle">Hotspot Capture Setup</h2>
+          <span class="ni-setup-header-badge" id="niSetupHeaderBadge" data-state="unknown" hidden></span>
+        </div>
+        <button type="button" class="modal-close" id="niSetupModalClose" title="Close" aria-label="Close">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </div>
+      <div class="ni-modal-body" id="niSetupModalBody"></div>
+    </div>
+  </div>
+  <script type="module" src="./dist/components/settings/settings.js"></script>
+</body>
+</html>
