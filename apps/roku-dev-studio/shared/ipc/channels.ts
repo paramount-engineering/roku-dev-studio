@@ -7,6 +7,8 @@ export const IPC = {
   UpdaterCheck: 'updater:check',
   UpdaterDownload: 'updater:download',
   UpdaterInstall: 'updater:install',
+  /** Renderer asks main to fetch latest GitHub release title/body/url (avoids renderer CORS/CSP issues). */
+  UpdaterLatestReleaseInfo: 'updater:latest-release-info',
   /** Main → renderer: push updater status (checking / available / not-available / downloading / ready / error). */
   UpdaterStatus: 'updater:status',
   // About

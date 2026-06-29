@@ -43,7 +43,13 @@ jobs:
             artifact-name: mac-builds
             artifact-paths: |
               apps/roku-dev-studio/dist/*.dmg
+              apps/roku-dev-studio/dist/*.zip
+              apps/roku-dev-studio/dist/latest-mac.yml
+              apps/roku-dev-studio/dist/*.blockmap
               apps/roku-dev-studio/dist/mac/**/*.dmg
+              apps/roku-dev-studio/dist/mac/**/*.zip
+              apps/roku-dev-studio/dist/mac/**/latest-mac.yml
+              apps/roku-dev-studio/dist/mac/**/*.blockmap
           - label: Windows
             os: windows-latest
             build-cmd: build:win
@@ -177,6 +183,9 @@ jobs:
           prerelease: false
           files: |
             ./artifacts/mac-builds/**/*.dmg
+            ./artifacts/mac-builds/**/*.zip
+            ./artifacts/mac-builds/**/latest-mac.yml
+            ./artifacts/mac-builds/**/*.blockmap
             ./artifacts/windows-builds/**/*.exe
             ./artifacts/linux-builds/**/*.deb
             ./artifacts/linux-builds/**/*.AppImage

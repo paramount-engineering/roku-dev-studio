@@ -213,7 +213,7 @@
       "allowToChangeInstallationDirectory": true
     },
     "dmg": {
-      "writeUpdateInfo": false
+      "writeUpdateInfo": true
     },
     "deb": {
       "depends": [

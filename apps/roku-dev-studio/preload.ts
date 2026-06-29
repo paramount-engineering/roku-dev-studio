@@ -858,6 +858,7 @@ contextBridge.exposeInMainWorld('rdsUpdater', {
   check: () => ipcRenderer.invoke(IPC.UpdaterCheck),
   download: () => ipcRenderer.invoke(IPC.UpdaterDownload),
   install: () => ipcRenderer.invoke(IPC.UpdaterInstall),
+  getLatestReleaseInfo: () => ipcRenderer.invoke(IPC.UpdaterLatestReleaseInfo),
   getStatus: () => ipcRenderer.invoke(IPC.UpdaterStatus),
   onStatus: (callback: (status: unknown) => void) => {
     const handler = (_event: IpcRendererEvent, status: unknown) => callback(status);

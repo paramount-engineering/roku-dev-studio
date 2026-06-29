@@ -30,7 +30,16 @@ var init_channels = __esm({
   "shared/ipc/channels.ts"() {
     "use strict";
     IPC = {
+      // App updater
+      UpdaterCheck: "updater:check",
+      UpdaterDownload: "updater:download",
+      UpdaterInstall: "updater:install",
+      /** Renderer asks main to fetch latest GitHub release title/body/url (avoids renderer CORS/CSP issues). */
+      UpdaterLatestReleaseInfo: "updater:latest-release-info",
+      /** Main → renderer: push updater status (checking / available / not-available / downloading / ready / error). */
+      UpdaterStatus: "updater:status",
       // About
+      AboutGetInfo: "about:getInfo",
       AboutCopy: "about:copy",
       AboutOpenExternal: "about:openExternal",
       // Settings window (modal)

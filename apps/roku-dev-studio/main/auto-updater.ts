@@ -10,9 +10,11 @@
 import type { App, BrowserWindow, IpcMain } from 'electron';
 import { autoUpdater } from 'electron-updater';
 import { IPC } from '../shared/ipc/channels';
-import { mainError } from './log.js';
+import { mainError, mainWarn } from './log.js';
 
 const path = require('path');
+const LATEST_RELEASE_API_URL = 'https://api.github.com/repos/paramount-engineering/roku-dev-studio/releases/latest';
+const MANUAL_UPDATE_MESSAGE = 'New update is available. Please download the latest release to update.';
 
 export interface UpdaterStatus {
   type: 'idle' | 'checking' | 'available' | 'not-available' | 'downloading' | 'ready' | 'error';
@@ -20,9 +22,34 @@ export interface UpdaterStatus {
   percent?: number;
   bytesPerSecond?: number;
   message?: string;
+  needsManualDownload?: boolean;
 }
 
 let currentStatus: UpdaterStatus = { type: 'idle' };
+
+function isMissingMetadataUpdaterError(errorLike: unknown): boolean {
+  const maybeObj = errorLike as { message?: unknown; code?: unknown } | undefined;
+  const msg = String(maybeObj?.message ?? errorLike ?? '');
+  const code = String(maybeObj?.code ?? '');
+  return (
+    code === 'ERR_UPDATER_CHANNEL_FILE_NOT_FOUND' ||
+    /latest-mac\.yml|release artifacts|cannot find\s+latest/i.test(msg)
+  );
+}
+
+function toUpdaterMessage(errorLike: unknown): string {
+  if (isMissingMetadataUpdaterError(errorLike)) return MANUAL_UPDATE_MESSAGE;
+  const maybeObj = errorLike as { message?: unknown } | undefined;
+  return String(maybeObj?.message ?? errorLike ?? 'Unknown updater error');
+}
+
+function extractVersionFromUpdaterError(errorLike: unknown): string | undefined {
+  const maybeObj = errorLike as { message?: unknown } | undefined;
+  const msg = String(maybeObj?.message ?? errorLike ?? '');
+  const match = msg.match(/\/releases\/download\/(v?\d+\.\d+\.\d+(?:[-+][^\/\s]+)?)\//i);
+  if (!match || !match[1]) return undefined;
+  return String(match[1]).replace(/^v/i, '');
+}
 
 function applyStatus(status: UpdaterStatus, broadcast: (s: UpdaterStatus) => void) {
   currentStatus = status;
@@ -46,7 +73,7 @@ export function setupAutoUpdater(
     } catch {
       // semver not available — skip version override
     }
-    const devConfigPath = path.join(__dirname, '..', 'dev-app-update.yml');
+    const devConfigPath = path.join(__dirname, 'dev-app-update.yml');
     (autoUpdater as any).updateConfigPath = devConfigPath;
     (autoUpdater as any).forceDevUpdateConfig = true;
   }
@@ -82,8 +109,14 @@ export function setupAutoUpdater(
   });
 
   autoUpdater.on('error', (err) => {
-    mainError('Auto-updater error:', err);
-    applyStatus({ type: 'error', message: err.message }, broadcast);
+    const manualDownload = isMissingMetadataUpdaterError(err);
+    const version = extractVersionFromUpdaterError(err);
+    if (isMissingMetadataUpdaterError(err)) {
+      mainWarn('Auto-updater metadata missing on release; manual download required.');
+    } else {
+      mainError('Auto-updater error:', err);
+    }
+    applyStatus({ type: 'error', message: toUpdaterMessage(err), needsManualDownload: manualDownload, version }, broadcast);
   });
 
   ipcMain.handle(IPC.UpdaterCheck, async () => {
@@ -91,8 +124,13 @@ export function setupAutoUpdater(
       await autoUpdater.checkForUpdates();
       return { success: true };
     } catch (e: any) {
-      const msg = String(e?.message ?? e);
-      applyStatus({ type: 'error', message: msg }, broadcast);
+      const msg = toUpdaterMessage(e);
+      applyStatus({
+        type: 'error',
+        message: msg,
+        needsManualDownload: isMissingMetadataUpdaterError(e),
+        version: extractVersionFromUpdaterError(e)
+      }, broadcast);
       return { success: false, error: msg };
     }
   });
@@ -102,9 +140,42 @@ export function setupAutoUpdater(
       await autoUpdater.downloadUpdate();
       return { success: true };
     } catch (e: any) {
-      const msg = String(e?.message ?? e);
-      applyStatus({ type: 'error', message: msg }, broadcast);
+      const msg = toUpdaterMessage(e);
+      applyStatus({
+        type: 'error',
+        message: msg,
+        needsManualDownload: isMissingMetadataUpdaterError(e),
+        version: extractVersionFromUpdaterError(e)
+      }, broadcast);
       return { success: false, error: msg };
+    }
+  });
+
+  ipcMain.handle(IPC.UpdaterLatestReleaseInfo, async () => {
+    try {
+      const response = await fetch(LATEST_RELEASE_API_URL, {
+        headers: { Accept: 'application/vnd.github+json' }
+      });
+      if (!response.ok) {
+        return {
+          success: false,
+          error: `Failed to load release notes (${response.status})`
+        };
+      }
+      const json = await response.json();
+      return {
+        success: true,
+        info: {
+          title: String(json?.name || json?.tag_name || 'Latest Release'),
+          body: String(json?.body || ''),
+          htmlUrl: String(json?.html_url || 'https://github.com/paramount-engineering/roku-dev-studio/releases/latest')
+        }
+      };
+    } catch (e: any) {
+      return {
+        success: false,
+        error: String(e?.message ?? e)
+      };
     }
   });
 
@@ -120,7 +191,11 @@ export function setupAutoUpdater(
   // Auto-check 12 seconds after the app is ready so it doesn't slow launch.
   setTimeout(() => {
     autoUpdater.checkForUpdates().catch((e) => {
-      mainError('Auto-updater background check failed:', e);
+      if (isMissingMetadataUpdaterError(e)) {
+        mainWarn('Auto-updater background check requires manual download (missing release metadata).');
+      } else {
+        mainError('Auto-updater background check failed:', e);
+      }
     });
   }, 12000);
 }
