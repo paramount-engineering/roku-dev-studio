@@ -232,6 +232,7 @@ function eventMatchesQuery(ev: ParsedNetworkEvent, q: NetworkEventQuery): boolea
 }
 
 const CAPTURE_SUPPRESS_COOLDOWN_MS = 30_000;
+const MITM_PORT_CONFLICT_DISABLE_MS = 30_000;
 const STATUS_BROADCAST_DEBOUNCE_MS = 150;
 
 export class NetworkInspectorService {
@@ -244,6 +245,9 @@ export class NetworkInspectorService {
   // Set when the proxy can't bind its port because another process holds it. Carries the offending
   // process + remediation so the Network tab can warn the user. Cleared once the proxy binds.
   private mitmPortConflict: MitmPortConflict | undefined;
+  // First-seen timestamp for the current continuous MITM port-conflict run. If the port stays
+  // unavailable for long enough, Network Inspector auto-disables to match other blocking failures.
+  private mitmPortConflictSince = 0;
   private gatewayIp: string | undefined;
   // The per-OS capture worker. All platform-specific behavior (hotspot detection, readiness,
   // prerequisites, capture mechanism, one-click setup) is routed through this single contract,
@@ -333,6 +337,10 @@ export class NetworkInspectorService {
     if (!enabled) {
       this.stopAll();
     } else {
+      this.lastError = undefined;
+      this.captureStartSuppressed = false;
+      this.captureSuppressedAt = 0;
+      this.mitmPortConflictSince = 0;
       this.startPolling();
       if (this.mitmEnabled) this.startMitm();
     }
@@ -875,6 +883,10 @@ export class NetworkInspectorService {
       const hint = this.platform.detectHotspotInterface();
       if (hint?.gatewayIp) this.gatewayIp = hint.gatewayIp;
       this.startMitm();
+      if (this.shouldDisableForMitmPortConflict()) {
+        this.disableForMitmPortConflict();
+        return;
+      }
     }
 
     // Packet capture and subnet discovery require a confident hotspot (macOS bridge100, Windows
@@ -1151,6 +1163,7 @@ export class NetworkInspectorService {
             niLog(`MITM proxy listening on 0.0.0.0:${this.mitmPort}.`);
             this.mitmLastError = undefined;
             this.mitmPortConflict = undefined;
+            this.mitmPortConflictSince = 0;
           }
           this.broadcastStatus();
         },
@@ -1160,6 +1173,11 @@ export class NetworkInspectorService {
           niWarn(`MITM proxy error on port ${this.mitmPort}: ${message}`);
           this.mitmLastError = message || 'MITM proxy failed to start';
           this.mitmPortConflict = this.buildPortConflict(message);
+          if (this.mitmPortConflict) {
+            if (!this.mitmPortConflictSince) this.mitmPortConflictSince = Date.now();
+          } else {
+            this.mitmPortConflictSince = 0;
+          }
           this.broadcastStatus();
         },
         onTransaction: (tx) => {
@@ -1171,6 +1189,11 @@ export class NetworkInspectorService {
       if (!started) {
         this.mitmLastError = this.mitmProxy.getLastError() || 'MITM proxy failed to start';
         this.mitmPortConflict = this.buildPortConflict(this.mitmLastError);
+        if (this.mitmPortConflict) {
+          if (!this.mitmPortConflictSince) this.mitmPortConflictSince = Date.now();
+        } else {
+          this.mitmPortConflictSince = 0;
+        }
         this.mitmProxy = null;
       }
       // On `started === true` we DON'T optimistically clear the conflict here: `start()` returns
@@ -1180,6 +1203,11 @@ export class NetworkInspectorService {
     } catch (err) {
       this.mitmLastError = err instanceof Error ? err.message : String(err);
       this.mitmPortConflict = this.buildPortConflict(this.mitmLastError);
+      if (this.mitmPortConflict) {
+        if (!this.mitmPortConflictSince) this.mitmPortConflictSince = Date.now();
+      } else {
+        this.mitmPortConflictSince = 0;
+      }
       this.mitmProxy = null;
     }
     this.broadcastStatus();
@@ -1195,7 +1223,33 @@ export class NetworkInspectorService {
   /** Clear a port-conflict warning + last error (used by intentional stops/disables). */
   private clearMitmError(): void {
     this.mitmPortConflict = undefined;
+    this.mitmPortConflictSince = 0;
     this.mitmLastError = undefined;
+  }
+
+  private shouldDisableForMitmPortConflict(): boolean {
+    return (
+      !!this.mitmPortConflict &&
+      this.mitmPortConflictSince > 0 &&
+      Date.now() - this.mitmPortConflictSince >= MITM_PORT_CONFLICT_DISABLE_MS
+    );
+  }
+
+  private disableForMitmPortConflict(): void {
+    const conflict = this.mitmPortConflict;
+    if (!conflict) return;
+    const who = conflict.processName
+      ? `${conflict.processName}${conflict.pid ? ` (PID ${conflict.pid})` : ''}`
+      : 'another app or process';
+    const timeoutSeconds = Math.round(MITM_PORT_CONFLICT_DISABLE_MS / 1000);
+    this.lastError =
+      `Network Inspector disabled: proxy port ${conflict.port} stayed unavailable for ${timeoutSeconds} seconds (${who}). ` +
+      'Free that port, then re-enable Network Inspector in Settings.';
+    niWarn(this.lastError);
+    // Disable both MITM and the inspector so the renderer shows the same blocked-state style used
+    // by other hard failures, instead of retrying forever with a persistent conflict.
+    this.setMitmEnabled(false);
+    this.setEnabled(false);
   }
 
   /**

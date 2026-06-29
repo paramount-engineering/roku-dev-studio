@@ -7,9 +7,11 @@
 import {
   NetworkInspectorService,
   initCaStore,
-  type NetworkInspectorBootConfig
+  type NetworkInspectorBootConfig,
+  type NetworkInspectorStatus
 } from 'roku-dev-studio-network-inspector';
 import { createElectronIpcListener } from './electron-ipc-listener';
+import { loadSettings, saveSettings } from '../settings';
 
 // Re-export the engine's public API so existing `./network-inspector/index` imports keep working.
 export * from 'roku-dev-studio-network-inspector';
@@ -17,9 +19,47 @@ export * from 'roku-dev-studio-network-inspector';
 type SafeSendFn = (channel: string, data: unknown) => void;
 
 let singleton: NetworkInspectorService | null = null;
+let autoDisablePersisted = false;
+
+function isAutoDisabledStatus(status: NetworkInspectorStatus): boolean {
+  return (
+    status.enabled === false &&
+    typeof status.lastError === 'string' &&
+    /^Network Inspector disabled:/i.test(status.lastError)
+  );
+}
+
+function persistAutoDisabledSettings(status: NetworkInspectorStatus): void {
+  if (!isAutoDisabledStatus(status)) {
+    autoDisablePersisted = false;
+    return;
+  }
+  if (autoDisablePersisted) return;
+  const settings = loadSettings();
+  let changed = false;
+  if (settings['networkInspectorEnabled'] !== false) {
+    settings['networkInspectorEnabled'] = false;
+    changed = true;
+  }
+  if (settings['networkInspectorMitmEnabled'] !== false) {
+    settings['networkInspectorMitmEnabled'] = false;
+    changed = true;
+  }
+  if (changed) saveSettings(settings);
+  autoDisablePersisted = true;
+}
 
 export function getNetworkInspectorService(safeSend: SafeSendFn): NetworkInspectorService {
-  if (!singleton) singleton = new NetworkInspectorService(createElectronIpcListener(safeSend));
+  if (!singleton) {
+    const baseListener = createElectronIpcListener(safeSend);
+    singleton = new NetworkInspectorService({
+      ...baseListener,
+      onStatus: (status) => {
+        persistAutoDisabledSettings(status);
+        baseListener.onStatus(status);
+      }
+    });
+  }
   return singleton;
 }
 

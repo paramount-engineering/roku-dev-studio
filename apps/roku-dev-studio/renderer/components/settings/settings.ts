@@ -683,6 +683,8 @@ var niConnectedLocations: any[] = [];
 var niProbeCache: Record<string, any> = {};
 var niSelectedPlace = 'local';
 var niLocalSnapshot: any = null;
+var niAutoDisableStatusTimer: number | null = null;
+var niLastAutoDisableStatusMessage = '';
 
 function currentNiPlace() {
   return niSelectedPlace || 'local';
@@ -700,6 +702,21 @@ function setNiPlaceHint(text: string, show: boolean) {
   if (!hint) return;
   hint.hidden = !show;
   hint.textContent = text || '';
+}
+
+function showTransientNiStatus(message: string, isErr: boolean, durationMs?: number) {
+  setSectionStatus('saveStatusNetworkInspector', message || '', !!isErr);
+  if (niAutoDisableStatusTimer != null) {
+    window.clearTimeout(niAutoDisableStatusTimer);
+    niAutoDisableStatusTimer = null;
+  }
+  var ms = typeof durationMs === 'number' && durationMs > 0 ? durationMs : 4500;
+  niAutoDisableStatusTimer = window.setTimeout(function () {
+    if (el('saveStatusNetworkInspector') && (el('saveStatusNetworkInspector').textContent || '') === message) {
+      setSectionStatus('saveStatusNetworkInspector', '', false);
+    }
+    niAutoDisableStatusTimer = null;
+  }, ms);
 }
 
 function applyLocalNiValues() {
@@ -786,10 +803,38 @@ function applyRemoteProbeResult(place: string, res: any) {
   if (el('niMaxBodyKb')) el('niMaxBodyKb').disabled = true;
   var cfg = res.config || {};
   var status = res.status || {};
-  setToggle('optNetworkInspector', cfg.enabled === true || status.enabled === true);
+  var statusHasEnabled = typeof status.enabled === 'boolean';
+  setToggle('optNetworkInspector', statusHasEnabled ? status.enabled === true : cfg.enabled === true);
   if (el('niMitmPort')) el('niMitmPort').value = String(cfg.mitmPort || status.mitmPort || 8888);
-  setNiPlaceHint('Editing remote location settings. Capture runs on the remote server.', true);
+  var autoDisabled = status && status.enabled === false && /^Network Inspector disabled:/i.test(String(status.lastError || ''));
+  setNiPlaceHint(
+    autoDisabled
+      ? String(status.lastError || 'Network Inspector is disabled.')
+      : 'Editing remote location settings. Capture runs on the remote server.',
+    true
+  );
   renderNiPortConflict(status && status.mitmPortConflict ? status.mitmPortConflict : null);
+}
+
+function applyLocalNiRuntimeStatus(status: any) {
+  var autoDisabled = status && status.enabled === false && /^Network Inspector disabled:/i.test(String(status.lastError || ''));
+  if (autoDisabled) {
+    setToggle('optNetworkInspector', false);
+    if (niLocalSnapshot) niLocalSnapshot.enabled = false;
+    setNiPlaceHint('', false);
+    var msg = String(status.lastError || 'Network Inspector is disabled.');
+    if (msg !== niLastAutoDisableStatusMessage) {
+      showTransientNiStatus(msg, true, 5000);
+      niLastAutoDisableStatusMessage = msg;
+    }
+    updateNetworkInspectorStatusLine({ networkInspectorEnabled: false });
+    return;
+  }
+  niLastAutoDisableStatusMessage = '';
+  // Local place normally hides the place hint; clear any stale auto-disable message once recovered.
+  if (currentNiPlace() === 'local') {
+    setNiPlaceHint('', false);
+  }
 }
 
 function renderNiPortConflict(conflict: any) {
@@ -817,6 +862,7 @@ function refreshNiPortConflict() {
     api.getNetworkInspectorStatus().then(function (res: any) {
       if (currentNiPlace() !== 'local') return;
       var status = res && res.status;
+      applyLocalNiRuntimeStatus(status || {});
       renderNiPortConflict(status && status.mitmPortConflict ? status.mitmPortConflict : null);
     }).catch(function () { renderNiPortConflict(null); });
     return;

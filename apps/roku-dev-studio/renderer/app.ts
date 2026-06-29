@@ -134,6 +134,17 @@ const hotspotSerialIps = new Map<string, string>();
  * Wi-Fi the tab must be shown even though the device was never discovered on a hotspot subnet.
  */
 const mitmRevealedTabIds = new Set<string>();
+let lastNiAutoDisabledToast = '';
+
+function hideAllNetworkTabsForDisable(): void {
+  hotspotSerialsActive.clear();
+  hotspotSerialIps.clear();
+  mitmRevealedTabIds.clear();
+  for (const ctrl of networkTabControllers.values()) {
+    ctrl.setVisible(false);
+    ctrl.setHotspotIp(null);
+  }
+}
 
 /** Reveal the Network tab for every connected local device when the MITM proxy is active. */
 function revealLocalNetworkTabsForMitm(): void {
@@ -353,6 +364,7 @@ function setupNetworkInspectorListeners(): void {
     },
     onStatus: (status) => {
       const s = status as {
+        enabled?: boolean;
         packetsCaptured?: number;
         captureActive?: boolean;
         hotspotInterfaceDetected?: boolean;
@@ -382,17 +394,33 @@ function setupNetworkInspectorListeners(): void {
           persistentFixInstalled?: boolean;
         }>;
       };
+      const autoDisabledMessage =
+        s.enabled === false && typeof s.lastError === 'string' && /^Network Inspector disabled:/i.test(s.lastError)
+          ? s.lastError
+          : '';
+      if (autoDisabledMessage) {
+        if (autoDisabledMessage !== lastNiAutoDisabledToast) {
+          showToast(autoDisabledMessage, 'error');
+          lastNiAutoDisabledToast = autoDisabledMessage;
+        }
+        hideAllNetworkTabsForDisable();
+      } else if (s.enabled !== false) {
+        lastNiAutoDisabledToast = '';
+      }
+
       const clients = s.connectedClients || [];
-      for (const client of clients) {
-        if (client.serialNumber && client.ip) {
-          hotspotSerialIps.set(client.serialNumber.trim(), client.ip.trim());
-          hotspotSerialsActive.add(client.serialNumber.trim());
-          applyNetworkTabForSerial(client.serialNumber.trim(), client.ip.trim(), true);
+      if (s.enabled !== false) {
+        for (const client of clients) {
+          if (client.serialNumber && client.ip) {
+            hotspotSerialIps.set(client.serialNumber.trim(), client.ip.trim());
+            hotspotSerialsActive.add(client.serialNumber.trim());
+            applyNetworkTabForSerial(client.serialNumber.trim(), client.ip.trim(), true);
+          }
         }
       }
       // Shared Wi-Fi (no hotspot): reveal connected local devices' Network tabs once the proxy is
       // active, since they won't appear in connectedClients (that list comes from hotspot scans).
-      if (s.mitmActive || s.mitmEnabled) revealLocalNetworkTabsForMitm();
+      if (s.enabled !== false && (s.mitmActive || s.mitmEnabled)) revealLocalNetworkTabsForMitm();
       for (const ctrl of networkTabControllers.values()) {
         ctrl.setCaptureStatus(s);
       }

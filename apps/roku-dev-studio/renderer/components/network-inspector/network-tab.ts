@@ -1056,7 +1056,9 @@ export function setupNetworkTab(
       // "blocked/needs Npcap" warning on the Windows capture screen (it would also misleadingly
       // appear when no hotspot is active and hotspot capture isn't even being attempted). Fall
       // through to the MITM-proxy guidance, which is the path that actually works on Windows.
-      const showCaptureError = !!state.captureError && state.platform !== 'win32';
+      const isAutoDisabledError =
+        typeof state.captureError === 'string' && /^Network Inspector disabled:/i.test(state.captureError);
+      const showCaptureError = !!state.captureError && (state.platform !== 'win32' || isAutoDisabledError);
       if (showCaptureError && state.mitmActive) {
         body =
           `<p class="ni-hint">Hotspot capture is blocked, but the MITM proxy at <strong>${escapeHtml(state.mitmListenAddress || 'gateway:8888')}</strong> can still record proxied requests. Use <code>host:port</code> only in BrightScript (e.g. <code>192.168.2.1:8888</code>), not the device IP and not <code>http://</code>.</p>`;
@@ -1403,6 +1405,9 @@ export function setupNetworkTab(
    * Hotspot capture setup is intentionally excluded — it's optional and has its own setup badge.
    */
   function niIssueSummary(): string | null {
+    if (typeof state.captureError === 'string' && /^Network Inspector disabled:/i.test(state.captureError)) {
+      return state.captureError;
+    }
     const c = state.mitmPortConflict;
     if (c) {
       const who = c.processName ? ` (${c.processName}${c.pid ? ` · PID ${c.pid}` : ''})` : '';
@@ -2262,16 +2267,17 @@ export function setupNetworkTab(
       // The MITM port conflict is independent of hotspot capture state, so evaluate it even when a
       // capture error short-circuits the rest of this handler below.
       setPortConflict(status.mitmPortConflict ?? null);
-      if (status.lastError) {
-        state.captureError = status.lastError;
-        state.captureActive = false;
-        updateSetupBadge();
-        if (state.events.length === 0) scheduleSessionListPaint({ force: true });
-        return;
-      }
-      state.captureError = null;
       const prevCaptureActiveStatus = state.captureActive;
-      state.captureActive = !!status.captureActive;
+      const hasCaptureError = !!status.lastError;
+      if (hasCaptureError) {
+        state.captureError = String(status.lastError || 'Network Inspector error');
+        state.captureActive = false;
+      } else {
+        state.captureError = null;
+      }
+      if (!hasCaptureError) {
+        state.captureActive = !!status.captureActive;
+      }
       if (prevCaptureActiveStatus !== state.captureActive) {
         syncSidebarOptions();
         scheduleSessionListPaint({ force: true });
@@ -2289,7 +2295,9 @@ export function setupNetworkTab(
       if (typeof status.mitmTransactions === 'number') {
         state.mitmTransactions = status.mitmTransactions;
       }
-      if (status.captureActive || status.mitmActive) {
+      if (hasCaptureError) {
+        stopPolling();
+      } else if (status.captureActive || status.mitmActive) {
         if (state.capturing) startPolling();
         if (
           state.capturing &&
@@ -2308,6 +2316,7 @@ export function setupNetworkTab(
       // granted — without waiting for a tab re-show. The error branch above already does this.
       updateSetupBadge();
       updateCaptureButton();
+      if (hasCaptureError && state.events.length === 0) scheduleSessionListPaint({ force: true });
     },
     loadBufferedEvents(events) {
       if (!state.capturing) return;
