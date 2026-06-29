@@ -92,7 +92,7 @@ function showAboutDialog(mainWindow: BrowserWindow) {
   });
 
   try {
-    aboutWindow.loadFile(path.join(__dirname, '..', 'renderer', 'about.html'));
+    aboutWindow.loadFile(path.join(__dirname, 'renderer', 'about.html'));
   } catch (error) {
     mainError('Error loading About dialog:', error);
     dialog.showErrorBox('Error', 'Failed to load About dialog. Please try again.');

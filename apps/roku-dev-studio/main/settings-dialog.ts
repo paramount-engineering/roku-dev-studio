@@ -82,7 +82,7 @@ function showSettingsDialog(mainWindow: BrowserWindow, initialSection?: string) 
 
   try {
     const query = initialSection ? { query: { section: initialSection } } : undefined;
-    settingsWindow.loadFile(path.join(__dirname, '..', 'renderer', 'settings.html'), query);
+    settingsWindow.loadFile(path.join(__dirname, 'renderer', 'settings.html'), query);
   } catch (error) {
     mainError('Error loading Settings dialog:', error);
     dialog.showErrorBox('Error', 'Failed to open Settings. Please try again.');
