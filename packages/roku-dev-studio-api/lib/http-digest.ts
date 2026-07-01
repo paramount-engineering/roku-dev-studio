@@ -166,14 +166,25 @@ function httpDigestRequestOnce(options: HttpDigestRequestOptions): Promise<{ sta
   const { ip, password, path, method, body, headers = {}, timeoutMs = DEFAULT_TIMEOUT_MS } = options;
 
   return new Promise((resolve, reject) => {
-    const send = (authorization?: string) => {
+    // A single HTTP round. The body is streamed ONLY on `withBody` rounds, which
+    // only ever run once we hold credentials (or the device confirmed no auth is
+    // required). This avoids writing a large POST body to a socket the device
+    // closes with a 401 challenge — which surfaces as `write EPIPE` and aborts a
+    // sideload mid-upload.
+    const round = (authorization: string | undefined, withBody: boolean, roundMethod: string) => {
       const reqHeaders: Record<string, string> = {
         Host: ip,
         Connection: 'close',
         ...headers
       };
-      if (body) {
+      if (withBody && body) {
         reqHeaders['Content-Length'] = String(body.length);
+      } else {
+        // Bodyless probe: drop the multipart content-type/length so the device
+        // doesn't sit waiting for a body that never comes.
+        delete reqHeaders['Content-Type'];
+        delete reqHeaders['content-type'];
+        delete reqHeaders['Content-Length'];
       }
       if (authorization) {
         reqHeaders.Authorization = authorization;
@@ -184,7 +195,7 @@ function httpDigestRequestOnce(options: HttpDigestRequestOptions): Promise<{ sta
           host: ip,
           port: 80,
           path,
-          method,
+          method: roundMethod,
           headers: reqHeaders,
           // Fresh socket per round — Roku often RSTs keep-alive sockets after 401.
           agent: false,
@@ -193,6 +204,7 @@ function httpDigestRequestOnce(options: HttpDigestRequestOptions): Promise<{ sta
         (res: IncomingMessage) => {
           const status = res.statusCode ?? 0;
 
+          // Got the digest challenge — authenticate, then send the real request.
           if (status === 401 && !authorization) {
             const challengeHeader = findDigestChallengeHeader(res.headers['www-authenticate']);
             void drainResponse(res)
@@ -209,8 +221,17 @@ function httpDigestRequestOnce(options: HttpDigestRequestOptions): Promise<{ sta
                   uri: path,
                   challenge
                 });
-                send(authHeader);
+                round(authHeader, Boolean(body), method);
               })
+              .catch(reject);
+            return;
+          }
+
+          // The bodyless probe came back without a challenge (no auth required).
+          // Re-issue the real request (with body) unauthenticated.
+          if (roundMethod !== method && status !== 401) {
+            void drainResponse(res)
+              .then(() => round(undefined, Boolean(body), method))
               .catch(reject);
             return;
           }
@@ -227,11 +248,18 @@ function httpDigestRequestOnce(options: HttpDigestRequestOptions): Promise<{ sta
         req.destroy(new Error('Connection timed out'));
       });
       req.on('error', reject);
-      if (body) req.write(body);
+      if (withBody && body) req.write(body);
       req.end();
     };
 
-    send();
+    // When there's a body, fetch the digest challenge with a bodyless GET probe
+    // first so the body is only streamed on the authenticated round. Bodyless
+    // requests keep the original single-round behavior.
+    if (body) {
+      round(undefined, false, 'GET');
+    } else {
+      round(undefined, false, method);
+    }
   });
 }
 
@@ -243,7 +271,8 @@ async function httpDigestRequest(options: HttpDigestRequestOptions): Promise<{ s
     const msg = errorMessage(err);
     const retriable =
       code === 'ECONNRESET' ||
-      /socket hang up|ECONNRESET/i.test(msg);
+      code === 'EPIPE' ||
+      /socket hang up|ECONNRESET|EPIPE/i.test(msg);
     if (!retriable) throw err;
     return httpDigestRequestOnce(options);
   }
@@ -255,21 +284,28 @@ function mapDeviceHttpError(err: unknown, context = 'Device request'): { success
   if (
     code === 'ECONNREFUSED' ||
     code === 'ECONNRESET' ||
+    code === 'EPIPE' ||
     code === 'ENOTFOUND' ||
     code === 'EHOSTUNREACH' ||
     code === 'ENETUNREACH' ||
-    /connection refused|failed to connect|couldn't connect|could not resolve host|timed out|socket hang up/i.test(msg)
+    /connection refused|failed to connect|couldn't connect|could not resolve host|timed out|socket hang up|EPIPE/i.test(msg)
   ) {
     return {
       success: false,
-      error: 'Could not reach the device web server. Check the IP and network.'
+      error: 'Could not reach the device web server. Check the IP and network, then try again.'
     };
   }
   return { success: false, error: `${context} failed: ${msg}` };
 }
 
 function responseLooksLikeAuthFailure(statusCode: number, text: string): boolean {
-  return statusCode === 401 || /authentication/i.test(text);
+  // A genuine auth failure is an HTTP 401. The text heuristic is only a backstop
+  // for devices that return 200 with an auth-failure body, so it must match
+  // actual failure phrasing — NOT the bare word "authentication", which also
+  // appears on the normal (successful) plugin_install page and would otherwise
+  // mask a successful sideload as an auth error.
+  if (statusCode === 401) return true;
+  return /401\s*unauthorized|authentication\s+(?:failed|required|error)|failed to authenticate|invalid (?:dev(?:eloper)?\s+)?password/i.test(text);
 }
 
 module.exports = {

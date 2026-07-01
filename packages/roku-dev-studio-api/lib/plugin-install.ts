@@ -107,13 +107,24 @@ async function sideloadChannel({ ip, filePath, password, log = (_m: string) => u
       log
     );
 
-    if (statusCode === 401 || responseLooksLikeAuthFailure(statusCode, text)) {
+    // Wrong developer password comes back as HTTP 401 — trust that over any
+    // body-text heuristic, which can false-match the normal (successful) page.
+    if (statusCode === 401) {
       return { success: false, error: 'Authentication failed. Check your developer password.', authFailed: true };
     }
 
     const parsed = parsePluginInstallResponse(text);
     if (!parsed.success) {
-      log(`Sideload: unexpected response (first 500): ${text.substring(0, 500)}`);
+      log(`Sideload: unexpected response (statusCode=${statusCode}, first 500): ${text.substring(0, 500)}`);
+      // The device frequently drops the connection right after a successful
+      // install because it reboots into the new channel, leaving an empty or
+      // unrecognized 2xx body. Don't report that as a failure — there's no
+      // explicit "Install Failure" marker, and the post-install check verifies
+      // the real device state. Genuine failures return a "Install Failure" body.
+      const hasFailureMarker = /Install Failure|Failure/i.test(text);
+      if (statusCode >= 200 && statusCode < 300 && !hasFailureMarker && !text.trim()) {
+        return { success: true, message: 'Channel uploaded. Verifying on device…' };
+      }
     }
     return parsed;
   } catch (error: unknown) {
