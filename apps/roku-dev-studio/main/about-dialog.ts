@@ -69,7 +69,7 @@ function showAboutDialog(mainWindow: BrowserWindow) {
 
   const aboutWindow = new BrowserWindowConstructor({
     width: 500,
-    height: 400,
+    height: 460,
     resizable: false,
     minimizable: false,
     maximizable: false,
