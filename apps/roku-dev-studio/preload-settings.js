@@ -139,18 +139,31 @@ var init_channels = __esm({
       ConsoleSpillAppend: "console-spill:append",
       ConsoleSpillRead: "console-spill:read",
       ConsoleSpillClear: "console-spill:clear",
-      /** Streaming load: renderer kicks off the read; main answers with file
-       *  metadata and starts emitting `LogViewerStreamChunk` / `Complete` /
-       *  `Error` events. Streaming avoids holding the whole decoded file string
-       *  in memory in both processes (which doubled peak heap on large files). */
-      LogViewerStreamStart: "log-viewer:stream-start",
-      /** Main → renderer: a decoded text chunk plus progress
-       *  (`{ text, doneBytes, totalBytes }`). Sent multiple times per stream. */
-      LogViewerStreamChunk: "log-viewer:stream-chunk",
-      /** Main → renderer: stream finished cleanly (EOF). */
-      LogViewerStreamComplete: "log-viewer:stream-complete",
-      /** Main → renderer: read failed mid-stream. Payload `{ error: string }`. */
-      LogViewerStreamError: "log-viewer:stream-error",
+      /**
+       * Windowed load: renderer asks main to index the file (encoding-aware line
+       * offsets) and answers with `{ lineCount, encoding, fileSize, fileName }`.
+       * The renderer then pulls only the byte range around the viewport via
+       * `LogViewerReadRange` / `LogViewerReadLines`, so the whole file never lives
+       * in the renderer heap. The scrollbar spans the full file (`lineCount`); the
+       * resident window slides as the user scrolls. Full-file Find/Filter run in
+       * main via `LogViewerSearch`. See `main/log-file-index.ts`.
+       */
+      LogViewerPrepare: "log-viewer:prepare",
+      /** Renderer → main (invoke): decode a *contiguous* line range
+       *  `{ startLine, endLine }` (half-open). Answers `{ text, startLine, endLine }`.
+       *  Used for the normal (unfiltered) sliding window. */
+      LogViewerReadRange: "log-viewer:read-range",
+      /** Renderer → main (invoke): decode a set of *scattered* line numbers
+       *  `{ lines: number[] }` (used by Filter mode, whose visible lines are not
+       *  contiguous in the file). Answers `{ lines: Array<{ line, text }> }`. */
+      LogViewerReadLines: "log-viewer:read-lines",
+      /** Renderer → main (invoke): full-file search. Payload
+       *  `{ query, options: { case, word, regex } }`. Answers
+       *  `{ hits: Array<{ line, start, end }>, matchLines: number[], truncated }`.
+       *  `hits` drive Find highlight/nav (capped); `matchLines` is the ordered set
+       *  of matching line numbers Filter mode collapses the file down to. A newer
+       *  Search invoke supersedes any in-flight scan for the same window. */
+      LogViewerSearch: "log-viewer:search",
       RokuSaveTrackerTask: "roku:save-tracker-task",
       RokuSaveTextFile: "roku:save-text-file",
       RokuSaveBinaryFile: "roku:save-binary-file",

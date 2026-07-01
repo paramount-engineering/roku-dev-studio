@@ -1,10 +1,8 @@
-import type { ConsoleLogFileEntry } from '../../modules/console-log/console-log-file-view.js';
 import { setConsoleViewerModalTitlePrefix } from '../../modules/console-log/console-modal-title.js';
 import { mountConsoleLogSurface } from '../../modules/console-log/mount-console-log-surface.js';
-import {
-  createConsoleLineParserState,
-  parseConsoleLineBatch
-} from '../../modules/console-log/console-line-parser.js';
+import { consoleDisplayText } from '../../modules/console-log/console-line-parser.js';
+import type { ConsoleFindOptions } from '../../modules/console-log/console-find-helpers.js';
+import { createLogFileWindowModel } from './log-file-window-model.js';
 
 /**
  * Local typed view of `window.roku` for this renderer window. Declared as a
@@ -13,19 +11,40 @@ import {
  * conflicting global `Window.roku` declaration in this file would override
  * that and break the Console panel's IPC bridges. See `log-viewer-preload.ts`
  * for the IPC shape.
+ *
+ * **Load model: windowed.** We ask main to index the file (`prepareLogViewerFile`)
+ * and then pull only the byte range around the viewport (`readLogViewerRange` /
+ * `readLogViewerLines`) as the user scrolls, so the whole file never lives in
+ * this renderer's heap. Find / Filter run whole-file in main
+ * (`searchLogViewerFile`). See `log-file-window-model.ts`.
  */
 type LogViewerRokuApi = {
-  loadLogViewerFile: () => Promise<{
+  prepareLogViewerFile: () => Promise<{
     success: boolean;
     fileName?: string;
     fileSize?: number;
+    lineCount?: number;
+    encoding?: string;
     error?: string;
   }>;
-  onLogViewerChunk: (
-    cb: (data: { text: string; doneBytes: number; totalBytes: number }) => void
-  ) => () => void;
-  onLogViewerComplete: (cb: () => void) => () => void;
-  onLogViewerError: (cb: (data: { error: string }) => void) => () => void;
+  readLogViewerRange: (
+    startLine: number,
+    endLine: number
+  ) => Promise<{ success: boolean; startLine?: number; endLine?: number; lines?: string[]; error?: string }>;
+  readLogViewerLines: (
+    lines: number[]
+  ) => Promise<{ success: boolean; lines?: Array<{ line: number; text: string }>; error?: string }>;
+  searchLogViewerFile: (
+    query: string,
+    options: ConsoleFindOptions
+  ) => Promise<{
+    success: boolean;
+    hits?: Array<{ line: number; start: number; end: number }>;
+    matchLines?: number[];
+    truncated?: boolean;
+    superseded?: boolean;
+    error?: string;
+  }>;
   copyToClipboard: (text: string) => Promise<unknown>;
   openExternal: (url: string) => Promise<unknown>;
 };
@@ -33,10 +52,6 @@ type LogViewerRokuApi = {
 const rokuApi = window.roku as unknown as LogViewerRokuApi;
 
 async function main() {
-  // DOM refs first — the lazy-mount path inside the chunk handler needs
-  // these in scope. Listeners are wired below; chunk events arrive on the
-  // next tick after the load invoke resolves, so the closure values are
-  // populated by the time they're read.
   const statusEl = document.getElementById('logViewerStatus');
   const titleEl = document.getElementById('logViewerTitle');
   const outputEl = document.getElementById('logViewerOutput');
@@ -47,30 +62,7 @@ async function main() {
 
   if (!(outputEl instanceof HTMLElement)) return;
 
-  // Streaming load state. The model (`entries`) is mutated as chunks
-  // arrive; the surface observes the same array reference and is told to
-  // relayout via `notifyAppended()` after each chunk.
-  const entries: ConsoleLogFileEntry[] = [];
-  let surface: ReturnType<typeof mountConsoleLogSurface> | null = null;
-  let totalBytes = 0;
-  let receivedAnyChunk = false;
-  let streamErrored = false;
-  let streamComplete = false;
-  let fileName = 'unknown';
-  /**
-   * Parser state carried across chunks. The `[DEBUG]`-on-its-own-line prefix
-   * can land at the boundary of one chunk with its continuation in the next;
-   * `parseConsoleLineBatch` reads + writes `state.pendingLogPrefix` to bridge
-   * that case.
-   */
-  const parserState = createConsoleLineParserState();
-  /**
-   * Tail of the previous chunk that wasn't terminated by a newline yet. We
-   * carry it forward so a line split across the chunk boundary parses as
-   * one line on the next chunk's tick. Without this, the boundary line
-   * would be treated as two separate (truncated) entries.
-   */
-  let lineBuffer = '';
+  let lineCount = 0;
 
   function setStatus(message: string, isError = false): void {
     if (!statusEl) return;
@@ -78,22 +70,9 @@ async function main() {
     statusEl.classList.toggle('log-viewer-status--error', isError);
   }
 
-  function updateProgressStatus(doneBytes: number): void {
-    if (!statusEl || streamErrored) return;
-    if (streamComplete) {
-      // Final state — show entry count, not a "loaded" suffix; mirrors the
-      // earlier non-streaming UX.
-      statusEl.textContent = `${entries.length.toLocaleString()} lines`;
-      return;
-    }
-    const pct = totalBytes > 0 ? Math.min(100, Math.round((doneBytes / totalBytes) * 100)) : 0;
-    statusEl.textContent = `${entries.length.toLocaleString()} lines (Loading ${pct}%)`;
-  }
-
   /**
-   * Brief, transient feedback in the status row. Used by Cmd+A and the
-   * Copy button so the user gets a confirmation without us spawning a toast
-   * stack. The status caption (line count) is restored after a short delay.
+   * Brief, transient feedback in the status row (Cmd+A / Copy). The line-count
+   * caption is restored after a short delay.
    */
   function flashStatus(message: string): void {
     if (!statusEl) return;
@@ -107,112 +86,13 @@ async function main() {
     }, 1500);
   }
 
-  /** Mount the surface lazily on the first chunk so the user sees actual
-   *  content (not just the empty scaffold) on first paint. The surface
-   *  works fine over an array we keep mutating; subsequent chunks just
-   *  push entries and call `surface.notifyAppended()`. */
-  function ensureSurfaceMounted(): void {
-    if (surface) return;
-    surface = mountConsoleLogSurface({
-      outputEl: outputEl as HTMLElement,
-      entries,
-      findBarHost: headerEl,
-      onSelectAll: () => {
-        const text = surface?.getVisibleText() ?? '';
-        if (!text) {
-          flashStatus('Nothing to copy');
-          return;
-        }
-        void rokuApi.copyToClipboard(text).then(
-          () => flashStatus('Copied entire log to clipboard'),
-          () => flashStatus('Copy failed')
-        );
-      }
-    });
-  }
-
-  /**
-   * Parse one chunk into entries and append them. Cross-chunk line
-   * boundaries are handled by `lineBuffer`: the unterminated tail of each
-   * chunk is held back, then prepended to the next chunk's text. The final
-   * flush after `Complete` runs `processChunk('', true)` so any trailing
-   * line (file without a final `\n`) reaches the parser.
-   */
-  function processChunk(text: string, final: boolean): void {
-    const combined = lineBuffer + text;
-    let toParse: string;
-    if (final) {
-      toParse = combined;
-      lineBuffer = '';
-    } else {
-      const lastNewline = combined.lastIndexOf('\n');
-      if (lastNewline < 0) {
-        // No newline in this chunk yet — buffer the whole thing and wait.
-        lineBuffer = combined;
-        return;
-      }
-      toParse = combined.slice(0, lastNewline + 1);
-      lineBuffer = combined.slice(lastNewline + 1);
-    }
-
-    // Match the file viewer's existing whole-text normalization: collapse
-    // `\r\n` / `\r` to `\n` before splitting. The shared parser expects
-    // pre-split lines.
-    const lines = toParse.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
-    const parsed = parseConsoleLineBatch(parserState, lines);
-    if (parsed.length === 0) return;
-
-    for (const p of parsed) {
-      entries.push({
-        text: p.text,
-        timestamp: null,
-        type: p.type,
-        ...(p.structuredTargets ? { structuredTargets: p.structuredTargets } : {})
-      });
-    }
-
-    ensureSurfaceMounted();
-    surface?.notifyAppended();
-  }
-
-  // Wire chunk listeners *before* starting the stream so we don't drop a
-  // chunk that arrives in the same microtask as the invoke resolution.
-  // Disposers kept for symmetry but not currently called — the log viewer
-  // window is single-load per session.
-  rokuApi.onLogViewerChunk((data) => {
-    if (streamErrored || streamComplete) return;
-    receivedAnyChunk = true;
-    if (data.totalBytes > 0) totalBytes = data.totalBytes;
-    processChunk(data.text, false);
-    updateProgressStatus(data.doneBytes);
-  });
-  rokuApi.onLogViewerComplete(() => {
-    if (streamErrored) return;
-    streamComplete = true;
-    if (lineBuffer.length > 0) {
-      // Flush any trailing buffered line (file with no final `\n`).
-      processChunk('', true);
-    }
-    // Cold-start corner case: the file had no parseable content (empty
-    // file, ANSI-only, or all blank lines). Mount the surface anyway so
-    // the user sees an empty scrollable area instead of a blank window.
-    ensureSurfaceMounted();
-    updateProgressStatus(totalBytes);
-  });
-  rokuApi.onLogViewerError((data) => {
-    streamErrored = true;
-    setStatus(data.error || 'Could not load file', true);
-  });
-
-  // First status line — gives the user immediate "loading started" feedback,
-  // even if the first chunk takes a moment to arrive on a large file.
-  setStatus('Loading…');
+  setStatus('Indexing…');
   findHostEl?.removeAttribute('hidden');
   if (actionsEl) actionsEl.removeAttribute('hidden');
 
-  let res: Awaited<ReturnType<typeof rokuApi.loadLogViewerFile>>;
+  let res: Awaited<ReturnType<typeof rokuApi.prepareLogViewerFile>>;
   try {
-    res = await rokuApi.loadLogViewerFile();
+    res = await rokuApi.prepareLogViewerFile();
   } catch (e: unknown) {
     setStatus(e instanceof Error ? e.message : 'Could not load file', true);
     return;
@@ -223,45 +103,97 @@ async function main() {
   }
 
   if (res.fileName) {
-    fileName = res.fileName;
     setConsoleViewerModalTitlePrefix(res.fileName);
-    if (titleEl) {
-      titleEl.textContent = res.fileName;
-    }
+    if (titleEl) titleEl.textContent = res.fileName;
     document.title = `Log Viewer ♦ ${res.fileName}`;
   }
-  if (typeof res.fileSize === 'number') totalBytes = res.fileSize;
+  lineCount = res.lineCount ?? 0;
 
-  // Replace the generic "Loading…" placeholder with the structured progress
-  // line now that we know the total size. If a chunk has already arrived
-  // (extremely fast files), `updateProgressStatus` was already called from
-  // the chunk handler — the explicit update here is a no-op for that case
-  // because `streamComplete` already gated to the final form.
-  if (!receivedAnyChunk && !streamErrored && !streamComplete) {
-    setStatus(`0 lines (Loading 0%)`);
+  const model = createLogFileWindowModel({
+    lineCount,
+    fileSize: res.fileSize ?? 0,
+    readRange: async (startLine, endLine) => {
+      const r = await rokuApi.readLogViewerRange(startLine, endLine);
+      return r.success ? (r.lines ?? []) : null;
+    },
+    readLines: async (lines) => {
+      const r = await rokuApi.readLogViewerLines(lines);
+      return r.success ? (r.lines ?? []) : null;
+    },
+    scrollToTop: () => {
+      outputEl.scrollTop = 0;
+    }
+  });
+
+  /**
+   * Build the export text for Copy / Cmd+A. Windowing means the whole file
+   * isn't resident, so we read it back from main on demand: the entire file in
+   * Find mode, or just the matching lines when a Filter is active. Text is
+   * run through `consoleDisplayText` so it matches what's on screen (ANSI
+   * stripped, long lines truncated) — same as the old in-memory copy path.
+   */
+  async function buildExportText(): Promise<string> {
+    const spec = model.exportSpec();
+    if (spec.kind === 'lines') {
+      if (spec.lines.length === 0) return '';
+      const rows = await rokuApi.readLogViewerLines(spec.lines);
+      if (!rows.success || !rows.lines) return '';
+      return rows.lines.map((r) => consoleDisplayText(r.text)).join('\n');
+    }
+    if (lineCount === 0) return '';
+    const r = await rokuApi.readLogViewerRange(0, lineCount);
+    if (!r.success || !r.lines) return '';
+    return r.lines.map((line) => consoleDisplayText(line)).join('\n');
   }
 
-  // Copy header button — file-viewer-specific chrome (the Console panel
-  // exposes the same action via different markup). Goes through
-  // `surface.getVisibleText()` so a future filter-rule change lands in
-  // exactly one place.
-  copyBtn?.addEventListener('click', async () => {
-    if (!surface) {
-      flashStatus('Still loading…');
+  async function copyExport(feedbackPrefix: string): Promise<void> {
+    let text: string;
+    try {
+      text = await buildExportText();
+    } catch {
+      flashStatus('Copy failed');
       return;
     }
-    const text = surface.getVisibleText();
     if (!text) {
       flashStatus('Nothing to copy');
       return;
     }
     try {
       await rokuApi.copyToClipboard(text);
-      flashStatus('Copied to clipboard');
+      flashStatus(feedbackPrefix);
     } catch {
       flashStatus('Copy failed');
     }
+  }
+
+  const surface = mountConsoleLogSurface({
+    outputEl,
+    entries: model.entries,
+    findBarHost: headerEl,
+    onRangeChange: (start, end) => model.ensureWindow(start, end),
+    remoteSearch: async (query, options) => {
+      const r = await rokuApi.searchLogViewerFile(query, options);
+      if (!r.success || r.superseded) return null;
+      return {
+        hits: (r.hits ?? []).map((h) => ({ lineIndex: h.line, start: h.start, end: h.end })),
+        matchLines: r.matchLines ?? [],
+        truncated: !!r.truncated
+      };
+    },
+    onFilterLinesChange: (matchLines) => model.setFilter(matchLines),
+    onSelectAll: () => void copyExport('Copied entire log to clipboard')
   });
+  model.bindSurface(surface);
+  // Kick the first window load explicitly. The virtualizer's initial layout
+  // normally fires onRangeChange (which loads the top window), but if the
+  // scroll area reports zero height on first paint no range fires — this
+  // guarantees content regardless. Redundant loads are deduped by the model's
+  // load token, so at worst this costs one extra read.
+  model.ensureWindow(0, Math.min(64, lineCount));
+
+  setStatus(`${lineCount.toLocaleString()} lines`);
+
+  copyBtn?.addEventListener('click', () => void copyExport('Copied to clipboard'));
 }
 
 void main();

@@ -1,44 +1,52 @@
 import { IPC } from './shared/ipc/channels';
+import type { ConsoleFindOptions } from './renderer/modules/console-log/console-find-helpers';
 
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('roku', {
   /**
-   * Kick off the streaming load. Returns once the file metadata is known
-   * (filename + total size); the renderer then subscribes to chunk events
-   * via `onLogViewerChunk`/`onLogViewerComplete`/`onLogViewerError`. The
-   * stream starts emitting on the next tick — guaranteed to arrive *after*
-   * this promise resolves, so the renderer has a chance to mount the surface
-   * scaffold before any chunk lands.
+   * Prepare the file for windowed reading: main builds the per-line byte-offset
+   * index and returns file metadata (`lineCount` sizes the full-file scrollbar).
+   * The renderer then pulls only the visible window via `readLogViewerRange` /
+   * `readLogViewerLines`, so the whole file never lives in the renderer heap.
    */
-  loadLogViewerFile: () =>
-    ipcRenderer.invoke(IPC.LogViewerStreamStart) as Promise<{
+  prepareLogViewerFile: () =>
+    ipcRenderer.invoke(IPC.LogViewerPrepare) as Promise<{
       success: boolean;
       fileName?: string;
       fileSize?: number;
+      lineCount?: number;
+      encoding?: string;
       error?: string;
     }>,
-  /** Subscribe to streaming chunks. Returns a disposer for symmetry with
-   *  the other `on*` bridges, though the log viewer window is single-load
-   *  per session so most callers don't need it. */
-  onLogViewerChunk: (
-    callback: (data: { text: string; doneBytes: number; totalBytes: number }) => void
-  ): (() => void) => {
-    const handler = (_e: unknown, data: { text: string; doneBytes: number; totalBytes: number }) =>
-      callback(data);
-    ipcRenderer.on(IPC.LogViewerStreamChunk, handler);
-    return () => ipcRenderer.removeListener(IPC.LogViewerStreamChunk, handler);
-  },
-  onLogViewerComplete: (callback: () => void): (() => void) => {
-    const handler = () => callback();
-    ipcRenderer.on(IPC.LogViewerStreamComplete, handler);
-    return () => ipcRenderer.removeListener(IPC.LogViewerStreamComplete, handler);
-  },
-  onLogViewerError: (callback: (data: { error: string }) => void): (() => void) => {
-    const handler = (_e: unknown, data: { error: string }) => callback(data);
-    ipcRenderer.on(IPC.LogViewerStreamError, handler);
-    return () => ipcRenderer.removeListener(IPC.LogViewerStreamError, handler);
-  },
+  /** Decode a contiguous, half-open line range `[startLine, endLine)`. */
+  readLogViewerRange: (startLine: number, endLine: number) =>
+    ipcRenderer.invoke(IPC.LogViewerReadRange, { startLine, endLine }) as Promise<{
+      success: boolean;
+      startLine?: number;
+      endLine?: number;
+      lines?: string[];
+      error?: string;
+    }>,
+  /** Decode a scattered set of line numbers (Filter mode's non-contiguous window). */
+  readLogViewerLines: (lines: number[]) =>
+    ipcRenderer.invoke(IPC.LogViewerReadLines, { lines }) as Promise<{
+      success: boolean;
+      lines?: Array<{ line: number; text: string }>;
+      error?: string;
+    }>,
+  /** Full-file search. `hits` drive Find highlight/nav; `matchLines` is the set
+   *  Filter mode collapses the file to. `superseded` means a newer search
+   *  started before this one finished — the caller should ignore the result. */
+  searchLogViewerFile: (query: string, options: ConsoleFindOptions) =>
+    ipcRenderer.invoke(IPC.LogViewerSearch, { query, options }) as Promise<{
+      success: boolean;
+      hits?: Array<{ line: number; start: number; end: number }>;
+      matchLines?: number[];
+      truncated?: boolean;
+      superseded?: boolean;
+      error?: string;
+    }>,
   copyToClipboard: (text: string) => ipcRenderer.invoke(IPC.ClipboardWrite, text),
   openExternal: (url: string) => ipcRenderer.invoke(IPC.ShellOpenExternal, url)
 });

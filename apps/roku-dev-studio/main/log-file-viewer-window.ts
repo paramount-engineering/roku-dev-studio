@@ -1,210 +1,203 @@
 /**
  * Standalone window: open a log file with the same console-style rendering as the device Console.
  *
- * **Load model: streaming.** Earlier the main process read the entire file
- * into a Buffer, decoded to a single string, and shipped that whole string
- * back to the renderer in one IPC reply. For a 36 MB file that meant the
- * file lived three times in memory at peak (Buffer + decoded string in main +
- * IPC-cloned string in renderer) before parsing even started, then a fourth
- * time as the parsed `entries[]` settled. Streaming chunks instead lets the
- * renderer parse and discard text incrementally; only `entries[]` survives
- * at steady state, and the user sees content as it arrives.
+ * **Load model: windowed.** Earlier the main process streamed the whole file to
+ * the renderer, which parsed every line into one resident `entries[]` array —
+ * so the file effectively lived in the renderer heap and a 41 MB log tripped
+ * the viewer's memory guard. Now main builds a per-line byte-offset index
+ * (`buildLineIndex`) and the renderer pulls only the byte range around the
+ * viewport (`readLineRange` / `readLines`), keeping a small sliding window
+ * resident while the scrollbar still spans the whole file. Full-file Find /
+ * Filter run in main (`searchFile`) so search covers lines that aren't
+ * currently resident. See `log-file-index.ts` for the backend.
  */
 
 import type { BrowserWindow as ElectronBrowserWindow, IpcMain, IpcMainInvokeEvent } from 'electron';
-import { TextDecoder } from 'util';
 import { IPC } from '../shared/ipc/channels';
 import { setupZoomGuards } from './window-zoom';
 import { mainError } from './log.js';
+import {
+  buildLineIndex,
+  readLineRange,
+  readLines,
+  searchFile,
+  LOG_VIEWER_MAX_LINES,
+  type LogFileIndex
+} from './log-file-index';
+import { buildSearchRegex, type ConsoleFindOptions } from '../renderer/modules/console-log/console-find-helpers';
 
 const fs = require('fs');
 const path = require('path');
 const { BrowserWindow, dialog, screen } = require('electron') as typeof import('electron');
 
-const LOG_VIEWER_MAX_BYTES = 36 * 1024 * 1024;
 /**
- * Streaming chunk size. 256 KB is the sweet spot for our setup:
- *  - Small enough that the first chunk arrives quickly (sub-50 ms perceived
- *    latency on macOS spinning disks; near-instant on SSD).
- *  - Big enough that the parser amortizes per-chunk overhead — `setImmediate`
- *    yields between chunks, so smaller chunks would mean more yield trips
- *    per file with no win on parse throughput.
- *  - Big enough that a typical 5 MB file completes in 20 chunks (so the
- *    progress bar / status line ticks meaningfully without flooding IPC).
+ * Upper bound on file size we'll index. Far above the old 36 MB in-renderer
+ * cap because the file no longer lives in the renderer — only the offset table
+ * (8 bytes/line, itself capped by `LOG_VIEWER_MAX_LINES`) and a small window do.
+ * The ceiling is a sanity guard against accidentally pointing the viewer at a
+ * multi-gigabyte blob, not a memory constraint.
  */
-const LOG_VIEWER_STREAM_CHUNK_BYTES = 256 * 1024;
+const LOG_VIEWER_MAX_BYTES = 2 * 1024 * 1024 * 1024;
 
-/**
- * Encoding sniffer. Examines the first 2–3 bytes of the file and returns:
- *
- *   - `{ encoding, bomBytes }` — chosen encoding label for `TextDecoder`,
- *     and the number of BOM bytes to skip before decoding starts.
- *   - The body of the very first chunk that follows the BOM (so the caller
- *     doesn't have to re-buffer it).
- *
- * Three encodings cover the Roku ecosystem:
- *
- *   - UTF-8  (`EF BB BF` BOM) — sideloaded BrightScript dumps from macOS /
- *     Linux test harnesses; also the no-BOM default.
- *   - UTF-16 LE (`FF FE`)     — Windows native (PowerShell `Out-File`,
- *     Notepad's "Unicode" save, several Win-side QA tools).
- *   - UTF-16 BE (`FE FF`)     — much rarer, but trivial to handle while
- *     we're already sniffing.
- *
- * No BOM ⇒ assume UTF-8. No heuristic charset detection — false positives
- * are worse than mojibake the user can immediately see is wrong.
- */
-function sniffEncoding(firstChunk: Buffer): { encoding: string; bomBytes: number } {
-  if (firstChunk.length >= 2 && firstChunk[0] === 0xff && firstChunk[1] === 0xfe) {
-    return { encoding: 'utf-16le', bomBytes: 2 };
-  }
-  if (firstChunk.length >= 2 && firstChunk[0] === 0xfe && firstChunk[1] === 0xff) {
-    return { encoding: 'utf-16be', bomBytes: 2 };
-  }
-  if (
-    firstChunk.length >= 3 &&
-    firstChunk[0] === 0xef &&
-    firstChunk[1] === 0xbb &&
-    firstChunk[2] === 0xbf
-  ) {
-    return { encoding: 'utf-8', bomBytes: 3 };
-  }
-  return { encoding: 'utf-8', bomBytes: 0 };
-}
-
-/** BrowserWindow.id → absolute file path (set before load; cleared on close). */
-const logViewerPathsByWindowId = new Map<number, string>();
+/** Per-window backing state, keyed by BrowserWindow.id. `filePath` is set at
+ *  open; `index` is built lazily on the first `Prepare`; `searchToken` lets a
+ *  newer search supersede an in-flight scan. */
+type LogViewerState = {
+  filePath: string;
+  index: LogFileIndex | null;
+  searchToken: number;
+};
+const logViewerStateByWindowId = new Map<number, LogViewerState>();
 
 let logViewerIpcRegistered = false;
+
+function stateForEvent(event: IpcMainInvokeEvent): { state: LogViewerState } | { error: string } {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  if (!win || win.isDestroyed()) return { error: 'Internal error: no window' };
+  const state = logViewerStateByWindowId.get(win.id);
+  if (!state) return { error: 'No file is associated with this window' };
+  return { state };
+}
 
 export function registerLogViewerIpc(ipcMain: IpcMain): void {
   if (logViewerIpcRegistered) return;
   logViewerIpcRegistered = true;
 
-  // Streaming load. Renderer kicks off via `LogViewerStreamStart` (invoke);
-  // main answers with `{ success, fileName?, fileSize? }` and starts emitting
-  // `LogViewerStreamChunk` events on the same `webContents`. Either
-  // `LogViewerStreamComplete` (EOF) or `LogViewerStreamError` (read failure)
-  // terminates the stream.
+  // Prepare: stat + build the line-offset index. Answers with file metadata the
+  // renderer needs to size the virtualizer to the whole file. The index is
+  // cached on the window's state for subsequent range/search calls.
   ipcMain.handle(
-    IPC.LogViewerStreamStart,
-    async (event: IpcMainInvokeEvent): Promise<{
+    IPC.LogViewerPrepare,
+    async (
+      event: IpcMainInvokeEvent
+    ): Promise<{
       success: boolean;
       fileName?: string;
       fileSize?: number;
+      lineCount?: number;
+      encoding?: string;
       error?: string;
     }> => {
-      const win = BrowserWindow.fromWebContents(event.sender);
-      if (!win || win.isDestroyed()) {
-        return { success: false, error: 'Internal error: no window' };
-      }
-      const filePath = logViewerPathsByWindowId.get(win.id);
-      if (!filePath) {
-        return { success: false, error: 'No file is associated with this window' };
-      }
+      const got = stateForEvent(event);
+      if ('error' in got) return { success: false, error: got.error };
+      const { state } = got;
 
       let stat: ReturnType<typeof fs.statSync>;
       try {
-        stat = fs.statSync(filePath);
+        stat = fs.statSync(state.filePath);
       } catch (e) {
         return { success: false, error: e instanceof Error ? e.message : String(e) };
       }
-      if (!stat.isFile()) {
-        return { success: false, error: 'Not a file' };
-      }
+      if (!stat.isFile()) return { success: false, error: 'Not a file' };
       if (stat.size > LOG_VIEWER_MAX_BYTES) {
         return {
           success: false,
-          error: `File is too large (${Math.round(stat.size / (1024 * 1024))} MB). Maximum is ${LOG_VIEWER_MAX_BYTES / (1024 * 1024)} MB.`
+          error: `File is too large (${Math.round(stat.size / (1024 * 1024 * 1024))} GB). Maximum is ${LOG_VIEWER_MAX_BYTES / (1024 * 1024 * 1024)} GB.`
         };
       }
 
-      const fileName = path.basename(filePath);
-      const fileSize: number = stat.size;
-      const sender = event.sender;
+      try {
+        state.index = buildLineIndex(state.filePath);
+      } catch (e) {
+        if (e instanceof Error && e.message === 'too-many-lines') {
+          return {
+            success: false,
+            error: `File has too many lines (over ${LOG_VIEWER_MAX_LINES.toLocaleString()}). Try splitting it.`
+          };
+        }
+        return { success: false, error: e instanceof Error ? e.message : String(e) };
+      }
 
-      // Start the stream on the next tick so the invoke result lands in the
-      // renderer *before* the first chunk event — the renderer needs the
-      // fileName/fileSize to mount the surface scaffold before chunks arrive.
-      setImmediate(() => {
-        if (sender.isDestroyed()) return;
-        streamFileToRenderer(sender, filePath, fileSize).catch((err: unknown) => {
-          if (sender.isDestroyed()) return;
-          sender.send(IPC.LogViewerStreamError, {
-            error: err instanceof Error ? err.message : String(err)
-          });
-        });
-      });
-
-      return { success: true, fileName, fileSize };
+      return {
+        success: true,
+        fileName: path.basename(state.filePath),
+        fileSize: state.index.fileSize,
+        lineCount: state.index.lineCount,
+        encoding: state.index.encoding
+      };
     }
   );
-}
 
-/**
- * Read `filePath` in `LOG_VIEWER_STREAM_CHUNK_BYTES`-sized chunks, sniff the
- * encoding from the first chunk, decode each chunk through a streaming
- * `TextDecoder` (which buffers split multi-byte sequences across chunks),
- * and forward decoded text to the renderer with progress.
- *
- * `TextDecoder({ stream: true })` is the right primitive here:
- *  - On UTF-8 we'd otherwise see mojibake at any chunk boundary that lands
- *    in the middle of a multi-byte sequence (CJK, emoji, structured-payload
- *    Unicode escapes — all common in BrightScript log dumps).
- *  - On UTF-16 the chunk size is even (256 KB), so 16-bit code units never
- *    split — but BMP surrogate pairs that straddle chunks would; the
- *    streaming decoder handles them correctly.
- */
-async function streamFileToRenderer(
-  sender: Electron.WebContents,
-  filePath: string,
-  totalBytes: number
-): Promise<void> {
-  const stream = fs.createReadStream(filePath, { highWaterMark: LOG_VIEWER_STREAM_CHUNK_BYTES });
-  let decoder: TextDecoder | null = null;
-  let doneBytes = 0;
-  let firstChunkSeen = false;
-
-  for await (const raw of stream as AsyncIterable<Buffer>) {
-    if (sender.isDestroyed()) {
-      stream.destroy();
-      return;
-    }
-    let chunk = raw;
-    if (!firstChunkSeen) {
-      firstChunkSeen = true;
-      const { encoding, bomBytes } = sniffEncoding(chunk);
+  // Read a contiguous line range for the normal sliding window.
+  ipcMain.handle(
+    IPC.LogViewerReadRange,
+    (
+      event: IpcMainInvokeEvent,
+      payload: { startLine: number; endLine: number }
+    ): { success: boolean; startLine?: number; endLine?: number; lines?: string[]; error?: string } => {
+      const got = stateForEvent(event);
+      if ('error' in got) return { success: false, error: got.error };
+      const { state } = got;
+      if (!state.index) return { success: false, error: 'File not prepared' };
       try {
-        decoder = new TextDecoder(encoding, { fatal: false });
-      } catch {
-        decoder = new TextDecoder('utf-8', { fatal: false });
+        const lines = readLineRange(state.index, payload.startLine, payload.endLine);
+        return { success: true, startLine: payload.startLine, endLine: payload.endLine, lines };
+      } catch (e) {
+        return { success: false, error: e instanceof Error ? e.message : String(e) };
       }
-      if (bomBytes > 0) chunk = chunk.subarray(bomBytes);
     }
-    if (!decoder) continue;
-    const text = decoder.decode(chunk, { stream: true });
-    doneBytes += raw.length;
-    if (text.length > 0) {
-      sender.send(IPC.LogViewerStreamChunk, { text, doneBytes, totalBytes });
-    }
-  }
+  );
 
-  if (sender.isDestroyed()) return;
-
-  // Flush any bytes the streaming decoder buffered (e.g. an incomplete
-  // multi-byte sequence at EOF — invalid for the encoding but the
-  // non-fatal decoder will replace with U+FFFD).
-  if (decoder) {
-    const tail = decoder.decode();
-    if (tail.length > 0) {
-      sender.send(IPC.LogViewerStreamChunk, {
-        text: tail,
-        doneBytes,
-        totalBytes
-      });
+  // Read scattered line numbers for the Filter-mode window.
+  ipcMain.handle(
+    IPC.LogViewerReadLines,
+    (
+      event: IpcMainInvokeEvent,
+      payload: { lines: number[] }
+    ): { success: boolean; lines?: Array<{ line: number; text: string }>; error?: string } => {
+      const got = stateForEvent(event);
+      if ('error' in got) return { success: false, error: got.error };
+      const { state } = got;
+      if (!state.index) return { success: false, error: 'File not prepared' };
+      try {
+        return { success: true, lines: readLines(state.index, payload.lines ?? []) };
+      } catch (e) {
+        return { success: false, error: e instanceof Error ? e.message : String(e) };
+      }
     }
-  }
-  sender.send(IPC.LogViewerStreamComplete, {});
+  );
+
+  // Full-file search (Find highlight/nav + Filter line set). A newer call bumps
+  // `searchToken`; the running scan polls it and aborts if superseded.
+  ipcMain.handle(
+    IPC.LogViewerSearch,
+    async (
+      event: IpcMainInvokeEvent,
+      payload: { query: string; options: ConsoleFindOptions }
+    ): Promise<{
+      success: boolean;
+      hits?: Array<{ line: number; start: number; end: number }>;
+      matchLines?: number[];
+      truncated?: boolean;
+      superseded?: boolean;
+      error?: string;
+    }> => {
+      const got = stateForEvent(event);
+      if ('error' in got) return { success: false, error: got.error };
+      const { state } = got;
+      if (!state.index) return { success: false, error: 'File not prepared' };
+
+      const query = payload?.query ?? '';
+      if (!query) return { success: true, hits: [], matchLines: [], truncated: false };
+
+      const regex = buildSearchRegex(query, payload.options);
+      if (!regex) return { success: true, hits: [], matchLines: [], truncated: false };
+
+      const myToken = ++state.searchToken;
+      const result = await searchFile(state.index, regex, () => state.searchToken !== myToken);
+      if (state.searchToken !== myToken) {
+        // A newer search started while we scanned — discard this stale result so
+        // the renderer doesn't paint hits for an outdated query.
+        return { success: true, superseded: true };
+      }
+      return {
+        success: true,
+        hits: result.hits,
+        matchLines: result.matchLines,
+        truncated: result.truncated
+      };
+    }
+  );
 }
 
 export function openLogFileViewerWindow(parent: ElectronBrowserWindow | undefined, filePath: string): void {
@@ -244,9 +237,9 @@ export function openLogFileViewerWindow(parent: ElectronBrowserWindow | undefine
     }
   });
 
-  logViewerPathsByWindowId.set(child.id, resolved);
+  logViewerStateByWindowId.set(child.id, { filePath: resolved, index: null, searchToken: 0 });
   child.once('closed', () => {
-    logViewerPathsByWindowId.delete(child.id);
+    logViewerStateByWindowId.delete(child.id);
   });
 
   // Same zoom band + pinch-zoom guard as the main window so View > Zoom and
@@ -279,7 +272,7 @@ export function openLogFileViewerWindow(parent: ElectronBrowserWindow | undefine
 
   void child.loadFile(htmlPath).catch((err: unknown) => {
     mainError('[Log viewer] loadFile failed:', err);
-    logViewerPathsByWindowId.delete(child.id);
+    logViewerStateByWindowId.delete(child.id);
     if (!child.isDestroyed()) child.close();
   });
 }
