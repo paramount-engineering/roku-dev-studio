@@ -66,10 +66,14 @@ function formatInlineMarkdown(line: string): string {
 }
 
 function renderReleaseNotesBody(body: string): string {
-  const trimmed = (body || '').trim();
+  // Strip everything from the first horizontal rule (---) onwards — the release
+  // body convention uses this to separate the human-readable notes from the
+  // auto-generated downloads/installation table.
+  const withoutSuffix = (body || '').replace(/\r\n?/g, '\n').replace(/\n---[\s\S]*$/, '');
+  const trimmed = withoutSuffix.trim();
   if (!trimmed) return '<p>No release notes provided for this release.</p>';
 
-  const lines = trimmed.replace(/\r\n?/g, '\n').split('\n');
+  const lines = trimmed.split('\n');
   const out: string[] = [];
   let inCode = false;
   let codeLines: string[] = [];
@@ -219,13 +223,18 @@ function showReleaseNotesModal(): void {
     <div class="rds-release-notes-dialog" role="dialog" aria-modal="true" aria-labelledby="rdsReleaseNotesTitle">
       <div class="rds-release-notes-header">
         <h3 id="rdsReleaseNotesTitle">Release Notes</h3>
-        <button type="button" class="rds-release-notes-close" aria-label="Close">×</button>
+        <div class="rds-release-notes-header-actions">
+          <button type="button" class="rds-release-notes-icon-btn" id="rdsReleaseNotesOpenPage" title="Open Release Page" aria-label="Open Release Page">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+              <polyline points="15 3 21 3 21 9"/>
+              <line x1="10" y1="14" x2="21" y2="3"/>
+            </svg>
+          </button>
+          <button type="button" class="rds-release-notes-close" aria-label="Close">×</button>
+        </div>
       </div>
       <div class="rds-release-notes-content" id="rdsReleaseNotesContent">Loading latest release notes...</div>
-      <div class="rds-release-notes-actions">
-        <button type="button" class="rds-banner-btn rds-banner-btn-ghost" id="rdsReleaseNotesCloseBtn">Close</button>
-        <button type="button" class="rds-banner-btn rds-banner-btn-primary" id="rdsReleaseNotesOpenPage">Open Release Page</button>
-      </div>
     </div>`;
 
   document.body.appendChild(modal);
@@ -235,7 +244,6 @@ function showReleaseNotesModal(): void {
     if (e.target === modal) close();
   });
   modal.querySelector('.rds-release-notes-close')?.addEventListener('click', close);
-  document.getElementById('rdsReleaseNotesCloseBtn')?.addEventListener('click', close);
   document.getElementById('rdsReleaseNotesOpenPage')?.addEventListener('click', () => {
     (window as any).roku?.openExternal?.(LATEST_RELEASE_URL).catch(() => undefined);
   });
@@ -243,10 +251,10 @@ function showReleaseNotesModal(): void {
   const content = document.getElementById('rdsReleaseNotesContent');
   fetchLatestReleaseInfo().then((info) => {
     if (!content) return;
-    content.innerHTML = `
-      <div class="rds-release-notes-subtitle">${escapeHtml(info.title)}</div>
-      ${renderReleaseNotesBody(info.body)}
-    `;
+    // Update the modal heading to "v1.1.0 · Release Notes" once we know the version.
+    const titleEl = document.getElementById('rdsReleaseNotesTitle');
+    if (titleEl) titleEl.textContent = `${info.title} · Release Notes`;
+    content.innerHTML = renderReleaseNotesBody(info.body);
     const openBtn = document.getElementById('rdsReleaseNotesOpenPage') as HTMLButtonElement | null;
     if (openBtn) {
       openBtn.onclick = () => {
@@ -266,22 +274,32 @@ function ensureBannerStyles(): void {
   if (document.getElementById('rds-update-banner-style')) return;
   const style = document.createElement('style');
   style.id = 'rds-update-banner-style';
+  // All colour/radius/shadow tokens are aligned with the app-wide CSS variables
+  // defined in renderer/index.html :root so every modal surface looks identical.
+  //
+  // Shared modal constants (mirror the canonical values from index.html):
+  //   Overlay:  rgba(0,0,0,0.7)  backdrop-filter: blur(4px)  z-index: 100000
+  //   Dialog:   bg var(--bg-tertiary)  border var(--border)  radius 16px
+  //             shadow 0 20px 60px rgba(0,0,0,0.5)
+  //   Header:   padding 16px 20px  title 16px/600
+  //   Btn close: 28×28  bg var(--bg-elevated)  hover var(--bg-elevated) +10%
   style.textContent = `
+    /* ── Update notification banner ─────────────────────────────────── */
     #rds-update-banner {
       position: fixed;
       bottom: 20px;
       right: 20px;
-      z-index: 99999;
-      background: #1e1e2a;
-      border: 1px solid rgba(139, 92, 246, 0.35);
-      border-radius: 10px;
-      box-shadow: 0 4px 24px rgba(0,0,0,0.5), 0 0 0 1px rgba(139,92,246,0.08);
+      z-index: 100000;
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border-hover, rgba(139, 92, 246, 0.25));
+      border-radius: 12px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.5);
       padding: 14px 16px;
       min-width: 280px;
       max-width: 340px;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      font-family: inherit;
       font-size: 13px;
-      color: #e2e8f0;
+      color: var(--text-primary);
       display: flex;
       flex-direction: column;
       gap: 10px;
@@ -306,32 +324,45 @@ function ensureBannerStyles(): void {
       width: 28px;
       height: 28px;
       border-radius: 6px;
-      background: rgba(139, 92, 246, 0.15);
+      background: var(--accent-purple-dim);
       display: flex;
       align-items: center;
       justify-content: center;
       flex-shrink: 0;
-      color: #a78bfa;
+      color: var(--accent-purple);
     }
     .rds-banner-text { flex: 1; min-width: 0; }
     .rds-banner-title {
       font-weight: 600;
-      color: #f1f5f9;
+      color: var(--text-primary);
       margin-bottom: 2px;
+      font-size: 13px;
     }
-    .rds-banner-subtitle { color: #94a3b8; font-size: 11.5px; }
+    .rds-banner-subtitle {
+      color: var(--text-secondary);
+      font-size: 11.5px;
+    }
     .rds-banner-dismiss {
       margin-left: auto;
+      width: 24px;
+      height: 24px;
       background: none;
       border: none;
-      color: #64748b;
+      border-radius: 5px;
+      color: var(--text-muted);
       cursor: pointer;
       font-size: 16px;
       line-height: 1;
-      padding: 0 0 0 4px;
+      padding: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
       flex-shrink: 0;
     }
-    .rds-banner-dismiss:hover { color: #94a3b8; }
+    .rds-banner-dismiss:hover {
+      background: var(--bg-elevated);
+      color: var(--text-primary);
+    }
     .rds-banner-actions {
       display: flex;
       gap: 8px;
@@ -342,42 +373,55 @@ function ensureBannerStyles(): void {
       border-radius: 6px;
       font-size: 12px;
       font-weight: 500;
+      font-family: inherit;
       cursor: pointer;
       border: none;
-      transition: opacity 0.15s;
+      transition: background 0.15s, opacity 0.15s;
     }
     .rds-banner-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-    .rds-banner-btn-primary { background: #8b5cf6; color: #fff; }
-    .rds-banner-btn-primary:hover:not(:disabled) { background: #7c3aed; }
-    .rds-banner-btn-ghost {
-      background: rgba(255,255,255,0.06);
-      color: #94a3b8;
-      border: 1px solid rgba(255,255,255,0.08);
+    .rds-banner-btn-primary {
+      background: var(--accent-purple);
+      color: #fff;
     }
-    .rds-banner-btn-ghost:hover:not(:disabled) { background: rgba(255,255,255,0.1); }
+    .rds-banner-btn-primary:hover:not(:disabled) {
+      background: #7c3aed;
+    }
+    .rds-banner-btn-ghost {
+      background: var(--bg-elevated);
+      color: var(--text-secondary);
+      border: 1px solid var(--border);
+    }
+    .rds-banner-btn-ghost:hover:not(:disabled) {
+      background: var(--bg-elevated);
+      color: var(--text-primary);
+      border-color: var(--border-hover, rgba(139,92,246,0.25));
+    }
     .rds-banner-progress-wrap {
-      background: rgba(255,255,255,0.07);
+      background: var(--bg-elevated);
       border-radius: 4px;
       height: 5px;
       overflow: hidden;
     }
     .rds-banner-progress-bar {
       height: 100%;
-      background: #8b5cf6;
+      background: var(--accent-purple);
       border-radius: 4px;
       transition: width 0.3s ease;
     }
     .rds-banner-progress-label {
       font-size: 11px;
-      color: #64748b;
+      color: var(--text-muted);
       text-align: right;
     }
-    .rds-banner-error { color: #f87171; font-size: 11.5px; }
+    .rds-banner-error { color: var(--accent-red); font-size: 11.5px; }
+
+    /* ── Release notes modal ─────────────────────────────────────────── */
     .rds-release-notes-overlay {
       position: fixed;
       inset: 0;
       z-index: 100000;
-      background: rgba(8, 10, 20, 0.72);
+      background: rgba(0, 0, 0, 0.7);
+      backdrop-filter: blur(4px);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -386,10 +430,10 @@ function ensureBannerStyles(): void {
     .rds-release-notes-dialog {
       width: min(760px, 96vw);
       max-height: min(78vh, 760px);
-      background: #141723;
-      border: 1px solid rgba(139, 92, 246, 0.45);
-      border-radius: 12px;
-      box-shadow: 0 24px 56px rgba(0, 0, 0, 0.55);
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
       display: flex;
       flex-direction: column;
       overflow: hidden;
@@ -398,37 +442,57 @@ function ensureBannerStyles(): void {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 14px 16px;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-      color: #f1f5f9;
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
     }
     .rds-release-notes-header h3 {
       margin: 0;
-      font-size: 14px;
+      font-size: 16px;
       font-weight: 600;
-    }
-    .rds-release-notes-close {
-      border: none;
-      background: none;
-      color: #94a3b8;
-      font-size: 20px;
-      line-height: 1;
-      cursor: pointer;
-    }
-    .rds-release-notes-close:hover { color: #e2e8f0; }
-    .rds-release-notes-content {
-      padding: 14px 16px;
-      overflow: auto;
-      color: #dbe3f3;
-      font-size: 12px;
-      line-height: 1.5;
-      background: #10131d;
+      color: var(--text-primary);
       flex: 1;
+      min-width: 0;
     }
-    .rds-release-notes-subtitle {
-      color: #9cb2d3;
-      font-size: 11.5px;
-      margin-bottom: 8px;
+    .rds-release-notes-header-actions {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      flex-shrink: 0;
+      margin-left: 8px;
+    }
+    /* Shared icon-button style — used for both the external-link and close buttons */
+    .rds-release-notes-icon-btn,
+    .rds-release-notes-close {
+      width: 28px;
+      height: 28px;
+      border: none;
+      background: var(--bg-elevated);
+      color: var(--text-muted);
+      border-radius: 6px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      line-height: 1;
+      font-size: 18px;
+      padding: 0;
+      transition: background 0.15s, color 0.15s;
+    }
+    .rds-release-notes-icon-btn:hover,
+    .rds-release-notes-close:hover {
+      background: var(--bg-elevated);
+      color: var(--text-primary);
+      border: 1px solid var(--border-hover, rgba(139,92,246,0.25));
+    }
+    .rds-release-notes-content {
+      padding: 16px 20px;
+      overflow: auto;
+      color: var(--text-secondary);
+      font-size: 12px;
+      line-height: 1.6;
+      background: var(--bg-primary);
+      flex: 1;
     }
     .rds-release-notes-markdown h1,
     .rds-release-notes-markdown h2,
@@ -436,7 +500,7 @@ function ensureBannerStyles(): void {
     .rds-release-notes-markdown h4,
     .rds-release-notes-markdown h5,
     .rds-release-notes-markdown h6 {
-      color: #f3f6ff;
+      color: var(--text-primary);
       margin: 14px 0 8px;
       line-height: 1.3;
       font-weight: 700;
@@ -449,7 +513,7 @@ function ensureBannerStyles(): void {
     .rds-release-notes-markdown h6 { font-size: 13px; }
     .rds-release-notes-markdown p {
       margin: 8px 0;
-      color: #dbe3f3;
+      color: var(--text-secondary);
     }
     .rds-release-notes-markdown ul,
     .rds-release-notes-markdown ol {
@@ -458,30 +522,28 @@ function ensureBannerStyles(): void {
     }
     .rds-release-notes-markdown li {
       margin: 4px 0;
-      color: #dbe3f3;
+      color: var(--text-secondary);
     }
     .rds-release-notes-markdown blockquote {
       margin: 10px 0;
       padding: 6px 12px;
-      border-left: 3px solid rgba(139, 92, 246, 0.75);
-      background: rgba(139, 92, 246, 0.1);
+      border-left: 3px solid var(--accent-purple);
+      background: var(--accent-purple-dim);
       border-radius: 0 6px 6px 0;
     }
     .rds-release-notes-markdown a {
-      color: #9ecbff;
+      color: var(--accent-purple);
       text-decoration: underline;
       text-underline-offset: 2px;
     }
-    .rds-release-notes-markdown a:hover {
-      color: #c6deff;
-    }
+    .rds-release-notes-markdown a:hover { opacity: 0.8; }
     .rds-release-notes-markdown code {
       font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
-      background: rgba(255, 255, 255, 0.08);
+      background: var(--bg-elevated);
       padding: 1px 5px;
       border-radius: 4px;
       font-size: 11px;
-      color: #f4f8ff;
+      color: var(--text-primary);
     }
     .rds-release-notes-code {
       margin: 10px 0;
@@ -489,9 +551,9 @@ function ensureBannerStyles(): void {
       white-space: pre-wrap;
       word-break: break-word;
       border-radius: 8px;
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      background: rgba(6, 8, 14, 0.75);
-      color: #e2e8f0;
+      border: 1px solid var(--border);
+      background: var(--bg-deep);
+      color: var(--text-secondary);
       font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
       font-size: 11.5px;
       line-height: 1.45;
@@ -503,16 +565,8 @@ function ensureBannerStyles(): void {
       font-size: inherit;
       color: inherit;
     }
-    .rds-release-notes-actions {
-      display: flex;
-      justify-content: flex-end;
-      gap: 8px;
-      padding: 12px 16px;
-      border-top: 1px solid rgba(255, 255, 255, 0.08);
-      background: #141723;
-    }
     .rds-release-notes-fallback {
-      color: #94a3b8;
+      color: var(--text-muted);
       font-size: 11.5px;
     }
   `;
@@ -549,8 +603,8 @@ function renderBanner(status: UpdaterStatus): void {
       <div class="rds-banner-header">
         <div class="rds-banner-icon">${iconSvg}</div>
         <div class="rds-banner-text">
-          <div class="rds-banner-title">Update Available</div>
-          <div class="rds-banner-subtitle">Version ${status.version ?? ''} is ready to download.</div>
+          <div class="rds-banner-title">Roku Dev Studio ${status.version ? `v${status.version}` : 'Update'} Available</div>
+          <div class="rds-banner-subtitle">A new version is ready to download.</div>
         </div>
         <button class="rds-banner-dismiss" aria-label="Dismiss update notification">×</button>
       </div>
@@ -592,8 +646,8 @@ function renderBanner(status: UpdaterStatus): void {
       <div class="rds-banner-header">
         <div class="rds-banner-icon">${iconSvg}</div>
         <div class="rds-banner-text">
-          <div class="rds-banner-title">Update Ready</div>
-          <div class="rds-banner-subtitle">Version ${status.version ?? ''} will be installed on restart.</div>
+          <div class="rds-banner-title">Roku Dev Studio ${status.version ? `v${status.version}` : 'Update'} Ready</div>
+          <div class="rds-banner-subtitle">Will be installed on restart.</div>
         </div>
       </div>
       <div class="rds-banner-actions">
@@ -611,13 +665,13 @@ function renderBanner(status: UpdaterStatus): void {
   } else if (status.type === 'error') {
     const msg = status.message ?? 'Update check failed.';
     if (status.needsManualDownload || isMissingReleaseMetadataError(msg)) {
-      const versionText = status.version ? `Version ${status.version} is available.` : 'A new version is available.';
+      const bannerTitle = status.version ? `Roku Dev Studio v${status.version} Available` : 'New Update Available';
       banner.innerHTML = `
         <div class="rds-banner-header">
           <div class="rds-banner-icon">${iconSvg}</div>
           <div class="rds-banner-text">
-            <div class="rds-banner-title">New Update Available</div>
-            <div class="rds-banner-subtitle">${versionText} Please download the latest release to update.</div>
+            <div class="rds-banner-title">${bannerTitle}</div>
+            <div class="rds-banner-subtitle">Please download the latest release to update.</div>
           </div>
           <button class="rds-banner-dismiss" aria-label="Dismiss">×</button>
         </div>

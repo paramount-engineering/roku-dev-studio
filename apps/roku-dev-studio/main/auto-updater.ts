@@ -1,10 +1,10 @@
 /**
  * App auto-update via electron-updater + GitHub Releases.
  *
- * In dev mode the current version is overridden to 1.0.0 so that the existing
- * 1.1.0 GitHub release is surfaced as an available update — without touching
- * package.json. Remove the override block once you no longer need to demo
- * the update flow in development.
+ * In dev mode (`!app.isPackaged`) the current version is pinned to 1.0.0 so
+ * the latest GitHub release is always surfaced as an available update during
+ * local development without touching package.json. In packaged production
+ * builds electron-updater reads the real version from package.json automatically.
  */
 
 import type { App, BrowserWindow, IpcMain } from 'electron';
@@ -65,8 +65,26 @@ export function setupAutoUpdater(
   autoUpdater.autoInstallOnAppQuit = false;
   autoUpdater.allowPrerelease = false;
 
+  // Replace electron-updater's default logger so the verbose 404 stack-trace for a
+  // missing latest-mac.yml is suppressed — we handle that case ourselves and emit a
+  // clean "manual download required" message instead.
+  autoUpdater.logger = {
+    info:  (...args: unknown[]) => mainWarn('[updater]', ...args),
+    warn:  (...args: unknown[]) => mainWarn('[updater]', ...args),
+    error: (...args: unknown[]) => {
+      // Swallow the noisy missing-metadata 404 — our 'error' event handler already
+      // logs a concise warning and surfaces the manual-download banner to the user.
+      const combined = args.map((a) => String((a as any)?.message ?? a ?? '')).join(' ');
+      if (isMissingMetadataUpdaterError({ message: combined })) return;
+      mainError('[updater]', ...args);
+    },
+    debug: () => { /* suppress verbose debug output */ },
+  } as any;
+
   if (!app.isPackaged) {
-    // Dev mode: simulate running on 1.0.0 so the 1.1.0 GitHub release is detected.
+    // Dev mode only: pin the current version to 1.0.0 so a real GitHub release is
+    // detected during local development. In production app.isPackaged is true and
+    // electron-updater uses the real app version from package.json automatically.
     try {
       const { parse } = require('semver');
       (autoUpdater as any).currentVersion = parse('1.0.0');
