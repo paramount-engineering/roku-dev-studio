@@ -23,7 +23,13 @@ import {
   type StructuredConsolePayload
 } from './structured-log-detect.js';
 import { stripAnsiForConsole } from '../telnet/telnet-console-buffer.js';
+import { consoleDisplayText } from './console-display-text.js';
 import { DEFER_HEAVY_LINE_CHARS, MAX_LOG_LINE_CHARS } from './console-render-limits.js';
+
+// Re-export so existing importers can keep pulling `consoleDisplayText` from the
+// parser module; the implementation now lives in the DOM-free
+// `console-display-text.ts` so the main process can share it.
+export { consoleDisplayText } from './console-display-text.js';
 
 export type ConsoleLineParserState = {
   /** Buffer for a `[DEBUG]`-style log-level marker that arrived alone on its
@@ -52,6 +58,27 @@ export type ParsedTelnetEntry = {
  * Returns entries in input order. Empty lines (after pendingLogPrefix
  * processing and ANSI strip) are dropped silently.
  */
+/**
+ * Parse a single raw line into exactly one entry — no blank-line dropping and
+ * no `[DEBUG]`-prefix merging. The windowed Log Viewer needs a strict 1:1
+ * mapping between file line number and rendered row (so the byte index, the
+ * scrollbar, and whole-file search line numbers all agree); the batch parser's
+ * line-collapsing would desync that. A blank line becomes a blank row — which
+ * is exactly what the file contains at that line.
+ */
+export function parseConsoleLine(rawLine: string): ParsedTelnetEntry {
+  const textLine = consoleDisplayText(rawLine);
+  const detected =
+    textLine.length > 0 && textLine.length < DEFER_HEAVY_LINE_CHARS
+      ? detectStructuredConsoleLine(textLine)
+      : [];
+  return {
+    text: textLine,
+    type: classifyLogLine(textLine),
+    ...(detected.length ? { structuredTargets: detected } : {})
+  };
+}
+
 export function parseConsoleLineBatch(
   state: ConsoleLineParserState,
   rawLines: string[]

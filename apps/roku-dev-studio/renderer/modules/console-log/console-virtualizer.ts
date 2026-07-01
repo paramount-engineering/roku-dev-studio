@@ -60,6 +60,11 @@ export type ConsoleVirtualizerOpts = {
   createLineEl: (index: number) => HTMLElement;
   onMount?: (index: number, lineEl: HTMLElement) => void;
   onUnmount?: (index: number, lineEl: HTMLElement) => void;
+  /** Fires after each layout pass with the current visible index range
+   *  (inclusive `start`, exclusive `end`), or `null` when nothing is visible.
+   *  The windowed log-file model wires this to slide its resident byte-window
+   *  to follow the viewport. */
+  onRangeChange?: (start: number, end: number) => void;
 };
 
 export type ConsoleVirtualizerHandle = {
@@ -99,6 +104,14 @@ export type ConsoleVirtualizerHandle = {
   shiftIndicesAfterPrepend: (headCount: number) => void;
   /** Force a relayout pass (e.g. when row content changed shape). */
   measure: () => void;
+  /**
+   * Unmount every currently-mounted row and rebuild the visible window from
+   * scratch via `createLineEl`. Used by the windowed log-file model: rows
+   * whose entries weren't resident yet were mounted as "loading" placeholders,
+   * and once the byte-window load lands they must be rebuilt into real rows.
+   * Cheap — only the ~visible window (+overscan) is ever mounted.
+   */
+  remountVisible: () => void;
   dispose: () => void;
 };
 
@@ -257,6 +270,12 @@ export function createConsoleVirtualizer(opts: ConsoleVirtualizerOpts): ConsoleV
     }
 
     if (pendingMeasure.length > 0) scheduleMeasurePass();
+
+    // Report the current visible range so windowed models can follow the
+    // viewport. `items` is index-ordered, so first/last bound the range.
+    if (opts.onRangeChange && items.length > 0) {
+      opts.onRangeChange(items[0]!.index, items[items.length - 1]!.index + 1);
+    }
   }
 
   // `_didMount` only registers a cleanup hook in `@tanstack/virtual-core` —
@@ -380,6 +399,17 @@ export function createConsoleVirtualizer(opts: ConsoleVirtualizerOpts): ConsoleV
     measure() {
       virt.measure();
       virt._willUpdate();
+      sync();
+    },
+    remountVisible() {
+      // Drop every mounted row (firing onUnmount so per-line find/highlight
+      // bindings are released), then re-run sync() so the visible window is
+      // rebuilt through createLineEl against the now-resident window.
+      for (const [idx, el] of mounted) {
+        opts.onUnmount?.(idx, el);
+        el.remove();
+      }
+      mounted.clear();
       sync();
     },
     dispose() {

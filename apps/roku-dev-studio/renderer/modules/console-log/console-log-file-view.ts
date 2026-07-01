@@ -140,6 +140,10 @@ export type ConsoleLogFileViewHandle = {
    *  container without resorting to querySelector — keeps the placeholder
    *  + container sibling order identical to the cold-start markup. */
   getContainerEl(): HTMLElement;
+  /** Rebuild the visible window from scratch via the row builder. The windowed
+   *  log-file model calls this after a byte-window load lands so "loading"
+   *  placeholder rows are replaced by real content. */
+  remountVisible(): void;
   /** Tear down the underlying virtualizer (detach scroll/resize observers
    *  and remove all mounted rows). The caller still owns `outputEl`. */
   dispose(): void;
@@ -169,6 +173,10 @@ export type MountConsoleLogFileViewOpts = {
    * 350-line flushes.
    */
   buildLineEl?: (entry: ConsoleLogFileEntry, index: number) => HTMLElement;
+  /** Forwarded to the virtualizer: fires after each layout pass with the
+   *  current visible index range. The windowed log-file model uses it to slide
+   *  its resident byte-window to follow the viewport. */
+  onRangeChange?: (start: number, end: number) => void;
   /**
    * Skip the `outputEl.textContent = ''` step at mount. The live Console
    * renders a "Connect to Roku…" placeholder element into `outputEl` before
@@ -245,7 +253,8 @@ export function mountConsoleLogFileView(
       // accumulate ranges pointing to garbage-collected text nodes.
       clearJsonPlusRangesForLine(lineEl);
       opts.onLineUnmount?.(index, lineEl);
-    }
+    },
+    onRangeChange: opts.onRangeChange
   });
 
   // Click delegation lives on `outputEl` (the persistent scroll container),
@@ -324,6 +333,7 @@ export function mountConsoleLogFileView(
     shiftIndicesAfterTrim: (headCount) => virtualizer.shiftIndicesAfterTrim(headCount),
     shiftIndicesAfterPrepend: (headCount) => virtualizer.shiftIndicesAfterPrepend(headCount),
     getContainerEl: () => containerEl,
+    remountVisible: () => virtualizer.remountVisible(),
     dispose: () => virtualizer.dispose()
   };
 }

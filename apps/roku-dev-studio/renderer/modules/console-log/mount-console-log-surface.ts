@@ -26,7 +26,7 @@
  */
 
 import { mountConsoleLogFileView, type ConsoleLogFileEntry, type ConsoleLogFileViewHandle, type MountConsoleLogFileViewOpts } from './console-log-file-view.js';
-import { attachConsoleFindBar, type ConsoleFindBarHandle } from './console-find-bar.js';
+import { attachConsoleFindBar, type ConsoleFindBarHandle, type AttachConsoleFindBarOpts } from './console-find-bar.js';
 import { attachViewerShortcuts } from './console-viewer-shortcuts.js';
 import { buildVisibleLogText } from './console-visible-log-text.js';
 
@@ -76,6 +76,18 @@ export type MountConsoleLogSurfaceOpts = {
    * static Log Viewer has no tail-follow, so it uses the default.
    */
   scrollLineIntoView?: (index: number) => void;
+  /** Forwarded to the view/virtualizer: fires with the current visible index
+   *  range after each layout pass. The windowed Log Viewer wires this to slide
+   *  its resident byte-window. */
+  onRangeChange?: (start: number, end: number) => void;
+  /** Forwarded to the find bar. When present, Find mode delegates to this
+   *  (whole-file search in main) instead of scanning the in-memory model — the
+   *  windowed Log Viewer only holds a slice of the file resident. */
+  remoteSearch?: AttachConsoleFindBarOpts['remoteSearch'];
+  /** Forwarded to the find bar. When present, Filter mode reports its matching
+   *  line-number set here (instead of toggling `filtered-out` on model rows) so
+   *  the windowed viewer can collapse the virtual list to matching lines. */
+  onFilterLinesChange?: AttachConsoleFindBarOpts['onFilterLinesChange'];
 };
 
 export type ConsoleLogSurfaceHandle = {
@@ -111,6 +123,13 @@ export type ConsoleLogSurfaceHandle = {
    * expects the view to stay anchored on what was previously visible).
    */
   notifyPrepended(count: number): number;
+  /** Rebuild the visible window via the row builder — see
+   *  `ConsoleLogFileViewHandle.remountVisible`. The windowed Log Viewer calls
+   *  this after a byte-window load lands. */
+  remountVisible(): void;
+  /** Set the total (view) entry count. The windowed viewer calls this directly
+   *  when Filter mode reshapes the virtual list to matching lines only. */
+  setCount(n: number): void;
   /** Detach the find bar + shortcut listeners and dispose the underlying
    *  virtualizer. The caller still owns `outputEl`. */
   dispose(): void;
@@ -154,7 +173,8 @@ export function mountConsoleLogSurface(opts: MountConsoleLogSurfaceOpts): Consol
     },
     shouldFilterOut: (entry) => findBarHandle?.shouldFilterOut(entry.text) ?? false,
     buildLineEl: opts.buildLineEl,
-    preservePlaceholder: opts.preservePlaceholder
+    preservePlaceholder: opts.preservePlaceholder,
+    onRangeChange: opts.onRangeChange
   });
 
   if (findBarHost) {
@@ -162,6 +182,8 @@ export function mountConsoleLogSurface(opts: MountConsoleLogSurfaceOpts): Consol
       root: findBarHost,
       outputEl,
       model: view,
+      remoteSearch: opts.remoteSearch,
+      onFilterLinesChange: opts.onFilterLinesChange,
       // Find's "scroll into view on next/prev" must use the virtualizer's
       // scroll-to-index path (it mounts the row first, then scrolls) instead
       // of the DOM `scrollIntoView` which assumes the row is already in DOM.
@@ -238,6 +260,12 @@ export function mountConsoleLogSurface(opts: MountConsoleLogSurfaceOpts): Consol
       // this single use case.
       findBarHandle?.refresh();
       return Math.max(0, afterTotal - beforeTotal);
+    },
+    remountVisible() {
+      view.remountVisible();
+    },
+    setCount(n: number) {
+      view.setCount(n);
     },
     dispose() {
       shortcutHandle.dispose();

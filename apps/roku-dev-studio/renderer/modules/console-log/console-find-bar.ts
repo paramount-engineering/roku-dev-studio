@@ -126,6 +126,30 @@ export type AttachConsoleFindBarOpts = {
    * non-virtualized models where every entry is in the DOM).
    */
   scrollLineIntoView?: (lineIndex: number) => void;
+  /**
+   * Whole-file search delegate. When present, **Find mode** calls this instead
+   * of scanning `model.getEntryText` line-by-line — used by the windowed Log
+   * Viewer, which only holds a slice of the file resident in the renderer so an
+   * in-memory scan would miss matches outside the loaded window. Returns hits
+   * (`line` is the model/view index), the matching-line set, and a `truncated`
+   * flag, or `null` when a newer search superseded this one (ignore it).
+   *
+   * Callers that provide this get no incremental cache / append-tail scanning —
+   * each query is one round trip to the search backend.
+   */
+  remoteSearch?: (
+    query: string,
+    options: ConsoleFindOptions
+  ) => Promise<{ hits: FlatHit[]; matchLines: number[]; truncated: boolean } | null>;
+  /**
+   * Filter-mode line-set sink. When present (alongside `remoteSearch`),
+   * **Filter mode** does NOT toggle `filtered-out` classes across model rows;
+   * instead it reports the matching line numbers here (or `null` to clear the
+   * filter) so a windowed consumer can collapse its virtual list to just the
+   * matching lines. The find bar still drives the query/debounce/regex; the
+   * consumer owns how the collapse is rendered.
+   */
+  onFilterLinesChange?: (matchLines: number[] | null) => void;
 };
 
 export function attachConsoleFindBar(opts: AttachConsoleFindBarOpts): ConsoleFindBarHandle | null {
@@ -186,6 +210,16 @@ export function attachConsoleFindBar(opts: AttachConsoleFindBarOpts): ConsoleFin
 
   let searchAbortController: { abort: boolean } | null = null;
   let findTimeout: ReturnType<typeof setTimeout> | undefined;
+
+  /**
+   * Monotonic token for the remote (whole-file) search path. Each new query
+   * bumps it; an in-flight `remoteSearch` promise that resolves against a stale
+   * token is ignored, so fast typing can't paint results for a superseded query.
+   */
+  let remoteSearchSeq = 0;
+  /** True when the last remote result was capped by the backend (more matches
+   *  exist than were returned). Surfaced in the count label. */
+  let remoteTruncated = false;
 
   /**
    * The hit the user most recently asked to navigate to (Next/Prev/typing).
@@ -485,8 +519,13 @@ export function attachConsoleFindBar(opts: AttachConsoleFindBarOpts): ConsoleFin
     // `HIGHLIGHT_PAINT_CAP` matches are visually highlighted; navigation
     // (Next/Prev) still covers all of them. Without this annotation users see
     // "200 of 1200" but only some matches glow, which reads as broken paint.
-    const cappedNote =
-      flatHits.length > HIGHLIGHT_PAINT_CAP ? ' (Highlights capped)' : '';
+    // `remoteTruncated` means the whole-file backend itself capped the result
+    // set — there are more matches than we can navigate.
+    const cappedNote = remoteTruncated
+      ? ' (First matches)'
+      : flatHits.length > HIGHLIGHT_PAINT_CAP
+        ? ' (Highlights capped)'
+        : '';
     const navPart = `${base}${cappedNote}`;
     findCountEl.textContent = scanPercent != null ? `${navPart} (Searching ${scanPercent}%)` : navPart;
   }
@@ -610,7 +649,98 @@ export function attachConsoleFindBar(opts: AttachConsoleFindBarOpts): ConsoleFin
     processChunk();
   }
 
+  /**
+   * Find mode against a whole-file backend (`opts.remoteSearch`). Replaces the
+   * in-renderer chunked scan for consumers (the windowed Log Viewer) that don't
+   * hold the whole file resident. No incremental cache — one round trip per
+   * query, guarded by `remoteSearchSeq` so stale results never paint.
+   */
+  function performRemoteSearch(): void {
+    if (searchAbortController) {
+      searchAbortController.abort = true;
+      searchAbortController = null;
+    }
+    clearAllHighlights();
+    currentHitIndex = -1;
+    currentEntry = null;
+    remoteTruncated = false;
+
+    if (!currentQuery) {
+      flatHits = [];
+      findCountEl.textContent = '';
+      findBarEl.classList.remove('no-results');
+      return;
+    }
+
+    const seq = ++remoteSearchSeq;
+    findCountEl.textContent = 'Searching…';
+    findBarEl.classList.remove('no-results');
+    void opts.remoteSearch!(currentQuery, findOptions).then(
+      (res) => {
+        if (seq !== remoteSearchSeq) return; // a newer query superseded us
+        if (!res) return; // backend reports it was superseded
+        flatHits = res.hits;
+        remoteTruncated = res.truncated;
+        if (flatHits.length === 0) {
+          currentHitIndex = -1;
+          findCountEl.textContent = 'No results';
+          findBarEl.classList.add('no-results');
+          return;
+        }
+        currentHitIndex = 0;
+        rebindAllMountedLines();
+        findBarEl.classList.remove('no-results');
+        highlightCurrentMatch(true);
+        updateFindCountLabel();
+      },
+      () => {
+        if (seq !== remoteSearchSeq) return;
+        findCountEl.textContent = 'Search failed';
+      }
+    );
+  }
+
+  /**
+   * Filter mode against the whole-file backend. Reports the matching line set
+   * to `opts.onFilterLinesChange` (the consumer collapses its virtual list to
+   * those lines) instead of toggling `filtered-out` classes on resident rows.
+   */
+  function performRemoteFilter(): void {
+    remoteTruncated = false;
+    if (!currentQuery) {
+      opts.onFilterLinesChange!(null);
+      findCountEl.textContent = '';
+      findBarEl.classList.remove('no-results');
+      return;
+    }
+    const seq = ++remoteSearchSeq;
+    findCountEl.textContent = 'Filtering…';
+    findBarEl.classList.remove('no-results');
+    void opts.remoteSearch!(currentQuery, findOptions).then(
+      (res) => {
+        if (seq !== remoteSearchSeq) return;
+        if (!res) return;
+        opts.onFilterLinesChange!(res.matchLines);
+        if (res.matchLines.length === 0) {
+          findCountEl.textContent = 'No results';
+          findBarEl.classList.add('no-results');
+        } else {
+          findCountEl.textContent = `${res.matchLines.length.toLocaleString()} lines${res.truncated ? ' (capped)' : ''}`;
+          findBarEl.classList.remove('no-results');
+        }
+      },
+      () => {
+        if (seq !== remoteSearchSeq) return;
+        findCountEl.textContent = 'Filter failed';
+      }
+    );
+  }
+
   function performSearch(): void {
+    if (opts.remoteSearch) {
+      performRemoteSearch();
+      return;
+    }
     if (searchAbortController) {
       searchAbortController.abort = true;
       searchAbortController = null;
@@ -681,7 +811,7 @@ export function attachConsoleFindBar(opts: AttachConsoleFindBarOpts): ConsoleFin
 
     if (currentMode === 'filter') {
       // Switching to / typing in filter mode: drop any leftover find paint, then
-      // recompute filter classes from the model.
+      // recompute the filter.
       if (searchAbortController) {
         searchAbortController.abort = true;
         searchAbortController = null;
@@ -689,12 +819,25 @@ export function attachConsoleFindBar(opts: AttachConsoleFindBarOpts): ConsoleFin
       flatHits = [];
       currentHitIndex = -1;
       clearAllHighlights();
-      applyFilter();
-      findCountEl.textContent = '';
-      findBarEl.classList.remove('no-results');
+      if (opts.onFilterLinesChange && opts.remoteSearch) {
+        // Whole-file filter: the consumer collapses its virtual list to the
+        // matching line set (see `performRemoteFilter`).
+        performRemoteFilter();
+      } else {
+        applyFilter();
+        findCountEl.textContent = '';
+        findBarEl.classList.remove('no-results');
+      }
     } else {
       // Find mode: ensure no rows are filtered, then compute hits + paint.
-      clearFilter();
+      if (opts.onFilterLinesChange) {
+        // Windowed consumer: restore the un-collapsed full-file view (idempotent
+        // when already un-collapsed). No `filtered-out` classes are ever set in
+        // this mode, so the O(viewCount) `clearFilter` sweep is unnecessary.
+        opts.onFilterLinesChange(null);
+      } else {
+        clearFilter();
+      }
       performSearch();
     }
   }
@@ -784,6 +927,10 @@ export function attachConsoleFindBar(opts: AttachConsoleFindBarOpts): ConsoleFin
       searchAbortController.abort = true;
       searchAbortController = null;
     }
+    // Invalidate any in-flight remote (whole-file) search so a late resolve
+    // can't repaint after a reset.
+    remoteSearchSeq++;
+    remoteTruncated = false;
     flatHits = [];
     currentHitIndex = -1;
     currentEntry = null;
