@@ -6777,10 +6777,38 @@
       border-bottom: 1px solid var(--border);
       flex-shrink: 0;
     }
+    .device-hardware-image-modal-title-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      min-width: 0;
+    }
     .device-hardware-image-modal-title {
       font-size: 16px;
       font-weight: 600;
       color: var(--text-primary);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .device-hardware-image-modal-ip-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+    }
+    .device-hardware-image-modal-ip-row .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+      background: var(--accent-green);
+      animation: pulse 2s ease-in-out infinite;
+    }
+    .device-hardware-image-modal-ip-row .device-ip {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      color: var(--text-muted);
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
@@ -10351,39 +10379,45 @@
     }
     
     /* Apps Grid */
-    .installed-apps-grid {
+    /* Shared scroll container holds both the apps grid and the inputs section,
+       so they scroll together and the inputs row is never clipped when space is tight */
+    .apps-scroll-area {
+      overflow-y: auto;
+      overflow-x: hidden;
+    }
+
+    .installed-apps-grid,
+    .installed-inputs-grid {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
       grid-auto-rows: min-content;
       gap: 8px;
       padding: 8px 6px 6px;
-      overflow-y: auto;
-      overflow-x: auto;
       align-items: start;
     }
-    
+
     /* Force scrollbar to be visible when content overflows */
-    .installed-apps-grid::-webkit-scrollbar {
+    .apps-scroll-area::-webkit-scrollbar {
       width: 8px;
     }
-    
-    .installed-apps-grid::-webkit-scrollbar-track {
+
+    .apps-scroll-area::-webkit-scrollbar-track {
       background: var(--bg-secondary);
       border-radius: 4px;
     }
-    
-    .installed-apps-grid::-webkit-scrollbar-thumb {
+
+    .apps-scroll-area::-webkit-scrollbar-thumb {
       background: var(--bg-elevated);
       border-radius: 4px;
     }
-    
-    .installed-apps-grid::-webkit-scrollbar-thumb:hover {
+
+    .apps-scroll-area::-webkit-scrollbar-thumb:hover {
       background: var(--accent-purple);
     }
-    .installed-apps-grid::-webkit-scrollbar-corner {
+    .apps-scroll-area::-webkit-scrollbar-corner {
       background: var(--bg-secondary);
     }
-    
+
     .app-btn-dynamic {
       display: flex;
       flex-direction: column;
@@ -10524,18 +10558,12 @@
     
     /* Responsive heights for smaller screens */
     @media (max-height: 800px) {
-      .installed-apps-grid {
-        max-height: 250px;
-      }
       .output-area:not(.installed-apps-output) {
         max-height: 250px;
       }
     }
-    
+
     @media (max-height: 600px) {
-      .installed-apps-grid {
-        max-height: 200px;
-      }
       .output-area:not(.installed-apps-output) {
         max-height: 200px;
       }
@@ -13647,7 +13675,15 @@
             </div>
             <div class="card-body" style="flex: 1; display: flex; flex-direction: column; min-height: 0; overflow: hidden;">
               <div class="apps-loading" style="display: none;">Loading apps...</div>
-              <div class="installed-apps-grid" style="flex: 1; min-height: 0; max-height: 100%; overflow-y: auto; overflow-x: hidden; align-content: start;"></div>
+              <!-- Apps grid and Inputs share one scroll area so the inputs row is never clipped -->
+              <div class="apps-scroll-area" style="flex: 1; min-height: 0;">
+                <div class="installed-apps-grid" style="align-content: start;"></div>
+                <!-- Inputs (shown only when TV inputs are available) -->
+                <div class="installed-inputs-section" style="display: none; flex-direction: column; border-top: 1px solid var(--border); margin-top: 8px; padding-top: 8px;">
+                  <span class="installed-section-label" style="font-size: 11px; font-weight: 600; letter-spacing: 0.5px; text-transform: uppercase; color: var(--text-muted); padding: 0 6px 4px;">Inputs</span>
+                  <div class="installed-inputs-grid"></div>
+                </div>
+              </div>
               <div class="apps-empty" style="display: none;">No apps found. Click Refresh to load.</div>
             </div>
           </div>

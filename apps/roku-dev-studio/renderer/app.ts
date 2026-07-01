@@ -2896,9 +2896,29 @@ function openDeviceHardwareImageModal(imageSrc, device, opener?: HTMLElement | n
   const header = document.createElement('div');
   header.className = 'device-hardware-image-modal-header';
 
+  const titleGroup = document.createElement('div');
+  titleGroup.className = 'device-hardware-image-modal-title-group';
+
   const titleEl = document.createElement('span');
   titleEl.className = 'device-hardware-image-modal-title';
   titleEl.textContent = device.deviceName || device.modelName || 'Roku device';
+  titleGroup.appendChild(titleEl);
+
+  const ip = typeof device.ip === 'string' ? device.ip.trim() : '';
+  if (ip) {
+    const ipRow = document.createElement('div');
+    ipRow.className = 'device-hardware-image-modal-ip-row';
+    const dot = document.createElement('span');
+    dot.className = 'status-dot';
+    dot.title = 'Connected';
+    dot.setAttribute('aria-label', 'Connected');
+    const ipEl = document.createElement('span');
+    ipEl.className = 'device-ip';
+    ipEl.textContent = ip;
+    ipRow.appendChild(dot);
+    ipRow.appendChild(ipEl);
+    titleGroup.appendChild(ipRow);
+  }
 
   const closeBtn = document.createElement('button');
   closeBtn.type = 'button';
@@ -2914,7 +2934,7 @@ function openDeviceHardwareImageModal(imageSrc, device, opener?: HTMLElement | n
   img.src = imageSrc;
   img.alt = '';
 
-  header.appendChild(titleEl);
+  header.appendChild(titleGroup);
   header.appendChild(closeBtn);
   body.appendChild(img);
   modal.appendChild(header);
@@ -3294,6 +3314,8 @@ function setupApps(panel, device, api) {
   const appsEmpty = panel.querySelector('.apps-empty');
   const refreshBtn = panel.querySelector('.refresh-apps-btn');
   const tvInputsRow = panel.querySelector('.tv-inputs-row');
+  const inputsSection = panel.querySelector('.installed-inputs-section');
+  const inputsGrid = panel.querySelector('.installed-inputs-grid');
   
   if (!appsGrid || !appsLoading || !appsEmpty || !refreshBtn) {
     rendererError('Apps elements not found:', { appsGrid, appsLoading, appsEmpty, refreshBtn });
@@ -3305,85 +3327,141 @@ function setupApps(panel, device, api) {
     tvInputsRow.style.display = isTv ? 'flex' : 'none';
   }
   
+  // TV inputs are exposed by /query/apps with ids prefixed "tvinput." (e.g. tvinput.hdmi1)
+  const isTvInput = (appId) => appId.startsWith('tvinput.');
+
+  // Run async tasks with a bounded number running at once. The Roku device's HTTP
+  // server drops connections when hit with too many concurrent requests, so firing
+  // all ~28 icon fetches at once causes some to fail; a small pool keeps them reliable.
+  async function runWithConcurrency(tasks, limit) {
+    let next = 0;
+    const worker = async () => {
+      while (next < tasks.length) {
+        const task = tasks[next++];
+        await task();
+      }
+    };
+    const workerCount = Math.min(limit, tasks.length);
+    await Promise.all(Array.from({ length: workerCount }, () => worker()));
+  }
+
+  // Build an app/input card button. Returns the button plus a loadIcon() task so
+  // icon fetching can be deferred and run through the concurrency pool above.
+  function createAppButton(appId, appName) {
+    const btn = document.createElement('button');
+    btn.className = 'app-btn-dynamic';
+    btn.dataset.app = appId;
+    btn.title = `${appName}\nID: ${appId}\nClick to launch`;
+
+    setSafeHTML(btn, `
+      <div class="app-icon-wrapper">
+        <img class="app-icon" alt="${escapeHtml(appName)}" style="display: none;">
+        <div class="app-icon-placeholder">${icon('tv', 'icon-lg', 'icon-muted icon-loading')}</div>
+      </div>
+      <div class="app-name-wrapper">
+        <span class="app-name">${escapeHtml(appName)}</span>
+        <span class="app-id">${appId}</span>
+      </div>
+    `);
+
+    const iconImg = btn.querySelector('.app-icon');
+    const placeholder = btn.querySelector('.app-icon-placeholder');
+
+    // Stop the loading animation and show the static fallback icon
+    const showFallbackIcon = () => {
+      if (!(placeholder instanceof HTMLElement)) return;
+      placeholder.style.animation = 'none';
+      placeholder.style.background = 'var(--bg-elevated)';
+      const loadingIcon = placeholder.querySelector('.icon-loading');
+      if (loadingIcon) loadingIcon.classList.remove('icon-loading');
+    };
+
+    // Fetch and apply the icon, retrying transient failures (the device drops
+    // sockets under load, so a fresh attempt usually succeeds).
+    const loadIcon = async () => {
+      const maxAttempts = 3;
+      for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        try {
+          const result = await api.getIcon(appId);
+          if (result && result.success && result.dataUrl) {
+            if (iconImg instanceof HTMLImageElement && placeholder instanceof HTMLElement) {
+              iconImg.src = result.dataUrl;
+              iconImg.style.display = 'block';
+              placeholder.style.display = 'none';
+            }
+            return;
+          }
+        } catch {
+          // fall through to retry
+        }
+        if (attempt < maxAttempts) {
+          await new Promise(resolve => setTimeout(resolve, attempt * 300));
+        }
+      }
+      showFallbackIcon();
+    };
+
+    // Add click handler to launch app
+    btn.addEventListener('click', async () => {
+      btn.style.opacity = '0.5';
+      await api.launch(appId);
+      setTimeout(() => {
+        btn.style.opacity = '1';
+      }, 200);
+    });
+
+    return { btn, loadIcon };
+  }
+
   // Function to load and display installed apps
   async function loadInstalledApps() {
     appsLoading.style.display = 'block';
     appsGrid.innerHTML = '';
+    if (inputsGrid) inputsGrid.innerHTML = '';
+    if (inputsSection) inputsSection.style.display = 'none';
     appsEmpty.style.display = 'none';
-    
+
     try {
       const result = await api.query('/query/apps');
-      
+
       appsLoading.style.display = 'none';
-      
+
       if (result.success && result.data) {
         const appMatches = [...result.data.matchAll(/<app id="([^"]+)"[^>]*>([^<]+)<\/app>/g)];
-        
+
         if (appMatches.length === 0) {
           appsEmpty.style.display = 'block';
           return;
         }
-        
+
         // Sort apps alphabetically by name
         appMatches.sort((a, b) => a[2].localeCompare(b[2]));
-        
+
+        let inputCount = 0;
+        const iconTasks = [];
         for (const match of appMatches) {
           const appId = match[1];
           const appName = decodeHtmlEntities(match[2]);
-          
-          const btn = document.createElement('button');
-          btn.className = 'app-btn-dynamic';
-          btn.dataset.app = appId;
-          btn.title = `${appName}\nID: ${appId}\nClick to launch`;
-          
-          setSafeHTML(btn, `
-            <div class="app-icon-wrapper">
-              <img class="app-icon" alt="${escapeHtml(appName)}" style="display: none;">
-              <div class="app-icon-placeholder">${icon('tv', 'icon-lg', 'icon-muted icon-loading')}</div>
-            </div>
-            <div class="app-name-wrapper">
-              <span class="app-name">${escapeHtml(appName)}</span>
-              <span class="app-id">${appId}</span>
-            </div>
-          `);
-          
-          // Load icon via API adapter
-          const iconImg = btn.querySelector('.app-icon');
-          const placeholder = btn.querySelector('.app-icon-placeholder');
-          
-          api.getIcon(appId).then(result => {
-            if (!(iconImg instanceof HTMLImageElement) || !(placeholder instanceof HTMLElement)) return;
-            if (result.success && result.dataUrl) {
-              iconImg.src = result.dataUrl;
-              iconImg.style.display = 'block';
-              placeholder.style.display = 'none';
-            } else {
-              // Stop animation on error, show static icon
-              placeholder.style.animation = 'none';
-              placeholder.style.background = 'var(--bg-elevated)';
-              const loadingIcon = placeholder.querySelector('.icon-loading');
-              if (loadingIcon) loadingIcon.classList.remove('icon-loading');
-            }
-          }).catch(() => {
-            if (!(placeholder instanceof HTMLElement)) return;
-            // Stop animation on error
-            placeholder.style.animation = 'none';
-            placeholder.style.background = 'var(--bg-elevated)';
-            const loadingIcon = placeholder.querySelector('.icon-loading');
-            if (loadingIcon) loadingIcon.classList.remove('icon-loading');
-          });
-          
-          // Add click handler to launch app
-          btn.addEventListener('click', async () => {
-            btn.style.opacity = '0.5';
-            await api.launch(appId);
-            setTimeout(() => {
-              btn.style.opacity = '1';
-            }, 200);
-          });
-          
-          appsGrid.appendChild(btn);
+          const { btn, loadIcon } = createAppButton(appId, appName);
+          iconTasks.push(loadIcon);
+
+          // Route TV inputs into their own section, apps into the main grid
+          if (isTvInput(appId) && inputsGrid) {
+            inputsGrid.appendChild(btn);
+            inputCount++;
+          } else {
+            appsGrid.appendChild(btn);
+          }
         }
+
+        // Only reveal the Inputs section when inputs are actually available
+        if (inputsSection) {
+          inputsSection.style.display = inputCount > 0 ? 'flex' : 'none';
+        }
+
+        // Fetch icons through a bounded pool so the device isn't overwhelmed.
+        // Not awaited: cards are already visible and icons fill in progressively.
+        runWithConcurrency(iconTasks, 6);
       } else {
         appsEmpty.style.display = 'block';
         setSafeHTML(appsEmpty, '<p>Failed to load apps: ' + escapeHtml(result.error || 'Unknown error') + '</p>');
@@ -3465,16 +3543,29 @@ function setupApps(panel, device, api) {
         };
       });
       
-      // Sort by app name alphabetically
+      // Sort by app name alphabetically, then push TV inputs (tvinput.*) to the bottom
       apps.sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase()));
-      
-      let formatted = 'INSTALLED APPS\n' + '═'.repeat(50) + '\n\n';
-      
-      for (const app of apps) {
+      const isInput = (app) => app.id.startsWith('tvinput.');
+      const regularApps = apps.filter(app => !isInput(app));
+      const inputs = apps.filter(isInput);
+
+      const formatRow = (app) => {
         const versionStr = app.version ? ` (v${app.version})` : '';
-        formatted += `ID: ${app.id.padEnd(12)} │ ${app.name}${versionStr}\n`;
+        return `ID: ${app.id.padEnd(16)} │ ${app.name}${versionStr}\n`;
+      };
+
+      let formatted = 'INSTALLED APPS\n' + '═'.repeat(50) + '\n\n';
+      for (const app of regularApps) {
+        formatted += formatRow(app);
       }
-      
+
+      if (inputs.length > 0) {
+        formatted += '\nINPUTS\n' + '═'.repeat(50) + '\n\n';
+        for (const app of inputs) {
+          formatted += formatRow(app);
+        }
+      }
+
       appsOutput.textContent = formatted || result.data;
     } else {
       appsOutput.textContent = `Error: ${result.error}`;
