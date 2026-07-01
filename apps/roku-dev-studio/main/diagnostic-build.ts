@@ -238,6 +238,8 @@ export function registerDiagnosticIpc(
   if (!isDiagnosticBuild() || ipcRegistered) return;
   ipcRegistered = true;
 
+  // Remove the always-registered fallback handler before installing the real one.
+  ipcMain.removeHandler(IPC.IsDiagnosticBuild);
   ipcMain.handle(IPC.IsDiagnosticBuild, async () => ({ enabled: true }));
 
   ipcMain.handle(IPC.OpenDiagnosticLogFolder, async () => {

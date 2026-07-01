@@ -722,6 +722,11 @@ app.whenReady().then(() => {
 
   setupIpcHandlers(mainWindow, getDeviceInfo, getDeviceId, safeSendToRendererWithFiddleMirror, dialog, Menu, clipboard, app, appState);
 
+  // Always register a fallback so the renderer's isDiagnosticBuild() invoke never
+  // throws "No handler registered for 'is-diagnostic-build'". In diagnostic builds
+  // registerDiagnosticIpc removes this and installs the real handler.
+  ipcMain.handle(IPC.IsDiagnosticBuild, async () => ({ enabled: false }));
+
   if (isDiagnosticBuild()) {
     registerDiagnosticIpc(ipcMain, shell, () => app.getPath('userData'));
     startDiagnosticTelemetry({
