@@ -137,7 +137,7 @@ function setupSystemHandlers(
           title: dialogTitle || 'Save',
           defaultPath: defaultName || `response-${Date.now()}.txt`,
           filters: [
-            { name: 'Text Files', extensions: ['txt', 'json', 'xml', 'log'] },
+            { name: 'Text Files', extensions: ['txt', 'json', 'xml', 'log', 'har'] },
             { name: 'All Files', extensions: ['*'] }
           ]
         });

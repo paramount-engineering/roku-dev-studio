@@ -31,6 +31,7 @@ export function setupScreenshots(
     screenshotBtn,
     copyScreenshotBtn,
     saveScreenshotBtn,
+    clearScreenshotBtn,
     screenshotStatus,
     screenshotImage,
     screenshotPlaceholder,
@@ -59,11 +60,12 @@ export function setupScreenshots(
 
   setDevAppAllowsCapture(false);
   
-  // Show/hide screenshot buttons
+  // Show/hide screenshot buttons (Copy / Download / Clear appear once there's an image)
   function showScreenshotButtons(show: boolean) {
     const display = show ? 'inline-flex' : 'none';
     if (copyScreenshotBtn) copyScreenshotBtn.style.display = display;
     if (saveScreenshotBtn) saveScreenshotBtn.style.display = display;
+    if (clearScreenshotBtn) clearScreenshotBtn.style.display = display;
   }
   
   // Capture screenshot
@@ -131,8 +133,12 @@ export function setupScreenshots(
         });
         if (!blob) throw new Error('Could not encode screenshot');
         await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
-        copyScreenshotBtn.textContent = '✓ Copied!';
-        setTimeout(() => { setSafeHTML(copyScreenshotBtn, icon('copy', 'icon-xs') + ' Copy'); }, 2000);
+        copyScreenshotBtn.title = 'Copied!';
+        setSafeHTML(copyScreenshotBtn, icon('check', 'icon-xs'));
+        setTimeout(() => {
+          copyScreenshotBtn.title = 'Copy screenshot';
+          setSafeHTML(copyScreenshotBtn, icon('copy', 'icon-xs'));
+        }, 2000);
       } catch (error: unknown) {
         showStatusMessage(screenshotStatus, 'Failed to copy: ' + errMessage(error), 'error');
       }
@@ -153,6 +159,19 @@ export function setupScreenshots(
       } catch (error: unknown) {
         showStatusMessage(screenshotStatus, '✗ ' + errMessage(error), 'error');
       }
+    });
+  }
+
+  // Clear screenshot — drop the current image and return to the placeholder.
+  if (clearScreenshotBtn) {
+    clearScreenshotBtn.addEventListener('click', () => {
+      currentScreenshotUrl = '';
+      currentScreenshotTempFile = '';
+      screenshotImage.removeAttribute('src');
+      screenshotImage.style.display = 'none';
+      if (screenshotPlaceholder) screenshotPlaceholder.style.display = '';
+      screenshotStatus.innerHTML = '';
+      showScreenshotButtons(false);
     });
   }
 

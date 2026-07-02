@@ -44,6 +44,7 @@ export function setupDevApp(panel: DevicePanelRoot, device: DevAppDevice, api: D
   const screenshotBtn = panel.querySelector('.screenshot-btn');
   const copyScreenshotBtn = panel.querySelector('.copy-screenshot-btn');
   const saveScreenshotBtn = panel.querySelector('.save-screenshot-btn');
+  const clearScreenshotBtn = panel.querySelector('.clear-screenshot-btn');
   const screenshotStatus = panel.querySelector('.screenshot-status');
   const screenshotImage = panel.querySelector('.screenshot-image');
   const screenshotPlaceholder = panel.querySelector('.screenshot-placeholder');
@@ -91,6 +92,7 @@ export function setupDevApp(panel: DevicePanelRoot, device: DevAppDevice, api: D
       screenshotBtn: screenshotBtn instanceof HTMLButtonElement ? screenshotBtn : null,
       copyScreenshotBtn: copyScreenshotBtn instanceof HTMLButtonElement ? copyScreenshotBtn : null,
       saveScreenshotBtn: saveScreenshotBtn instanceof HTMLButtonElement ? saveScreenshotBtn : null,
+      clearScreenshotBtn: clearScreenshotBtn instanceof HTMLButtonElement ? clearScreenshotBtn : null,
       screenshotStatus,
       screenshotImage,
       screenshotPlaceholder: screenshotPlaceholder instanceof HTMLElement ? screenshotPlaceholder : null,

@@ -73,6 +73,7 @@ export interface ScreenshotElements {
   screenshotBtn: HTMLButtonElement | null;
   copyScreenshotBtn: HTMLButtonElement | null;
   saveScreenshotBtn: HTMLButtonElement | null;
+  clearScreenshotBtn: HTMLButtonElement | null;
   screenshotStatus: HTMLElement;
   screenshotImage: HTMLImageElement;
   screenshotPlaceholder: HTMLElement | null;
