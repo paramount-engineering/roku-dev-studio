@@ -23,7 +23,15 @@ import { openConsoleUrlViewer } from '../../modules/console-log/console-url-moda
 import { openConsoleStructuredViewer } from '../../modules/console-log/console-structured-view-modal.js';
 import { getEmbeddedStructuredPayload } from './network-embedded-structured.js';
 import { openTrafficRulesModal } from './traffic-rules-modal.js';
-import { buildCurlCommand, buildHarArchive, isExportableEvent } from './network-export.js';
+import {
+  buildCurlCommand,
+  buildHarArchive,
+  buildHarArchiveAll,
+  buildNetworkSessionFile,
+  isExportableEvent,
+  NETWORK_SESSION_FILE_EXT
+} from './network-export.js';
+import { showToast } from '../../modules/utils/ui.js';
 import { openHotspotCaptureSetupModal } from './hotspot-setup-modal.js';
 import { showPortConflictModal, hidePortConflictModal } from './port-conflict-modal.js';
 import {
@@ -79,6 +87,9 @@ type NetworkTabState = {
   watchIps: Set<string>;
   captureError: string | null;
   captureActive: boolean;
+  /** Raw frames retained for pcap export (mirrors the main-process export guard). 0 ⇒ pcap export
+   *  has nothing to write, so the pcap download option is hidden. */
+  rawPacketsAvailable: number;
   hotspotInterfaceDetected?: boolean;
   platform?: string;
   captureToolAvailable?: boolean;
@@ -244,6 +255,7 @@ export function setupNetworkTab(
   clearEvents: () => void;
   setCaptureStatus: (status: {
     packetsCaptured?: number;
+    rawPacketsAvailable?: number;
     captureActive?: boolean;
     hotspotInterfaceDetected?: boolean;
     lastError?: string;
@@ -276,6 +288,7 @@ export function setupNetworkTab(
     watchIps: new Set(device.ip ? [device.ip] : []),
     captureError: null,
     captureActive: false,
+    rawPacketsAvailable: 0,
     mitmEnabled: false,
     mitmActive: false,
     mitmListenAddress: undefined,
@@ -393,7 +406,10 @@ export function setupNetworkTab(
   const sidebarOptionsEl = panel.querySelector('.ni-sidebar-options') as HTMLElement | null;
   const groupToggleBtn = panel.querySelector('[data-ni-toggle-all-groups]') as HTMLButtonElement | null;
   const clearBtn = panel.querySelector('[data-ni-clear]');
-  const saveBtn = panel.querySelector('[data-ni-save-pcap]');
+  const downloadMenuEl = panel.querySelector('[data-ni-download-menu]') as HTMLElement | null;
+  const downloadToggleEl = panel.querySelector('[data-ni-download-toggle]') as HTMLElement | null;
+  const downloadDropdownEl = panel.querySelector('[data-ni-download-dropdown]') as HTMLElement | null;
+  const downloadPcapItemEl = panel.querySelector('[data-ni-download-item="pcap"]') as HTMLElement | null;
   const configureBtn = panel.querySelector('[data-ni-configure]');
   const setupBadgeBtn = panel.querySelector('[data-ni-setup-badge]') as HTMLElement | null;
   const setupBadgeLabel = panel.querySelector('[data-ni-setup-badge-label]') as HTMLElement | null;
@@ -1384,6 +1400,125 @@ export function setupNetworkTab(
     copyCaretEl.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
   }
 
+  function closeDownloadDropdown(): void {
+    if (downloadDropdownEl && !downloadDropdownEl.hidden) downloadDropdownEl.hidden = true;
+    downloadToggleEl?.setAttribute('aria-expanded', 'false');
+  }
+
+  function toggleDownloadDropdown(): void {
+    if (!downloadDropdownEl || !downloadToggleEl) return;
+    const willOpen = downloadDropdownEl.hidden;
+    downloadDropdownEl.hidden = !willOpen;
+    downloadToggleEl.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+  }
+
+  /** Raw pcap export only has data when the packet-capture engine is running and has captured
+   *  frames. MITM-proxied sessions (device off the hotspot) produce no raw frames, so hide the
+   *  pcap option entirely rather than offer a download that would come back empty. */
+  function updateDownloadOptions(): void {
+    if (!downloadPcapItemEl) return;
+    downloadPcapItemEl.hidden = state.rawPacketsAvailable <= 0;
+  }
+
+  /**
+   * Fetch the full detail (headers + bodies) for a set of list summaries without disturbing the
+   * pane's `selectedDetail`. Exports need the complete payload, but the list only holds lightweight
+   * summaries; this pulls each event's detail from the on-disk store (bounded concurrency) and
+   * falls back to the summary when detail was never stored / has been evicted.
+   */
+  async function loadEventsWithDetail(summaries: ParsedNetworkEvent[]): Promise<ParsedNetworkEvent[]> {
+    const api = window.roku;
+    const getDetail = api?.networkInspectorGetEventDetail;
+    if (!getDetail) return summaries;
+    const out = new Array<ParsedNetworkEvent>(summaries.length);
+    const CONCURRENCY = 8;
+    let cursor = 0;
+    async function worker(): Promise<void> {
+      while (cursor < summaries.length) {
+        const i = cursor++;
+        const summary = summaries[i];
+        if (!summary.detailAvailable) {
+          out[i] = summary;
+          continue;
+        }
+        try {
+          const res = await getDetail(summary.id);
+          const full = (res?.event ?? null) as ParsedNetworkEvent | null;
+          out[i] = full || summary;
+        } catch {
+          out[i] = summary;
+        }
+      }
+    }
+    await Promise.all(Array.from({ length: Math.min(CONCURRENCY, summaries.length) }, () => worker()));
+    return out;
+  }
+
+  /** Timestamped default filename stem scoped to the watched device, e.g. `network-192-168-1-81`. */
+  function exportFileStem(): string {
+    const ips = watchDeviceIps();
+    const primary = ips.find((ip) => !ip.endsWith('.1')) || ips[0];
+    const namePart = primary ? primary.replace(/\./g, '-') : 'session';
+    return `network-${namePart}-${Date.now()}`;
+  }
+
+  /** Save the raw packet capture (.pcap). Only yields data when hotspot frames were captured;
+   *  MITM-proxied sessions have no raw frames, so surface that instead of failing silently. */
+  async function exportPcap(): Promise<void> {
+    const api = window.roku;
+    if (!api?.networkInspectorExportPcap) return;
+    // Scope the pcap to this device's traffic only — capture stays whole-hotspot, but the
+    // download filters to the watched device IPs (device + its hotspot lease).
+    const ips = watchDeviceIps();
+    try {
+      const res = await api.networkInspectorExportPcap(ips.length > 0 ? ips : undefined);
+      if (res?.success) {
+        const n = typeof res.packetsWritten === 'number' ? res.packetsWritten : 0;
+        showToast(`Saved ${n} packet${n === 1 ? '' : 's'} to ${res.filePath || 'file'}.`, 'success');
+      } else if (res?.error && res.error !== 'cancelled') {
+        showToast(res.error, 'error');
+      }
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Failed to save packet capture.', 'error');
+    }
+  }
+
+  /** Export every request currently shown in the list (respecting the filter). `kind` selects the
+   *  interop HAR archive or the native, fully re-openable `.rdsnet.json` session bundle. */
+  async function exportSessions(kind: 'har' | 'bundle'): Promise<void> {
+    const api = window.roku;
+    if (!api?.saveTextFile) return;
+    const sessions = filteredSessions();
+    if (sessions.length === 0) {
+      showToast('No requests to export.', 'warning');
+      return;
+    }
+    if (kind === 'har' && !sessions.some((s) => isExportableEvent(s.event))) {
+      showToast('No HTTP transactions to export as HAR.', 'warning');
+      return;
+    }
+    try {
+      const events = await loadEventsWithDetail(sessions.map((s) => s.event));
+      const content =
+        kind === 'har'
+          ? buildHarArchiveAll(events)
+          : buildNetworkSessionFile(events, { deviceIps: watchDeviceIps() });
+      const stem = exportFileStem();
+      const res = await api.saveTextFile({
+        content,
+        defaultName: kind === 'har' ? `${stem}.har` : `${stem}.${NETWORK_SESSION_FILE_EXT}`,
+        dialogTitle: kind === 'har' ? 'Export sessions as HAR' : 'Export network session'
+      });
+      if (res?.success) {
+        showToast(`Exported ${events.length} request${events.length === 1 ? '' : 's'} to ${res.filePath || 'file'}.`, 'success');
+      } else if (res?.error && res.error !== 'Save cancelled') {
+        showToast(res.error, 'error');
+      }
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Failed to export session.', 'error');
+    }
+  }
+
   function updateSessionCount(): void {
     if (!(sessionCountEl instanceof HTMLElement)) return;
     const captured = buildSessionsCached(false).length;
@@ -1653,6 +1788,7 @@ export function setupNetworkTab(
 
   function applyStatusFields(s: {
     packetsCaptured?: number;
+    rawPacketsAvailable?: number;
     captureActive?: boolean;
     hotspotInterfaceDetected?: boolean;
     lastError?: string;
@@ -1690,12 +1826,14 @@ export function setupNetworkTab(
       state.captureError = null;
       state.captureActive = !!s.captureActive;
     }
+    if (typeof s.rawPacketsAvailable === 'number') state.rawPacketsAvailable = s.rawPacketsAvailable;
     // Capture state gates the "Proxied" filter's relevance — refresh its visibility and repaint the
     // list (the effective filter changes) when it flips, even if no new events arrived.
     if (prevCaptureActive !== state.captureActive) {
       syncSidebarOptions();
       scheduleSessionListPaint({ force: true });
     }
+    updateDownloadOptions();
     state.mitmEnabled = !!s.mitmEnabled;
     state.mitmActive = !!s.mitmActive;
     state.mitmListenAddress =
@@ -2075,14 +2213,41 @@ export function setupNetworkTab(
     })();
   }, listenerOpts);
 
-  saveBtn?.addEventListener('click', async () => {
-    const api = window.roku;
-    if (!api?.networkInspectorExportPcap) return;
-    // Scope the pcap to this device's traffic only — capture stays whole-hotspot, but the
-    // download filters to the watched device IPs (device + its hotspot lease).
-    const ips = watchDeviceIps();
-    await api.networkInspectorExportPcap(ips.length > 0 ? ips : undefined);
+  downloadToggleEl?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    toggleDownloadDropdown();
   }, listenerOpts);
+
+  downloadDropdownEl?.addEventListener('click', (e) => {
+    const item = (e.target as HTMLElement | null)?.closest('[data-ni-download-item]') as HTMLElement | null;
+    const kind = item?.dataset.niDownloadItem;
+    if (!kind) return;
+    closeDownloadDropdown();
+    if (kind === 'pcap') void exportPcap();
+    else if (kind === 'har' || kind === 'bundle') void exportSessions(kind);
+  }, listenerOpts);
+
+  // Dismiss the download dropdown on an outside click or Escape, like a normal menu.
+  document.addEventListener(
+    'click',
+    (e) => {
+      if (!downloadMenuEl || downloadDropdownEl?.hidden) return;
+      const t = e.target as Node | null;
+      if (t && downloadMenuEl.contains(t)) return;
+      closeDownloadDropdown();
+    },
+    { signal: listenerAc.signal }
+  );
+  document.addEventListener(
+    'keydown',
+    (e) => {
+      if (e.key === 'Escape' && downloadDropdownEl && !downloadDropdownEl.hidden) {
+        closeDownloadDropdown();
+        if (downloadToggleEl instanceof HTMLElement) downloadToggleEl.focus();
+      }
+    },
+    { signal: listenerAc.signal }
+  );
 
   configureBtn?.addEventListener('click', () => {
     const deviceIp = state.hotspotIp || state.deviceIp;
@@ -2158,6 +2323,7 @@ export function setupNetworkTab(
   updateCaptureButton();
   updateSetupBadge();
   updatePortBadge();
+  updateDownloadOptions();
   syncDetailLayout();
   syncBodyWrap();
   syncFilterClear();
@@ -2222,11 +2388,22 @@ export function setupNetworkTab(
         void loadBufferedForTab();
         if (state.capturing) startPolling();
       } else {
-        // Tab fully hidden (e.g. device left hotspot / panel deactivated): it's no longer the
-        // foreground Network tab, so drop the modal if this instance owned it.
+        // Tab fully hidden (e.g. Network Inspector disabled / device left hotspot / panel
+        // deactivated): it's no longer the foreground Network tab, so drop the modal if this
+        // instance owned it.
         if (networkTabForeground) hidePortConflictModal();
         networkTabForeground = false;
         stopPolling();
+        // If the (now hidden) Network tab was the active section, its content pane would keep
+        // showing. Hide the pane and fall back to the Remote tab so the panel doesn't strand the
+        // user on a section whose selector button just disappeared.
+        const wasActive = tabBtn.classList.contains('active') || tabContent.classList.contains('active');
+        tabContent.classList.remove('active');
+        tabContent.style.display = 'none';
+        if (wasActive) {
+          const remoteBtn = panel.querySelector('.inner-tab[data-inner-tab="remote"]');
+          if (remoteBtn instanceof HTMLElement) remoteBtn.click();
+        }
       }
     },
     appendEvents(events: ParsedNetworkEvent[]) {
@@ -2314,8 +2491,12 @@ export function setupNetworkTab(
       // Re-evaluate the setup badge on every (non-error) status push too, so it clears live once
       // capture recovers — e.g. after Npcap is installed and capture starts, or macOS BPF access is
       // granted — without waiting for a tab re-show. The error branch above already does this.
+      if (typeof status.rawPacketsAvailable === 'number') {
+        state.rawPacketsAvailable = status.rawPacketsAvailable;
+      }
       updateSetupBadge();
       updateCaptureButton();
+      updateDownloadOptions();
       if (hasCaptureError && state.events.length === 0) scheduleSessionListPaint({ force: true });
     },
     loadBufferedEvents(events) {

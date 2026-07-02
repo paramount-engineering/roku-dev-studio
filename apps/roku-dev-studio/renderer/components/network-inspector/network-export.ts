@@ -82,8 +82,8 @@ function harQueryString(url: string): Array<{ name: string; value: string }> {
   }
 }
 
-/** Build a single-entry HAR 1.2 archive (stringified) for the transaction. */
-export function buildHarArchive(ev: ParsedNetworkEvent): string {
+/** Build one HAR 1.2 entry object for a single transaction (shared by single- and multi-entry export). */
+function buildHarEntry(ev: ParsedNetworkEvent): Record<string, unknown> {
   const req = ev.httpRequest;
   const res = ev.httpResponse;
   const url = absoluteUrl(ev);
@@ -99,7 +99,7 @@ export function buildHarArchive(ev: ParsedNetworkEvent): string {
         }
       : undefined;
 
-  const entry = {
+  return {
     startedDateTime: ev.timestamp || new Date().toISOString(),
     time: typeof ev.durationMs === 'number' && ev.durationMs >= 0 ? ev.durationMs : 0,
     request: {
@@ -137,13 +137,72 @@ export function buildHarArchive(ev: ParsedNetworkEvent): string {
     },
     ...(ev.deviceIp ? { serverIPAddress: ev.destIp, comment: `device ${ev.deviceIp}` } : {})
   };
+}
 
+function harLog(entries: Array<Record<string, unknown>>): string {
   const har = {
     log: {
       version: '1.2',
       creator: { name: 'Roku Dev Studio — Network Inspector', version: '1.0' },
-      entries: [entry]
+      entries
     }
   };
   return JSON.stringify(har, null, 2);
+}
+
+/** Build a single-entry HAR 1.2 archive (stringified) for the transaction. */
+export function buildHarArchive(ev: ParsedNetworkEvent): string {
+  return harLog([buildHarEntry(ev)]);
+}
+
+/**
+ * Build a whole-session HAR 1.2 archive from every exportable HTTP transaction in `events`
+ * (order preserved). Non-HTTP events (DNS/TLS/TCP) carry no request and are skipped — HAR is an
+ * HTTP-only format. Use {@link buildNetworkSessionFile} to capture those too.
+ */
+export function buildHarArchiveAll(events: ParsedNetworkEvent[]): string {
+  const entries = events.filter(isExportableEvent).map((ev) => buildHarEntry(ev));
+  return harLog(entries);
+}
+
+/** Bumped when the on-disk shape of a saved session changes in a way the viewer must branch on. */
+export const NETWORK_SESSION_FILE_VERSION = 1;
+
+/** File extension (without dot) for the native, fully re-openable session bundle. */
+export const NETWORK_SESSION_FILE_EXT = 'rds-network-inspector.json';
+
+export type NetworkSessionFile = {
+  format: 'roku-dev-studio-network-session';
+  version: number;
+  createdAt: string;
+  creator: { name: string; version: string };
+  deviceIps: string[];
+  eventCount: number;
+  /** Full parsed events with headers/bodies inlined — feed straight to `buildSessions()`. */
+  events: ParsedNetworkEvent[];
+};
+
+/**
+ * Serialize a whole capture (all event kinds, full headers/bodies) into the native `.rdsnet.json`
+ * bundle. Unlike HAR this preserves DNS/TLS/TCP rows and the MITM/decrypted flags, so the file
+ * re-hydrates the exact Network Inspector UI when reopened. Callers must have loaded each event's
+ * detail first so bodies are present.
+ */
+export function buildNetworkSessionFile(
+  events: ParsedNetworkEvent[],
+  meta?: { deviceIps?: string[]; createdAt?: string }
+): string {
+  const deviceIps = Array.from(
+    new Set((meta?.deviceIps || events.map((e) => e.deviceIp)).filter((ip): ip is string => !!ip))
+  );
+  const bundle: NetworkSessionFile = {
+    format: 'roku-dev-studio-network-session',
+    version: NETWORK_SESSION_FILE_VERSION,
+    createdAt: meta?.createdAt || new Date().toISOString(),
+    creator: { name: 'Roku Dev Studio — Network Inspector', version: '1.0' },
+    deviceIps,
+    eventCount: events.length,
+    events
+  };
+  return JSON.stringify(bundle, null, 2);
 }

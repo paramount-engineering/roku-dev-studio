@@ -527,6 +527,10 @@ export class NetworkInspectorService {
       connectedClients: Array.from(this.clients.values()),
       matchedSerials: Array.from(this.matchedSerials),
       packetsCaptured: this.capture.getPacketsCaptured(),
+      rawPacketsAvailable: Array.from(this.rawPacketsByDevice.values()).reduce(
+        (sum, frames) => sum + frames.length,
+        0
+      ),
       packetsDropped: 0,
       eventsBuffered: this.eventBuffer.length,
       lastError: this.lastError,

@@ -176,6 +176,13 @@ export type NetworkInspectorStatus = {
   connectedClients: HotspotClientDevice[];
   matchedSerials: string[];
   packetsCaptured: number;
+  /**
+   * Raw frames actually retained for pcap export (sum of the per-device buckets). Unlike
+   * `packetsCaptured` (the engine's total frame counter) this is 0 whenever `exportPcap` would have
+   * nothing to write — e.g. MITM-proxied sessions where the device never appears on the capture
+   * interface — so the renderer can hide the pcap download when it isn't available.
+   */
+  rawPacketsAvailable: number;
   packetsDropped: number;
   eventsBuffered: number;
   lastError?: string;
