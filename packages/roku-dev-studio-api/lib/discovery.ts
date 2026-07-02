@@ -127,6 +127,9 @@ function ssdpDiscover(opts: SsdpDiscoverOpts = {}) {
     );
 
     socket.on('message', async (msg, rinfo) => {
+      // Discovery may already be finished (timeout / early-finish closed the socket and
+      // resolved the promise). Don't start new work for late datagrams.
+      if (resolved) return;
       const response = msg.toString();
       log('Received SSDP response from: ' + rinfo.address);
 
@@ -142,6 +145,11 @@ function ssdpDiscover(opts: SsdpDiscoverOpts = {}) {
           fetchDeviceInfo(ip, { includeSameSubnet: true }),
           getDeviceImageUrl(ip, { port: ecpPort }).catch(() => null)
         ]);
+
+        // fetchDeviceInfo can take seconds; the discovery window may have closed while we
+        // awaited. If so, drop this device rather than mutate an already-resolved result
+        // (which would fire onDeviceFound for a device missing from the returned array).
+        if (resolved) return;
 
         const deviceId = getDeviceId(deviceInfo) || ip;
         const existingDevice = devices.get(deviceId);

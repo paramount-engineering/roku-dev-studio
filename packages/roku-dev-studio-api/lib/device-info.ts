@@ -99,7 +99,9 @@ function isIpOnSameSubnet(deviceIp) {
   if (!deviceIp || typeof deviceIp !== 'string') return false;
   const interfaces = os.networkInterfaces();
   for (const name of Object.keys(interfaces)) {
-    for (const iface of interfaces[name]) {
+    // os.networkInterfaces() can yield undefined for a named entry; guard like the
+    // discovery.ts call sites so a missing interface doesn't throw "not iterable".
+    for (const iface of interfaces[name] || []) {
       if (iface.internal || iface.family !== 'IPv4') continue;
       const addr = iface.address;
       const parts = addr.split('.').map(Number);

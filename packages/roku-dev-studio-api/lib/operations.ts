@@ -835,8 +835,13 @@ const SCAN_DEVICES: RokuOp<
   },
   execute: async (p) => {
     const timeoutMs = typeof p.timeoutMs === 'number' ? p.timeoutMs : 4000;
-    const ssdp = await ssdpDiscover({ timeoutMs });
-    const subnet = p.includeSubnetScan ? await subnetScan({ timeoutMs }) : [];
+    // ssdpDiscover reads `timeout` (overall discovery window); passing `timeoutMs`
+    // was a dead option (the knob had no effect). subnetScan reads a *per-host*
+    // `requestTimeout` (default 500ms) — deliberately NOT wired to the overall
+    // timeoutMs, since applying a multi-second value per host would make a /24 sweep
+    // take minutes.
+    const ssdp = await ssdpDiscover({ timeout: timeoutMs });
+    const subnet = p.includeSubnetScan ? await subnetScan({}) : [];
     return { ssdp, subnet };
   }
 };
