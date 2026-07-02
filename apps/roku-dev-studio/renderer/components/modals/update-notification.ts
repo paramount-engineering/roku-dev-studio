@@ -18,6 +18,7 @@ interface UpdaterStatus {
 }
 
 const BANNER_ID = 'rds-update-banner';
+const BANNER_CLASS = 'rds-update-banner';
 const LATEST_RELEASE_URL = 'https://github.com/paramount-engineering/roku-dev-studio/releases/latest';
 const RELEASE_NOTES_MODAL_ID = 'rds-release-notes-modal';
 
@@ -28,6 +29,9 @@ type LatestReleaseInfo = {
 };
 
 let cachedLatestReleaseInfo: LatestReleaseInfo | null = null;
+// In-flight fetch so a prefetch (when the banner appears) and a click-open share
+// one request, and so the modal can await the same promise instead of re-fetching.
+let latestReleaseInfoPromise: Promise<LatestReleaseInfo> | null = null;
 
 function isMissingReleaseMetadataError(message: string): boolean {
   return /latest-mac\.yml|release artifacts|cannot find\s+latest/i.test(message);
@@ -191,22 +195,37 @@ function renderReleaseNotesBody(body: string): string {
   return `<div class="rds-release-notes-markdown">${out.join('')}</div>`;
 }
 
-async function fetchLatestReleaseInfo(): Promise<LatestReleaseInfo> {
-  if (cachedLatestReleaseInfo) return cachedLatestReleaseInfo;
-  const updater = (window as any).rdsUpdater;
-  if (!updater?.getLatestReleaseInfo) throw new Error('Updater release API unavailable');
-  const result = await updater.getLatestReleaseInfo();
-  if (!result?.success || !result?.info) {
-    throw new Error(String(result?.error || 'Failed to load release notes'));
-  }
-  const json = result.info;
-  const info: LatestReleaseInfo = {
-    title: String(json?.title || 'Latest Release'),
-    body: String(json?.body || ''),
-    htmlUrl: String(json?.htmlUrl || LATEST_RELEASE_URL)
-  };
-  cachedLatestReleaseInfo = info;
-  return info;
+function fetchLatestReleaseInfo(): Promise<LatestReleaseInfo> {
+  if (cachedLatestReleaseInfo) return Promise.resolve(cachedLatestReleaseInfo);
+  if (latestReleaseInfoPromise) return latestReleaseInfoPromise;
+
+  latestReleaseInfoPromise = (async () => {
+    const updater = (window as any).rdsUpdater;
+    if (!updater?.getLatestReleaseInfo) throw new Error('Updater release API unavailable');
+    const result = await updater.getLatestReleaseInfo();
+    if (!result?.success || !result?.info) {
+      throw new Error(String(result?.error || 'Failed to load release notes'));
+    }
+    const json = result.info;
+    const info: LatestReleaseInfo = {
+      title: String(json?.title || 'Latest Release'),
+      body: String(json?.body || ''),
+      htmlUrl: String(json?.htmlUrl || LATEST_RELEASE_URL)
+    };
+    cachedLatestReleaseInfo = info;
+    return info;
+  })();
+  // Drop the memo on failure so a later open can retry the request.
+  latestReleaseInfoPromise.catch(() => {
+    latestReleaseInfoPromise = null;
+  });
+  return latestReleaseInfoPromise;
+}
+
+/** Warm the cache in the background (e.g. when the update banner appears) so the
+ *  Release Notes modal opens fully populated instead of empty-then-fill. */
+function prefetchLatestReleaseInfo(): void {
+  void fetchLatestReleaseInfo().catch(() => undefined);
 }
 
 function removeReleaseNotesModal(): void {
@@ -234,7 +253,7 @@ function showReleaseNotesModal(): void {
           <button type="button" class="rds-release-notes-close" aria-label="Close">×</button>
         </div>
       </div>
-      <div class="rds-release-notes-content" id="rdsReleaseNotesContent">Loading latest release notes...</div>
+      <div class="rds-release-notes-content" id="rdsReleaseNotesContent"></div>
     </div>`;
 
   document.body.appendChild(modal);
@@ -249,19 +268,32 @@ function showReleaseNotesModal(): void {
   });
 
   const content = document.getElementById('rdsReleaseNotesContent');
-  fetchLatestReleaseInfo().then((info) => {
-    if (!content) return;
+
+  const applyInfo = (info: LatestReleaseInfo) => {
     // Update the modal heading to "v1.1.0 · Release Notes" once we know the version.
     const titleEl = document.getElementById('rdsReleaseNotesTitle');
     if (titleEl) titleEl.textContent = `${info.title} · Release Notes`;
-    content.innerHTML = renderReleaseNotesBody(info.body);
+    if (content) content.innerHTML = renderReleaseNotesBody(info.body);
     const openBtn = document.getElementById('rdsReleaseNotesOpenPage') as HTMLButtonElement | null;
     if (openBtn) {
       openBtn.onclick = () => {
         (window as any).roku?.openExternal?.(info.htmlUrl || LATEST_RELEASE_URL).catch(() => undefined);
       };
     }
-  }).catch((err) => {
+  };
+
+  // Already fetched (usually prefetched when the banner appeared): render inline so
+  // the modal opens fully populated with no empty flash.
+  if (cachedLatestReleaseInfo) {
+    applyInfo(cachedLatestReleaseInfo);
+    return;
+  }
+
+  // Cold open: show a centered spinner (not bare text) while the request resolves.
+  if (content) {
+    content.innerHTML = `<div class="rds-release-notes-loading"><span class="rds-release-notes-spinner" aria-hidden="true"></span>Loading release notes…</div>`;
+  }
+  fetchLatestReleaseInfo().then(applyInfo).catch((err) => {
     if (!content) return;
     content.innerHTML = `
       <p>Could not load release notes right now.</p>
@@ -367,6 +399,7 @@ function ensureBannerStyles(): void {
       display: flex;
       gap: 8px;
       justify-content: flex-end;
+      flex-wrap: wrap;
     }
     .rds-banner-btn {
       padding: 5px 14px;
@@ -569,15 +602,40 @@ function ensureBannerStyles(): void {
       color: var(--text-muted);
       font-size: 11.5px;
     }
+    .rds-release-notes-loading {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      padding: 48px 0;
+      color: var(--text-muted);
+      font-size: 12px;
+    }
+    .rds-release-notes-spinner {
+      width: 16px;
+      height: 16px;
+      border: 2px solid var(--border);
+      border-top-color: var(--accent-purple);
+      border-radius: 50%;
+      animation: rds-release-notes-spin 0.7s linear infinite;
+    }
+    @keyframes rds-release-notes-spin {
+      to { transform: rotate(360deg); }
+    }
   `;
   document.head.appendChild(style);
 }
 
 function removeBanner(): void {
-  const existing = document.getElementById(BANNER_ID);
-  if (!existing) return;
-  existing.classList.add('rds-banner-out');
-  setTimeout(() => existing.remove(), 200);
+  // Select by class, not id: a rapid status change (e.g. checking → available)
+  // can briefly leave a previous banner mid-fade, and we must tear down every
+  // one so none is orphaned. The id is kept intact so the fading banner keeps
+  // its `position: fixed` styling (dropping it would reflow the whole window).
+  const banners = document.querySelectorAll(`.${BANNER_CLASS}`);
+  banners.forEach((el) => {
+    el.classList.add('rds-banner-out');
+    setTimeout(() => el.remove(), 200);
+  });
 }
 
 function renderBanner(status: UpdaterStatus): void {
@@ -589,6 +647,7 @@ function renderBanner(status: UpdaterStatus): void {
 
   const banner = document.createElement('div');
   banner.id = BANNER_ID;
+  banner.classList.add(BANNER_CLASS);
   banner.setAttribute('role', 'status');
   banner.setAttribute('aria-live', 'polite');
 
@@ -609,16 +668,22 @@ function renderBanner(status: UpdaterStatus): void {
         <button class="rds-banner-dismiss" aria-label="Dismiss update notification">×</button>
       </div>
       <div class="rds-banner-actions">
+        <button class="rds-banner-btn rds-banner-btn-ghost" id="rdsUpdateReleaseNotes">Release Notes</button>
         <button class="rds-banner-btn rds-banner-btn-ghost" id="rdsUpdateDismiss">Later</button>
         <button class="rds-banner-btn rds-banner-btn-primary" id="rdsUpdateDownload">Download</button>
       </div>`;
 
     document.body.appendChild(banner);
+    // Warm the release-notes cache now so the modal opens populated when clicked.
+    prefetchLatestReleaseInfo();
 
     banner.querySelector('.rds-banner-dismiss')?.addEventListener('click', removeBanner);
-    document.getElementById('rdsUpdateDismiss')?.addEventListener('click', removeBanner);
-    document.getElementById('rdsUpdateDownload')?.addEventListener('click', () => {
-      const btn = document.getElementById('rdsUpdateDownload') as HTMLButtonElement | null;
+    banner.querySelector('#rdsUpdateReleaseNotes')?.addEventListener('click', () => {
+      showReleaseNotesModal();
+    });
+    banner.querySelector('#rdsUpdateDismiss')?.addEventListener('click', removeBanner);
+    banner.querySelector('#rdsUpdateDownload')?.addEventListener('click', () => {
+      const btn = banner.querySelector('#rdsUpdateDownload') as HTMLButtonElement | null;
       if (btn) btn.disabled = true;
       (window as any).rdsUpdater?.download().catch(() => undefined);
     });
@@ -657,8 +722,8 @@ function renderBanner(status: UpdaterStatus): void {
 
     document.body.appendChild(banner);
 
-    document.getElementById('rdsUpdateLater')?.addEventListener('click', removeBanner);
-    document.getElementById('rdsUpdateInstall')?.addEventListener('click', () => {
+    banner.querySelector('#rdsUpdateLater')?.addEventListener('click', removeBanner);
+    banner.querySelector('#rdsUpdateInstall')?.addEventListener('click', () => {
       (window as any).rdsUpdater?.install().catch(() => undefined);
     });
 
@@ -681,11 +746,13 @@ function renderBanner(status: UpdaterStatus): void {
         </div>`;
 
       document.body.appendChild(banner);
+      // Warm the release-notes cache now so the modal opens populated when clicked.
+      prefetchLatestReleaseInfo();
       banner.querySelector('.rds-banner-dismiss')?.addEventListener('click', removeBanner);
-      document.getElementById('rdsUpdateReleaseNotes')?.addEventListener('click', () => {
+      banner.querySelector('#rdsUpdateReleaseNotes')?.addEventListener('click', () => {
         showReleaseNotesModal();
       });
-      document.getElementById('rdsUpdateOpenLatest')?.addEventListener('click', () => {
+      banner.querySelector('#rdsUpdateOpenLatest')?.addEventListener('click', () => {
         (window as any).roku?.openExternal?.(LATEST_RELEASE_URL).catch(() => undefined);
       });
       return;

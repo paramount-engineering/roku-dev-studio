@@ -21,6 +21,9 @@ const {
 const { registerBsFiddleIpc } = require('./main/ipc/bs-fiddle-handlers');
 const { showAboutDialog, registerAboutIpc } = require('./main/about-dialog');
 const { setupAutoUpdater } = require('./main/auto-updater');
+// Handle for triggering the update-check flow from the "Check for Updates" menu
+// item (set once setupAutoUpdater runs at app-ready; the menu click reads it lazily).
+let updaterControls: import('./main/auto-updater').AutoUpdaterControls | null = null;
 const { showSettingsDialog } = require('./main/settings-dialog');
 const { registerSettingsWindowIpc } = require('./main/settings-window-ipc');
 const { initSettings, loadSettings, saveSettings, registerSettingsIpc } = require('./main/settings');
@@ -449,6 +452,15 @@ function createWindow(appState: AppWindowState) {
             ]),
         { type: 'separator' },
         {
+          // Available on all platforms (per request). Runs the same check flow as
+          // the automatic startup check: emitting `checking` clears any update
+          // banner currently shown, then the fresh result re-drives the notification.
+          label: 'Check for Updates',
+          click: () => {
+            void updaterControls?.checkForUpdates();
+          }
+        },
+        {
           label: 'Clear Cache and Reload',
           click: () => clearCacheAndReload(appState)
         },
@@ -626,7 +638,7 @@ app.whenReady().then(() => {
   const rememberPasswordsInKeychain = earlySettings.rememberPasswordsInKeychain === true;
   secretStore.init(app, { enabled: rememberPasswordsInKeychain });
   registerAboutIpc(ipcMain, clipboard, shell);
-  setupAutoUpdater(app, ipcMain, () => mainWindow);
+  updaterControls = setupAutoUpdater(app, ipcMain, () => mainWindow);
   registerLogViewerIpc(ipcMain);
   registerConsoleSpillIpc(ipcMain, app);
   registerSettingsIpc(ipcMain);

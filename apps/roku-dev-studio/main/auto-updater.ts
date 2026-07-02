@@ -25,6 +25,17 @@ export interface UpdaterStatus {
   needsManualDownload?: boolean;
 }
 
+/**
+ * Handle returned by `setupAutoUpdater` so callers outside the IPC layer (e.g. the
+ * "Check for Updates" File-menu item) can trigger the exact same check flow that
+ * runs on startup. Emitting `checking-for-update` clears any banner the renderer is
+ * currently showing, then the resulting `available` / `not-available` / `error`
+ * status re-drives the notification.
+ */
+export interface AutoUpdaterControls {
+  checkForUpdates: () => Promise<{ success: boolean; error?: string }>;
+}
+
 let currentStatus: UpdaterStatus = { type: 'idle' };
 
 function isMissingMetadataUpdaterError(errorLike: unknown): boolean {
@@ -60,7 +71,7 @@ export function setupAutoUpdater(
   app: App,
   ipcMain: IpcMain,
   getMainWindow: () => BrowserWindow | null | undefined
-): void {
+): AutoUpdaterControls {
   autoUpdater.autoDownload = false;
   autoUpdater.autoInstallOnAppQuit = false;
   autoUpdater.allowPrerelease = false;
@@ -137,7 +148,11 @@ export function setupAutoUpdater(
     applyStatus({ type: 'error', message: toUpdaterMessage(err), needsManualDownload: manualDownload, version }, broadcast);
   });
 
-  ipcMain.handle(IPC.UpdaterCheck, async () => {
+  // Shared check flow used by the renderer's UpdaterCheck IPC, the "Check for
+  // Updates" menu item, and (via `checkForUpdates()` below) the startup timer.
+  // `checkForUpdates()` emits `checking-for-update` first, which clears any banner
+  // the renderer is showing; the resulting status then re-drives the notification.
+  async function runCheckForUpdates(): Promise<{ success: boolean; error?: string }> {
     try {
       await autoUpdater.checkForUpdates();
       return { success: true };
@@ -151,7 +166,9 @@ export function setupAutoUpdater(
       }, broadcast);
       return { success: false, error: msg };
     }
-  });
+  }
+
+  ipcMain.handle(IPC.UpdaterCheck, () => runCheckForUpdates());
 
   ipcMain.handle(IPC.UpdaterDownload, async () => {
     try {
@@ -216,4 +233,6 @@ export function setupAutoUpdater(
       }
     });
   }, 12000);
+
+  return { checkForUpdates: runCheckForUpdates };
 }
