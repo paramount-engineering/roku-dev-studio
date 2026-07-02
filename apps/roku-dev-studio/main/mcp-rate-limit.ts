@@ -38,6 +38,27 @@ type Bucket = {
 
 const buckets = new Map<string, Bucket>();
 
+/**
+ * Upper bound on distinct buckets. Keys are derived from the request path/op id, which
+ * is caller-controlled — a looping agent hitting `/op/<garbage-N>` or arbitrary POST
+ * paths would otherwise grow this map without bound. Legit traffic uses only a few dozen
+ * keys, so 512 is comfortably above real usage while capping worst-case memory.
+ */
+const MAX_BUCKETS = 512;
+
+/** Evict the least-recently-refilled bucket to keep the map bounded. */
+function evictOldestBucket(): void {
+  let oldestKey: string | undefined;
+  let oldestAt = Infinity;
+  for (const [k, v] of buckets) {
+    if (v.lastRefillAt < oldestAt) {
+      oldestAt = v.lastRefillAt;
+      oldestKey = k;
+    }
+  }
+  if (oldestKey !== undefined) buckets.delete(oldestKey);
+}
+
 export type RateDecision = { allowed: true } | { allowed: false; retryAfterMs: number };
 
 /**
@@ -49,6 +70,7 @@ export function take(key: string, capacity: number, windowMs: number): RateDecis
   const now = Date.now();
   let b = buckets.get(key);
   if (!b) {
+    if (buckets.size >= MAX_BUCKETS) evictOldestBucket();
     b = { tokens: capacity, lastRefillAt: now, capacity, windowMs };
     buckets.set(key, b);
   }

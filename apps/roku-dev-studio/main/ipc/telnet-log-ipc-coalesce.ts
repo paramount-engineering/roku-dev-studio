@@ -5,6 +5,13 @@
 
 export const TELNET_IPC_CHUNK_CHARS = 256 * 1024;
 
+/**
+ * Safety cap on the coalesce buffer. It normally drains every `setImmediate` tick, but a
+ * device that floods logs faster than the loop can drain (or a starved loop) would grow it
+ * without bound in main-process memory. Beyond this we drop the oldest output.
+ */
+export const TELNET_IPC_MAX_PENDING_CHARS = 8 * 1024 * 1024; // 8 MB
+
 export type TelnetIpcCoalesceState = {
   pending: string;
   flushScheduled: boolean;
@@ -12,6 +19,19 @@ export type TelnetIpcCoalesceState = {
 
 export function createTelnetIpcCoalesceState(): TelnetIpcCoalesceState {
   return { pending: '', flushScheduled: false };
+}
+
+/** Append telnet text to the coalesce buffer, bounding total size (drops oldest on overflow). */
+export function appendCoalescedText(host: TelnetIpcCoalesceHost, text: string): void {
+  if (!text) return;
+  const state = host.ipcCoalesce;
+  const combined = state.pending + text;
+  if (combined.length > TELNET_IPC_MAX_PENDING_CHARS) {
+    const keep = combined.slice(combined.length - TELNET_IPC_MAX_PENDING_CHARS);
+    state.pending = '…[relay dropped older telnet output to bound memory]\n' + keep;
+  } else {
+    state.pending = combined;
+  }
 }
 
 export function emitTelnetTextInChunks(data: string, emitSlice: (slice: string) => void): void {

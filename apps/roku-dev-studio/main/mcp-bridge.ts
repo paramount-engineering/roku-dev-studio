@@ -200,6 +200,21 @@ let bridgeToken = '';
 let descriptorPath = '';
 let descriptorRecheckInterval: NodeJS.Timeout | null = null;
 let getRendererSender: (() => WebContents | null) = () => null;
+// Kept so stopMcpBridge can remove the result-channel listeners registered in
+// startMcpBridge. Without this, a restart-in-process stacks a second set of listeners
+// on top of the old (MaxListenersExceededWarning + every result processed twice).
+let bridgeIpcMain: IpcMain | null = null;
+// The renderer→main result channels this bridge owns exclusively. Registered in
+// startMcpBridge, removed in stopMcpBridge.
+const BRIDGE_RESULT_CHANNELS: string[] = [
+  IPC.McpBridgeReportState,
+  IPC.McpBridgeDropScriptResult,
+  IPC.McpBridgeRaleResult,
+  IPC.McpBridgeFunctionsResult,
+  IPC.McpBridgeToolResult,
+  IPC.McpBridgeConnectResult,
+  IPC.McpBridgeStoredPasswordResult,
+];
 
 const pendingDrops = new Map<string, PendingDrop>();
 let dropCorrelationCounter = 0;
@@ -325,12 +340,18 @@ function writeDescriptor(userData: string): void {
   }
 }
 
-function rewriteDescriptorIfMissing(): void {
+async function rewriteDescriptorIfMissing(): Promise<void> {
   if (!descriptorPath || !descriptorPayload) return;
-  if (fs.existsSync(descriptorPath)) return;
+  // Async fs so the 2s watcher never blocks the main thread for the app's lifetime.
   try {
-    fs.mkdirSync(path.dirname(descriptorPath), { recursive: true });
-    fs.writeFileSync(descriptorPath, JSON.stringify(descriptorPayload, null, 2), {
+    await fs.promises.access(descriptorPath);
+    return; // descriptor present — nothing to do
+  } catch {
+    /* missing — fall through and rewrite */
+  }
+  try {
+    await fs.promises.mkdir(path.dirname(descriptorPath), { recursive: true });
+    await fs.promises.writeFile(descriptorPath, JSON.stringify(descriptorPayload, null, 2), {
       encoding: 'utf-8',
       mode: 0o600
     });
@@ -1839,7 +1860,7 @@ export function startMcpBridge(deps: BridgeDeps): void {
       if (descriptorRecheckInterval == null) {
         descriptorRecheckInterval = setInterval(() => {
           if (!server) return;
-          rewriteDescriptorIfMissing();
+          void rewriteDescriptorIfMissing();
         }, 2000);
         // Don't keep the event loop alive just for this watcher; if the
         // process is otherwise idle and quitting, let it.
@@ -1853,6 +1874,11 @@ export function startMcpBridge(deps: BridgeDeps): void {
   server.on('error', (err) => {
     logWarn('server error', err);
   });
+
+  // Store for teardown, and defensively clear any prior registrations so a
+  // restart-in-process can't stack duplicate listeners on these bridge-only channels.
+  bridgeIpcMain = ipcMain;
+  for (const ch of BRIDGE_RESULT_CHANNELS) ipcMain.removeAllListeners(ch);
 
   ipcMain.on(IPC.McpBridgeReportState, (_event, payload: unknown) => {
     const sanitized = sanitizeStatePush(payload);
@@ -1975,6 +2001,16 @@ export function startMcpBridge(deps: BridgeDeps): void {
  * file, token, and all pending bridge IPC, and the heal watcher exits with it.
  */
 export function stopMcpBridge(): void {
+  if (bridgeIpcMain) {
+    for (const ch of BRIDGE_RESULT_CHANNELS) {
+      try {
+        bridgeIpcMain.removeAllListeners(ch);
+      } catch {
+        /* ignore */
+      }
+    }
+    bridgeIpcMain = null;
+  }
   if (descriptorRecheckInterval) {
     try {
       clearInterval(descriptorRecheckInterval);

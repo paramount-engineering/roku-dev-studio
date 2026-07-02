@@ -21,6 +21,7 @@ import type {
 } from '../../shared/ipc/payloads';
 import { IPC } from '../../shared/ipc/channels';
 import {
+  appendCoalescedText,
   createTelnetIpcCoalesceState,
   flushCoalescedMapNow,
   scheduleCoalescedMapFlush,
@@ -368,7 +369,7 @@ function establishRemoteTelnetConnection(
               const rt = remoteTelnetConnections.get(connectionId);
               if (rt && typeof parsed.data === 'string') {
                 rt.bytesReceived += Buffer.byteLength(parsed.data, 'utf8');
-                rt.ipcCoalesce.pending += parsed.data;
+                appendCoalescedText(rt, parsed.data);
                 scheduleCoalescedMapFlush(remoteTelnetConnections, connectionId, (live, slice) => {
                   safeSendToRenderer(IPC.TelnetData, { ip: live.ip, connectionId, data: slice, isRemote: true });
                 });
@@ -386,7 +387,7 @@ function establishRemoteTelnetConnection(
             const rt = remoteTelnetConnections.get(connectionId);
             if (rt) {
               rt.bytesReceived += Buffer.byteLength(chunkText, 'utf8');
-              rt.ipcCoalesce.pending += chunkText;
+              appendCoalescedText(rt, chunkText);
               scheduleCoalescedMapFlush(remoteTelnetConnections, connectionId, (live, slice) => {
                 safeSendToRenderer(IPC.TelnetData, { ip: live.ip, connectionId, data: slice, isRemote: true });
               });

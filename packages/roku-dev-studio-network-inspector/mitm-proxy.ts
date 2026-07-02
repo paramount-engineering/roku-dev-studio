@@ -1166,11 +1166,28 @@ export class RokuMitmProxy {
     // whether the upstream responds, errors, or times out. A hard timer is the absolute backstop.
     let settled = false;
     let hardTimer: ReturnType<typeof setTimeout> | null = null;
+    // Device closed the tunnel before the response completed — abort upstream so an
+    // aborted stream doesn't leak a socket. Named so `settle()` can remove it: `socket`
+    // is a reused keep-alive tunnel carrying many requests, so a per-request `on('close')`
+    // that's never removed accumulates listeners (MaxListenersExceededWarning + retained
+    // closures). On normal completion `settled` is already true, so this is a no-op.
+    const onSocketClose = (): void => {
+      if (settled) return;
+      settled = true;
+      settle();
+      try { upstream.destroy(); } catch { /* ignore */ }
+      this.emitTransaction(newTransactionId(), deviceIp, hostname, port, requestSnapshot, {
+        statusCode: 499,
+        statusText: 'Client Closed Request',
+        body: ''
+      });
+    };
     const settle = (): void => {
       if (hardTimer) {
         clearTimeout(hardTimer);
         hardTimer = null;
       }
+      socket.removeListener('close', onSocketClose);
     };
     const failTunnel = (statusCode: number, statusText: string, msg: string): void => {
       if (settled) return;
@@ -1256,20 +1273,7 @@ export class RokuMitmProxy {
       failTunnel(502, 'Bad Gateway', err.message);
     });
 
-    // Device closed the tunnel before the response completed — abort the upstream request so an
-    // aborted stream doesn't leak an upstream socket. On normal completion `settled` is already true
-    // (set before socket.end()), so this close handler is a no-op.
-    socket.on('close', () => {
-      if (settled) return;
-      settled = true;
-      settle();
-      try { upstream.destroy(); } catch { /* ignore */ }
-      this.emitTransaction(newTransactionId(), deviceIp, hostname, port, requestSnapshot, {
-        statusCode: 499,
-        statusText: 'Client Closed Request',
-        body: ''
-      });
-    });
+    socket.once('close', onSocketClose);
 
     if (reqBodyBuf.length) upstream.write(reqBodyBuf);
     upstream.end();

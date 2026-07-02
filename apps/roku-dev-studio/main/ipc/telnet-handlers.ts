@@ -5,6 +5,7 @@ import type { BrowserWindow, IpcMainInvokeEvent } from 'electron';
 import type { IpCommandPayload, IpPayload, SafeSendFn } from '../../shared/ipc/payloads';
 import { IPC } from '../../shared/ipc/channels';
 import {
+  appendCoalescedText,
   createTelnetIpcCoalesceState,
   flushCoalescedMapNow,
   scheduleCoalescedMapFlush,
@@ -16,7 +17,8 @@ import { mainLog, mainWarn } from '../log.js';
 const {
   connectRokuDebugTelnet,
   connectRokuSystemTelnet,
-  writeRokuTelnetLine
+  writeRokuTelnetLine,
+  isValidIp
 } = require('roku-dev-studio-api');
 
 type DebugTelnetConn = {
@@ -130,7 +132,7 @@ async function connectDebugTelnetInternal(ip: string): Promise<{ success: boolea
     const connection = telnetConnections.get(connectionId);
     if (!connection) return;
     connection.bytesReceived += data.length;
-    connection.ipcCoalesce.pending += text;
+    appendCoalescedText(connection, text);
     scheduleCoalescedMapFlush(telnetConnections, connectionId, (_live, slice) => {
       if (safeSend) safeSend(IPC.TelnetData, { ip, connectionId, data: slice });
     });
@@ -246,6 +248,7 @@ function setupTelnetHandlers(_mainWindow: BrowserWindow | undefined, safeSendToR
   cachedSafeSend = safeSendToRenderer;
 
   ipcMain.handle(IPC.TelnetConnect, async (_event: IpcMainInvokeEvent, { ip }: IpPayload) => {
+    if (!isValidIp(ip)) return { success: false, error: 'Invalid IP address' };
     // Idempotent: reuse a healthy 8085 socket rather than destroy+reopen.
     // The Roku 8085 BrightScript log stream binds to a single client and the
     // rebind on a destroy/reopen cycle is racy — repeated connects (e.g. an
@@ -289,6 +292,7 @@ function setupTelnetHandlers(_mainWindow: BrowserWindow | undefined, safeSendToR
   });
 
   ipcMain.handle(IPC.TelnetSystemConnect, async (_event: IpcMainInvokeEvent, { ip }: IpPayload) => {
+    if (!isValidIp(ip)) return { success: false, error: 'Invalid IP address' };
     const connectionId = `${ip}:8080`;
 
     if (telnetSystemConnections.has(connectionId)) {
@@ -321,7 +325,7 @@ function setupTelnetHandlers(_mainWindow: BrowserWindow | undefined, safeSendToR
       const text = data.toString('utf8');
       const sysConn = telnetSystemConnections.get(connectionId);
       if (!sysConn) return;
-      sysConn.ipcCoalesce.pending += text;
+      appendCoalescedText(sysConn, text);
       scheduleCoalescedMapFlush(telnetSystemConnections, connectionId, (_live, slice) => {
         safeSendToRenderer(IPC.TelnetSystemData, {
           ip,
