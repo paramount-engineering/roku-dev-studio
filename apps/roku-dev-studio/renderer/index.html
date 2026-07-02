@@ -12736,6 +12736,15 @@
     <symbol id="icon-globe" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/>
     </symbol>
+    <symbol id="icon-network" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="3.4"/><ellipse cx="12" cy="12" rx="1.4" ry="3.4"/><path d="M8.6 12h6.8"/>
+      <circle cx="20" cy="12" r="1.5"/><circle cx="4" cy="12" r="1.5"/>
+      <circle cx="16" cy="5.1" r="1.5"/><circle cx="8" cy="5.1" r="1.5"/>
+      <circle cx="16" cy="18.9" r="1.5"/><circle cx="8" cy="18.9" r="1.5"/>
+      <path d="M15.9 12h2.1"/><path d="M6 12h2.1"/>
+      <path d="M14 8.5 15 6.9"/><path d="M10 8.5 9 6.9"/>
+      <path d="M14 15.5 15 17.1"/><path d="M10 15.5 9 17.1"/>
+    </symbol>
     <symbol id="icon-server" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <rect width="20" height="8" x="2" y="2" rx="2" ry="2"/><rect width="20" height="8" x="2" y="14" rx="2" ry="2"/><line x1="6" x2="6.01" y1="6" y2="6"/><line x1="6" x2="6.01" y1="18" y2="18"/>
     </symbol>
@@ -13552,7 +13561,7 @@
             <button class="inner-tab" data-inner-tab="telnet" aria-label="Console"><span class="icon icon-sm"><svg><use href="#icon-terminal"/></svg></span><span class="inner-tab-label">Console</span></button>
             <button class="inner-tab" data-inner-tab="inspector" aria-label="App Connector"><span class="icon icon-sm"><svg><use href="#icon-plug"/></svg></span><span class="inner-tab-label">App Connector</span></button>
             <button class="inner-tab" data-inner-tab="actionscripts" aria-label="Action Scripts"><span class="icon icon-sm"><svg><use href="#icon-code"/></svg></span><span class="inner-tab-label">Action Scripts</span></button>
-            <button class="inner-tab" data-inner-tab="network" aria-label="Network" style="display: none;"><span class="icon icon-sm"><svg><use href="#icon-wifi"/></svg></span><span class="inner-tab-label">Network</span></button>
+            <button class="inner-tab" data-inner-tab="network" aria-label="Network" style="display: none;"><span class="icon icon-sm"><svg><use href="#icon-network"/></svg></span><span class="inner-tab-label">Network</span></button>
           </div>
         </div>
         <div class="device-panel-right">
@@ -14584,7 +14593,7 @@
           <div class="card network-inspector-card">
             <div class="card-header ni-card-header">
               <div class="ni-header-start">
-                <span class="card-icon"><span class="icon icon-sm"><svg><use href="#icon-wifi"/></svg></span></span>
+                <span class="card-icon"><span class="icon icon-sm"><svg><use href="#icon-network"/></svg></span></span>
                 <span class="card-title">Network Inspector</span>
                 <div class="ni-header-tools">
                   <div class="ni-download-menu" data-ni-download-menu>
@@ -14667,97 +14676,9 @@
                     </button>
                   </div>
                 </aside>
-                <div class="ni-inspector-pane is-empty" data-ni-detail>
-                  <div class="ni-inspector-empty">Select a session to inspect request and response.</div>
-                  <div class="ni-contents-split">
-                    <div class="ni-contents-pane" data-ni-request-pane>
-                      <div class="ni-contents-pane-head">
-                        <div class="ni-pane-head-left">
-                          <div class="ni-contents-label">Request</div>
-                          <div class="ni-pane-tabs" data-ni-pane-tabs="request">
-                            <button type="button" class="ni-pane-tab active" data-ni-req-tab="overview">Overview</button>
-                            <button type="button" class="ni-pane-tab" data-ni-req-tab="body">Body</button>
-                          </div>
-                          <div class="ni-copy-menu" data-ni-copy-menu>
-                            <button type="button" class="ni-pane-tool-btn ni-copy-main" data-ni-copy="request" title="Copy request body" aria-label="Copy request body">
-                              <span class="icon icon-xs"><svg><use href="#icon-copy"/></svg></span>
-                            </button>
-                            <button type="button" class="ni-pane-tool-btn ni-copy-caret" data-ni-copy-menu-toggle title="More copy options" aria-haspopup="true" aria-expanded="false" aria-label="More copy options" hidden>
-                              <span class="icon icon-xs"><svg><use href="#icon-chevron-down"/></svg></span>
-                            </button>
-                            <div class="ni-copy-dropdown" data-ni-copy-dropdown role="menu" hidden>
-                              <button type="button" class="ni-copy-dropdown-item" data-ni-copy-item="body" role="menuitem">
-                                <span class="ni-copy-item-icon icon icon-xs"><svg><use href="#icon-copy"/></svg></span>Copy Body
-                              </button>
-                              <button type="button" class="ni-copy-dropdown-item" data-ni-copy-item="curl" role="menuitem">
-                                <span class="ni-copy-item-icon icon icon-xs"><svg><use href="#icon-terminal"/></svg></span>Copy as cURL
-                              </button>
-                              <button type="button" class="ni-copy-dropdown-item" data-ni-copy-item="har" role="menuitem">
-                                <span class="ni-copy-item-icon icon icon-xs"><svg><use href="#icon-download"/></svg></span>Copy as HAR
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                        <span class="ni-pane-badges">
-                          <span class="ni-pane-badge ni-pane-badge--truncated" data-ni-req-truncated hidden title="The captured copy of this body exceeded the inspector's display cap, so what's shown here is incomplete. The full body was still delivered upstream. Use Copy for the captured portion.">Body Truncated</span>
-                        </span>
-                        <div class="ni-pane-head-right" data-ni-req-format-wrap hidden>
-                          <button type="button" class="ni-pane-tool-btn is-active" data-ni-wrap-toggle="request" title="Disable word wrap" aria-pressed="true" aria-label="Toggle word wrap">
-                            <span class="icon icon-xs"><svg><use href="#icon-wrap-text"/></svg></span>
-                          </button>
-                          <div class="ni-pane-head-format">
-                            <label class="ni-body-format-label">Format</label>
-                            <select class="ni-body-format-select" data-ni-body-format="request">
-                              <option value="auto" selected>Auto</option>
-                              <option value="json">JSON</option>
-                              <option value="xml">XML</option>
-                              <option value="raw">Raw</option>
-                            </select>
-                            <button type="button" class="ni-pane-tool-btn ni-format-info-btn" data-ni-req-format-info hidden title="Why is this shown as raw text?" aria-label="Why is this shown as raw text?">
-                              <span class="icon icon-xs"><svg><use href="#icon-info"/></svg></span>
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                      <div class="ni-contents-scroll" data-ni-request-body tabindex="0"></div>
-                    </div>
-                    <div class="ni-contents-pane" data-ni-response-pane>
-                      <div class="ni-contents-pane-head">
-                        <div class="ni-pane-head-left">
-                          <div class="ni-contents-label">Response</div>
-                          <div class="ni-pane-tabs" data-ni-pane-tabs="response">
-                            <button type="button" class="ni-pane-tab active" data-ni-res-tab="headers">Headers</button>
-                            <button type="button" class="ni-pane-tab" data-ni-res-tab="body">Body</button>
-                          </div>
-                          <button type="button" class="ni-pane-tool-btn" data-ni-copy="response" title="Copy response body" aria-label="Copy response body">
-                            <span class="icon icon-xs"><svg><use href="#icon-copy"/></svg></span>
-                          </button>
-                        </div>
-                        <span class="ni-pane-badges">
-                          <span class="ni-pane-badge ni-pane-badge--truncated" data-ni-res-truncated hidden title="The captured copy of this body exceeded the inspector's display cap, so what's shown here is incomplete. The full body was still delivered to the Roku. Use Copy for the captured portion.">Body Truncated</span>
-                        </span>
-                        <div class="ni-pane-head-right" data-ni-res-format-wrap hidden>
-                          <button type="button" class="ni-pane-tool-btn is-active" data-ni-wrap-toggle="response" title="Disable word wrap" aria-pressed="true" aria-label="Toggle word wrap">
-                            <span class="icon icon-xs"><svg><use href="#icon-wrap-text"/></svg></span>
-                          </button>
-                          <div class="ni-pane-head-format">
-                            <label class="ni-body-format-label">Format</label>
-                            <select class="ni-body-format-select" data-ni-body-format="response">
-                              <option value="auto" selected>Auto</option>
-                              <option value="json">JSON</option>
-                              <option value="xml">XML</option>
-                              <option value="raw">Raw</option>
-                            </select>
-                            <button type="button" class="ni-pane-tool-btn ni-format-info-btn" data-ni-res-format-info hidden title="Why is this shown as raw text?" aria-label="Why is this shown as raw text?">
-                              <span class="icon icon-xs"><svg><use href="#icon-info"/></svg></span>
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                      <div class="ni-contents-scroll" data-ni-response-body tabindex="0"></div>
-                    </div>
-                  </div>
-                </div>
+                <!-- Detail pane markup is injected at setup from network-detail-view.ts (DETAIL_PANE_HTML),
+                     single-sourced with the standalone Network Session Viewer. -->
+                <div class="ni-inspector-pane is-empty" data-ni-detail></div>
               </div>
             </div>
           </div>

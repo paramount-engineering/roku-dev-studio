@@ -5,7 +5,7 @@ import {
   clearEmbeddedStructured,
   type EmbeddedPane
 } from './network-embedded-structured.js';
-import { MAX_STRUCTURED_BYTES } from '../../modules/ui/structured-body.js';
+import { MAX_STRUCTURED_BYTES, renderStructuredInto } from '../../modules/ui/structured-body.js';
 
 export type BodyFormatMode = 'auto' | 'json' | 'xml' | 'raw';
 export type RequestPaneTab = 'overview' | 'body';
@@ -463,6 +463,24 @@ export function renderResponsePane(
 
 export function renderNetworkEventSummary(ev: ParsedNetworkEvent, allEvents: ParsedNetworkEvent[]): string {
   return renderRequestOverview(ev, allEvents);
+}
+
+/**
+ * Turn each `[data-ni-fold]` placeholder emitted by {@link renderBodyContent} into the shared
+ * collapsible, syntax-highlighted JSON/XML tree — the same renderer the Console viewer uses. Call
+ * once after a body's innerHTML is set. Idempotent (guarded by `data-ni-fold-ready`). Both the live
+ * Network Inspector and the standalone Session Viewer call this, so it lives here next to the
+ * placeholder producer.
+ */
+export function upgradeStructuredBodies(bodyEl: Element | null): void {
+  if (!(bodyEl instanceof HTMLElement)) return;
+  bodyEl.querySelectorAll('[data-ni-fold]').forEach((el) => {
+    if (!(el instanceof HTMLElement) || el.dataset.niFoldReady === '1') return;
+    const kind = el.dataset.niFold;
+    if (kind !== 'json' && kind !== 'xml') return;
+    renderStructuredInto(el, el.textContent || '', { kind });
+    el.dataset.niFoldReady = '1';
+  });
 }
 
 export function eventSummaryLabel(ev: ParsedNetworkEvent): string {

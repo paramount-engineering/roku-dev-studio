@@ -92,6 +92,19 @@ export function transpileMainProcess(appDir: string): void {
 
   esbuild.buildSync({
     absWorkingDir: appDir,
+    entryPoints: [path.join(appDir, 'network-session-viewer-preload.ts')],
+    bundle: true,
+    platform: 'node',
+    target: 'node20',
+    format: 'cjs',
+    outfile: path.join(appDir, 'network-session-viewer-preload.bundled.cjs'),
+    external: ['electron'],
+    logLevel: 'info',
+    treeShaking: true,
+  });
+
+  esbuild.buildSync({
+    absWorkingDir: appDir,
     entryPoints: [path.join(appDir, 'main.ts')],
     bundle: true,
     platform: 'node',

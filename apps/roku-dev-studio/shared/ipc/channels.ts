@@ -137,6 +137,14 @@ export const IPC = {
    *  of matching line numbers Filter mode collapses the file down to. A newer
    *  Search invoke supersedes any in-flight scan for the same window. */
   LogViewerSearch: 'log-viewer:search',
+  /**
+   * Standalone Network Session Viewer window. `NetSessionViewerLoad` (renderer → main, invoke)
+   * parses the file the window was opened with (native `.rds-network-inspector.json` bundle, HAR
+   * 1.2, or `.pcap`) into `ParsedNetworkEvent[]` and answers
+   * `{ success, fileName, format, events, deviceIps, error }`. Network captures are small relative to
+   * logs, so the whole parsed session is returned at once — no windowed paging like the log viewer.
+   */
+  NetSessionViewerLoad: 'net-session-viewer:load',
   RokuSaveTrackerTask: 'roku:save-tracker-task',
   RokuSaveTextFile: 'roku:save-text-file',
   RokuSaveBinaryFile: 'roku:save-binary-file',

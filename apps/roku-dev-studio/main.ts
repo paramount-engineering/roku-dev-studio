@@ -11,6 +11,10 @@ const { resolveUnderBase, isPathUnderOneOf, resolveUserPathUnderOneOf } = requir
 // Import IPC handler modules
 const { setupIpcHandlers } = require('./main/ipc/index');
 const { registerLogViewerIpc, openLogFileViewerWindow } = require('./main/log-file-viewer-window');
+const {
+  registerNetworkSessionViewerIpc,
+  openNetworkSessionViewerWindow
+} = require('./main/network-session-viewer-window');
 const { registerConsoleSpillIpc } = require('./main/console-spill');
 const {
   registerFiddleIpc,
@@ -427,6 +431,26 @@ function createWindow(appState: AppWindowState) {
           }
         },
         {
+          label: 'Open Network Session',
+          accelerator: 'CmdOrCtrl+Shift+N',
+          click: async () => {
+            const res = await dialog.showOpenDialog(win, {
+              title: 'Open network session',
+              properties: ['openFile'],
+              filters: [
+                {
+                  name: 'Network session',
+                  // `.rds-network-inspector.json` bundles match the `json` filter.
+                  extensions: ['json', 'har', 'pcap', 'pcapng']
+                },
+                { name: 'All files', extensions: ['*'] }
+              ]
+            });
+            if (res.canceled || !res.filePaths?.length) return;
+            openNetworkSessionViewerWindow(win, res.filePaths[0]!);
+          }
+        },
+        {
           label: 'Open Fiddle',
           accelerator: 'CmdOrCtrl+Shift+B',
           click: () => {
@@ -640,6 +664,7 @@ app.whenReady().then(() => {
   registerAboutIpc(ipcMain, clipboard, shell);
   updaterControls = setupAutoUpdater(app, ipcMain, () => mainWindow);
   registerLogViewerIpc(ipcMain);
+  registerNetworkSessionViewerIpc(ipcMain);
   registerConsoleSpillIpc(ipcMain, app);
   registerSettingsIpc(ipcMain);
   registerSecretsIpc(ipcMain);

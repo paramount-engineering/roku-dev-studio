@@ -9,6 +9,29 @@ import * as path from 'path';
 import { createRequire } from 'node:module';
 import * as esbuild from 'esbuild';
 
+/**
+ * Extract the inline CSS from index.html's single <style> block into dist/network-session-viewer.css
+ * so the standalone Network Session Viewer window can reuse the exact same `ni-*` + theme styles the
+ * live Network Inspector uses (which are authored inline in index.html). Regenerated on every build,
+ * so the viewer never drifts from the app's styling.
+ */
+export function extractIndexStyleToCss(rendererRoot: string, rendererDist: string): void {
+  const indexHtml = path.join(rendererRoot, 'index.html');
+  if (!fs.existsSync(indexHtml)) {
+    console.warn('transpile-renderer: index.html not found — skipping network-session-viewer.css');
+    return;
+  }
+  const html = fs.readFileSync(indexHtml, 'utf-8');
+  const match = /<style[^>]*>([\s\S]*?)<\/style>/i.exec(html);
+  if (!match) {
+    console.warn('transpile-renderer: no <style> block in index.html — skipping network-session-viewer.css');
+    return;
+  }
+  const header = '/* AUTO-GENERATED from renderer/index.html <style> by transpile-renderer.ts. Do not edit. */\n';
+  fs.mkdirSync(rendererDist, { recursive: true });
+  fs.writeFileSync(path.join(rendererDist, 'network-session-viewer.css'), header + match[1], 'utf-8');
+}
+
 /** Copy Monaco's `min/vs` into renderer/dist/vendor/monaco so the Fiddle window can load via the AMD loader. */
 export function copyMonacoVendor(appDir: string, rendererDist: string): void {
   const require = createRequire(path.join(appDir, 'package.json'));
@@ -203,6 +226,7 @@ export function transpileRenderer(appDir: string): void {
     path.join(rendererRoot, 'components', 'log-file-viewer'),
     path.join(rendererRoot, 'components', 'fiddle'),
     path.join(rendererRoot, 'components', 'network-inspector'),
+    path.join(rendererRoot, 'components', 'network-session-viewer'),
     path.join(rendererRoot, 'components', 'about'),
     path.join(rendererRoot, 'components', 'settings'),
   ];
@@ -240,6 +264,12 @@ export function transpileRenderer(appDir: string): void {
     fs.mkdirSync(path.dirname(fragmentsDest), { recursive: true });
     fs.cpSync(fragmentsSrc, fragmentsDest, { recursive: true });
   }
+
+  // The Network Session Viewer is a standalone window that reuses the Network Inspector's `ni-*`
+  // styles (and theme vars), which live inline in index.html's single <style> block. Extract that
+  // block verbatim into dist/network-session-viewer.css so the viewer stays pixel-identical to the
+  // live inspector with zero manual transcription (unused app rules are harmless).
+  extractIndexStyleToCss(rendererRoot, rendererDist);
 
   verifyRendererDist(appDir, rendererDist);
   console.log('HTML renderer:', entryPoints.length, 'modules →', path.relative(appDir, rendererDist));

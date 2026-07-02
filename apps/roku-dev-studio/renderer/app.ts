@@ -125,6 +125,13 @@ const state = {
 
 /** Per device tab panel: Network Inspector UI controller. */
 const networkTabControllers = new Map();
+/** Tell every Network Inspector tab whether more than one device tab is open, so a tab only uses its
+ *  permissive single-device discovery fallback when it's the sole device (prevents cross-claiming
+ *  another device's captured traffic). Call whenever a device tab is added or removed. */
+function syncNetworkTabMultiDevice(): void {
+  const multi = networkTabControllers.size > 1;
+  for (const ctrl of networkTabControllers.values()) ctrl.setMultiDevice?.(multi);
+}
 /** Serial numbers currently seen on the hotspot (local devices only). */
 const hotspotSerialsActive = new Set<string>();
 const hotspotSerialIps = new Map<string, string>();
@@ -2439,6 +2446,7 @@ function disconnectDevice(deviceKey) {
     try { networkCtrl.destroy?.(); } catch (_) {}
     networkTabControllers.delete(tabId);
     mitmRevealedTabIds.delete(tabId);
+    syncNetworkTabMultiDevice();
   }
 
   // Remove from state
@@ -3519,6 +3527,7 @@ function createDevicePanel(device, tabId, isRemote = false, serverUrl = null, lo
     setupActionScripts(panel, device, api);
     const networkCtrl = setupNetworkTab(panel, device, isRemote);
     networkTabControllers.set(tabId, networkCtrl);
+    syncNetworkTabMultiDevice();
     void syncNetworkTabForConnectedDevice(tabId, device, networkCtrl, isRemote);
     
     // Update dev mode warnings based on device status

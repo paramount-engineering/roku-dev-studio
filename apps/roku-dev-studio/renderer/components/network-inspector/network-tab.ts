@@ -14,6 +14,7 @@ import {
   renderResponsePane,
   getLargeBodyKb,
   getLargeBodyDowngraded,
+  upgradeStructuredBodies,
   type BodyFormatMode,
   type RequestPaneTab,
   type ResponsePaneTab
@@ -22,6 +23,8 @@ import { buildSessions, buildStructureGroups, filterSessions } from './network-s
 import { openConsoleUrlViewer } from '../../modules/console-log/console-url-modal.js';
 import { openConsoleStructuredViewer } from '../../modules/console-log/console-structured-view-modal.js';
 import { getEmbeddedStructuredPayload } from './network-embedded-structured.js';
+import { DETAIL_PANE_HTML, wireDetailInteractions } from './network-detail-view.js';
+import { openFilterHelpModal } from './network-filter-help.js';
 import { openTrafficRulesModal } from './traffic-rules-modal.js';
 import {
   buildCurlCommand,
@@ -44,7 +47,7 @@ import {
   bindFindShortcut,
   type FindBarHandle
 } from '../../modules/ui/find-bar.js';
-import { renderStructuredInto, attachFoldToggle, MAX_STRUCTURED_BYTES } from '../../modules/ui/structured-body.js';
+import { attachFoldToggle, MAX_STRUCTURED_BYTES } from '../../modules/ui/structured-body.js';
 import { attachSelectAll } from '../../modules/ui/select-all.js';
 
 // Caps resident DOM rows so an extreme session count can't bloat the list. The event
@@ -85,6 +88,13 @@ type NetworkTabState = {
   events: ParsedNetworkEvent[];
   hotspotIp: string | null;
   watchIps: Set<string>;
+  /**
+   * True when more than one device tab is open. With a single device a tab may use the permissive
+   * "any hotspot client" discovery fallback (fast first paint before its lease is known); with
+   * multiple devices that fallback is disabled so a tab can't claim another device's traffic before
+   * its own hotspot lease resolves by serial. See {@link eventMatchesTab}.
+   */
+  multiDevice: boolean;
   captureError: string | null;
   captureActive: boolean;
   /** Raw frames retained for pcap export (mirrors the main-process export guard). 0 ⇒ pcap export
@@ -130,69 +140,6 @@ function isHotspotClientIp(ip: string): boolean {
   );
 }
 
-/** Supported filter fields, shown in the help modal with clickable examples. */
-const FILTER_HELP_FIELDS: Array<{ field: string; desc: string; examples: string[] }> = [
-  { field: 'host:', desc: 'Match the hostname (substring).', examples: ['host:roku.com', 'host:googlevideo'] },
-  { field: 'method:', desc: 'HTTP method.', examples: ['method:POST', 'method:GET'] },
-  { field: 'status:', desc: 'Status code, or a class like 4xx / 5xx.', examples: ['status:404', 'status:4xx', 'status:5xx'] },
-  { field: 'type:', desc: 'Response Content-Type (alias content-type:).', examples: ['type:json', 'type:image'] },
-  { field: 'kind:', desc: 'Session kind.', examples: ['kind:https', 'kind:dns', 'kind:tcp'] },
-  { field: 'path:', desc: 'URL path (substring; alias url:).', examples: ['path:/v1/play'] }
-];
-
-/**
- * Filtering help modal. Lists the supported field-scoped syntax with clickable example chips that
- * append to the filter box via `onPick`. Free text and comma-OR semantics are explained inline.
- */
-function openFilterHelpModal(onPick: (term: string) => void): void {
-  const overlay = document.createElement('div');
-  // `.modal-overlay` is display:none until `.active` is added (shared backdrop + centering).
-  overlay.className = 'modal-overlay ni-filter-help-overlay active';
-  const rows = FILTER_HELP_FIELDS.map((f) => {
-    const chips = f.examples
-      .map(
-        (ex) =>
-          `<button type="button" class="ni-filter-help-chip" data-filter-term="${escapeHtml(ex)}" title="Add to Filter">${escapeHtml(ex)}</button>`
-      )
-      .join('');
-    return `<tr>
-      <td class="ni-filter-help-field"><code>${escapeHtml(f.field)}</code></td>
-      <td class="ni-filter-help-desc">${escapeHtml(f.desc)}<div class="ni-filter-help-chips">${chips}</div></td>
-    </tr>`;
-  }).join('');
-  overlay.innerHTML = `
-    <div class="ni-filter-help-modal" role="dialog" aria-modal="true" aria-label="Filter Help">
-      <div class="ni-filter-help-header">
-        <h3>Filtering Sessions</h3>
-        <button type="button" class="modal-close ni-filter-help-close" title="Close" aria-label="Close">×</button>
-      </div>
-      <div class="ni-filter-help-body">
-        <p class="ni-filter-help-intro">Type free text to match host, path, method, status, kind, or Content-Type. Use <code>field:value</code> for precise matches, and separate terms with <strong>commas</strong> to match <strong>any</strong> of them (OR).</p>
-        <table class="ni-filter-help-table"><tbody>${rows}</tbody></table>
-        <p class="ni-filter-help-note">Example: <button type="button" class="ni-filter-help-chip" data-filter-term="host:roku.com, status:4xx, method:POST" title="Add to Filter">host:roku.com, status:4xx, method:POST</button> shows any session on roku.com <em>or</em> with a 4xx status <em>or</em> using POST. Click any example to add it.</p>
-      </div>
-    </div>`;
-  document.body.appendChild(overlay);
-
-  const close = (): void => {
-    overlay.remove();
-    document.removeEventListener('keydown', onKey);
-  };
-  const onKey = (e: KeyboardEvent): void => {
-    if (e.key === 'Escape') close();
-  };
-  document.addEventListener('keydown', onKey);
-  attachBackdropClickToClose(overlay, close);
-  overlay.querySelector('.ni-filter-help-close')?.addEventListener('click', close);
-  overlay.addEventListener('click', (e) => {
-    const chip = (e.target as HTMLElement).closest('[data-filter-term]') as HTMLElement | null;
-    if (chip?.dataset.filterTerm) {
-      onPick(chip.dataset.filterTerm);
-      close();
-    }
-  });
-}
-
 /**
  * Explainer for the "shown as raw text" case: a JSON/XML body too large to render as a collapsible
  * tree. Opened from the small amber "i" beside the Format selector (set by `setFormatInfo`), so it
@@ -234,11 +181,12 @@ function eventMatchesTab(ev: ParsedNetworkEvent, state: NetworkTabState): boolea
   if (state.watchIps.has(ev.deviceIp)) return true;
   const watch = state.hotspotIp || state.deviceIp;
   if (watch && ev.deviceIp === watch) return true;
-  // Discovery fallback: only before this tab has resolved its hotspot lease.
-  // Once `hotspotIp` is known we filter strictly so multiple Rokus on the same
-  // hotspot don't cross-show each other's traffic (including MITM/decrypted
-  // events, which previously matched any hotspot client unconditionally).
-  if (!state.hotspotIp && isHotspotClientIp(ev.deviceIp)) return true;
+  // Discovery fallback: only before this tab has resolved its hotspot lease, AND only when this is
+  // the sole device tab. With multiple devices open this "any hotspot client" match is unsafe — a
+  // tab could claim another device's traffic before its own lease resolves by serial — so we filter
+  // strictly by identity (deviceIp/hotspotIp/watchIps) and let the serial-based resolution set the
+  // lease. With a single device the fallback is harmless (the only client IS this device).
+  if (!state.multiDevice && !state.hotspotIp && isHotspotClientIp(ev.deviceIp)) return true;
   return false;
 }
 
@@ -249,6 +197,9 @@ export function setupNetworkTab(
 ): {
   destroy: () => void;
   setHotspotIp: (ip: string | null) => void;
+  /** Tell the tab whether more than one device tab is open (disables the single-device discovery
+   *  fallback so tabs don't cross-claim traffic). */
+  setMultiDevice: (multi: boolean) => void;
   setDeviceIp: (ip: string) => void;
   setVisible: (visible: boolean) => void;
   appendEvents: (events: ParsedNetworkEvent[]) => void;
@@ -286,6 +237,7 @@ export function setupNetworkTab(
     events: [],
     hotspotIp: null,
     watchIps: new Set(device.ip ? [device.ip] : []),
+    multiDevice: false,
     captureError: null,
     captureActive: false,
     rawPacketsAvailable: 0,
@@ -372,6 +324,10 @@ export function setupNetworkTab(
   const sessionListEl = panel.querySelector('[data-ni-session-list]');
   const sessionPaneEl = panel.querySelector('[data-ni-session-pane]');
   const detailPane = panel.querySelector('[data-ni-detail]');
+  // The detail pane's request/response markup is single-sourced in `network-detail-view.ts` and
+  // injected here, before the per-pane element queries below read from it. (Shared with the
+  // standalone Session Viewer so the two never drift.)
+  if (detailPane instanceof HTMLElement) detailPane.innerHTML = DETAIL_PANE_HTML;
   const copyMenuEl = panel.querySelector('[data-ni-copy-menu]') as HTMLElement | null;
   const copyCaretEl = panel.querySelector('[data-ni-copy-menu-toggle]') as HTMLElement | null;
   const copyDropdownEl = panel.querySelector('[data-ni-copy-dropdown]') as HTMLElement | null;
@@ -778,21 +734,6 @@ export function setupNetworkTab(
       );
       // Find visibility is decided in afterBodyRender (depends on rendered content).
     }
-  }
-
-  /** Upgrade any `[data-ni-fold]` placeholder into the collapsible, syntax-highlighted JSON/XML
-   *  tree using the shared Console fold renderer (same markup the "Console: JSON" viewer uses, so
-   *  the look, twisties, and performance match). The placeholder's textContent is the pretty text. */
-  function upgradeStructuredBodies(bodyEl: Element | null): void {
-    if (!(bodyEl instanceof HTMLElement)) return;
-    bodyEl.querySelectorAll('[data-ni-fold]').forEach((el) => {
-      if (!(el instanceof HTMLElement) || el.dataset.niFoldReady === '1') return;
-      const kind = el.dataset.niFold;
-      if (kind !== 'json' && kind !== 'xml') return;
-      // The placeholder holds the raw body; the shared renderer pretty-prints + highlights + folds.
-      renderStructuredInto(el, el.textContent || '', { kind });
-      el.dataset.niFoldReady = '1';
-    });
   }
 
   /** Find only makes sense for text bodies. Image/video/audio previews and empty/placeholder
@@ -2048,74 +1989,45 @@ export function setupNetworkTab(
     if (payload) openConsoleStructuredViewer(embBtn, payload, { titlePrefix: 'Network Inspector' });
   }, listenerOpts);
 
-  detailPane?.addEventListener('click', (e) => {
-    const target = e.target as HTMLElement | null;
-    const urlBtn = target?.closest('[data-ni-url]') as HTMLElement | null;
-    if (urlBtn?.dataset.niUrl) {
-      e.preventDefault();
-      openConsoleUrlViewer(urlBtn, urlBtn.dataset.niUrl, { titlePrefix: 'Network Inspector' });
-      return;
-    }
-    // JSON/XML embedded inside a raw text body → open the shared formatted viewer. Skip when the
-    // user is selecting text (a drag), so highlighting a fragment to copy doesn't pop the modal.
-    const embBtn = target?.closest('.ni-embedded-structured') as HTMLElement | null;
-    if (embBtn?.dataset.niEmbIdx) {
-      const sel = window.getSelection();
-      if (sel && !sel.isCollapsed) return;
-      e.preventDefault();
-      const pane = embBtn.closest('[data-ni-response-body]') ? 'response' : 'request';
-      const payload = getEmbeddedStructuredPayload(pane, parseInt(embBtn.dataset.niEmbIdx, 10));
-      if (payload) openConsoleStructuredViewer(embBtn, payload, { titlePrefix: 'Network Inspector' });
-      return;
-    }
-    const copyMenuToggle = target?.closest('[data-ni-copy-menu-toggle]') as HTMLElement | null;
-    if (copyMenuToggle) {
-      toggleCopyDropdown();
-      return;
-    }
-    const copyItem = target?.closest('[data-ni-copy-item]') as HTMLElement | null;
-    if (copyItem?.dataset.niCopyItem) {
-      const kind = copyItem.dataset.niCopyItem;
-      if (kind === 'curl' || kind === 'har') void exportSelectedAs(copyItem, kind);
-      else void copyPaneContent(copyItem, 'request');
-      closeCopyDropdown();
-      return;
-    }
-    const copyBtn = target?.closest('[data-ni-copy]') as HTMLElement | null;
-    if (copyBtn?.dataset.niCopy) {
-      void copyPaneContent(copyBtn, copyBtn.dataset.niCopy);
-      return;
-    }
-    const wrapBtn = target?.closest('[data-ni-wrap-toggle]') as HTMLElement | null;
-    if (wrapBtn) {
-      if (wrapBtn.dataset.niWrapToggle === 'response') {
-        state.responseBodyWrap = !state.responseBodyWrap;
-      } else {
-        state.requestBodyWrap = !state.requestBodyWrap;
-      }
-      syncBodyWrap();
-      return;
-    }
-    const reqTabBtn = target?.closest('[data-ni-req-tab]') as HTMLElement | null;
-    if (reqTabBtn?.dataset.niReqTab) {
-      const tab = reqTabBtn.dataset.niReqTab as RequestPaneTab;
-      if (tab === 'overview' || tab === 'body') {
-        if (state.requestTab === tab) return;
-        state.requestTab = tab;
-        renderDetail('request');
-      }
-      return;
-    }
-    const resTabBtn = target?.closest('[data-ni-res-tab]') as HTMLElement | null;
-    if (resTabBtn?.dataset.niResTab) {
-      const tab = resTabBtn.dataset.niResTab as ResponsePaneTab;
-      if (tab === 'headers' || tab === 'body') {
-        if (state.responseTab === tab) return;
-        state.responseTab = tab;
-        renderDetail('response');
-      }
-    }
-  }, listenerOpts);
+  if (detailPane instanceof HTMLElement) {
+    // Delegated detail-pane clicks (tabs/wrap/copy/cURL/HAR/URL/embedded) run through the shared
+    // dispatcher; the callbacks below preserve the live tab's exact behavior (lazy-loaded export,
+    // dropdown caret, per-pane wrap). `renderDetail`, find bars and badges stay local.
+    wireDetailInteractions(
+      detailPane,
+      {
+        onUrl: (anchor, url) =>
+          openConsoleUrlViewer(anchor, url, { titlePrefix: 'Network Inspector' }),
+        onEmbedded: (anchor, pane, idx) => {
+          const payload = getEmbeddedStructuredPayload(pane, idx);
+          if (payload) openConsoleStructuredViewer(anchor, payload, { titlePrefix: 'Network Inspector' });
+        },
+        onCopyMenuToggle: () => toggleCopyDropdown(),
+        onCopyItem: (item, kind) => {
+          if (kind === 'curl' || kind === 'har') void exportSelectedAs(item, kind);
+          else void copyPaneContent(item, 'request');
+          closeCopyDropdown();
+        },
+        onCopyBody: (btn, which) => void copyPaneContent(btn, which),
+        onToggleWrap: (which) => {
+          if (which === 'response') state.responseBodyWrap = !state.responseBodyWrap;
+          else state.requestBodyWrap = !state.requestBodyWrap;
+          syncBodyWrap();
+        },
+        onSetRequestTab: (tab) => {
+          if (state.requestTab === tab) return;
+          state.requestTab = tab;
+          renderDetail('request');
+        },
+        onSetResponseTab: (tab) => {
+          if (state.responseTab === tab) return;
+          state.responseTab = tab;
+          renderDetail('response');
+        }
+      },
+      listenerOpts
+    );
+  }
 
   // Right-click on a media preview (image/video/audio) → native menu to copy the actual picture
   // or save the file, instead of the text-only Copy button. The element's `src` is the data URL.
@@ -2359,6 +2271,9 @@ export function setupNetworkTab(
       state.hotspotIp = ip;
       syncWatchIps();
     },
+    setMultiDevice(multi: boolean) {
+      state.multiDevice = multi;
+    },
     setDeviceIp(ip: string) {
       const next = ip?.trim() || '';
       if (!next || next === state.deviceIp) return;
@@ -2413,7 +2328,10 @@ export function setupNetworkTab(
       if (filtered.length === 0) return;
       const hadSelection = !!state.selectedEventId;
       mergeEvents(filtered);
-      if (!state.hotspotIp && filtered[0]?.deviceIp) {
+      // Adopt the first matched event's IP as the hotspot lease only for a sole device — with
+      // multiple devices the lease must come from the authoritative serial-based resolution, or a
+      // tab could lock onto another device's IP (matched via the discovery fallback above).
+      if (!state.multiDevice && !state.hotspotIp && filtered[0]?.deviceIp) {
         state.hotspotIp = filtered[0].deviceIp;
         syncWatchIps();
       }
