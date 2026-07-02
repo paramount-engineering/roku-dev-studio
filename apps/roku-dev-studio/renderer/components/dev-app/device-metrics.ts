@@ -140,6 +140,34 @@ function ringSlotCount(): number {
   return Math.min(7200, Math.max(10, n));
 }
 
+/**
+ * Last non-null value in a ring, scanning from the end. Replaces the hot-path
+ * `[...ring].reverse().find(...)` which copied the whole ring (up to 7200 slots) and
+ * reversed it on every metrics frame, several times per frame.
+ */
+function lastNonNull(ring: Array<number | null>): number | null {
+  for (let i = ring.length - 1; i >= 0; i--) {
+    const v = ring[i];
+    if (v != null) return v;
+  }
+  return null;
+}
+
+/**
+ * Max finite value across one or more rings. Replaces `Math.max(0, ...[...a,...b].filter(...))`
+ * which both allocated a merged+filtered array and spread up to ~28k elements into a variadic
+ * call (a stack-overflow risk at large history) on every frame.
+ */
+function maxFiniteAcross(...rings: Array<Array<number | null>>): number {
+  let max = 0;
+  for (const ring of rings) {
+    for (const v of ring) {
+      if (v != null && Number.isFinite(v) && v > max) max = v;
+    }
+  }
+  return max;
+}
+
 function makeRing(len: number): Array<number | null> {
   return Array.from({ length: len }, () => null);
 }
@@ -274,6 +302,10 @@ function totalMetricValue(
   return Math.max(0, channelMemBytes);
 }
 
+/** Last-rendered data signature per resource-monitor element, so an unchanged tick can
+ *  skip the full `innerHTML=''` + re-sort + createElement rebuild. */
+const objectsRmSignatures = new WeakMap<HTMLElement, string>();
+
 function renderObjectsResourceMonitor(
   rm: HTMLElement,
   footerEl: HTMLElement | null,
@@ -284,6 +316,14 @@ function renderObjectsResourceMonitor(
   channelMemBytes: number,
   mode: ObjectsMode
 ): void {
+  // Skip the (expensive) rebuild when nothing that affects the rendered output changed.
+  // The "Updated:" label is intentionally part of this — it reflects when the data last
+  // changed, not wall-clock ticks. Signature is cheap (O(rows), rows are few dozen).
+  let sig = `${mode}|${totalCount}|${totalBytes}|${channelMemBytes}`;
+  for (const r of rows) sig += `|${r.label}:${r.count}:${r.bytes ?? ''}`;
+  if (objectsRmSignatures.get(rm) === sig) return;
+  objectsRmSignatures.set(rm, sig);
+
   const now = new Date();
   const timeStr = `Updated: ${now.toLocaleTimeString(undefined, {
     hour: '2-digit',
@@ -697,17 +737,17 @@ export function setupRemoteTabMetrics(
     liveRow.hidden = false;
     pausedEl.hidden = true;
 
-    const lastU = [...ringCpuUser].reverse().find((v) => v != null);
-      const lastS = [...ringCpuSys].reverse().find((v) => v != null);
+    const lastU = lastNonNull(ringCpuUser);
+      const lastS = lastNonNull(ringCpuSys);
       const lastT =
         lastU != null && lastS != null
           ? Math.min(100, lastU + lastS)
           : lastU != null || lastS != null
             ? Math.min(100, (lastU ?? 0) + (lastS ?? 0))
             : null;
-      const lastUsed = [...ringMemUsed].reverse().find((v) => v != null);
+      const lastUsed = lastNonNull(ringMemUsed);
 
-      const totalLast = [...ringObjTotal].reverse().find((v) => v != null);
+      const totalLast = lastNonNull(ringObjTotal);
       const modeRaw = wrap
         .querySelector('.remote-objects-mode-btn.is-active')
         ?.getAttribute('data-objects-mode');
@@ -747,12 +787,7 @@ export function setupRemoteTabMetrics(
         });
       }
 
-      const peakMemH = Math.max(
-        0,
-        ...[...ringMemUsed, ...ringMemRes, ...ringMemAnon, ...ringMemShared].filter(
-          (v): v is number => v != null && Number.isFinite(v)
-        )
-      );
+      const peakMemH = maxFiniteAcross(ringMemUsed, ringMemRes, ringMemAnon, ringMemShared);
       const memYMaxH = memChartYAxisMaxBytes({
         peakSampleBytes: peakMemH,
         chanperfLimitBytes: lastChanperfMemLimitBytes
@@ -836,10 +871,10 @@ export function setupRemoteTabMetrics(
     const clk = ps.clkTck > 0 ? ps.clkTck : 100;
     const userSec = ps.utime / clk;
     const sysSec = ps.stime / clk;
-    const lastUserPct = [...ringCpuUser].reverse().find((v) => v != null) ?? null;
-    const lastSysPct = [...ringCpuSys].reverse().find((v) => v != null) ?? null;
-    const lastMinorRate = [...ringFaultsMinorPerSec].reverse().find((v) => v != null) ?? null;
-    const lastMajorRate = [...ringFaultsMajorPerSec].reverse().find((v) => v != null) ?? null;
+    const lastUserPct = lastNonNull(ringCpuUser) ?? null;
+    const lastSysPct = lastNonNull(ringCpuSys) ?? null;
+    const lastMinorRate = lastNonNull(ringFaultsMinorPerSec) ?? null;
+    const lastMajorRate = lastNonNull(ringFaultsMajorPerSec) ?? null;
     const uptimeSec =
       procStatUptimeAnchorMs != null
         ? Math.max(0, (frame.nowMs - procStatUptimeAnchorMs) / 1000)
@@ -1009,8 +1044,8 @@ export function setupRemoteTabMetrics(
     frame: { nowMs: number; historyMs: number; maxSampleGapMs: number }
   ): void {
     const { nowMs, historyMs, maxSampleGapMs } = frame;
-    const lastU = [...ringCpuUser].reverse().find((v) => v != null);
-    const lastS = [...ringCpuSys].reverse().find((v) => v != null);
+    const lastU = lastNonNull(ringCpuUser);
+    const lastS = lastNonNull(ringCpuSys);
     const lastT =
       lastU != null && lastS != null
         ? Math.min(100, lastU + lastS)
@@ -1089,21 +1124,16 @@ export function setupRemoteTabMetrics(
       renderCpuPercentChart(root, { nowMs, historyMs, maxSampleGapMs });
     }
 
-    const lastUsed = [...ringMemUsed].reverse().find((v) => v != null);
-    const lastRes = [...ringMemRes].reverse().find((v) => v != null);
-    const lastAnon = [...ringMemAnon].reverse().find((v) => v != null);
-    const lastShared = [...ringMemShared].reverse().find((v) => v != null);
+    const lastUsed = lastNonNull(ringMemUsed);
+    const lastRes = lastNonNull(ringMemRes);
+    const lastAnon = lastNonNull(ringMemAnon);
+    const lastShared = lastNonNull(ringMemShared);
     setLegendMetric(root, '[data-legend="mem"]', 'mem-used', lastUsed != null ? fmtMb(lastUsed) : '—');
     setLegendMetric(root, '[data-legend="mem"]', 'mem-res', lastRes != null ? fmtMb(lastRes) : '—');
     setLegendMetric(root, '[data-legend="mem"]', 'mem-anon', lastAnon != null ? fmtMb(lastAnon) : '—');
     setLegendMetric(root, '[data-legend="mem"]', 'mem-shared', lastShared != null ? fmtMb(lastShared) : '—');
 
-    const peakMem = Math.max(
-      0,
-      ...[...ringMemUsed, ...ringMemRes, ...ringMemAnon, ...ringMemShared].filter(
-        (v): v is number => v != null && Number.isFinite(v)
-      )
-    );
+    const peakMem = maxFiniteAcross(ringMemUsed, ringMemRes, ringMemAnon, ringMemShared);
     const memYMax = memChartYAxisMaxBytes({
       peakSampleBytes: peakMem,
       chanperfLimitBytes: lastChanperfMemLimitBytes
@@ -1159,7 +1189,7 @@ export function setupRemoteTabMetrics(
       }
     });
 
-    const totalLast = [...ringObjTotal].reverse().find((v) => v != null);
+    const totalLast = lastNonNull(ringObjTotal);
 
     const modeRaw = root.querySelector('.remote-objects-mode-btn.is-active')?.getAttribute('data-objects-mode');
     const objectsMode: ObjectsMode = modeRaw === 'memory' ? 'memory' : 'count';
