@@ -66,6 +66,7 @@ import {
 } from './modules/mcp-bridge-client.js';
 import { peekAppConnector } from './modules/app-connector/index.js';
 import { mountUpdateNotification } from './components/modals/update-notification.js';
+import { setupWelcomeFeatureModals } from './components/modals/welcome-feature-modal.js';
 
 // ============================================
 // Developer Mode - Conditional Logging
@@ -5824,6 +5825,7 @@ function runInit() {
   ensureMcpStoredPasswordBridge();
   ensureMcpAgentScreenshotBridge();
   mountUpdateNotification();
+  setupWelcomeFeatureModals();
   onMcpAgentAction((payload) => {
     if (!payload || typeof payload.summary !== 'string' || !payload.summary) return;
     const variant = payload.level === 'destructive' ? 'warning' : 'info';

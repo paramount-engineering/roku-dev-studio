@@ -2449,16 +2449,16 @@
        "wider window, sidebar open". */
     .welcome-features {
       display: grid;
-      grid-template-columns: repeat(5, minmax(0, 1fr));
+      grid-template-columns: repeat(6, minmax(0, 1fr));
       gap: 16px;
-      width: min(1200px, 100%);
+      width: min(1440px, 100%);
       margin: 8px auto 0;
     }
-    
-    @container welcome (max-width: 1100px) {
+
+    @container welcome (max-width: 1240px) {
       .welcome-features { grid-template-columns: repeat(4, minmax(0, 1fr)); }
     }
-    @container welcome (max-width: 860px) {
+    @container welcome (max-width: 900px) {
       .welcome-features { grid-template-columns: repeat(3, minmax(0, 1fr)); }
     }
     @container welcome (max-width: 620px) {
@@ -2491,6 +2491,8 @@
     .welcome-feature:nth-child(8)  { animation-delay: 0.40s; }
     .welcome-feature:nth-child(9)  { animation-delay: 0.45s; }
     .welcome-feature:nth-child(10) { animation-delay: 0.50s; }
+    .welcome-feature:nth-child(11) { animation-delay: 0.55s; }
+    .welcome-feature:nth-child(12) { animation-delay: 0.60s; }
     
     @keyframes featureSlideUp {
       from { opacity: 0; transform: translateY(30px); }
@@ -2572,7 +2574,140 @@
       color: var(--text-muted);
       line-height: 1.5;
     }
-    
+
+    /* ── Welcome feature tile → detail modal (flip-open) ─────────────────── */
+    .welcome-feature-clickable { cursor: pointer; }
+    .welcome-feature-clickable:focus-visible {
+      outline: 2px solid var(--accent-purple);
+      outline-offset: 2px;
+    }
+
+    .welcome-detail-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 100000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      background: rgba(0, 0, 0, 0);
+      backdrop-filter: blur(0px);
+      -webkit-backdrop-filter: blur(0px);
+      transition: background-color 0.42s cubic-bezier(0.16, 1, 0.3, 1),
+        backdrop-filter 0.42s cubic-bezier(0.16, 1, 0.3, 1),
+        -webkit-backdrop-filter 0.42s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .welcome-detail-overlay.is-open {
+      background: rgba(0, 0, 0, 0.7);
+      backdrop-filter: blur(4px);
+      -webkit-backdrop-filter: blur(4px);
+    }
+
+    .welcome-detail-modal {
+      position: relative;
+      width: min(520px, 100%);
+      max-height: min(84vh, 640px);
+      overflow-y: auto;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      box-shadow: 0 24px 70px rgba(0, 0, 0, 0.55);
+      padding: 26px 26px 24px;
+      /* Keep the flip crisp (no flattening of the 3D rotate). */
+      transform-style: preserve-3d;
+      backface-visibility: hidden;
+      will-change: transform, opacity;
+    }
+
+    .welcome-detail-close {
+      position: absolute;
+      top: 14px;
+      right: 14px;
+      width: 30px;
+      height: 30px;
+      border: none;
+      background: var(--bg-elevated);
+      color: var(--text-muted);
+      border-radius: 8px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.15s, color 0.15s;
+    }
+    .welcome-detail-close:hover {
+      background: var(--bg-elevated);
+      color: var(--text-primary);
+      border: 1px solid var(--border-hover, rgba(139, 92, 246, 0.25));
+    }
+
+    .welcome-detail-hero {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding-right: 34px;
+      margin-bottom: 18px;
+    }
+    .welcome-detail-hero-icon .feature-icon-wrapper {
+      width: 56px;
+      height: 56px;
+      border-radius: 14px;
+    }
+    .welcome-detail-hero-icon .feature-icon-wrapper .icon {
+      width: 28px;
+      height: 28px;
+    }
+    .welcome-detail-title {
+      margin: 0 0 4px;
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--text-primary);
+      line-height: 1.2;
+    }
+    .welcome-detail-sub {
+      margin: 0;
+      font-size: 12.5px;
+      color: var(--text-muted);
+      line-height: 1.45;
+    }
+
+    .welcome-detail-body { color: var(--text-secondary); }
+    .welcome-detail-blurb {
+      margin: 0 0 14px;
+      font-size: 13.5px;
+      line-height: 1.6;
+      color: var(--text-secondary);
+    }
+    .welcome-detail-points {
+      margin: 0;
+      padding-left: 0;
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 9px;
+    }
+    .welcome-detail-points li {
+      position: relative;
+      padding-left: 22px;
+      font-size: 13px;
+      line-height: 1.45;
+      color: var(--text-secondary);
+    }
+    .welcome-detail-points li::before {
+      content: '';
+      position: absolute;
+      left: 4px;
+      top: 7px;
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--accent-purple);
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .welcome-detail-overlay { transition: none; }
+    }
+
     /* App Connector Highlight Section */
     .welcome-connector-highlight {
       display: flex;
@@ -12748,6 +12883,12 @@
     <symbol id="icon-server" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <rect width="20" height="8" x="2" y="2" rx="2" ry="2"/><rect width="20" height="8" x="2" y="14" rx="2" ry="2"/><line x1="6" x2="6.01" y1="6" y2="6"/><line x1="6" x2="6.01" y1="18" y2="18"/>
     </symbol>
+    <!-- Official Model Context Protocol logo (Wikimedia Commons). stroke=currentColor so it tints with the surrounding text/icon color. -->
+    <symbol id="icon-mcp" viewBox="0 0 180 180" fill="none" stroke="currentColor" stroke-width="12" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M18 84.8528L85.8822 16.9706C95.2548 7.59798 110.451 7.59798 119.823 16.9706V16.9706C129.196 26.3431 129.196 41.5391 119.823 50.9117L68.5581 102.177"/>
+      <path d="M69.2652 101.47L119.823 50.9117C129.196 41.5391 144.392 41.5391 153.765 50.9117L154.118 51.2652C163.491 60.6378 163.491 75.8338 154.118 85.2063L92.7248 146.6C89.6006 149.724 89.6006 154.789 92.7248 157.913L105.331 170.52"/>
+      <path d="M102.853 33.9411L52.6482 84.1457C43.2756 93.5183 43.2756 108.714 52.6482 118.087V118.087C62.0208 127.459 77.2167 127.459 86.5893 118.087L136.794 67.8822"/>
+    </symbol>
     <symbol id="icon-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <path d="M5 12h14"/><path d="M12 5v14"/>
     </symbol>
@@ -13449,6 +13590,53 @@
               </div>
               <div class="welcome-feature">
                 <div class="feature-header">
+                <div class="feature-icon-wrapper indigo">
+                  <span class="icon"><svg><use href="#icon-app"/></svg></span>
+                </div>
+                <div class="feature-title">Apps &amp; Deep Linking</div>
+                </div>
+                <div class="feature-desc">Browse, Launch Apps, Use Deep Links with custom parameters.</div>
+              </div>
+              <div class="welcome-feature">
+                <div class="feature-header">
+                <div class="feature-icon-wrapper amber">
+                  <span class="icon"><svg><use href="#icon-zap"/></svg></span>
+                </div>
+                <div class="feature-title">Dev App</div>
+                </div>
+                <div class="feature-desc">Sideload dev channels and auto-capture Dev App screenshots.</div>
+              </div>
+              <div class="welcome-feature">
+                <div class="feature-header">
+                <div class="feature-icon-wrapper teal">
+                  <span class="icon"><svg><use href="#icon-plug"/></svg></span>
+                </div>
+                <div class="feature-title">App Connector</div>
+                </div>
+                <div class="feature-desc">Execute BrightScript functions on a sideloaded App.</div>
+              </div>
+              <div class="welcome-feature">
+                <div class="feature-header">
+                <div class="feature-icon-wrapper pink">
+                  <span class="icon"><svg><use href="#icon-rocket"/></svg></span>
+                </div>
+                <div class="feature-title">Fiddle</div>
+                </div>
+                <div class="feature-desc">Run BrightScript snippets on-device in a Monaco editor.</div>
+              </div>
+              <div class="welcome-feature">
+                <div class="feature-header">
+                <div class="feature-icon-wrapper orange">
+                  <span class="icon"><svg><use href="#icon-mcp"/></svg></span>
+                </div>
+                <div class="feature-title">MCP Server</div>
+                </div>
+                <div class="feature-desc">Expose Roku Dev Studio to AI agents using MCP Server.</div>
+              </div>
+
+              <!-- Row 2 -->
+              <div class="welcome-feature">
+                <div class="feature-header">
                 <div class="feature-icon-wrapper green">
                   <span class="icon"><svg><use href="#icon-gamepad"/></svg></span>
                 </div>
@@ -13458,12 +13646,12 @@
               </div>
               <div class="welcome-feature">
                 <div class="feature-header">
-                <div class="feature-icon-wrapper amber">
-                  <span class="icon"><svg><use href="#icon-zap"/></svg></span>
+                <div class="feature-icon-wrapper teal">
+                  <span class="icon"><svg><use href="#icon-database"/></svg></span>
                 </div>
-                <div class="feature-title">Dev App</div>
+                <div class="feature-title">Query</div>
                 </div>
-                <div class="feature-desc">Sideload dev apps/channels, control the Dev App and auto-capture screenshots.</div>
+                <div class="feature-desc">Query device info, media-player state, and registry over ECP.</div>
               </div>
               <div class="welcome-feature">
                 <div class="feature-header">
@@ -13483,8 +13671,15 @@
                 </div>
                 <div class="feature-desc">Chain key presses, launches, and RALE calls into automated flows.</div>
               </div>
-
-              <!-- Row 2 -->
+              <div class="welcome-feature">
+                <div class="feature-header">
+                <div class="feature-icon-wrapper indigo">
+                  <span class="icon"><svg><use href="#icon-network"/></svg></span>
+                </div>
+                <div class="feature-title">Network Inspector</div>
+                </div>
+                <div class="feature-desc">Inspect Dev App HTTP/HTTPS traffic via a MITM proxy.</div>
+              </div>
               <div class="welcome-feature">
                 <div class="feature-header">
                 <div class="feature-icon-wrapper cyan">
@@ -13493,42 +13688,6 @@
                 <div class="feature-title">Remote Locations</div>
                 </div>
                 <div class="feature-desc">Connect to Roku devices anywhere via relay servers.</div>
-              </div>
-              <div class="welcome-feature">
-                <div class="feature-header">
-                <div class="feature-icon-wrapper indigo">
-                  <span class="icon"><svg><use href="#icon-app"/></svg></span>
-                </div>
-                <div class="feature-title">Apps &amp; Deep Linking</div>
-                </div>
-                <div class="feature-desc">Browse, launch apps, and test deep links with custom parameters.</div>
-              </div>
-              <div class="welcome-feature">
-                <div class="feature-header">
-                <div class="feature-icon-wrapper pink">
-                  <span class="icon"><svg><use href="#icon-rocket"/></svg></span>
-                </div>
-                <div class="feature-title">Fiddle</div>
-                </div>
-                <div class="feature-desc">Run BrightScript snippets on a connected device — Monaco Editor, live linting, one-click run.</div>
-              </div>
-              <div class="welcome-feature">
-                <div class="feature-header">
-                <div class="feature-icon-wrapper teal">
-                  <span class="icon"><svg><use href="#icon-plug"/></svg></span>
-                </div>
-                <div class="feature-title">App Connector</div>
-                </div>
-                <div class="feature-desc">Execute BrightScript functions remotely on a sideloaded channel.</div>
-              </div>
-              <div class="welcome-feature">
-                <div class="feature-header">
-                <div class="feature-icon-wrapper orange">
-                  <span class="icon"><svg><use href="#icon-server"/></svg></span>
-                </div>
-                <div class="feature-title">MCP Server</div>
-                </div>
-                <div class="feature-desc">Expose Roku Dev Studio to AI agents via Model Context Protocol.</div>
               </div>
             </div>
           </div>
