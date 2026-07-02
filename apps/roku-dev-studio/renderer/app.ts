@@ -68,6 +68,16 @@ import { peekAppConnector } from './modules/app-connector/index.js';
 import { mountUpdateNotification } from './components/modals/update-notification.js';
 import { setupWelcomeFeatureModals } from './components/modals/welcome-feature-modal.js';
 
+// Per-device-panel expando hooks set up by the responsive-header measurer and read on
+// live rename / tab-close teardown. Declared here so TypeScript recognizes them on the
+// panel elements (they're intentionally attached to the DOM node, not tracked in a map).
+declare global {
+  interface HTMLElement {
+    _headerResponsiveRemeasure?: () => void;
+    _headerResponsiveCleanup?: () => void;
+  }
+}
+
 // ============================================
 // Developer Mode - Conditional Logging
 // ============================================
@@ -1347,10 +1357,6 @@ function showServerCapabilities(location, opener?: HTMLElement | null) {
   document.addEventListener('keydown', escHandler);
 }
 
-// Compatibility alias (historical name)
-function createRemoteLocationCard(location) {
-  return createRemoteLocationSection(location);
-}
 
 // Create a device card for remote device (matching local device card format)
 function createRemoteDeviceCard(device, locationId) {
@@ -3809,7 +3815,7 @@ function setupApps(panel, device, api) {
         appMatches.sort((a, b) => a[2].localeCompare(b[2]));
 
         let inputCount = 0;
-        const iconTasks = [];
+        const iconTasks: Array<() => Promise<void>> = [];
         for (const match of appMatches) {
           const appId = match[1];
           const appName = decodeHtmlEntities(match[2]);
