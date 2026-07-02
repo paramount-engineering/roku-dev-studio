@@ -49,7 +49,11 @@ function parseBundle(text: string): ParsedSession {
   if (!obj || !Array.isArray(obj.events)) {
     throw new Error('Not a Roku Dev Studio network session file (missing "events" array).');
   }
-  const events = obj.events as ParsedNetworkEvent[];
+  // Keep only object entries — a crafted/corrupt file could carry primitives in the
+  // array (e.g. `{"events":[1,2,3]}`), which the renderer would later deref (e.deviceIp…).
+  const events = (obj.events as unknown[]).filter(
+    (e): e is ParsedNetworkEvent => !!e && typeof e === 'object'
+  );
   const deviceIps = Array.isArray(obj.deviceIps)
     ? (obj.deviceIps as unknown[]).filter((ip): ip is string => typeof ip === 'string')
     : collectDeviceIps(events);

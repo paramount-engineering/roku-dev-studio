@@ -27,7 +27,17 @@ function pickQop(challenge: Record<string, string>): string | undefined {
   if (!raw) return undefined;
   const options = raw.split(',').map((s) => s.trim().replace(/^"|"$/g, ''));
   if (options.includes('auth')) return 'auth';
-  return options[0];
+  // We only implement `qop=auth`. Returning an unsupported value like `auth-int`
+  // here would build a response digest WITHOUT the required entity-body hash — a
+  // definitely-wrong header that fails as "authentication failed" even with the
+  // correct password. Fall back to legacy (no-qop, RFC 2069) digest instead.
+  return undefined;
+}
+
+/** Strip CR/LF and quotes from a value interpolated into a multipart header param so a
+ *  crafted field name / filename can't break framing or inject extra headers. */
+function sanitizeHeaderParam(value: string): string {
+  return String(value).replace(/[\r\n"]/g, '').slice(0, 256);
 }
 
 function md5Hex(value: string): string {
@@ -85,17 +95,17 @@ function buildMultipartBody(
 
   for (const field of fields) {
     chunks.push(Buffer.from(`--${boundary}${crlf}`));
-    chunks.push(Buffer.from(`Content-Disposition: form-data; name="${field.name}"${crlf}${crlf}`));
+    chunks.push(Buffer.from(`Content-Disposition: form-data; name="${sanitizeHeaderParam(field.name)}"${crlf}${crlf}`));
     chunks.push(Buffer.from(field.value));
     chunks.push(Buffer.from(crlf));
   }
 
   for (const file of files) {
-    const ct = file.contentType ?? 'application/octet-stream';
+    const ct = sanitizeHeaderParam(file.contentType ?? 'application/octet-stream');
     chunks.push(Buffer.from(`--${boundary}${crlf}`));
     chunks.push(
       Buffer.from(
-        `Content-Disposition: form-data; name="${file.name}"; filename="${file.filename}"${crlf}Content-Type: ${ct}${crlf}${crlf}`
+        `Content-Disposition: form-data; name="${sanitizeHeaderParam(file.name)}"; filename="${sanitizeHeaderParam(file.filename)}"${crlf}Content-Type: ${ct}${crlf}${crlf}`
       )
     );
     chunks.push(file.data);

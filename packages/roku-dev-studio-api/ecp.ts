@@ -258,17 +258,27 @@ function getIcon(ip: string, appId: string, opts: EcpCallOpts = {}) {
         chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
       });
       res.on('end', () => {
-        if (res.statusCode === 200 && chunks.length > 0) {
+        const contentType = res.headers['content-type'];
+        // A device that returns 200 + an HTML "not found" page would otherwise be
+        // base64-encoded into a broken-image data URL. Require an image content-type
+        // (absent is tolerated — some devices omit it — and defaults to png).
+        const looksLikeImage = !contentType || /^image\//i.test(contentType);
+        if (res.statusCode === 200 && chunks.length > 0 && looksLikeImage) {
           const buffer = Buffer.concat(chunks);
           const base64 = buffer.toString('base64');
-          const mimeType = res.headers['content-type'] || 'image/png';
+          const mimeType = contentType || 'image/png';
           const dataUrl = `data:${mimeType};base64,${base64}`;
           resolve({ success: true, dataUrl, mimeType });
         } else {
           const err = ecpErrorFromStatus(res.statusCode || 0);
           resolve({
             success: false,
-            error: res.statusCode === 200 ? 'Empty icon response' : err.error,
+            error:
+              res.statusCode === 200
+                ? looksLikeImage
+                  ? 'Empty icon response'
+                  : 'Device returned a non-image response for icon'
+                : err.error,
             statusCode: res.statusCode,
             authFailed: err.authFailed
           });

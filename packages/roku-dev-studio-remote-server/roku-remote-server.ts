@@ -110,7 +110,29 @@ function storeRelayQueryCache(ip: string, endpoint: string, result: unknown): vo
 }
 
 // Configuration
-const PORT = parseInt(process.argv[2]) || 4951;
+const PORT = parseInt(process.argv[2], 10) || 4951;
+
+// Optional shared-secret authentication. This relay is designed to be reachable over
+// the network and exposes full device control (keypress, sideload, telnet, capture).
+// CORS is NOT authentication — it only constrains browsers, not curl/scripts/other hosts.
+// If RDS_RELAY_TOKEN is set, every route (except /health) and the WebSocket upgrade
+// require `Authorization: Bearer <token>` or `?token=<token>`. If unset, the server
+// stays open for backward compatibility but logs a prominent startup warning.
+const RELAY_TOKEN = (process.env.RDS_RELAY_TOKEN || '').trim();
+
+/** Constant-time check that the request carries the configured bearer token. */
+function isAuthorized(req, parsedUrl?: URL): boolean {
+  if (!RELAY_TOKEN) return true; // auth disabled
+  const header = String(req.headers['authorization'] || '');
+  const m = /^Bearer\s+(.+)$/i.exec(header);
+  let provided = m ? m[1].trim() : '';
+  // Browsers can't set an Authorization header on a WebSocket upgrade, so also accept ?token=.
+  if (!provided && parsedUrl) provided = parsedUrl.searchParams.get('token') || '';
+  if (provided.length === 0) return false;
+  const a = Buffer.from(provided);
+  const b = Buffer.from(RELAY_TOKEN);
+  return a.length === b.length && nodeCrypto.timingSafeEqual(a, b);
+}
 
 // ============================================
 // Network Inspector (capture + MITM) — engine integration
@@ -298,11 +320,14 @@ function parseBody(body, contentType) {
     return parseFormUrlEncoded(body);
   }
   
-  // Try JSON first, then form-urlencoded as fallback
-  const jsonResult = parseJson(body);
-  if (jsonResult) return jsonResult;
-  
-  return parseFormUrlEncoded(body);
+  // Try JSON first; fall back to form-urlencoded ONLY on a real parse error.
+  // (Don't use `parseJson() || fallback`: valid JSON `0`, `false`, `""`, `null`
+  //  are falsy and would be wrongly re-parsed as a form body.)
+  try {
+    return JSON.parse(body);
+  } catch {
+    return parseFormUrlEncoded(body);
+  }
 }
 
 function sendJson(res, data, statusCode = 200) {
@@ -657,6 +682,13 @@ function handleTelnetWebSocket(req, socket, head, sessionId, opts: { skipBuffer?
   // Perform WebSocket handshake (RFC 6455). Sec-WebSocket-Accept is a hash of the
   // client key—not user-controlled HTML; safe to send in response header.
   const key = req.headers['sec-websocket-key'];
+  if (typeof key !== 'string' || key.length === 0) {
+    // A missing key would otherwise hash `undefined` into a bogus-but-"successful"
+    // handshake. Reject per RFC 6455.
+    socket.write('HTTP/1.1 400 Bad Request\r\n\r\n');
+    socket.destroy();
+    return;
+  }
   const acceptKey = nodeCrypto
     .createHash('sha1')
     .update(key + '258EAFA5-E914-47DA-95CA-C5AB0DC85B11')
@@ -702,11 +734,28 @@ function handleTelnetWebSocket(req, socket, head, sessionId, opts: { skipBuffer?
   
   socket.on('data', (data) => {
     frameBuffer = Buffer.concat([frameBuffer, data]);
-    
+
+    // Guard against a client that streams bytes but never completes a frame (OOM DoS).
+    if (frameBuffer.length > MAX_WS_BUFFER_BYTES) {
+      log(`Telnet: WS buffer exceeded ${MAX_WS_BUFFER_BYTES} bytes for session ${sessionId}, closing`);
+      ws.readyState = 3;
+      session.wsClients.delete(ws);
+      socket.destroy();
+      return;
+    }
+
     while (frameBuffer.length >= 2) {
       const frame = parseWebSocketFrame(frameBuffer);
       if (!frame) break;
-      
+
+      if (frame.protocolError) {
+        log(`Telnet: WS protocol error (${frame.protocolError}) for session ${sessionId}, closing`);
+        ws.readyState = 3;
+        session.wsClients.delete(ws);
+        socket.destroy();
+        return;
+      }
+
       frameBuffer = frameBuffer.slice(frame.totalLength);
       
       if (frame.opcode === 0x8) {
@@ -777,8 +826,15 @@ function createWebSocketFrame(data) {
   return Buffer.concat([header, data]);
 }
 
+/** Hard cap on a single inbound WS frame's declared payload (control commands are tiny). */
+const MAX_WS_FRAME_BYTES = 1 * 1024 * 1024; // 1 MB
+/** Hard cap on the accumulation buffer while waiting for a full frame (frame + partial next). */
+const MAX_WS_BUFFER_BYTES = 2 * 1024 * 1024; // 2 MB
+
 /**
- * Parse an incoming WebSocket frame
+ * Parse an incoming WebSocket frame.
+ * Returns `null` when more bytes are needed, `{ protocolError }` on a fatal violation
+ * (caller must close the socket), or a parsed frame otherwise.
  */
 function parseWebSocketFrame(buffer) {
   if (buffer.length < 2) return null;
@@ -796,30 +852,35 @@ function parseWebSocketFrame(buffer) {
     offset = 4;
   } else if (payloadLength === 127) {
     if (buffer.length < 10) return null;
-    payloadLength = Number(buffer.readBigUInt64BE(2));
+    const big = buffer.readBigUInt64BE(2);
+    // Bound before Number() so a huge declared length can't drive unbounded buffering.
+    if (big > BigInt(MAX_WS_FRAME_BYTES)) return { protocolError: 'frame too large' };
+    payloadLength = Number(big);
     offset = 10;
   }
 
+  if (payloadLength > MAX_WS_FRAME_BYTES) return { protocolError: 'frame too large' };
+  // RFC 6455 §5.1: client→server frames MUST be masked. Reject unmasked frames.
+  if (!isMasked) return { protocolError: 'unmasked client frame' };
+
   const maskOffset = offset;
-  if (isMasked) offset += 4;
+  offset += 4;
 
   const totalLength = offset + payloadLength;
   if (buffer.length < totalLength) return null;
 
   let payload = buffer.slice(offset, totalLength);
-  
-  if (isMasked) {
-    const mask = buffer.slice(maskOffset, maskOffset + 4);
-    for (let i = 0; i < payload.length; i++) {
-      payload[i] ^= mask[i % 4];
-    }
+
+  const mask = buffer.slice(maskOffset, maskOffset + 4);
+  for (let i = 0; i < payload.length; i++) {
+    payload[i] ^= mask[i % 4];
   }
 
   return { opcode, payload: payload.toString(), totalLength };
 }
 
-// Cleanup stale telnet sessions every 5 minutes
-setInterval(() => {
+// Cleanup stale telnet sessions every 5 minutes. Handle kept so shutdown can clear it.
+const staleSessionCleanupInterval = setInterval(() => {
   const now = Date.now();
   const TIMEOUT = 30 * 60 * 1000; // 30 minutes
   
@@ -886,6 +947,11 @@ async function telnetSystemConnect(deviceIP) {
     if (c) {
       c.lastActivity = Date.now();
       c.buffer += text;
+      // Bound the buffer like the 8085 path (line ~570). Without listeners draining it,
+      // a chatty device console would otherwise grow this string without limit.
+      if (c.buffer.length > 100000) {
+        c.buffer = c.buffer.slice(-50000);
+      }
       c.listeners.forEach((listener) => {
         try {
           listener({ ip: deviceIP, data: text });
@@ -1008,6 +1074,11 @@ async function handleRequest(req, res) {
     res.writeHead(204, corsHeaders);
     res.end();
     return;
+  }
+
+  // Optional shared-secret gate (see RELAY_TOKEN). /health stays open for uptime probes.
+  if (RELAY_TOKEN && pathname !== '/health' && !isAuthorized(req, parsedUrl)) {
+    return sendError(res, 'Unauthorized', 401);
   }
 
   log(`${method} ${pathname}`);
@@ -1188,10 +1259,18 @@ async function handleRequest(req, res) {
           /* ignore */
         }
       }, 25000);
-      req.on('close', () => {
+      // Clear the heartbeat on ANY end event, not just req 'close'. If the response
+      // socket errors, req 'close' may not fire and the interval would leak forever.
+      let sseCleaned = false;
+      const cleanupSse = () => {
+        if (sseCleaned) return;
+        sseCleaned = true;
         clearInterval(heartbeat);
         networkSseClients.delete(res);
-      });
+      };
+      req.on('close', cleanupSse);
+      res.on('close', cleanupSse);
+      res.on('error', cleanupSse);
       return;
     }
 
@@ -1715,9 +1794,26 @@ const server = http.createServer(handleRequest);
 
 // Handle WebSocket upgrade for telnet streaming
 server.on('upgrade', (req, socket, head) => {
-  const parsedUrl = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
+  // The raw upgrade socket can emit 'error' (client abort during handshake) with no
+  // listener → uncaughtException → process crash. Attach one before any other work.
+  socket.on('error', () => socket.destroy());
+
+  let parsedUrl: URL;
+  try {
+    parsedUrl = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
+  } catch {
+    socket.write('HTTP/1.1 400 Bad Request\r\n\r\n');
+    socket.destroy();
+    return;
+  }
   const pathname = parsedUrl.pathname;
-  
+
+  if (RELAY_TOKEN && !isAuthorized(req, parsedUrl)) {
+    socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
+    socket.destroy();
+    return;
+  }
+
   // Check if this is a telnet stream request: /telnet/stream/{sessionId}
   const match = pathname.match(/^\/telnet\/stream\/([^\/]+)$/);
   if (match) {
@@ -1766,36 +1862,34 @@ server.listen(PORT, '0.0.0.0', () => {
   log(`  GET  /device/:ip/telnet-system/status      - Check connection status`);
   log(`  GET  /device/:ip/telnet-system/data       - Get buffered data`);
   log(`==============================================`);
-  
+  if (RELAY_TOKEN) {
+    log(`🔒 Auth: shared-secret token REQUIRED (Authorization: Bearer … or ?token=…)`);
+  } else {
+    log(`⚠️  Auth: DISABLED — anyone who can reach this port can fully control every`);
+    log(`⚠️  Roku on the network (keypress, sideload, telnet, capture). CORS is NOT auth.`);
+    log(`⚠️  Set RDS_RELAY_TOKEN=<secret> to require a bearer token on all routes.`);
+  }
+  log(`==============================================`);
+
   // Initial device discovery
-  discoverDevices().then(devices => {
-    log(`Initial discovery found ${devices.length} device(s)`);
-  });
+  discoverDevices()
+    .then(devices => {
+      log(`Initial discovery found ${devices.length} device(s)`);
+    })
+    .catch(err => {
+      log(`Initial discovery failed: ${errMsg(err)}`);
+    });
 });
 
-// Handle graceful shutdown
-process.on('SIGINT', () => {
-  log('Shutting down...');
-  raleDisconnectAll();
-  // Close telnet sessions
-  telnetSessions.forEach((session, id) => {
-    telnetSessionClose(id);
-  });
-  // Close telnet system connections
-  telnetSystemConnections.forEach((connection, deviceIP) => {
-    if (connection.socket && !connection.socket.destroyed) {
-      connection.socket.destroy();
-    }
-  });
-  telnetSystemConnections.clear();
-  server.close(() => {
-    log('Server stopped');
-    process.exit(0);
-  });
-});
-
-process.on('SIGTERM', () => {
-  log('Received SIGTERM, shutting down...');
+// Handle graceful shutdown. `server.close()` alone waits for all keep-alive/WS/SSE
+// sockets to drain, which never happens for a long-lived telnet stream — so the process
+// would hang forever. Force-close active connections and add a hard-exit backstop.
+let shuttingDown = false;
+function shutdown(signal: string): void {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  log(`Received ${signal}, shutting down...`);
+  clearInterval(staleSessionCleanupInterval);
   raleDisconnectAll();
   telnetSessions.forEach((_, id) => telnetSessionClose(id));
   telnetSystemConnections.forEach((connection) => {
@@ -1805,7 +1899,17 @@ process.on('SIGTERM', () => {
   });
   telnetSystemConnections.clear();
   server.close(() => {
+    log('Server stopped');
     process.exit(0);
   });
-});
+  // Node 18.2+: drop lingering keep-alive/upgrade sockets so close() can fire.
+  if (typeof (server as { closeAllConnections?: () => void }).closeAllConnections === 'function') {
+    (server as { closeAllConnections: () => void }).closeAllConnections();
+  }
+  // Backstop: exit even if a socket refuses to close. unref() so it can't keep us alive.
+  setTimeout(() => process.exit(0), 5000).unref();
+}
+
+process.on('SIGINT', () => shutdown('SIGINT'));
+process.on('SIGTERM', () => shutdown('SIGTERM'));
 

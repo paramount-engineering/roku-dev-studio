@@ -39,12 +39,12 @@ function parsePluginInstallResponse(response: string): { success: true; message:
     const errorMatch = response.match(/Install Failure:\s*([^<\n]+)/);
     return { success: false, error: errorMatch ? errorMatch[1].trim() : 'Installation failed' };
   }
-  if (response.includes('Delete Success') || (response.includes('Roku') && !response.includes('Failure'))) {
-    return { success: true, message: 'Sideloaded channel deleted successfully!' };
-  }
   if (responseLooksLikeAuthFailure(0, response)) {
     return { success: false, error: 'Authentication failed. Check your developer password.', authFailed: true };
   }
+  // Install-only parser (deleteSideload parses its own response). A generic success
+  // page ("Roku" present, no "Failure") means the install landed — this used to be
+  // shadowed by a misplaced delete-success branch that mislabeled installs as deletes.
   if (response.includes('Roku') && !response.includes('Failure')) {
     return { success: true, message: 'Channel installed! Check your Roku device.' };
   }
@@ -88,7 +88,10 @@ async function sideloadChannel({ ip, filePath, password, log = (_m: string) => u
     return { success: false, error: 'File path is required' };
   }
   const normalizedPath = path.normalize(filePath.trim());
-  if (normalizedPath.includes('..')) {
+  // Reject only actual `..` path segments, not directory names that merely contain
+  // ".." (e.g. `/Users/x/my..app/chan.zip`). After normalize, a legit path has no
+  // standalone `..` segment, so this catches traversal without false-positives.
+  if (normalizedPath.split(path.sep).includes('..')) {
     return { success: false, error: 'Invalid file path' };
   }
   if (!fs.existsSync(normalizedPath)) {
