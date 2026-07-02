@@ -4,7 +4,7 @@
  * `../../vendor/modern-screenshot.mjs` from `renderer/components/**` before a full transpile.
  */
 import * as path from 'path';
-import { copyModernScreenshotVendor } from './transpile-renderer.ts';
+import { copyModernScreenshotVendor } from './transpile-renderer';
 
 const appDir = path.resolve(__dirname, '../..');
 const rendererRoot = path.join(appDir, 'renderer');

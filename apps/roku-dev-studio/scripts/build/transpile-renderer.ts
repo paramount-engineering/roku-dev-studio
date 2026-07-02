@@ -53,6 +53,33 @@ export function copyMonacoVendor(appDir: string, rendererDist: string): void {
     fs.rmSync(dest, { recursive: true, force: true });
   }
   fs.cpSync(src, dest, { recursive: true });
+  pruneMonacoVendor(dest);
+}
+
+/**
+ * Drop the Monaco pieces the Fiddle window never loads (~7.6 MB of the ~13 MB `min/vs`).
+ * Fiddle registers a fully-custom `brightscript` Monarch language (see fiddle.ts) and
+ * never creates models for any built-in language, so:
+ *   - `vs/language/*`     — TS/HTML/CSS/JSON worker language services (~6.9 MB), never requested.
+ *   - `vs/basic-languages/*` — the 81 built-in syntax defs (~640 KB), never requested.
+ *   - `vs/nls.messages.<locale>.js` — non-`en` UI localizations (the app ships en/en_GB only).
+ * The AMD loader only fetches these on demand, so removing them can't break the editor.
+ * `vs/editor`, `vs/base`, and `vs/loader.js` are required and kept.
+ */
+function pruneMonacoVendor(dest: string): void {
+  // The copied tree lives under `<dest>/vs/…` (Monaco's `min/vs` structure).
+  const vs = path.join(dest, 'vs');
+  if (!fs.existsSync(vs)) return;
+  const rmDirs = [path.join(vs, 'language'), path.join(vs, 'basic-languages')];
+  for (const dir of rmDirs) {
+    if (fs.existsSync(dir)) fs.rmSync(dir, { recursive: true, force: true });
+  }
+  // Remove localized `nls.messages.<locale>.js`; keep the default `nls.messages.js`.
+  for (const name of fs.readdirSync(vs)) {
+    if (/^nls\.messages\.[^.]+\.js$/.test(name)) {
+      fs.rmSync(path.join(vs, name), { force: true });
+    }
+  }
 }
 
 /** Copy `modern-screenshot` ESM next to legacy renderer sources and under `dist/` (for `../../vendor/…` imports). */
@@ -145,6 +172,8 @@ function transpileSharedForRenderer(appDir: string, rendererDist: string): void 
       platform: 'browser',
       format: 'esm',
       target: 'es2022',
+      minify: true,
+      keepNames: true,
       logLevel: 'info',
     });
   }
@@ -174,6 +203,8 @@ function transpileSharedForRenderer(appDir: string, rendererDist: string): void 
       platform: 'browser',
       format: 'esm',
       target: 'es2022',
+      minify: true,
+      keepNames: true,
       logLevel: 'info',
     });
   }
@@ -250,6 +281,11 @@ export function transpileRenderer(appDir: string): void {
     platform: 'browser',
     format: 'esm',
     target: 'es2022',
+    // Minify per-file. `bundle: false` keeps import/export bindings intact (esbuild never
+    // renames them), so only in-file whitespace/syntax/locals shrink. `keepNames` preserves
+    // function/class names in case any runtime relies on `.name`/`constructor.name`.
+    minify: true,
+    keepNames: true,
     logLevel: 'info',
   });
 

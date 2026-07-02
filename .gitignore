@@ -11,6 +11,7 @@ apps/roku-dev-studio/preload.bundled.cjs
 apps/roku-dev-studio/main.bundled.cjs
 apps/roku-dev-studio/fiddle-preload.bundled.cjs
 apps/roku-dev-studio/log-viewer-preload.bundled.cjs
+apps/roku-dev-studio/network-session-viewer-preload.bundled.cjs
 
 # Remote relay server: built from roku-remote-server.ts (see packages/roku-dev-studio-remote-server/build.mjs)
 packages/roku-dev-studio-remote-server/roku-remote-server.js

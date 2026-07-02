@@ -5,7 +5,7 @@
  * `renderer/modules/**` before a full transpile.
  */
 import * as path from 'path';
-import { copyTanstackVirtualVendor } from './transpile-renderer.ts';
+import { copyTanstackVirtualVendor } from './transpile-renderer';
 
 const appDir = path.resolve(__dirname, '../..');
 const rendererRoot = path.join(appDir, 'renderer');
