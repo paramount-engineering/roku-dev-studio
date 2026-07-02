@@ -1197,6 +1197,61 @@
     .tab-item .tab-close { width: 18px; height: 18px; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 14px; opacity: 0; transition: all 0.15s; }
     .tab-item:hover .tab-close, .tab-item.active .tab-close { opacity: 0.5; }
     .tab-item .tab-close:hover { opacity: 1; background: var(--accent-red-dim); color: var(--accent-red); }
+
+    /* Safari/Chrome-style hover popup showing full device info for a tab whose
+       label is truncated. Positioned via JS; fixed so it escapes the tab strip. */
+    .tab-hover-tooltip {
+      position: fixed;
+      z-index: 3000;
+      max-width: 320px;
+      padding: 10px 12px;
+      background: var(--bg-elevated, var(--bg-secondary));
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+      pointer-events: none;
+      opacity: 0;
+      transform: translateY(-4px);
+      transition: opacity 0.12s ease, transform 0.12s ease;
+      display: none;
+    }
+    .tab-hover-tooltip.visible {
+      display: block;
+      opacity: 1;
+      transform: translateY(0);
+    }
+    .tab-hover-tooltip-name {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-primary);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .tab-hover-tooltip-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 5px;
+    }
+    .tab-hover-tooltip-row .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+      background: var(--accent-green);
+    }
+    .tab-hover-tooltip-ip {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+    .tab-hover-tooltip-model {
+      margin-top: 5px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      color: var(--text-secondary);
+    }
     
     .tab-placeholder { flex: 1; }
     
@@ -2900,6 +2955,60 @@
       background: var(--bg-secondary);
       flex-shrink: 0;
     }
+    /* Copy / Download / Clear group, left of the header next to the title. The
+       Capture button lives in .card-header-actions (margin-left:auto → right). */
+    .devapp-col-right .screenshot-actions {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      /* Override the unrelated base `.screenshot-actions { margin-bottom: 12px }`
+         (a class-name collision): in this align-items:center header, that bottom
+         margin centered the margin-box and pushed the buttons ~6px too high. */
+      margin: 0;
+    }
+    /* Uniform square icon buttons, flex-centered so the glyph sits dead-center
+       and the group lines up vertically with the title and Capture button.
+       !important overrides the base .btn-icon padding/font-size (also !important). */
+    .devapp-col-right .screenshot-actions .btn-icon {
+      width: 26px;
+      height: 26px;
+      padding: 0 !important;
+      font-size: 12px !important;
+      line-height: 1 !important;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+    /* Capture status message: absolutely centered on the header's true center
+       (the sticky header is the containing block). Out of flow + pointer-events:
+       none, so it never shifts or blocks the left actions or the Capture button.
+       Capped width + ellipsis keeps it clear of both groups. */
+    .devapp-col-right .card-header .screenshot-status {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      max-width: 50%;
+      display: flex;
+      justify-content: center;
+      margin: 0;
+      pointer-events: none;
+      z-index: 2;
+    }
+    .devapp-col-right .card-header .screenshot-status:empty {
+      display: none;
+    }
+    .devapp-col-right .card-header .screenshot-status .status-message {
+      margin: 0;
+      max-width: 100%;
+      padding: 3px 10px;
+      font-size: 10px;
+      line-height: 1.4;
+      border-radius: 999px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
     
     .devapp-col-right .card-body {
       flex: 1;
@@ -3062,6 +3171,12 @@
       color: var(--text-secondary);
       border-bottom: 1px solid var(--border);
       background: var(--bg-tertiary);
+      /* Match the card's rounded top corners (8px outer − 1px border = 7px inner).
+         Needed because solo mode sets the card to overflow:visible, so the header's
+         square background would otherwise bleed over the rounded corners. Redundant
+         (but harmless) in quad mode where the card clips via overflow:hidden. */
+      border-top-left-radius: 7px;
+      border-top-right-radius: 7px;
     }
     /*
      * Quad: header strip matches each card’s footer band (min-height + insets).
@@ -4260,7 +4375,8 @@
      * they contain (e.g. an actions slot with a hidden button), even when
      * padding and typography are identical. */
     .query-layout .card > .card-header {
-      min-height: 50px;
+      /* Match the global card-header height (see base .card-header). */
+      min-height: 46px;
       box-sizing: border-box;
     }
     
@@ -4466,7 +4582,9 @@
       column-gap: 10px;
       row-gap: 0;
       min-width: 0;
-      padding: 14px 18px;
+      /* Vertical size comes from the base .card-header min-height; keep only the
+         wider horizontal padding to match the query results grid. */
+      padding: 4px 18px;
       position: relative;
     }
     .card-header.query-results-card-header .card-icon {
@@ -5627,26 +5745,7 @@
       color: #e0e0e0;
     }
     
-    /* Custom scrollbar for telnet output */
-    .telnet-output::-webkit-scrollbar {
-      width: 8px;
-    }
-    
-    .telnet-output::-webkit-scrollbar-track {
-      background: #1a1a2e;
-    }
-    
-    .telnet-output::-webkit-scrollbar-thumb {
-      background: #4a4a6a;
-      border-radius: 4px;
-    }
-    
-    .telnet-output::-webkit-scrollbar-thumb:hover {
-      background: #5a5a7a;
-    }
-    .telnet-output::-webkit-scrollbar-corner {
-      background: #1a1a2e;
-    }
+    /* Telnet output uses the unified global scrollbar (see `::-webkit-scrollbar`). */
     
     .telnet-placeholder {
       display: flex;
@@ -5738,6 +5837,15 @@
       text-decoration-color: rgba(192, 132, 252, 0.9);
       text-underline-offset: 3px;
       text-decoration-thickness: 1px;
+    }
+
+    /* When the cursor is over an embedded URL, that URL is its own clickable
+       target (opens the URL preview, not the JSON modal). Suppress the whole-line
+       JSON "open in modal" dotted underline so only the URL's own cyan underline
+       shows — this disambiguates "click here opens the URL" from "click the line
+       text opens the JSON". */
+    .telnet-log-line.has-structured .telnet-log-content:hover:has(.telnet-log-url:hover) {
+      text-decoration: none;
     }
 
     .telnet-structured-view-pills {
@@ -5851,56 +5959,9 @@
       max-height: 70vh;
     }
 
-    /*
-     * Dark-themed scrollbar for the JSON / XML preview pane and the URL-modal
-     * params pane. Mirrors `.telnet-output`'s scrollbar styling so the modal
-     * doesn't paint the OS-default white track on a dark surface.
-     */
-    .telnet-structured-view-body::-webkit-scrollbar,
-    .telnet-url-view-params::-webkit-scrollbar {
-      width: 8px;
-    }
-    .telnet-structured-view-body::-webkit-scrollbar-track,
-    .telnet-url-view-params::-webkit-scrollbar-track {
-      background: var(--bg-secondary);
-    }
-    .telnet-structured-view-body::-webkit-scrollbar-thumb,
-    .telnet-url-view-params::-webkit-scrollbar-thumb {
-      background: #4a4a6a;
-      border-radius: 4px;
-    }
-    .telnet-structured-view-body::-webkit-scrollbar-thumb:hover,
-    .telnet-url-view-params::-webkit-scrollbar-thumb:hover {
-      background: #5a5a7a;
-    }
-    .telnet-structured-view-body::-webkit-scrollbar-corner,
-    .telnet-url-view-params::-webkit-scrollbar-corner {
-      background: var(--bg-secondary);
-    }
-
-    /*
-     * Full-URL preview pane sits on --bg-tertiary (its own card surface,
-     * darker than the modal body), so its scrollbar track wants --bg-tertiary
-     * instead of --bg-secondary. Without this it paints the OS-default white
-     * track when the URL is long enough to scroll — see screenshot 2026-05-13
-     * (modal title "20260513_PTVPlaybackTelnetLogs.txt: URL").
-     */
-    .telnet-url-view-full-url::-webkit-scrollbar {
-      width: 8px;
-    }
-    .telnet-url-view-full-url::-webkit-scrollbar-track {
-      background: var(--bg-tertiary);
-    }
-    .telnet-url-view-full-url::-webkit-scrollbar-thumb {
-      background: #4a4a6a;
-      border-radius: 4px;
-    }
-    .telnet-url-view-full-url::-webkit-scrollbar-thumb:hover {
-      background: #5a5a7a;
-    }
-    .telnet-url-view-full-url::-webkit-scrollbar-corner {
-      background: var(--bg-tertiary);
-    }
+    /* The telnet JSON/XML, URL-params, and full-URL modal panes use the unified
+       global scrollbar (translucent thumb + transparent track works on every
+       surface, so the old per-pane track colours are no longer needed). */
 
     .telnet-structured-view-pre {
       margin: 0;
@@ -6250,22 +6311,7 @@
       padding-right: 4px;
     }
     
-    .external-functions-list::-webkit-scrollbar {
-      width: 6px;
-    }
-    
-    .external-functions-list::-webkit-scrollbar-track {
-      background: var(--bg-secondary);
-      border-radius: 3px;
-    }
-    
-    .external-functions-list::-webkit-scrollbar-thumb {
-      background: var(--accent-purple);
-      border-radius: 3px;
-    }
-    .external-functions-list::-webkit-scrollbar-corner {
-      background: var(--bg-secondary);
-    }
+    /* External functions list uses the unified global scrollbar. */
     
     .external-func-item {
       display: flex;
@@ -6676,17 +6722,26 @@
     
     /* 1fr | auto | 1fr — equal side tracks so inner tabs stay true horizontal center when perf digits change width */
     .device-panel-header {
+      /* 3-column grid with equal side tracks keeps the section selector (center)
+         truly centered in the header regardless of the side content's width. The
+         side tracks shrink to 0 and clip their content, so the JS fit-detector
+         (setupDevicePanelHeaderResponsive) only collapses the tabs once the sides
+         can't give any more room. */
       display: grid;
       grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
       align-items: center;
       column-gap: 16px;
-      row-gap: 8px;
-      margin-bottom: var(--device-shell-padding);
-      padding-bottom: var(--device-shell-padding);
+      /* Keep the gap below the divider line equal to the card's side/bottom gaps
+         (the tab-panel's 16px padding). The active pane already adds 6px padding-top
+         (compositor safety), so 10px here lands the first card exactly 16px below
+         the line. padding-bottom is the header's own breathing room above the line —
+         trimmed so the header doesn't waste vertical space around a 1px rule. */
+      margin-bottom: 10px;
+      padding-bottom: 12px;
       border-bottom: 1px solid var(--border);
       min-width: 0;
     }
-    
+
     .device-panel-left {
       display: flex;
       align-items: center;
@@ -6838,6 +6893,16 @@
       line-height: 1.45;
       color: var(--text-muted);
       font-family: 'JetBrains Mono', monospace;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px 32px;
+    }
+    .device-hardware-image-modal-footer-item {
+      min-width: 0;
+    }
+    .device-hardware-image-modal-footer-item--end {
+      margin-left: auto;
+      text-align: right;
     }
     .device-hardware-image-modal-footer-label {
       font-family: system-ui, -apple-system, sans-serif;
@@ -6865,6 +6930,13 @@
       display: flex;
       align-items: center;
       min-width: 0;
+    }
+    /* First rung of the responsive ladder (setupDevicePanelHeaderResponsive):
+       when the header tightens, hide the name/IP to free space for the section
+       selector — the full details live in the device-image modal (open via the
+       device icon). display:none (not visibility) so the space is reclaimed. */
+    .device-panel-info.is-hidden {
+      display: none;
     }
     .device-panel-info .panel-device-ip-row {
       display: flex;
@@ -7017,12 +7089,24 @@
     }
     
     .device-panel-nav {
+      /* Center grid column (auto = tab strip's own width), so the strip is
+         always centered in the header. The JS ladder keeps the strip narrow
+         enough that the 1fr side tracks never go below their needs. Horizontal
+         scroll is the last-resort fallback once even icon-only tabs can't fit. */
       grid-column: 2;
       justify-self: center;
       min-width: 0;
-      max-width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: safe center;
+      overflow-x: auto;
+      overflow-y: hidden;
+      scrollbar-width: none;
     }
+    .device-panel-nav::-webkit-scrollbar { height: 0; width: 0; }
     .device-panel-right {
+      /* Right side track; truncates its content (perf strip / paused banner) so
+         it yields space to the centered tab strip. Full text lives in a tooltip. */
       grid-column: 3;
       justify-self: end;
       display: flex;
@@ -7031,14 +7115,14 @@
       gap: 8px;
       min-width: 0;
       max-width: 100%;
+      overflow: hidden;
     }
     .inner-tabs {
       display: flex;
+      flex-wrap: nowrap;
       align-items: center;
       gap: 4px;
       margin: 0;
-      min-width: 0;
-      max-width: 100%;
       background: var(--bg-secondary);
       padding: 4px;
       border-radius: 10px;
@@ -7096,11 +7180,6 @@
       .device-panel-right {
         gap: 6px;
       }
-      .inner-tab {
-        padding: 8px 10px;
-        font-size: 12px;
-        gap: 4px;
-      }
       .device-panel-paused-nav {
         max-width: min(280px, 32vw);
         gap: 6px;
@@ -7135,14 +7214,27 @@
       font-size: 13px;
       font-weight: 500;
       cursor: pointer;
-      transition: background 0.2s cubic-bezier(0.16, 1, 0.3, 1), color 0.2s cubic-bezier(0.16, 1, 0.3, 1), transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+      white-space: nowrap;
+      flex: 0 0 auto;
+      transition: background 0.2s cubic-bezier(0.16, 1, 0.3, 1), color 0.2s cubic-bezier(0.16, 1, 0.3, 1), transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), padding 0.18s ease, font-size 0.18s ease;
       display: inline-flex;
       align-items: center;
       gap: 6px;
     }
-    
+    .inner-tab .inner-tab-label { white-space: nowrap; }
+
     .inner-tab:hover { color: var(--text-secondary); }
     .inner-tab.active { background: var(--accent-purple); color: white; }
+
+    /* Responsive section selector (driven by setupDevicePanelHeaderResponsive): as the
+       header narrows, first tighten padding/font/gap to reclaim wasted space,
+       then drop to icon-only tabs (labels move to a hover tooltip).
+       All 8 sections stay visible and reachable at every step. */
+    .inner-tabs.is-compact { gap: 2px; padding: 3px; }
+    .inner-tabs.is-compact .inner-tab { padding: 6px 9px; font-size: 12px; gap: 5px; }
+    .inner-tabs.is-icons { gap: 2px; padding: 3px; }
+    .inner-tabs.is-icons .inner-tab { padding: 8px; gap: 0; }
+    .inner-tabs.is-icons .inner-tab-label { display: none; }
     
     /* Stacked device sections: cross-fade + slide without display toggling (enables transitions) */
     .device-inner-panes {
@@ -8668,6 +8760,14 @@
       display: inline-flex;
       align-items: center;
     }
+    .ni-download-menu {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+    }
+    .ni-download-dropdown {
+      min-width: 220px;
+    }
     .ni-copy-menu.has-caret .ni-copy-main {
       border-top-right-radius: 0;
       border-bottom-right-radius: 0;
@@ -10175,7 +10275,13 @@
       display: flex;
       align-items: center;
       gap: 10px;
-      padding: 14px 18px;
+      /* Uniform header height across all cards/sections: min-height is the single
+         source of truth (controls are ≤ ~38px, so button headers sit at it and
+         title-only headers fill up to it), with minimal vertical padding as a
+         buffer for anything near the limit. 46px = a natural button-header height,
+         so nothing is wasteful. Per-card rules should only vary horizontal padding. */
+      min-height: 46px;
+      padding: 4px 16px;
       line-height: 1.35;
       background: linear-gradient(135deg, rgba(139, 92, 246, 0.1) 0%, transparent 100%);
       border-bottom: 1px solid var(--border);
@@ -10384,6 +10490,11 @@
     .apps-scroll-area {
       overflow-y: auto;
       overflow-x: hidden;
+      /* Full-bleed the scrollbar to the card's right border (the card-body has
+         18px padding, which would otherwise inset the scrollbar). The grid's own
+         6px right padding keeps items off the scrollbar. */
+      margin-right: -18px;
+      padding-right: 6px;
     }
 
     .installed-apps-grid,
@@ -10396,27 +10507,7 @@
       align-items: start;
     }
 
-    /* Force scrollbar to be visible when content overflows */
-    .apps-scroll-area::-webkit-scrollbar {
-      width: 8px;
-    }
-
-    .apps-scroll-area::-webkit-scrollbar-track {
-      background: var(--bg-secondary);
-      border-radius: 4px;
-    }
-
-    .apps-scroll-area::-webkit-scrollbar-thumb {
-      background: var(--bg-elevated);
-      border-radius: 4px;
-    }
-
-    .apps-scroll-area::-webkit-scrollbar-thumb:hover {
-      background: var(--accent-purple);
-    }
-    .apps-scroll-area::-webkit-scrollbar-corner {
-      background: var(--bg-secondary);
-    }
+    /* Installed-apps grid uses the unified global scrollbar. */
 
     .app-btn-dynamic {
       display: flex;
@@ -10444,6 +10535,13 @@
     }
     
     .app-btn-dynamic .app-icon { width: 100%; height: 100%; object-fit: cover; }
+
+    /* TV input icons are square-ish glyphs (not 16:9 poster art). Use a taller,
+       near-square picture area so the whole glyph fits large and centered instead
+       of being letterboxed inside the wide app aspect ratio. Text below is shared
+       with app tiles (.app-name/.app-id), so it stays the same size. */
+    .app-btn-dynamic.input-tile .app-icon-wrapper { aspect-ratio: 4 / 3; }
+    .app-btn-dynamic.input-tile .app-icon { object-fit: contain; padding: 4px; }
     .app-btn-dynamic .app-icon-placeholder { 
       width: 100%; 
       height: 100%; 
@@ -10527,27 +10625,7 @@
       border: 1px solid var(--border);
     }
     
-    /* Force scrollbar to be visible when content overflows */
-    .output-area::-webkit-scrollbar {
-      width: 8px;
-    }
-    
-    .output-area::-webkit-scrollbar-track {
-      background: #1a1a2e;
-      border-radius: 4px;
-    }
-    
-    .output-area::-webkit-scrollbar-thumb {
-      background: #4a4a6a;
-      border-radius: 4px;
-    }
-    
-    .output-area::-webkit-scrollbar-thumb:hover {
-      background: #5a5a7a;
-    }
-    .output-area::-webkit-scrollbar-corner {
-      background: #1a1a2e;
-    }
+    /* Output areas (query / raw list) use the unified global scrollbar. */
     /* Apps tab — Raw List: grows with card; global .output-area max/min height is for fixed panes only */
     .apps-tab-layout-col-left .installed-apps-output.output-area {
       max-height: none;
@@ -10995,15 +11073,22 @@
     .keyboard-hint { text-align: center; color: var(--text-muted); font-size: 11px; margin-top: 16px; }
     kbd { background: var(--bg-tertiary); padding: 2px 6px; border-radius: 4px; font-family: 'JetBrains Mono', monospace; font-size: 10px; border: 1px solid var(--border); }
     
-    /* Scrollbar */
+    /* Scrollbar — one unified style across the whole app, matching the Settings
+       window. The thumb hugs the right/bottom edge (no inset) so it never drifts
+       away from the border. Track transparent so it doesn't paint a box on odd
+       surfaces; thumb is --bg-elevated with a subtle border, brightening to
+       --bg-tertiary on hover/drag. Per-surface overrides were removed in favour
+       of this single rule. */
     ::-webkit-scrollbar { width: 8px; height: 8px; }
     ::-webkit-scrollbar-track { background: transparent; }
-    ::-webkit-scrollbar-thumb { background: var(--bg-elevated); border-radius: 4px; }
-    ::-webkit-scrollbar-thumb:hover { background: var(--accent-purple); }
-    /* Where vertical + horizontal scrollbars meet (WebKit/Electron); default is bright */
-    ::-webkit-scrollbar-corner {
-      background: var(--bg-secondary);
+    ::-webkit-scrollbar-thumb {
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      border-radius: 4px;
     }
+    ::-webkit-scrollbar-thumb:hover { background: var(--bg-tertiary); }
+    ::-webkit-scrollbar-thumb:active { background: var(--bg-tertiary); }
+    ::-webkit-scrollbar-corner { background: transparent; }
     
     /* Dev Mode Warning Banner */
     .dev-mode-warning {
@@ -11260,14 +11345,7 @@
       overflow-y: auto;
     }
 
-    .help-nav::-webkit-scrollbar { width: 6px; }
-    .help-nav::-webkit-scrollbar-track { background: transparent; margin: 4px 0; }
-    .help-nav::-webkit-scrollbar-thumb {
-      background: var(--bg-elevated);
-      border-radius: 4px;
-      border: 1px solid var(--border);
-    }
-    .help-nav::-webkit-scrollbar-thumb:hover { background: var(--bg-tertiary); }
+    /* Help nav uses the unified global scrollbar. */
 
     .help-nav-item {
       display: flex;
@@ -11341,10 +11419,7 @@
       scroll-behavior: smooth;
     }
 
-    .help-content::-webkit-scrollbar { width: 8px; }
-    .help-content::-webkit-scrollbar-track { background: var(--bg-primary); border-radius: 4px; }
-    .help-content::-webkit-scrollbar-thumb { background: var(--bg-elevated); border-radius: 4px; border: 1px solid var(--border); }
-    .help-content::-webkit-scrollbar-thumb:hover { background: var(--bg-tertiary); }
+    /* Help content uses the unified global scrollbar. */
 
     /* Narrow viewports: collapse nav to a top bar of pill chips so content keeps room. */
     @media (max-width: 700px) {
@@ -12391,7 +12466,118 @@
       background: transparent;
     }
     .floating-remote-shell .quick-remote-card .card-body {
-      padding: 10px !important;
+      /* Trim the bottom so Send sits close to the footer (no dead space). */
+      padding: 10px 10px 4px !important;
+    }
+    .floating-remote-shell .devapp-vertical-remote {
+      padding-bottom: 0;
+    }
+
+    /* Compact Dev App footer: mirrors the active panel's dev-app state. Given a
+       distinct, slightly-inset dark surface so it reads as separate from the
+       remote controls above it. */
+    .floating-remote-footer {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 10px;
+      border-top: 1px solid var(--border);
+      background: rgba(0, 0, 0, 0.28);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+      min-width: 0;
+    }
+    .floating-remote-footer:empty {
+      display: none;
+    }
+    .floating-remote-footer-app {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex: 1 1 auto;
+      min-width: 0;
+      /* One hover group (icon + title) that surfaces the full name via title. */
+      padding: 3px 6px;
+      margin: -3px -2px;
+      border-radius: 6px;
+      cursor: default;
+      transition: background 0.15s ease;
+    }
+    .floating-remote-footer-app:hover {
+      background: rgba(255, 255, 255, 0.05);
+    }
+    .floating-remote-footer-icon {
+      flex-shrink: 0;
+      width: 46px;
+      height: 26px;
+      border-radius: 4px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--bg-tertiary);
+      overflow: hidden;
+    }
+    .floating-remote-footer-icon img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    .floating-remote-footer-name {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-primary);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      min-width: 0;
+    }
+    .floating-remote-footer-actions {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-shrink: 0;
+    }
+    .floating-remote-footer-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 4px 8px;
+      font-family: inherit;
+      font-size: 10px;
+      font-weight: 600;
+      line-height: 1;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--bg-tertiary);
+      color: var(--text-primary);
+      cursor: pointer;
+      transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+    }
+    .floating-remote-footer-sideload {
+      flex: 1 1 auto;
+      justify-content: center;
+    }
+    .floating-remote-footer-sideload:hover {
+      border-color: var(--accent-purple);
+      background: var(--accent-purple-dim);
+    }
+    .floating-remote-footer-launch {
+      padding: 5px 7px;
+      border-color: transparent;
+      background: var(--accent-green-dim);
+      color: var(--accent-green);
+    }
+    .floating-remote-footer-launch:hover {
+      border-color: var(--accent-green);
+      background: var(--accent-green-dim);
+    }
+    .floating-remote-footer-delete {
+      padding: 5px 7px;
+      color: var(--accent-red);
+    }
+    .floating-remote-footer-delete:hover {
+      border-color: var(--accent-red);
+      background: var(--accent-red-dim);
     }
 
     /* Mirror the existing ECP-Disabled treatment so the floater dims +
@@ -13359,14 +13545,14 @@
         </div>
         <div class="device-panel-nav">
           <div class="inner-tabs">
-            <button class="inner-tab active" data-inner-tab="remote"><span class="icon icon-sm"><svg><use href="#icon-gamepad"/></svg></span> Remote</button>
-            <button class="inner-tab" data-inner-tab="apps"><span class="icon icon-sm"><svg><use href="#icon-grid"/></svg></span> Apps</button>
-            <button class="inner-tab" data-inner-tab="query"><span class="icon icon-sm"><svg><use href="#icon-database"/></svg></span> Query</button>
-            <button class="inner-tab" data-inner-tab="devapp"><span class="icon icon-sm"><svg><use href="#icon-zap"/></svg></span> Dev App</button>
-            <button class="inner-tab" data-inner-tab="telnet"><span class="icon icon-sm"><svg><use href="#icon-terminal"/></svg></span> Console</button>
-            <button class="inner-tab" data-inner-tab="inspector"><span class="icon icon-sm"><svg><use href="#icon-plug"/></svg></span> App Connector</button>
-            <button class="inner-tab" data-inner-tab="actionscripts"><span class="icon icon-sm"><svg><use href="#icon-code"/></svg></span> Action Scripts</button>
-            <button class="inner-tab" data-inner-tab="network" style="display: none;"><span class="icon icon-sm"><svg><use href="#icon-wifi"/></svg></span> Network</button>
+            <button class="inner-tab active" data-inner-tab="remote" aria-label="Remote"><span class="icon icon-sm"><svg><use href="#icon-gamepad"/></svg></span><span class="inner-tab-label">Remote</span></button>
+            <button class="inner-tab" data-inner-tab="apps" aria-label="Apps"><span class="icon icon-sm"><svg><use href="#icon-grid"/></svg></span><span class="inner-tab-label">Apps</span></button>
+            <button class="inner-tab" data-inner-tab="query" aria-label="Query"><span class="icon icon-sm"><svg><use href="#icon-database"/></svg></span><span class="inner-tab-label">Query</span></button>
+            <button class="inner-tab" data-inner-tab="devapp" aria-label="Dev App"><span class="icon icon-sm"><svg><use href="#icon-zap"/></svg></span><span class="inner-tab-label">Dev App</span></button>
+            <button class="inner-tab" data-inner-tab="telnet" aria-label="Console"><span class="icon icon-sm"><svg><use href="#icon-terminal"/></svg></span><span class="inner-tab-label">Console</span></button>
+            <button class="inner-tab" data-inner-tab="inspector" aria-label="App Connector"><span class="icon icon-sm"><svg><use href="#icon-plug"/></svg></span><span class="inner-tab-label">App Connector</span></button>
+            <button class="inner-tab" data-inner-tab="actionscripts" aria-label="Action Scripts"><span class="icon icon-sm"><svg><use href="#icon-code"/></svg></span><span class="inner-tab-label">Action Scripts</span></button>
+            <button class="inner-tab" data-inner-tab="network" aria-label="Network" style="display: none;"><span class="icon icon-sm"><svg><use href="#icon-wifi"/></svg></span><span class="inner-tab-label">Network</span></button>
           </div>
         </div>
         <div class="device-panel-right">
@@ -13571,7 +13757,7 @@
           <div class="apps-tab-layout-col-left">
             <!-- Custom Launch (Row 1) -->
             <div class="card" style="flex: 0 0 auto;">
-              <div class="card-header" style="padding: 10px 12px;">
+              <div class="card-header" style="padding: 4px 12px;">
                 <span class="card-icon"><span class="icon icon-sm"><svg><use href="#icon-zap"/></svg></span></span>
                 <span class="card-title">Custom Launch</span>
                 <div class="card-header-actions">
@@ -13592,7 +13778,7 @@
             
             <!-- Deep Link (Row 2) -->
             <div class="card" style="flex: 0 0 auto;">
-              <div class="card-header" style="padding: 10px 12px;">
+              <div class="card-header" style="padding: 4px 12px;">
                 <span class="card-icon"><span class="icon icon-sm"><svg><use href="#icon-link"/></svg></span></span>
                 <span class="card-title">Deep Link</span>
                 <div class="card-header-actions">
@@ -13652,25 +13838,27 @@
             
             <!-- Raw List of Apps (Row 3) -->
             <div class="card" style="flex: 1; display: flex; flex-direction: column; min-height: 0; min-width: 0; overflow: hidden;">
-              <div class="card-header" style="padding: 10px 12px; min-width: 0;">
+              <div class="card-header" style="padding: 4px 12px; min-width: 0;">
                 <span class="card-icon"><span class="icon icon-sm"><svg><use href="#icon-list"/></svg></span></span>
-                <span class="card-title">Raw List of Apps</span>
+                <span class="card-title raw-list-title">Raw List of Apps</span>
+                <div class="card-header-actions is-left">
+                  <button class="btn btn-secondary btn-icon copy-apps-btn" title="Copy list" aria-label="Copy list" style="display: none;"><span class="icon icon-xs"><svg><use href="#icon-copy"/></svg></span></button>
+                </div>
                 <div class="card-header-actions" style="flex-shrink: 0;">
                   <button class="btn btn-secondary list-apps-btn" style="padding: 4px 10px; font-size: 10px;"><span class="icon icon-xs"><svg><use href="#icon-refresh"/></svg></span> List</button>
-                  <button class="btn btn-secondary copy-apps-btn" style="display: none; padding: 4px 10px; font-size: 10px; margin-left: 4px;"><span class="icon icon-xs"><svg><use href="#icon-copy"/></svg></span> Copy</button>
                 </div>
               </div>
-              <div class="card-body" style="flex: 1; display: flex; flex-direction: column; min-height: 0; min-width: 0; overflow: hidden; padding: 10px 12px;">
-                <pre class="output-area installed-apps-output hidden" style="flex: 1; min-height: 0; min-width: 0; width: 100%; overflow-y: auto; overflow-x: hidden; margin: 0; padding: 8px; font-size: clamp(8px, 1.8vw, 11px); font-family: 'JetBrains Mono', monospace; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 6px; white-space: pre-wrap; word-wrap: break-word; overflow-wrap: break-word; line-height: 1.4; box-sizing: border-box;"></pre>
+              <div class="card-body" style="flex: 1; display: flex; flex-direction: column; min-height: 0; min-width: 0; overflow: hidden; padding: 10px 0 10px 12px;">
+                <pre class="output-area installed-apps-output hidden" style="flex: 1; min-height: 0; min-width: 0; width: 100%; overflow-y: auto; overflow-x: hidden; margin: 0; padding: 0 8px 0 0; font-size: clamp(8px, 1.8vw, 11px); font-family: 'JetBrains Mono', monospace; background: transparent; border: none; border-radius: 0; white-space: pre-wrap; word-wrap: break-word; overflow-wrap: break-word; line-height: 1.4; box-sizing: border-box;"></pre>
               </div>
             </div>
           </div>
           
           <!-- Right Column (70%) - Installed Apps -->
           <div class="card" style="flex: 1; min-width: 0; display: flex; flex-direction: column; min-height: 0;">
-            <div class="card-header">
+            <div class="card-header" style="padding: 4px 12px;">
               <span class="card-icon"><span class="icon icon-sm"><svg><use href="#icon-rocket"/></svg></span></span>
-              <span class="card-title">Installed Apps</span>
+              <span class="card-title installed-apps-title">Installed Apps</span>
               <button class="btn btn-secondary refresh-apps-btn" style="margin-left: auto; padding: 6px 12px; font-size: 11px;"><span class="icon icon-xs"><svg><use href="#icon-refresh"/></svg></span> Refresh</button>
             </div>
             <div class="card-body" style="flex: 1; display: flex; flex-direction: column; min-height: 0; overflow: hidden;">
@@ -13725,7 +13913,7 @@
           <div class="devapp-col-left">
             <!-- Auth Card -->
             <div class="card">
-              <div class="card-header" style="padding: 10px 12px;">
+              <div class="card-header" style="padding: 4px 12px;">
                 <span class="card-icon"><span class="icon icon-sm"><svg><use href="#icon-lock"/></svg></span></span>
                 <span class="card-title" style="font-size: 11px;">Auth</span>
                 <span class="auth-status not-authenticated" style="margin-left: auto; font-size: 10px;"><span class="icon icon-xs icon-red"><svg><use href="#icon-circle"/></svg></span></span>
@@ -13744,7 +13932,7 @@
 
             <!-- Dev App Card -->
             <div class="card sideloaded-app-card">
-              <div class="card-header" style="padding: 10px 12px;">
+              <div class="card-header" style="padding: 4px 12px;">
                 <span class="card-icon"><span class="icon icon-sm"><svg><use href="#icon-package"/></svg></span></span>
                 <span class="card-title" style="font-size: 11px;">Dev App</span>
                 <div class="card-header-actions">
@@ -13778,7 +13966,7 @@
 
             <!-- Remote Card -->
             <div class="card quick-remote-card">
-              <div class="card-header" style="padding: 10px 12px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+              <div class="card-header" style="padding: 4px 12px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
                 <span class="card-icon"><span class="icon icon-sm"><svg><use href="#icon-gamepad"/></svg></span></span>
                 <span class="card-title" style="font-size: 11px;">Remote</span>
                 <button type="button" class="keyboard-remote-help-btn" title="Keyboard shortcuts for Quick Remote" aria-label="Keyboard Remote shortcuts help" style="margin-left: auto;">
@@ -13823,17 +14011,22 @@
           <!-- Right Column: Screenshot -->
           <div class="devapp-col-right">
             <div class="card">
-              <div class="card-header" style="padding: 8px 10px;">
+              <div class="card-header" style="padding: 4px 10px;">
                 <span class="card-icon"><span class="icon icon-sm"><svg><use href="#icon-camera"/></svg></span></span>
                 <span class="card-title" style="font-size: 11px;">Screenshot</span>
+                <div class="screenshot-actions">
+                  <button class="btn btn-secondary btn-icon copy-screenshot-btn" title="Copy screenshot" aria-label="Copy screenshot" style="display: none;"><span class="icon icon-xs"><svg><use href="#icon-copy"/></svg></span></button>
+                  <button class="btn btn-secondary btn-icon save-screenshot-btn" title="Download screenshot" aria-label="Download screenshot" style="display: none;"><span class="icon icon-xs"><svg><use href="#icon-download"/></svg></span></button>
+                  <button class="btn btn-secondary btn-icon clear-screenshot-btn" title="Clear screenshot" aria-label="Clear screenshot" style="display: none;"><span class="icon icon-xs"><svg><use href="#icon-clear-results"/></svg></span></button>
+                </div>
+                <!-- Capture status: centered in the header, fills the space between the
+                     left actions and the Capture button (in flow, so it never overlaps them). -->
+                <div class="screenshot-status"></div>
                 <div class="card-header-actions">
-                  <button class="btn btn-secondary copy-screenshot-btn" style="display: none; padding: 4px 8px; font-size: 10px;"><span class="icon icon-xs"><svg><use href="#icon-copy"/></svg></span> Copy</button>
-                  <button class="btn btn-secondary save-screenshot-btn" style="display: none; padding: 4px 8px; font-size: 10px;"><span class="icon icon-xs"><svg><use href="#icon-save"/></svg></span> Save</button>
                   <button class="btn btn-primary screenshot-btn" style="padding: 5px 10px; font-size: 10px;"><span class="icon icon-xs"><svg><use href="#icon-camera"/></svg></span> Capture</button>
                 </div>
               </div>
               <div class="card-body">
-                <div class="screenshot-status" style="font-size: 10px;"></div>
                 <div class="screenshot-container">
                   <img class="screenshot-image" alt="Roku Screenshot" style="display: none;">
                   <div class="screenshot-placeholder">
@@ -14394,9 +14587,22 @@
                 <span class="card-icon"><span class="icon icon-sm"><svg><use href="#icon-wifi"/></svg></span></span>
                 <span class="card-title">Network Inspector</span>
                 <div class="ni-header-tools">
-                  <button type="button" class="btn btn-secondary btn-sm ni-icon-btn" data-ni-save-pcap title="Save packet capture (.pcap)">
-                    <span class="icon icon-sm"><svg><use href="#icon-download"/></svg></span>
-                  </button>
+                  <div class="ni-download-menu" data-ni-download-menu>
+                    <button type="button" class="btn btn-secondary btn-sm ni-icon-btn" data-ni-download-toggle title="Download session…" aria-haspopup="true" aria-expanded="false" aria-label="Download session">
+                      <span class="icon icon-sm"><svg><use href="#icon-download"/></svg></span>
+                    </button>
+                    <div class="ni-copy-dropdown ni-download-dropdown" data-ni-download-dropdown role="menu" hidden>
+                      <button type="button" class="ni-copy-dropdown-item" data-ni-download-item="har" role="menuitem">
+                        <span class="ni-copy-item-icon icon icon-xs"><svg><use href="#icon-download"/></svg></span>Export all as HAR
+                      </button>
+                      <button type="button" class="ni-copy-dropdown-item" data-ni-download-item="bundle" role="menuitem">
+                        <span class="ni-copy-item-icon icon icon-xs"><svg><use href="#icon-download"/></svg></span>Export session (.rds-network-inspector.json)
+                      </button>
+                      <button type="button" class="ni-copy-dropdown-item" data-ni-download-item="pcap" role="menuitem">
+                        <span class="ni-copy-item-icon icon icon-xs"><svg><use href="#icon-download"/></svg></span>Save packet capture (.pcap)
+                      </button>
+                    </div>
+                  </div>
                   <button type="button" class="btn btn-secondary btn-sm ni-icon-btn" data-ni-clear title="Clear session list">
                     <span class="icon icon-sm"><svg><use href="#icon-clear-results"/></svg></span>
                   </button>

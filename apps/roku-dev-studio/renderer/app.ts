@@ -254,6 +254,13 @@ function reconcileConnectedDeviceIp(
 }
 
 function refreshAllNetworkTabVisibility(): void {
+  // Setting toggled off at runtime: hide every Network tab (and switch any panel
+  // showing it back to Remote). Without this the tab lingers after the user
+  // disables the inspector. Re-enabling re-reveals via the status/MITM listeners.
+  if (!NETWORK_INSPECTOR_ENABLED) {
+    hideAllNetworkTabsForDisable();
+    return;
+  }
   for (const serial of hotspotSerialsActive) {
     applyNetworkTabForSerial(serial, hotspotSerialIps.get(serial) || null, true);
   }
@@ -2039,6 +2046,8 @@ function addDiscoveredDevice(device) {
         if (iconEl) {
           setDevicePanelIcon(iconEl, device, { isRemote: false });
         }
+        // Name/IP width may have changed — re-measure the responsive header.
+        panel._headerResponsiveRemeasure?.();
         updateEcpWarnings(panel, device);
         updateDevModeWarnings(panel, device.developerEnabled === true);
       }
@@ -2407,6 +2416,9 @@ function disconnectDevice(deviceKey) {
     if (panel._deviceMetricsCleanup) {
       panel._deviceMetricsCleanup();
     }
+    if (panel._headerResponsiveCleanup) {
+      panel._headerResponsiveCleanup();
+    }
     // Tear down the per-panel AppConnector explicitly. The WeakMap-keyed
     // registry would eventually let GC reclaim it once `panel` is gone,
     // but `connector.destroy()` also releases the `RaleDisconnected` IPC
@@ -2461,27 +2473,133 @@ function createTab(device, tabId) {
   tab.className = 'tab-item';
   tab.dataset.tabId = tabId;
   tab.dataset.ip = device.ip;
-  
+  // Stashed for the hover popup (Safari/Chrome-style) — the tab label itself is
+  // truncated, so the full name/IP/model are surfaced on hover instead.
+  tab.dataset.deviceName = device.deviceName || device.modelName || 'Unknown Roku';
+  if (device.modelName) tab.dataset.modelName = device.modelName;
+  if (device.modelNumber) tab.dataset.modelNumber = device.modelNumber;
+
   setSafeHTML(tab, `
     <span class="tab-name">${escapeHtml(device.deviceName)}</span>
     <span class="tab-close">×</span>
   `);
-  
+
   tab.addEventListener('click', (e) => {
     const t = e.target;
     if (t instanceof Element && !t.classList.contains('tab-close')) {
       activateTab(tabId);
     }
   });
-  
+
   tab.querySelector('.tab-close')?.addEventListener('click', (e) => {
     e.stopPropagation();
     // Check if this is a remote device
     const deviceKey = tab.dataset.deviceKey || device.ip;
     disconnectDevice(deviceKey);
   });
-  
+
+  tab.addEventListener('mouseenter', () => scheduleTabHoverTooltip(tab));
+  tab.addEventListener('mouseleave', () => hideTabHoverTooltip());
+  tab.addEventListener('mousedown', () => hideTabHoverTooltip());
+
   return tab;
+}
+
+// ---- Tab hover popup (Safari/Chrome-style device info on tab hover) ----
+
+let tabHoverTooltipEl: HTMLElement | null = null;
+let tabHoverTooltipTimer: ReturnType<typeof setTimeout> | null = null;
+
+function getTabHoverTooltip(): HTMLElement {
+  if (tabHoverTooltipEl) return tabHoverTooltipEl;
+  const el = document.createElement('div');
+  el.className = 'tab-hover-tooltip';
+  el.setAttribute('role', 'tooltip');
+  document.body.appendChild(el);
+  tabHoverTooltipEl = el;
+  return el;
+}
+
+function hideTabHoverTooltip() {
+  if (tabHoverTooltipTimer) {
+    clearTimeout(tabHoverTooltipTimer);
+    tabHoverTooltipTimer = null;
+  }
+  if (tabHoverTooltipEl) tabHoverTooltipEl.classList.remove('visible');
+}
+
+function scheduleTabHoverTooltip(tab: HTMLElement) {
+  if (tabHoverTooltipTimer) clearTimeout(tabHoverTooltipTimer);
+  tabHoverTooltipTimer = setTimeout(() => showTabHoverTooltip(tab), 400);
+}
+
+function showTabHoverTooltip(tab: HTMLElement) {
+  if (!tab.isConnected) return;
+  const name = tab.dataset.deviceName || '';
+  const ip = tab.dataset.ip || '';
+  const modelName = (tab.dataset.modelName || '').trim();
+  const modelNumber = (tab.dataset.modelNumber || '').trim();
+  const modelParts: string[] = [];
+  if (modelName) modelParts.push(modelName);
+  if (modelNumber && modelNumber !== modelName) modelParts.push(modelNumber);
+  const modelStr = modelParts.join(' · ');
+
+  const tip = getTabHoverTooltip();
+  let html = `<div class="tab-hover-tooltip-name">${escapeHtml(name)}</div>`;
+  if (ip) {
+    html +=
+      `<div class="tab-hover-tooltip-row">` +
+      `<span class="status-dot" aria-hidden="true"></span>` +
+      `<span class="tab-hover-tooltip-ip">${escapeHtml(ip)}</span></div>`;
+  }
+  if (modelStr) {
+    html += `<div class="tab-hover-tooltip-model">${escapeHtml(modelStr)}</div>`;
+  }
+  setSafeHTML(tip, html);
+
+  // Show first (so we can measure), then clamp within the viewport.
+  tip.classList.add('visible');
+  const rect = tab.getBoundingClientRect();
+  const margin = 8;
+  const tipRect = tip.getBoundingClientRect();
+  let left = rect.left;
+  if (left + tipRect.width > window.innerWidth - margin) {
+    left = Math.max(margin, window.innerWidth - margin - tipRect.width);
+  }
+  const top = rect.bottom + 6;
+  tip.style.left = `${Math.round(left)}px`;
+  tip.style.top = `${Math.round(top)}px`;
+}
+
+// Section-selector (inner-tab) hover tooltip — only meaningful in icon-only
+// mode, where the label is hidden. Reuses the shared tooltip element/timer so
+// the section tabs and the device tabs feel identical (and only one shows at a
+// time). Prefer this over the native `title` (instant, styled, consistent).
+function scheduleSectionTabTooltip(tab: HTMLElement) {
+  if (tabHoverTooltipTimer) clearTimeout(tabHoverTooltipTimer);
+  tabHoverTooltipTimer = setTimeout(() => showSectionTabTooltip(tab), 300);
+}
+
+function showSectionTabTooltip(tab: HTMLElement) {
+  if (!tab.isConnected) return;
+  const label =
+    tab.querySelector('.inner-tab-label')?.textContent?.trim() ||
+    tab.getAttribute('aria-label') ||
+    '';
+  if (!label) return;
+
+  const tip = getTabHoverTooltip();
+  setSafeHTML(tip, `<div class="tab-hover-tooltip-name">${escapeHtml(label)}</div>`);
+  tip.classList.add('visible');
+
+  // Center under the tab, clamped to the viewport.
+  const rect = tab.getBoundingClientRect();
+  const margin = 8;
+  const tipRect = tip.getBoundingClientRect();
+  let left = rect.left + rect.width / 2 - tipRect.width / 2;
+  left = Math.max(margin, Math.min(left, window.innerWidth - margin - tipRect.width));
+  tip.style.left = `${Math.round(left)}px`;
+  tip.style.top = `${Math.round(rect.bottom + 6)}px`;
 }
 
 function activateTab(tabId) {
@@ -2874,6 +2992,21 @@ function getDeviceHardwareImageModalFooterModel(device) {
 }
 
 /**
+ * Screen size for the hardware image modal footer — shown only when the device
+ * reports `is-tv` true and a `screen-size` value. Roku's ECP `screen-size` is a
+ * bare inch count (e.g. "65"), so append a quote mark; a non-numeric value is
+ * shown verbatim. Returns null otherwise.
+ * @param {object} device
+ * @returns {string | null}
+ */
+function getDeviceHardwareImageModalScreenSize(device) {
+  if (!device || device.isTv !== true) return null;
+  const raw = String(device.screenSize || '').trim();
+  if (!raw) return null;
+  return /^\d+$/.test(raw) ? `${raw}"` : raw;
+}
+
+/**
  * Full-size hardware image in a lightbox (same URL as the panel thumbnail).
  * @param {string} imageSrc
  * @param {object} device
@@ -2940,18 +3073,30 @@ function openDeviceHardwareImageModal(imageSrc, device, opener?: HTMLElement | n
   modal.appendChild(header);
   modal.appendChild(body);
 
+  const footerItems: Array<{ label: string; value: string; end?: boolean }> = [];
   const footerModel = getDeviceHardwareImageModalFooterModel(device);
-  if (footerModel) {
+  if (footerModel) footerItems.push({ label: 'Model', value: footerModel });
+  const screenSize = getDeviceHardwareImageModalScreenSize(device);
+  // Right-align Screen Size to the far edge of the footer (only meaningful when
+  // Model is also present; on its own it just sits at the start).
+  if (screenSize) footerItems.push({ label: 'Screen Size', value: screenSize, end: footerItems.length > 0 });
+  if (footerItems.length) {
     const footer = document.createElement('div');
     footer.className = 'device-hardware-image-modal-footer';
-    const label = document.createElement('span');
-    label.className = 'device-hardware-image-modal-footer-label';
-    label.textContent = 'Model';
-    const value = document.createElement('div');
-    value.className = 'device-hardware-image-modal-footer-value';
-    value.textContent = footerModel;
-    footer.appendChild(label);
-    footer.appendChild(value);
+    for (const item of footerItems) {
+      const cell = document.createElement('div');
+      cell.className = 'device-hardware-image-modal-footer-item';
+      if (item.end) cell.classList.add('device-hardware-image-modal-footer-item--end');
+      const label = document.createElement('span');
+      label.className = 'device-hardware-image-modal-footer-label';
+      label.textContent = item.label;
+      const value = document.createElement('div');
+      value.className = 'device-hardware-image-modal-footer-value';
+      value.textContent = item.value;
+      cell.appendChild(label);
+      cell.appendChild(value);
+      footer.appendChild(cell);
+    }
     modal.appendChild(footer);
   }
 
@@ -3095,6 +3240,206 @@ function setDevicePanelIcon(
   iconEl.appendChild(btn);
 }
 
+/**
+ * Responsive device-panel header. Keeps the section selector (inner tabs)
+ * horizontally centered in the *header* (not just the leftover space beside the
+ * device info) and, as the header narrows, degrades gracefully through this
+ * priority ladder — each rung only used when the previous doesn't fit:
+ *
+ *   0. device info shown  + full-size tabs
+ *   1. device info HIDDEN  + full-size tabs   (name/IP live in the image modal)
+ *   2. device info hidden  + compact tabs      (tighter padding/font/gap)
+ *   3. device info hidden  + icon-only tabs     (labels move to a hover tooltip)
+ *
+ * Centering is handled by the CSS (header is a `1fr auto 1fr` grid, so the
+ * center tab strip is always horizontally centered in the header). The right
+ * column (Device Performance strip / "paused" banner) truncates to fit its
+ * track, yielding space to the tabs, with the full text in a tooltip.
+ *
+ * This controller only decides the tab rung. The section selector has priority:
+ * it stays full while each side track can still hold its need — the left block's
+ * info (or, once hidden, the icon) and a small reserved floor for the right
+ * block (RIGHT_FLOOR). Because the grid centers, both side tracks are equal, so
+ * the fit budget is H − 2·max(leftNeed, rightReserve) − 2·gap. The perf block
+ * then shrinks into whatever the right track gives it (≥ RIGHT_FLOOR).
+ *
+ * Hysteresis: rungs downgrade the moment the current one stops fitting, but only
+ * upgrade once the lower rung fits with HYST px of slack — so dragging the
+ * window slowly across a boundary can't flip-flop.
+ *
+ * Loop-safety: header width is fixed by the outer layout and is independent of
+ * our class toggles (they change the center/side content, not the header's own
+ * width); the cached natural widths don't depend on our toggles; and every class
+ * write is guarded to fire only on an actual change, so apply() is idempotent
+ * and can't drive the observers in a loop. Observers are disconnected on tab
+ * close via panel._headerResponsiveCleanup (see disconnectDevice).
+ */
+function setupDevicePanelHeaderResponsive(panel) {
+  const header = panel.querySelector('.device-panel-header');
+  const left = panel.querySelector('.device-panel-left');
+  const right = panel.querySelector('.device-panel-right');
+  const nav = panel.querySelector('.device-panel-nav');
+  const info = panel.querySelector('.device-panel-info');
+  const innerTabs = panel.querySelector('.inner-tabs');
+  if (
+    !(header instanceof HTMLElement) ||
+    !(left instanceof HTMLElement) ||
+    !(nav instanceof HTMLElement) ||
+    !(innerTabs instanceof HTMLElement)
+  ) {
+    return;
+  }
+
+  // Read the header column gap from CSS so the JS math can't silently drift if
+  // the stylesheet gap changes.
+  const parsedGap = parseFloat(getComputedStyle(header).columnGap || '');
+  const GAP = Number.isFinite(parsedGap) ? parsedGap : 16;
+  const HYST = 16; // px dead-band to keep rung boundaries from flip-flopping
+  const RIGHT_FLOOR = 140; // min width the perf/paused block keeps (icon + action) before tabs collapse
+
+  // The right block's two possible occupants; used to detect when it's active.
+  const perfWrap = right instanceof HTMLElement ? right.querySelector('[data-device-panel-perf-wrap]') : null;
+  const pausedNav = right instanceof HTMLElement ? right.querySelector('[data-device-panel-paused-nav]') : null;
+  const rightActive = () =>
+    (perfWrap instanceof HTMLElement && !perfWrap.hidden) ||
+    (pausedNav instanceof HTMLElement && !pausedNav.hidden);
+
+  let wFull = 0; // tab strip natural width, full
+  let wCompact = 0; // tab strip natural width, compact
+  let leftInfo = 0; // left block width with the device info shown
+  let leftNoInfo = 0; // left block width with the device info hidden
+  let measured = false;
+  let scheduled = false;
+  let rafId = 0;
+  let rung = 0; // current ladder rung (see doc comment)
+
+  const rectW = (el: Element | null) => (el ? el.getBoundingClientRect().width : 0);
+
+  const measure = () => {
+    const hadCompact = innerTabs.classList.contains('is-compact');
+    const hadIcons = innerTabs.classList.contains('is-icons');
+    innerTabs.classList.remove('is-compact', 'is-icons');
+    wFull = innerTabs.scrollWidth;
+    innerTabs.classList.add('is-compact');
+    wCompact = innerTabs.scrollWidth;
+    innerTabs.classList.remove('is-compact');
+    if (hadCompact) innerTabs.classList.add('is-compact');
+    if (hadIcons) innerTabs.classList.add('is-icons');
+
+    // Left block width with the device info shown vs. hidden. justify-self:start
+    // makes the block content-sized, so getBoundingClientRect gives the true
+    // content width even when its grid track is wider.
+    if (info instanceof HTMLElement) {
+      const wasHidden = info.classList.contains('is-hidden');
+      info.classList.remove('is-hidden');
+      leftInfo = rectW(left);
+      info.classList.add('is-hidden');
+      leftNoInfo = rectW(left);
+      if (!wasHidden) info.classList.remove('is-hidden');
+    } else {
+      leftInfo = leftNoInfo = rectW(left);
+    }
+    measured = true;
+  };
+
+  const setClass = (el: HTMLElement, name: string, on: boolean) => {
+    if (el.classList.contains(name) !== on) el.classList.toggle(name, on);
+  };
+
+  const apply = () => {
+    const H = header.clientWidth;
+    if (H <= 0) return;
+    // The grid centers the strip, so both side tracks are equal — the binding
+    // side is whichever needs more. The right block only reserves a small floor
+    // (it truncates below its natural width), so a wide perf strip / paused
+    // banner yields to the tabs instead of collapsing them.
+    const rightReserve = rightActive() ? RIGHT_FLOOR : 0;
+    const availInfo = H - 2 * Math.max(leftInfo, rightReserve) - 2 * GAP;
+    const availNoInfo = H - 2 * Math.max(leftNoInfo, rightReserve) - 2 * GAP;
+
+    // Rung table: [needed strip width, available width, resulting config].
+    // Rung 3 (icons) needs 0 → always fits, so it's the last-resort floor.
+    const rungs = [
+      { need: wFull, avail: availInfo, hideInfo: false, compact: false, icons: false },
+      { need: wFull, avail: availNoInfo, hideInfo: true, compact: false, icons: false },
+      { need: wCompact, avail: availNoInfo, hideInfo: true, compact: true, icons: false },
+      { need: 0, avail: availNoInfo, hideInfo: true, compact: false, icons: true }
+    ];
+    const fits = (i: number, margin: number) => rungs[i].need <= rungs[i].avail - margin;
+    // Downgrade the moment the current rung stops fitting…
+    while (rung < 3 && !fits(rung, 0)) rung++;
+    // …but only upgrade once the lower rung fits with hysteresis slack.
+    while (rung > 0 && fits(rung - 1, HYST)) rung--;
+
+    const cfg = rungs[rung];
+    if (info instanceof HTMLElement) setClass(info, 'is-hidden', cfg.hideInfo);
+    setClass(innerTabs, 'is-compact', cfg.compact);
+    setClass(innerTabs, 'is-icons', cfg.icons);
+  };
+
+  const run = () => {
+    // Don't measure until the panel is actually laid out — a hidden/detached
+    // panel reports zero widths, which would cache bogus thresholds.
+    if (header.clientWidth <= 0) return;
+    if (!measured) measure();
+    apply();
+  };
+
+  const schedule = () => {
+    if (scheduled) return;
+    scheduled = true;
+    rafId = requestAnimationFrame(() => {
+      scheduled = false;
+      run();
+    });
+  };
+
+  // Observe the header: with the grid, its width tracks the real available space
+  // (the center track is content-sized, so it wouldn't reflect window/sidebar
+  // resizes). Our class toggles don't change the header's own width → no loop.
+  const ro = new ResizeObserver(schedule);
+  ro.observe(header);
+
+  // The Network tab is revealed/hidden via an inline `display` style (changes
+  // the strip's natural width); the perf/paused blocks toggle via the `hidden`
+  // attribute (changes whether the right side reserves space) — react to both.
+  const mo = new MutationObserver(() => {
+    measured = false;
+    schedule();
+  });
+  mo.observe(innerTabs, { attributes: true, attributeFilter: ['style'], subtree: true });
+  if (right instanceof HTMLElement) {
+    mo.observe(right, { attributes: true, attributeFilter: ['hidden'], subtree: true });
+  }
+
+  // Font loading can change label widths after first paint.
+  let alive = true;
+  if (document.fonts?.ready) {
+    document.fonts.ready
+      .then(() => {
+        if (!alive) return;
+        measured = false;
+        schedule();
+      })
+      .catch(() => {});
+  }
+
+  schedule();
+
+  // Re-measure when the device is renamed / info changes live.
+  panel._headerResponsiveRemeasure = () => {
+    measured = false;
+    schedule();
+  };
+  // Deterministic teardown on tab close (matches the other per-panel cleanups).
+  panel._headerResponsiveCleanup = () => {
+    alive = false;
+    if (scheduled) cancelAnimationFrame(rafId);
+    ro.disconnect();
+    mo.disconnect();
+  };
+}
+
 function createDevicePanel(device, tabId, isRemote = false, serverUrl = null, locationId = null) {
   devLog('Creating device panel for:', device.deviceName, device.ip, isRemote ? '(remote)' : '(local)');
   
@@ -3157,10 +3502,11 @@ function createDevicePanel(device, tabId, isRemote = false, serverUrl = null, lo
   if (iconEl) {
     setDevicePanelIcon(iconEl, device, { isRemote, serverUrl });
   }
-  
+
   try {
     // Set up inner tabs
     setupInnerTabs(panel);
+    setupDevicePanelHeaderResponsive(panel);
     
     // Set up all components using the unified API adapter
     setupRemoteControls(panel, device, api);
@@ -3212,7 +3558,15 @@ function setupInnerTabs(panel) {
   
   devLog('Setting up inner tabs:', innerTabs.length, 'tabs found');
   
+  const innerTabsStrip = panel.querySelector('.inner-tabs');
   innerTabs.forEach(tab => {
+    // Show the label tooltip on hover only when collapsed to icons.
+    tab.addEventListener('mouseenter', () => {
+      if (innerTabsStrip?.classList.contains('is-icons')) scheduleSectionTabTooltip(tab);
+    });
+    tab.addEventListener('mouseleave', () => hideTabHoverTooltip());
+    tab.addEventListener('mousedown', () => hideTabHoverTooltip());
+
     tab.addEventListener('click', () => {
       const target = tab.dataset.innerTab;
       devLog('Tab clicked:', target);
@@ -3316,6 +3670,12 @@ function setupApps(panel, device, api) {
   const tvInputsRow = panel.querySelector('.tv-inputs-row');
   const inputsSection = panel.querySelector('.installed-inputs-section');
   const inputsGrid = panel.querySelector('.installed-inputs-grid');
+  const appsTitle = panel.querySelector('.installed-apps-title');
+  const rawListTitle = panel.querySelector('.raw-list-title');
+  const setAppsTitle = (hasInputs: boolean) => {
+    if (appsTitle) appsTitle.textContent = hasInputs ? 'Installed Apps and TV Inputs' : 'Installed Apps';
+    if (rawListTitle) rawListTitle.textContent = hasInputs ? 'Apps and Inputs List' : 'Raw List of Apps';
+  };
   
   if (!appsGrid || !appsLoading || !appsEmpty || !refreshBtn) {
     rendererError('Apps elements not found:', { appsGrid, appsLoading, appsEmpty, refreshBtn });
@@ -3419,6 +3779,7 @@ function setupApps(panel, device, api) {
     appsGrid.innerHTML = '';
     if (inputsGrid) inputsGrid.innerHTML = '';
     if (inputsSection) inputsSection.style.display = 'none';
+    setAppsTitle(false);
     appsEmpty.style.display = 'none';
 
     try {
@@ -3447,6 +3808,9 @@ function setupApps(panel, device, api) {
 
           // Route TV inputs into their own section, apps into the main grid
           if (isTvInput(appId) && inputsGrid) {
+            // Input icons are square-ish glyphs, not 16:9 poster art, so mark them
+            // for contain-fit rendering (see .input-tile CSS) to avoid cropping.
+            btn.classList.add('input-tile');
             inputsGrid.appendChild(btn);
             inputCount++;
           } else {
@@ -3454,10 +3818,12 @@ function setupApps(panel, device, api) {
           }
         }
 
-        // Only reveal the Inputs section when inputs are actually available
+        // Only reveal the Inputs section when inputs are actually available, and
+        // reflect that in the card title.
         if (inputsSection) {
           inputsSection.style.display = inputCount > 0 ? 'flex' : 'none';
         }
+        setAppsTitle(inputCount > 0);
 
         // Fetch icons through a bounded pool so the device isn't overwhelmed.
         // Not awaited: cards are already visible and icons fill in progressively.
@@ -3524,7 +3890,7 @@ function setupApps(panel, device, api) {
     appsOutput.classList.remove('hidden');
     appsOutput.classList.add('visible');
     appsOutput.style.display = 'block';
-    copyAppsBtn.style.display = 'block';
+    copyAppsBtn.style.display = '';
     
     if (result.success && result.data) {
       // Match app elements and extract id, version, and name
@@ -3593,11 +3959,13 @@ function setupApps(panel, device, api) {
     const text = appsOutput.textContent;
     if (text) {
       await window.roku.copyToClipboard(text);
-      copyAppsBtn.textContent = '✓ Copied!';
+      copyAppsBtn.title = 'Copied!';
+      setSafeHTML(copyAppsBtn, icon('check', 'icon-xs'));
       copyAppsBtn.classList.add('copied');
-      
+
       setTimeout(() => {
-        setSafeHTML(copyAppsBtn, icon('copy', 'icon-xs') + ' Copy');
+        copyAppsBtn.title = 'Copy list';
+        setSafeHTML(copyAppsBtn, icon('copy', 'icon-xs'));
         copyAppsBtn.classList.remove('copied');
       }, 2000);
     }

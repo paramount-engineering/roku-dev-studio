@@ -206,6 +206,12 @@ body {
   text-decoration-color: rgba(192, 132, 252, 0.9);
   text-underline-offset: 3px;
 }
+/* Cursor over an embedded URL: that URL is its own clickable target (opens the
+   URL preview, not the JSON modal). Drop the whole-line JSON dotted underline so
+   only the URL's cyan underline shows, disambiguating the two click targets. */
+.telnet-log-line.has-structured .telnet-log-content:hover:has(.telnet-log-url:hover) {
+  text-decoration: none;
+}
 
 .telnet-structured-view-pills {
   display: flex;
