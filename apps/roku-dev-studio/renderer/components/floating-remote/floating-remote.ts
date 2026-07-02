@@ -26,6 +26,7 @@ import {
 import { onAppSettingsChanged } from '../../modules/utils/app-settings-change-bus.js';
 import { getPanelApi } from '../../modules/device-api/panel-api-registry.js';
 import { rendererError } from '../../modules/utils/logger.js';
+import { icon, escapeHtml, setSafeHTML } from '../../modules/utils/index.js';
 import type { DevAppApi } from '../dev-app/dev-app-types.js';
 
 const ROOT_ID = 'floating-remote-root';
@@ -35,7 +36,11 @@ const DRAG_HANDLE_SELECTOR = '.floating-remote-shell-handle';
 let mounted = false;
 let shellEl: HTMLElement | null = null;
 let cardSlotEl: HTMLElement | null = null;
+let footerEl: HTMLElement | null = null;
 let boundPanel: HTMLElement | null = null;
+/** Panel whose dev-app events the footer is currently subscribed to. */
+let footerListenerPanel: HTMLElement | null = null;
+let footerRefreshHandler: (() => void) | null = null;
 let dragState: { startX: number; startY: number; originX: number; originY: number } | null = null;
 let positionRafId: number | null = null;
 /**
@@ -78,13 +83,15 @@ export function mountFloatingRemote(): void {
         </button>
       </div>
       <div class="floating-remote-shell-body" data-floating-remote-slot></div>
+      <div class="floating-remote-footer" data-floating-remote-footer></div>
     </div>
   `;
 
   shellEl = root.querySelector('.floating-remote-shell');
   cardSlotEl = root.querySelector<HTMLElement>('[data-floating-remote-slot]');
-  if (!shellEl || !cardSlotEl) {
-    rendererError('[FloatingRemote] shell or slot element missing after mount');
+  footerEl = root.querySelector<HTMLElement>('[data-floating-remote-footer]');
+  if (!shellEl || !cardSlotEl || !footerEl) {
+    rendererError('[FloatingRemote] shell, slot, or footer element missing after mount');
     return;
   }
 
@@ -178,6 +185,100 @@ function rebindCard(panel: HTMLElement, api: DevAppApi): void {
   } else {
     delete shellEl.dataset.ecpMode;
   }
+
+  bindDevAppFooter(panel);
+}
+
+/**
+ * Compact Dev App footer. Mirrors the active panel's Dev App state and delegates
+ * every action to that panel's real controls, so the password/confirm/launch/
+ * screenshot logic is reused verbatim:
+ *   - no dev app  → a "Sideload Dev App" button (jumps to the Dev App tab)
+ *   - installed   → small icon + title + Delete
+ *   - not launched → also a Launch button (hidden once it's foreground)
+ * Re-renders on the panel's `dev-app-sideload-state` (install/uninstall) and
+ * `dev-app-active-polled` (foreground) events.
+ */
+function bindDevAppFooter(panel: HTMLElement): void {
+  if (!footerEl) return;
+
+  // Re-subscribe only when the bound panel changes.
+  if (footerListenerPanel !== panel) {
+    if (footerListenerPanel && footerRefreshHandler) {
+      footerListenerPanel.removeEventListener('dev-app-sideload-state', footerRefreshHandler);
+      footerListenerPanel.removeEventListener('dev-app-active-polled', footerRefreshHandler);
+    }
+    footerRefreshHandler = () => renderDevAppFooter(panel);
+    panel.addEventListener('dev-app-sideload-state', footerRefreshHandler);
+    panel.addEventListener('dev-app-active-polled', footerRefreshHandler);
+    footerListenerPanel = panel;
+  }
+
+  renderDevAppFooter(panel);
+}
+
+function renderDevAppFooter(panel: HTMLElement): void {
+  if (!footerEl) return;
+
+  const details = panel.querySelector('.sideloaded-app-details');
+  const nameEl = panel.querySelector('.sideloaded-app-name');
+  const installed =
+    !!nameEl && !(details instanceof HTMLElement && details.querySelector('.sideloaded-none'));
+  const launchBtn = panel.querySelector('.launch-sideload-btn');
+  const deleteBtn = panel.querySelector('.delete-sideload-btn');
+  // Panel keeps Launch visible only while installed AND not foreground.
+  const canLaunch = launchBtn instanceof HTMLElement && launchBtn.style.display !== 'none';
+
+  if (!installed) {
+    setSafeHTML(
+      footerEl,
+      `<button type="button" class="floating-remote-footer-btn floating-remote-footer-sideload" data-fr-sideload title="Sideload a dev channel">
+        <span class="icon icon-xs" aria-hidden="true"><svg><use href="#icon-rocket"/></svg></span>
+        Sideload Dev App
+      </button>`
+    );
+    footerEl.querySelector('[data-fr-sideload]')?.addEventListener('click', () => {
+      // Jump to the Dev App tab, where the full select-package + install UI lives.
+      const devappTab = panel.querySelector('.inner-tab[data-inner-tab="devapp"]');
+      if (devappTab instanceof HTMLElement) devappTab.click();
+    });
+    return;
+  }
+
+  const name = nameEl?.textContent?.trim() || 'Dev App';
+  const meta = panel.querySelector('.sideloaded-app-meta')?.textContent?.trim() || '';
+  // Icon + title are one hover group; the tooltip carries the full (untruncated)
+  // name plus the version line so the whole unit is self-describing.
+  const appTooltip = meta ? `${name}\n${meta}` : name;
+  const iconImg = panel.querySelector('.sideloaded-app-icon');
+  const iconSrc =
+    iconImg instanceof HTMLImageElement && iconImg.style.display !== 'none' && iconImg.src
+      ? iconImg.src
+      : '';
+
+  setSafeHTML(
+    footerEl,
+    `<div class="floating-remote-footer-app" title="${escapeHtml(appTooltip)}">
+      <span class="floating-remote-footer-icon" aria-hidden="true">${iconSrc ? '<img alt="">' : icon('package', 'icon-xs', 'icon-muted')}</span>
+      <span class="floating-remote-footer-name">${escapeHtml(name)}</span>
+    </div>
+    <div class="floating-remote-footer-actions">
+      ${canLaunch ? '<button type="button" class="floating-remote-footer-btn floating-remote-footer-launch" data-fr-launch title="Launch Dev App" aria-label="Launch Dev App"><span class="icon icon-xs" aria-hidden="true"><svg><use href="#icon-rocket"/></svg></span></button>' : ''}
+      <button type="button" class="floating-remote-footer-btn floating-remote-footer-delete" data-fr-delete title="Delete Dev App" aria-label="Delete Dev App"><span class="icon icon-xs" aria-hidden="true"><svg><use href="#icon-trash"/></svg></span></button>
+    </div>`
+  );
+
+  // Set the icon src via JS (avoid injecting a data-URL into the HTML string).
+  if (iconSrc) {
+    const img = footerEl.querySelector('.floating-remote-footer-icon img');
+    if (img instanceof HTMLImageElement) img.src = iconSrc;
+  }
+  footerEl.querySelector('[data-fr-launch]')?.addEventListener('click', () => {
+    if (launchBtn instanceof HTMLElement) launchBtn.click();
+  });
+  footerEl.querySelector('[data-fr-delete]')?.addEventListener('click', () => {
+    if (deleteBtn instanceof HTMLElement) deleteBtn.click();
+  });
 }
 
 /**
