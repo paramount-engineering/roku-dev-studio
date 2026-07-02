@@ -57,6 +57,9 @@ type SpillSession = {
    *  renderer on every `Append` (for the live counter) and on `Read` (so it
    *  can size its prepend correctly). */
   entryCount: number;
+  /** Serializes async appends so out-of-order/concurrent `Append` IPCs can't
+   *  interleave writes or race the byte/entry counters. Reads chain after it too. */
+  writeChain: Promise<void>;
 };
 
 /** spillId → in-memory bookkeeping. The entry count is mirrored to the
@@ -172,13 +175,13 @@ export function registerConsoleSpillIpc(ipcMain: IpcMain, app: App): void {
         error: e instanceof Error ? e.message : String(e)
       };
     }
-    sessions.set(stem, { filePath, byteSize: 0, entryCount: 0 });
+    sessions.set(stem, { filePath, byteSize: 0, entryCount: 0, writeChain: Promise.resolve() });
     return { success: true as const, spillId: stem };
   });
 
   ipcMain.handle(
     IPC_ConsoleSpillAppend,
-    (
+    async (
       event: IpcMainInvokeEvent,
       payload: { spillId: string; entries: Array<Record<string, unknown>> }
     ) => {
@@ -195,58 +198,63 @@ export function registerConsoleSpillIpc(ipcMain: IpcMain, app: App): void {
         };
       }
 
-      // Build the on-disk text first so we can pre-check against the cap. A
-      // single `appendFileSync` is dramatically cheaper than per-entry
-      // syscalls for the streaming workload (350-line bursts on hot trim).
-      let text = '';
-      let dropped = 0;
-      for (const entry of payload.entries) {
-        const line = JSON.stringify(entry) + '\n';
-        if (session.byteSize + Buffer.byteLength(text) + Buffer.byteLength(line) > SPILL_FILE_MAX_BYTES) {
-          dropped = payload.entries.length - (text.length === 0 ? 0 : countLines(text));
-          break;
+      // The whole build + cap-check + write runs serialized on the session's
+      // writeChain so `byteSize` is always current and appends never interleave.
+      // Async `appendFile` (not `appendFileSync`) keeps the main thread unblocked
+      // on the streaming hot path (350-line bursts on trim).
+      const task = session.writeChain.then(async () => {
+        // Build the on-disk text and pre-check against the cap. A single append is
+        // dramatically cheaper than per-entry syscalls for the streaming workload.
+        let text = '';
+        let dropped = 0;
+        for (const entry of payload.entries) {
+          const line = JSON.stringify(entry) + '\n';
+          if (session.byteSize + Buffer.byteLength(text) + Buffer.byteLength(line) > SPILL_FILE_MAX_BYTES) {
+            dropped = payload.entries.length - (text.length === 0 ? 0 : countLines(text));
+            break;
+          }
+          text += line;
         }
-        text += line;
-      }
 
-      if (text.length === 0) {
-        // Hit the cap before writing anything. Caller learns from the
-        // `dropped` count and may stop trying to append.
-        return {
-          success: true as const,
-          entryCount: session.entryCount,
-          dropped
-        };
-      }
+        if (text.length === 0) {
+          // Hit the cap before writing anything. Caller learns from `dropped`.
+          return { entryCount: session.entryCount, dropped };
+        }
+
+        await fs.promises.appendFile(session.filePath, text);
+        session.byteSize += Buffer.byteLength(text);
+        session.entryCount += countLines(text);
+        return { entryCount: session.entryCount, dropped };
+      });
+      // Keep the chain alive (and unrejected) for the next append regardless of outcome.
+      session.writeChain = task.then(
+        () => undefined,
+        () => undefined
+      );
 
       try {
-        fs.appendFileSync(session.filePath, text);
+        const { entryCount, dropped } = await task;
+        return { success: true as const, entryCount, dropped };
       } catch (e) {
         return {
           success: false as const,
           error: e instanceof Error ? e.message : String(e)
         };
       }
-      const writtenLines = countLines(text);
-      session.byteSize += Buffer.byteLength(text);
-      session.entryCount += writtenLines;
-
-      return {
-        success: true as const,
-        entryCount: session.entryCount,
-        dropped
-      };
     }
   );
 
-  ipcMain.handle(IPC_ConsoleSpillRead, (event: IpcMainInvokeEvent, payload: { spillId: string }) => {
+  ipcMain.handle(IPC_ConsoleSpillRead, async (event: IpcMainInvokeEvent, payload: { spillId: string }) => {
     void event;
     const session = sessions.get(payload.spillId);
     if (!session) {
       return { success: false as const, error: 'Unknown spillId' };
     }
     try {
-      const text = fs.readFileSync(session.filePath, 'utf8') as string;
+      // Wait for any queued appends to land so the read reflects them, then read
+      // asynchronously (the file can be up to 100 MB — a sync read would freeze the UI).
+      await session.writeChain;
+      const text = (await fs.promises.readFile(session.filePath, 'utf8')) as string;
       // Empty file or trailing newline produces an empty last line — strip it.
       const lines = text.length === 0 ? [] : text.split('\n');
       if (lines.length > 0 && lines[lines.length - 1] === '') lines.pop();

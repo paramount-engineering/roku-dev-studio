@@ -40,7 +40,9 @@ export function registerNetworkSessionViewerIpc(ipcMain: IpcMain): void {
       const state = win ? stateByWindowId.get(win.id) : undefined;
       if (!state) return { success: false, error: 'No file is associated with this window.' };
       try {
-        const stat = fs.statSync(state.filePath);
+        // Async I/O: the file can be up to MAX_SESSION_BYTES (512 MB); a sync stat/read
+        // would freeze the main process (and every window) while it loads.
+        const stat = await fs.promises.stat(state.filePath);
         if (!stat.isFile()) return { success: false, error: 'Not a file.' };
         if (stat.size > MAX_SESSION_BYTES) {
           return {
@@ -48,7 +50,7 @@ export function registerNetworkSessionViewerIpc(ipcMain: IpcMain): void {
             error: `File is too large (${Math.round(stat.size / (1024 * 1024))} MB). Maximum is ${MAX_SESSION_BYTES / (1024 * 1024)} MB.`
           };
         }
-        const buf = fs.readFileSync(state.filePath) as Buffer;
+        const buf = (await fs.promises.readFile(state.filePath)) as Buffer;
         const parsed = parseSessionBuffer(state.filePath, buf);
         return {
           success: true,

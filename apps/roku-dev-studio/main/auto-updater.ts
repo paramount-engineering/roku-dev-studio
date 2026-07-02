@@ -197,7 +197,12 @@ export function setupAutoUpdater(
           error: `Failed to load release notes (${response.status})`
         };
       }
-      const json = await response.json();
+      const json = (await response.json()) as {
+        name?: string;
+        tag_name?: string;
+        body?: string;
+        html_url?: string;
+      };
       return {
         success: true,
         info: {
