@@ -144,7 +144,7 @@ function setupSystemHandlers(
         if (result.canceled || !result.filePath) {
           return { success: false, error: 'Save cancelled' };
         }
-        fs.writeFileSync(result.filePath, content ?? '', 'utf-8');
+        await fs.promises.writeFile(result.filePath, content ?? '', 'utf-8');
         return { success: true, filePath: result.filePath };
       } catch (err) {
         mainError('Error saving text file:', err);
@@ -168,7 +168,7 @@ function setupSystemHandlers(
         if (result.canceled || !result.filePath) {
           return { success: false, error: 'Save cancelled' };
         }
-        fs.writeFileSync(result.filePath, Buffer.from(base64 ?? '', 'base64'));
+        await fs.promises.writeFile(result.filePath, Buffer.from(base64 ?? '', 'base64'));
         return { success: true, filePath: result.filePath };
       } catch (err) {
         mainError('Error saving binary file:', err);
@@ -214,7 +214,7 @@ function setupSystemHandlers(
       
       try {
         // Try to read the bundled TrackerTask.xml
-        trackerTaskContent = fs.readFileSync(trackerTaskPath, 'utf-8');
+        trackerTaskContent = await fs.promises.readFile(trackerTaskPath, 'utf-8');
       } catch (readErr) {
         // If not found, return error with helpful message
         mainLog('TrackerTask.xml not found at', trackerTaskPath);
@@ -225,8 +225,8 @@ function setupSystemHandlers(
       }
       
       // Write to selected path
-      fs.writeFileSync(result.filePath, trackerTaskContent, 'utf-8');
-      
+      await fs.promises.writeFile(result.filePath, trackerTaskContent, 'utf-8');
+
       return { success: true, filePath: result.filePath };
     } catch (err) {
       mainError('Error saving TrackerTask:', err);
@@ -336,11 +336,9 @@ function setupSystemHandlers(
       if (!targetPath) {
         return { success: false, error: 'Path is not under an allowed directory' };
       }
-      // Ensure parent directory exists
+      // Ensure parent directory exists (recursive mkdir is idempotent — no existsSync race).
       const dir = path.dirname(targetPath);
-      if (!fs.existsSync(dir)) {
-        fs.mkdirSync(dir, { recursive: true });
-      }
+      await fs.promises.mkdir(dir, { recursive: true });
       let data: string | Buffer =
         typeof content === 'string' ? content : Buffer.from(String(content ?? ''), 'utf8');
       let enc: NodeJS.BufferEncoding | undefined = (encoding || 'utf8') as NodeJS.BufferEncoding;
@@ -355,9 +353,9 @@ function setupSystemHandlers(
         enc = undefined;
       }
       if (enc !== undefined) {
-        fs.writeFileSync(targetPath, data, enc);
+        await fs.promises.writeFile(targetPath, data, enc);
       } else {
-        fs.writeFileSync(targetPath, data);
+        await fs.promises.writeFile(targetPath, data);
       }
       return { success: true, filePath: targetPath };
     } catch (err) {
@@ -455,7 +453,7 @@ function setupSystemHandlers(
       if (!fs.existsSync(resolved)) {
         return { success: false, error: 'File not found' };
       }
-      const buf = fs.readFileSync(resolved);
+      const buf = await fs.promises.readFile(resolved);
       const ext = path.extname(resolved).toLowerCase();
       const mime = ext === '.png' ? 'image/png' : 'image/jpeg';
       const base64 = buf.toString('base64');
@@ -732,7 +730,7 @@ function setupSystemHandlers(
       }
 
       const pdfBytes = await doc.save();
-      fs.writeFileSync(result.filePath, pdfBytes);
+      await fs.promises.writeFile(result.filePath, pdfBytes);
       return { success: true, filePath: result.filePath };
     } catch (err) {
       mainError('Error saving results PDF:', err);

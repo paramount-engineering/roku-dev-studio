@@ -175,9 +175,9 @@ function setupDevAppHandlers(mainWindow: BrowserWindow | undefined, dialog: Dial
         ? resolveUserPathUnderOneOf([os.tmpdir()], tempFile)
         : null;
       if (tempFileSafe && fs.existsSync(tempFileSafe)) {
-        fs.copyFileSync(tempFileSafe, result.filePath);
+        await fs.promises.copyFile(tempFileSafe, result.filePath);
         try {
-          fs.unlinkSync(tempFileSafe);
+          await fs.promises.unlink(tempFileSafe);
         } catch (unlinkErr) {
           // Ignore cleanup errors
         }
@@ -185,7 +185,7 @@ function setupDevAppHandlers(mainWindow: BrowserWindow | undefined, dialog: Dial
         // Decode base64 data URL
         const base64Data = dataUrl.replace(/^data:image\/\w+;base64,/, '');
         const buffer = Buffer.from(base64Data, 'base64');
-        fs.writeFileSync(result.filePath, buffer);
+        await fs.promises.writeFile(result.filePath, buffer);
       } else {
         return { success: false, error: 'No screenshot data available' };
       }
@@ -209,7 +209,7 @@ function setupDevAppHandlers(mainWindow: BrowserWindow | undefined, dialog: Dial
     }
     const tempFile = path.join(os.tmpdir(), `roku-screenshot-${Date.now()}.jpg`);
     try {
-      fs.writeFileSync(tempFile, result.imageBuffer);
+      await fs.promises.writeFile(tempFile, result.imageBuffer);
     } catch (err: unknown) {
       mainError('Screenshot: failed to write temp file', errMsg(err));
       return { success: false, error: `Failed to save screenshot: ${errMsg(err)}` };

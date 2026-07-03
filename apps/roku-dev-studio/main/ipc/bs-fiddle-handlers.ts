@@ -217,16 +217,23 @@ function humanizeRemoteUploadError(raw: string | undefined): string {
   return msg.length > 240 ? msg.slice(0, 240) + '…' : msg;
 }
 
-function sideloadRemoteUploadOnce(opts: {
+async function sideloadRemoteUploadOnce(opts: {
   serverUrl: string;
   ip: string;
   zipPath: string;
   password: string;
 }): Promise<{ success: boolean; error?: string; message?: string; authFailed?: boolean }> {
+  const fileName = path.basename(opts.zipPath);
+  // Async read (the zip can be many MB) BEFORE constructing the upload Promise, so the main
+  // thread isn't blocked and we avoid an async Promise executor.
+  let fileBuffer: Buffer;
+  try {
+    fileBuffer = await fs.promises.readFile(opts.zipPath);
+  } catch (err) {
+    return { success: false, error: errMsg(err) };
+  }
   return new Promise((resolve) => {
     try {
-      const fileName = path.basename(opts.zipPath);
-      const fileBuffer = fs.readFileSync(opts.zipPath);
       const form = new FormData();
       form.append('file', fileBuffer, { filename: fileName, contentType: 'application/zip' });
       form.append('password', opts.password);

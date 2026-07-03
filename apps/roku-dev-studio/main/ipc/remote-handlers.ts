@@ -637,8 +637,9 @@ function setupRemoteHandlers(mainWindow: BrowserWindow | undefined, safeSendToRe
         return { success: false, error: 'File not found: ' + filePath };
       }
       const fileName = path.basename(resolved);
-      const fileBuffer = fs.readFileSync(resolved);
-      
+      // Async read: sideload zips can be many MB; a sync read blocks the whole UI.
+      const fileBuffer = await fs.promises.readFile(resolved);
+
       // Create form data
       const form = new FormData();
       form.append('file', fileBuffer, {
