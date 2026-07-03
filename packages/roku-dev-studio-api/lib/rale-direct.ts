@@ -17,6 +17,11 @@ const connections = new Map<string, Socket>();
 // would attach multiple 'data' listeners with separate buffers and race on '[end]',
 // cross-contaminating responses. A chain-per-connection keeps commands sequential.
 const commandChains = new Map<string, Promise<unknown>>();
+// Bytes received after a command's `[end]` (e.g. a second framed message the device pushed
+// in the same TCP chunk). The old code discarded these on listener removal, so a following
+// frame was lost and the next command hung until timeout. We stash the tail here and seed
+// the next runOne with it. Commands are serialized (commandChains), so this can't interleave.
+const recvBuffers = new Map<string, string>();
 
 function randomUUID() {
   return typeof crypto.randomUUID === 'function'
@@ -101,6 +106,7 @@ function raleConnect(
     socket.on('close', () => {
       connections.delete(connectionId);
       commandChains.delete(connectionId);
+      recvBuffers.delete(connectionId);
       if (onClose) {
         try {
           onClose(connectionId);
@@ -172,39 +178,44 @@ function runOne(
 
     const onData = (data: Buffer) => {
       if (resolved) return;
-      const chunk = data.toString();
-      responseData += chunk;
+      responseData += data.toString();
 
-      if (responseData.includes('[end]')) {
-        resolved = true;
-        cleanup();
+      // Consume exactly the FIRST complete frame. Using lastIndexOf (old behavior) would
+      // merge two back-to-back frames into one and parse across them; indexOf takes one.
+      const endIdx = responseData.indexOf('[end]');
+      if (endIdx === -1) return;
 
-        try {
-          const startIdx = responseData.indexOf('[start]');
-          const endIdx = responseData.lastIndexOf('[end]');
+      resolved = true;
+      cleanup();
 
-          if (startIdx !== -1 && endIdx !== -1) {
-            let content = responseData.substring(startIdx + 7, endIdx);
+      const frame = responseData.slice(0, endIdx);
+      // Preserve any bytes after this frame for the next serialized command.
+      const leftover = responseData.slice(endIdx + '[end]'.length);
+      if (leftover.length > 0) recvBuffers.set(connectionId, leftover);
 
-            const uuidPrefixMatch = content.match(/^\[uuid:(\d+)\]/);
-            if (uuidPrefixMatch) {
-              const uuidLen = parseInt(uuidPrefixMatch[1], 10);
-              const prefixLen = uuidPrefixMatch[0].length;
-              content = content.substring(prefixLen + uuidLen);
-            }
+      try {
+        const startIdx = frame.indexOf('[start]');
+        if (startIdx !== -1) {
+          let content = frame.substring(startIdx + 7);
 
-            try {
-              const result = JSON.parse(content);
-              resolve({ success: true, data: result, uuid });
-            } catch {
-              resolve({ success: true, data: content, uuid, raw: true });
-            }
-          } else {
-            resolve({ success: true, data: responseData, uuid, raw: true });
+          const uuidPrefixMatch = content.match(/^\[uuid:(\d+)\]/);
+          if (uuidPrefixMatch) {
+            const uuidLen = parseInt(uuidPrefixMatch[1], 10);
+            const prefixLen = uuidPrefixMatch[0].length;
+            content = content.substring(prefixLen + uuidLen);
           }
-        } catch (e: unknown) {
-          resolve({ success: true, data: responseData, uuid, parseError: errorMessage(e) });
+
+          try {
+            const result = JSON.parse(content);
+            resolve({ success: true, data: result, uuid });
+          } catch {
+            resolve({ success: true, data: content, uuid, raw: true });
+          }
+        } else {
+          resolve({ success: true, data: frame, uuid, raw: true });
         }
+      } catch (e: unknown) {
+        resolve({ success: true, data: frame, uuid, parseError: errorMessage(e) });
       }
     };
 
@@ -218,7 +229,15 @@ function runOne(
       }
     }, timeoutMs);
 
+    // Always send the command FIRST (never skip the write), then feed any tail left over
+    // from the previous command's frame. Feeding after the write means a response that was
+    // split right after a previous `[end]` completes here instead of being lost.
     socket.write(message);
+    const seeded = recvBuffers.get(connectionId);
+    if (seeded) {
+      recvBuffers.delete(connectionId);
+      onData(Buffer.from(seeded));
+    }
   });
 }
 
@@ -231,6 +250,7 @@ function raleDisconnect(connectionId: string) {
     connections.delete(connectionId);
   }
   commandChains.delete(connectionId);
+  recvBuffers.delete(connectionId);
   return { success: true };
 }
 
