@@ -518,6 +518,39 @@ function formatHoverAge(ageMs: number): string {
 type LastPointerState = { x: number; y: number; isOver: boolean };
 const lastPointerBySvg: WeakMap<SVGSVGElement, LastPointerState> = new WeakMap();
 
+/**
+ * True when the SVG is actually on screen. Charts poll every 0.5–5s per device forever, and the
+ * old code full-rebuilt the SVG each tick even for charts in a hidden tab / collapsed panel —
+ * the dominant CPU/GC churn. `checkVisibility()` (Chromium, present in this Electron) returns
+ * false for `display:none`/`visibility:hidden` ancestors; disconnected nodes are skipped too.
+ */
+function isSvgRenderable(svg: SVGSVGElement): boolean {
+  const anyEl = svg as unknown as { checkVisibility?: () => boolean };
+  if (typeof anyEl.checkVisibility === 'function') return anyEl.checkVisibility();
+  return svg.isConnected;
+}
+
+function clearNode(node: Element): void {
+  while (node.firstChild) node.removeChild(node.firstChild);
+}
+
+/** Remove the per-frame hover layer (hit rect + tooltip) so it can be re-created with live data. */
+function removeChartHover(svg: SVGSVGElement): void {
+  svg.querySelectorAll('.remote-ts-hit-area, .remote-ts-hover-layer').forEach((n) => n.remove());
+}
+
+/** Persistent structural groups for the full timeseries chart (grid/labels reused across frames). */
+const tsChartState = new WeakMap<
+  SVGSVGElement,
+  { gridG: SVGGElement; lineG: SVGGElement; labelG: SVGGElement; axisSig: string }
+>();
+
+/** Persistent structural nodes for the sparkline (plot bg + clip built once; only lines redraw). */
+const sparkState = new WeakMap<
+  SVGSVGElement,
+  { lineG: SVGGElement; clipId: string }
+>();
+
 type HoverLayout = {
   pl: number;
   pt: number;
@@ -822,11 +855,11 @@ export function drawTimeseriesChart(
     hover?: TimeseriesHoverOpts;
   }
 ): void {
-  while (svg.firstChild) svg.removeChild(svg.firstChild);
+  // Skip all work when the chart isn't on screen (hidden tab / collapsed panel).
+  if (!isSvgRenderable(svg)) return;
 
   const vbW = 420;
   const vbH = 200;
-  svg.setAttribute('viewBox', `0 0 ${vbW} ${vbH}`);
 
   const pl = 36;
   const pr = 4;
@@ -842,32 +875,82 @@ export function drawTimeseriesChart(
   const nowMs = Number.isFinite(opts.nowMs) ? opts.nowMs : Date.now();
   const maxGapMs = finitePositiveMs(opts.maxSampleGapMs, 30_000);
 
-  const gridG = el('g', { class: 'remote-ts-grid' });
-  const lineG = el('g', { class: 'remote-ts-lines' });
-  const labelG = el('g', { class: 'remote-ts-labels' });
-
-  for (let i = 0; i <= tickCount; i++) {
-    const t = yMin + (ySpan * i) / tickCount;
-    const y = pt + gh - (gh * i) / tickCount;
-    const line = el('line', {
-      x1: String(pl),
-      y1: String(y),
-      x2: String(pl + gw),
-      y2: String(y),
-      stroke: 'rgba(255,255,255,0.07)',
-      'stroke-width': '1'
-    });
-    gridG.appendChild(line);
-    const txt = el('text', {
-      x: String(pl - 3),
-      y: String(y + 3),
-      fill: 'var(--text-muted, #888)',
-      'font-size': '9',
-      'text-anchor': 'end'
-    });
-    txt.textContent = opts.yFormat(t);
-    labelG.appendChild(txt);
+  // Persist the three structural groups across frames. Grid + axis labels only change when the
+  // axis / time-window changes; only the data lines (and hover) are rebuilt each frame.
+  let st = tsChartState.get(svg);
+  if (!st) {
+    while (svg.firstChild) svg.removeChild(svg.firstChild);
+    svg.setAttribute('viewBox', `0 0 ${vbW} ${vbH}`);
+    const g = el('g', { class: 'remote-ts-grid' });
+    const l = el('g', { class: 'remote-ts-lines' });
+    const b = el('g', { class: 'remote-ts-labels' });
+    // Z-order preserved from the original: grid, lines, labels (hover appends on top later).
+    svg.appendChild(g);
+    svg.appendChild(l);
+    svg.appendChild(b);
+    st = { gridG: g, lineG: l, labelG: b, axisSig: '' };
+    tsChartState.set(svg, st);
   }
+  const gridG = st.gridG;
+  const lineG = st.lineG;
+  const labelG = st.labelG;
+
+  const xFromAgeMs = (ageMs: number) => {
+    const a = Math.max(0, Math.min(historyMs, ageMs));
+    return pl + gw * (1 - a / historyMs);
+  };
+
+  // Rebuild grid + axis labels only when the axis / window changed (they're otherwise identical
+  // frame to frame — the bulk of the old per-tick allocation).
+  const axisSig = `${yMin}|${yMax}|${tickCount}|${historyMs}`;
+  if (st.axisSig !== axisSig) {
+    st.axisSig = axisSig;
+    clearNode(gridG);
+    clearNode(labelG);
+
+    for (let i = 0; i <= tickCount; i++) {
+      const t = yMin + (ySpan * i) / tickCount;
+      const y = pt + gh - (gh * i) / tickCount;
+      const line = el('line', {
+        x1: String(pl),
+        y1: String(y),
+        x2: String(pl + gw),
+        y2: String(y),
+        stroke: 'rgba(255,255,255,0.07)',
+        'stroke-width': '1'
+      });
+      gridG.appendChild(line);
+      const txt = el('text', {
+        x: String(pl - 3),
+        y: String(y + 3),
+        fill: 'var(--text-muted, #888)',
+        'font-size': '9',
+        'text-anchor': 'end'
+      });
+      txt.textContent = opts.yFormat(t);
+      labelG.appendChild(txt);
+    }
+
+    const xTickDivs = 6;
+    for (let k = 0; k <= xTickDivs; k++) {
+      const agoMs = (historyMs * k) / xTickDivs;
+      const x = xFromAgeMs(agoMs);
+      /* k === 0 is newest (right edge); middle-anchored “now” was clipped at the SVG/card edge. */
+      const isRightmost = k === 0;
+      const t = el('text', {
+        x: String(isRightmost ? Math.min(pl + gw - 2, vbW - 4) : x),
+        y: String(vbH - 6),
+        fill: 'var(--text-muted, #888)',
+        'font-size': '8',
+        'text-anchor': isRightmost ? 'end' : 'middle'
+      });
+      t.textContent = agoMs < 750 ? 'now' : formatMmSs(agoMs / 1000);
+      labelG.appendChild(t);
+    }
+  }
+
+  // Data lines are rebuilt every frame.
+  clearNode(lineG);
 
   const hasYConstant = series.some(
     (s) => typeof s.yConstant === 'number' && Number.isFinite(s.yConstant)
@@ -881,32 +964,8 @@ export function drawTimeseriesChart(
     )
   );
 
-  const xFromAgeMs = (ageMs: number) => {
-    const a = Math.max(0, Math.min(historyMs, ageMs));
-    return pl + gw * (1 - a / historyMs);
-  };
-
-  const xTickDivs = 6;
-  for (let k = 0; k <= xTickDivs; k++) {
-    const agoMs = (historyMs * k) / xTickDivs;
-    const x = xFromAgeMs(agoMs);
-    /* k === 0 is newest (right edge); middle-anchored “now” was clipped at the SVG/card edge. */
-    const isRightmost = k === 0;
-    const t = el('text', {
-      x: String(isRightmost ? Math.min(pl + gw - 2, vbW - 4) : x),
-      y: String(vbH - 6),
-      fill: 'var(--text-muted, #888)',
-      'font-size': '8',
-      'text-anchor': isRightmost ? 'end' : 'middle'
-    });
-    t.textContent = agoMs < 750 ? 'now' : formatMmSs(agoMs / 1000);
-    labelG.appendChild(t);
-  }
-
   if (n < 1 && !hasYConstant) {
-    svg.appendChild(gridG);
-    svg.appendChild(lineG);
-    svg.appendChild(labelG);
+    removeChartHover(svg);
     return;
   }
 
@@ -999,10 +1058,10 @@ export function drawTimeseriesChart(
     lineG.appendChild(hLine);
   }
 
-  svg.appendChild(gridG);
-  svg.appendChild(lineG);
-  svg.appendChild(labelG);
-
+  // Recreate the hover layer each frame with live data (its closures capture the current
+  // series/sampleAt/nowMs). Removing the prior one first prevents listener accumulation now
+  // that we no longer wipe the whole SVG.
+  removeChartHover(svg);
   if (opts.hover && n >= 1) {
     attachTimeseriesHover(svg, {
       pl,
@@ -1038,12 +1097,11 @@ export function drawSparklineTimeseries(
     maxSampleGapMs?: number;
   }
 ): void {
-  while (svg.firstChild) svg.removeChild(svg.firstChild);
+  // Skip all work when the sparkline isn't on screen (header strips in a hidden tab, etc.).
+  if (!isSvgRenderable(svg)) return;
 
   const vbW = 88;
   const vbH = 28;
-  svg.setAttribute('viewBox', `0 0 ${vbW} ${vbH}`);
-  svg.setAttribute('preserveAspectRatio', 'none');
 
   const pl = 2;
   const pr = 2;
@@ -1051,42 +1109,60 @@ export function drawSparklineTimeseries(
   const pb = 2;
   const gw = vbW - pl - pr;
   const gh = vbH - pt - pb;
-
-  /* `vector-effect: non-scaling-stroke` keeps strokes at their declared screen-pixel
-   * width regardless of how the tiny 88×28 viewBox is stretched into the host SVG
-   * (host can be a header strip a few dozen px tall or a 100+px fault card body). */
   const plotRx = 3;
-  const plotBg = el('rect', {
-    x: String(pl),
-    y: String(pt),
-    width: String(gw),
-    height: String(gh),
-    rx: String(plotRx),
-    fill: 'rgba(255,255,255,0.05)',
-    stroke: 'rgba(255,255,255,0.08)',
-    'stroke-width': '1',
-    'vector-effect': 'non-scaling-stroke'
-  });
-  svg.appendChild(plotBg);
 
-  /* Clip the data layer to the same rounded rect as the plot background so data
-   * lines near the corners follow the curve instead of poking outside the box.
-   * Unique id per call keeps multiple sparklines on the page from clashing. */
-  __sparkClipSeq += 1;
-  const clipId = `remote-ts-spark-clip-${__sparkClipSeq}`;
-  const defs = el('defs', {});
-  const clipPath = el('clipPath', { id: clipId });
-  clipPath.appendChild(
-    el('rect', {
+  // Build the static chrome (plot background + clip + line group) once per SVG and reuse it.
+  // Only the data lines inside `lineG` are rebuilt each frame. This also stops the old code's
+  // per-call `__sparkClipSeq` id churn (a fresh <clipPath> id allocated on every tick).
+  let st = sparkState.get(svg);
+  if (!st) {
+    while (svg.firstChild) svg.removeChild(svg.firstChild);
+    svg.setAttribute('viewBox', `0 0 ${vbW} ${vbH}`);
+    svg.setAttribute('preserveAspectRatio', 'none');
+
+    /* `vector-effect: non-scaling-stroke` keeps strokes at their declared screen-pixel width
+     * regardless of how the tiny 88×28 viewBox is stretched into the host SVG. */
+    const plotBg = el('rect', {
       x: String(pl),
       y: String(pt),
       width: String(gw),
       height: String(gh),
-      rx: String(plotRx)
-    })
-  );
-  defs.appendChild(clipPath);
-  svg.appendChild(defs);
+      rx: String(plotRx),
+      fill: 'rgba(255,255,255,0.05)',
+      stroke: 'rgba(255,255,255,0.08)',
+      'stroke-width': '1',
+      'vector-effect': 'non-scaling-stroke'
+    });
+    svg.appendChild(plotBg);
+
+    /* Clip the data layer to the same rounded rect as the plot background. Unique id keeps
+     * multiple sparklines on the page from clashing. */
+    __sparkClipSeq += 1;
+    const clipId = `remote-ts-spark-clip-${__sparkClipSeq}`;
+    const defs = el('defs', {});
+    const clipPath = el('clipPath', { id: clipId });
+    clipPath.appendChild(
+      el('rect', {
+        x: String(pl),
+        y: String(pt),
+        width: String(gw),
+        height: String(gh),
+        rx: String(plotRx)
+      })
+    );
+    defs.appendChild(clipPath);
+    svg.appendChild(defs);
+
+    const lineG = el('g', {
+      class: 'remote-ts-spark-lines',
+      'clip-path': `url(#${clipId})`
+    });
+    svg.appendChild(lineG);
+    st = { lineG, clipId };
+    sparkState.set(svg, st);
+  }
+  const lineG = st.lineG;
+  clearNode(lineG);
 
   const { yMin, yMax, series } = opts;
   const ySpan = yMax - yMin || 1;
@@ -1107,11 +1183,6 @@ export function drawSparklineTimeseries(
         : s.values.length
     )
   );
-
-  const lineG = el('g', {
-    class: 'remote-ts-spark-lines',
-    'clip-path': `url(#${clipId})`
-  });
 
   for (const s of series) {
     if (!(typeof s.yConstant === 'number' && Number.isFinite(s.yConstant))) continue;
@@ -1182,8 +1253,7 @@ export function drawSparklineTimeseries(
       }
     }
   }
-
-  svg.appendChild(lineG);
+  // lineG is a persistent child of the SVG (appended once on first draw); nothing to append here.
 }
 
 const DEFAULT_MEM_AXIS_BYTES = 256 * 1024 * 1024;
