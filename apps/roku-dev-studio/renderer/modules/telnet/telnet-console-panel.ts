@@ -109,6 +109,10 @@ export function setupTelnet(
   // Optional element — not in the early null-guard because absence just
   // means the host markup didn't include it (silent no-op).
   const lineCountEl = panel.querySelector<HTMLElement>('.telnet-line-count');
+  // Find/Filter has nothing to act on with an empty console, so hide the bar until logs
+  // exist. We hide the inner `.telnet-find-bar`, not the `.telnet-find-slot` wrapper — the
+  // slot stays as a flex spacer so Port/Connect remain right-aligned. Optional element.
+  const findBarEl = panel.querySelector<HTMLElement>('.telnet-find-bar');
 
   // Downstream handlers reference statusEl, statusText, disconnectBtn, and clearBtn
   // without null checks. Assert them here so a reused fragment without these nodes
@@ -382,6 +386,10 @@ export function setupTelnet(
    * tabular-nums`) so they don't jitter on every batch.
    */
   function refreshLineCount(): void {
+    // Show the Find/Filter bar only once there's something to search (in-memory or spilled).
+    // Keyed on log presence, not connection, so logs that persist after disconnect stay searchable.
+    if (findBarEl) findBarEl.hidden = logLines.length === 0 && spilledEntryCount === 0;
+
     if (!lineCountEl) return;
     if (!isConnected) {
       lineCountEl.hidden = true;

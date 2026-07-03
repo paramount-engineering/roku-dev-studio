@@ -838,6 +838,12 @@ body {
   font-family: 'JetBrains Mono', ui-monospace, monospace;
 }
 
+/* "Match Whole Word" reads as an underlined "ab", matching the VS Code find-widget icon. */
+.telnet-option-btn[data-option="word"] {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
 .telnet-option-btn:hover {
   background: var(--bg-tertiary);
   color: var(--text-primary);

@@ -43,3 +43,19 @@ export function attachBackdropClickToClose(overlay: HTMLElement, close: () => vo
     overlay.removeEventListener('click', onClick);
   };
 }
+
+/**
+ * Close-on-Escape for a modal: adds a `document` keydown listener that invokes `close`
+ * when Escape is pressed. Returns a `dispose()` that removes the listener — call it in the
+ * modal's teardown so document listeners don't accumulate across open/close cycles.
+ *
+ * The `close` callback is expected to guard its own re-entrancy (e.g. check the overlay is
+ * still connected) as the app's modal close paths already do.
+ */
+export function attachEscToClose(close: () => void): () => void {
+  const onKeyDown = (e: KeyboardEvent): void => {
+    if (e.key === 'Escape') close();
+  };
+  document.addEventListener('keydown', onKeyDown);
+  return () => document.removeEventListener('keydown', onKeyDown);
+}
