@@ -239,9 +239,13 @@ function parseIpPacket(frame: Buffer, ipOffset: number, ctx: PacketParseContext,
     const outbound = deviceIp === srcIp;
     const remoteIp = outbound ? dstIp : srcIp;
     const remotePort = outbound ? dstPort : srcPort;
+    const tcpFlags = frame[transportOffset + 13];
+    // FIN (0x01) or RST (0x04) closes the flow — lets the HTTP reassembler finalize a
+    // length-unknown (connection-close-delimited) response.
+    const finOrRst = (tcpFlags & 0x01) !== 0 || (tcpFlags & 0x04) !== 0;
     const events: ParsedNetworkEvent[] = [];
 
-    if (payload.length > 0) {
+    if (payload.length > 0 || finOrRst) {
       events.push(
         ...feedTcpStream({
           deviceIp,
@@ -250,7 +254,8 @@ function parseIpPacket(frame: Buffer, ipOffset: number, ctx: PacketParseContext,
           srcPort,
           dstPort,
           payload,
-          timestamp
+          timestamp,
+          finOrRst
         })
       );
     }
@@ -274,7 +279,7 @@ function parseIpPacket(frame: Buffer, ipOffset: number, ctx: PacketParseContext,
 
     if (events.length > 0) return events;
 
-    const flags = frame[transportOffset + 13];
+    const flags = tcpFlags;
     if (flags & 0x02 && !(flags & 0x10)) {
       if (outbound && rememberFlow(ctx, outboundTcpFlowKey(deviceIp, remoteIp, remotePort))) {
         return [
