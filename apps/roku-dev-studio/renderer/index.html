@@ -4020,7 +4020,9 @@
       /* One scale for D-pad + sides + media so nothing dominates on large tiles */
       --rq: max(150px, min(212px, min(44cqw, 31cqh)));
     }
-    /* Solo: wrapper is transparent to layout (same as unwrapped blocks). */
+    /* Solo: wrapper is transparent to layout, so .remote-main-col (the button stack) and the
+       TV-inputs panel flow in the scroll's normal block order — inputs stack below Send Text.
+       With the panel hidden (non-TV / no inputs) this is identical to the original layout. */
     .remote-tab-metrics-root[data-remote-layout="solo"] .remote-quad-remote-body {
       display: contents;
     }
@@ -4034,6 +4036,115 @@
       align-items: center;
       justify-content: space-evenly;
       gap: calc(var(--rq) * 0.055);
+    }
+
+    /* ── Remote main column + TV inputs panel ────────────────────────────
+       The TV-inputs panel stacks BELOW the whole remote cluster (under Send Text) as a
+       centered, equal-column grid — no label, no separator. Solo: main-col is a real flex
+       column and the panel flows beneath it in the scroll. Quad: main-col is transparent
+       (display:contents) so the existing blocks keep their space-evenly distribution and the
+       panel is just the last item, scaled by the container-query --rq. */
+    .remote-main-col {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-width: 0;
+    }
+    .remote-tab-metrics-root[data-remote-layout="quad"] .remote-main-col {
+      display: contents;
+    }
+
+    .remote-inputs-panel[hidden] { display: none; }
+    .remote-inputs-panel {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-width: 0;
+      width: 100%;
+    }
+    /* Centered wrapping row: up to ~6 chips fit on one line (max-width ≈ 6 × min-width +
+       gaps); a 7th input — or a narrower window/tile — wraps to the next row automatically.
+       No fixed column count, so it reflows purely on available width. */
+    .remote-inputs-grid {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 8px;
+      width: 100%;
+      max-width: 760px;
+    }
+    .remote-input-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      flex: 0 0 auto;
+      min-width: 104px;
+      min-height: 34px;
+      padding: 8px 14px;
+      border-radius: 8px;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      color: var(--text-primary);
+      font-size: 12px;
+      font-weight: 500;
+      font-family: inherit;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: background 0.15s, border-color 0.15s, color 0.15s;
+    }
+    .remote-input-btn:hover {
+      border-color: var(--border-hover, rgba(139, 92, 246, 0.35));
+      color: var(--text-primary);
+    }
+    .remote-input-btn.pressed {
+      background: var(--accent-purple-dim);
+      border-color: var(--accent-purple);
+      color: var(--accent-purple);
+    }
+    /* Solo: gap between Send Text and the inputs grid. */
+    .remote-tab-metrics-root[data-remote-layout="solo"] .remote-inputs-panel {
+      margin-top: 16px;
+    }
+    /* Solo: when TV inputs are present, shrink the main cluster a touch so the whole
+       remote (controls + inputs) reads as one balanced block instead of oversized buttons
+       with inputs tacked on. Scoped to .has-tv-inputs so non-TV solo is unchanged. */
+    .remote-tab-metrics-root[data-remote-layout="solo"] .remote-quad-remote-body.has-tv-inputs .remote-container {
+      gap: 24px;
+    }
+    .remote-tab-metrics-root[data-remote-layout="solo"] .remote-quad-remote-body.has-tv-inputs .remote-dpad {
+      width: 150px;
+      height: 150px;
+    }
+    .remote-tab-metrics-root[data-remote-layout="solo"] .remote-quad-remote-body.has-tv-inputs .dpad-btn {
+      font-size: 15px;
+    }
+    .remote-tab-metrics-root[data-remote-layout="solo"] .remote-quad-remote-body.has-tv-inputs .dpad-center {
+      font-size: 12px;
+    }
+    .remote-tab-metrics-root[data-remote-layout="solo"] .remote-quad-remote-body.has-tv-inputs .side-btn {
+      padding: 7px 12px;
+      font-size: 11px;
+    }
+    .remote-tab-metrics-root[data-remote-layout="solo"] .remote-quad-remote-body.has-tv-inputs .media-btn {
+      padding: 8px 16px;
+    }
+    /* Quad: cramped tile — the panel is the last space-evenly item; scale it with --rq.
+       Full-width (no narrow cap) so up to 6 chips fit on one row when the tile is wide
+       enough; the grid's own max-width still caps the row at ~6 and wraps when narrower. */
+    .remote-tab-metrics-root[data-remote-layout="quad"] .remote-inputs-panel {
+      width: 100%;
+      box-sizing: border-box;
+    }
+    .remote-tab-metrics-root[data-remote-layout="quad"] .remote-inputs-grid {
+      gap: calc(var(--rq) * 0.035);
+    }
+    .remote-tab-metrics-root[data-remote-layout="quad"] .remote-input-btn {
+      min-width: calc(var(--rq) * 0.5);
+      min-height: calc(var(--rq) * 0.19);
+      padding: calc(var(--rq) * 0.05) calc(var(--rq) * 0.06);
+      font-size: calc(var(--rq) * 0.072);
+      border-radius: calc(var(--rq) * 0.045);
     }
     .remote-tab-metrics-root[data-remote-layout="quad"] .remote-quad-remote .remote-secret-screens-footer {
       /* Sibling of `.remote-quad-remote-scroll` (see markup) — pinned to
@@ -4068,6 +4179,12 @@
       padding: 8px 0;
       flex-wrap: wrap;
       justify-content: center;
+    }
+    /* Solo: the D-pad has a fixed height and is shorter than the 4-button side columns, so
+       the default `align-items: stretch` pins it to the top. Center it vertically instead.
+       (Quad is unaffected — its sides use align-self:stretch at the same --rq height.) */
+    .remote-tab-metrics-root[data-remote-layout="solo"] .remote-quad-remote .remote-container {
+      align-items: center;
     }
     .remote-tab-metrics-root[data-remote-layout="quad"] .remote-quad-remote .remote-container {
       flex-wrap: nowrap;
@@ -5445,6 +5562,12 @@
       display: flex;
       justify-content: center;
     }
+    /* The find bar is hidden until the console has logs (see telnet-console-panel.ts
+       refreshLineCount), but the .telnet-find-slot stays in the layout as a flex spacer so
+       Port/Connect remain right-aligned. The explicit rule beats `display: flex`. */
+    .telnet-find-bar[hidden] {
+      display: none;
+    }
     .telnet-header .telnet-find-bar {
       flex: 0 1 520px;
     }
@@ -5520,7 +5643,13 @@
       cursor: pointer;
       font-family: 'JetBrains Mono', monospace;
     }
-    
+
+    /* "Match Whole Word" reads as an underlined "ab", matching the VS Code find-widget icon. */
+    .telnet-option-btn[data-option="word"] {
+      text-decoration: underline;
+      text-underline-offset: 2px;
+    }
+
     .telnet-option-btn:hover {
       background: var(--bg-tertiary);
       color: var(--text-primary);
@@ -13802,40 +13931,51 @@
               </div>
               <div class="remote-quad-remote-scroll">
                 <div class="remote-quad-remote-body">
-                  <div class="remote-container">
-                    <div class="remote-side">
-                      <button class="side-btn" data-key="Back"><span class="icon icon-sm"><svg><use href="#icon-arrow-left"/></svg></span> Back</button>
-                      <button class="side-btn home" data-key="Home"><span class="icon icon-sm"><svg><use href="#icon-home"/></svg></span> Home</button>
-                      <button class="side-btn" data-key="Info"><span class="icon icon-sm"><svg><use href="#icon-options"/></svg></span> Options</button>
-                      <button class="side-btn" data-key="InstantReplay"><span class="icon icon-sm"><svg><use href="#icon-replay"/></svg></span> Replay</button>
+                  <!-- Existing remote cluster. Wrapped in .remote-main-col so a TV-inputs
+                       panel can sit beside it (solo: to the right w/ a vertical separator)
+                       or below it (quad: transparent wrapper via display:contents). -->
+                  <div class="remote-main-col">
+                    <div class="remote-container">
+                      <div class="remote-side">
+                        <button class="side-btn" data-key="Back"><span class="icon icon-sm"><svg><use href="#icon-arrow-left"/></svg></span> Back</button>
+                        <button class="side-btn home" data-key="Home"><span class="icon icon-sm"><svg><use href="#icon-home"/></svg></span> Home</button>
+                        <button class="side-btn" data-key="Info"><span class="icon icon-sm"><svg><use href="#icon-options"/></svg></span> Options</button>
+                        <button class="side-btn" data-key="InstantReplay"><span class="icon icon-sm"><svg><use href="#icon-replay"/></svg></span> Replay</button>
+                      </div>
+                      <div class="remote-dpad">
+                        <button class="dpad-btn dpad-up" data-key="Up"><span class="icon"><svg><use href="#icon-chevron-up"/></svg></span></button>
+                        <button class="dpad-btn dpad-left" data-key="Left"><span class="icon"><svg><use href="#icon-chevron-left"/></svg></span></button>
+                        <button class="dpad-btn dpad-center" data-key="Select">OK</button>
+                        <button class="dpad-btn dpad-right" data-key="Right"><span class="icon"><svg><use href="#icon-chevron-right"/></svg></span></button>
+                        <button class="dpad-btn dpad-down" data-key="Down"><span class="icon"><svg><use href="#icon-chevron-down"/></svg></span></button>
+                      </div>
+                      <div class="remote-side">
+                        <button class="side-btn" data-key="VolumeUp">Vol +</button>
+                        <button class="side-btn" data-key="VolumeMute">Mute</button>
+                        <button class="side-btn" data-key="VolumeDown">Vol -</button>
+                        <button class="side-btn" data-key="PowerOff">Power</button>
+                      </div>
                     </div>
-                    <div class="remote-dpad">
-                      <button class="dpad-btn dpad-up" data-key="Up"><span class="icon"><svg><use href="#icon-chevron-up"/></svg></span></button>
-                      <button class="dpad-btn dpad-left" data-key="Left"><span class="icon"><svg><use href="#icon-chevron-left"/></svg></span></button>
-                      <button class="dpad-btn dpad-center" data-key="Select">OK</button>
-                      <button class="dpad-btn dpad-right" data-key="Right"><span class="icon"><svg><use href="#icon-chevron-right"/></svg></span></button>
-                      <button class="dpad-btn dpad-down" data-key="Down"><span class="icon"><svg><use href="#icon-chevron-down"/></svg></span></button>
+                    <div class="media-controls">
+                      <button class="media-btn" data-key="Rev"><span class="icon icon-md"><svg><use href="#icon-rewind"/></svg></span> Rewind</button>
+                      <button class="media-btn play" data-key="Play"><span class="icon icon-md"><svg><use href="#icon-play"/></svg></span> Play/Pause</button>
+                      <button class="media-btn" data-key="Fwd"><span class="icon icon-md"><svg><use href="#icon-fast-forward"/></svg></span> Forward</button>
                     </div>
-                    <div class="remote-side">
-                      <button class="side-btn" data-key="VolumeUp">Vol +</button>
-                      <button class="side-btn" data-key="VolumeMute">Mute</button>
-                      <button class="side-btn" data-key="VolumeDown">Vol -</button>
-                      <button class="side-btn" data-key="PowerOff">Power</button>
+                    <div class="text-input-section text-input-section--integrated">
+                      <div class="text-input-wrap">
+                        <input type="text" class="text-input" placeholder="Type text to send to Roku...">
+                        <button type="button" class="btn btn-primary send-text-btn">
+                          <span class="icon icon-sm"><svg><use href="#icon-send"/></svg></span>
+                          <span class="send-text-btn-label">Send Text</span>
+                        </button>
+                      </div>
                     </div>
                   </div>
-                  <div class="media-controls">
-                    <button class="media-btn" data-key="Rev"><span class="icon icon-md"><svg><use href="#icon-rewind"/></svg></span> Rewind</button>
-                    <button class="media-btn play" data-key="Play"><span class="icon icon-md"><svg><use href="#icon-play"/></svg></span> Play/Pause</button>
-                    <button class="media-btn" data-key="Fwd"><span class="icon icon-md"><svg><use href="#icon-fast-forward"/></svg></span> Forward</button>
-                  </div>
-                  <div class="text-input-section text-input-section--integrated">
-                    <div class="text-input-wrap">
-                      <input type="text" class="text-input" placeholder="Type text to send to Roku...">
-                      <button type="button" class="btn btn-primary send-text-btn">
-                        <span class="icon icon-sm"><svg><use href="#icon-send"/></svg></span>
-                        <span class="send-text-btn-label">Send Text</span>
-                      </button>
-                    </div>
+                  <!-- TV inputs (HDMI/AV/Tuner). Populated + revealed only for TV devices
+                       that report inputs (see setupRemoteTabInputs). Stacks below Send Text.
+                       Hidden otherwise so non-TV devices and both layout variants are unchanged. -->
+                  <div class="remote-inputs-panel" hidden>
+                    <div class="remote-inputs-grid"></div>
                   </div>
                 </div>
               </div>
@@ -14376,7 +14516,7 @@
                 </div>
               </div>
               <div class="telnet-find-slot">
-                <div class="telnet-find-bar">
+                <div class="telnet-find-bar" hidden>
                   <select class="telnet-mode-select">
                     <option value="find">Find</option>
                     <option value="filter">Filter</option>

@@ -34,7 +34,8 @@ import {
   closeModalWithOriginMotion,
   openModalOverlayActiveFromOpener
 } from './modules/utils/modal-origin-motion.js';
-import { attachBackdropClickToClose } from './modules/utils/modal-backdrop-click.js';
+import { attachBackdropClickToClose, attachEscToClose } from './modules/utils/modal-backdrop-click.js';
+import { resolveRokuKeyFromEvent } from './modules/utils/keyboard-remote-keymap.js';
 import { setupTelnet } from './modules/telnet/telnet-console-panel.js';
 import { setupQueries as setupQueriesComponent } from './components/queries/index.js';
 import { setupInspector as setupInspectorComponent } from './components/inspector/index.js';
@@ -1339,8 +1340,9 @@ function showServerCapabilities(location, opener?: HTMLElement | null) {
   modal.classList.add('modal-motion-enabled');
   playModalOpenMotion(modal);
 
+  let detachEsc = () => {};
   const removeServerModal = () => {
-    document.removeEventListener('keydown', escHandler);
+    detachEsc();
     modal.remove();
   };
   const requestClose = () => {
@@ -1350,11 +1352,7 @@ function showServerCapabilities(location, opener?: HTMLElement | null) {
 
   modal.querySelector('.close-modal-btn')?.addEventListener('click', requestClose);
   attachBackdropClickToClose(modal, requestClose);
-
-  const escHandler = (e: KeyboardEvent) => {
-    if (e.key === 'Escape' && modal.isConnected) requestClose();
-  };
-  document.addEventListener('keydown', escHandler);
+  detachEsc = attachEscToClose(requestClose);
 }
 
 
@@ -3122,9 +3120,10 @@ function openDeviceHardwareImageModal(imageSrc, device, opener?: HTMLElement | n
   overlay.classList.add('modal-motion-enabled');
   playModalOpenMotion(overlay);
 
+  let detachEsc = () => {};
   const teardown = () => {
     overlay.remove();
-    document.removeEventListener('keydown', escHandler);
+    detachEsc();
   };
 
   const requestClose = () => {
@@ -3138,11 +3137,7 @@ function openDeviceHardwareImageModal(imageSrc, device, opener?: HTMLElement | n
   // Backdrop click-to-close, mousedown-gated so a text selection inside the
   // dialog body that ends on the backdrop doesn't dismiss the modal.
   attachBackdropClickToClose(overlay, requestClose);
-
-  const escHandler = (e: KeyboardEvent) => {
-    if (e.key === 'Escape') requestClose();
-  };
-  document.addEventListener('keydown', escHandler);
+  detachEsc = attachEscToClose(requestClose);
   closeBtn.focus();
 }
 
@@ -3668,6 +3663,87 @@ function setupRemoteControls(panel, device, api) {
     panel.dispatchEvent(new CustomEvent('homePressed', { bubbles: true }));
   });
   wireRemoteTabSendText(panel, api, scheduleAutoScreenshot);
+  setupRemoteTabInputs(panel, device, api, scheduleAutoScreenshot);
+}
+
+/**
+ * Populate the Remote card's TV-inputs panel for TV devices. Roku TVs expose their inputs
+ * via /query/apps as `<app id="tvinput.hdmi1">HDMI 1</app>`; we launch them with
+ * `api.launch(id)` (the same mechanism the Apps tab uses). The panel stays hidden for
+ * non-TV devices and for TVs that report no inputs, so nothing else in the Remote card
+ * changes. Works in both the solo and quad (device-performance) layouts — the panel is
+ * placed by CSS, not JS.
+ */
+function setupRemoteTabInputs(
+  panel: HTMLElement,
+  device: { isTv?: boolean },
+  api: { query: (path: string) => Promise<{ success?: boolean; data?: string }>; launch: (id: string) => Promise<unknown> },
+  scheduleAutoScreenshot: (delayMs?: number) => void
+): void {
+  const inputsPanel = panel.querySelector<HTMLElement>('.remote-inputs-panel');
+  const grid = panel.querySelector<HTMLElement>('.remote-inputs-grid');
+  const body = panel.querySelector<HTMLElement>('.remote-quad-remote-body');
+  if (!inputsPanel || !grid) return;
+
+  // Reveal/hide the panel and toggle the cluster-shrink class in one place.
+  const setInputsVisible = (visible: boolean): void => {
+    inputsPanel.hidden = !visible;
+    body?.classList.toggle('has-tv-inputs', visible);
+  };
+
+  // Non-TV devices: leave the panel hidden — the Remote card is unchanged.
+  if (device.isTv !== true) {
+    setInputsVisible(false);
+    return;
+  }
+
+  void (async () => {
+    try {
+      const result = await api.query('/query/apps');
+      if (!result?.success || typeof result.data !== 'string') return;
+      const inputs = [...result.data.matchAll(/<app id="(tvinput\.[^"]+)"[^>]*>([^<]+)<\/app>/g)].map(
+        (m) => ({ id: m[1], label: decodeHtmlEntities(m[2]).trim() })
+      );
+      if (inputs.length === 0) {
+        setInputsVisible(false);
+        return;
+      }
+
+      // Stable order regardless of how the device lists them: sort by input id (e.g.
+      // tvinput.cvbs, tvinput.dtv, tvinput.hdmi1…hdmi4 → AV, Live TV, Roku, HDMI 2, …).
+      inputs.sort((a, b) => a.id.localeCompare(b.id));
+
+      // Layout is CSS-driven (centered flex-wrap): up to ~6 fit on one row, wrapping when
+      // there are more or the space is narrower. No fixed column count needed here.
+      grid.innerHTML = ''; // clears any prior buttons + their listeners
+
+      for (const inp of inputs) {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'remote-input-btn';
+        btn.dataset.launch = inp.id;
+        const displayName = inp.label || inp.id.replace(/^tvinput\./, '');
+        btn.textContent = displayName;
+        btn.title = `Switch to ${displayName}`;
+        btn.addEventListener('click', async () => {
+          btn.classList.add('pressed');
+          try {
+            await api.launch(inp.id);
+            scheduleAutoScreenshot();
+          } catch (error) {
+            rendererError('TV input launch error:', error);
+          }
+          setTimeout(() => btn.classList.remove('pressed'), 150);
+        });
+        grid.appendChild(btn);
+      }
+
+      setInputsVisible(true);
+    } catch (error) {
+      rendererError('Failed to load TV inputs for remote:', error);
+      setInputsVisible(false);
+    }
+  })();
 }
 
 // ============================================
@@ -4234,34 +4310,7 @@ document.addEventListener('keydown', async (e) => {
     return;
   }
 
-  const keyMap = {
-    'ArrowUp': 'Up',
-    'ArrowDown': 'Down',
-    'ArrowLeft': 'Left',
-    'ArrowRight': 'Right',
-    'Enter': 'Select',
-    'Backspace': 'Back',
-    'Escape': 'Home',
-    ' ': 'Play',
-    '*': 'Info',
-    'r': 'InstantReplay',
-    'j': 'Rev',
-    'l': 'Fwd',
-    '+': 'VolumeUp',
-    '-': 'VolumeDown',
-    'm': 'VolumeMute'
-  };
-
-  const shiftPForPower =
-    e.shiftKey &&
-    !e.ctrlKey &&
-    !e.metaKey &&
-    !e.altKey &&
-    e.key.length === 1 &&
-    e.key.toLowerCase() === 'p';
-
-  const lookupKey = e.key.length === 1 ? e.key.toLowerCase() : e.key;
-  const rokuKey = shiftPForPower ? 'PowerOff' : keyMap[lookupKey];
+  const rokuKey = resolveRokuKeyFromEvent(e);
   if (rokuKey) {
     e.preventDefault();
 
