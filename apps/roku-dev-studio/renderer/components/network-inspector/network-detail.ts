@@ -34,16 +34,20 @@ function looksLikeJson(body: string): boolean {
   }
 }
 
-function looksLikeXml(body: string): boolean {
-  const trimmed = body.trim();
-  return trimmed.startsWith('<') && !trimmed.startsWith('<!');
+// Any body that opens with a tag is treated as markup and routed through the XML pretty-printer.
+// This includes HTML (`<!doctype html>`, `<html>`, `<meta>` …), which isn't well-formed XML — the
+// renderer falls back to a lenient reindent so markup still formats instead of showing as one line.
+function looksLikeMarkup(body: string): boolean {
+  return body.trim().startsWith('<');
 }
 
 export function inferDetectedBodyFormat(msg: NetworkHttpMessage | undefined): ResolvedBodyFormat {
   if (!msg?.body?.trim()) return 'raw';
   const ct = contentType(msg);
   if (ct.includes('json') || looksLikeJson(msg.body)) return 'json';
-  if (ct.includes('xml') || ct.includes('+xml') || looksLikeXml(msg.body)) return 'xml';
+  if (ct.includes('xml') || ct.includes('+xml') || ct.includes('html') || looksLikeMarkup(msg.body)) {
+    return 'xml';
+  }
   return 'raw';
 }
 

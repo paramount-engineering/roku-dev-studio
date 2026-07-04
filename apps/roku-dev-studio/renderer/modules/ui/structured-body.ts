@@ -82,11 +82,22 @@ export function prettyXmlLenient(xml: string): string {
     out.push(indentStr.repeat(indent) + line);
     if (!isClosing && !isSelfClosing && line.startsWith('<') && !line.startsWith('<!')) {
       const tagMatch = line.match(/^<([^\s/>]+)/);
-      if (tagMatch && !line.includes(`</${tagMatch[1]}>`)) indent++;
+      // HTML void elements (`<meta>`, `<br>`, `<img>` …) never nest, so don't indent after them —
+      // otherwise a plain HTML page would step further right on every one. Harmless for real XML,
+      // where these names don't appear as unclosed container tags.
+      const tag = tagMatch?.[1]?.toLowerCase();
+      if (tagMatch && tag && !HTML_VOID_TAGS.has(tag) && !line.includes(`</${tagMatch[1]}>`)) indent++;
     }
   }
   return out.join('\n');
 }
+
+// HTML elements that are always empty (no closing tag), per the HTML spec. Used by the lenient
+// markup printer so unclosed void tags in an HTML body don't cause runaway indentation.
+const HTML_VOID_TAGS = new Set([
+  'area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input',
+  'link', 'meta', 'param', 'source', 'track', 'wbr'
+]);
 
 /** Classify a response string as JSON, XML, or plain text (same rules `renderStructuredBody` uses).
  *  Handy for choosing a default file extension on Save. */
@@ -155,7 +166,10 @@ export function renderStructuredInto(
     return 'json';
   }
   if (kind === 'xml') {
-    appendStructured(container, 'xml', opts.preformatted ? raw : prettyXml(trimmed) ?? raw);
+    // Strict `prettyXml` (well-formed XML only) → lenient reindent for HTML / partial markup so a
+    // non-well-formed body (e.g. an HTML error page) still formats instead of rendering as one line.
+    const formatted = opts.preformatted ? raw : prettyXml(trimmed) ?? prettyXmlLenient(trimmed);
+    appendStructured(container, 'xml', formatted);
     return 'xml';
   }
 
