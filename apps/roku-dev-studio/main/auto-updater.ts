@@ -23,6 +23,9 @@ export interface UpdaterStatus {
   bytesPerSecond?: number;
   message?: string;
   needsManualDownload?: boolean;
+  /** Set only when a *user-initiated* check finds no update, so the renderer can toast
+   *  "you're up to date" (the automatic startup check leaves this unset to stay silent). */
+  notifyNoUpdate?: boolean;
 }
 
 /**
@@ -33,7 +36,7 @@ export interface UpdaterStatus {
  * status re-drives the notification.
  */
 export interface AutoUpdaterControls {
-  checkForUpdates: () => Promise<{ success: boolean; error?: string }>;
+  checkForUpdates: (opts?: { userInitiated?: boolean }) => Promise<{ success: boolean; error?: string }>;
 }
 
 let currentStatus: UpdaterStatus = { type: 'idle' };
@@ -170,6 +173,17 @@ export function setupAutoUpdater(
   // GitHub round-trip for the same failed check.
   let manualCheckInFlight = false;
 
+  // True while a check the user explicitly asked for is running. Consumed by the terminal
+  // outcome (available / not-available / error) to decide whether a "no update" result should
+  // be announced to the user. The automatic startup check leaves this false so it stays silent.
+  let pendingUserInitiated = false;
+  /** Read and clear the user-initiated flag so it applies to exactly one check outcome. */
+  function consumeUserInitiated(): boolean {
+    const v = pendingUserInitiated;
+    pendingUserInitiated = false;
+    return v;
+  }
+
   /**
    * A release without electron-updater metadata (missing latest-mac.yml / latest.yml /
    * latest-linux.yml) can't be auto-checked,
@@ -180,6 +194,7 @@ export function setupAutoUpdater(
   async function surfaceManualUpdateIfNewer(versionFromError: string | undefined): Promise<void> {
     if (manualCheckInFlight) return;
     manualCheckInFlight = true;
+    const userInitiated = consumeUserInitiated();
     try {
       const current = getCurrentVersion();
       const latest = normalizeVersion(versionFromError) ?? (await fetchLatestReleaseVersion());
@@ -189,8 +204,9 @@ export function setupAutoUpdater(
           broadcast
         );
       } else {
-        // Already current (or the latest version couldn't be determined) — don't nag.
-        applyStatus({ type: 'not-available', version: latest ?? current }, broadcast);
+        // Already current (or the latest version couldn't be determined) — don't nag,
+        // but confirm to the user if they asked for the check themselves.
+        applyStatus({ type: 'not-available', version: latest ?? current, notifyNoUpdate: userInitiated }, broadcast);
       }
     } finally {
       manualCheckInFlight = false;
@@ -202,11 +218,13 @@ export function setupAutoUpdater(
   });
 
   autoUpdater.on('update-available', (info) => {
+    // Update exists — the banner surfaces it, so no "no update" toast is needed.
+    consumeUserInitiated();
     applyStatus({ type: 'available', version: String(info.version) }, broadcast);
   });
 
   autoUpdater.on('update-not-available', (info) => {
-    applyStatus({ type: 'not-available', version: String(info.version) }, broadcast);
+    applyStatus({ type: 'not-available', version: String(info.version), notifyNoUpdate: consumeUserInitiated() }, broadcast);
   });
 
   autoUpdater.on('download-progress', (progress) => {
@@ -226,6 +244,7 @@ export function setupAutoUpdater(
       void surfaceManualUpdateIfNewer(extractVersionFromUpdaterError(err));
       return;
     }
+    consumeUserInitiated();
     mainError('Auto-updater error:', err);
     applyStatus(
       { type: 'error', message: toUpdaterMessage(err), needsManualDownload: false, version: extractVersionFromUpdaterError(err) },
@@ -237,7 +256,9 @@ export function setupAutoUpdater(
   // Updates" menu item, and (via `checkForUpdates()` below) the startup timer.
   // `checkForUpdates()` emits `checking-for-update` first, which clears any banner
   // the renderer is showing; the resulting status then re-drives the notification.
-  async function runCheckForUpdates(): Promise<{ success: boolean; error?: string }> {
+  // `userInitiated` marks explicit user checks so a "no update" result can be toasted.
+  async function runCheckForUpdates(opts?: { userInitiated?: boolean }): Promise<{ success: boolean; error?: string }> {
+    pendingUserInitiated = !!opts?.userInitiated;
     try {
       await autoUpdater.checkForUpdates();
       return { success: true };
@@ -259,7 +280,7 @@ export function setupAutoUpdater(
     }
   }
 
-  ipcMain.handle(IPC.UpdaterCheck, () => runCheckForUpdates());
+  ipcMain.handle(IPC.UpdaterCheck, () => runCheckForUpdates({ userInitiated: true }));
 
   ipcMain.handle(IPC.UpdaterDownload, async () => {
     try {

@@ -481,7 +481,7 @@ function createWindow(appState: AppWindowState) {
           // banner currently shown, then the fresh result re-drives the notification.
           label: 'Check for Updates',
           click: () => {
-            void updaterControls?.checkForUpdates();
+            void updaterControls?.checkForUpdates({ userInitiated: true });
           }
         },
         {

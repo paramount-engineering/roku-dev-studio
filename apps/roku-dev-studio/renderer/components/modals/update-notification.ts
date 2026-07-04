@@ -8,6 +8,8 @@
  * a download is in progress or an update is ready to install).
  */
 
+import { showToast } from '../../modules/utils/ui.js';
+
 interface UpdaterStatus {
   type: 'idle' | 'checking' | 'available' | 'not-available' | 'downloading' | 'ready' | 'error';
   version?: string;
@@ -15,6 +17,7 @@ interface UpdaterStatus {
   bytesPerSecond?: number;
   message?: string;
   needsManualDownload?: boolean;
+  notifyNoUpdate?: boolean;
 }
 
 const BANNER_ID = 'rds-update-banner';
@@ -836,6 +839,12 @@ export function mountUpdateNotification(): void {
 
   // Wire live updates
   updater.onStatus((status: UpdaterStatus) => {
+    // A user-initiated "Check for Updates" that found nothing surfaces a brief,
+    // auto-dismissing confirmation toast (the automatic startup check stays silent).
+    if (status?.type === 'not-available' && status.notifyNoUpdate) {
+      const v = status.version ? ` (v${status.version})` : '';
+      showToast(`You're up to date${v}.`, 'success');
+    }
     renderBanner(status);
   });
 
