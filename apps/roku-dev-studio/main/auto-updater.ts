@@ -44,7 +44,9 @@ function isMissingMetadataUpdaterError(errorLike: unknown): boolean {
   const code = String(maybeObj?.code ?? '');
   return (
     code === 'ERR_UPDATER_CHANNEL_FILE_NOT_FOUND' ||
-    /latest-mac\.yml|release artifacts|cannot find\s+latest/i.test(msg)
+    // Per-platform channel files: latest-mac.yml (macOS), latest.yml (Windows),
+    // latest-linux.yml (Linux). The generic phrases catch the rest cross-platform.
+    /latest(-mac|-linux)?\.yml|release artifacts|cannot find\s+latest/i.test(msg)
   );
 }
 
@@ -62,6 +64,48 @@ function extractVersionFromUpdaterError(errorLike: unknown): string | undefined 
   return String(match[1]).replace(/^v/i, '');
 }
 
+/** Strip a leading `v` and keep only a `x.y.z[-…]` version, or undefined if it isn't one. */
+function normalizeVersion(v: unknown): string | undefined {
+  const s = String(v ?? '').trim().replace(/^v/i, '');
+  return /^\d+\.\d+\.\d+/.test(s) ? s : undefined;
+}
+
+/**
+ * True only when `latest` is a strictly higher version than `current`. Prefers semver;
+ * falls back to a numeric tuple compare if semver isn't loadable. A non-comparable input
+ * returns false so we never prompt on a bad/equal version.
+ */
+function isStrictlyNewer(latest: string, current: string): boolean {
+  try {
+    const semver = require('semver');
+    const a = semver.coerce(latest)?.version;
+    const b = semver.coerce(current)?.version;
+    if (a && b) return semver.gt(a, b);
+  } catch {
+    /* semver unavailable — fall through to tuple compare */
+  }
+  const pa = latest.split('.').map((n) => parseInt(n, 10) || 0);
+  const pb = current.split('.').map((n) => parseInt(n, 10) || 0);
+  for (let i = 0; i < 3; i++) {
+    if ((pa[i] || 0) !== (pb[i] || 0)) return (pa[i] || 0) > (pb[i] || 0);
+  }
+  return false;
+}
+
+/** Latest published release version from the GitHub API, or undefined if it can't be read. */
+async function fetchLatestReleaseVersion(): Promise<string | undefined> {
+  try {
+    const response = await fetch(LATEST_RELEASE_API_URL, {
+      headers: { Accept: 'application/vnd.github+json' }
+    });
+    if (!response.ok) return undefined;
+    const json = (await response.json()) as { tag_name?: string; name?: string };
+    return normalizeVersion(json?.tag_name) ?? normalizeVersion(json?.name);
+  } catch {
+    return undefined;
+  }
+}
+
 function applyStatus(status: UpdaterStatus, broadcast: (s: UpdaterStatus) => void) {
   currentStatus = status;
   broadcast(status);
@@ -77,8 +121,8 @@ export function setupAutoUpdater(
   autoUpdater.allowPrerelease = false;
 
   // Replace electron-updater's default logger so the verbose 404 stack-trace for a
-  // missing latest-mac.yml is suppressed — we handle that case ourselves and emit a
-  // clean "manual download required" message instead.
+  // missing channel file (latest-mac.yml / latest.yml / latest-linux.yml) is suppressed —
+  // we handle that case ourselves and emit a clean "manual download required" message instead.
   autoUpdater.logger = {
     info:  (...args: unknown[]) => mainWarn('[updater]', ...args),
     warn:  (...args: unknown[]) => mainWarn('[updater]', ...args),
@@ -114,6 +158,45 @@ export function setupAutoUpdater(
     }
   }
 
+  // The version this build reports for update comparisons. Dev is pinned to 1.0.0 (matching
+  // the currentVersion override above) so a real release always surfaces locally; a packaged
+  // build uses its actual version so we don't prompt users who are already on the latest.
+  function getCurrentVersion(): string {
+    if (!app.isPackaged) return '1.0.0';
+    return normalizeVersion(app.getVersion()) ?? '0.0.0';
+  }
+
+  // Guards against the error event and the checkForUpdates() rejection both triggering a
+  // GitHub round-trip for the same failed check.
+  let manualCheckInFlight = false;
+
+  /**
+   * A release without electron-updater metadata (missing latest-mac.yml / latest.yml /
+   * latest-linux.yml) can't be auto-checked,
+   * so electron-updater reports it as an error. That does NOT mean an update exists — surfacing
+   * the "manual download" banner unconditionally shows it even to users already on the latest
+   * version. Verify against the latest published release and only prompt when it's strictly newer.
+   */
+  async function surfaceManualUpdateIfNewer(versionFromError: string | undefined): Promise<void> {
+    if (manualCheckInFlight) return;
+    manualCheckInFlight = true;
+    try {
+      const current = getCurrentVersion();
+      const latest = normalizeVersion(versionFromError) ?? (await fetchLatestReleaseVersion());
+      if (latest && isStrictlyNewer(latest, current)) {
+        applyStatus(
+          { type: 'error', message: MANUAL_UPDATE_MESSAGE, needsManualDownload: true, version: latest },
+          broadcast
+        );
+      } else {
+        // Already current (or the latest version couldn't be determined) — don't nag.
+        applyStatus({ type: 'not-available', version: latest ?? current }, broadcast);
+      }
+    } finally {
+      manualCheckInFlight = false;
+    }
+  }
+
   autoUpdater.on('checking-for-update', () => {
     applyStatus({ type: 'checking' }, broadcast);
   });
@@ -138,14 +221,16 @@ export function setupAutoUpdater(
   });
 
   autoUpdater.on('error', (err) => {
-    const manualDownload = isMissingMetadataUpdaterError(err);
-    const version = extractVersionFromUpdaterError(err);
     if (isMissingMetadataUpdaterError(err)) {
-      mainWarn('Auto-updater metadata missing on release; manual download required.');
-    } else {
-      mainError('Auto-updater error:', err);
+      mainWarn('Auto-updater metadata missing on release; verifying against latest release before prompting.');
+      void surfaceManualUpdateIfNewer(extractVersionFromUpdaterError(err));
+      return;
     }
-    applyStatus({ type: 'error', message: toUpdaterMessage(err), needsManualDownload: manualDownload, version }, broadcast);
+    mainError('Auto-updater error:', err);
+    applyStatus(
+      { type: 'error', message: toUpdaterMessage(err), needsManualDownload: false, version: extractVersionFromUpdaterError(err) },
+      broadcast
+    );
   });
 
   // Shared check flow used by the renderer's UpdaterCheck IPC, the "Check for
@@ -158,12 +243,18 @@ export function setupAutoUpdater(
       return { success: true };
     } catch (e: any) {
       const msg = toUpdaterMessage(e);
-      applyStatus({
-        type: 'error',
-        message: msg,
-        needsManualDownload: isMissingMetadataUpdaterError(e),
-        version: extractVersionFromUpdaterError(e)
-      }, broadcast);
+      if (isMissingMetadataUpdaterError(e)) {
+        // The 'error' event (above) already routes this through the version gate; don't
+        // apply a manual-download status here or we'd flash the banner before the check.
+        void surfaceManualUpdateIfNewer(extractVersionFromUpdaterError(e));
+      } else {
+        applyStatus({
+          type: 'error',
+          message: msg,
+          needsManualDownload: false,
+          version: extractVersionFromUpdaterError(e)
+        }, broadcast);
+      }
       return { success: false, error: msg };
     }
   }
