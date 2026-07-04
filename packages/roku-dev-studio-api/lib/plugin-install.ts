@@ -20,6 +20,13 @@ interface SideloadChannelOpts {
   filePath: string;
   password: string;
   log?: LogFn;
+  /**
+   * Extra multipart form fields sent alongside `mysubmit=Install` + `archive`.
+   * The Sideload Relay uses this to forward `remotedebug=1` to the designated
+   * primary/debug device so it opens its debug protocol control port for the
+   * VS Code "BrightScript Debug: Launch" flow.
+   */
+  extraFields?: { name: string; value: string }[];
 }
 
 interface DeleteSideloadOpts {
@@ -76,7 +83,7 @@ async function postPluginInstall(
 /**
  * Sideload a channel package to a Roku device.
  */
-async function sideloadChannel({ ip, filePath, password, log = (_m: string) => undefined }: SideloadChannelOpts) {
+async function sideloadChannel({ ip, filePath, password, log = (_m: string) => undefined, extraFields = [] }: SideloadChannelOpts) {
   if (!isValidIp(ip)) {
     return { success: false, error: 'Invalid device IP address' };
   }
@@ -104,7 +111,7 @@ async function sideloadChannel({ ip, filePath, password, log = (_m: string) => u
     const { statusCode, text } = await postPluginInstall(
       ip,
       password,
-      [{ name: 'mysubmit', value: 'Install' }],
+      [{ name: 'mysubmit', value: 'Install' }, ...extraFields],
       [{ name: 'archive', filename, data: fileData }],
       SIDELOAD_TIMEOUT_MS,
       log

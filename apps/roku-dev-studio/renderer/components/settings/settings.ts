@@ -12,6 +12,7 @@ import {
   networkInspectorHasCaptureSetupAction,
   type NiSetupPlatform,
 } from '../../shared/network-inspector/setup-guide.js';
+import { initSideloadRelaySection } from './sideload-relay-section.js';
 
 const api = (window as any).settingsApi;
 if (!api) {
@@ -1335,6 +1336,8 @@ setInterval(function () {
 (window as any).rdsNavigateSettingsSection = function (id: string) {
   if (id) { try { selectSection(id); } catch (e) {} }
 };
+
+try { initSideloadRelaySection(); } catch (e) {}
 
 if (INITIAL_SECTION) {
   try { selectSection(INITIAL_SECTION); } catch (e) {}

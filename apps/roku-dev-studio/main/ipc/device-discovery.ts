@@ -6,8 +6,14 @@ import { IPC } from '../../shared/ipc/channels';
 import { detectHotspotInterface } from '../network-inspector/index';
 import { loadSettings } from '../settings';
 import { mainLog, mainError } from '../log.js';
+import { isRelaySelfDevice } from '../sideload-relay/fake-device-info';
 
 const { ssdpDiscover, subnetScan } = require('roku-dev-studio-api');
+
+/** The relay may advertise RDS as a Roku (for VS Code discovery); never list it as a real device. */
+function dropRelaySelf(devices: any[]): any[] {
+  return devices.filter((d) => !isRelaySelfDevice(d as { serialNumber?: unknown; modelName?: unknown }));
+}
 
 function errMsg(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
@@ -27,10 +33,14 @@ function setupDeviceDiscovery(
   ipcMain.handle(IPC.RokuDiscover, async () => {
     mainLog('=== SSDP Discovery Started ===');
     try {
-      const devices = await ssdpDiscover({
-        onDeviceFound: (device: unknown) => safeSendToRenderer(IPC.RokuDeviceFound, device),
+      const found = await ssdpDiscover({
+        onDeviceFound: (device: unknown) => {
+          if (isRelaySelfDevice(device as { serialNumber?: unknown; modelName?: unknown })) return;
+          safeSendToRenderer(IPC.RokuDeviceFound, device);
+        },
         log: (msg: unknown) => mainLog(msg)
       });
+      const devices = dropRelaySelf(found);
       mainLog('=== SSDP Discovery Complete ===');
       mainLog(
         'Found',
@@ -67,11 +77,15 @@ function setupDeviceDiscovery(
           );
         }
       }
-      const devices = await subnetScan({
+      const found = await subnetScan({
         extraSubnetPrefixes,
-        onDeviceFound: (device: unknown) => safeSendToRenderer(IPC.RokuDeviceFound, device),
+        onDeviceFound: (device: unknown) => {
+          if (isRelaySelfDevice(device as { serialNumber?: unknown; modelName?: unknown })) return;
+          safeSendToRenderer(IPC.RokuDeviceFound, device);
+        },
         log: (msg: unknown) => mainLog(msg)
       });
+      const devices = dropRelaySelf(found);
       mainLog('=== Subnet Scan Complete ===');
       mainLog('Found', devices.length, 'devices');
       return { success: true, devices };

@@ -2,6 +2,7 @@
  * Preload for the Settings modal window (same isolation pattern as preload-about).
  */
 const { contextBridge, ipcRenderer } = require('electron');
+import type { IpcRendererEvent } from 'electron';
 const { IPC } = require('./shared/ipc/channels');
 
 contextBridge.exposeInMainWorld('settingsApi', {
@@ -16,5 +17,27 @@ contextBridge.exposeInMainWorld('settingsApi', {
   remoteNetworkProbe: (serverUrl: string) =>
     ipcRenderer.invoke(IPC.SettingsWindowRemoteNetworkProbe, { serverUrl }),
   remoteNetworkSetConfig: (serverUrl: string, config: unknown) =>
-    ipcRenderer.invoke(IPC.SettingsWindowRemoteNetworkSetConfig, { serverUrl, config })
+    ipcRenderer.invoke(IPC.SettingsWindowRemoteNetworkSetConfig, { serverUrl, config }),
+
+  // Sideload Relay — config (gate/port/password/flags/targets) + live per-device results.
+  sideloadRelayGetStatus: () => ipcRenderer.invoke(IPC.SideloadRelayGetStatus),
+  sideloadRelayGetConfig: () => ipcRenderer.invoke(IPC.SideloadRelayGetConfig),
+  sideloadRelayApply: (payload: unknown) => ipcRenderer.invoke(IPC.SideloadRelayApplySettings, payload),
+  sideloadRelaySeedTargets: (includeSubnetScan?: boolean) =>
+    ipcRenderer.invoke(IPC.SideloadRelaySeedTargets, { includeSubnetScan }),
+  onSideloadRelayStatus: (callback: (status: unknown) => void) => {
+    const handler = (_e: IpcRendererEvent, status: unknown) => callback(status);
+    ipcRenderer.on(IPC.SideloadRelayStatus, handler);
+    return () => ipcRenderer.removeListener(IPC.SideloadRelayStatus, handler);
+  },
+  onSideloadRelayRunStarted: (callback: (run: unknown) => void) => {
+    const handler = (_e: IpcRendererEvent, run: unknown) => callback(run);
+    ipcRenderer.on(IPC.SideloadRelayRunStarted, handler);
+    return () => ipcRenderer.removeListener(IPC.SideloadRelayRunStarted, handler);
+  },
+  onSideloadRelayResult: (callback: (result: unknown) => void) => {
+    const handler = (_e: IpcRendererEvent, result: unknown) => callback(result);
+    ipcRenderer.on(IPC.SideloadRelayResult, handler);
+    return () => ipcRenderer.removeListener(IPC.SideloadRelayResult, handler);
+  }
 });

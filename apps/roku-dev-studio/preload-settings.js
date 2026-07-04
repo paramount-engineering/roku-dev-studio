@@ -316,7 +316,25 @@ var init_channels = __esm({
       NetworkInspectorExportCaCert: "network-inspector:export-ca-cert",
       NetworkInspectorInstallBpfAccess: "network-inspector:install-bpf-access",
       NetworkInspectorGetTrafficRules: "network-inspector:get-traffic-rules",
-      NetworkInspectorSetDeviceTrafficRules: "network-inspector:set-device-traffic-rules"
+      NetworkInspectorSetDeviceTrafficRules: "network-inspector:set-device-traffic-rules",
+      /**
+       * Sideload Relay — RDS impersonates a Roku dev server on `/plugin_install`,
+       * accepts one build from the IDE, and fans it out (install → launch →
+       * console) to many devices. Gated by `sideloadRelayEnabled` (default off).
+       */
+      SideloadRelayGetStatus: "sideload-relay:get-status",
+      /** Returns a renderer-safe view of the current config (targets + flags, NO passwords). */
+      SideloadRelayGetConfig: "sideload-relay:get-config",
+      /** Persist relay config (targets/flags) and re-boot the service. Passwords go via the secret-store IPC. */
+      SideloadRelayApplySettings: "sideload-relay:apply-settings",
+      /** Discover LAN devices and return them as candidate targets to seed the list. */
+      SideloadRelaySeedTargets: "sideload-relay:seed-targets",
+      /** Main → renderer: relay bind/lifecycle status changed. */
+      SideloadRelayStatus: "sideload-relay:status",
+      /** Main → renderer: a new upload was accepted and fan-out started. */
+      SideloadRelayRunStarted: "sideload-relay:run-started",
+      /** Main → renderer: per-device fan-out result update. */
+      SideloadRelayResult: "sideload-relay:result"
     };
   }
 });
@@ -334,5 +352,25 @@ contextBridge.exposeInMainWorld("settingsApi", {
   installBpfAccess: () => ipcRenderer.invoke(IPC2.NetworkInspectorInstallBpfAccess),
   // Remote Network Inspector (per-location): probe capability + config, and apply config.
   remoteNetworkProbe: (serverUrl) => ipcRenderer.invoke(IPC2.SettingsWindowRemoteNetworkProbe, { serverUrl }),
-  remoteNetworkSetConfig: (serverUrl, config) => ipcRenderer.invoke(IPC2.SettingsWindowRemoteNetworkSetConfig, { serverUrl, config })
+  remoteNetworkSetConfig: (serverUrl, config) => ipcRenderer.invoke(IPC2.SettingsWindowRemoteNetworkSetConfig, { serverUrl, config }),
+  // Sideload Relay — config (gate/port/password/flags/targets) + live per-device results.
+  sideloadRelayGetStatus: () => ipcRenderer.invoke(IPC2.SideloadRelayGetStatus),
+  sideloadRelayGetConfig: () => ipcRenderer.invoke(IPC2.SideloadRelayGetConfig),
+  sideloadRelayApply: (payload) => ipcRenderer.invoke(IPC2.SideloadRelayApplySettings, payload),
+  sideloadRelaySeedTargets: (includeSubnetScan) => ipcRenderer.invoke(IPC2.SideloadRelaySeedTargets, { includeSubnetScan }),
+  onSideloadRelayStatus: (callback) => {
+    const handler = (_e, status) => callback(status);
+    ipcRenderer.on(IPC2.SideloadRelayStatus, handler);
+    return () => ipcRenderer.removeListener(IPC2.SideloadRelayStatus, handler);
+  },
+  onSideloadRelayRunStarted: (callback) => {
+    const handler = (_e, run) => callback(run);
+    ipcRenderer.on(IPC2.SideloadRelayRunStarted, handler);
+    return () => ipcRenderer.removeListener(IPC2.SideloadRelayRunStarted, handler);
+  },
+  onSideloadRelayResult: (callback) => {
+    const handler = (_e, result) => callback(result);
+    ipcRenderer.on(IPC2.SideloadRelayResult, handler);
+    return () => ipcRenderer.removeListener(IPC2.SideloadRelayResult, handler);
+  }
 });

@@ -28,6 +28,7 @@
       <button type="button" class="settings-nav-item" role="tab" aria-selected="false" data-target="device-performance" id="nav-device-performance">Device Performance</button>
       <button type="button" class="settings-nav-item" role="tab" aria-selected="false" data-target="timing" id="nav-timing">Timing &amp; Network</button>
       <button type="button" class="settings-nav-item" role="tab" aria-selected="false" data-target="network-inspector" id="nav-network-inspector">Network Inspector</button>
+      <button type="button" class="settings-nav-item" role="tab" aria-selected="false" data-target="sideload-relay" id="nav-sideload-relay">Sideload Relay</button>
       <button type="button" class="settings-nav-item" role="tab" aria-selected="false" data-target="mcp-server" id="nav-mcp-server">MCP Server</button>
     </nav>
     <div class="settings-content">
@@ -251,6 +252,13 @@
             <button type="button" class="btn-timing-reset" id="btnResetNetworkInspector">Reset to Defaults</button>
             <span class="section-save-status" id="saveStatusNetworkInspector" aria-live="polite"></span>
             <button type="button" class="btn btn-primary" id="btnSaveNetworkInspector">Save</button>
+          </div>
+        </div>
+      </div>
+      <div class="settings-panel" data-section="sideload-relay" id="panel-sideload-relay" role="tabpanel" aria-labelledby="nav-sideload-relay" aria-hidden="true">
+        <div class="settings-panel-fill">
+          <div class="settings-panel-scroll">
+            <div id="sideloadRelayRoot" class="settings-section"></div>
           </div>
         </div>
       </div>

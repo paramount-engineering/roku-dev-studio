@@ -562,6 +562,32 @@ contextBridge.exposeInMainWorld('roku', {
   },
 
   // ============================================
+  // Sideload Relay (push one build to many devices)
+  // ============================================
+
+  sideloadRelayGetStatus: () => ipcRenderer.invoke(IPC.SideloadRelayGetStatus),
+  sideloadRelayGetConfig: () => ipcRenderer.invoke(IPC.SideloadRelayGetConfig),
+  sideloadRelayApplySettings: (payload: unknown) =>
+    ipcRenderer.invoke(IPC.SideloadRelayApplySettings, payload),
+  sideloadRelaySeedTargets: (includeSubnetScan?: boolean) =>
+    ipcRenderer.invoke(IPC.SideloadRelaySeedTargets, { includeSubnetScan }),
+  onSideloadRelayStatus: (callback: (status: unknown) => void) => {
+    const handler = (_event: IpcRendererEvent, status: unknown) => callback(status);
+    ipcRenderer.on(IPC.SideloadRelayStatus, handler);
+    return () => ipcRenderer.removeListener(IPC.SideloadRelayStatus, handler);
+  },
+  onSideloadRelayRunStarted: (callback: (run: unknown) => void) => {
+    const handler = (_event: IpcRendererEvent, run: unknown) => callback(run);
+    ipcRenderer.on(IPC.SideloadRelayRunStarted, handler);
+    return () => ipcRenderer.removeListener(IPC.SideloadRelayRunStarted, handler);
+  },
+  onSideloadRelayResult: (callback: (result: unknown) => void) => {
+    const handler = (_event: IpcRendererEvent, result: unknown) => callback(result);
+    ipcRenderer.on(IPC.SideloadRelayResult, handler);
+    return () => ipcRenderer.removeListener(IPC.SideloadRelayResult, handler);
+  },
+
+  // ============================================
   // BrightScript Fiddle (standalone window)
   // ============================================
 

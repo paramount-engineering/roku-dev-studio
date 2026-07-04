@@ -288,7 +288,25 @@ var IPC = {
   NetworkInspectorExportCaCert: "network-inspector:export-ca-cert",
   NetworkInspectorInstallBpfAccess: "network-inspector:install-bpf-access",
   NetworkInspectorGetTrafficRules: "network-inspector:get-traffic-rules",
-  NetworkInspectorSetDeviceTrafficRules: "network-inspector:set-device-traffic-rules"
+  NetworkInspectorSetDeviceTrafficRules: "network-inspector:set-device-traffic-rules",
+  /**
+   * Sideload Relay — RDS impersonates a Roku dev server on `/plugin_install`,
+   * accepts one build from the IDE, and fans it out (install → launch →
+   * console) to many devices. Gated by `sideloadRelayEnabled` (default off).
+   */
+  SideloadRelayGetStatus: "sideload-relay:get-status",
+  /** Returns a renderer-safe view of the current config (targets + flags, NO passwords). */
+  SideloadRelayGetConfig: "sideload-relay:get-config",
+  /** Persist relay config (targets/flags) and re-boot the service. Passwords go via the secret-store IPC. */
+  SideloadRelayApplySettings: "sideload-relay:apply-settings",
+  /** Discover LAN devices and return them as candidate targets to seed the list. */
+  SideloadRelaySeedTargets: "sideload-relay:seed-targets",
+  /** Main → renderer: relay bind/lifecycle status changed. */
+  SideloadRelayStatus: "sideload-relay:status",
+  /** Main → renderer: a new upload was accepted and fan-out started. */
+  SideloadRelayRunStarted: "sideload-relay:run-started",
+  /** Main → renderer: per-device fan-out result update. */
+  SideloadRelayResult: "sideload-relay:result"
 };
 
 // network-session-viewer-preload.ts

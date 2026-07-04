@@ -10,6 +10,7 @@ import { setupTelnetHandlers } from './telnet-handlers';
 import { setupRemoteHandlers } from './remote-handlers';
 import { setupSystemHandlers } from './system-handlers';
 import { setupNetworkInspectorHandlers } from './network-inspector-handlers';
+import { setupRelayHandlers } from './relay-handlers';
 import { cleanupStaleTempFiles } from '../startup-temp-cleanup';
 
 type AppWindowState = {
@@ -50,6 +51,7 @@ function setupIpcHandlers(
   setupRemoteHandlers(mainWindow, safeSendToRenderer);
   setupSystemHandlers(mainWindow, dialog, Menu, clipboard, app, state);
   setupNetworkInspectorHandlers(mainWindow, safeSendToRenderer, dialog, app.getPath('userData'));
+  setupRelayHandlers(mainWindow, safeSendToRenderer);
 }
 
 export { setupIpcHandlers };
