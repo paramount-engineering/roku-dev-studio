@@ -18,9 +18,11 @@ import type {
   RelayStatus,
   RelayTarget
 } from '../../shared/sideload-relay/types';
+import type { Server } from 'http';
 import { RelayIngestServer, type RelayUpload } from './relay-server';
 import { DebugProxy } from './debug-proxy';
 import { SsdpResponder } from './ssdp-responder';
+import { RokuEmulator } from './roku-emulator';
 import { runFanout, type FanoutTarget } from './fanout';
 
 const { mainLog, mainWarn } = require('../log');
@@ -45,6 +47,9 @@ export class SideloadRelayService {
   private readonly ingest: RelayIngestServer;
   private readonly proxy: DebugProxy;
   private readonly ssdp: SsdpResponder;
+  private readonly emulator: RokuEmulator;
+  /** The 8060 ECP emulator http server (runs whenever the relay is enabled). */
+  private emulatorServer: Server | null = null;
   private config: RelayBootConfig = defaultConfig();
   private runCounter = 0;
   private disposed = false;
@@ -60,10 +65,24 @@ export class SideloadRelayService {
       onDelete: () => mainLog('[SideloadRelay] received Delete request (fan-out of Delete not yet enabled)')
     });
     this.proxy = new DebugProxy({
+      getPrimaryIp: () => this.primaryTarget()?.ip || null
+    });
+    this.ssdp = new SsdpResponder();
+    this.emulator = new RokuEmulator({
       getPrimaryIp: () => this.primaryTarget()?.ip || null,
       getReplayIps: () => this.enabledTargets().map((t) => t.ip)
     });
-    this.ssdp = new SsdpResponder();
+  }
+
+  private emulatorListening(): boolean {
+    return this.emulatorServer != null;
+  }
+
+  private closeEmulator(): Promise<void> {
+    const srv = this.emulatorServer;
+    this.emulatorServer = null;
+    if (!srv) return Promise.resolve();
+    return new Promise<void>((resolve) => srv.close(() => resolve()));
   }
 
   private enabledTargets(): RelayTarget[] {
@@ -82,6 +101,7 @@ export class SideloadRelayService {
       addresses: this.ingest.getAddresses(),
       lastError: this.ingest.getLastError() || this.proxy.getLastError(),
       debugProxyListening: this.proxy.isListening(),
+      ecpEmulatorListening: this.emulatorListening(),
       ssdpAdvertising: this.ssdp.isListening(),
       primaryIp: this.primaryTarget()?.ip || null
     };
@@ -120,9 +140,35 @@ export class SideloadRelayService {
       mainWarn('[SideloadRelay] ingest (re)start failed:', (e as Error)?.message || e);
     }
 
-    // Debug proxy + SSDP advertisement: bind only while enabled AND the debug
-    // path is requested. SSDP makes RDS discoverable in VS Code; the proxy
-    // serves the synthetic device-info the discoverer follows to.
+    // ECP emulator (8060) + SSDP advertisement: run whenever the relay is
+    // enabled, so RDS is discoverable in VS Code and answers roku-debug's
+    // device-info pre-flight WITHOUT needing a primary/debug device. (This used
+    // to be gated behind the debug-proxy toggle, which made the relay look
+    // undiscoverable unless you also flipped that second switch.)
+    const wantEmulator = this.config.enabled;
+    try {
+      if (wantEmulator && !this.emulatorListening()) {
+        this.emulatorServer = await this.emulator.listen();
+      } else if (!wantEmulator && this.emulatorListening()) {
+        await this.closeEmulator();
+      }
+    } catch (e) {
+      mainWarn('[SideloadRelay] ECP emulator (re)start failed:', (e as Error)?.message || e);
+    }
+    try {
+      if (wantEmulator && !this.ssdp.isListening()) {
+        await this.ssdp.start();
+      } else if (!wantEmulator && this.ssdp.isListening()) {
+        await this.ssdp.stop();
+      }
+    } catch (e) {
+      mainWarn('[SideloadRelay] SSDP responder (re)start failed:', (e as Error)?.message || e);
+    }
+
+    // Debug TCP proxies (8081/8085 → primary): only when the debug toggle is on.
+    // These forward the binary debug protocol + telnet to a real device for
+    // breakpoints, so they're pointless (and would refuse connections) without
+    // both the toggle and a selected primary.
     const wantProxy = this.config.enabled && this.config.debugProxyEnabled;
     try {
       if (wantProxy && !this.proxy.isListening()) {
@@ -132,15 +178,6 @@ export class SideloadRelayService {
       }
     } catch (e) {
       mainWarn('[SideloadRelay] debug proxy (re)start failed:', (e as Error)?.message || e);
-    }
-    try {
-      if (wantProxy && !this.ssdp.isListening()) {
-        await this.ssdp.start();
-      } else if (!wantProxy && this.ssdp.isListening()) {
-        await this.ssdp.stop();
-      }
-    } catch (e) {
-      mainWarn('[SideloadRelay] SSDP responder (re)start failed:', (e as Error)?.message || e);
     }
 
     this.emitStatus();
@@ -227,6 +264,11 @@ export class SideloadRelayService {
     }
     try {
       await this.ssdp.stop();
+    } catch {
+      /* ignore */
+    }
+    try {
+      await this.closeEmulator();
     } catch {
       /* ignore */
     }

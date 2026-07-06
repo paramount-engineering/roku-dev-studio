@@ -188,8 +188,9 @@ function setStatusLine(status: any): void {
   if (status.boundPort !== status.requestedPort) {
     parts.push(`(Port ${status.requestedPort} was unavailable; fell back to ${status.boundPort}.)`);
   }
-  if (status.debugProxyListening) parts.push('Debug proxy active (8060/8081/8085 → primary).');
-  if (status.ssdpAdvertising) parts.push('Advertising as a Roku — pick “Roku Dev Studio Relay” in VS Code (or host=${promptForHost}).');
+  if (status.ecpEmulatorListening) parts.push('ECP emulator on :8060.');
+  if (status.ssdpAdvertising) parts.push('Discoverable in VS Code as “Roku Dev Studio Relay”.');
+  if (status.debugProxyListening) parts.push('Debugger proxy 8081/8085 → primary.');
   line.textContent = parts.join(' ');
 }
 
@@ -254,12 +255,12 @@ function buildDom(root: HTMLElement): void {
       h('input', { type, id, class: 'settings-text-input', 'aria-label': title, ...extra })
     ]);
 
-  root.append(toggleRow('optSideloadRelay', 'Enable Sideload Relay', 'Bind the “fake Roku” HTTP server so IDEs can sideload through RDS. Off by default.'));
+  root.append(toggleRow('optSideloadRelay', 'Enable Sideload Relay', 'Bind the “fake Roku” HTTP server so IDEs can sideload through RDS, and advertise RDS over SSDP as a Roku so it shows up in VS Code’s device list. Off by default.'));
   root.append(inputRow('srPort', 'Listen Port', 'Port the relay listens on. 80 matches roku-deploy’s default; if 80 needs root it falls back to 8888 automatically.', 'number', { min: '1', max: '65535', value: '80' }));
   root.append(inputRow('srPassword', 'Relay Dev Password', 'The developer password your IDE authenticates with (user rokudev). Stored encrypted; leave blank to keep the saved one.', 'password', { placeholder: '••••••••', autocomplete: 'off' }));
   root.append(toggleRow('optSrAutoLaunch', 'Auto-launch Dev App', 'After install, launch the “dev” channel on each device.'));
   root.append(toggleRow('optSrAutoConsole', 'Auto-connect Console', 'After install, open the BrightScript debug console (telnet 8085) for each device.'));
-  root.append(toggleRow('optSrDebugProxy', 'VS Code “Debug: Launch” proxy', 'Bind ECP 8060 + debug ports 8081/8085 and proxy them to the chosen debug device, so the VS Code debugger attaches while the build still fans out to the fleet. Also advertises RDS over SSDP as “Roku Dev Studio Relay” so it appears in VS Code’s device picker.'));
+  root.append(toggleRow('optSrDebugProxy', 'Attach debugger to primary (8081/8085)', 'Proxy the BrightScript debug protocol (8081) + telnet console (8085) to the chosen primary device, so VS Code breakpoints/stepping attach to it while the build still fans out to the fleet. Discovery + device-info already work with just the relay enabled above; turn this on to also debug on the primary.'));
   root.append(toggleRow('optSrRetry', 'Retry once on failure', 'If an install fails, retry it one time before reporting failure.'));
 
   root.append(h('div', { class: 'sr-status', id: 'sideloadRelayStatusLine', 'aria-live': 'polite' }, []));

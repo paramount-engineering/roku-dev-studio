@@ -77,8 +77,10 @@ export interface RelayStatus {
   addresses: string[];
   /** Non-fatal last error (bind failure, etc.). */
   lastError?: string;
-  /** P4: TCP debug proxies (8081/8085) + ECP intercept (8060) bound for the debug-launch path. */
+  /** P4: TCP debug proxies (8081/8085 → primary) bound for the debug-launch breakpoint path. */
   debugProxyListening: boolean;
+  /** ECP emulator (8060) bound — RDS answers device-info/apps/commands as a Roku. Runs with the relay. */
+  ecpEmulatorListening: boolean;
   /** SSDP responder active — RDS is advertising itself as a Roku for VS Code discovery. */
   ssdpAdvertising: boolean;
   /** ip of the current primary/debug device, if any. */

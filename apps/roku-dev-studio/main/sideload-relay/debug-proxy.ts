@@ -1,52 +1,37 @@
 /**
- * P4 — "BrightScript Debug: Launch" support.
+ * P4 — transparent TCP proxies for the binary debug protocol (8081) and telnet
+ * console (8085), relayed to the designated primary/debug device.
  *
- * With `host = <RDS-ip>`, VS Code's roku-debug sends ECP (8060), the debug
- * protocol control socket (8081), and the telnet console (8085) to RDS instead
- * of a device. RDS handles them as:
+ * These are opaque socket streams, so RDS forwards bytes without parsing the
+ * debug protocol — the VS Code debugger attaches to the primary and breakpoints
+ * / stepping / variables work there. They only make sense with a reachable
+ * primary, so they're gated on the debug-proxy toggle + a selected primary.
  *
- *   - **8060 (ECP)** — a full {@link RokuEmulator}: RDS answers device-info,
- *     app queries, and remote commands itself as a developer-enabled Roku (so
- *     the launch pre-flight and roku-deploy discovery pass with no reachable
- *     device), and forwards keypress/launch/… to the primary + fleet.
- *   - **8081 / 8085** — transparent TCP relays to the primary. Because both are
- *     opaque socket streams, RDS forwards bytes without parsing the debug
- *     protocol; the debugger attaches to the primary and breakpoints work there.
- *
- * The sideload itself (port 80) is handled by the ingest server + fan-out; this
- * module only covers the fixed Roku ports the debugger assumes.
+ * The ECP surface (8060) and SSDP discovery are handled separately by
+ * {@link RokuEmulator} / {@link SsdpResponder} and run whenever the relay is
+ * enabled, so RDS is discoverable in VS Code without also needing a primary.
  */
 
-import type { Server } from 'http';
 import type { Server as NetServer, Socket } from 'net';
 
 const net = require('net');
 const { mainLog, mainWarn } = require('../log');
-const { DEBUG_CONTROL_PORT, DEBUG_CONSOLE_PORT, ECP_PORT } = require('../../shared/sideload-relay/types');
-import { RokuEmulator } from './roku-emulator';
+const { DEBUG_CONTROL_PORT, DEBUG_CONSOLE_PORT } = require('../../shared/sideload-relay/types');
 
 export interface DebugProxyCallbacks {
   /** ip of the current primary/debug device, or null when none is set. */
   getPrimaryIp: () => string | null;
-  /** Other enabled target IPs to optionally replay keypress/launch to (best-effort). */
-  getReplayIps: () => string[];
 }
 
 export class DebugProxy {
-  private ecpServer: Server | null = null;
   private controlServer: NetServer | null = null;
   private consoleServer: NetServer | null = null;
   private listening = false;
   private lastError: string | undefined;
   private readonly cb: DebugProxyCallbacks;
-  private readonly emulator: RokuEmulator;
 
   constructor(cb: DebugProxyCallbacks) {
     this.cb = cb;
-    this.emulator = new RokuEmulator({
-      getPrimaryIp: () => this.cb.getPrimaryIp(),
-      getReplayIps: () => this.cb.getReplayIps()
-    });
   }
 
   isListening(): boolean {
@@ -60,14 +45,13 @@ export class DebugProxy {
     if (this.listening) return;
     this.lastError = undefined;
     try {
-      this.ecpServer = await this.emulator.listen();
       this.controlServer = await this.startTcpProxy(DEBUG_CONTROL_PORT, 'debug-control');
       this.consoleServer = await this.startTcpProxy(DEBUG_CONSOLE_PORT, 'debug-console');
       this.listening = true;
-      mainLog(`[SideloadRelay] debug proxy up (ECP emulator :${ECP_PORT}, control :${DEBUG_CONTROL_PORT}, console :${DEBUG_CONSOLE_PORT})`);
+      mainLog(`[SideloadRelay] debug TCP proxies up (control :${DEBUG_CONTROL_PORT}, console :${DEBUG_CONSOLE_PORT} → primary)`);
     } catch (e) {
       this.lastError = (e as Error)?.message || String(e);
-      mainWarn('[SideloadRelay] debug proxy failed to start:', this.lastError);
+      mainWarn('[SideloadRelay] debug TCP proxies failed to start:', this.lastError);
       await this.stop();
       throw e;
     }
@@ -75,13 +59,12 @@ export class DebugProxy {
 
   async stop(): Promise<void> {
     this.listening = false;
-    const close = (srv: Server | NetServer | null) =>
+    const close = (srv: NetServer | null) =>
       new Promise<void>((resolve) => {
         if (!srv) return resolve();
         srv.close(() => resolve());
       });
-    await Promise.all([close(this.ecpServer), close(this.controlServer), close(this.consoleServer)]);
-    this.ecpServer = null;
+    await Promise.all([close(this.controlServer), close(this.consoleServer)]);
     this.controlServer = null;
     this.consoleServer = null;
   }
