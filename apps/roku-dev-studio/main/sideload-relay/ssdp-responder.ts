@@ -107,6 +107,8 @@ export class SsdpResponder {
       socket.on('message', (msg: Buffer, rinfo: RemoteInfo) => {
         const text = msg.toString('utf8');
         if (!/^M-SEARCH\s/i.test(text)) return;
+        // A real Roku only answers a proper discovery request.
+        if (!/\bMAN:\s*"?ssdp:discover"?/i.test(text)) return;
         const stMatch = /\bST:\s*([^\r\n]+)/i.exec(text);
         const st = stMatch ? stMatch[1]!.trim().toLowerCase() : '';
         // Answer Roku-targeted and wildcard searches; ignore unrelated device queries.
@@ -118,10 +120,24 @@ export class SsdpResponder {
       });
 
       socket.bind(SSDP_PORT, () => {
+        // Join the group on the specific LAN interface (multi-homed machines
+        // otherwise join the wrong NIC and never see the M-SEARCH), and cap the
+        // multicast TTL like a LAN device.
+        const iface = firstLanIpv4();
         try {
-          socket.addMembership(SSDP_ADDR);
+          socket.addMembership(SSDP_ADDR, iface || undefined);
         } catch (e) {
-          mainWarn('[SideloadRelay] SSDP addMembership failed:', (e as Error)?.message || e);
+          // Fall back to the default interface if the scoped join fails.
+          try {
+            socket.addMembership(SSDP_ADDR);
+          } catch (e2) {
+            mainWarn('[SideloadRelay] SSDP addMembership failed:', (e2 as Error)?.message || e2);
+          }
+        }
+        try {
+          socket.setMulticastTTL(4);
+        } catch {
+          /* ignore */
         }
         this.socket = socket;
         this.listening = true;
