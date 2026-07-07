@@ -215,6 +215,8 @@ var IPC = {
   SecretsGetAll: "secrets:get-all",
   SecretsSetPassword: "secrets:set-password",
   SecretsDeletePassword: "secrets:delete-password",
+  /** Main → renderer: a device password was saved elsewhere (e.g. Sideload Relay); update the in-memory cache. */
+  SecretsPasswordUpdated: "secrets:password-updated",
   SecretsMigrateLegacy: "secrets:migrate-legacy",
   SecretsClearAll: "secrets:clear-all",
   GetDeveloperMode: "get-developer-mode",
@@ -301,6 +303,10 @@ var IPC = {
   SideloadRelayApplySettings: "sideload-relay:apply-settings",
   /** Discover LAN devices and return them as candidate targets to seed the list. */
   SideloadRelaySeedTargets: "sideload-relay:seed-targets",
+  /** Validate a device's dev password (local or remote) and, on success, save it for the relay. */
+  SideloadRelayValidatePassword: "sideload-relay:validate-password",
+  /** Reveal the saved Relay Dev Password (for the settings "show password" eye toggle). */
+  SideloadRelayRevealPassword: "sideload-relay:reveal-password",
   /** Main → renderer: relay bind/lifecycle status changed. */
   SideloadRelayStatus: "sideload-relay:status",
   /** Main → renderer: a new upload was accepted and fan-out started. */

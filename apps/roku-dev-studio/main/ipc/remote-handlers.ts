@@ -28,6 +28,7 @@ import {
   type TelnetIpcCoalesceState
 } from './telnet-log-ipc-coalesce.js';
 import { mainLog } from '../log.js';
+import { isSafeRelayUrl, remoteHttpRequest } from '../remote-http';
 
 const { computeInputTextRelayHttpTimeoutMs } = require('roku-dev-studio-api');
 const WebSocket = require('ws');
@@ -41,101 +42,10 @@ function errMsg(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
 }
 
-/**
- * Reject anything that is not a well-formed http(s) URL. `serverUrl` arrives
- * from the renderer (user-added relay locations); validating the protocol here
- * keeps the main process from being driven to `file://` and other schemes via
- * IPC (SSRF / local-file read hardening).
- */
-function isSafeRelayUrl(serverUrl: unknown): serverUrl is string {
-  if (!serverUrl || typeof serverUrl !== 'string') return false;
-  try {
-    const u = new URL(serverUrl);
-    return u.protocol === 'http:' || u.protocol === 'https:';
-  } catch {
-    return false;
-  }
-}
-
 /** Build a `/device/<ip>...` path with the IP encoded as a single path segment
  * so addresses containing reserved characters can't break out of the segment. */
 function devicePath(ip: string, suffix = ''): string {
   return `/device/${encodeURIComponent(ip)}${suffix}`;
-}
-
-/**
- * Helper function to make HTTP request to remote server
- */
-function remoteHttpRequest(
-  serverUrl: string,
-  pathStr: string,
-  method = 'GET',
-  body: Record<string, unknown> | null = null,
-  timeout = 15000
-) {
-  return new Promise((resolve) => {
-    if (!isSafeRelayUrl(serverUrl)) {
-      resolve({ success: false, error: 'Invalid relay server URL' });
-      return;
-    }
-    const url = new URL(pathStr, serverUrl);
-    const isHttps = url.protocol === 'https:';
-    const httpModule = isHttps ? require('https') : require('http');
-
-    const headers: Record<string, string | number> = {};
-
-    const options: {
-      hostname: string;
-      port: string | number;
-      path: string;
-      method: string;
-      headers: Record<string, string | number>;
-      timeout: number;
-    } = {
-      hostname: url.hostname,
-      port: url.port || (isHttps ? 443 : 80),
-      // Preserve the query string — `new URL('/network/events?…', base)` parses
-      // it into `url.search`, which `url.pathname` alone drops.
-      path: url.pathname + url.search,
-      method: method,
-      headers,
-      timeout: timeout
-    };
-
-    let postData: string | null = null;
-    if (body) {
-      postData = JSON.stringify(body);
-      headers['Content-Type'] = 'application/json';
-      headers['Content-Length'] = Buffer.byteLength(postData);
-    }
-    
-    const req = httpModule.request(options, (res: IncomingMessage) => {
-      let data = '';
-      res.on('data', (chunk: Buffer | string) => {
-        data += chunk;
-      });
-      res.on('end', () => {
-        try {
-          resolve(JSON.parse(data));
-        } catch (e) {
-          resolve({ success: false, error: 'Invalid JSON response', raw: data });
-        }
-      });
-    });
-    
-    req.on('error', (err: Error) => {
-      resolve({ success: false, error: err.message });
-    });
-    req.on('timeout', () => {
-      req.destroy();
-      resolve({ success: false, error: 'Request timed out' });
-    });
-    
-    if (postData) {
-      req.write(postData);
-    }
-    req.end();
-  });
 }
 
 type RemoteTelnetConn = {
@@ -470,6 +380,74 @@ export async function ensureRemoteTelnetConnected(
 }
 
 /**
+ * Sideload a local .zip to a device via a remote RDS server. Trusted internal
+ * caller (Sideload Relay fan-out) — unlike the {@link IPC.RemoteSideloadUpload}
+ * handler this does NOT restrict the path to the user profile dirs, because the
+ * relay's package lives in an OS temp dir it created itself.
+ */
+export async function sideloadFileToRemote(
+  serverUrl: string,
+  ip: string,
+  filePath: string,
+  password: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    if (!isSafeRelayUrl(serverUrl)) return { success: false, error: 'Invalid relay server URL' };
+    if (!filePath || !fs.existsSync(filePath)) return { success: false, error: 'Package file not found' };
+    const fileBuffer = await fs.promises.readFile(filePath);
+    const form = new FormData();
+    form.append('file', fileBuffer, { filename: path.basename(filePath), contentType: 'application/zip' });
+    form.append('password', password || '');
+    const urlObj = new URL(serverUrl);
+    const isHttps = urlObj.protocol === 'https:';
+    const options = {
+      hostname: urlObj.hostname,
+      port: urlObj.port || (isHttps ? 443 : 80),
+      path: devicePath(ip, '/sideload'),
+      method: 'POST',
+      headers: form.getHeaders(),
+      timeout: 180000
+    };
+    return await new Promise<{ success: boolean; error?: string }>((resolve) => {
+      const httpModule = isHttps ? require('https') : require('http');
+      const req = httpModule.request(options, (res: IncomingMessage) => {
+        let data = '';
+        res.on('data', (c: Buffer | string) => (data += c));
+        res.on('end', () => {
+          try {
+            resolve(JSON.parse(data) as { success: boolean; error?: string });
+          } catch {
+            resolve({ success: false, error: 'Invalid response from remote server' });
+          }
+        });
+      });
+      req.setTimeout(180000);
+      req.on('error', (e: Error) => resolve({ success: false, error: e.message }));
+      req.on('timeout', () => {
+        req.destroy();
+        resolve({ success: false, error: 'Remote sideload timed out' });
+      });
+      form.pipe(req);
+    });
+  } catch (e) {
+    return { success: false, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+/** Launch a channel on a device via a remote RDS server. */
+export async function launchOnRemote(
+  serverUrl: string,
+  ip: string,
+  appId = 'dev'
+): Promise<{ success: boolean; error?: string }> {
+  const r = (await remoteHttpRequest(serverUrl, devicePath(ip, `/launch/${encodeURIComponent(appId)}`), 'POST', {})) as {
+    success?: boolean;
+    error?: string;
+  };
+  return { success: r?.success !== false, error: r?.error };
+}
+
+/**
  * Setup remote server IPC handlers
  */
 function setupRemoteHandlers(mainWindow: BrowserWindow | undefined, safeSendToRenderer: SafeSendFn) {
@@ -621,77 +599,14 @@ function setupRemoteHandlers(mainWindow: BrowserWindow | undefined, safeSendToRe
   // Sideload via remote server with file upload from local machine. filePath must be under allowed dirs.
   ipcMain.handle(IPC.RemoteSideloadUpload, async (_event: IpcMainInvokeEvent, payload: RemoteSideloadPayload) => {
     const { serverUrl, ip, filePath, password } = payload;
-    try {
-      if (!filePath || typeof filePath !== 'string') {
-        return { success: false, error: 'File path required' };
-      }
-      if (!isSafeRelayUrl(serverUrl)) {
-        return { success: false, error: 'Invalid relay server URL' };
-      }
-      const allowedBases = userProfileDirectories();
-      const resolved = resolveUserPathUnderOneOf(allowedBases, filePath);
-      if (!resolved) {
-        return { success: false, error: 'Path is not under an allowed directory' };
-      }
-      if (!fs.existsSync(resolved)) {
-        return { success: false, error: 'File not found: ' + filePath };
-      }
-      const fileName = path.basename(resolved);
-      // Async read: sideload zips can be many MB; a sync read blocks the whole UI.
-      const fileBuffer = await fs.promises.readFile(resolved);
-
-      // Create form data
-      const form = new FormData();
-      form.append('file', fileBuffer, {
-        filename: fileName,
-        contentType: 'application/zip'
-      });
-      form.append('password', password);
-      
-      // Parse server URL
-      const urlObj = new URL(serverUrl);
-      const options = {
-        hostname: urlObj.hostname,
-        port: urlObj.port || 80,
-        path: devicePath(ip, '/sideload'),
-        method: 'POST',
-        headers: form.getHeaders(),
-        timeout: 180000 // 3 minutes timeout for upload + install
-      };
-      
-      return new Promise((resolve) => {
-        const http = require(urlObj.protocol === 'https:' ? 'https' : 'http');
-        const req = http.request(options, (res: IncomingMessage) => {
-          let data = '';
-          res.on('data', (chunk: Buffer | string) => {
-            data += chunk;
-          });
-          res.on('end', () => {
-            try {
-              resolve(JSON.parse(data));
-            } catch (e) {
-              resolve({ success: false, error: 'Invalid response from server' });
-            }
-          });
-        });
-        
-        // Set socket timeout as well
-        req.setTimeout(180000);
-        
-        req.on('error', (error: Error) => {
-          resolve({ success: false, error: error.message });
-        });
-        
-        req.on('timeout', () => {
-          req.destroy();
-          resolve({ success: false, error: 'Request timeout - sideload may still be in progress' });
-        });
-        
-        form.pipe(req);
-      });
-    } catch (error: unknown) {
-      return { success: false, error: errMsg(error) };
-    }
+    // Renderer-supplied path: enforce the allowed-dirs sandbox here, then delegate
+    // the actual multipart upload to the shared `sideloadFileToRemote` (the same
+    // implementation the Sideload Relay fan-out uses — one code path, not two).
+    if (!filePath || typeof filePath !== 'string') return { success: false, error: 'File path required' };
+    if (!isSafeRelayUrl(serverUrl)) return { success: false, error: 'Invalid relay server URL' };
+    const resolved = resolveUserPathUnderOneOf(userProfileDirectories(), filePath);
+    if (!resolved) return { success: false, error: 'Path is not under an allowed directory' };
+    return sideloadFileToRemote(serverUrl, ip, resolved, password || '');
   });
 
   // Delete sideload via remote server

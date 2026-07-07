@@ -265,6 +265,8 @@ ol.help-blurb li,
 ul.help-blurb li {
   margin-bottom: 2px;
 }
+/* Sideload Relay intro list — a little breathing room before the settings card. */
+.sr-intro { margin-bottom: 20px; }
 .timing-row {
   display: flex;
   align-items: center;
@@ -997,3 +999,100 @@ ul.help-blurb li {
   border-color: rgba(201, 162, 39, 0.4);
 }
 .ni-bpf-state[data-state="blocked"] .ni-bpf-dot { background: #e0b341; }
+
+/* ============================================================
+   Sideload Relay section + Setup Devices modal
+   (must live here, not injected — the settings window CSP is
+   `style-src 'self'`, which blocks inline <style> blocks.)
+   ============================================================ */
+/* "Targeted Devices" summary row — inherits the standard .settings-row-toggle
+   frame (padding + single border-bottom), so no extra border-top here. */
+#sideloadRelayRoot .sr-summary-row .settings-row-text { flex: 1; min-width: 0; }
+
+/* Setup modal (mounted on <body>) */
+.sr-modal-overlay { position: fixed; inset: 0; background: rgba(6, 6, 12, .6); backdrop-filter: blur(3px); display: flex; align-items: center; justify-content: center; z-index: 9999; }
+.sr-modal-overlay[hidden] { display: none; }
+.sr-modal { width: min(760px, 94vw); max-height: 86vh; display: flex; flex-direction: column; background: var(--bg-secondary, #1a1a2e); border: 1px solid var(--border, #2a2a40); border-radius: 14px; box-shadow: 0 24px 60px rgba(0, 0, 0, .5); overflow: hidden; }
+.sr-modal-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid var(--border, #2a2a40); }
+.sr-modal-header h2 { margin: 0; font-size: 16px; font-weight: 650; }
+.sr-modal-close { background: transparent; border: 0; color: var(--text-secondary, #9aa); font-size: 20px; line-height: 1; cursor: pointer; padding: 4px 8px; border-radius: 6px; }
+.sr-modal-close:hover { background: var(--bg-elevated, #2a2a40); color: var(--text-primary, #e8e8f0); }
+.sr-modal-header-actions { display: flex; align-items: center; gap: 10px; }
+.sr-scan-btn { background: linear-gradient(180deg, #c084fc, #a855f7); color: #fff; border: 0; border-radius: 8px; padding: 6px 13px; font-size: 12.5px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+.sr-scan-btn:hover:not(:disabled) { filter: brightness(1.08); }
+.sr-scan-btn:disabled { cursor: default; }
+.sr-scan-btn.scanning { opacity: .8; }
+.sr-modal-sub { padding: 12px 20px 0; color: var(--text-secondary, #9aa); font-size: 12.5px; line-height: 1.5; }
+.sr-modal-toolbar { display: flex; align-items: center; gap: 12px; padding: 12px 20px; }
+.sr-scan-status { font-size: 12px; color: var(--text-secondary, #9aa); }
+.sr-modal-table-wrap { flex: 1; min-height: 0; overflow-y: auto; padding: 0 20px; }
+.sr-dtable-head,
+.sr-dtable-row { display: grid; align-items: center; gap: 12px; grid-template-columns: 110px 1.1fr 0.9fr 180px 84px; }
+.sr-dtable-head { position: sticky; top: 0; background: var(--bg-secondary, #1a1a2e); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-secondary, #9aa); padding: 8px 0; border-bottom: 1px solid var(--border, #2a2a40); z-index: 1; }
+.sr-dtable-row { padding: 10px 0; border-bottom: 1px solid var(--border, #232336); }
+.sr-col-center, .sr-dt-cell-center { text-align: center; display: flex; justify-content: center; }
+.sr-row-off { opacity: .5; }
+.sr-loc-pill { display: inline-block; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+.sr-loc-local { background: rgba(139, 92, 246, .16); color: #c4b5fd; }
+.sr-loc-remote { background: rgba(34, 211, 238, .14); color: #67e8f9; }
+.sr-dt-name { font-weight: 550; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sr-dt-info { display: flex; flex-direction: column; gap: 1px; font-family: ui-monospace, Menlo, monospace; font-size: 11.5px; }
+.sr-dt-ip { color: var(--text-primary, #e8e8f0); }
+.sr-dt-serial { color: var(--text-secondary, #9aa); font-size: 10.5px; }
+.sr-dt-toggle { flex: 0 0 auto; min-width: 46px; }
+.sr-dt-toggle .settings-toggle-input:disabled + .settings-toggle-ui { opacity: .4; }
+.sr-dt-toggle:has(.settings-toggle-input:disabled) { cursor: not-allowed; }
+.sr-reach { font-size: 12px; font-weight: 600; }
+.sr-reach-ok { color: #4ade80; }
+.sr-reach-off { color: var(--text-secondary, #9aa); font-weight: 500; }
+.sr-dtable-empty { padding: 22px 0; text-align: center; color: var(--text-secondary, #9aa); font-size: 13px; }
+.sr-modal-footer { display: flex; align-items: center; gap: 12px; padding: 14px 20px; border-top: 1px solid var(--border, #2a2a40); }
+.sr-modal-summary { flex: 1; font-size: 12.5px; color: var(--text-secondary, #9aa); }
+.sr-modal-actions { display: flex; gap: 10px; }
+/* Per-device password affordance */
+.sr-pw-btn { background: rgba(139, 92, 246, .14); color: #c4b5fd; border: 1px solid rgba(139, 92, 246, .35); border-radius: 7px; padding: 4px 10px; font-size: 11.5px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+.sr-pw-btn:hover { background: rgba(139, 92, 246, .24); }
+/* Prerequisite warning banner above the relay rows */
+#sideloadRelayRoot .sr-gate-warning { margin: 0 0 4px; padding: 10px 14px; border-radius: 10px; background: rgba(201, 162, 39, .1); border: 1px solid rgba(201, 162, 39, .35); border-left: 3px solid #e0b341; }
+#sideloadRelayRoot .sr-gate-warning[hidden] { display: none; }
+#sideloadRelayRoot .sr-gate-title { font-size: 12px; font-weight: 600; color: #e0b341; margin-bottom: 4px; }
+#sideloadRelayRoot .sr-gate-list { margin: 0; padding-left: 18px; font-size: 12px; color: var(--text-secondary, #9aa); line-height: 1.5; }
+#sideloadRelayRoot .sr-gate-list li { margin-bottom: 2px; }
+#sideloadRelayRoot .sr-gate-warning.attention { animation: sr-gate-pulse .5s ease; }
+@keyframes sr-gate-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(224, 179, 65, .5); }
+  100% { box-shadow: 0 0 0 8px rgba(224, 179, 65, 0); }
+}
+
+/* Relay Dev Password field with an inline show/hide eye */
+.sr-pw-reveal-wrap { position: relative; display: flex; align-items: center; flex: 0 0 auto; width: 160px; }
+.settings-row-input .sr-pw-reveal-wrap .sr-pw-reveal-input { width: 100%; padding-right: 34px; }
+.sr-pw-eye { position: absolute; right: 3px; top: 50%; transform: translateY(-50%); display: flex; align-items: center; justify-content: center; background: transparent; border: 0; padding: 5px; border-radius: 6px; color: var(--text-secondary, #9aa); cursor: pointer; transition: color .12s, background .12s; }
+.sr-pw-eye:hover { color: var(--text-primary, #e8e8f0); background: var(--bg-elevated, #2a2a40); }
+.sr-pw-eye-icon { display: flex; }
+.sr-pw-eye .eye-off { display: none; }
+.sr-pw-eye.revealed .eye-open { display: none; }
+.sr-pw-eye.revealed .eye-off { display: flex; }
+
+/* Inline password entry, living inside the Enabled cell of the row */
+.sr-pw-inline { display: flex; flex-direction: column; align-items: stretch; gap: 5px; width: 100%; }
+.sr-pw-field { display: flex; align-items: center; background: var(--bg-primary, #12121f); border: 1px solid var(--border, #2a2a40); border-radius: 7px; padding-left: 8px; transition: border-color .12s; }
+.sr-pw-field:focus-within { border-color: var(--accent, #a855f7); }
+.sr-pw-field.sr-pw-bad { border-color: var(--accent-red, #f87171); }
+.sr-pw-input2 { flex: 1; min-width: 0; background: transparent; border: 0; outline: none; color: var(--text-primary, #e8e8f0); font-size: 12px; padding: 6px 2px; }
+.sr-pw-input2::placeholder { color: var(--text-secondary, #9aa); }
+.sr-pw-validate { flex: none; background: transparent; border: 0; color: #4ade80; font-size: 13px; font-weight: 700; line-height: 1; cursor: pointer; padding: 4px 8px; border-radius: 5px; }
+.sr-pw-validate:hover { background: rgba(74, 222, 128, .16); }
+.sr-pw-validate[disabled] { cursor: default; }
+.sr-pw-validate.busy { color: var(--text-secondary, #9aa); }
+.sr-pw-cancel { align-self: center; background: transparent; border: 0; color: var(--text-secondary, #9aa); font-size: 11px; cursor: pointer; padding: 1px 6px; border-radius: 5px; }
+.sr-pw-cancel:hover { color: var(--text-primary, #e8e8f0); text-decoration: underline; }
+.sr-pw-err2 { font-size: 10.5px; line-height: 1.3; text-align: center; color: var(--accent-red, #f87171); }
+.sr-pw-err2:empty { display: none; }
+.sr-pw-field.shake { animation: sr-shake .4s ease; }
+@keyframes sr-shake {
+  10%, 90% { transform: translateX(-1px); }
+  20%, 80% { transform: translateX(2px); }
+  30%, 50%, 70% { transform: translateX(-4px); }
+  40%, 60% { transform: translateX(4px); }
+}

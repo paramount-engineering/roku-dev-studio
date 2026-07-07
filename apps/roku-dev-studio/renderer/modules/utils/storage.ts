@@ -163,6 +163,16 @@ export function getStoredPassword(serial: string): string {
 }
 
 /**
+ * Update the in-memory cache for a password validated & persisted elsewhere
+ * (e.g. the Sideload Relay setup modal), so this window reflects it without a
+ * re-hydrate. Does not re-persist — the main process already saved it.
+ */
+export function setCachedPassword(serial: string, password: string): void {
+  if (!serial || typeof password !== 'string') return;
+  cache[serial] = password;
+}
+
+/**
  * Save a remembered developer password. Updates the in-memory cache
  * immediately and fires a fire-and-forget IPC to persist via `safeStorage`.
  * Failure to persist is logged but doesn't block the UI — the in-session

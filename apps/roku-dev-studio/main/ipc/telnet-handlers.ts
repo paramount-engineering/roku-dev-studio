@@ -49,6 +49,41 @@ function fiddleDebugTelnetHolderKey(fiddleWindowId: number): string {
   return `fiddle:${fiddleWindowId}`;
 }
 
+/**
+ * Raw 8085 console-data subscribers per device IP. Lets other main-process
+ * modules (the Sideload Relay) tap a device's live console output — e.g. to
+ * relay a target's real compile errors/logs to the IDE's relay console.
+ */
+const telnetDataSubscribers = new Map<string, Set<(text: string) => void>>();
+
+/** Subscribe to a device's raw 8085 console text. Returns an unsubscribe fn. */
+export function subscribeDebugTelnetData(ip: string, cb: (text: string) => void): () => void {
+  let set = telnetDataSubscribers.get(ip);
+  if (!set) {
+    set = new Set();
+    telnetDataSubscribers.set(ip, set);
+  }
+  set.add(cb);
+  return () => {
+    const s = telnetDataSubscribers.get(ip);
+    if (!s) return;
+    s.delete(cb);
+    if (s.size === 0) telnetDataSubscribers.delete(ip);
+  };
+}
+
+function notifyTelnetDataSubscribers(ip: string, text: string): void {
+  const set = telnetDataSubscribers.get(ip);
+  if (!set) return;
+  for (const cb of set) {
+    try {
+      cb(text);
+    } catch {
+      /* subscriber best-effort */
+    }
+  }
+}
+
 function addDebugTelnetHolder(ip: string, holder: string): void {
   let set = debugTelnetHoldersByIp.get(ip);
   if (!set) {
@@ -132,6 +167,7 @@ async function connectDebugTelnetInternal(ip: string): Promise<{ success: boolea
     const connection = telnetConnections.get(connectionId);
     if (!connection) return;
     connection.bytesReceived += data.length;
+    notifyTelnetDataSubscribers(ip, text);
     appendCoalescedText(connection, text);
     scheduleCoalescedMapFlush(telnetConnections, connectionId, (_live, slice) => {
       if (safeSend) safeSend(IPC.TelnetData, { ip, connectionId, data: slice });

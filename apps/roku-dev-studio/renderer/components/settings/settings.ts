@@ -476,7 +476,7 @@ function applyDefaultsForKeys(keys: string[]) {
 }
 
 function setSectionStatus(targetId: string, msg: string, isErr: boolean) {
-  var ids = ['saveStatusGeneral', 'saveStatusActionScripts', 'saveStatusDevicePerf', 'saveStatusTiming', 'saveStatusMcpServer', 'saveStatusNetworkInspector'];
+  var ids = ['saveStatusGeneral', 'saveStatusActionScripts', 'saveStatusDevicePerf', 'saveStatusTiming', 'saveStatusMcpServer', 'saveStatusNetworkInspector', 'saveStatusSideloadRelay'];
   ids.forEach(function (id) {
     var s = el(id);
     if (!s) return;

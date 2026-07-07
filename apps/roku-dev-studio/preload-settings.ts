@@ -25,6 +25,14 @@ contextBridge.exposeInMainWorld('settingsApi', {
   sideloadRelayApply: (payload: unknown) => ipcRenderer.invoke(IPC.SideloadRelayApplySettings, payload),
   sideloadRelaySeedTargets: (includeSubnetScan?: boolean) =>
     ipcRenderer.invoke(IPC.SideloadRelaySeedTargets, { includeSubnetScan }),
+  sideloadRelayValidatePassword: (payload: {
+    ip: string;
+    serial?: string;
+    remote?: boolean;
+    serverUrl?: string;
+    password: string;
+  }) => ipcRenderer.invoke(IPC.SideloadRelayValidatePassword, payload),
+  sideloadRelayRevealPassword: () => ipcRenderer.invoke(IPC.SideloadRelayRevealPassword),
   onSideloadRelayStatus: (callback: (status: unknown) => void) => {
     const handler = (_e: IpcRendererEvent, status: unknown) => callback(status);
     ipcRenderer.on(IPC.SideloadRelayStatus, handler);

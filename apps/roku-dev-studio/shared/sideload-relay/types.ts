@@ -6,7 +6,8 @@
  * The relay impersonates a Roku dev server on `/plugin_install`: the IDE
  * (roku-deploy / VS Code / Eclipse) repoints `host` to the RDS machine, RDS
  * accepts the upload, fast-ACKs, then fans the saved package out to the real
- * devices — install → launch → console — reporting per-device status.
+ * devices — install → console — reporting per-device status. (The channel
+ * auto-launches on install, so the relay never issues an explicit launch.)
  */
 
 /** A fan-out target (a real Roku device the relay forwards installs to). */
@@ -19,12 +20,31 @@ export interface RelayTarget {
   name: string;
   /** True when this target participates in fan-out. */
   enabled: boolean;
-  /**
-   * The designated debug device (P4). Exactly one target may be primary. The
-   * primary receives `remotedebug=1` and is the target of the 8081/8085 TCP
-   * proxies + 8060 ECP reverse-proxy so the VS Code debugger attaches to it.
-   */
-  primary?: boolean;
+  /** Device serial (for stable identity + display), when known. */
+  serial?: string;
+  /** Human label for the device's location — "Local" or a remote location name. */
+  location?: string;
+  /** True when the device belongs to a remote RDS location (fan-out routes through its server). */
+  remote?: boolean;
+  /** Remote server base URL (remote targets only). */
+  serverUrl?: string;
+  /** Remote location id (remote targets only). */
+  locationId?: string;
+}
+
+/** A device candidate returned by discovery for the setup table (local or remote). */
+export interface RelayDeviceCandidate {
+  id: string;
+  ip: string;
+  name: string;
+  serial?: string;
+  /** "Local" or the remote location's name. */
+  location: string;
+  remote: boolean;
+  serverUrl?: string;
+  locationId?: string;
+  /** A validated dev password is already stored for this device (relay per-target or app credential). */
+  hasPassword: boolean;
 }
 
 /** Per-step outcome for one target during one relay run. */
@@ -44,9 +64,7 @@ export interface RelayDeviceResult {
   targetId: string;
   ip: string;
   name: string;
-  primary: boolean;
   install: RelayStepResult;
-  launch: RelayStepResult;
   console: RelayStepResult;
   /** Set once all steps have settled. */
   done: boolean;
@@ -77,14 +95,16 @@ export interface RelayStatus {
   addresses: string[];
   /** Non-fatal last error (bind failure, etc.). */
   lastError?: string;
-  /** P4: TCP debug proxies (8081/8085 → primary) bound for the debug-launch breakpoint path. */
-  debugProxyListening: boolean;
+  /**
+   * Debug endpoints (8081 protocol stub + 8085 status console) bound. RDS
+   * emulates these itself so the VS Code BrightScript "Debug: Launch" connect
+   * succeeds and the fan-out status streams to the console. Runs with the relay.
+   */
+  debugEndpointsListening: boolean;
   /** ECP emulator (8060) bound — RDS answers device-info/apps/commands as a Roku. Runs with the relay. */
   ecpEmulatorListening: boolean;
   /** SSDP responder active — RDS is advertising itself as a Roku for VS Code discovery. */
   ssdpAdvertising: boolean;
-  /** ip of the current primary/debug device, if any. */
-  primaryIp: string | null;
 }
 
 /** Boot config assembled from settings + secret store, handed to the service. */
@@ -100,10 +120,7 @@ export interface RelayBootConfig {
    * relay `password`.
    */
   targetPasswords?: Record<string, string>;
-  autoLaunch: boolean;
   autoConsole: boolean;
-  /** P4: bind the debug-proxy ports (8060/8081/8085) so "BrightScript Debug: Launch" works. */
-  debugProxyEnabled: boolean;
   /** P5: retry a failed install once before reporting failure. */
   retryOnFailure: boolean;
 }

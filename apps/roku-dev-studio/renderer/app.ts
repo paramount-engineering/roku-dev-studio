@@ -8,6 +8,7 @@ import {
   icon,
   setSafeHTML,
   getStoredPassword,
+  setCachedPassword,
   removePassword,
   hydrateSecretCache,
   showStatusMessage,
@@ -645,6 +646,64 @@ function registerMcpConnectFlow(): void {
       ok: false,
       error: `Device "${wantSerial || wantIp}" was not found in the Local Devices list. Scan or add it manually first, then call connect_device again.`
     };
+  });
+}
+
+/**
+ * Auto-connect Sideload Relay targets in the UI. When the relay fans a build out
+ * to a device, open that device as a connected tab here (if it isn't already)
+ * and connect its console — so a device that wasn't open in RDS shows up
+ * connected right after sideloading. `connectDevice` is idempotent (it just
+ * activates the existing tab when already connected).
+ */
+function registerRelayAutoConnect(): void {
+  const roku = (window as any).roku;
+  if (!roku?.onSideloadRelayResult) return;
+  roku.onSideloadRelayResult((raw: unknown) => {
+    const r = raw as {
+      ip?: string;
+      name?: string;
+      install?: { state?: string };
+      console?: { state?: string };
+      done?: boolean;
+    } | null;
+    if (!r || !r.ip || r.done !== true || r.install?.state !== 'ok') return;
+    const ip = r.ip;
+    try {
+      // Prefer a full device object from the scan cache; fall back to a minimal
+      // one built from the relay target (enough for the tab/panel + passwordless
+      // ECP/telnet).
+      let device: Record<string, unknown> | undefined;
+      for (const dev of state.devices.values()) {
+        if ((dev as { ip?: string }).ip === ip) {
+          device = dev as Record<string, unknown>;
+          break;
+        }
+      }
+      if (!device) device = { ip, deviceName: r.name || ip, modelName: r.name || 'Roku' };
+
+      const alreadyConnected = state.connectedDevices.has(ip);
+      connectDevice(device);
+      if (alreadyConnected) return; // console already handled by the existing tab
+
+      // Connect the console too, unless the relay's auto-console was off for this
+      // run (console step 'skipped'). Defer a tick so the panel finishes wiring.
+      if (r.console?.state !== 'skipped') {
+        const conn = state.connectedDevices.get(ip) as { tabId?: string } | undefined;
+        const panel = conn?.tabId ? (document.getElementById(conn.tabId) as { connectTelnet?: () => Promise<void> } | null) : null;
+        if (panel?.connectTelnet) {
+          setTimeout(() => {
+            try {
+              void panel.connectTelnet!();
+            } catch (e) {
+              rendererWarn('[SideloadRelay] auto console connect failed', e);
+            }
+          }, 0);
+        }
+      }
+    } catch (e) {
+      rendererError('[SideloadRelay] auto-connect failed', e);
+    }
   });
 }
 
@@ -5877,6 +5936,10 @@ function subscribeToAppZoom() {
 function runInit() {
   subscribeToAppZoom();
   registerMcpConnectFlow();
+  registerRelayAutoConnect();
+  // A password validated in the Sideload Relay setup is a shared device credential —
+  // update this window's cache so the Dev App stops prompting for it.
+  (window as any).roku?.onSecretsPasswordUpdated?.((serial: string, password: string) => setCachedPassword(serial, password));
   ensureMcpStoredPasswordBridge();
   ensureMcpAgentScreenshotBridge();
   mountUpdateNotification();

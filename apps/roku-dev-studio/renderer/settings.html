@@ -258,7 +258,18 @@
       <div class="settings-panel" data-section="sideload-relay" id="panel-sideload-relay" role="tabpanel" aria-labelledby="nav-sideload-relay" aria-hidden="true">
         <div class="settings-panel-fill">
           <div class="settings-panel-scroll">
+            <ul class="help-blurb sr-intro">
+              <li>Point your sideload tool (VS Code with the BrightScript extension, Eclipse, or the roku-deploy CLI)<span id="srRelayUrlWrap" hidden> — or a browser at <code id="srRelayUrl">http://…/</code></span> — here instead of a single Roku.</li>
+              <li>RDS accepts the sideload once, then installs it on every enabled target, launches the dev app, and opens each console.</li>
+              <li>Sideloads from this machine proceed automatically.</li>
+              <li>A sideload from another LAN device needs the Dev Password and asks you to allow it.</li>
+            </ul>
             <div id="sideloadRelayRoot" class="settings-section"></div>
+          </div>
+          <div class="section-save-dock">
+            <button type="button" class="btn-timing-reset" id="btnResetSideloadRelay">Reset to Defaults</button>
+            <span class="section-save-status" id="saveStatusSideloadRelay" aria-live="polite"></span>
+            <button type="button" class="btn btn-primary" id="btnSaveSideloadRelay">Save</button>
           </div>
         </div>
       </div>

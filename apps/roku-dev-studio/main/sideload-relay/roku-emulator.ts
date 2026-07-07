@@ -15,11 +15,14 @@
  *   other /query/*             → 200 <status>OK</status>;  else 404
  *
  * Every response carries a `Server: Roku ...` header (roku-deploy sniffs it).
- * Side-effecting commands (keypress/launch/…) are additionally forwarded to the
- * primary/debug device and replayed to the rest of the fleet, best-effort, so
- * the debugger's navigation drives the real hardware while the emulator answers
- * instantly. The binary debug protocol (8081) and telnet (8085) are NOT
- * emulated — those are transparently proxied to the primary by `debug-proxy`.
+ * Side-effecting commands (keypress/launch/…) are ACKed but NOT propagated to
+ * the real devices: once a build is handed over, the IDE's debug session talks
+ * only to RDS's fake Roku and must not drive (or kill) the fleet — the devices
+ * run under RDS's own control. In particular VS Code's Stop/disconnect presses
+ * Home on the host; forwarding that used to exit the channel on every device.
+ * A Home press is instead used only to end the emulated debug session (see
+ * `onHomePress`). The binary debug protocol (8081) and telnet console (8085)
+ * are emulated by `debug-endpoints` (a handshake stub + live status console).
  *
  * Modeled on a standalone Python Roku emulator proven to be discovered/listed
  * by the RokuCommunity BrightScript VS Code extension.
@@ -87,10 +90,12 @@ function rootDescriptionXml(location: string): string {
 const COMMAND_PREFIXES = ['/keypress/', '/keydown/', '/keyup/', '/launch/', '/install/', '/input', '/search', '/exit-app'];
 
 export interface RokuEmulatorCallbacks {
-  /** Primary/debug device ip to forward commands to (or null). */
-  getPrimaryIp: () => string | null;
-  /** Other enabled target ips to replay commands to (best-effort). */
-  getReplayIps: () => string[];
+  /**
+   * A Home keypress was received on the ECP surface. Used to mimic a real
+   * Roku's "press Home → app exits → debugger disconnects" flow by signalling
+   * an app exit on the 8085 console. Best-effort. NOT forwarded to devices.
+   */
+  onHomePress?: () => void;
 }
 
 export class RokuEmulator {
@@ -111,19 +116,6 @@ export class RokuEmulator {
     res.end(payload);
   }
 
-  /** Fire-and-forget an ECP command at a device. */
-  private forward(ip: string, method: string, path: string, body: Buffer): void {
-    try {
-      const r = http.request({ host: ip, port: ECP_PORT, path, method, timeout: 4000 }, (pr: IncomingMessage) => pr.resume());
-      r.on('error', () => undefined);
-      r.on('timeout', () => r.destroy());
-      if (body.length) r.write(body);
-      r.end();
-    } catch {
-      /* best-effort */
-    }
-  }
-
   /** The requestListener to mount on the 8060 http server. */
   handle = (req: IncomingMessage, res: ServerResponse): void => {
     const method = (req.method || 'GET').toUpperCase();
@@ -132,15 +124,12 @@ export class RokuEmulator {
     const host = (req.headers.host || `127.0.0.1:${ECP_PORT}`).split(':')[0];
     const location = `http://${host}:${ECP_PORT}/`;
 
-    // Drain any request body so the socket can close cleanly, and so command
-    // forwarding can replay the exact bytes the client sent.
-    const chunks: Buffer[] = [];
-    req.on('data', (c: Buffer) => chunks.push(c));
+    // Drain any request body so the socket can close cleanly (we don't relay it).
+    req.on('data', () => undefined);
     req.on('error', () => undefined);
     req.on('end', () => {
-      const body = Buffer.concat(chunks);
       try {
-        this.route(req, res, method, path, location, body);
+        this.route(res, method, path, location);
       } catch (e) {
         mainWarn('[SideloadRelay] emulator route error:', (e as Error)?.message || e);
         try {
@@ -153,12 +142,10 @@ export class RokuEmulator {
   };
 
   private route(
-    req: IncomingMessage,
     res: ServerResponse,
     method: string,
     path: string,
-    location: string,
-    body: Buffer
+    location: string
   ): void {
     // Read-only queries — answered entirely by the emulator.
     if (path === '' || path === '/') return this.send(res, rootDescriptionXml(location));
@@ -167,13 +154,18 @@ export class RokuEmulator {
     if (path === '/query/active-app') return this.send(res, ACTIVE_APP_XML);
     if (path.startsWith('/query/icon/')) return this.send(res, ONE_PX_PNG, 200, 'image/png');
 
-    // Side-effecting commands: ack immediately, forward to the fleet.
+    // Side-effecting commands: ACK like a real Roku, but do NOT drive the real
+    // devices — the IDE must not control the fleet once a build is handed over.
     if (COMMAND_PREFIXES.some((p) => path === p.replace(/\/$/, '') || path.startsWith(p))) {
       if (method !== 'GET' && method !== 'HEAD') {
-        const primary = this.cb.getPrimaryIp();
-        const replay = this.cb.getReplayIps();
-        for (const ip of new Set([primary, ...replay].filter((x): x is string => !!x))) {
-          this.forward(ip, method, req.url || path, body);
+        // A Home press (e.g. VS Code Stop/disconnect) ends the emulated debug
+        // session cleanly — but is intentionally not forwarded to any device.
+        if (path.toLowerCase() === '/keypress/home') {
+          try {
+            this.cb.onHomePress?.();
+          } catch {
+            /* best-effort */
+          }
         }
       }
       return this.send(res, '', 200, 'text/plain');

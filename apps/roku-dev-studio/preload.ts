@@ -458,6 +458,12 @@ contextBridge.exposeInMainWorld('roku', {
     ipcRenderer.invoke(IPC.SecretsDeletePassword, { serial }),
   secretsMigrateLegacy: (entries: Record<string, string>) =>
     ipcRenderer.invoke(IPC.SecretsMigrateLegacy, { entries }),
+  onSecretsPasswordUpdated: (callback: (serial: string, password: string) => void) => {
+    const handler = (_e: IpcRendererEvent, payload: { serial: string; password: string }) =>
+      callback(payload?.serial, payload?.password);
+    ipcRenderer.on(IPC.SecretsPasswordUpdated, handler);
+    return () => ipcRenderer.removeListener(IPC.SecretsPasswordUpdated, handler);
+  },
   
   // ============================================
   // Developer Mode
