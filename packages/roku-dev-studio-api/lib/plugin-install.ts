@@ -21,10 +21,9 @@ interface SideloadChannelOpts {
   password: string;
   log?: LogFn;
   /**
-   * Extra multipart form fields sent alongside `mysubmit=Install` + `archive`.
-   * The Sideload Relay uses this to forward `remotedebug=1` to the designated
-   * primary/debug device so it opens its debug protocol control port for the
-   * VS Code "BrightScript Debug: Launch" flow.
+   * Optional extra multipart form fields sent alongside `mysubmit=Install` +
+   * `archive` (e.g. a caller that wants to forward `remotedebug=1`). A general
+   * capability; the Sideload Relay fan-out does not currently use it.
    */
   extraFields?: { name: string; value: string }[];
 }
