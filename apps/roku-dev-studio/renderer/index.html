@@ -7382,15 +7382,45 @@
       overflow: hidden;
     }
     .inner-tabs {
+      /* Content-sized tabs (compact — the bar hugs its content), but gap:0 so
+         each tab's uniform padding meets its neighbour's with no dead gap: the
+         space between two tabs is their shared padding. Only one tab is active at
+         a time, so its pill fills content + that padding on both sides — taking
+         the shared padding from either side — without colliding with a neighbour. */
+      position: relative;
       display: flex;
       flex-wrap: nowrap;
       align-items: center;
-      gap: 4px;
+      gap: 0;
       margin: 0;
       background: var(--bg-secondary);
       padding: 4px;
       border-radius: 10px;
       width: max-content;
+    }
+    /* Sliding highlight: a single pill that travels between tabs. Its position and
+       size are set in JS (setupInnerTabs) to match the active tab; the transition
+       here animates the trip. It sits behind the tab labels (z-index:0 vs the
+       tabs' z-index:1). Starts hidden until JS places it under the active tab. */
+    .inner-tab-indicator {
+      position: absolute;
+      top: 0;
+      left: 0;
+      z-index: 0;
+      border-radius: 8px;
+      background: var(--accent-purple);
+      opacity: 0;
+      pointer-events: none;
+      will-change: transform, width;
+      transition: transform 0.32s cubic-bezier(0.16, 1, 0.3, 1),
+                  width 0.32s cubic-bezier(0.16, 1, 0.3, 1),
+                  height 0.32s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    /* Used for the very first placement and while responsive resizing so the pill
+       snaps to the active tab instead of animating from 0,0 / lagging the resize. */
+    .inner-tabs--indicator-instant .inner-tab-indicator { transition: none; }
+    @media (prefers-reduced-motion: reduce) {
+      .inner-tab-indicator { transition: none; }
     }
     .device-panel-paused-nav {
       display: flex;
@@ -7469,6 +7499,8 @@
     }
     
     .inner-tab {
+      position: relative;
+      z-index: 1;
       padding: 10px 16px;
       border-radius: 8px;
       border: none;
@@ -7488,15 +7520,17 @@
     .inner-tab .inner-tab-label { white-space: nowrap; }
 
     .inner-tab:hover { color: var(--text-secondary); }
-    .inner-tab.active { background: var(--accent-purple); color: white; }
+    /* The active tab's fill is provided by the travelling .inner-tab-indicator,
+       not a background here — so the highlight can move between tabs. */
+    .inner-tab.active { background: transparent; color: white; }
 
     /* Responsive section selector (driven by setupDevicePanelHeaderResponsive): as the
        header narrows, first tighten padding/font/gap to reclaim wasted space,
        then drop to icon-only tabs (labels move to a hover tooltip).
        All 8 sections stay visible and reachable at every step. */
-    .inner-tabs.is-compact { gap: 2px; padding: 3px; }
+    .inner-tabs.is-compact { gap: 0; padding: 3px; }
     .inner-tabs.is-compact .inner-tab { padding: 6px 9px; font-size: 12px; gap: 5px; }
-    .inner-tabs.is-icons { gap: 2px; padding: 3px; }
+    .inner-tabs.is-icons { gap: 0; padding: 3px; }
     .inner-tabs.is-icons .inner-tab { padding: 8px; gap: 0; }
     .inner-tabs.is-icons .inner-tab-label { display: none; }
     

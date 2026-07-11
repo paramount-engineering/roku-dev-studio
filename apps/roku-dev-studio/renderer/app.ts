@@ -3629,6 +3629,60 @@ function setupInnerTabs(panel) {
   devLog('Setting up inner tabs:', innerTabs.length, 'tabs found');
   
   const innerTabsStrip = panel.querySelector('.inner-tabs');
+
+  // Sliding highlight that travels between tabs when the section changes. Driven
+  // reactively (not from the click handler) so EVERY path that flips the active
+  // tab — click, capability auto-switch, programmatic — moves it, and the
+  // responsive compact/icon width changes keep it aligned to the active tab.
+  if (innerTabsStrip instanceof HTMLElement && innerTabsStrip.dataset.indicatorReady !== '1') {
+    innerTabsStrip.dataset.indicatorReady = '1';
+    const strip = innerTabsStrip;
+    let indicator = strip.querySelector('.inner-tab-indicator') as HTMLElement | null;
+    if (!indicator) {
+      indicator = document.createElement('div');
+      indicator.className = 'inner-tab-indicator';
+      indicator.setAttribute('aria-hidden', 'true');
+      strip.prepend(indicator);
+    }
+    const ind = indicator;
+
+    // Move/resize the pill to sit exactly over the active tab. animate=false snaps
+    // (first placement + live tracking during responsive resize); true lets the
+    // CSS transition animate the trip across the strip.
+    const placeIndicator = (animate: boolean) => {
+      const active = strip.querySelector('.inner-tab.active') as HTMLElement | null;
+      if (!active || active.offsetWidth === 0) return;
+      if (!animate) strip.classList.add('inner-tabs--indicator-instant');
+      ind.style.width = `${active.offsetWidth}px`;
+      ind.style.height = `${active.offsetHeight}px`;
+      ind.style.transform = `translate(${active.offsetLeft}px, ${active.offsetTop}px)`;
+      ind.style.opacity = '1';
+      if (!animate) {
+        void ind.offsetWidth; // flush the snap before re-enabling transitions
+        strip.classList.remove('inner-tabs--indicator-instant');
+      }
+    };
+
+    // Animate the travel whenever the active tab actually changes.
+    let lastActive: Element | null = strip.querySelector('.inner-tab.active');
+    const mo = new MutationObserver(() => {
+      const active = strip.querySelector('.inner-tab.active');
+      if (active && active !== lastActive) {
+        lastActive = active;
+        placeIndicator(true);
+      }
+    });
+    mo.observe(strip, { subtree: true, attributes: true, attributeFilter: ['class'] });
+
+    // Track width changes (compact/icon mode transitions, window resize, fonts)
+    // without animating, so the pill stays glued to the active tab.
+    const ro = new ResizeObserver(() => placeIndicator(false));
+    ro.observe(strip);
+
+    // First placement under the already-active tab, after layout, without animating in.
+    requestAnimationFrame(() => placeIndicator(false));
+  }
+
   innerTabs.forEach(tab => {
     // Show the label tooltip on hover only when collapsed to icons.
     tab.addEventListener('mouseenter', () => {
