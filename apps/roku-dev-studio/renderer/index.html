@@ -7182,7 +7182,51 @@
       color: var(--text-secondary);
       word-break: break-word;
     }
-    
+    /* Second footer row: software/OS version on the left, stacked action
+       buttons (Check for Updates / Restart Device) on the right. */
+    .device-hardware-image-modal-actions {
+      padding: 10px 18px;
+      border-top: 1px solid var(--border);
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+    .device-hardware-image-modal-actions .device-hardware-image-modal-footer-value {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px;
+    }
+    /* Icon-only action buttons, side by side and right-aligned (the group is the
+       flex end child; the label lives in the tooltip / aria-label). */
+    .device-hardware-image-modal-actions-buttons {
+      display: flex;
+      flex-direction: row;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+    /* Scoped by the parent so this beats the base `.btn` rule (same specificity,
+       but `.btn` is defined later in this stylesheet and would otherwise win). */
+    .device-hardware-image-modal-actions .device-hardware-image-modal-action-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0;
+      width: 40px;
+      height: 40px;
+      padding: 0;
+      min-width: 0;
+      border-radius: 8px;
+    }
+    .device-hardware-image-modal-action-btn:disabled {
+      opacity: 0.55;
+      cursor: default;
+    }
+    .device-hardware-image-modal-action-btn.is-busy {
+      opacity: 0.7;
+      cursor: progress;
+    }
+
     .device-panel-info h2,
     .device-panel-info .panel-device-name {
       font-size: 18px;

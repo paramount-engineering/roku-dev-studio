@@ -3172,6 +3172,98 @@ function openDeviceHardwareImageModal(imageSrc, device, opener?: HTMLElement | n
     modal.appendChild(footer);
   }
 
+  // ── Software version + device actions ────────────────────────────────────
+  // A second footer row: software/OS version on the left, and two stacked
+  // buttons on the right (Check for Updates, Restart Device). Both actions post
+  // to the device's Developer Application Installer (plugin_swup) via the
+  // preload bridge and need the stored developer password.
+  {
+    const actions = document.createElement('div');
+    actions.className = 'device-hardware-image-modal-actions';
+
+    const swCell = document.createElement('div');
+    swCell.className = 'device-hardware-image-modal-footer-item';
+    const swLabel = document.createElement('span');
+    swLabel.className = 'device-hardware-image-modal-footer-label';
+    swLabel.textContent = 'OS Version & Build';
+    const swValue = document.createElement('div');
+    swValue.className = 'device-hardware-image-modal-footer-value';
+    const swVersion = typeof device.softwareVersion === 'string' ? device.softwareVersion.trim() : '';
+    const swBuild = typeof device.softwareBuild === 'string' ? device.softwareBuild.trim() : '';
+    swValue.textContent = swVersion ? `${swVersion}${swBuild ? ` (${swBuild})` : ''}` : 'Unknown';
+    swCell.appendChild(swLabel);
+    swCell.appendChild(swValue);
+
+    const btnGroup = document.createElement('div');
+    btnGroup.className = 'device-hardware-image-modal-actions-buttons';
+
+    // Icon-only buttons; the label lives in the native tooltip + aria-label.
+    const checkBtn = document.createElement('button');
+    checkBtn.type = 'button';
+    checkBtn.className = 'btn btn-secondary device-hardware-image-modal-action-btn';
+    checkBtn.title = 'Check for Updates';
+    checkBtn.setAttribute('aria-label', 'Check for Updates');
+    setSafeHTML(checkBtn, icon('refresh', 'icon-md'));
+
+    const restartBtn = document.createElement('button');
+    restartBtn.type = 'button';
+    restartBtn.className = 'btn btn-secondary device-hardware-image-modal-action-btn';
+    restartBtn.title = 'Restart Device';
+    restartBtn.setAttribute('aria-label', 'Restart Device');
+    setSafeHTML(restartBtn, icon('replay', 'icon-md'));
+
+    btnGroup.appendChild(checkBtn);
+    btnGroup.appendChild(restartBtn);
+    actions.appendChild(swCell);
+    actions.appendChild(btnGroup);
+    modal.appendChild(actions);
+
+    const actionIp = typeof device.ip === 'string' ? device.ip.trim() : '';
+    const serial =
+      device.serialNumber != null ? String(device.serialNumber).trim() : '';
+    const getPwd = () => (serial ? getStoredPassword(serial) || '' : '');
+
+    const runAction = async (
+      btn: HTMLButtonElement,
+      label: string,
+      fn: (ip: string, password: string) => Promise<{ success?: boolean; message?: string; error?: string } | undefined>
+    ) => {
+      if (!actionIp) {
+        showToast('Device IP is unavailable.', 'error');
+        return;
+      }
+      const pwd = getPwd();
+      if (!pwd) {
+        showToast('Set this device’s developer password first (Dev App tab).', 'error');
+        return;
+      }
+      checkBtn.disabled = true;
+      restartBtn.disabled = true;
+      btn.classList.add('is-busy');
+      try {
+        const res = await fn(actionIp, pwd);
+        if (res && res.success) {
+          showToast(res.message || `${label} succeeded.`, 'success');
+        } else {
+          showToast((res && res.error) || `${label} failed.`, 'error');
+        }
+      } catch (err) {
+        showToast(`${label} failed: ${errMessage(err)}`, 'error');
+      } finally {
+        checkBtn.disabled = false;
+        restartBtn.disabled = false;
+        btn.classList.remove('is-busy');
+      }
+    };
+
+    checkBtn.addEventListener('click', () =>
+      runAction(checkBtn, 'Check for updates', (ip, pwd) => window.roku.checkForUpdate(ip, pwd))
+    );
+    restartBtn.addEventListener('click', () =>
+      runAction(restartBtn, 'Restart device', (ip, pwd) => window.roku.reboot(ip, pwd))
+    );
+  }
+
   overlay.appendChild(modal);
   prepareModalOpenOrigin(overlay, opener ?? null);
   document.body.appendChild(overlay);

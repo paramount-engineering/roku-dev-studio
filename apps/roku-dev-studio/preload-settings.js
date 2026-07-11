@@ -103,6 +103,8 @@ var init_channels = __esm({
       RokuResolveSideloadFile: "roku:resolve-sideload-file",
       RokuSideload: "roku:sideload",
       RokuDeleteSideload: "roku:delete-sideload",
+      RokuReboot: "roku:reboot",
+      RokuCheckUpdate: "roku:check-update",
       RokuScreenshot: "roku:screenshot",
       RokuVerifyDevAuth: "roku:verify-dev-auth",
       RokuSaveScreenshot: "roku:save-screenshot",

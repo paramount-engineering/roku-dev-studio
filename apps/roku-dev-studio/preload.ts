@@ -96,9 +96,15 @@ contextBridge.exposeInMainWorld('roku', {
   },
   sideload: (ip: string, filePath: string, password: string | undefined) => 
     ipcRenderer.invoke(IPC.RokuSideload, { ip, filePath, password }),
-  deleteSideload: (ip: string, password: string | undefined) => 
+  deleteSideload: (ip: string, password: string | undefined) =>
     ipcRenderer.invoke(IPC.RokuDeleteSideload, { ip, password }),
-  
+
+  // Device dev-portal operations (require the developer password)
+  reboot: (ip: string, password: string | undefined) =>
+    ipcRenderer.invoke(IPC.RokuReboot, { ip, password }),
+  checkForUpdate: (ip: string, password: string | undefined) =>
+    ipcRenderer.invoke(IPC.RokuCheckUpdate, { ip, password }),
+
   // Screenshot (optional options.waitAfterTriggerMs for slow/HUD screens)
   screenshot: (ip: string, password: string | undefined, options: { waitAfterTriggerMs?: number } | undefined) =>
     ipcRenderer.invoke(IPC.RokuScreenshot, { ip, password, waitAfterTriggerMs: options?.waitAfterTriggerMs }),

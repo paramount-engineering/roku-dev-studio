@@ -21,7 +21,9 @@ const {
   captureRokuScreenshot,
   verifyDeveloperDigestAuth,
   sideloadChannel,
-  deleteSideload
+  deleteSideload,
+  rebootDevice,
+  checkForUpdate
 } = require('roku-dev-studio-api');
 
 function errMsg(e: unknown): string {
@@ -151,6 +153,16 @@ function setupDevAppHandlers(mainWindow: BrowserWindow | undefined, dialog: Dial
   // Delete sideloaded channel (shared logic in lib/roku-plugin-install.js)
   ipcMain.handle(IPC.RokuDeleteSideload, async (_event: IpcMainInvokeEvent, { ip, password }: IpPasswordPayload) => {
     return deleteSideload({ ip, password });
+  });
+
+  // Reboot the device via the Developer Application Installer (plugin_swup).
+  ipcMain.handle(IPC.RokuReboot, async (_event: IpcMainInvokeEvent, { ip, password }: IpPasswordPayload) => {
+    return rebootDevice({ ip, password: password || '' });
+  });
+
+  // Ask the device to check for a software update (plugin_swup).
+  ipcMain.handle(IPC.RokuCheckUpdate, async (_event: IpcMainInvokeEvent, { ip, password }: IpPasswordPayload) => {
+    return checkForUpdate({ ip, password: password || '' });
   });
 
   // Save screenshot to file

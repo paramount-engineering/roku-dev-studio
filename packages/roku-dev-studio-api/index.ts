@@ -16,7 +16,7 @@ const { ssdpDiscover, subnetScan } = require('./lib/discovery');
 const { isValidIp, validateDevPassword } = require('roku-dev-studio-platform/validation');
 const { captureRokuScreenshot } = require('./lib/screenshot');
 const { verifyDeveloperDigestAuth } = require('./lib/verify-dev-digest-auth');
-const { sideloadChannel, deleteSideload } = require('./lib/plugin-install');
+const { sideloadChannel, deleteSideload, rebootDevice, checkForUpdate } = require('./lib/plugin-install');
 const { buildFiddleZip, userCodeDefinesInit } = require('./lib/bs-fiddle-template');
 
 const {
@@ -88,6 +88,8 @@ module.exports = {
   verifyDeveloperDigestAuth,
   sideloadChannel,
   deleteSideload,
+  rebootDevice,
+  checkForUpdate,
   // BrightScript Fiddle (generate minimal sideloadable channel around user code)
   buildFiddleZip,
   userCodeDefinesInit,

@@ -34,8 +34,15 @@ interface DeleteSideloadOpts {
   log?: LogFn;
 }
 
+interface DevPortalOpts {
+  ip: string;
+  password: string;
+  log?: LogFn;
+}
+
 const SIDELOAD_TIMEOUT_MS = 120000;
 const DELETE_TIMEOUT_MS = 30000;
+const SWUP_TIMEOUT_MS = 30000;
 
 function parsePluginInstallResponse(response: string): { success: true; message: string } | { success: false; error: string; authFailed?: boolean } {
   if (response.includes('Install Success') || response.includes('Application Received') || response.includes('Conversion complete')) {
@@ -190,4 +197,92 @@ async function deleteSideload({ ip, password, log = (_m: string) => undefined }:
   }
 }
 
-module.exports = { sideloadChannel, deleteSideload };
+/**
+ * POST to the device's Developer Application Installer "software update" page
+ * (`/plugin_swup`). Reboot and Check-for-updates are the same request with a
+ * different `mysubmit` value + an empty `archive` field — this mirrors what the
+ * RokuCommunity `roku-deploy` tooling (used by the BrightScript VS Code
+ * extension) does for its "Restart Device" / "Check for updates" commands.
+ */
+async function postPluginSwup(
+  ip: string,
+  password: string,
+  submit: string,
+  timeoutMs: number,
+  log: LogFn
+): Promise<{ statusCode: number; text: string }> {
+  const { body, contentType } = buildMultipartBody(
+    [
+      { name: 'mysubmit', value: submit },
+      { name: 'archive', value: '' }
+    ],
+    []
+  );
+  log(`plugin_swup: posting mysubmit=${submit}`);
+  const { statusCode, body: responseBody } = await httpDigestRequest({
+    ip,
+    password,
+    path: '/plugin_swup',
+    method: 'POST',
+    body,
+    headers: { 'Content-Type': contentType },
+    timeoutMs
+  });
+  return { statusCode, text: responseBody.toString('utf8') };
+}
+
+/**
+ * Reboot a Roku device via the Developer Application Installer (requires the
+ * developer password / Developer Mode).
+ */
+async function rebootDevice({ ip, password, log = (_m: string) => undefined }: DevPortalOpts) {
+  if (!isValidIp(ip)) {
+    return { success: false, error: 'Invalid device IP address' };
+  }
+  const pwdCheck = validateDevPassword(password);
+  if (!pwdCheck.valid) {
+    return { success: false, error: pwdCheck.error || 'Invalid developer password' };
+  }
+  try {
+    const { statusCode, text } = await postPluginSwup(ip, password, 'Reboot', SWUP_TIMEOUT_MS, log);
+    if (statusCode === 401 || responseLooksLikeAuthFailure(statusCode, text)) {
+      return { success: false, error: 'Authentication failed. Check your developer password.', authFailed: true };
+    }
+    return { success: true, message: 'Restart command sent — the device is rebooting.' };
+  } catch (error: unknown) {
+    // Rebooting frequently kills the socket before the response is fully read;
+    // a dropped connection here means the command reached the device, so treat
+    // it as success rather than an error.
+    const code = (error as NodeJS.ErrnoException)?.code;
+    const rawMsg = error instanceof Error ? error.message : String(error);
+    if (code === 'ECONNRESET' || code === 'ECONNABORTED' || /socket hang up|ECONNRESET/i.test(rawMsg)) {
+      return { success: true, message: 'Restart command sent — the device is rebooting.' };
+    }
+    return mapDeviceHttpError(error, 'Restart');
+  }
+}
+
+/**
+ * Ask a Roku device to check for a software update via the Developer
+ * Application Installer (requires the developer password / Developer Mode).
+ */
+async function checkForUpdate({ ip, password, log = (_m: string) => undefined }: DevPortalOpts) {
+  if (!isValidIp(ip)) {
+    return { success: false, error: 'Invalid device IP address' };
+  }
+  const pwdCheck = validateDevPassword(password);
+  if (!pwdCheck.valid) {
+    return { success: false, error: pwdCheck.error || 'Invalid developer password' };
+  }
+  try {
+    const { statusCode, text } = await postPluginSwup(ip, password, 'CheckUpdate', SWUP_TIMEOUT_MS, log);
+    if (statusCode === 401 || responseLooksLikeAuthFailure(statusCode, text)) {
+      return { success: false, error: 'Authentication failed. Check your developer password.', authFailed: true };
+    }
+    return { success: true, message: 'Asked the device to check for software updates.' };
+  } catch (error: unknown) {
+    return mapDeviceHttpError(error, 'Check for updates');
+  }
+}
+
+module.exports = { sideloadChannel, deleteSideload, rebootDevice, checkForUpdate };
