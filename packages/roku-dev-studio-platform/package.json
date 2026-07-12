@@ -22,7 +22,7 @@
   "scripts": {
     "build": "node build.mjs && tsc --emitDeclarationOnly",
     "typecheck": "tsc --noEmit",
-    "prepare": "node -e \"require('fs').existsSync('dist/index.js') || require('child_process').execSync('npm run build', { stdio: 'inherit' })\""
+    "prepare": "node -e \"if (process.env.CI) process.exit(0); require('fs').existsSync('dist/index.js') || require('child_process').execSync('npm run build', { stdio: 'inherit' })\""
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
