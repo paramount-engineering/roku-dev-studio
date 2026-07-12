@@ -25,7 +25,7 @@
     "prepare": "node -e \"if (process.env.CI) process.exit(0); require('fs').existsSync('dist/index.js') || require('child_process').execSync('npm run build', { stdio: 'inherit' })\""
   },
   "devDependencies": {
-    "@types/node": "^22.10.0",
+    "@types/node": "22.19.21",
     "esbuild": "0.28.1",
     "typescript": "^5.7.3"
   },
