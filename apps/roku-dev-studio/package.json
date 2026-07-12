@@ -45,7 +45,7 @@
     "electron-updater": "^6.8.9",
     "form-data": "^4.0.0",
     "modern-screenshot": "^4.6.8",
-    "monaco-editor": "^0.52.2",
+    "monaco-editor": "^0.55.1",
     "node-forge": "^1.4.0",
     "pdf-lib": "^1.17.1",
     "roku-dev-studio-api": "file:../../packages/roku-dev-studio-api",
