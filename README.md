@@ -2,7 +2,7 @@
 
 A comprehensive cross-platform desktop application for controlling and developing on Roku devices over your local network or via remote server using the External Control Protocol (ECP).
 
-This repository is an **npm workspace** monorepo. Run **`npm install`** and **`npm start`** from the **repository root** so workspaces link correctly. Use **`npm run typecheck`** for a full TypeScript check across workspaces. Setup, scripts, and distributable builds are documented in **[INSTALLATION.md](INSTALLATION.md)**.
+This repository is an **npm workspace** monorepo. Run **`npm install`** and **`npm start`** from the **repository root** so workspaces link correctly. Installing runs a `postinstall` (`npm run build:libs`) that compiles the shared `roku-dev-studio-platform` and `roku-dev-studio-api` packages to their `dist/` outputs, which the app and remote server import. Use **`npm run typecheck`** for a full TypeScript check across every workspace and **`npm test`** to run unit tests. CI runs these plus per-package build/syntax smoke checks on each push and pull request. Setup, scripts, and distributable builds are documented in **[INSTALLATION.md](INSTALLATION.md)**.
 
 ## Repository layout
 
@@ -11,9 +11,10 @@ This repository is an **npm workspace** monorepo. Run **`npm install`** and **`n
 | **[`apps/roku-dev-studio/`](apps/roku-dev-studio/)** | Electron desktop app (main process, renderer, packaging). Dev and distributable builds: **[INSTALLATION.md](INSTALLATION.md)**. |
 | **[`packages/roku-dev-studio-api/`](packages/roku-dev-studio-api/)** | Shared Node library + **`rds` CLI**: discovery, ECP, screenshots, sideload, RALE, action-script runner, headless validator — [package README](packages/roku-dev-studio-api/README.md). |
 | **[`packages/roku-dev-studio-mcp/`](packages/roku-dev-studio-mcp/)** | **MCP server** that lets AI agents (Cursor, Claude Desktop, VS Code) drive a Roku through this app — [package README](packages/roku-dev-studio-mcp/README.md). |
+| **[`packages/roku-dev-studio-network-inspector/`](packages/roku-dev-studio-network-inspector/)** | Network Inspector engine: hotspot packet capture (DNS/SNI/HTTP) + local MITM proxy, transport-agnostic so it runs in both the desktop app and the remote server. |
 | **[`packages/roku-dev-studio-remote-server/`](packages/roku-dev-studio-remote-server/)** | HTTP/WebSocket relay to control Rokus over the internet — [package README](packages/roku-dev-studio-remote-server/README.md). |
+| **[`packages/roku-dev-studio-platform/`](packages/roku-dev-studio-platform/)** | Shared host-platform helpers (OS identity, modifier keys, `path-safe`, node-only filesystem helpers) used by the app and other packages so platform logic lives in one place. Built to `dist/` on `npm install`. |
 | **[`roku-components/`](roku-components/)** | BrightScript-side artifacts: `TrackerTask.xml` (drop into your channel for App Connector / RALE) and the `fiddle/` SceneGraph scaffold — [components README](roku-components/README.md). |
-| **[`lib/`](lib/)** | Small repo-root helpers (e.g. **path-safe** TypeScript) used by the app and remote server. Sync compiles to `path-safe.js` and copies into the app — [lib README](lib/README.md). |
 
 **Author:** Hareendra Donapati
 
@@ -277,9 +278,10 @@ See the [remote server package README](packages/roku-dev-studio-remote-server/RE
 ├── packages/
 │   ├── roku-dev-studio-api/             # Shared API + `rds` CLI (npm: roku-dev-studio-api)
 │   ├── roku-dev-studio-mcp/             # MCP server bundled into the desktop app
+│   ├── roku-dev-studio-network-inspector/ # Network capture + MITM proxy engine
+│   ├── roku-dev-studio-platform/        # Shared platform helpers (path-safe, OS identity)
 │   └── roku-dev-studio-remote-server/   # HTTP/WS relay (npm: roku-dev-studio-remote-server)
 ├── roku-components/                     # TrackerTask + Fiddle SceneGraph assets
-├── lib/                                 # path-safe and other repo-root helpers
 ├── package.json                         # Workspace root (workspaces: apps/*, packages/*)
 ├── INSTALLATION.md
 └── README.md
