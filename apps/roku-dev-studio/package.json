@@ -68,7 +68,7 @@
     "cross-env": "^7.0.3",
     "electron": "33.4.11",
     "electron-builder": "^24.9.1",
-    "esbuild": "^0.25.0",
+    "esbuild": "0.25.12",
     "jsdom": "^24.1.0",
     "sharp": "^0.34.5",
     "tsx": "^4.21.0",
