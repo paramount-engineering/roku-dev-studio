@@ -12,6 +12,8 @@
     "start:solid": "npm run dev:solid -w roku-dev-studio",
     "wiz:scan": "wizcli scan dir . --use-device-code --by-policy-hits=DISABLED --json-output-file=.wiz/wiz-results.json --sarif-output-file=.wiz/wiz-results.sarif --human-output-file=.wiz/wiz-results.txt",
     "wiz:export-findings": "node .wiz/wiz-findings-to-md.js",
+    "postinstall": "npm run build:libs",
+    "build:libs": "npm run build -w roku-dev-studio-platform && npm run build -w roku-dev-studio-api",
     "build": "npm --prefix apps/roku-dev-studio run build",
     "build:mac": "npm --prefix apps/roku-dev-studio run build:mac",
     "build:win": "npm --prefix apps/roku-dev-studio run build:win",
