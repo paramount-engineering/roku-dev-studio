@@ -1,13 +1,13 @@
-<table border="0"><tr>
-  <td><img src="images/icon.png" alt="Roku Dev Studio icon" width="72" /></td>
-  <td><h1>Roku Dev Studio</h1></td>
-</tr></table>
+<h1>
+  <img src="images/icon.png" alt="Roku Dev Studio icon" width="44" align="middle" />
+  &nbsp;Roku Dev Studio
+</h1>
 
 ![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-blue)
 ![CI](https://github.com/paramount-engineering/roku-dev-studio/actions/workflows/ci.yml/badge.svg)
 ![Version](https://img.shields.io/github/package-json/v/paramount-engineering/roku-dev-studio?filename=apps%2Froku-dev-studio%2Fpackage.json&label=version&color=purple)
 ![Electron](https://img.shields.io/github/package-json/dependency-version/paramount-engineering/roku-dev-studio/dev/electron?filename=apps%2Froku-dev-studio%2Fpackage.json&color=green)
-![License](https://img.shields.io/github/license/paramount-engineering/roku-dev-studio?color=lightgrey)
+![License](https://img.shields.io/badge/license-MIT-lightgrey)
 
 A comprehensive cross-platform desktop application for controlling and developing on Roku devices over your local network or via remote server using the External Control Protocol (ECP).
 
