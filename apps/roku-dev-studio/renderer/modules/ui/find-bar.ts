@@ -29,6 +29,8 @@ import {
   paintMatchHighlights,
   setCurrentMatchHighlight
 } from './find-highlight.js';
+import { attachSearchHistory } from './search-history.js';
+import { findHistoryKey } from './search-storage-keys.js';
 
 export type FindBarHandle = {
   /** Show/hide the bar. Hiding drops highlights; the query is retained for next show. */
@@ -50,6 +52,11 @@ export type FindBarOptions = {
   barEl: HTMLElement;
   /** Unique id for this surface's CSS highlight registry entries (e.g. 'ecp-find'). */
   highlightId: string;
+  /** Extra scope suffix for the search-history key (e.g. a device IP) so history
+   *  is per-device rather than shared. Omit for a single shared history. */
+  historyScope?: string;
+  /** Backing store for history (default localStorage; sessionStorage = per-window). */
+  historyStorage?: Storage;
 };
 
 // Navigation walks up to MAX_MATCHES; paint covers up to PAINT_CAP. Both bound worst-case work for
@@ -337,6 +344,17 @@ export function createFindBar(opts: FindBarOptions): FindBarHandle | null {
     bodyEl.focus();
   });
 
+  // Up/Down arrow recall of previous search terms (shared behavior).
+  const historyHandle = attachSearchHistory({
+    input: inputEl,
+    storageKey: findHistoryKey(highlightId, opts.historyScope),
+    storage: opts.historyStorage,
+    onChange: (v) => {
+      query = v;
+      runSearch(true);
+    }
+  });
+
   barEl.hidden = true;
 
   return {
@@ -376,6 +394,7 @@ export function createFindBar(opts: FindBarOptions): FindBarHandle | null {
       inputEl.removeEventListener('keydown', onKeydown);
       prevEl.removeEventListener('click', prev);
       nextEl.removeEventListener('click', next);
+      historyHandle.dispose();
       clearHighlights();
     }
   };

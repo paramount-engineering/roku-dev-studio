@@ -140,6 +140,11 @@ export function attachViewerShortcuts(opts: ViewerShortcutOpts): { dispose: () =
     // way the user still gets native Select-All on whatever DOM rows are
     // mounted, which is at least better than no-op.
     if (cmd && !e.altKey && !e.shiftKey && (e.key === 'a' || e.key === 'A')) {
+      // The find/filter input is exempted from the foreign-input guard above (so
+      // Cmd+G/F3 keep working while typing a query), which means Cmd+A reaches
+      // here too. Inside that input, let the browser do its native select-all on
+      // the input's own text instead of selecting the whole console.
+      if (e.target === opts.findInputEl) return;
       if (!opts.selectAllAction) return;
       e.preventDefault();
       opts.selectAllAction();

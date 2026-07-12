@@ -5549,27 +5549,107 @@
        the find/filter bar (centered), and the connection group + Port badge (right). */
     .telnet-header {
       flex-wrap: nowrap;
+      /* Positioning context for the absolutely-centered find slot below, and a
+         container-query context so the right group can shed its port badge /
+         button labels as the header narrows (freeing room for the search box). */
+      position: relative;
+      container-type: inline-size;
+      container-name: telnet-hdr;
     }
+    /* When the header gets tight, drop the port badge first, then collapse the
+       Connect/Disconnect button to its icon. Labels live in the tooltip (title),
+       so the actions stay discoverable. Thresholds are on the header's own width. */
+    @container telnet-hdr (max-width: 900px) {
+      .telnet-header .telnet-port-badge { display: none; }
+    }
+    @container telnet-hdr (max-width: 780px) {
+      .telnet-header .telnet-btn-label { display: none; }
+      .telnet-header .telnet-connect-btn,
+      .telnet-header .telnet-disconnect-btn { padding-left: 9px; padding-right: 9px; }
+    }
+    /* When the search box has wrapped to its own second row, row 1 has room
+       again — so undo the width-based collapse above (higher specificity wins):
+       bring the port badge and the Connect/Disconnect labels back. */
+    .telnet-header.hdr-search-wrapped .telnet-port-badge { display: inline; }
+    .telnet-header.hdr-search-wrapped .telnet-btn-label { display: inline; }
+    .telnet-header.hdr-search-wrapped .telnet-connect-btn,
+    .telnet-header.hdr-search-wrapped .telnet-disconnect-btn { padding-left: 12px; padding-right: 12px; }
+    /* With the find slot taken out of flow (absolute), push the connection group
+       to the right edge so the left actions and right group hug the two ends. */
     .telnet-header .card-header-actions {
-      margin-left: 0;
+      margin-left: auto;
     }
     .telnet-header .telnet-port-badge {
       margin-left: 0;
     }
+    /* Center the find bar on the *header* (not on the leftover space between the
+       side groups), so its horizontal center always coincides with the header's
+       center regardless of how wide the left/right groups are. It floats over the
+       middle of the header; the clamp keeps it from overrunning the side groups
+       on narrow widths, and pointer-events lets clicks through when it's empty. */
     .telnet-find-slot {
-      flex: 1 1 auto;
-      min-width: 0;
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      /* Default = current width; also the *minimum* (min-width) — the drag
+         handle can only expand from here, never shrink below it. The handle sets
+         an inline width, clamped in JS so the box stays centered and never eats
+         into the side groups. max-width is a pre-JS backstop against overflow. */
+      width: min(680px, calc(100% - 360px));
+      max-width: calc(100% - 24px);
       display: flex;
+      align-items: center;
       justify-content: center;
+      pointer-events: none;
+    }
+    .telnet-find-slot > * {
+      pointer-events: auto;
+    }
+    /* Drag handle sitting just past the find bar's right edge. Dragging widens
+       the box symmetrically about the header center (JS grows width by 2× the
+       pointer delta), so the right edge tracks the cursor while the box stays
+       centered. Double-click resets to the default width. */
+    .telnet-find-resize {
+      position: absolute;
+      top: 0;
+      right: -9px;
+      width: 12px;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: ew-resize;
+      touch-action: none;
+    }
+    .telnet-find-resize::before {
+      content: '';
+      width: 3px;
+      height: 15px;
+      border-radius: 2px;
+      background: var(--border);
+      transition: background 0.15s ease;
+    }
+    .telnet-find-resize:hover::before,
+    .telnet-find-resize.is-dragging::before {
+      background: var(--accent-purple);
+    }
+    /* No bar shown yet (console empty) → no handle. */
+    .telnet-find-slot:has(.telnet-find-bar[hidden]) .telnet-find-resize {
+      display: none;
     }
     /* The find bar is hidden until the console has logs (see telnet-console-panel.ts
-       refreshLineCount), but the .telnet-find-slot stays in the layout as a flex spacer so
-       Port/Connect remain right-aligned. The explicit rule beats `display: flex`. */
+       refreshLineCount). The explicit rule beats `display: flex`. */
     .telnet-find-bar[hidden] {
       display: none;
     }
     .telnet-header .telnet-find-bar {
-      flex: 0 1 520px;
+      flex: 1 1 auto;
+      width: 100%;
+      /* The base .telnet-find-bar caps at 550px; without this the bar would stay
+         550px centered inside the (wider/resizable) slot, leaving the drag handle
+         detached from its right edge and making the drag appear to do nothing. */
+      max-width: none;
     }
     
     /* Find bar - VS Code style */
@@ -5579,6 +5659,9 @@
       background: var(--bg-primary);
       border: 1px solid var(--border);
       border-radius: 6px;
+      /* Guarantee the controls never spill past the (clamped) box onto the header
+         controls; at the enforced min width they fit, so this only bites in edge cases. */
+      overflow: hidden;
       padding: 2px;
       gap: 4px;
       flex: 1;
@@ -5608,9 +5691,11 @@
       flex: 1;
       display: flex;
       align-items: center;
-      min-width: 200px;
+      /* Shrinkable so the bar's controls stay INSIDE the (resizable/clamped) box
+         instead of overflowing past its right edge onto the header controls. */
+      min-width: 0;
     }
-    
+
     .telnet-find-input {
       flex: 1;
       background: transparent;
@@ -5618,7 +5703,10 @@
       padding: 6px 8px;
       font-size: 12px;
       color: var(--text-primary);
-      min-width: 100px;
+      /* Keep a usable text width even at the box's min size so the query text
+         stays visible (the box won't shrink below minWidthPx, which accounts for
+         this; below that the header wraps to a second row). */
+      min-width: 80px;
       outline: none;
     }
     
@@ -5666,6 +5754,12 @@
       color: var(--text-muted);
       padding: 0 8px;
       white-space: nowrap;
+      /* Yield space (truncate) instead of pushing the nav/clear buttons past the
+         box edge, which made them collide with the counter at the min width. */
+      flex: 0 1 auto;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
     
     .telnet-find-count:empty {
@@ -7572,7 +7666,12 @@
       cursor: pointer;
       white-space: nowrap;
       flex: 0 0 auto;
-      transition: background 0.2s cubic-bezier(0.16, 1, 0.3, 1), color 0.2s cubic-bezier(0.16, 1, 0.3, 1), transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), padding 0.18s ease, font-size 0.18s ease;
+      /* NOTE: no transition on padding/font-size. The responsive rung system
+         (setupDevicePanelHeaderResponsive) toggles .is-compact/.is-icons and reads
+         scrollWidth synchronously to pick a rung; animating padding/font makes that
+         read return the pre-transition width, so the measurement oscillates and the
+         selector visibly flip-flops. Instant size changes keep it stable. */
+      transition: background 0.2s cubic-bezier(0.16, 1, 0.3, 1), color 0.2s cubic-bezier(0.16, 1, 0.3, 1), transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
       display: inline-flex;
       align-items: center;
       gap: 6px;
@@ -7729,10 +7828,14 @@
       padding: 0;
       overflow: hidden;
     }
+    /* Flex header (was a 3-col grid): left group and right group hug the ends;
+       the filter center is taken out of flow and absolutely centered on the
+       header (below), so its horizontal center coincides with the card center. */
     .network-inspector-card .card-header {
-      display: grid;
-      grid-template-columns: auto 1fr auto;
+      position: relative;
+      display: flex;
       align-items: center;
+      justify-content: space-between;
       gap: 10px;
     }
     .ni-header-start {
@@ -7742,14 +7845,22 @@
       min-width: 0;
     }
     .ni-header-center {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
       display: flex;
       align-items: center;
       justify-content: center;
       gap: 10px;
       min-width: 0;
-      justify-self: center;
-      width: 100%;
-      max-width: 520px;
+      /* Resizable default (JS clamps to the no-overlap max); drag handle widens it. */
+      width: min(680px, calc(100% - 360px));
+      max-width: calc(100% - 24px);
+      pointer-events: none;
+    }
+    .ni-header-center > * {
+      pointer-events: auto;
     }
     .ni-filter-wrap {
       position: relative;
@@ -7757,7 +7868,6 @@
       align-items: center;
       flex: 1;
       min-width: 0;
-      max-width: 400px;
     }
     .ni-header-center .ni-filter-input {
       flex: 1;
@@ -9471,7 +9581,7 @@
       justify-content: center;
     }
     .find-bar.find-bar-header .find-bar-field {
-      max-width: 460px;
+      max-width: none;
     }
     .find-bar.find-bar-header .find-bar-input {
       height: 28px;
@@ -9489,15 +9599,65 @@
       position: absolute;
       left: 50%;
       transform: translateX(-50%);
-      width: 100%;
-      max-width: 460px;
-      padding-left: 18px;
-      padding-right: 18px;
+      /* Resizable default (JS clamps it to the no-overlap max). Was a fixed
+         460px; the drag handle can now widen it, staying centered on the header. */
+      width: min(680px, calc(100% - 360px));
+      max-width: calc(100% - 24px);
       pointer-events: none;
     }
     .card-header.query-results-card-header .find-bar.find-bar-header .find-bar-field,
     .inspector-bottom-row .card-header .find-bar.find-bar-header .find-bar-field {
       pointer-events: auto;
+    }
+    /* Generic drag handle for centered, resizable header search boxes (shared by
+       the find-bar-header surfaces + the Network Inspector center). Sits just
+       past the box's right edge; grows the box symmetrically (JS). */
+    .hdr-search-resize {
+      position: absolute;
+      top: 0;
+      right: -9px;
+      width: 12px;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: ew-resize;
+      touch-action: none;
+      pointer-events: auto;
+    }
+    .hdr-search-resize::before {
+      content: '';
+      width: 3px;
+      height: 15px;
+      border-radius: 2px;
+      background: var(--border);
+      transition: background 0.15s ease;
+    }
+    .hdr-search-resize:hover::before,
+    .hdr-search-resize.is-dragging::before {
+      background: var(--accent-purple);
+    }
+    /* Two-row fallback: when a header is too narrow to fit the centered search
+       box on one row without overlapping its side groups (toggled in JS), the box
+       drops to its own full-width second row. The side groups stay on row 1. */
+    .hdr-search-wrapped {
+      flex-wrap: wrap;
+      height: auto;
+      row-gap: 8px;
+    }
+    .hdr-search-wrapped .hdr-search-slot {
+      position: static !important;
+      transform: none !important;
+      left: auto !important;
+      top: auto !important;
+      width: 100% !important;
+      max-width: none !important;
+      order: 99;
+      justify-content: center;
+    }
+    /* No drag affordance on the full-width row. */
+    .hdr-search-wrapped .hdr-search-resize {
+      display: none;
     }
     /* Header action group pinned to the left (next to the title) instead of the default right. */
     .card-header-actions.is-left {
@@ -14628,6 +14788,7 @@
                   <button class="btn btn-icon telnet-find-next" title="Next (Enter)"><span class="icon icon-xs"><svg><use href="#icon-chevron-down"/></svg></span></button>
                   <button class="btn btn-icon telnet-find-clear" title="Clear"><span class="icon icon-xs"><svg><use href="#icon-x"/></svg></span></button>
                 </div>
+                <div class="telnet-find-resize" role="separator" aria-orientation="vertical" title="Drag to widen search (double-click to reset)"></div>
               </div>
               <div class="card-header-actions">
                 <!-- Live line counter; hidden until first batch arrives so the
@@ -14642,7 +14803,7 @@
                 </span>
                 <div class="telnet-split-control telnet-connect-split">
                   <button type="button" class="btn btn-primary telnet-connect-btn telnet-split-main" title="Connect and pull relay buffer">
-                    <span class="icon icon-xs"><svg><use href="#icon-plug"/></svg></span> Connect
+                    <span class="icon icon-xs"><svg><use href="#icon-plug"/></svg></span><span class="telnet-btn-label">Connect</span>
                   </button>
                   <button type="button" class="btn btn-primary telnet-connect-menu-btn telnet-split-menu-btn" title="Connect options" aria-label="Connect options" aria-haspopup="menu" aria-expanded="false" hidden>
                     <span class="icon icon-xs"><svg><use href="#icon-chevron-down"/></svg></span>
@@ -14653,8 +14814,8 @@
                     </button>
                   </div>
                 </div>
-                <button class="btn btn-danger telnet-disconnect-btn" style="display: none;">
-                  <span class="icon icon-xs"><svg><use href="#icon-x"/></svg></span> Disconnect
+                <button class="btn btn-danger telnet-disconnect-btn" style="display: none;" title="Disconnect">
+                  <span class="icon icon-xs"><svg><use href="#icon-x"/></svg></span><span class="telnet-btn-label">Disconnect</span>
                 </button>
               </div>
             </div>

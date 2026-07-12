@@ -3,6 +3,8 @@ import { mountConsoleLogSurface } from '../../modules/console-log/mount-console-
 import { consoleDisplayText } from '../../modules/console-log/console-line-parser.js';
 import type { ConsoleFindOptions } from '../../modules/console-log/console-find-helpers.js';
 import { createLogFileWindowModel } from './log-file-window-model.js';
+import { makeCenteredSearchResizable } from '../../modules/ui/header-search-resize.js';
+import { searchWidthKey } from '../../modules/ui/search-storage-keys.js';
 
 /**
  * Local typed view of `window.roku` for this renderer window. Declared as a
@@ -170,6 +172,8 @@ async function main() {
     outputEl,
     entries: model.entries,
     findBarHost: headerEl,
+    // Standalone window → per-window history (cleared when the window closes).
+    historyStorage: window.sessionStorage,
     onRangeChange: (start, end) => model.ensureWindow(start, end),
     remoteSearch: async (query, options) => {
       const r = await rokuApi.searchLogViewerFile(query, options);
@@ -184,6 +188,17 @@ async function main() {
     onSelectAll: () => void copyExport('Copied entire log to clipboard')
   });
   model.bindSurface(surface);
+  // Centered, drag-to-resize behavior for the find bar in the header.
+  if (findHostEl instanceof HTMLElement && headerEl instanceof HTMLElement) {
+    makeCenteredSearchResizable(findHostEl, {
+      storageKey: searchWidthKey('logviewer'),
+      storage: window.sessionStorage,
+      header: headerEl,
+      leftGroupSelector: '.log-viewer-header-primary',
+      rightGroupSelector: '#logViewerActions',
+      minWidthPx: 420
+    });
+  }
   // Kick the first window load explicitly. The virtualizer's initial layout
   // normally fires onRangeChange (which loads the top window), but if the
   // scroll area reports zero height on first paint no range fires — this

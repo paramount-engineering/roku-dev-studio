@@ -3495,13 +3495,25 @@ function setupDevicePanelHeaderResponsive(panel) {
     if (hadCompact) innerTabs.classList.add('is-compact');
     if (hadIcons) innerTabs.classList.add('is-icons');
 
-    // Left block width with the device info shown vs. hidden. justify-self:start
-    // makes the block content-sized, so getBoundingClientRect gives the true
-    // content width even when its grid track is wider.
+    // Left block width with the device info shown vs. hidden. We force the block
+    // to `max-content` while measuring the shown state: the name/IP truncate
+    // (ellipsis, min-width:0) when their grid track is narrow, so a plain
+    // getBoundingClientRect would UNDER-measure leftInfo — the rung math would
+    // then think the info fits and show it truncated instead of hiding it.
+    // Measuring the untruncated width makes rung 0 mathematically guarantee the
+    // grid track is wide enough for the info (no truncation), and hides it below.
     if (info instanceof HTMLElement) {
       const wasHidden = info.classList.contains('is-hidden');
       info.classList.remove('is-hidden');
+      // Lift BOTH the width and the `max-width: 100%` cap (which otherwise clamps
+      // `max-content` back to the narrow grid track, keeping the read truncated).
+      const prevW = left.style.width;
+      const prevMaxW = left.style.maxWidth;
+      left.style.width = 'max-content';
+      left.style.maxWidth = 'none';
       leftInfo = rectW(left);
+      left.style.width = prevW;
+      left.style.maxWidth = prevMaxW;
       info.classList.add('is-hidden');
       leftNoInfo = rectW(left);
       if (!wasHidden) info.classList.remove('is-hidden');

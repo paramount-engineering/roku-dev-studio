@@ -45,6 +45,10 @@ export type MountConsoleLogSurfaceOpts = {
    *  `outputEl`. Use the Console panel's root so shortcuts only fire when
    *  the panel is the visible one. */
   shortcutScopeEl?: HTMLElement;
+  /** Scope suffix for the find bar's search-history key (e.g. device IP). */
+  historyScope?: string;
+  /** Backing store for search history (default localStorage; sessionStorage = per-window). */
+  historyStorage?: Storage;
   /**
    * Callback invoked by Cmd/Ctrl+A. The default is "copy the visible log
    * text to clipboard" via `buildVisibleLogText` + `window.roku.copyToClipboard`,
@@ -182,6 +186,8 @@ export function mountConsoleLogSurface(opts: MountConsoleLogSurfaceOpts): Consol
       root: findBarHost,
       outputEl,
       model: view,
+      historyScope: opts.historyScope,
+      historyStorage: opts.historyStorage,
       remoteSearch: opts.remoteSearch,
       onFilterLinesChange: opts.onFilterLinesChange,
       // Find's "scroll into view on next/prev" must use the virtualizer's

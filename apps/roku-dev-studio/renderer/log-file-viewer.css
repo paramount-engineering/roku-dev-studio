@@ -47,6 +47,8 @@ body {
   padding: 12px 16px;
   border-bottom: 1px solid var(--border);
   background: var(--bg-primary);
+  /* Positioning context for the absolutely-centered find host below. */
+  position: relative;
 }
 
 .log-viewer-header-primary {
@@ -54,11 +56,68 @@ body {
   min-width: 0;
 }
 
+/* Center the find bar on the header (not the leftover space), and make it
+   drag-resizable via the handle appended in JS. Taken out of flow so the
+   title (left) and actions (right) hug the ends. */
 .log-viewer-find-host {
-  flex: 1 1 260px;
-  max-width: 560px;
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: min(680px, calc(100% - 360px));
+  max-width: calc(100% - 24px);
   min-width: 180px;
-  align-self: center;
+  display: flex;
+  align-items: center;
+  pointer-events: none;
+}
+.log-viewer-find-host > * {
+  pointer-events: auto;
+}
+/* Generic drag handle (this window has its own stylesheet). */
+.hdr-search-resize {
+  position: absolute;
+  top: 0;
+  right: -9px;
+  width: 12px;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: ew-resize;
+  touch-action: none;
+  pointer-events: auto;
+}
+.hdr-search-resize::before {
+  content: '';
+  width: 3px;
+  height: 15px;
+  border-radius: 2px;
+  background: var(--border);
+  transition: background 0.15s ease;
+}
+.hdr-search-resize:hover::before,
+.hdr-search-resize.is-dragging::before {
+  background: var(--accent-purple);
+}
+/* Two-row fallback when the header can't fit the centered search box on one row. */
+.hdr-search-wrapped {
+  flex-wrap: wrap;
+  height: auto;
+  row-gap: 8px;
+}
+.hdr-search-wrapped .hdr-search-slot {
+  position: static !important;
+  transform: none !important;
+  left: auto !important;
+  top: auto !important;
+  width: 100% !important;
+  max-width: none !important;
+  order: 99;
+  justify-content: center;
+}
+.hdr-search-wrapped .hdr-search-resize {
+  display: none;
 }
 
 .log-viewer-actions {

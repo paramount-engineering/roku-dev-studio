@@ -10,6 +10,8 @@ import { RALE_BUILTIN_COMMANDS, isRaleBuiltinSelection } from './rale-builtins.j
 import { displayResponse } from './response-display.js';
 import { setupCopyButton } from '../../modules/ui/copy-button.js';
 import { createFindBar, buildFindBarElement, bindFindShortcut } from '../../modules/ui/find-bar.js';
+import { makeCenteredSearchResizable } from '../../modules/ui/header-search-resize.js';
+import { searchWidthKey } from '../../modules/ui/search-storage-keys.js';
 import { attachFoldToggle, structuredBodyText, structuredFileExtension } from '../../modules/ui/structured-body.js';
 import { attachSelectAll } from '../../modules/ui/select-all.js';
 import { icon, setSafeHTML, DEFAULT_RALE_PORT } from '../../modules/utils/index.js';
@@ -100,7 +102,8 @@ export function setupInspector(panel: DevicePanelRoot, _device: InspectorDevice,
   const responseFindBar = createFindBar({
     bodyEl: responseOutput,
     barEl: responseFindBarEl,
-    highlightId: 'rale-find'
+    highlightId: 'rale-find',
+    historyScope: api.ip || 'unknown'
   });
   if (responseFindBar) {
     // Bind Ctrl/Cmd+F within the App Connector tab so the shortcut works anywhere in the pane,
@@ -108,6 +111,12 @@ export function setupInspector(panel: DevicePanelRoot, _device: InspectorDevice,
     const inspectorTab = panel.querySelector('[data-inner-content="inspector"]');
     bindFindShortcut(inspectorTab instanceof HTMLElement ? inspectorTab : responseOutput, responseFindBar);
   }
+  // Centered, drag-to-resize behavior for the Response search box.
+  makeCenteredSearchResizable(responseFindBarEl, {
+    storageKey: searchWidthKey('inspector', api.ip || 'unknown'),
+    leftGroupSelector: '.card-header-actions',
+    minWidthPx: 220
+  });
 
   // Collapsible JSON/XML nodes in the response (delegated twisty handler survives re-renders).
   attachFoldToggle(responseOutput);

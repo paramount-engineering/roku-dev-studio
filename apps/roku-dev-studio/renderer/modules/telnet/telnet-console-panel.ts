@@ -8,6 +8,8 @@ import { populateConsoleLineContentWithUrls } from '../console-log/console-url-d
 import { createConsoleDeferredHeavyDrain } from '../console-log/console-deferred-heavy-drain.js';
 import { DEFER_HEAVY_LINE_CHARS } from '../console-log/console-render-limits.js';
 import { mountConsoleLogSurface } from '../console-log/mount-console-log-surface.js';
+import { attachHeaderSearchResize } from '../ui/header-search-resize.js';
+import { searchWidthKey } from '../ui/search-storage-keys.js';
 import {
   buildVisibleLogText,
   selectVisibleLogEntries
@@ -192,6 +194,7 @@ export function setupTelnet(
     entries: logLines,
     findBarHost: panel,
     shortcutScopeEl: panel,
+    historyScope: api.ip || 'unknown',
     preservePlaceholder: true,
     buildLineEl: (entry, index) => createLogLineElement(entry as TelnetLogEntry, index),
     // Find navigation must unpin stick-to-bottom before scrolling to the match.
@@ -291,6 +294,32 @@ export function setupTelnet(
   /** True while a tail-follow RAF chain is pending — lets streaming flushes
    *  coalesce onto the in-flight chain instead of stacking a new 3-pass run. */
   let tailFollowScheduled = false;
+  /** True while the user has a live (non-collapsed) text selection inside the
+   *  console output. Auto-scroll-to-tail and scrollback trim are paused while
+   *  this holds so the selection's DOM nodes aren't scrolled/recycled/removed
+   *  mid-drag — that was collapsing the selection and snapping the view to the
+   *  top or bottom. Tailing/trim resume once the selection is cleared. */
+  let userSelecting = false;
+
+  /** Is there a non-collapsed selection whose range lives inside the console
+   *  output? Cheap enough to call on every `selectionchange`. */
+  function selectionActiveInOutput(): boolean {
+    const sel = window.getSelection();
+    if (!sel || sel.isCollapsed || sel.rangeCount === 0) return false;
+    return outputEl.contains(sel.getRangeAt(0).commonAncestorContainer);
+  }
+
+  const onSelectionChange = (): void => {
+    const active = selectionActiveInOutput();
+    if (active === userSelecting) return;
+    userSelecting = active;
+    // Selection just cleared: catch back up to the tail (and let the deferred
+    // scrollback trim run) if we were pinned to the bottom.
+    if (!active && pinnedToBottom) {
+      ensureTelnetScrollbackRoom(0);
+      followTailScroll();
+    }
+  };
 
   function distanceFromBottom(): number {
     return outputEl.scrollHeight - outputEl.scrollTop - outputEl.clientHeight;
@@ -399,14 +428,25 @@ export function setupTelnet(
     const buffered = logLines.length;
     const total = spilledEntryCount + buffered;
     lineCountEl.hidden = false;
+    // Compact label (e.g. "50K / 132K") so a large count can't crowd the header
+    // and force the centered search box to overlap it; the full text is in the
+    // tooltip.
+    const compact = (n: number): string =>
+      n >= 1_000_000
+        ? `${(n / 1_000_000).toFixed(1).replace(/\.0$/, '')}M`
+        : n >= 10_000
+          ? `${Math.round(n / 1000)}K`
+          : n.toLocaleString();
     if (spilledEntryCount > 0) {
-      lineCountEl.textContent = `${buffered.toLocaleString()} of ${total.toLocaleString()} lines`;
+      lineCountEl.textContent = `${compact(buffered)} / ${compact(total)}`;
       lineCountEl.title =
+        `${buffered.toLocaleString()} of ${total.toLocaleString()} lines — ` +
         `${buffered.toLocaleString()} in memory, ${spilledEntryCount.toLocaleString()} spilled to disk` +
         (spillCapHit ? ' (disk cap reached — older lines dropped)' : '');
     } else {
-      lineCountEl.textContent = `${buffered.toLocaleString()} ${buffered === 1 ? 'line' : 'lines'}`;
-      lineCountEl.removeAttribute('title');
+      lineCountEl.textContent = `${compact(buffered)} ${buffered === 1 ? 'line' : 'lines'}`;
+      if (buffered >= 10_000) lineCountEl.title = `${buffered.toLocaleString()} lines`;
+      else lineCountEl.removeAttribute('title');
     }
   }
 
@@ -627,6 +667,11 @@ export function setupTelnet(
 
   /** Drop oldest lines from memory + DOM when over cap; preserve scroll offset. */
   function ensureTelnetScrollbackRoom(linesToAdd: number) {
+    // Trimming removes head rows and rewrites scrollTop, which collapses an
+    // in-progress text selection and snaps the view. Defer while the user has a
+    // live selection in the console — `onSelectionChange` runs a catch-up trim
+    // once the selection clears, and the next batch trims any accumulated tail.
+    if (userSelecting) return;
     let overflow = logLines.length + linesToAdd - TELNET_MAX_SCROLLBACK_LINES;
     if (overflow <= 0) return;
 
@@ -800,7 +845,10 @@ export function setupTelnet(
     surface.notifyAppended();
     refreshLineCount();
 
-    if (pinnedToBottom) {
+    // Don't yank the view to the tail while the user is selecting text — the
+    // scroll would recycle the virtualized rows out from under the selection.
+    // New lines still buffer; `onSelectionChange` catches up when it clears.
+    if (pinnedToBottom && !userSelecting) {
       followTailScroll();
     } else {
       updateScrollToBottomAffordance();
@@ -1243,6 +1291,32 @@ export function setupTelnet(
 
   outputEl.addEventListener('scroll', handleScroll, { passive: true });
 
+  // Pause auto-scroll / trim while the user is selecting text in the console
+  // (see `userSelecting`). selectionchange is the reliable signal — it covers
+  // mouse drag, shift-click and keyboard selection alike.
+  document.addEventListener('selectionchange', onSelectionChange);
+
+  // Centered, drag-to-resize find bar — shared helper (its ResizeObserver on the
+  // header re-clamps the width whenever the header resizes, e.g. the sidebar is
+  // toggled, so an expanded box shrinks back rather than overlapping the controls).
+  const findSlotEl = panel.querySelector('.telnet-find-slot');
+  const findResizeEl = panel.querySelector('.telnet-find-resize');
+  const findHeaderEl = panel.querySelector('.telnet-header');
+  const disposeFindResize =
+    findSlotEl instanceof HTMLElement &&
+    findResizeEl instanceof HTMLElement &&
+    findHeaderEl instanceof HTMLElement
+      ? attachHeaderSearchResize({
+          slot: findSlotEl,
+          handle: findResizeEl,
+          header: findHeaderEl,
+          leftGroup: panel.querySelector('.telnet-actions'),
+          rightGroup: panel.querySelector('.telnet-header .card-header-actions'),
+          storageKey: searchWidthKey('telnet', api.ip || 'unknown'),
+          minWidthPx: 420
+        })
+      : null;
+
   outputEl.querySelector('.telnet-scroll-spacer')?.remove();
 
   function clearConsoleLocal(): void {
@@ -1497,6 +1571,8 @@ export function setupTelnet(
     // Without this, repeated panel reuse (device switch) would accumulate
     // observers on the same scroll element.
     surface.dispose();
+    disposeFindResize?.dispose();
+    document.removeEventListener('selectionchange', onSelectionChange);
     document.removeEventListener(CONSOLE_VIEWER_CLOSED_EVENT, onTelnetViewerClosedResume);
     cancelTelnetFlush();
     clearDeferredTelnetHeavyLines();

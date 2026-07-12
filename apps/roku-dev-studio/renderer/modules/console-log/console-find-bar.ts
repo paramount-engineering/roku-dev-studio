@@ -35,6 +35,8 @@ import {
   HIGHLIGHT_PRIORITY_MATCHES,
   setCurrentMatchHighlight
 } from '../ui/find-highlight.js';
+import { attachSearchHistory } from '../ui/search-history.js';
+import { findHistoryKey } from '../ui/search-storage-keys.js';
 
 // Re-export so existing callers that imported these from the find-bar module
 // keep working after the helpers were extracted.
@@ -116,6 +118,11 @@ export type AttachConsoleFindBarOpts = {
   /** Unique key for this find bar's CSS Custom Highlight registry entries. Defaults
    *  to `'telnet-find'`. Override when multiple find bars share a document. */
   highlightId?: string;
+  /** Extra scope suffix for the search-history key (e.g. a device IP) so history
+   *  is per-device rather than shared. Omit for a single shared history. */
+  historyScope?: string;
+  /** Backing store for history (default localStorage; sessionStorage = per-window). */
+  historyStorage?: Storage;
   /**
    * Optional virtualization-aware scroll-into-view. When provided, the find bar
    * uses this to navigate to a hit's line instead of the DOM `scrollIntoView`
@@ -922,6 +929,14 @@ export function attachConsoleFindBar(opts: AttachConsoleFindBarOpts): ConsoleFin
   findNextEl.addEventListener('click', searchNext);
   findClearEl.addEventListener('click', onClearClick);
 
+  // Up/Down arrow recall of previous find/filter terms (shared behavior).
+  const historyHandle = attachSearchHistory({
+    input: findInputEl,
+    storageKey: findHistoryKey(highlightId, opts.historyScope),
+    storage: opts.historyStorage,
+    onChange: () => executeFindAction()
+  });
+
   const resetFindState = (): void => {
     if (searchAbortController) {
       searchAbortController.abort = true;
@@ -1031,6 +1046,7 @@ export function attachConsoleFindBar(opts: AttachConsoleFindBarOpts): ConsoleFin
     findPrevEl.removeEventListener('click', searchPrev);
     findNextEl.removeEventListener('click', searchNext);
     findClearEl.removeEventListener('click', onClearClick);
+    historyHandle.dispose();
     resetFindState();
   };
 

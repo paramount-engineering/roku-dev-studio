@@ -264,6 +264,11 @@ export function mountConsoleLogFileView(
   outputEl.addEventListener(
     'click',
     (e) => {
+      // A drag-to-select ends with a click event; don't hijack it to open a URL
+      // / structured-payload modal — let the user's text selection stand.
+      const sel = window.getSelection();
+      if (sel && !sel.isCollapsed && sel.toString().trim().length > 0) return;
+
       const anchor = firstHitElementOnConsoleClick(e);
       if (!anchor) return;
 

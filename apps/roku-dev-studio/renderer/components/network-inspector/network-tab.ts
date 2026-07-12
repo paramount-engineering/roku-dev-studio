@@ -23,6 +23,9 @@ import { buildSessions, buildStructureGroups, filterSessions } from './network-s
 import { openConsoleUrlViewer } from '../../modules/console-log/console-url-modal.js';
 import { openConsoleStructuredViewer } from '../../modules/console-log/console-structured-view-modal.js';
 import { getEmbeddedStructuredPayload } from './network-embedded-structured.js';
+import { makeCenteredSearchResizable } from '../../modules/ui/header-search-resize.js';
+import { attachSearchHistory } from '../../modules/ui/search-history.js';
+import { filterWidthKey, filterHistoryKey } from '../../modules/ui/search-storage-keys.js';
 import { DETAIL_PANE_HTML, wireDetailInteractions } from './network-detail-view.js';
 import { openFilterHelpModal } from './network-filter-help.js';
 import { openTrafficRulesModal } from './traffic-rules-modal.js';
@@ -371,6 +374,18 @@ export function setupNetworkTab(
   const setupBadgeLabel = panel.querySelector('[data-ni-setup-badge-label]') as HTMLElement | null;
   const filterClearBtn = panel.querySelector('[data-ni-filter-clear]') as HTMLElement | null;
   const filterHelpBtn = panel.querySelector('[data-ni-filter-help]') as HTMLElement | null;
+  // Centered, drag-to-resize behavior for the session filter (its .ni-header-center
+  // is now absolutely centered on the header — see CSS).
+  const niHeaderCenter = panel.querySelector('.ni-header-center');
+  const niFilterResize =
+    niHeaderCenter instanceof HTMLElement
+      ? makeCenteredSearchResizable(niHeaderCenter, {
+          storageKey: filterWidthKey('ni', device.ip || 'unknown'),
+          leftGroupSelector: '.ni-header-start',
+          rightGroupSelector: '.ni-header-controls',
+          minWidthPx: 280
+        })
+      : null;
   const portBadgeBtn = panel.querySelector('[data-ni-port-badge]') as HTMLElement | null;
   // Tracks whether the Network inner tab is the foreground tab in this device panel, so the global
   // port-conflict modal only auto-pops when the user is actually looking at the Network tab.
@@ -1886,6 +1901,14 @@ export function setupNetworkTab(
   }
 
   filterInput?.addEventListener('input', applyFilterChange, listenerOpts);
+  // Up/Down arrow recall of previous filter terms (shared behavior).
+  const niFilterHistory = filterInput
+    ? attachSearchHistory({
+        input: filterInput,
+        storageKey: filterHistoryKey('ni', device.ip || 'unknown'),
+        onChange: () => applyFilterChange()
+      })
+    : null;
 
   filterClearBtn?.addEventListener('click', () => {
     if (!filterInput || !filterInput.value) return;
@@ -2244,6 +2267,8 @@ export function setupNetworkTab(
   return {
     destroy() {
       listenerAc.abort();
+      niFilterResize?.dispose();
+      niFilterHistory?.dispose();
       requestSearch?.dispose();
       responseSearch?.dispose();
       if (networkTabForeground) hidePortConflictModal();

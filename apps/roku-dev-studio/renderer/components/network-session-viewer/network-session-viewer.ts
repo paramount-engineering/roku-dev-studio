@@ -10,6 +10,9 @@
 import type { ParsedNetworkEvent } from '../../../shared/network-inspector/types';
 import { buildStructureGroups, type NetworkSession } from '../network-inspector/network-sessions.js';
 import { SessionStore } from '../network-inspector/network-session-store.js';
+import { makeCenteredSearchResizable } from '../../modules/ui/header-search-resize.js';
+import { attachSearchHistory } from '../../modules/ui/search-history.js';
+import { filterWidthKey, filterHistoryKey } from '../../modules/ui/search-storage-keys.js';
 import {
   renderSidebarSequence,
   renderStructureTree
@@ -217,10 +220,33 @@ function closeCopyDropdown(): void {
 }
 
 function wireEvents(): void {
+  // Centered, drag-to-resize behavior for the session filter (shares the
+  // `.ni-header-center` CSS generated from index.html).
+  const nsvHeaderCenter = $('.ni-header-center');
+  if (nsvHeaderCenter instanceof HTMLElement) {
+    makeCenteredSearchResizable(nsvHeaderCenter, {
+      storageKey: filterWidthKey('nsv'),
+      leftGroupSelector: '.ni-header-start',
+      rightGroupSelector: '.ni-header-tools',
+      minWidthPx: 280
+    });
+  }
+
   filterInput?.addEventListener('input', () => {
     store.setQuery(filterInput.value);
     renderList();
   });
+  // Up/Down arrow recall of previous filter terms (shared behavior).
+  if (filterInput) {
+    attachSearchHistory({
+      input: filterInput,
+      storageKey: filterHistoryKey('nsv'),
+      onChange: () => {
+        store.setQuery(filterInput.value);
+        renderList();
+      }
+    });
+  }
 
   filterHelpBtn?.addEventListener('click', () => {
     openFilterHelpModal((term) => {

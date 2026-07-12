@@ -9,6 +9,8 @@ import { setupSecretScreens } from './secret-screens.js';
 import { OutputArea } from '../../modules/ui/output-area.js';
 import { setupCopyButton } from '../../modules/ui/copy-button.js';
 import { createFindBar, buildFindBarElement, bindFindShortcut } from '../../modules/ui/find-bar.js';
+import { makeCenteredSearchResizable } from '../../modules/ui/header-search-resize.js';
+import { searchWidthKey } from '../../modules/ui/search-storage-keys.js';
 import { attachFoldToggle, structuredBodyText, structuredFileExtension } from '../../modules/ui/structured-body.js';
 import { attachSelectAll } from '../../modules/ui/select-all.js';
 import type { DevicePanelRoot } from '../../types/device-panel-dom.js';
@@ -67,8 +69,22 @@ export function setupQueries(panel: DevicePanelRoot, api: QueriesDeviceApi): voi
   const resultsHeader = panel.querySelector('.query-results-card-header');
   if (resultsHeader instanceof HTMLElement) resultsHeader.appendChild(findBarEl);
   else queryOutput.insertAdjacentElement('beforebegin', findBarEl);
-  const findBar = createFindBar({ bodyEl: queryOutput, barEl: findBarEl, highlightId: 'ecp-find' });
+  // Per-device scope so history + saved width don't bleed across device tabs.
+  const scopeKey = api.ip || 'unknown';
+  const findBar = createFindBar({
+    bodyEl: queryOutput,
+    barEl: findBarEl,
+    highlightId: 'ecp-find',
+    historyScope: scopeKey
+  });
   if (findBar) bindFindShortcut(queryOutput, findBar);
+  // Centered, drag-to-resize behavior for the Results search box. Left group is
+  // the icon-actions (Copy/Save/Clear); there's no right group.
+  makeCenteredSearchResizable(findBarEl, {
+    storageKey: searchWidthKey('query', scopeKey),
+    leftGroupSelector: '.card-header-actions',
+    minWidthPx: 220
+  });
 
   // Collapsible JSON/XML nodes in the results (delegated twisty handler survives re-renders).
   attachFoldToggle(queryOutput);
