@@ -28,11 +28,15 @@
     "ci:api": "node -e \"require('roku-dev-studio-api'); console.log('roku-dev-studio-api ok')\" && node packages/roku-dev-studio-api/dist/cli.js --help >/dev/null",
     "ci:remote-check": "npm run build -w roku-dev-studio-remote-server && node --check packages/roku-dev-studio-remote-server/roku-remote-server.js",
     "ci:app-check": "npx tsx apps/roku-dev-studio/scripts/build/index.ts && node --check apps/roku-dev-studio/main.bundled.cjs",
+    "typecheck:platform": "npm run typecheck -w roku-dev-studio-platform",
     "typecheck:api": "npm run typecheck -w roku-dev-studio-api",
+    "typecheck:mcp": "npm run typecheck -w roku-dev-studio-mcp",
+    "typecheck:network-inspector": "npm run typecheck -w roku-dev-studio-network-inspector",
     "typecheck:electron": "npm run typecheck:electron -w roku-dev-studio",
     "typecheck:renderer": "npm run typecheck:renderer -w roku-dev-studio",
     "typecheck:remote-server": "npm run typecheck -w roku-dev-studio-remote-server",
-    "typecheck": "npm run typecheck:api && npm run typecheck:electron && npm run typecheck:renderer && npm run typecheck:scripts -w roku-dev-studio && npm run typecheck:remote-server && npm run renderer:solid:typecheck -w roku-dev-studio"
+    "typecheck": "npm run typecheck:platform && npm run typecheck:api && npm run typecheck:mcp && npm run typecheck:network-inspector && npm run typecheck:electron && npm run typecheck:renderer && npm run typecheck:scripts -w roku-dev-studio && npm run typecheck:remote-server && npm run renderer:solid:typecheck -w roku-dev-studio",
+    "test": "npm test --workspaces --if-present"
   },
   "license": "MIT"
 }
