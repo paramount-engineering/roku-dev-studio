@@ -44,7 +44,7 @@
     "brighterscript": "^0.68.5",
     "electron-updater": "^6.8.9",
     "form-data": "^4.0.6",
-    "modern-screenshot": "^4.6.8",
+    "modern-screenshot": "^4.7.0",
     "monaco-editor": "^0.52.2",
     "node-forge": "^1.4.0",
     "pdf-lib": "^1.17.1",
