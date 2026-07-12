@@ -23,6 +23,7 @@
           <button type="button" class="help-nav-item" data-target="help-section-secret-screens"><span class="icon icon-sm icon-indigo"><svg><use href="#icon-key"/></svg></span><span class="help-nav-label">Secret Screens</span></button>
           <button type="button" class="help-nav-item" data-target="help-section-settings"><span class="icon icon-sm icon-red"><svg><use href="#icon-settings"/></svg></span><span class="help-nav-label">Settings</span></button>
           <button type="button" class="help-nav-item" data-target="help-section-remote-locations"><span class="icon icon-sm icon-cyan"><svg><use href="#icon-globe"/></svg></span><span class="help-nav-label">Remote Locations</span></button>
+          <button type="button" class="help-nav-item" data-target="help-section-sideload-relay"><span class="icon icon-sm icon-green"><svg><use href="#icon-send"/></svg></span><span class="help-nav-label">Sideload Relay</span></button>
           <button type="button" class="help-nav-item" data-target="help-section-tips"><span class="icon icon-sm icon-amber"><svg><use href="#icon-info"/></svg></span><span class="help-nav-label">Tips</span></button>
         </nav>
         <div class="help-content" id="helpContent">
@@ -254,6 +255,20 @@
           <p><strong>Sideload or screenshot fails via relay but ECP works?</strong> Update the relay host to the same <code>roku-dev-studio-api</code> version as this app. Check <code>GET /health</code> on the relay (<code>apiVersion</code> field) and ensure port <code>4951</code> is reachable through firewalls.</p>
         </div>
         
+        <div class="help-section" id="help-section-sideload-relay">
+          <h3><span class="icon icon-sm icon-green"><svg><use href="#icon-send"/></svg></span> Sideload Relay</h3>
+          <p>Sideload one build to <strong>many devices at once</strong>. When the relay is on, Roku Dev Studio advertises itself as a Roku on your network: point your IDE (VS Code BrightScript / roku-deploy / Eclipse) or a browser at this machine, upload once, and RDS fans the build out — <em>install → launch → console</em> — to every targeted device, local or at a remote location.</p>
+          <p><strong>Enable it</strong> in <strong>Settings → Sideload Relay</strong> (off by default). Two prerequisites gate the toggle:</p>
+          <ul>
+            <li><strong>Relay Dev Password</strong> - The password your IDE authenticates to RDS with (user <code>rokudev</code>), exactly like a real Roku's developer password. This is separate from each target device's own dev password.</li>
+            <li><strong>Setup Devices</strong> - Open the device-setup modal and enable at least one reachable, Developer Mode-enabled device. It lists local and remote (relay-location) devices; enable the ones that should receive every build. Devices without a saved dev password show <strong>🔒 Set Password</strong> to validate one inline. Previously-targeted devices that go offline stay listed (disabled) and rejoin automatically when reachable again.</li>
+          </ul>
+          <p><strong>Point your IDE at RDS.</strong> With the relay enabled, RDS is discoverable over SSDP as <em>"Roku Dev Studio Relay"</em>, or you can set your build host to this machine's IP directly. On <em>Sideload</em> / <em>Debug: Launch</em>, the IDE uploads to RDS on port <code>80</code> and RDS handles the fan-out. A themed upload web page is also served at the relay address (<code>http://&lt;this-machine&gt;/</code>) for drag-and-drop <code>.zip</code> sideloads from a browser.</p>
+          <p><strong>Auto-connect.</strong> When a build lands successfully on a target, RDS opens that device as a connected tab and attaches its debug console automatically, so you see per-device output without extra clicks. Live fan-out progress also streams as a status console on telnet port <code>8085</code>.</p>
+          <p><strong>Source approval.</strong> A sideload originating from this machine proceeds automatically. A sideload from a different machine holds the upload and shows an allow/deny prompt on the RDS host (auto-denies after 30s); browser uploads from a remote machine additionally require logging in with the Relay Dev Password.</p>
+          <p>Requires the targeted devices to have Developer Mode enabled. See <strong>Remote Locations</strong> above for targeting devices at another site through a relay server.</p>
+        </div>
+
         <div class="help-section" id="help-section-tips">
           <h3><span class="icon icon-sm icon-amber"><svg><use href="#icon-info"/></svg></span> Tips</h3>
           <ul>
