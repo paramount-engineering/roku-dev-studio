@@ -44,6 +44,36 @@ const SIDELOAD_TIMEOUT_MS = 120000;
 const DELETE_TIMEOUT_MS = 30000;
 const SWUP_TIMEOUT_MS = 30000;
 
+type DevRequestError = { success: false; error: string };
+
+/**
+ * Shared entry guard for every dev-portal request (sideload / delete / reboot /
+ * check-update): the device IP must be valid and a developer password present
+ * and well-formed. Returns an error result to hand straight back to the caller,
+ * or `null` when the request may proceed.
+ */
+function validateDevRequest(ip: string, password: string): DevRequestError | null {
+  if (!isValidIp(ip)) {
+    return { success: false, error: 'Invalid device IP address' };
+  }
+  const pwdCheck = validateDevPassword(password);
+  if (!pwdCheck.valid) {
+    return { success: false, error: pwdCheck.error || 'Invalid developer password' };
+  }
+  return null;
+}
+
+/**
+ * Detect the dev portal's "wrong developer password" response (HTTP 401 or a
+ * login page in the body) and return the shared auth-failure result, else null.
+ */
+function authFailureResult(statusCode: number, text: string): (DevRequestError & { authFailed: true }) | null {
+  if (statusCode === 401 || responseLooksLikeAuthFailure(statusCode, text)) {
+    return { success: false, error: 'Authentication failed. Check your developer password.', authFailed: true };
+  }
+  return null;
+}
+
 function parsePluginInstallResponse(response: string): { success: true; message: string } | { success: false; error: string; authFailed?: boolean } {
   if (response.includes('Install Success') || response.includes('Application Received') || response.includes('Conversion complete')) {
     return { success: true, message: 'Channel installed successfully!' };
@@ -90,13 +120,8 @@ async function postPluginInstall(
  * Sideload a channel package to a Roku device.
  */
 async function sideloadChannel({ ip, filePath, password, log = (_m: string) => undefined, extraFields = [] }: SideloadChannelOpts) {
-  if (!isValidIp(ip)) {
-    return { success: false, error: 'Invalid device IP address' };
-  }
-  const pwdCheck = validateDevPassword(password);
-  if (!pwdCheck.valid) {
-    return { success: false, error: pwdCheck.error || 'Invalid developer password' };
-  }
+  const guard = validateDevRequest(ip, password);
+  if (guard) return guard;
   if (typeof filePath !== 'string' || !filePath.trim()) {
     return { success: false, error: 'File path is required' };
   }
@@ -164,13 +189,8 @@ async function sideloadChannel({ ip, filePath, password, log = (_m: string) => u
  * Delete the sideloaded channel from a Roku device.
  */
 async function deleteSideload({ ip, password, log = (_m: string) => undefined }: DeleteSideloadOpts) {
-  if (!isValidIp(ip)) {
-    return { success: false, error: 'Invalid device IP address' };
-  }
-  const pwdCheck = validateDevPassword(password);
-  if (!pwdCheck.valid) {
-    return { success: false, error: pwdCheck.error || 'Invalid developer password' };
-  }
+  const guard = validateDevRequest(ip, password);
+  if (guard) return guard;
 
   try {
     const { statusCode, text } = await postPluginInstall(
@@ -185,9 +205,8 @@ async function deleteSideload({ ip, password, log = (_m: string) => undefined }:
       log
     );
 
-    if (statusCode === 401 || responseLooksLikeAuthFailure(statusCode, text)) {
-      return { success: false, error: 'Authentication failed. Check your developer password.', authFailed: true };
-    }
+    const authFail = authFailureResult(statusCode, text);
+    if (authFail) return authFail;
     if (text.includes('Delete Success') || (text.includes('Roku') && !text.includes('Failure'))) {
       return { success: true, message: 'Sideloaded channel deleted successfully!' };
     }
@@ -236,18 +255,12 @@ async function postPluginSwup(
  * developer password / Developer Mode).
  */
 async function rebootDevice({ ip, password, log = (_m: string) => undefined }: DevPortalOpts) {
-  if (!isValidIp(ip)) {
-    return { success: false, error: 'Invalid device IP address' };
-  }
-  const pwdCheck = validateDevPassword(password);
-  if (!pwdCheck.valid) {
-    return { success: false, error: pwdCheck.error || 'Invalid developer password' };
-  }
+  const guard = validateDevRequest(ip, password);
+  if (guard) return guard;
   try {
     const { statusCode, text } = await postPluginSwup(ip, password, 'Reboot', SWUP_TIMEOUT_MS, log);
-    if (statusCode === 401 || responseLooksLikeAuthFailure(statusCode, text)) {
-      return { success: false, error: 'Authentication failed. Check your developer password.', authFailed: true };
-    }
+    const authFail = authFailureResult(statusCode, text);
+    if (authFail) return authFail;
     return { success: true, message: 'Restart command sent — the device is rebooting.' };
   } catch (error: unknown) {
     // Rebooting frequently kills the socket before the response is fully read;
@@ -267,18 +280,12 @@ async function rebootDevice({ ip, password, log = (_m: string) => undefined }: D
  * Application Installer (requires the developer password / Developer Mode).
  */
 async function checkForUpdate({ ip, password, log = (_m: string) => undefined }: DevPortalOpts) {
-  if (!isValidIp(ip)) {
-    return { success: false, error: 'Invalid device IP address' };
-  }
-  const pwdCheck = validateDevPassword(password);
-  if (!pwdCheck.valid) {
-    return { success: false, error: pwdCheck.error || 'Invalid developer password' };
-  }
+  const guard = validateDevRequest(ip, password);
+  if (guard) return guard;
   try {
     const { statusCode, text } = await postPluginSwup(ip, password, 'CheckUpdate', SWUP_TIMEOUT_MS, log);
-    if (statusCode === 401 || responseLooksLikeAuthFailure(statusCode, text)) {
-      return { success: false, error: 'Authentication failed. Check your developer password.', authFailed: true };
-    }
+    const authFail = authFailureResult(statusCode, text);
+    if (authFail) return authFail;
     return { success: true, message: 'Asked the device to check for software updates.' };
   } catch (error: unknown) {
     return mapDeviceHttpError(error, 'Check for updates');
