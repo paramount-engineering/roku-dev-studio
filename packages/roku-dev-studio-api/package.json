@@ -30,7 +30,7 @@
   "scripts": {
     "build": "node build.mjs && tsc --emitDeclarationOnly",
     "typecheck": "tsc --noEmit",
-    "prepare": "node -e \"require('fs').existsSync('dist/index.js') || require('child_process').execSync('npm run build', { stdio: 'inherit' })\"",
+    "prepare": "node -e \"if (process.env.CI) process.exit(0); require('fs').existsSync('dist/index.js') || require('child_process').execSync('npm run build', { stdio: 'inherit' })\"",
     "prepublishOnly": "npm run build",
     "example:direct": "node dist/examples/direct-sample.js",
     "example:relay": "node dist/examples/relay-sample.js",
@@ -44,7 +44,7 @@
   "devDependencies": {
     "@types/archiver": "^5.3.4",
     "@types/node": "^22.10.0",
-    "esbuild": "0.25.12",
+    "esbuild": "0.28.1",
     "typescript": "^5.7.3",
     "roku-dev-studio-platform": "^1.0.0"
   },
