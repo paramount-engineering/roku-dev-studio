@@ -43,8 +43,7 @@ npm-debug.log*
 # Wiz security scan output (per-developer)
 .wiz/*
 
-# Per-developer Claude Code session worktrees (project-level .claude/settings.local.json is tracked)
-.claude/worktrees/
+# Local Claude Code config, skills, worktrees — kept out of the repo
+.claude/
 .discussion-docs/
 .cursor/
-.claude/settings.json
