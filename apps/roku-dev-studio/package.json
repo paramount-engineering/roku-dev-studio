@@ -40,7 +40,7 @@
   "company": "Paramount Streaming",
   "license": "MIT",
   "dependencies": {
-    "@tanstack/virtual-core": "^3.14.0",
+    "@tanstack/virtual-core": "^3.17.3",
     "brighterscript": "^0.68.5",
     "electron-updater": "^6.8.9",
     "form-data": "^4.0.0",
