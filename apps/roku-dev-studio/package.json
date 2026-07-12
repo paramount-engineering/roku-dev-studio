@@ -51,7 +51,7 @@
     "roku-dev-studio-api": "file:../../packages/roku-dev-studio-api",
     "roku-dev-studio-mcp": "file:../../packages/roku-dev-studio-mcp",
     "roku-dev-studio-platform": "file:../../packages/roku-dev-studio-platform",
-    "solid-js": "^1.9.5",
+    "solid-js": "^1.9.14",
     "ws": "^8.21.0"
   },
   "optionalDependencies": {
