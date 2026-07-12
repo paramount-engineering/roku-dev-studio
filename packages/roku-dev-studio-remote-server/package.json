@@ -47,7 +47,7 @@
   "devDependencies": {
     "@types/node": "^22.10.0",
     "esbuild": "0.28.1",
-    "typescript": "^5.7.3",
+    "typescript": "5.9.3",
     "roku-dev-studio-platform": "^1.0.0"
   }
 }
