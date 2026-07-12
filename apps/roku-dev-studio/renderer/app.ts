@@ -3194,8 +3194,8 @@ function openDeviceHardwareImageModal(imageSrc, device, opener?: HTMLElement | n
     swCell.appendChild(swLabel);
     swCell.appendChild(swValue);
 
-    const btnGroup = document.createElement('div');
-    btnGroup.className = 'device-hardware-image-modal-actions-buttons';
+    const leftCol = document.createElement('div');
+    leftCol.className = 'device-hardware-image-modal-actions-left';
 
     // Icon-only buttons; the label lives in the native tooltip + aria-label.
     const checkBtn = document.createElement('button');
@@ -3212,10 +3212,18 @@ function openDeviceHardwareImageModal(imageSrc, device, opener?: HTMLElement | n
     restartBtn.setAttribute('aria-label', 'Restart Device');
     setSafeHTML(restartBtn, icon('replay', 'icon-md'));
 
-    btnGroup.appendChild(checkBtn);
-    btnGroup.appendChild(restartBtn);
-    actions.appendChild(swCell);
-    actions.appendChild(btnGroup);
+    const checkSlot = document.createElement('div');
+    checkSlot.className = 'device-hardware-image-modal-update-slot';
+    checkSlot.appendChild(checkBtn);
+
+    const rightCol = document.createElement('div');
+    rightCol.className = 'device-hardware-image-modal-actions-right';
+    rightCol.appendChild(restartBtn);
+
+    leftCol.appendChild(swCell);
+    leftCol.appendChild(checkSlot);
+    actions.appendChild(leftCol);
+    actions.appendChild(rightCol);
     modal.appendChild(actions);
 
     const actionIp = typeof device.ip === 'string' ? device.ip.trim() : '';
