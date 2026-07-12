@@ -1,5 +1,5 @@
 <h1>
-  <img src="images/icon.png" alt="Roku Dev Studio icon" width="44" align="middle" />
+  <img src="images/icon.png" alt="Roku Dev Studio icon" height="72" align="middle" />
   &nbsp;Roku Dev Studio
 </h1>
 
@@ -36,7 +36,9 @@ This repository is an **npm workspace** monorepo. Run **`npm install`** and **`n
 | **RALE** | Roku Advanced Layout Editor — Roku's SceneGraph inspection protocol over a TCP socket (default port `49200`), spoken by the `TrackerTask` component. |
 | **TrackerTask** | The BrightScript component channel developers add to their app to make it reachable from RALE / App Connector — see [`roku-components/README.md`](roku-components/README.md). |
 | **App Connector** | The Dev Studio tab that talks RALE: list / call your channel's `GetExternalControlFunctions`, plus built-ins (node lookup, registry editor, update node). |
+| **Network Inspector** | The Dev Studio tab / engine that inspects a dev channel's HTTP(S) traffic through a local MITM proxy, with optional hotspot packet capture. |
 | **Sideload** | Uploading and installing a `.zip` / `.pkg` dev channel onto a Developer-Mode Roku via its Dev Password. |
+| **Sideload Relay** | RDS advertising itself as a Roku so one sideload from your IDE / browser fans out (install → launch → console) to many targeted devices. |
 | **Action Script** | JSON-described automation that chains keypresses, queries, sideload, App Connector calls, screenshots, conditionals, waits, and variables. Built and run from the *Action Scripts* tab; also runnable headless via `rds`. |
 | **MCP server** | Roku Dev Studio's **Model Context Protocol** server — lets Cursor / Claude Desktop / VS Code drive a real device through this app while it's open. Toggle clients in **Settings → MCP Server**. |
 | **Fiddle** | The BrightScript scratch editor (Monaco + brighterscript lint) that wraps your snippet into a temporary channel and runs it on a selected device. |
@@ -114,6 +116,13 @@ Roku Dev Studio is available for:
 - **Progress Tracking:** Real-time upload progress for sideloading
 ![Dev App](images/DEV_APP.png)
 
+### 📡 Sideload Relay
+- **One build → many devices:** With the relay on, Roku Dev Studio advertises itself as a Roku over SSDP; point your IDE (VS Code BrightScript / roku-deploy) or a browser at this machine, upload once, and RDS fans the build out (install → launch → console) to every targeted device — local or at a remote location
+- **Enable in Settings → Sideload Relay** (off by default): set a **Relay Dev Password** (how your IDE authenticates to RDS) and pick targets in **Setup Devices**
+- **Browser upload page:** A themed drag-and-drop `.zip` uploader is served at the relay address for sideloads without an IDE
+- **Auto-connect:** Each device that receives a build opens as a connected tab with its debug console attached; live fan-out progress streams on telnet `8085`
+- **Source approval:** A sideload from another machine prompts for allow / deny on the RDS host; remote browser uploads also require the Relay Dev Password
+
 ### 💻 Console & Debugging
 - **Telnet Console Access:** Direct access to Roku console logs (port 8085)
 - **Remote Console:** Access console logs on remote devices via server
@@ -132,6 +141,14 @@ Roku Dev Studio is available for:
 - **Integration Guide modal:** In-app TrackerTask tutorial with BrightScript snippets, supported parameter types, and a *Save TrackerTask.xml* button
 - **Remote Function Calls:** Works on local and remote devices via server
 ![App Connector](images/APP_CONNECTOR.png)
+
+### 🕵️ Network Inspector
+- **MITM proxy:** A local proxy decrypts your dev channel's HTTPS so you can inspect full request / response headers and bodies — enable it in **Settings → Network Inspector** and point your channel at the proxy address shown
+- **Hotspot capture (optional):** Records SNI / DNS metadata for all device traffic via OS packet capture (macOS BPF, Windows Npcap)
+- **Session list & filters:** Filter by `host:`, `method:`, `status:`, `type:`, `kind:`, `path:` (comma = OR), group by host, and jump to errors
+- **Inspect & export:** View request / response overview, headers, and bodies (JSON / XML / raw); copy a body or export as **cURL** / **HAR**; save captured packets as **.pcap**
+- **Traffic rules:** Block all proxied traffic, throttle bandwidth / latency (device-wide or per host), and set per-host / path **Block** / **Reset** / **Mock** responses
+- Available for locally connected devices; engine lives in [`roku-dev-studio-network-inspector`](packages/roku-dev-studio-network-inspector/)
 
 ### 📜 Action Scripts
 - **Script Builder:** Create scripted sequences with keypresses, send-text, ECP query / POST, launch, sideload, delete-sideload, screenshots, App Connector Function calls, RALE commands, Device Performance chart capture, and waits
@@ -183,12 +200,14 @@ Each row is one supported host (Cursor, Claude Desktop, VS Code, Visual Studio C
 - **Swagger API:** Interactive API documentation for remote server
 
 ### ⚙️ Settings
-Open with `Ctrl/Cmd+,` (or *Roku Dev Studio → Settings* on macOS, *File → Settings* on Windows / Linux). Five sections:
+Open with `Ctrl/Cmd+,` (or *Roku Dev Studio → Settings* on macOS, *File → Settings* on Windows / Linux). Seven sections:
 
 - **General:** Developer Mode, Privacy Mode (mask IPs / serials), Debug Logging to file, Roku Remote - Use Keyboard, Auto Connect to Devices, Auto Hide SideBar
 - **Action Scripts:** Default folder for run artifacts (screenshots, exported PDFs)
 - **Device Performance:** Chart sample interval, chart history window, *Remember 'Show Device Performance'* per device
 - **Timing & Network:** Connection / query / telnet timeouts and other knobs (with *Reset to Defaults*)
+- **Network Inspector:** Enable the local MITM proxy and hotspot packet capture, with per-platform capture setup
+- **Sideload Relay:** Advertise RDS as a Roku and fan one sideload out to many devices; set the Relay Dev Password and target devices (off by default)
 - **MCP Server:** Toggle `roku-dev-studio` in your AI client(s) — see [AI Agents (MCP Server)](#-ai-agents-mcp-server) above for the screenshot
 
 | General | Action Scripts |
