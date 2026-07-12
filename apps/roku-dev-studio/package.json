@@ -52,7 +52,7 @@
     "roku-dev-studio-mcp": "file:../../packages/roku-dev-studio-mcp",
     "roku-dev-studio-platform": "file:../../packages/roku-dev-studio-platform",
     "solid-js": "^1.9.5",
-    "ws": "^8.18.0"
+    "ws": "^8.21.0"
   },
   "optionalDependencies": {
     "cap": "^0.2.1"
