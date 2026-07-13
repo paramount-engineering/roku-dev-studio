@@ -12,7 +12,7 @@ import type {
   NetworkTrafficRules,
   MitmPortConflict
 } from './types';
-import { detectPortHolder, isAddressInUseError } from './port-conflict';
+import { detectPortHolder, isAddressInUseError, type PortHolder } from './port-conflict';
 import {
   DEFAULT_MAX_RAW_PACKETS_PER_DEVICE,
   clampMaxRawPacketsPerDevice,
@@ -1210,9 +1210,11 @@ export class NetworkInspectorService {
     }
     try {
       const ca = getOrCreateCa();
-      // Pre-generate the shared leaf keypair so the one keygen happens here, not on the first
-      // HTTPS handshake the proxy serves.
-      warmLeafKeyPair();
+      // Pre-generate the shared leaf keypair so the one keygen happens up front, not on the first
+      // HTTPS handshake the proxy serves. Fire-and-forget + async: the keygen yields to the event
+      // loop (see warmLeafKeyPair) so it never freezes startup or device connect. A handshake that
+      // somehow beats it falls back to a one-time sync generate in getSharedLeafKeys.
+      void warmLeafKeyPair();
       this.mitmProxy = new RokuMitmProxy({
         port: this.mitmPort,
         ca,
@@ -1237,12 +1239,7 @@ export class NetworkInspectorService {
         onError: (message) => {
           niWarn(`MITM proxy error on port ${this.mitmPort}: ${message}`);
           this.mitmLastError = message || 'MITM proxy failed to start';
-          this.mitmPortConflict = this.buildPortConflict(message);
-          if (this.mitmPortConflict) {
-            if (!this.mitmPortConflictSince) this.mitmPortConflictSince = Date.now();
-          } else {
-            this.mitmPortConflictSince = 0;
-          }
+          this.applyPortConflict(message);
           this.broadcastStatus();
         },
         onTransaction: (tx) => {
@@ -1253,12 +1250,7 @@ export class NetworkInspectorService {
       const started = this.mitmProxy.start();
       if (!started) {
         this.mitmLastError = this.mitmProxy.getLastError() || 'MITM proxy failed to start';
-        this.mitmPortConflict = this.buildPortConflict(this.mitmLastError);
-        if (this.mitmPortConflict) {
-          if (!this.mitmPortConflictSince) this.mitmPortConflictSince = Date.now();
-        } else {
-          this.mitmPortConflictSince = 0;
-        }
+        this.applyPortConflict(this.mitmLastError);
         this.mitmProxy = null;
       }
       // On `started === true` we DON'T optimistically clear the conflict here: `start()` returns
@@ -1267,12 +1259,7 @@ export class NetworkInspectorService {
       // here would flap the warning off/on every retry tick.
     } catch (err) {
       this.mitmLastError = err instanceof Error ? err.message : String(err);
-      this.mitmPortConflict = this.buildPortConflict(this.mitmLastError);
-      if (this.mitmPortConflict) {
-        if (!this.mitmPortConflictSince) this.mitmPortConflictSince = Date.now();
-      } else {
-        this.mitmPortConflictSince = 0;
-      }
+      this.applyPortConflict(this.mitmLastError);
       this.mitmProxy = null;
     }
     this.broadcastStatus();
@@ -1318,15 +1305,45 @@ export class NetworkInspectorService {
   }
 
   /**
-   * Turn a proxy start failure into a structured, user-facing port conflict. Returns undefined when
-   * the failure isn't an address-in-use error (those keep flowing through `mitmLastError`). When it
-   * is, best-effort resolves the squatting process so the warning can name it and recommend either
-   * closing it or changing the proxy port in RDS.
+   * Record a proxy port conflict from a start failure. No-op (and clears any prior conflict) when the
+   * failure isn't an address-in-use error. The conflict is shown to the user immediately with a
+   * generic message; resolving *which* process holds the port runs asynchronously
+   * ({@link detectPortHolder} spawns `lsof`/`ps`, which must never block the main-process event loop
+   * — a synchronous probe here used to freeze all IPC, including device connect, for seconds on every
+   * EADDRINUSE and on every 4s retry tick). When it resolves, the conflict is enriched with the
+   * process name/PID and re-broadcast.
    */
-  private buildPortConflict(message: string | undefined): MitmPortConflict | undefined {
-    if (!isAddressInUseError(message)) return undefined;
+  private applyPortConflict(message: string | undefined): void {
+    if (!isAddressInUseError(message)) {
+      this.mitmPortConflict = undefined;
+      this.mitmPortConflictSince = 0;
+      return;
+    }
     const port = this.mitmPort;
-    const holder = detectPortHolder(port);
+    // Already resolved (with a PID) for this same port on an earlier tick — keep it, don't re-probe.
+    const alreadyResolved = this.mitmPortConflict?.port === port && this.mitmPortConflict?.pid != null;
+    if (!alreadyResolved) {
+      // Show the conflict instantly with no process name; the holder lookup follows off-thread.
+      this.mitmPortConflict = this.makePortConflict(port, null);
+    }
+    if (!this.mitmPortConflictSince) this.mitmPortConflictSince = Date.now();
+    if (alreadyResolved) return;
+    void detectPortHolder(port)
+      .then((holder) => {
+        // Only enrich if we're still in the same live conflict and actually learned who holds it.
+        if (holder && this.mitmPortConflict?.port === port) {
+          this.mitmPortConflict = this.makePortConflict(port, holder);
+          this.broadcastStatus();
+        }
+      })
+      .catch(() => {
+        /* holder lookup is best-effort — the generic conflict is already shown */
+      });
+  }
+
+  /** Build the structured, user-facing port-conflict payload. `holder` is null until the async
+   *  {@link detectPortHolder} lookup resolves (then the warning can name the squatting process). */
+  private makePortConflict(port: number, holder: PortHolder | null): MitmPortConflict {
     const remediation: string[] = [];
     if (holder?.pid) {
       remediation.push(
