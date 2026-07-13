@@ -11,7 +11,7 @@
  * `buildSessions`/`filterSessions` caching (version-gated) so both surfaces get identical, cheap
  * derived data without reimplementing it.
  */
-import type { ParsedNetworkEvent } from '../../../shared/network-inspector/types';
+import type { ParsedNetworkEvent } from '@shared/network-inspector/types';
 import { buildSessions, filterSessions, type NetworkSession } from './network-sessions.js';
 
 export class SessionStore {

@@ -6,7 +6,10 @@
     "moduleResolution": "Node",
     "noEmit": true,
     "types": ["node"],
-    "lib": ["ES2022"]
+    "lib": ["ES2022"],
+    "paths": {
+      "@shared/*": ["./shared/*"]
+    }
   },
   "include": ["main.ts", "preload.ts", "log-viewer-preload.ts", "main/**/*.ts", "shared/**/*.ts"]
 }

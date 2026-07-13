@@ -7,11 +7,13 @@
     "noEmit": true,
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "skipLibCheck": true,
-    "noImplicitAny": false
+    "noImplicitAny": false,
+    "paths": {
+      "@shared/*": ["./shared/*"]
+    }
   },
   "include": [
-    "shared/mcp-bridge-state.ts",
-    "renderer/shared/**/*.ts",
+    "shared/**/*.ts",
     "renderer/renderer-globals.d.ts",
     "renderer/types/**/*.ts",
     "renderer/app.ts",

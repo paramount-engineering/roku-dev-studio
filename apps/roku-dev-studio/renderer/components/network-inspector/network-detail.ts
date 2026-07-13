@@ -1,4 +1,4 @@
-import type { NetworkHttpMessage, ParsedNetworkEvent } from '../../../shared/network-inspector/types';
+import type { NetworkHttpMessage, ParsedNetworkEvent } from '@shared/network-inspector/types';
 import { escapeHtml } from '../../modules/utils/dom.js';
 import {
   buildEmbeddedBodyHtml,

@@ -17,7 +17,7 @@ import type {
   NetworkFindMatch,
   NetworkFindOptions,
   NetworkFindScope
-} from '../../../shared/network-inspector/content-search';
+} from '@shared/network-inspector/content-search';
 import { escapeHtml } from '../../modules/utils/dom.js';
 
 /** The four user-facing scope chips, mapped to the engine's granular scopes. */

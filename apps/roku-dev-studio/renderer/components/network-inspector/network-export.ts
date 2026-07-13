@@ -4,7 +4,7 @@
  * on-disk detail store and are fetched before export); a lightweight summary still yields a usable
  * URL/method-only result.
  */
-import type { NetworkHttpMessage, ParsedNetworkEvent } from '../../../shared/network-inspector/types';
+import type { NetworkHttpMessage, ParsedNetworkEvent } from '@shared/network-inspector/types';
 
 /** Can this event be meaningfully exported (only full HTTP transactions carry a request)? */
 export function isExportableEvent(ev: ParsedNetworkEvent | null | undefined): boolean {

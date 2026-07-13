@@ -5,13 +5,13 @@ import {
   DEFAULT_MAX_BODY_RETAINED_BYTES,
   MIN_MAX_BODY_RETAINED_BYTES,
   MAX_MAX_BODY_RETAINED_BYTES,
-} from '../../shared/network-inspector/types.js';
+} from '@shared/network-inspector/types.js';
 import {
   networkInspectorSetupTitle,
   networkInspectorSetupGuideBodyHtml,
   networkInspectorHasCaptureSetupAction,
   type NiSetupPlatform,
-} from '../../shared/network-inspector/setup-guide.js';
+} from '@shared/network-inspector/setup-guide.js';
 import { initSideloadRelaySection } from './sideload-relay-section.js';
 
 const api = (window as any).settingsApi;

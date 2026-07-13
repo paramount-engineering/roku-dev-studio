@@ -7,7 +7,7 @@
  * rendering reuses the Network Inspector's pure modules (`network-sessions`, `network-session-view`,
  * `network-detail`, `network-export`), so this file is just glue: state + selection + filter + tabs.
  */
-import type { ParsedNetworkEvent } from '../../../shared/network-inspector/types';
+import type { ParsedNetworkEvent } from '@shared/network-inspector/types';
 import { buildStructureGroups, type NetworkSession } from '../network-inspector/network-sessions.js';
 import { SessionStore } from '../network-inspector/network-session-store.js';
 import { makeCenteredSearchResizable } from '../../modules/ui/header-search-resize.js';

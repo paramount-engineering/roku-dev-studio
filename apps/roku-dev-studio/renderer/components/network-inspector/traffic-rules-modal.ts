@@ -8,7 +8,7 @@ import type {
   HostTrafficRule,
   MockResponse,
   TrafficThrottle
-} from '../../../shared/network-inspector/types.js';
+} from '@shared/network-inspector/types.js';
 import { escapeHtml } from '../../modules/utils/dom.js';
 import { attachBackdropClickToClose } from '../../modules/utils/modal-backdrop-click.js';
 
