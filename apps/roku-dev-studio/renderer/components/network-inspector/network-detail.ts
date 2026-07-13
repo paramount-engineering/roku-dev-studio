@@ -465,10 +465,6 @@ export function renderResponsePane(
   return renderBodyContent(ev.httpResponse, bodyFormat, fallback, 'response');
 }
 
-export function renderNetworkEventSummary(ev: ParsedNetworkEvent, allEvents: ParsedNetworkEvent[]): string {
-  return renderRequestOverview(ev, allEvents);
-}
-
 /**
  * Turn each `[data-ni-fold]` placeholder emitted by {@link renderBodyContent} into the shared
  * collapsible, syntax-highlighted JSON/XML tree — the same renderer the Console viewer uses. Call
@@ -487,10 +483,3 @@ export function upgradeStructuredBodies(bodyEl: Element | null): void {
   });
 }
 
-export function eventSummaryLabel(ev: ParsedNetworkEvent): string {
-  if (ev.type === 'http-transaction') {
-    const host = ev.httpRequest?.headers?.host || ev.hostname || ev.destIp || '';
-    return `${ev.httpRequest?.method || 'HTTP'} ${host}${ev.httpRequest?.url && ev.httpRequest.url !== host ? ev.httpRequest.url : ''}`;
-  }
-  return ev.hostname || ev.sni || `${ev.destIp || ''}:${ev.destPort ?? ''}`;
-}

@@ -186,3 +186,27 @@ export function wireDetailInteractions(
     opts
   );
 }
+
+/**
+ * Sync the per-pane word-wrap toggle buttons + body scrollers to the given wrap state. Shared by the
+ * live Network tab and the offline Session Viewer so the button state — including the `title`, which
+ * the viewer previously never updated (stale "Disable word wrap" tooltip) — stays consistent.
+ * `root` is where the `[data-ni-wrap-toggle]` buttons are queried (the panel / document).
+ */
+export function syncBodyWrap(opts: {
+  root: ParentNode;
+  requestBodyEl: Element | null;
+  responseBodyEl: Element | null;
+  requestWrap: boolean;
+  responseWrap: boolean;
+}): void {
+  (opts.requestBodyEl as HTMLElement | null)?.classList.toggle('ni-body-nowrap', !opts.requestWrap);
+  (opts.responseBodyEl as HTMLElement | null)?.classList.toggle('ni-body-nowrap', !opts.responseWrap);
+  opts.root.querySelectorAll('[data-ni-wrap-toggle]').forEach((btn) => {
+    const el = btn as HTMLElement;
+    const on = el.dataset.niWrapToggle === 'response' ? opts.responseWrap : opts.requestWrap;
+    el.classList.toggle('is-active', on);
+    el.setAttribute('aria-pressed', on ? 'true' : 'false');
+    el.title = on ? 'Disable word wrap' : 'Enable word wrap';
+  });
+}
