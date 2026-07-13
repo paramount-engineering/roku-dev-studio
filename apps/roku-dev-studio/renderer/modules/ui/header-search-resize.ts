@@ -17,6 +17,8 @@
  * the persisted width lands even for tabs that aren't mounted-visible at setup.
  */
 
+import { inMemorySessionStore } from './in-memory-storage.js';
+
 export interface HeaderSearchResizeOptions {
   /** Absolutely-centered element that holds the search box (its width is driven). */
   slot: HTMLElement;
@@ -53,7 +55,9 @@ export function attachHeaderSearchResize(o: HeaderSearchResizeOptions): { dispos
   const MAX_DEFAULT = o.maxDefaultWidth ?? 680;
   const RESERVE = o.defaultReservePx ?? 360;
   const GAP = o.edgeGapPx ?? 30;
-  const store: Storage = o.storage ?? sessionStorage;
+  // In-memory by default, NOT sessionStorage — avoids the ~4s file:// first-touch stall. See
+  // in-memory-storage.ts and search-history.ts.
+  const store: Storage = o.storage ?? inMemorySessionStore;
 
   // User's chosen width (null = use the default). Restored from storage below.
   let desired: number | null = null;
@@ -78,11 +82,22 @@ export function attachHeaderSearchResize(o: HeaderSearchResizeOptions): { dispos
 
   // Widest the centered box can be on one row without overlapping either side
   // group. Not floored at MIN — so we can detect when even MIN won't fit.
+  //
+  // Uses LAYOUT metrics (clientWidth / offsetLeft / offsetWidth), all relative
+  // to the header, rather than getBoundingClientRect(). getBoundingClientRect is
+  // affected by CSS transforms on any ancestor; when this box lives in a modal
+  // header, the modal's open animation scales the whole surface, so a rect-based
+  // measure taken mid-animation reads tiny and wrongly wraps the box to a second
+  // row (a transform change never re-fires the ResizeObserver, so it sticks).
+  // Layout metrics ignore transforms and stay correct. Callers whose side groups
+  // must resolve their offset against this header keep it a positioning context
+  // (the card headers and the help modal header are all `position: relative`).
   const availW = (): number => {
-    const hr = header.getBoundingClientRect();
-    const center = hr.left + hr.width / 2;
-    const leftEnd = o.leftGroup instanceof HTMLElement ? o.leftGroup.getBoundingClientRect().right : hr.left;
-    const rightStart = o.rightGroup instanceof HTMLElement ? o.rightGroup.getBoundingClientRect().left : hr.right;
+    const headerW = header.clientWidth;
+    const center = headerW / 2;
+    const leftEnd =
+      o.leftGroup instanceof HTMLElement ? o.leftGroup.offsetLeft + o.leftGroup.offsetWidth : 0;
+    const rightStart = o.rightGroup instanceof HTMLElement ? o.rightGroup.offsetLeft : headerW;
     return 2 * Math.min(center - leftEnd, rightStart - center) - GAP;
   };
 
@@ -123,7 +138,8 @@ export function attachHeaderSearchResize(o: HeaderSearchResizeOptions): { dispos
     window.removeEventListener('pointerup', onUp);
     document.body.style.userSelect = '';
     handle.classList.remove('is-dragging');
-    desired = slot.getBoundingClientRect().width;
+    // offsetWidth (layout), not getBoundingClientRect (transform-affected).
+    desired = slot.offsetWidth;
     try {
       store.setItem(o.storageKey, String(Math.round(desired)));
     } catch {
@@ -134,7 +150,7 @@ export function attachHeaderSearchResize(o: HeaderSearchResizeOptions): { dispos
     if (e.button !== 0) return;
     e.preventDefault();
     startX = e.clientX;
-    startW = slot.getBoundingClientRect().width;
+    startW = slot.offsetWidth;
     document.body.style.userSelect = 'none';
     handle.classList.add('is-dragging');
     window.addEventListener('pointermove', onMove);
@@ -182,6 +198,7 @@ export function makeCenteredSearchResizable(
     rightGroupSelector?: string;
     header?: HTMLElement | null;
     minWidthPx?: number;
+    maxDefaultWidth?: number;
   }
 ): { dispose: () => void } | null {
   const header = opts.header ?? barEl.closest('.card-header');
@@ -200,6 +217,7 @@ export function makeCenteredSearchResizable(
     rightGroup: opts.rightGroupSelector ? header.querySelector(opts.rightGroupSelector) : null,
     storageKey: opts.storageKey,
     storage: opts.storage,
-    minWidthPx: opts.minWidthPx
+    minWidthPx: opts.minWidthPx,
+    maxDefaultWidth: opts.maxDefaultWidth
   });
 }
