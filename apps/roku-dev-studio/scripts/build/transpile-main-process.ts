@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Bundle Electron main process + preload (+ about window preload) from TypeScript → CJS.
+ * Bundle Electron main process + preloads from TypeScript → CJS.
  */
 
 import * as path from 'path';
@@ -21,98 +21,44 @@ export const MAIN_EXTERNAL = [
   'cap'
 ];
 
+/** Preload bundles, all sharing the same `['electron']` external. `[entry.ts, outfile]`. */
+const PRELOAD_ENTRIES: ReadonlyArray<readonly [string, string]> = [
+  ['preload-about.ts', 'preload-about.js'],
+  ['preload-settings.ts', 'preload-settings.js'],
+  ['preload.ts', 'preload.bundled.cjs'],
+  ['log-viewer-preload.ts', 'log-viewer-preload.bundled.cjs'],
+  ['fiddle-preload.ts', 'fiddle-preload.bundled.cjs'],
+  ['network-session-viewer-preload.ts', 'network-session-viewer-preload.bundled.cjs'],
+];
+
 /**
  * @param appDir Absolute path to apps/roku-dev-studio
  */
 export function transpileMainProcess(appDir: string): void {
-  esbuild.buildSync({
+  // Options shared by every main/preload bundle. `alias`: a few of these graphs pull in renderer
+  // helpers (e.g. the Log Viewer window reuses `console-find-helpers`) that import shared code via
+  // the `@shared/*` alias — the renderer's own transpile rewrites that specifier for the browser,
+  // but these bundle:true builds must resolve it to the app-level `shared/` source tree.
+  const base = {
     absWorkingDir: appDir,
-    entryPoints: [path.join(appDir, 'preload-about.ts')],
+    alias: { '@shared': path.join(appDir, 'shared') },
     bundle: true,
     platform: 'node',
     target: 'node20',
     format: 'cjs',
-    outfile: path.join(appDir, 'preload-about.js'),
-    external: ['electron'],
     logLevel: 'info',
     treeShaking: true,
-  });
+  } as const;
 
-  esbuild.buildSync({
-    absWorkingDir: appDir,
-    entryPoints: [path.join(appDir, 'preload-settings.ts')],
-    bundle: true,
-    platform: 'node',
-    target: 'node20',
-    format: 'cjs',
-    outfile: path.join(appDir, 'preload-settings.js'),
-    external: ['electron'],
-    logLevel: 'info',
-    treeShaking: true,
-  });
+  const bundleNode = (entry: string, outfile: string, external: string[]): void => {
+    esbuild.buildSync({
+      ...base,
+      entryPoints: [path.join(appDir, entry)],
+      outfile: path.join(appDir, outfile),
+      external,
+    });
+  };
 
-  esbuild.buildSync({
-    absWorkingDir: appDir,
-    entryPoints: [path.join(appDir, 'preload.ts')],
-    bundle: true,
-    platform: 'node',
-    target: 'node20',
-    format: 'cjs',
-    outfile: path.join(appDir, 'preload.bundled.cjs'),
-    external: ['electron'],
-    logLevel: 'info',
-    treeShaking: true,
-  });
-
-  esbuild.buildSync({
-    absWorkingDir: appDir,
-    entryPoints: [path.join(appDir, 'log-viewer-preload.ts')],
-    bundle: true,
-    platform: 'node',
-    target: 'node20',
-    format: 'cjs',
-    outfile: path.join(appDir, 'log-viewer-preload.bundled.cjs'),
-    external: ['electron'],
-    logLevel: 'info',
-    treeShaking: true,
-  });
-
-  esbuild.buildSync({
-    absWorkingDir: appDir,
-    entryPoints: [path.join(appDir, 'fiddle-preload.ts')],
-    bundle: true,
-    platform: 'node',
-    target: 'node20',
-    format: 'cjs',
-    outfile: path.join(appDir, 'fiddle-preload.bundled.cjs'),
-    external: ['electron'],
-    logLevel: 'info',
-    treeShaking: true,
-  });
-
-  esbuild.buildSync({
-    absWorkingDir: appDir,
-    entryPoints: [path.join(appDir, 'network-session-viewer-preload.ts')],
-    bundle: true,
-    platform: 'node',
-    target: 'node20',
-    format: 'cjs',
-    outfile: path.join(appDir, 'network-session-viewer-preload.bundled.cjs'),
-    external: ['electron'],
-    logLevel: 'info',
-    treeShaking: true,
-  });
-
-  esbuild.buildSync({
-    absWorkingDir: appDir,
-    entryPoints: [path.join(appDir, 'main.ts')],
-    bundle: true,
-    platform: 'node',
-    target: 'node20',
-    format: 'cjs',
-    outfile: path.join(appDir, 'main.bundled.cjs'),
-    external: MAIN_EXTERNAL,
-    logLevel: 'info',
-    treeShaking: true,
-  });
+  for (const [entry, outfile] of PRELOAD_ENTRIES) bundleNode(entry, outfile, ['electron']);
+  bundleNode('main.ts', 'main.bundled.cjs', MAIN_EXTERNAL);
 }

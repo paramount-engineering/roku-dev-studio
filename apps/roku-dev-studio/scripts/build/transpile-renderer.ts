@@ -9,6 +9,17 @@ import * as path from 'path';
 import { createRequire } from 'node:module';
 import * as esbuild from 'esbuild';
 
+/** Common esbuild options for renderer browser-ESM output (per-file transpile + shared-shim bundles).
+ *  `minify` shrinks in-file whitespace/locals; `keepNames` preserves `.name`/`constructor.name`. */
+const BROWSER_ESM = {
+  platform: 'browser',
+  format: 'esm',
+  target: 'es2022',
+  minify: true,
+  keepNames: true,
+  logLevel: 'info',
+} as const;
+
 /**
  * Extract the inline CSS from index.html's single <style> block into dist/network-session-viewer.css
  * so the standalone Network Session Viewer window can reuse the exact same `ni-*` + theme styles the
@@ -32,21 +43,42 @@ export function extractIndexStyleToCss(rendererRoot: string, rendererDist: strin
   fs.writeFileSync(path.join(rendererDist, 'network-session-viewer.css'), header + match[1], 'utf-8');
 }
 
-/** Copy Monaco's `min/vs` into renderer/dist/vendor/monaco so the Fiddle window can load via the AMD loader. */
-export function copyMonacoVendor(appDir: string, rendererDist: string): void {
+/**
+ * Resolve `<pkg>/<...subpath>` from the app's node_modules, or return `null` (with a warning) when
+ * the package or the specific file is missing. Every vendor-staging step below shares this head —
+ * an optional/vendored dep is a warn-and-skip, never a hard build failure.
+ */
+function resolveVendorFile(
+  appDir: string,
+  pkg: string,
+  subpath: string[],
+  missingWarn: string
+): string | null {
   const require = createRequire(path.join(appDir, 'package.json'));
   let pkgDir: string;
   try {
-    pkgDir = path.dirname(require.resolve('monaco-editor/package.json'));
+    pkgDir = path.dirname(require.resolve(`${pkg}/package.json`));
   } catch {
-    console.warn('transpile-renderer: monaco-editor not installed — Fiddle window will not highlight code.');
-    return;
+    console.warn(missingWarn);
+    return null;
   }
-  const src = path.join(pkgDir, 'min');
+  const src = path.join(pkgDir, ...subpath);
   if (!fs.existsSync(src)) {
-    console.warn('transpile-renderer: monaco-editor/min not found at', src);
-    return;
+    console.warn(`transpile-renderer: ${pkg} ${subpath.join('/')} not found at`, src);
+    return null;
   }
+  return src;
+}
+
+/** Copy Monaco's `min/vs` into renderer/dist/vendor/monaco so the Fiddle window can load via the AMD loader. */
+export function copyMonacoVendor(appDir: string, rendererDist: string): void {
+  const src = resolveVendorFile(
+    appDir,
+    'monaco-editor',
+    ['min'],
+    'transpile-renderer: monaco-editor not installed — Fiddle window will not highlight code.'
+  );
+  if (!src) return;
   const dest = path.join(rendererDist, 'vendor', 'monaco');
   fs.mkdirSync(path.dirname(dest), { recursive: true });
   if (fs.existsSync(dest)) {
@@ -84,21 +116,13 @@ function pruneMonacoVendor(dest: string): void {
 
 /** Copy `modern-screenshot` ESM next to legacy renderer sources and under `dist/` (for `../../vendor/…` imports). */
 export function copyModernScreenshotVendor(appDir: string, rendererRoot: string, rendererDist: string): void {
-  const require = createRequire(path.join(appDir, 'package.json'));
-  let pkgDir: string;
-  try {
-    pkgDir = path.dirname(require.resolve('modern-screenshot/package.json'));
-  } catch {
-    console.warn(
-      'transpile-renderer: optional dependency modern-screenshot missing — run npm install in apps/roku-dev-studio'
-    );
-    return;
-  }
-  const src = path.join(pkgDir, 'dist', 'index.mjs');
-  if (!fs.existsSync(src)) {
-    console.warn('transpile-renderer: modern-screenshot dist/index.mjs not found at', src);
-    return;
-  }
+  const src = resolveVendorFile(
+    appDir,
+    'modern-screenshot',
+    ['dist', 'index.mjs'],
+    'transpile-renderer: optional dependency modern-screenshot missing — run npm install in apps/roku-dev-studio'
+  );
+  if (!src) return;
   const destDist = path.join(rendererDist, 'vendor', 'modern-screenshot.mjs');
   fs.mkdirSync(path.dirname(destDist), { recursive: true });
   fs.copyFileSync(src, destDist);
@@ -117,21 +141,13 @@ export function copyModernScreenshotVendor(appDir: string, rendererRoot: string,
  * import `'../../vendor/tanstack-virtual-core.mjs'` from any depth.
  */
 export function copyTanstackVirtualVendor(appDir: string, rendererRoot: string, rendererDist: string): void {
-  const require = createRequire(path.join(appDir, 'package.json'));
-  let pkgDir: string;
-  try {
-    pkgDir = path.dirname(require.resolve('@tanstack/virtual-core/package.json'));
-  } catch {
-    console.warn(
-      'transpile-renderer: @tanstack/virtual-core missing — log viewer / Console virtualization disabled'
-    );
-    return;
-  }
-  const src = path.join(pkgDir, 'dist', 'esm', 'index.js');
-  if (!fs.existsSync(src)) {
-    console.warn('transpile-renderer: @tanstack/virtual-core dist/esm/index.js not found at', src);
-    return;
-  }
+  const src = resolveVendorFile(
+    appDir,
+    '@tanstack/virtual-core',
+    ['dist', 'esm', 'index.js'],
+    'transpile-renderer: @tanstack/virtual-core missing — log viewer / Console virtualization disabled'
+  );
+  if (!src) return;
   const destDist = path.join(rendererDist, 'vendor', 'tanstack-virtual-core.mjs');
   const destSrcTree = path.join(rendererRoot, 'vendor', 'tanstack-virtual-core.mjs');
   fs.mkdirSync(path.dirname(destDist), { recursive: true });
@@ -164,17 +180,12 @@ function transpileSharedForRenderer(appDir: string, rendererDist: string): void 
   if (plainEntries.length > 0) {
     fs.mkdirSync(sharedOut, { recursive: true });
     esbuild.buildSync({
+      ...BROWSER_ESM,
       absWorkingDir: appDir,
       entryPoints: plainEntries,
       outdir: sharedOut,
       outbase: sharedRoot,
       bundle: false,
-      platform: 'browser',
-      format: 'esm',
-      target: 'es2022',
-      minify: true,
-      keepNames: true,
-      logLevel: 'info',
     });
   }
 
@@ -195,17 +206,12 @@ function transpileSharedForRenderer(appDir: string, rendererDist: string): void 
   if (shimEntries.length > 0) {
     fs.mkdirSync(sharedOut, { recursive: true });
     esbuild.buildSync({
+      ...BROWSER_ESM,
       absWorkingDir: appDir,
       entryPoints: shimEntries,
       outdir: sharedOut,
       outbase: sharedRoot,
       bundle: true,
-      platform: 'browser',
-      format: 'esm',
-      target: 'es2022',
-      minify: true,
-      keepNames: true,
-      logLevel: 'info',
     });
   }
 }
@@ -237,6 +243,40 @@ function walkTsFiles(dir: string, acc: string[] = []): string[] {
     else if (name.endsWith('.ts') && !name.endsWith('.d.ts')) acc.push(p);
   }
   return acc;
+}
+
+function walkJsFiles(dir: string, acc: string[] = []): string[] {
+  if (!fs.existsSync(dir)) return acc;
+  for (const name of fs.readdirSync(dir)) {
+    const p = path.join(dir, name);
+    const st = fs.statSync(p);
+    if (st.isDirectory()) walkJsFiles(p, acc);
+    else if (name.endsWith('.js')) acc.push(p);
+  }
+  return acc;
+}
+
+/**
+ * Rewrite the `@shared/*` alias to a plain relative path in every emitted renderer module.
+ *
+ * Renderer source imports shared code as `@shared/foo.js` (one location-independent convention, no
+ * `../` counting — resolved for type-check by tsconfig `paths`). The per-file transpile (`bundle:
+ * false`) leaves that bare specifier in the output, but the browser can't resolve a bare specifier
+ * and the app's CSP (`script-src 'self'`) forbids the inline `<script type="importmap">` that would
+ * map it. So we resolve it here instead: for each emitted `.js` file under `dist/`, replace
+ * `@shared/` with the relative path from that file's directory to `dist/shared/`. The result is ESM
+ * imports — CSP-safe, no import map, and the depth math is done once by the build, not by hand.
+ */
+function rewriteSharedAlias(rendererDist: string): void {
+  const sharedDir = path.join(rendererDist, 'shared');
+  for (const file of walkJsFiles(rendererDist)) {
+    const code = fs.readFileSync(file, 'utf-8');
+    if (!code.includes('@shared/')) continue;
+    let rel = path.relative(path.dirname(file), sharedDir);
+    if (!rel.startsWith('.')) rel = `./${rel}`;
+    // Match the specifier in both quote styles esbuild may emit (e.g. `from"@shared/x.js"`).
+    fs.writeFileSync(file, code.replace(/(["'])@shared\//g, `$1${rel}/`), 'utf-8');
+  }
 }
 
 /**
@@ -272,24 +312,19 @@ export function transpileRenderer(appDir: string): void {
   fs.rmSync(rendererDist, { recursive: true, force: true });
   fs.mkdirSync(rendererDist, { recursive: true });
 
+  // `bundle: false` keeps import/export bindings intact (esbuild never renames them across files),
+  // so BROWSER_ESM's minify only shrinks in-file whitespace/syntax/locals.
   esbuild.buildSync({
+    ...BROWSER_ESM,
     absWorkingDir: appDir,
     entryPoints,
     outdir: rendererDist,
     outbase: rendererRoot,
     bundle: false,
-    platform: 'browser',
-    format: 'esm',
-    target: 'es2022',
-    // Minify per-file. `bundle: false` keeps import/export bindings intact (esbuild never
-    // renames them), so only in-file whitespace/syntax/locals shrink. `keepNames` preserves
-    // function/class names in case any runtime relies on `.name`/`constructor.name`.
-    minify: true,
-    keepNames: true,
-    logLevel: 'info',
   });
 
   transpileSharedForRenderer(appDir, rendererDist);
+  rewriteSharedAlias(rendererDist);
   copyModernScreenshotVendor(appDir, rendererRoot, rendererDist);
   copyTanstackVirtualVendor(appDir, rendererRoot, rendererDist);
   copyMonacoVendor(appDir, rendererDist);
