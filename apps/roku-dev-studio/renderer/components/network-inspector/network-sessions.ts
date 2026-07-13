@@ -27,6 +27,10 @@ export type NetworkSession = {
 export type SessionBuildOptions = {
   /** Hide passive TLS/TCP metadata when decrypted HTTP exists. */
   decryptedOnly?: boolean;
+  /** Stable per-event capture number (id → number). When provided, it's used as the row index so
+   *  the number shown for a request never renumbers on trim/filter changes. Falls back to the
+   *  position in the built list (1-based) for events not in the map / when omitted. */
+  seqById?: Map<string, number>;
 };
 
 // A summary carries `bodyBytes` (and no `body`), so "has a captured body" is derived from sizes;
@@ -264,12 +268,9 @@ export function buildSessions(events: ParsedNetworkEvent[], options?: SessionBui
     if (e.destPort === 443 && tlsDests.has(destKey(e))) return false;
     return true;
   });
-  return filtered.map((ev, i) => eventToSession(ev, i + 1));
+  return filtered.map((ev, i) => eventToSession(ev, options?.seqById?.get(ev.id) ?? i + 1));
 }
 
-export function countDecryptedSessions(events: ParsedNetworkEvent[]): number {
-  return events.filter(isDecryptedEvent).length;
-}
 
 type FilterTerm =
   | { field: 'host' | 'method' | 'type' | 'kind' | 'path'; value: string }

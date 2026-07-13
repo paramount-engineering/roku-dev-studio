@@ -38,6 +38,9 @@ export type FindBarHandle = {
   isVisible: () => boolean;
   /** Focus + select the input (e.g. from Ctrl/Cmd+F). No-op when hidden. */
   focus: () => void;
+  /** Set the query programmatically (e.g. seeded from the Network Inspector Find modal). Searches
+   *  immediately when the bar is visible; otherwise the query is applied next time it's shown. */
+  setQuery: (query: string, jumpToFirst?: boolean) => void;
   /** Recompute matches against the current body DOM (call after the content repaints). */
   refresh: () => void;
   /** Clear the query, input, and highlights (e.g. the output was reset). Leaves the bar visible. */
@@ -80,8 +83,8 @@ export function buildFindBarElement(placeholder = 'Find'): HTMLElement {
     `<div class="find-bar-field">` +
     `<input type="text" class="find-bar-input" data-find-input placeholder="${placeholder}" spellcheck="false" aria-label="${placeholder}" />` +
     `<span class="find-bar-count" data-find-count aria-live="polite"></span>` +
-    `<button type="button" class="find-bar-btn" data-find-prev title="Previous match (Shift+Enter)" aria-label="Previous match"><span class="icon icon-xs"><svg><use href="#icon-chevron-up"/></svg></span></button>` +
-    `<button type="button" class="find-bar-btn" data-find-next title="Next match (Enter)" aria-label="Next match"><span class="icon icon-xs"><svg><use href="#icon-chevron-down"/></svg></span></button>` +
+    `<button type="button" class="find-bar-btn" data-find-prev title="Previous Match (Shift+Enter)" aria-label="Previous Match"><span class="icon icon-xs"><svg><use href="#icon-chevron-up"/></svg></span></button>` +
+    `<button type="button" class="find-bar-btn" data-find-next title="Next Match (Enter)" aria-label="Next Match"><span class="icon icon-xs"><svg><use href="#icon-chevron-down"/></svg></span></button>` +
     `<button type="button" class="find-bar-btn" data-find-clear title="Clear search (Esc)" aria-label="Clear search"><span class="icon icon-xs"><svg><use href="#icon-x"/></svg></span></button>` +
     `</div>`;
   return bar;
@@ -374,6 +377,17 @@ export function createFindBar(opts: FindBarOptions): FindBarHandle | null {
       if (!visible) return;
       inputEl.focus();
       inputEl.select();
+    },
+    setQuery(q: string, jumpToFirst = true) {
+      if (inputEl.value === q && query === q) {
+        // Already showing this query — just re-anchor if visible (content may have repainted).
+        if (visible) runSearch(jumpToFirst);
+        return;
+      }
+      inputEl.value = q;
+      query = q;
+      clearTimeout(debounce);
+      if (visible) runSearch(jumpToFirst);
     },
     refresh() {
       if (!visible || !query) return;

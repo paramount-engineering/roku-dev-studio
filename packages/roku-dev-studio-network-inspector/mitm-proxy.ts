@@ -432,7 +432,6 @@ function isValidSniHostname(name: string | undefined | null): name is string {
 export class RokuMitmProxy {
   private server: http.Server | null = null;
   private readonly leafCache = new Map<string, { certPem: string; keyPem: string }>();
-  private readonly transactionStarts = new Map<string, number>();
   private running = false;
   private lastError: string | undefined;
   private readonly opts: MitmProxyOptions;
@@ -447,11 +446,6 @@ export class RokuMitmProxy {
 
   getLastError(): string | undefined {
     return this.lastError;
-  }
-
-  getListenAddress(gatewayIp?: string): string {
-    const host = gatewayIp || this.opts.gatewayIp || '0.0.0.0';
-    return `${host}:${this.opts.port}`;
   }
 
   start(): boolean {
@@ -499,10 +493,8 @@ export class RokuMitmProxy {
     const srv = this.server;
     this.server = null;
     this.running = false;
-    // Release per-host leaf certs and any in-flight transaction timers so a stop/start cycle
-    // doesn't leak them for the process lifetime.
+    // Release per-host leaf certs so a stop/start cycle doesn't leak them for the process lifetime.
     this.leafCache.clear();
-    this.transactionStarts.clear();
     srv.close();
   }
 
@@ -522,21 +514,14 @@ export class RokuMitmProxy {
     response: NetworkHttpMessage,
     startedAtMs?: number
   ): void {
-    const existingStart = this.transactionStarts.get(transactionId);
-    const startMs = startedAtMs ?? existingStart;
-    if (response.statusCode === 0) {
-      // Genuinely pending — remember the start so the terminal emit can compute a duration. Only
-      // track it when no start time is otherwise known (the HTTP path supplies startedAtMs and so
-      // never needs the map).
-      if (startMs == null) this.transactionStarts.set(transactionId, Date.now());
-    } else if (existingStart != null) {
-      // Terminal status for a previously-pending transaction — release its tracked start. One-shot
-      // terminal emits (blocked/mock/error/TLS-fail) carry a fresh id with no tracked start, so they
-      // no longer leave a dangling map entry that leaked for the process lifetime.
-      this.transactionStarts.delete(transactionId);
-    }
+    // The genuine "Pending → terminal" HTTP path passes `startedAtMs` on both emits, so duration is
+    // computed directly from it. One-shot emits (reset/blocked/mock/error/TLS-fail) omit it and have
+    // no duration — and, crucially, no longer record a per-id start that would leak (the socket is
+    // destroyed with no terminal emit to release it).
     const durationMs =
-      response.statusCode === 0 || startMs == null ? undefined : Math.max(0, Date.now() - startMs);
+      response.statusCode === 0 || startedAtMs == null
+        ? undefined
+        : Math.max(0, Date.now() - startedAtMs);
     this.opts.onTransaction({
       transactionId,
       deviceIp,

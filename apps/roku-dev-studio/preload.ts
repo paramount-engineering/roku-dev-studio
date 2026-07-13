@@ -527,6 +527,8 @@ contextBridge.exposeInMainWorld('roku', {
     ipcRenderer.invoke(IPC.NetworkInspectorGetEvents, { deviceIp, limit, sinceSeq }),
   networkInspectorGetEventDetail: (id: string) =>
     ipcRenderer.invoke(IPC.NetworkInspectorGetEventDetail, { id }),
+  networkInspectorFind: (deviceIp: string, options: unknown) =>
+    ipcRenderer.invoke(IPC.NetworkInspectorFind, { deviceIp, options }),
   networkInspectorClearEvents: (deviceIps?: string[]) =>
     ipcRenderer.invoke(IPC.NetworkInspectorClearEvents, { deviceIps }),
   networkInspectorSetRecording: (payload: { deviceIps: string[]; recording: boolean }) =>

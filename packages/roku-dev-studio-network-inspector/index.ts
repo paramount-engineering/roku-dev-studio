@@ -60,6 +60,21 @@ export {
   defaultCapturePermissionHint
 } from './capture-engine';
 export { isBpfLaunchDaemonInstalled, installBpfAccessMacOS } from './bpf-access-macos';
+// "Find in content" matcher — shared by the desktop app (over disk-backed detail) and the offline
+// Session Viewer (over in-memory events) so search semantics stay identical.
+export {
+  createContentMatcher,
+  matchEventContent,
+  findNeedsDetail,
+  ALL_FIND_SCOPES
+} from './content-search';
+export type {
+  NetworkFindScope,
+  NetworkFindScopeCounts,
+  NetworkFindMatch,
+  NetworkFindOptions,
+  ContentMatcher
+} from './content-search';
 export { installCaptureAccessLinux } from './capture-access-linux';
 // Per-platform capture worker abstraction (one provider per OS behind a common contract).
 export { getCapturePlatform } from './platform';
@@ -67,6 +82,13 @@ export type { CapturePlatform, PlatformCaptureReadiness } from './platform/types
 import { RokuMitmProxy } from './mitm-proxy';
 import { mitmTransactionToEvent } from './mitm-events';
 import { NetworkDetailStore } from './detail-store';
+import {
+  createContentMatcher,
+  matchEventContent,
+  findNeedsDetail,
+  type NetworkFindMatch,
+  type NetworkFindOptions
+} from './content-search';
 import { extractFrameIps } from './packet-parser';
 import { exportCaCertToFile, exportCaPemToFile } from './channel-ca-inject';
 
@@ -685,6 +707,39 @@ export class NetworkInspectorService {
     return this.detailStore.get(id);
   }
 
+  /**
+   * "Find in content" over the captured transactions for one device: matches the query against the
+   * requested scopes (URL / request+response headers+bodies) and returns per-event match counts.
+   *
+   * URL-only searches are served straight from the in-memory summary buffer (no disk). When a header
+   * or body scope is active, the full event is pulled from the disk-backed detail store per id
+   * (respecting `detailAvailable`), so bodies never have to live in memory. Results follow the same
+   * newest-window ordering as the summary buffer; `maxResults` bounds worst-case work.
+   */
+  async searchEvents(
+    deviceIp: string,
+    options: NetworkFindOptions,
+    maxResults = 2000
+  ): Promise<NetworkFindMatch[]> {
+    const matcher = createContentMatcher(options);
+    if (!matcher) return [];
+    const summaries = this.eventBuffer.filter((e) => this.eventMatchesDeviceQuery(e, deviceIp));
+    const needsDetail = findNeedsDetail(matcher.scopes) && !!this.detailStore;
+    const results: NetworkFindMatch[] = [];
+    for (const summary of summaries) {
+      if (results.length >= maxResults) break;
+      // Pull full detail only when a header/body scope is active and the event has it on disk;
+      // otherwise the summary (which carries the URL) is enough.
+      let event: ParsedNetworkEvent | null = summary;
+      if (needsDetail && summary.detailAvailable) {
+        event = (await this.detailStore!.get(summary.id)) ?? summary;
+      }
+      const match = matchEventContent(event, matcher);
+      if (match) results.push(match);
+    }
+    return results;
+  }
+
   clearEventsForDevices(deviceIps?: string[]): { cleared: number } {
     const before = this.eventBuffer.length;
     if (!deviceIps || deviceIps.length === 0) {
@@ -792,7 +847,10 @@ export class NetworkInspectorService {
       global.writeUInt32LE(0, 12);
       global.writeUInt32LE(65535, 16);
       global.writeUInt32LE(1, 20);
-      fs.writeSync(fd, global);
+      // Assemble the whole pcap into one buffer and write it once. The previous per-packet
+      // fs.writeSync (2 syscalls × up to 100k packets/device) blocked the main thread for the
+      // entire export.
+      const parts: Buffer[] = [global];
       for (const pkt of packets) {
         const hdr = Buffer.alloc(16);
         const sec = Math.floor(pkt.timestampMs / 1000);
@@ -801,9 +859,9 @@ export class NetworkInspectorService {
         hdr.writeUInt32LE(usec, 4);
         hdr.writeUInt32LE(pkt.frame.length, 8);
         hdr.writeUInt32LE(pkt.frame.length, 12);
-        fs.writeSync(fd, hdr);
-        fs.writeSync(fd, pkt.frame);
+        parts.push(hdr, pkt.frame);
       }
+      fs.writeSync(fd, Buffer.concat(parts));
       fs.closeSync(fd);
       return { success: true, packetsWritten: packets.length };
     } catch (err) {
@@ -824,8 +882,11 @@ export class NetworkInspectorService {
 
   private startPolling(): void {
     if (this.pollTimer) return;
-    void this.tick();
-    this.pollTimer = setInterval(() => void this.tick(), 4000);
+    // `tickInner` awaits async platform calls that can reject; swallow so a failing tick can't become
+    // an unhandled rejection (noisy, and fatal under strict main-process settings).
+    const runTick = (): void => void this.tick().catch(() => {});
+    runTick();
+    this.pollTimer = setInterval(runTick, 4000);
   }
 
   private stopPolling(): void {

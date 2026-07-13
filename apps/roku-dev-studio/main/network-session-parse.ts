@@ -16,6 +16,7 @@ import {
   type PacketParseContext
 } from 'roku-dev-studio-network-inspector/packet-parser';
 import { resetHttpStreams } from 'roku-dev-studio-network-inspector/http-stream-parser';
+import { isPrivateClientIp } from './network-inspector/index';
 
 export type NetworkSessionFormat = 'bundle' | 'har' | 'pcap';
 
@@ -185,23 +186,9 @@ const PCAP_MAGIC_NS_LE = 0xa1b23c4d; // nanosecond, little-endian
 const PCAP_MAGIC_NS_BE = 0x4d3cb2a1; // nanosecond, byte-swapped
 const LINKTYPE_ETHERNET = 1;
 
-/**
- * RFC1918 private client IP (minus the typical `.1` gateway). The live parser attributes a frame to
- * a device only when one endpoint is a known client IP; offline we have no device list, so we treat
- * every private endpoint seen in the capture as a "client" so both request and response frames get
- * attributed and decoded (mirrors the hotspot-client semantics without a fixed subnet prefix).
- */
-function isPrivateClientIp(ip: string): boolean {
-  if (!ip || ip.endsWith('.1')) return false;
-  if (ip.startsWith('10.')) return true;
-  if (ip.startsWith('192.168.')) return true;
-  const m = /^172\.(\d+)\./.exec(ip);
-  if (m) {
-    const n = Number(m[1]);
-    return n >= 16 && n <= 31;
-  }
-  return false;
-}
+// `isPrivateClientIp` (imported from the engine) treats every RFC1918 endpoint as a "client": offline
+// we have no device list, so both request and response frames get attributed and decoded, mirroring
+// the hotspot-client semantics without a fixed subnet prefix.
 
 /**
  * Replay a classic-format `.pcap` (not pcapng) through the live frame parser. Reads the 24-byte

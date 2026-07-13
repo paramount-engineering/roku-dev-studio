@@ -63,15 +63,13 @@ export function renderSidebarSequence(
   return `<div class="ni-sidebar-scroll">${renderSidebarRows(sessions, selectedEventId)}</div>`;
 }
 
-function structureLeafHtml(
-  s: NetworkSession,
-  selectedEventId: string | null,
-  groupIndex: number
-): string {
+function structureLeafHtml(s: NetworkSession, selectedEventId: string | null): string {
   const sel = s.eventId === selectedEventId ? ' ni-struct-leaf-selected' : '';
   const label = s.kind === 'dns' ? s.path : `${s.method} ${s.path}`;
+  // Use the session's stable capture index (not a per-group ordinal) so a request keeps the same
+  // number across sequence/grouped views and it doesn't renumber when older events are trimmed.
   return `<div class="ni-struct-leaf${sel}" data-event-id="${escapeHtml(s.eventId)}">
-    <span class="ni-struct-leaf-seq">${seqPillHtml(groupIndex, `Request #${groupIndex} in group`)}</span>
+    <span class="ni-struct-leaf-seq">${seqPillHtml(s.index, `Request #${s.index}`)}</span>
     <span class="ni-struct-leaf-label">${escapeHtml(label)}</span>
     <span class="ni-struct-leaf-status">${statusPillHtml(s)}</span>
     ${sessionMetaHtml(s)}
@@ -81,10 +79,9 @@ function structureLeafHtml(
 /** Leaf rows only, for appending to an existing host group (incremental structure paint). */
 export function renderStructureLeaves(
   sessions: NetworkSession[],
-  selectedEventId: string | null,
-  startIndex: number
+  selectedEventId: string | null
 ): string {
-  return sessions.map((s, i) => structureLeafHtml(s, selectedEventId, startIndex + i + 1)).join('');
+  return sessions.map((s) => structureLeafHtml(s, selectedEventId)).join('');
 }
 
 export function renderStructureTree(
@@ -108,7 +105,7 @@ export function renderStructureTree(
         selectedEventId != null && g.sessions.some((s) => s.eventId === selectedEventId);
       const hostStateClass = open ? 'ni-struct-host-open' : 'ni-struct-host-collapsed';
       const rowSel = !open && containsSelected ? ' ni-struct-host-row-selected' : '';
-      const children = renderStructureLeaves(g.sessions, selectedEventId, 0);
+      const children = renderStructureLeaves(g.sessions, selectedEventId);
       return `<div class="ni-struct-host ${hostStateClass}" data-struct-host="${escapeHtml(g.host)}">
         <div class="ni-struct-host-row${rowSel}" data-struct-toggle="${escapeHtml(g.host)}">
           <span class="ni-struct-chevron">${chevron}</span>
@@ -120,4 +117,29 @@ export function renderStructureTree(
     })
     .join('');
   return `<div class="ni-structure-wrap">${noticeHtml}${html}</div>`;
+}
+
+/**
+ * Sync the "expand/collapse all groups" toggle button: visible only in Group-by-Host view with
+ * hosts, chevron + label reflecting the all-collapsed state. Shared by the live tab and the offline
+ * viewer so the a11y contract (aria-hidden / tabindex) can't drift between them.
+ */
+export function syncGroupToggleButton(
+  btn: HTMLButtonElement | null,
+  viewMode: 'sequence' | 'structure',
+  hosts: string[],
+  collapsedHosts: Set<string>
+): void {
+  if (!(btn instanceof HTMLButtonElement)) return;
+  const show = viewMode === 'structure' && hosts.length > 0;
+  btn.classList.toggle('is-visible', show);
+  btn.setAttribute('aria-hidden', show ? 'false' : 'true');
+  btn.tabIndex = show ? 0 : -1;
+  if (!show) return;
+  const allCollapsed = hosts.every((h) => collapsedHosts.has(h));
+  const chevron = btn.querySelector('.ni-struct-chevron');
+  if (chevron) chevron.textContent = allCollapsed ? '▶' : '▼';
+  const label = allCollapsed ? 'Expand all groups' : 'Collapse all groups';
+  btn.title = label;
+  btn.setAttribute('aria-label', label);
 }
