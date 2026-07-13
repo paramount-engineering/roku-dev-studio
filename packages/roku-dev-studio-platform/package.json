@@ -60,6 +60,10 @@
     "./path-safe": {
       "types": "./dist/path-safe.d.ts",
       "default": "./dist/path-safe.js"
+    },
+    "./text-match": {
+      "types": "./dist/text-match.d.ts",
+      "default": "./dist/text-match.js"
     }
   }
 }

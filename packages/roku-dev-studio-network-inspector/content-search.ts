@@ -16,6 +16,7 @@
  * as text is meaningless. Text bodies (the common JSON/text/XML/form case) are searched in full.
  */
 import type { NetworkHttpMessage, ParsedNetworkEvent } from './types';
+import { MAX_FIND_QUERY_LENGTH, compileGlobalSearchRegex } from 'roku-dev-studio-platform/text-match';
 
 /** The distinct parts of a transaction that Find can search. */
 export type NetworkFindScope = 'url' | 'reqHeaders' | 'reqBody' | 'respHeaders' | 'respBody';
@@ -43,7 +44,8 @@ export type NetworkFindOptions = {
   /** Which scopes to search. Empty/undefined = all scopes. */
   scopes?: readonly NetworkFindScope[];
   caseSensitive?: boolean;
-  /** Treat `query` as a JS regular expression. Invalid patterns yield a null matcher. */
+  /** Treat `query` as a JS regular expression. A dangerous (ReDoS-suspect) or un-compilable pattern
+   *  degrades to a literal search rather than yielding no matcher — see {@link createContentMatcher}. */
   regex?: boolean;
 };
 
@@ -95,24 +97,25 @@ function countRegex(haystack: string, re: RegExp): number {
 }
 
 /**
- * Compile a {@link ContentMatcher} from options, or `null` when the query is empty or (in regex
- * mode) not a valid pattern. Substring search is case-insensitive by default; the needle is
+ * Compile a {@link ContentMatcher} from options, or `null` when the query is empty or too long (see
+ * {@link MAX_FIND_QUERY_LENGTH}). Substring search is case-insensitive by default; the needle is
  * lower-cased once and each haystack is lower-cased at count time.
+ *
+ * Regex mode shares the app-wide {@link compileGlobalSearchRegex}, which applies the ReDoS/length
+ * guards and falls back to a literal search on a dangerous or un-compilable pattern — important here
+ * because NI Find runs in the Electron **main process**, where a catastrophic regex would stall the
+ * whole app, not just one renderer.
  */
 export function createContentMatcher(opts: NetworkFindOptions): ContentMatcher | null {
   const raw = opts.query ?? '';
-  if (!raw) return null;
+  if (!raw || raw.length > MAX_FIND_QUERY_LENGTH) return null;
   const scopeList =
     opts.scopes && opts.scopes.length > 0 ? opts.scopes : ALL_FIND_SCOPES;
   const scopes = new Set<NetworkFindScope>(scopeList);
 
   if (opts.regex) {
-    let re: RegExp;
-    try {
-      re = new RegExp(raw, opts.caseSensitive ? 'g' : 'gi');
-    } catch {
-      return null;
-    }
+    const re = compileGlobalSearchRegex(raw, { regex: true, caseSensitive: !!opts.caseSensitive });
+    if (!re) return null;
     return { scopes, count: (hay) => (hay ? countRegex(hay, re) : 0) };
   }
 
