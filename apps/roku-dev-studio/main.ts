@@ -288,8 +288,11 @@ function createWindow(appState: AppWindowState) {
   });
   registerDiagnosticWebContents(win.webContents);
 
-  // Show window as soon as it's ready (before content fully loads)
+  // Show window as soon as it's ready (before content fully loads). Maximize
+  // first so it comes up filling the screen from startup (the 1400x900 above is
+  // the restored/unmaximized size the user gets when they un-maximize).
   win.once('ready-to-show', () => {
+    win.maximize();
     win.show();
   });
 
