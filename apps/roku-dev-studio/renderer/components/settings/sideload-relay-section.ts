@@ -9,6 +9,8 @@
  * dedicated `sideloadRelay*` IPC.
  */
 
+import { attachBackdropClickToClose } from '../../modules/utils/modal-backdrop-click.js';
+
 interface Target {
   id: string;
   ip: string;
@@ -753,9 +755,8 @@ export function initSideloadRelaySection(): void {
   document.getElementById('srModalCancel')?.addEventListener('click', () => closeSetupModal());
   document.getElementById('srModalSave')?.addEventListener('click', () => applySetupModal());
   document.getElementById('srRescanBtn')?.addEventListener('click', () => void scanDevices(true));
-  document.getElementById('srSetupOverlay')?.addEventListener('click', (e) => {
-    if (e.target === document.getElementById('srSetupOverlay')) closeSetupModal();
-  });
+  const srSetupOverlay = document.getElementById('srSetupOverlay');
+  if (srSetupOverlay instanceof HTMLElement) attachBackdropClickToClose(srSetupOverlay, closeSetupModal);
 
   // Escape should peel back only the top layer: an open inline password editor
   // first, then this modal — never the whole Settings window while the modal is

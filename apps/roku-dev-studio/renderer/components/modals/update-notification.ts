@@ -9,6 +9,7 @@
  */
 
 import { showToast } from '../../modules/utils/ui.js';
+import { attachBackdropClickToClose } from '../../modules/utils/modal-backdrop-click.js';
 
 interface UpdaterStatus {
   type: 'idle' | 'checking' | 'available' | 'not-available' | 'downloading' | 'ready' | 'error';
@@ -303,9 +304,7 @@ function showReleaseNotesModal(opts: { originRect?: DOMRect } = {}): void {
   document.body.appendChild(modal);
 
   const close = () => removeReleaseNotesModal();
-  modal.addEventListener('click', (e) => {
-    if (e.target === modal) close();
-  });
+  attachBackdropClickToClose(modal, close);
   modal.querySelector('.rds-release-notes-close')?.addEventListener('click', close);
   document.getElementById('rdsReleaseNotesOpenPage')?.addEventListener('click', () => {
     (window as any).roku?.openExternal?.(LATEST_RELEASE_URL).catch(() => undefined);

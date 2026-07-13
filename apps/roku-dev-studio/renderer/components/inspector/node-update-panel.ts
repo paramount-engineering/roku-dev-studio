@@ -6,6 +6,7 @@ import {
   playModalOpenMotion,
   closeModalWithOriginMotion
 } from '../../modules/utils/modal-origin-motion.js';
+import { attachBackdropClickToClose } from '../../modules/utils/modal-backdrop-click.js';
 import type { DevicePanelRoot, DisplayResponseFn, RaleSendCommand } from './inspector-types.js';
 import type { NodeUpdateContext } from './inspector-node-update-helpers.js';
 
@@ -424,9 +425,7 @@ export function setupNodeUpdatePanel(panel: DevicePanelRoot, options: NodeUpdate
 
   closeBtn?.addEventListener('click', () => closeModal());
   cancelBtn?.addEventListener('click', () => closeModal());
-  rootModal.addEventListener('click', (e: MouseEvent) => {
-    if (e.target === rootModal) closeModal();
-  });
+  attachBackdropClickToClose(rootModal, closeModal);
   rootModal.addEventListener('keydown', (e: KeyboardEvent) => {
     if (e.key === 'Escape' && rootModal.classList.contains('active')) {
       e.stopPropagation();

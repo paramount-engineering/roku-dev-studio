@@ -13,6 +13,7 @@ import {
   type NiSetupPlatform,
 } from '@shared/network-inspector/setup-guide.js';
 import { initSideloadRelaySection } from './sideload-relay-section.js';
+import { attachBackdropClickToClose } from '../../modules/utils/modal-backdrop-click.js';
 
 const api = (window as any).settingsApi;
 if (!api) {
@@ -1245,14 +1246,8 @@ var btnOpenNiSetup = el('btnOpenNiSetup');
 if (btnOpenNiSetup) btnOpenNiSetup.addEventListener('click', openNiSetup);
 var niSetupClose = el('niSetupModalClose');
 if (niSetupClose) niSetupClose.addEventListener('click', closeNiSetup);
-if (niSetupModal) {
-  var niSetupPressOnOverlay = false;
-  niSetupModal.addEventListener('mousedown', function (e: MouseEvent) {
-    niSetupPressOnOverlay = e.target === niSetupModal;
-  });
-  niSetupModal.addEventListener('click', function (e: MouseEvent) {
-    if (e.target === niSetupModal && niSetupPressOnOverlay) closeNiSetup();
-  });
+if (niSetupModal instanceof HTMLElement) {
+  attachBackdropClickToClose(niSetupModal, closeNiSetup);
 }
 
 wireSaveButton('btnSaveGeneral', 'General settings saved.', 'saveStatusGeneral');
