@@ -909,6 +909,10 @@ export function attachConsoleFindBar(opts: AttachConsoleFindBarOpts): ConsoleFin
         findInputEl.blur();
         return;
       }
+      // Swallow the event so a containing modal's Escape-to-close handler
+      // doesn't also fire — Escape in the find box clears the query first.
+      e.preventDefault();
+      e.stopPropagation();
       findInputEl.value = '';
       currentQuery = '';
       executeFindAction();
