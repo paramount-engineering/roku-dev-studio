@@ -65,7 +65,7 @@
     "@types/ws": "^8.18.1",
     "concurrently": "^10.0.0",
     "cross-env": "^10.0.0",
-    "electron": "39.8.5",
+    "electron": "39.8.10",
     "electron-builder": "^26.0.0",
     "esbuild": "0.28.1",
     "jsdom": "^29.0.0",
