@@ -38,6 +38,9 @@ import {
 import { attachBackdropClickToClose, attachEscToClose } from './modules/utils/modal-backdrop-click.js';
 import { resolveRokuKeyFromEvent } from './modules/utils/keyboard-remote-keymap.js';
 import { setupTelnet } from './modules/telnet/telnet-console-panel.js';
+import { buildFindBarElement, createFindBar, bindFindShortcut } from './modules/ui/find-bar.js';
+import { makeCenteredSearchResizable } from './modules/ui/header-search-resize.js';
+import { searchWidthKey } from './modules/ui/search-storage-keys.js';
 import { setupQueries as setupQueriesComponent } from './components/queries/index.js';
 import { setupInspector as setupInspectorComponent } from './components/inspector/index.js';
 import { setupDevApp as setupDevAppComponent } from './components/dev-app/index.js';
@@ -4653,12 +4656,9 @@ function setupRemoteLocationModal() {
   
   cancelBtn.addEventListener('click', closeModal);
   
-  // Close on backdrop click
-  locationModal.addEventListener('click', (e) => {
-    if (e.target === locationModal) {
-      closeModal();
-    }
-  });
+  // Close on backdrop click, guarded so a drag that starts inside and releases
+  // on the backdrop doesn't dismiss the modal (see modal-backdrop-click.ts).
+  attachBackdropClickToClose(locationModal, closeModal);
   
   // Close on Escape
   document.addEventListener('keydown', (e) => {
@@ -5590,9 +5590,12 @@ async function init() {
 
     helpModalClose.addEventListener('click', closeHelpModal);
 
-    helpModal.addEventListener('click', (e) => {
-      if (e.target === helpModal) closeHelpModal();
-    });
+    // Backdrop-click-to-close, gated on the press ALSO starting on the backdrop.
+    // The naive `if (e.target === helpModal) close()` would dismiss the modal
+    // when a drag that STARTED inside (e.g. on the search-bar resize handle)
+    // releases out on the backdrop — the synthesized click's common ancestor is
+    // the overlay. This shared helper latches the mousedown target and skips it.
+    attachBackdropClickToClose(helpModal, closeHelpModal);
 
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape' && helpModal.classList.contains('active')) {
@@ -5612,6 +5615,40 @@ async function init() {
       const sections = navItems
         .map(btn => btn.dataset.target ? document.getElementById(btn.dataset.target) : null)
         .filter((el): el is HTMLElement => el instanceof HTMLElement);
+
+      // In-header search across the whole guide. The guide is one scroll
+      // container (#helpContent) with every section stacked, so the shared
+      // simple find bar — the same engine used by ECP Query results and the
+      // Network body panes — highlights matches across all sections and
+      // navigates between them. Always visible in the header; Ctrl/Cmd+F
+      // focuses it while the modal is open.
+      const helpFindBarEl = buildFindBarElement('Search Help & Guide');
+      helpFindBarEl.classList.add('find-bar-header');
+      const helpHeader = helpModal.querySelector('.modal-header');
+      if (helpHeader instanceof HTMLElement) helpHeader.insertBefore(helpFindBarEl, helpModalClose);
+      else helpContent.insertAdjacentElement('beforebegin', helpFindBarEl);
+      const helpFindBar = createFindBar({
+        bodyEl: helpContent,
+        barEl: helpFindBarEl,
+        highlightId: 'help-find'
+      });
+      if (helpFindBar) {
+        helpFindBar.setVisible(true);
+        bindFindShortcut(helpModal, helpFindBar);
+      }
+      // Centered, drag-to-resize search box — same behavior as the ECP Query /
+      // Network header search bars. Centered on the modal header between the
+      // pinned title (left) and close button (right).
+      if (helpHeader instanceof HTMLElement) {
+        makeCenteredSearchResizable(helpFindBarEl, {
+          storageKey: searchWidthKey('help', 'guide'),
+          header: helpHeader,
+          leftGroupSelector: '.modal-title',
+          rightGroupSelector: '.modal-close',
+          minWidthPx: 220,
+          maxDefaultWidth: 380
+        });
+      }
 
       const setActive = (targetId: string | null) => {
         if (!targetId) return;
@@ -5744,6 +5781,7 @@ async function init() {
       // Reset to the first section every time the modal opens so the user
       // always lands on a predictable starting point.
       const resetToTop = () => {
+        helpFindBar?.clear();
         helpContent.scrollTop = 0;
         if (navItems[0]?.dataset.target) setActive(navItems[0].dataset.target);
       };
@@ -5765,9 +5803,7 @@ async function init() {
 
     devModeModalClose.addEventListener('click', closeDevModeModal);
 
-    devModeModal.addEventListener('click', (e) => {
-      if (e.target === devModeModal) closeDevModeModal();
-    });
+    attachBackdropClickToClose(devModeModal, closeDevModeModal);
 
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape' && devModeModal.classList.contains('active')) {
@@ -5788,9 +5824,7 @@ async function init() {
     };
 
     ecpModeModalClose.addEventListener('click', closeEcpModeModal);
-    ecpModeModal.addEventListener('click', (e) => {
-      if (e.target === ecpModeModal) closeEcpModeModal();
-    });
+    attachBackdropClickToClose(ecpModeModal, closeEcpModeModal);
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape' && ecpModeModal.classList.contains('active')) {
         closeEcpModeModal();
