@@ -7,7 +7,25 @@
  * can be unit-tested in isolation. The find bar still owns the runtime state
  * (cache map, active `flatHits`, navigation cursor); this module just provides
  * the building blocks.
+ *
+ * The low-level query-safety primitives (ReDoS/length guards, literal escaping, regex compilation)
+ * are shared app-wide via `roku-dev-studio-platform/text-match` so the Console, Log Viewer, and
+ * Network Inspector Find all make the same decisions. They're re-exported here so this module stays
+ * the single import hub for the console find bar.
  */
+import {
+  MAX_FIND_QUERY_LENGTH,
+  isLikelyRedos,
+  safeRegexEscape,
+  compileGlobalSearchRegex
+} from '@shared/platform/text-match.js';
+
+export {
+  MAX_REGEX_PATTERN_LENGTH,
+  MAX_FIND_QUERY_LENGTH,
+  isLikelyRedos,
+  safeRegexEscape
+} from '@shared/platform/text-match.js';
 
 export type ConsoleFindOptions = {
   case: boolean;
@@ -36,15 +54,6 @@ export type FindCacheEntry = {
   scannedUpTo: number;
 };
 
-/** Reject patterns longer than this — the catastrophic-backtracking heuristic
- *  doesn't catch every footgun, and pathological 200+ char regexes are an
- *  outsize threat to the renderer's main thread. */
-export const MAX_REGEX_PATTERN_LENGTH = 100;
-
-/** Hard cap on the find input. Beyond this we assume the user pasted random
- *  binary into the box and refuse to scan. */
-export const MAX_FIND_QUERY_LENGTH = 300;
-
 /**
  * Cap on painted match Range objects. The find count and prev/next navigation
  * still cover all hits — we just stop *painting* once we have this many.
@@ -58,21 +67,6 @@ export const HIGHLIGHT_PAINT_CAP = 5000;
  *  is intentional — eight cached queries covers the common back-and-forth flow
  *  ("debug" / "error" / "warning") without holding too many large hit arrays. */
 export const FIND_CACHE_CAP = 8;
-
-/**
- * Catastrophic-backtracking heuristic. Long patterns are rejected outright;
- * common nested-quantifier shapes are recognized by the regex below. Both
- * paths fall back to literal substring matching in the find bar.
- */
-export function isLikelyRedos(pattern: string): boolean {
-  if (pattern.length > MAX_REGEX_PATTERN_LENGTH) return true;
-  return /\(\.\*\)\*|\(\.\+\)\+|\(\.\*\)\+|\(\.\+\)\*|\{\d+,\s*\d*\}\s*\+/.test(pattern);
-}
-
-/** Escape a string so every character is literal in a `RegExp`. */
-export function safeRegexEscape(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
 
 /**
  * Plain-text match used by Filter mode and Copy/Save. Mirrors `buildSearchRegex`'s
@@ -131,20 +125,9 @@ export function cacheKeyFor(query: string, options: ConsoleFindOptions): string 
  * pattern doesn't break the search outright.
  */
 export function buildSearchRegex(query: string, findOptions: ConsoleFindOptions): RegExp | null {
-  if (!query) return null;
-  if (query.length > MAX_FIND_QUERY_LENGTH) return null;
-  const flags = findOptions.case ? 'g' : 'gi';
-  try {
-    if (findOptions.regex && !isLikelyRedos(query)) {
-      return new RegExp(query, flags);
-    }
-  } catch {
-    /* fall through to escaped */
-  }
-  const escaped = safeRegexEscape(query);
-  try {
-    return findOptions.word ? new RegExp(`\\b${escaped}\\b`, flags) : new RegExp(escaped, flags);
-  } catch {
-    return null;
-  }
+  return compileGlobalSearchRegex(query, {
+    regex: findOptions.regex,
+    word: findOptions.word,
+    caseSensitive: findOptions.case
+  });
 }
