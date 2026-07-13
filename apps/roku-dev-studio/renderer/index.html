@@ -71,7 +71,7 @@
        */
       --titlebar-content-scale: calc(1 / min(var(--app-zoom, 1), 1));
       /* Sidebar lists + device tab panels: one outer shell and one inner inset */
-      --device-shell-padding: 16px;
+      --device-shell-padding: 12px;
       --device-section-inset: 12px;
       --device-layout-gap: 12px;
     }
@@ -5832,7 +5832,7 @@
     ::highlight(telnet-json-plus) {
       background-color: rgba(56, 189, 248, 0.1);
     }
-    
+
     .telnet-actions {
       display: flex;
       align-items: center;
@@ -7090,11 +7090,12 @@
       align-items: center;
       column-gap: 16px;
       /* Keep the gap below the divider line equal to the card's side/bottom gaps
-         (the tab-panel's 16px padding). The active pane already adds 6px padding-top
-         (compositor safety), so 10px here lands the first card exactly 16px below
-         the line. padding-bottom is the header's own breathing room above the line —
-         trimmed so the header doesn't waste vertical space around a 1px rule. */
-      margin-bottom: 10px;
+         (--device-shell-padding, the tab-panel's padding). The active pane already
+         adds 6px padding-top (compositor safety), so subtract that here — this tracks
+         --device-shell-padding automatically instead of a hardcoded value that drifts
+         when the shell padding changes. padding-bottom is the header's own breathing
+         room above the line — trimmed so it doesn't waste space around a 1px rule. */
+      margin-bottom: calc(var(--device-shell-padding) - 6px);
       padding-bottom: 12px;
       border-bottom: 1px solid var(--border);
       min-width: 0;
@@ -9585,13 +9586,15 @@
     }
     .find-bar[hidden] { display: none !important; }
     .find-bar-icon { color: var(--text-muted); flex: 0 0 auto; }
-    /* One bordered box that holds the input + (flush-right) count and nav/clear buttons. */
+    /* One bordered box that holds the search icon + input + (flush-right) count and nav/clear
+       buttons — the icon lives inside the box so it reads as part of the field, not a stray glyph. */
     .find-bar-field {
       flex: 1 1 auto;
       min-width: 0;
       display: flex;
       align-items: center;
       gap: 2px;
+      padding-left: 8px;
       padding-right: 4px;
       background: var(--bg-deep);
       border: 1px solid var(--border);
@@ -9606,7 +9609,7 @@
       outline: none;
       color: var(--text-primary);
       font-size: 12px;
-      padding: 4px 8px;
+      padding: 4px 6px;
     }
     .find-bar-count {
       flex: 0 0 auto;
@@ -11913,6 +11916,22 @@
       min-height: 0;
       overflow: hidden;
     }
+
+    /* In-header guide search. Unlike the card-header search bars (which overlay
+       the header, centered on its true center), this one is an in-flow flex
+       child: with the header's `space-between`, the three children (title, bar,
+       close) get equal gaps, so the bar sits centered in the space LEFT OVER
+       between the title and close button — not the header's geometric center.
+       `position: relative` anchors the shared drag handle to the bar's edge; the
+       `.find-bar-header` rule above supplies the transparent, borderless look. */
+    .help-modal .modal-header { position: relative; }
+    .help-modal .modal-header .find-bar.find-bar-header {
+      position: relative;
+      flex: 0 0 auto;
+      width: 380px;
+      max-width: calc(100% - 24px);
+    }
+    .help-modal .modal-header .find-bar.find-bar-header .find-bar-input { height: 28px; }
 
     .help-nav {
       flex: 0 0 220px;
