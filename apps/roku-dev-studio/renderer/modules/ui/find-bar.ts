@@ -76,11 +76,12 @@ export function buildFindBarElement(placeholder = 'Find'): HTMLElement {
   const bar = document.createElement('div');
   bar.className = 'find-bar';
   bar.hidden = true;
-  // The count + nav/clear buttons live INSIDE the input box (`.find-bar-field`) so there's no
-  // reserved empty gap when nothing is searched — the box just shows the controls flush right.
+  // The search icon, count, and nav/clear buttons all live INSIDE the input box (`.find-bar-field`):
+  // the icon reads as part of the field (not a stray glyph beside it), and the flush-right controls
+  // leave no reserved empty gap when nothing is searched.
   bar.innerHTML =
-    `<span class="find-bar-icon icon icon-xs"><svg><use href="#icon-zoom"/></svg></span>` +
     `<div class="find-bar-field">` +
+    `<span class="find-bar-icon icon icon-xs"><svg><use href="#icon-zoom"/></svg></span>` +
     `<input type="text" class="find-bar-input" data-find-input placeholder="${placeholder}" spellcheck="false" aria-label="${placeholder}" />` +
     `<span class="find-bar-count" data-find-count aria-live="polite"></span>` +
     `<button type="button" class="find-bar-btn" data-find-prev title="Previous Match (Shift+Enter)" aria-label="Previous Match"><span class="icon icon-xs"><svg><use href="#icon-chevron-up"/></svg></span></button>` +
@@ -330,6 +331,11 @@ export function createFindBar(opts: FindBarOptions): FindBarHandle | null {
     } else if (e.key === 'Escape') {
       e.preventDefault();
       if (inputEl.value) {
+        // Clear the query and swallow the event so a containing modal's
+        // Escape-to-close handler doesn't also fire — Escape in a search box
+        // should clear the search first, not dismiss the whole modal. A second
+        // Escape (now empty) falls through below and closes/blurs as usual.
+        e.stopPropagation();
         doClear();
       } else {
         inputEl.blur();
