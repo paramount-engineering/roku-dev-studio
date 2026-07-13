@@ -3,7 +3,7 @@
  * offline Session Viewer so the "what does Copy actually yield" rule and the copied-flash timing
  * stay identical.
  */
-import type { ParsedNetworkEvent } from '../../../shared/network-inspector/types';
+import type { ParsedNetworkEvent } from '@shared/network-inspector/types';
 
 /**
  * Text to copy for a request/response pane. On the Body tab, prefer the event's full RAW body so

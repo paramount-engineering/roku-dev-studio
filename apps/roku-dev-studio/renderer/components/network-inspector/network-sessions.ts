@@ -1,4 +1,4 @@
-import type { ParsedNetworkEvent } from '../../../shared/network-inspector/types';
+import type { ParsedNetworkEvent } from '@shared/network-inspector/types';
 
 export type SessionKind = 'https' | 'http' | 'dns' | 'tcp';
 

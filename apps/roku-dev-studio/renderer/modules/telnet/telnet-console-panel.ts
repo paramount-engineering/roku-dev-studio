@@ -1,4 +1,4 @@
-import { errMessage } from '../../shared/platform/err-util.js';
+import { errMessage } from '@shared/platform/err-util.js';
 import { rendererWarn, rendererError } from '../utils/logger.js';
 import { type StructuredConsolePayload } from '../console-log/structured-log-detect.js';
 import {
@@ -28,7 +28,7 @@ import { icon, setSafeHTML } from '../index.js';
 import {
   debugTelnetIpcTargetsDevice,
   type DebugTelnetIpcPayload
-} from '../../shared/ipc/debug-telnet-connection-id.js';
+} from '@shared/ipc/debug-telnet-connection-id.js';
 
 export type TelnetConsoleDevice = { deviceName?: string; modelName?: string; ip: string };
 

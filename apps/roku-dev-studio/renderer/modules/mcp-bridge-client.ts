@@ -23,7 +23,7 @@
 import type {
   McpBridgeAppConnectorState,
   McpBridgeDeviceSnapshot
-} from '../../shared/mcp-bridge-state.js';
+} from '@shared/mcp-bridge-state.js';
 import { getStoredPassword } from './utils/storage.js';
 import { rendererWarn } from './utils/logger.js';
 

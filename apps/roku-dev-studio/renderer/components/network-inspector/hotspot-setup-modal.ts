@@ -9,7 +9,7 @@ import {
   networkInspectorSetupGuideBodyHtml,
   networkInspectorHasCaptureSetupAction,
   type NiSetupPlatform
-} from '../../shared/network-inspector/setup-guide.js';
+} from '@shared/network-inspector/setup-guide.js';
 import { escapeHtml } from '../../modules/utils/dom.js';
 import { attachBackdropClickToClose } from '../../modules/utils/modal-backdrop-click.js';
 

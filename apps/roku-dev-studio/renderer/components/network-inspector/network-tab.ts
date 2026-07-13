@@ -1,4 +1,4 @@
-import type { ParsedNetworkEvent } from '../../../shared/network-inspector/types';
+import type { ParsedNetworkEvent } from '@shared/network-inspector/types';
 import { escapeHtml } from '../../modules/utils/dom.js';
 import { attachBackdropClickToClose } from '../../modules/utils/modal-backdrop-click.js';
 import {
@@ -44,7 +44,7 @@ import { showPortConflictModal, hidePortConflictModal } from './port-conflict-mo
 import {
   networkInspectorHasCaptureSetupAction,
   type NiSetupPlatform
-} from '../../shared/network-inspector/setup-guide.js';
+} from '@shared/network-inspector/setup-guide.js';
 import {
   createFindBar,
   buildFindBarElement,
@@ -59,7 +59,7 @@ import {
 } from '../../modules/ui/find-highlight.js';
 import { createNetworkFindModal, type FindModalHandle } from './network-find-modal.js';
 import { paneBodyText, flashCopied } from './network-copy.js';
-import type { NetworkFindMatch } from '../../../shared/network-inspector/content-search';
+import type { NetworkFindMatch } from '@shared/network-inspector/content-search';
 import { attachFoldToggle, MAX_STRUCTURED_BYTES } from '../../modules/ui/structured-body.js';
 import { attachSelectAll } from '../../modules/ui/select-all.js';
 

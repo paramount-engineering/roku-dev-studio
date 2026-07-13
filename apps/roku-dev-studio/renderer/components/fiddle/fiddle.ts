@@ -13,7 +13,7 @@
 import {
   debugTelnetIpcTargetsDevice,
   type DebugTelnetDeviceRef
-} from '../../shared/ipc/debug-telnet-connection-id.js';
+} from '@shared/ipc/debug-telnet-connection-id.js';
 import { rendererWarn, rendererError } from '../../modules/utils/logger.js';
 
 export {};

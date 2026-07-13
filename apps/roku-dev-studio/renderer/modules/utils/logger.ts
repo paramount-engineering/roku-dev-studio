@@ -10,7 +10,7 @@
  * each line, matching the renderer's existing output.
  */
 
-import { createLogger } from '../../shared/logging/logger.js';
+import { createLogger } from '@shared/logging/logger.js';
 import { isDeveloperModeEnabled } from './dev-log.js';
 
 const logger = createLogger({ prefix: '[RDS]', timestamp: false, debug: isDeveloperModeEnabled });
