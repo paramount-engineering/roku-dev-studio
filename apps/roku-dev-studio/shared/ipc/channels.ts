@@ -278,6 +278,8 @@ export const IPC = {
   NetworkInspectorGetStatus: 'network-inspector:get-status',
   NetworkInspectorGetEvents: 'network-inspector:get-events',
   NetworkInspectorGetEventDetail: 'network-inspector:get-event-detail',
+  /** "Find in content" — search URL/headers/bodies across a device's captured transactions. */
+  NetworkInspectorFind: 'network-inspector:find',
   NetworkInspectorClearEvents: 'network-inspector:clear-events',
   NetworkInspectorSetRecording: 'network-inspector:set-recording',
   NetworkInspectorExportPcap: 'network-inspector:export-pcap',

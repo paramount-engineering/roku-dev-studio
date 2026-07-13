@@ -9,6 +9,11 @@ import {
 } from '../network-inspector/index';
 import type { NetworkTrafficRules } from '../../shared/network-inspector/types';
 import {
+  ALL_FIND_SCOPES,
+  type NetworkFindOptions,
+  type NetworkFindScope
+} from '../../shared/network-inspector/content-search';
+import {
   clampMaxRawPacketsPerDevice,
   clampMaxBodyRetainedBytes
 } from '../../shared/network-inspector/types';
@@ -46,6 +51,25 @@ function readBootConfig(settings: Record<string, unknown>, userDataPath?: string
     ),
     trafficRules: readTrafficRules(settings),
     userDataPath
+  };
+}
+
+/** Validate the renderer-supplied Find options, or null when there's no usable query. */
+function sanitizeFindOptions(raw: unknown): NetworkFindOptions | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const o = raw as Record<string, unknown>;
+  const query = typeof o.query === 'string' ? o.query : '';
+  if (!query) return null;
+  const scopes = Array.isArray(o.scopes)
+    ? o.scopes.filter((s): s is NetworkFindScope =>
+        (ALL_FIND_SCOPES as readonly string[]).includes(s as string)
+      )
+    : undefined;
+  return {
+    query,
+    scopes,
+    caseSensitive: o.caseSensitive === true,
+    regex: o.regex === true
   };
 }
 
@@ -103,6 +127,21 @@ function setupNetworkInspectorHandlers(
       if (!id) return { success: false, error: 'id required' };
       const event = await getNetworkInspectorService(safeSendToRenderer).getEventDetail(id);
       return { success: true, event };
+    }
+  );
+
+  ipcMain.handle(
+    IPC.NetworkInspectorFind,
+    async (_event: IpcMainInvokeEvent, payload: { deviceIp?: string; options?: unknown }) => {
+      const deviceIp = typeof payload?.deviceIp === 'string' ? payload.deviceIp : '';
+      if (!deviceIp) return { success: false, error: 'deviceIp required' };
+      const options = sanitizeFindOptions(payload?.options);
+      if (!options) return { success: true, matches: [] };
+      const matches = await getNetworkInspectorService(safeSendToRenderer).searchEvents(
+        deviceIp,
+        options
+      );
+      return { success: true, matches };
     }
   );
 

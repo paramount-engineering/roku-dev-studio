@@ -7,7 +7,8 @@ import {
   renderStructureTree,
   renderStructureLeaves,
   statusPillHtml,
-  rowMetaPartsHtml
+  rowMetaPartsHtml,
+  syncGroupToggleButton as syncGroupToggleButtonShared
 } from './network-session-view.js';
 import {
   renderRequestPane,
@@ -26,7 +27,7 @@ import { getEmbeddedStructuredPayload } from './network-embedded-structured.js';
 import { makeCenteredSearchResizable } from '../../modules/ui/header-search-resize.js';
 import { attachSearchHistory } from '../../modules/ui/search-history.js';
 import { filterWidthKey, filterHistoryKey } from '../../modules/ui/search-storage-keys.js';
-import { DETAIL_PANE_HTML, wireDetailInteractions } from './network-detail-view.js';
+import { DETAIL_PANE_HTML, wireDetailInteractions, syncBodyWrap as syncBodyWrapShared } from './network-detail-view.js';
 import { openFilterHelpModal } from './network-filter-help.js';
 import { openTrafficRulesModal } from './traffic-rules-modal.js';
 import {
@@ -50,6 +51,15 @@ import {
   bindFindShortcut,
   type FindBarHandle
 } from '../../modules/ui/find-bar.js';
+import {
+  supportsCssHighlights,
+  ensureFindHighlightStyles,
+  paintMatchHighlights,
+  clearFindHighlights
+} from '../../modules/ui/find-highlight.js';
+import { createNetworkFindModal, type FindModalHandle } from './network-find-modal.js';
+import { paneBodyText, flashCopied } from './network-copy.js';
+import type { NetworkFindMatch } from '../../../shared/network-inspector/content-search';
 import { attachFoldToggle, MAX_STRUCTURED_BYTES } from '../../modules/ui/structured-body.js';
 import { attachSelectAll } from '../../modules/ui/select-all.js';
 
@@ -303,6 +313,14 @@ export function setupNetworkTab(
   // are fetched on demand), so the count cap alone bounds memory — no payload-byte cap needed.
   const eventIndex = new Map<string, ParsedNetworkEvent>();
   const MAX_EVENTS = 5000;
+  // Stable, monotonic capture number per event (assigned on first sight), so the row index shown to
+  // the user never renumbers when the oldest events are trimmed or the filter changes. Independent
+  // of the event's position in `state.events`.
+  const seqById = new Map<string, number>();
+  let captureSeq = 0;
+  // Set when a trim removed front events: the incremental row-patch assumes tail-only growth, which
+  // is invalid after a front removal, so the next paint must do a full rebuild.
+  let listNeedsRebuild = false;
 
   // The "Proxied" filter only means something when hotspot capture is running, where
   // proxied and hotspot-metadata sessions coexist. Without hotspot capture (e.g. Roku + desktop on
@@ -315,7 +333,7 @@ export function setupNetworkTab(
   function buildSessionsCached(decryptedOnly: boolean): ReturnType<typeof buildSessions> {
     const hit = sessionCache.get(decryptedOnly);
     if (hit && hit.version === eventsVersion) return hit.result;
-    const result = buildSessions(state.events, { decryptedOnly });
+    const result = buildSessions(state.events, { decryptedOnly, seqById });
     sessionCache.set(decryptedOnly, { version: eventsVersion, result });
     return result;
   }
@@ -341,6 +359,18 @@ export function setupNetworkTab(
   // the init block below; null when the body elements are missing (defensive).
   let requestSearch: FindBarHandle | null = null;
   let responseSearch: FindBarHandle | null = null;
+  // "Find in content" (URL/headers/bodies) modal + its result state. Distinct from the toolbar
+  // Filter (summary-only). Matches badge the session list ("keep all + badge & jump"); the focused
+  // match seeds the detail-pane find bars so the hit highlights in the body too.
+  let findModal: FindModalHandle | null = null;
+  let findMatches = new Map<string, NetworkFindMatch>();
+  let findCurrentId: string | null = null;
+  // The active Find query (empty when no search). The detail pane highlights it — in the URL/headers
+  // views and the body find bar — for ANY selected request that is a Find match, so viewing any hit
+  // (jumped-to or clicked) shows where the term occurs. Set from the search callback.
+  let findQuery = '';
+  // Guards the live re-search while the Find modal is open — only re-run when events/filter change.
+  let lastFindRefreshSig = '';
   const requestFormatWrapEl = panel.querySelector('[data-ni-req-format-wrap]');
   const responseFormatWrapEl = panel.querySelector('[data-ni-res-format-wrap]');
   const requestTruncatedBadgeEl = panel.querySelector('[data-ni-req-truncated]');
@@ -365,6 +395,11 @@ export function setupNetworkTab(
   const sidebarOptionsEl = panel.querySelector('.ni-sidebar-options') as HTMLElement | null;
   const groupToggleBtn = panel.querySelector('[data-ni-toggle-all-groups]') as HTMLButtonElement | null;
   const clearBtn = panel.querySelector('[data-ni-clear]');
+  const findBtn = panel.querySelector('[data-ni-find]') as HTMLButtonElement | null;
+  const findBtnGroup = panel.querySelector('.ni-find-btn-group') as HTMLElement | null;
+  const findClearBtn = panel.querySelector('[data-ni-find-clear]') as HTMLButtonElement | null;
+  const findPrevBtn = panel.querySelector('[data-ni-find-prev]') as HTMLButtonElement | null;
+  const findNextBtn = panel.querySelector('[data-ni-find-next]') as HTMLButtonElement | null;
   const downloadMenuEl = panel.querySelector('[data-ni-download-menu]') as HTMLElement | null;
   const downloadToggleEl = panel.querySelector('[data-ni-download-toggle]') as HTMLElement | null;
   const downloadDropdownEl = panel.querySelector('[data-ni-download-dropdown]') as HTMLElement | null;
@@ -386,6 +421,15 @@ export function setupNetworkTab(
           minWidthPx: 280
         })
       : null;
+  // The resize handle is created at the right edge of the whole centered slot, which also holds the
+  // session count — so it lands to the right of the count. Reparent it into the filter box so it
+  // anchors to the text box's right edge instead (its `right:-9px` is relative to `.ni-filter-wrap`,
+  // which is position:relative), sitting directly beside the input.
+  if (niHeaderCenter instanceof HTMLElement) {
+    const resizeHandle = niHeaderCenter.querySelector(':scope > .hdr-search-resize');
+    const filterWrap = niHeaderCenter.querySelector('.ni-filter-wrap');
+    if (resizeHandle && filterWrap instanceof HTMLElement) filterWrap.appendChild(resizeHandle);
+  }
   const portBadgeBtn = panel.querySelector('[data-ni-port-badge]') as HTMLElement | null;
   // Tracks whether the Network inner tab is the foreground tab in this device panel, so the global
   // port-conflict modal only auto-pops when the user is actually looking at the Network tab.
@@ -637,6 +681,76 @@ export function setupNetworkTab(
     scrollSelectedRowIntoView();
   }
 
+  /** Select an event by id (used by Find navigation): render its detail + scroll it into view. */
+  /** In Group-by-Host view, expand the host group that contains `id` if it's collapsed (so a Find
+   *  jump can land inside a folded group). Returns true when it changed state (a re-render is due). */
+  function ensureEventRevealed(id: string): boolean {
+    if (state.viewMode !== 'structure') return false;
+    const session = filteredSessions().find((s) => s.eventId === id);
+    if (!session) return false;
+    const hostKey = session.host.toLowerCase();
+    if (!state.collapsedHosts.has(hostKey)) return false;
+    state.collapsedHosts.delete(hostKey);
+    return true;
+  }
+
+  function selectEventById(id: string): void {
+    const revealed = ensureEventRevealed(id);
+    if (state.selectedEventId !== id) {
+      state.selectedEventId = id;
+      updateSelectionHighlight();
+      lastListSignature = listSignature(filteredSessions());
+      renderDetail('both');
+    }
+    if (revealed) {
+      // The group just expanded — repaint so the (now-visible) leaf exists, then scroll to it.
+      lastListSignature = '';
+      refreshSessionList({ force: true, scrollToSelection: true });
+    } else {
+      scrollSelectedRowIntoView();
+    }
+  }
+
+  /** Tint matching rows (and emphasize the currently-focused match) so hits are easy to scan.
+   *  Re-applied after every list repaint since matching rows get rebuilt. */
+  function applyFindDecorations(): void {
+    if (!(sessionListEl instanceof HTMLElement)) return;
+    // Idempotent toggle (not remove-all-then-re-add): a row that's already a match keeps its class
+    // untouched, so the CSS bar-appear animation only fires when a row NEWLY becomes a match (or is
+    // freshly rendered) — never re-triggering on every repaint/scroll.
+    sessionListEl.querySelectorAll('[data-event-id]').forEach((row) => {
+      const id = (row as HTMLElement).dataset.eventId;
+      const isMatch = !!id && findMatches.has(id);
+      row.classList.toggle('ni-find-match', isMatch);
+      row.classList.toggle('ni-find-current', isMatch && id === findCurrentId);
+    });
+    // Group-by-Host: a collapsed group hides its leaves (and their bars), so flag host rows whose
+    // group contains a match. CSS turns the chevron amber ONLY while collapsed; expanding reverts it
+    // and the individual request bars take over.
+    sessionListEl.querySelectorAll('.ni-struct-host').forEach((host) => {
+      const hasMatch = !!host.querySelector('.ni-struct-children .ni-find-match');
+      host
+        .querySelector(':scope > .ni-struct-host-row')
+        ?.classList.toggle('ni-find-group-match', hasMatch);
+    });
+  }
+
+  /** The ordered set Find's Prev/Next walks. In Group-by-Host view it follows the on-screen group
+   *  order (all matches in one host, then the next host) — including matches inside collapsed groups,
+   *  which navigation reveals — so jumping tracks what the user sees. In sequence view it's plain
+   *  capture order. */
+  function visibleFindOrder(): string[] {
+    if (state.viewMode === 'structure' && sessionListEl instanceof HTMLElement) {
+      // DOM order of the leaves == host-group order (collapsed groups still render their leaves).
+      return Array.from(sessionListEl.querySelectorAll('.ni-struct-leaf[data-event-id]'))
+        .map((el) => (el as HTMLElement).dataset.eventId)
+        .filter((id): id is string => !!id && findMatches.has(id));
+    }
+    return filteredSessions()
+      .map((s) => s.eventId)
+      .filter((id) => findMatches.has(id));
+  }
+
   function pickDefaultSelection(sessions: ReturnType<typeof filteredSessions>): void {
     if (sessions.length === 0) {
       state.selectedEventId = null;
@@ -654,7 +768,8 @@ export function setupNetworkTab(
 
   function selectedEvent(): ParsedNetworkEvent | null {
     if (!state.selectedEventId) return null;
-    return state.events.find((e) => e.id === state.selectedEventId) || null;
+    // O(1) via the id→event index (kept in sync by mergeEvents/trim), not an O(n) array scan.
+    return eventIndex.get(state.selectedEventId) ?? null;
   }
 
   function watchDeviceIps(): string[] {
@@ -770,12 +885,88 @@ export function setupNetworkTab(
       upgradeStructuredBodies(requestBodyEl);
       requestSearch?.setVisible(state.requestTab === 'body' && bodyIsSearchable(requestBodyEl));
       requestSearch?.refresh();
+      syncPaneSeedHighlight('request');
     }
     if (which !== 'request') {
       upgradeStructuredBodies(responseBodyEl);
       responseSearch?.setVisible(state.responseTab === 'body' && bodyIsSearchable(responseBodyEl));
       responseSearch?.refresh();
+      syncPaneSeedHighlight('response');
     }
+    seedDetailFind(which);
+  }
+
+  // Standalone highlight of the Find term on the NON-body tabs (Overview URL, Headers). The Body tab
+  // has its own find bar (with a count); everywhere else we just paint the match with the same amber
+  // tint so a hit in the URL or a header is visible. Separate highlight-registry ids per pane so the
+  // two panes (and the body find bars, which use `ni-find-*`) never clobber each other.
+  const SEED_HL_REQUEST = 'ni-detail-seed-request';
+  const SEED_HL_RESPONSE = 'ni-detail-seed-response';
+  const SEED_HL_CAP = 2000;
+
+  function paintSeedInPane(el: HTMLElement, id: string, query: string): void {
+    ensureFindHighlightStyles(id);
+    clearFindHighlights(id);
+    if (!query || !supportsCssHighlights) return;
+    const needle = query.toLowerCase();
+    const ranges: Range[] = [];
+    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+    let node: Node | null;
+    while ((node = walker.nextNode()) && ranges.length < SEED_HL_CAP) {
+      const text = node.nodeValue ?? '';
+      if (!text) continue;
+      const hay = text.toLowerCase();
+      let idx = hay.indexOf(needle);
+      while (idx !== -1 && ranges.length < SEED_HL_CAP) {
+        const range = document.createRange();
+        try {
+          range.setStart(node, idx);
+          range.setEnd(node, idx + needle.length);
+          ranges.push(range);
+        } catch {
+          /* ignore an un-rangeable node */
+        }
+        idx = hay.indexOf(needle, idx + needle.length);
+      }
+    }
+    paintMatchHighlights(id, ranges);
+  }
+
+  /** Paint (or clear) the Find-term highlight for one pane's non-body tabs. */
+  function syncPaneSeedHighlight(which: 'request' | 'response'): void {
+    const el = which === 'request' ? requestBodyEl : responseBodyEl;
+    const tab = which === 'request' ? state.requestTab : state.responseTab;
+    const id = which === 'request' ? SEED_HL_REQUEST : SEED_HL_RESPONSE;
+    if (!(el instanceof HTMLElement) || tab === 'body' || !selectedIsFindMatch()) {
+      clearFindHighlights(id);
+      return;
+    }
+    paintSeedInPane(el, id, findQuery);
+  }
+
+  /** True when the currently-selected request is a Find match (so its detail should show the term). */
+  function selectedIsFindMatch(): boolean {
+    return !!findQuery && !!state.selectedEventId && findMatches.has(state.selectedEventId);
+  }
+
+  /** Push the active Find query into the in-body Request/Response find bars for a matching selected
+   *  request. Called from afterBodyRender (covers async detail load + tab switches) AND directly on
+   *  Find navigation (covers re-committing on the already-selected request, which doesn't re-render).
+   *  The body find only searches the *rendered body*, so a request matched via URL/headers will show
+   *  "No results" here even though it's a valid Find match — that's expected. */
+  function seedDetailFind(which: 'request' | 'response' | 'both' = 'both', jumpToFirst = true): void {
+    if (!selectedIsFindMatch()) return;
+    if (which !== 'response') requestSearch?.setQuery(findQuery, jumpToFirst);
+    if (which !== 'request') responseSearch?.setQuery(findQuery, jumpToFirst);
+  }
+
+  /** Re-apply the Find term to the CURRENTLY-selected request's detail (body find bars + URL/header
+   *  highlight). Call after the match set / query changes so the request in view updates immediately,
+   *  without waiting for a re-render. `jumpToFirst=false` while typing so the body doesn't scroll. */
+  function syncSelectedDetailFind(jumpToFirst: boolean): void {
+    seedDetailFind('both', jumpToFirst);
+    syncPaneSeedHighlight('request');
+    syncPaneSeedHighlight('response');
   }
 
   function renderDetail(which: 'request' | 'response' | 'both' = 'both'): void {
@@ -955,10 +1146,7 @@ export function setupNetworkTab(
         const existing = childrenEl.querySelectorAll('.ni-struct-leaf').length;
         if (existing < g.sessions.length) {
           const slice = g.sessions.slice(existing);
-          childrenEl.insertAdjacentHTML(
-            'beforeend',
-            renderStructureLeaves(slice, state.selectedEventId, existing)
-          );
+          childrenEl.insertAdjacentHTML('beforeend', renderStructureLeaves(slice, state.selectedEventId));
         }
         if (countEl) countEl.textContent = String(g.sessions.length);
       }
@@ -997,11 +1185,14 @@ export function setupNetworkTab(
 
   function renderSessionList(options?: { scrollToSelection?: boolean; followTail?: boolean; force?: boolean }): void {
     if (!(sessionListEl instanceof HTMLElement)) return;
+    // A pending trim invalidates the incremental patch path (front rows removed) → force a rebuild.
+    const force = !!options?.force || listNeedsRebuild;
+    listNeedsRebuild = false;
     const sessions = state.events.length === 0 ? [] : filteredSessions();
     const signature = listSignature(sessions);
 
     if (
-      !options?.force &&
+      !force &&
       signature === lastListSignature &&
       sessionListEl.querySelector('.ni-sidebar-scroll, .ni-structure-wrap, .ni-sequence-wrap')
     ) {
@@ -1068,8 +1259,8 @@ export function setupNetworkTab(
 
     const result =
       state.viewMode === 'structure'
-        ? renderStructureView(sessions, !!options?.force)
-        : renderFlatView(sessions, !!options?.force);
+        ? renderStructureView(sessions, force)
+        : renderFlatView(sessions, force);
     // A full rebuild already reflects every status; only an incremental ('patched') paint
     // needs the changed existing rows updated in place.
     if (result === 'patched') updateChangedRows(sessions);
@@ -1113,6 +1304,21 @@ export function setupNetworkTab(
       const opts = listPaintQueued || undefined;
       listPaintQueued = null;
       renderSessionList(opts);
+      // Re-stamp Find badges (rows may have been rebuilt). While the modal is open, re-run the search
+      // only when the events or filter actually changed — not on every repaint (e.g. scroll) — so a
+      // live capture doesn't spam the search IPC.
+      applyFindDecorations();
+      // Keep Find live: whenever the events or filter change, re-run the active search so requests
+      // that arrive AFTER the search still get matched + highlighted — even with the modal closed.
+      if (findModal?.isActive()) {
+        // viewMode is included so toggling Group-by-Host re-runs the search and reorders the
+        // Prev/Next set to match the new on-screen order.
+        const sig = `${eventsVersion}|${effProxiedOnly()}|${state.viewMode}|${filterInput?.value || ''}`;
+        if (sig !== lastFindRefreshSig) {
+          lastFindRefreshSig = sig;
+          findModal.refresh();
+        }
+      }
     });
   }
 
@@ -1129,6 +1335,13 @@ export function setupNetworkTab(
     if (!wrap || wrap.dataset.niKeybound === '1') return;
     wrap.dataset.niKeybound = '1';
     wrap.addEventListener('keydown', (e) => {
+      // Shift+↑/↓ jumps across Find matches only (plain ↑/↓ still step through every request).
+      if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && e.shiftKey && findModal?.isActive()) {
+        e.preventDefault();
+        if (e.key === 'ArrowDown') findModal.next();
+        else findModal.prev();
+        return;
+      }
       if (e.key === 'ArrowDown') {
         e.preventDefault();
         selectSessionByOffset(1);
@@ -1201,19 +1414,7 @@ export function setupNetworkTab(
    *  out via CSS). Its triangle mirrors a group's own toggle — ▼ when groups are expanded, ▶ when
    *  all are collapsed — and clicking flips the whole set. */
   function syncGroupToggleButton(): void {
-    if (!(groupToggleBtn instanceof HTMLButtonElement)) return;
-    const hosts = lastStructureHosts;
-    const show = state.viewMode === 'structure' && hosts.length > 0;
-    groupToggleBtn.classList.toggle('is-visible', show);
-    groupToggleBtn.setAttribute('aria-hidden', show ? 'false' : 'true');
-    groupToggleBtn.tabIndex = show ? 0 : -1;
-    if (!show) return;
-    const allCollapsed = hosts.every((h) => state.collapsedHosts.has(h));
-    const chevron = groupToggleBtn.querySelector('.ni-struct-chevron');
-    if (chevron) chevron.textContent = allCollapsed ? '▶' : '▼';
-    const label = allCollapsed ? 'Expand all groups' : 'Collapse all groups';
-    groupToggleBtn.title = label;
-    groupToggleBtn.setAttribute('aria-label', label);
+    syncGroupToggleButtonShared(groupToggleBtn, state.viewMode, lastStructureHosts, state.collapsedHosts);
   }
 
   function syncFilterClear(): void {
@@ -1222,20 +1423,12 @@ export function setupNetworkTab(
   }
 
   function syncBodyWrap(): void {
-    // Per-pane: the nowrap class lives on each body scroll element so Request and Response
-    // wrap independently.
-    if (requestBodyEl instanceof HTMLElement) {
-      requestBodyEl.classList.toggle('ni-body-nowrap', !state.requestBodyWrap);
-    }
-    if (responseBodyEl instanceof HTMLElement) {
-      responseBodyEl.classList.toggle('ni-body-nowrap', !state.responseBodyWrap);
-    }
-    panel.querySelectorAll('[data-ni-wrap-toggle]').forEach((btn) => {
-      const pane = (btn as HTMLElement).dataset.niWrapToggle;
-      const on = pane === 'response' ? state.responseBodyWrap : state.requestBodyWrap;
-      btn.setAttribute('aria-pressed', on ? 'true' : 'false');
-      btn.classList.toggle('is-active', on);
-      (btn as HTMLElement).title = on ? 'Disable word wrap' : 'Enable word wrap';
+    syncBodyWrapShared({
+      root: panel,
+      requestBodyEl,
+      responseBodyEl,
+      requestWrap: state.requestBodyWrap,
+      responseWrap: state.responseBodyWrap
     });
   }
 
@@ -1294,26 +1487,13 @@ export function setupNetworkTab(
     // don't carry a single source string.
     const ev =
       selectedDetail?.id === state.selectedEventId ? selectedDetail.event : selectedEvent();
-    let text = '';
-    // Prefer the full raw body from the event so Copy yields the complete payload even
-    // when the displayed body is capped/formatted; fall back to the visible text for the
-    // overview/headers tabs which have no single source string.
-    if (ev) {
-      if (which === 'request' && state.requestTab === 'body') {
-        text = ev.httpRequest?.body || '';
-      } else if (which === 'response' && state.responseTab === 'body') {
-        text = ev.httpResponse?.body || '';
-      }
-    }
-    if (!text) {
-      const el = which === 'request' ? requestBodyEl : responseBodyEl;
-      if (el instanceof HTMLElement) text = (el.innerText || el.textContent || '').trim();
-    }
+    const pane = which === 'response' ? 'response' : 'request';
+    const showingBody = pane === 'request' ? state.requestTab === 'body' : state.responseTab === 'body';
+    const text = paneBodyText(ev, pane, showingBody, pane === 'request' ? requestBodyEl : responseBodyEl);
     if (!text) return;
     try {
       await window.roku.copyToClipboard(text);
-      btn.classList.add('is-copied');
-      window.setTimeout(() => btn.classList.remove('is-copied'), 1400);
+      flashCopied(btn);
     } catch {
       /* ignore */
     }
@@ -1563,7 +1743,12 @@ export function setupNetworkTab(
   function trimEvents(): boolean {
     if (state.events.length <= MAX_EVENTS) return false;
     const removed = state.events.splice(0, state.events.length - MAX_EVENTS);
-    for (const e of removed) eventIndex.delete(e.id);
+    for (const e of removed) {
+      eventIndex.delete(e.id);
+      seqById.delete(e.id);
+    }
+    // Front rows were removed → the tail-append patch path can't reconcile; force a full rebuild.
+    listNeedsRebuild = true;
     return true;
   }
 
@@ -1575,27 +1760,27 @@ export function setupNetworkTab(
     for (const ev of incoming) {
       const existing = eventIndex.get(ev.id);
       if (existing) {
-        const idx = state.events.indexOf(existing);
-        if (idx >= 0) {
-          if (eventRenderSig(existing) !== eventRenderSig(ev)) {
-            changed = true;
-            dirtyEventIds.add(ev.id);
-            // If the focused request itself changed (e.g. MITM Pending → 200), drop its cached
-            // detail so the panes reload the fresh headers/body rather than showing stale data.
-            if (ev.id === state.selectedEventId) {
-              selectedDetail = null;
-              detailLoadToken++;
-            }
-            // The event changed on disk too; allow its detail to be (re)fetched.
-            detailUnavailableIds.delete(ev.id);
+        if (eventRenderSig(existing) !== eventRenderSig(ev)) {
+          changed = true;
+          dirtyEventIds.add(ev.id);
+          // If the focused request itself changed (e.g. MITM Pending → 200), drop its cached
+          // detail so the panes reload the fresh headers/body rather than showing stale data.
+          if (ev.id === state.selectedEventId) {
+            selectedDetail = null;
+            detailLoadToken++;
           }
-          state.events[idx] = ev;
-          eventIndex.set(ev.id, ev);
+          // The event changed on disk too; allow its detail to be (re)fetched.
+          detailUnavailableIds.delete(ev.id);
         }
+        // Update in place: the same object stays at its position in `state.events` and in
+        // `eventIndex`, so there's no O(n) `indexOf`/array write per updated event. `ev` is a fresh
+        // full summary with the same shape, so the shallow merge fully refreshes it.
+        Object.assign(existing, ev);
       } else {
         changed = true;
         state.events.push(ev);
         eventIndex.set(ev.id, ev);
+        if (!seqById.has(ev.id)) seqById.set(ev.id, ++captureSeq);
       }
     }
     if (trimEvents()) changed = true;
@@ -2255,6 +2440,100 @@ export function setupNetworkTab(
     listenerAc.signal.addEventListener('abort', attachSelectAll(responseBodyEl));
   }
 
+  // ── Find in content (URL / headers / bodies) ──────────────────────────────────────────────
+  findModal = createNetworkFindModal({
+    async search(options) {
+      findQuery = options.query;
+      const api = window.roku;
+      if (!api?.networkInspectorFind) return [];
+      // Search each watched device's captured traffic and merge (ids are globally unique).
+      const ips = watchDeviceIps();
+      const merged: NetworkFindMatch[] = [];
+      const seen = new Set<string>();
+      await Promise.all(
+        ips.map(async (ip) => {
+          try {
+            const res = await api.networkInspectorFind(ip, options);
+            const matches = (res?.matches ?? []) as NetworkFindMatch[];
+            for (const m of matches) {
+              if (!seen.has(m.id)) {
+                seen.add(m.id);
+                merged.push(m);
+              }
+            }
+          } catch {
+            /* ignore per-device failure */
+          }
+        })
+      );
+      return merged;
+    },
+    onResults(matches) {
+      findMatches = new Map(matches.map((m) => [m.id, m]));
+      applyFindDecorations();
+      // Re-sync the request currently in view so a new/updated search term highlights it right away
+      // (don't scroll the body while the user is still typing).
+      syncSelectedDetailFind(false);
+      // Navigation walks only the VISIBLE (filtered-in) matches, so drive the header controls off
+      // that set too: if the toolbar Filter hides every match, the ↑/↓/clear buttons and the amber
+      // search state hide rather than sitting there doing nothing.
+      const order = visibleFindOrder();
+      const hasResults = order.length > 0;
+      if (findBtn) findBtn.classList.toggle('is-find-active', hasResults);
+      // The group class drives the CSS expand/collapse animation for the ↑/↓/clear child buttons.
+      if (findBtnGroup) findBtnGroup.classList.toggle('has-results', hasResults);
+      return order;
+    },
+    onNavigate(id, queryText) {
+      findCurrentId = id;
+      findQuery = queryText;
+      selectEventById(id);
+      // Re-sync here too: when Find re-commits on the ALREADY-selected request, selectEventById is a
+      // no-op (no re-render) so afterBodyRender won't fire. Jump to the first hit on commit.
+      syncSelectedDetailFind(true);
+      applyFindDecorations();
+    },
+    onClear() {
+      findMatches = new Map();
+      findCurrentId = null;
+      findQuery = '';
+      // Drop the seeded highlight from the detail-pane find bars + the URL/header highlight.
+      requestSearch?.clear();
+      responseSearch?.clear();
+      clearFindHighlights(SEED_HL_REQUEST);
+      clearFindHighlights(SEED_HL_RESPONSE);
+      applyFindDecorations();
+      if (findBtn) findBtn.classList.remove('is-find-active');
+      if (findBtnGroup) findBtnGroup.classList.remove('has-results');
+    },
+    // While the modal is open, `.ni-find-open` on the list suppresses the match-bar entrance
+    // animation (it'd play behind the modal, unseen). Removing it on close re-arms the animation so
+    // every match bar eases in right as the user's attention returns to the list.
+    onOpen() {
+      if (sessionListEl instanceof HTMLElement) sessionListEl.classList.add('ni-find-open');
+    },
+    onClose() {
+      if (sessionListEl instanceof HTMLElement) sessionListEl.classList.remove('ni-find-open');
+    }
+  });
+  findBtn?.addEventListener('click', () => findModal?.open(), listenerOpts);
+  findClearBtn?.addEventListener('click', () => findModal?.clear(), listenerOpts);
+  findPrevBtn?.addEventListener('click', () => findModal?.prev(), listenerOpts);
+  findNextBtn?.addEventListener('click', () => findModal?.next(), listenerOpts);
+  // ⌘/Ctrl+F opens the Find modal — unless an in-body find bar already handled it (it calls
+  // preventDefault when focused + visible), so searching the focused body stays contextual.
+  panel.addEventListener(
+    'keydown',
+    (e) => {
+      const ke = e as KeyboardEvent;
+      if (!((ke.metaKey || ke.ctrlKey) && (ke.key === 'f' || ke.key === 'F'))) return;
+      if (ke.defaultPrevented) return;
+      ke.preventDefault();
+      findModal?.open();
+    },
+    listenerOpts
+  );
+
   updateCaptureButton();
   updateSetupBadge();
   updatePortBadge();
@@ -2271,6 +2550,7 @@ export function setupNetworkTab(
       niFilterHistory?.dispose();
       requestSearch?.dispose();
       responseSearch?.dispose();
+      findModal?.destroy();
       if (networkTabForeground) hidePortConflictModal();
       stopPolling();
       if (filterDebounceTimer) {

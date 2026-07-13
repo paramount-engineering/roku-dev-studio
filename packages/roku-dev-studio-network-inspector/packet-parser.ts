@@ -1,4 +1,4 @@
-import type { ParsedNetworkEvent, ParsedNetworkEventType } from './types';
+import type { ParsedNetworkEvent } from './types';
 import { feedTcpStream } from './http-stream-parser';
 
 let eventSeq = 0;
@@ -319,7 +319,9 @@ function parseIpPacket(frame: Buffer, ipOffset: number, ctx: PacketParseContext,
 export function parseCaptureFrame(frame: Buffer, ctx: PacketParseContext): ParsedNetworkEvent[] {
   const ipOffset = ipOffsetForFrame(frame);
   if (ipOffset < 0) return [];
-  return parseIpPacket(frame, ipOffset, ctx, new Date().toISOString());
+  // Timestamp is left empty here: every caller (capture engine + offline parse) immediately
+  // overwrites `ev.timestamp` with the pcap frame time, so computing one per frame was dead work.
+  return parseIpPacket(frame, ipOffset, ctx, '');
 }
 
 /**
@@ -337,28 +339,4 @@ export function extractFrameIps(frame: Buffer): { srcIp: string; dstIp: string }
   const srcIp = `${frame[ipOffset + 12]}.${frame[ipOffset + 13]}.${frame[ipOffset + 14]}.${frame[ipOffset + 15]}`;
   const dstIp = `${frame[ipOffset + 16]}.${frame[ipOffset + 17]}.${frame[ipOffset + 18]}.${frame[ipOffset + 19]}`;
   return { srcIp, dstIp };
-}
-
-/** @deprecated Use parseCaptureFrame */
-export function parseEthernetFrame(frame: Buffer, deviceIps: Set<string>): ParsedNetworkEvent[] {
-  return parseCaptureFrame(frame, { deviceIps });
-}
-
-export function eventTypeLabel(type: ParsedNetworkEventType): string {
-  switch (type) {
-    case 'dns-query':
-      return 'DNS query';
-    case 'dns-response':
-      return 'DNS response';
-    case 'tls-handshake':
-      return 'TLS SNI';
-    case 'tcp-connection':
-      return 'TCP';
-    case 'http-transaction':
-      return 'HTTP';
-    case 'udp-datagram':
-      return 'UDP';
-    default:
-      return type;
-  }
 }

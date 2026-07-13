@@ -33,8 +33,10 @@ export class NetworkDetailStore {
   private fd: number | null = null;
   private writeOffset = 0;
   private readonly index = new Map<string, IndexEntry>();
-  private readonly pending = new Map<string, Buffer>();
-  private readonly queue: Array<{ id: string; buf: Buffer }> = [];
+  // Hold the event OBJECT (not a serialized buffer) so JSON.stringify happens in drain(), off the
+  // caller's (capture/emit) thread. A read that races the flush is served this object directly.
+  private readonly pending = new Map<string, ParsedNetworkEvent>();
+  private readonly queue: Array<{ id: string; event: ParsedNetworkEvent }> = [];
   private draining = false;
   private disposed = false;
   private capped = false;
@@ -92,16 +94,12 @@ export class NetworkDetailStore {
       this.capped = true;
       return false;
     }
-    let buf: Buffer;
-    try {
-      buf = Buffer.from(JSON.stringify(event), 'utf8');
-    } catch {
-      return false;
-    }
-    // Overwrite-in-place semantics for updates (e.g. MITM Pending → 200): the newest write wins
-    // via the index; the superseded bytes become dead space in the append-only file.
-    this.pending.set(event.id, buf);
-    this.queue.push({ id: event.id, buf });
+    // Serialization (JSON.stringify of a multi-MB body) is deferred to drain() so this call stays
+    // cheap on the hot path. `event` is safe to hold by reference — the caller derives a summary and
+    // drops it, never mutating it after put(). Overwrite-in-place semantics for updates (e.g. MITM
+    // Pending → 200): the newest write wins via the index; superseded bytes become dead file space.
+    this.pending.set(event.id, event);
+    this.queue.push({ id: event.id, event });
     void this.drain();
     return true;
   }
@@ -118,13 +116,21 @@ export class NetworkDetailStore {
           this.pending.delete(next.id);
           continue;
         }
-        const offset = this.writeOffset;
-        this.writeOffset += next.buf.length;
+        let buf: Buffer;
         try {
-          await this.writeAt(this.fd, next.buf, offset);
+          buf = Buffer.from(JSON.stringify(next.event), 'utf8');
+        } catch {
+          // Unserializable event — drop it (unless a newer write for this id is still queued).
+          if (this.queue.every((q) => q.id !== next.id)) this.pending.delete(next.id);
+          continue;
+        }
+        const offset = this.writeOffset;
+        this.writeOffset += buf.length;
+        try {
+          await this.writeAt(this.fd, buf, offset);
           // Only index if the id is still wanted (not evicted while in flight).
           if (this.pending.has(next.id)) {
-            this.index.set(next.id, { offset, length: next.buf.length });
+            this.index.set(next.id, { offset, length: buf.length });
           }
         } catch {
           /* a failed write just means this id won't be readable from disk */
@@ -158,8 +164,9 @@ export class NetworkDetailStore {
   /** Fetch the full event by id, or null if it was never stored / has been evicted. */
   async get(id: string): Promise<ParsedNetworkEvent | null> {
     if (this.disposed) return null;
+    // Served straight from the in-memory object when the flush hasn't happened yet — no parse.
     const buffered = this.pending.get(id);
-    if (buffered) return this.parse(buffered);
+    if (buffered) return buffered;
     const entry = this.index.get(id);
     if (!entry || this.fd == null) return null;
     try {

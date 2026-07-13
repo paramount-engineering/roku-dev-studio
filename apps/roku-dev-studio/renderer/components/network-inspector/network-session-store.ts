@@ -10,25 +10,9 @@
  * "File load" is just the single-batch case of a stream. The store owns the memoized
  * `buildSessions`/`filterSessions` caching (version-gated) so both surfaces get identical, cheap
  * derived data without reimplementing it.
- *
- * Detail (headers/bodies) is resolved through a {@link NetworkDetailProvider} so the two sources
- * plug in differently: live fetches lazily from the on-disk store over IPC; the viewer's bodies are
- * already inlined, so it uses {@link inlineDetailProvider}.
  */
 import type { ParsedNetworkEvent } from '../../../shared/network-inspector/types';
 import { buildSessions, filterSessions, type NetworkSession } from './network-sessions.js';
-
-/**
- * Resolves an event's full detail (headers + bodies) from a list summary. Live implements this as
- * an async IPC fetch against the on-disk detail store; sources that inline bodies (the parsed-file
- * viewer) use {@link inlineDetailProvider}.
- */
-export type NetworkDetailProvider = (
-  summary: ParsedNetworkEvent
-) => ParsedNetworkEvent | null | Promise<ParsedNetworkEvent | null>;
-
-/** Detail provider for sources whose events already carry headers/bodies (the Session Viewer). */
-export const inlineDetailProvider: NetworkDetailProvider = (summary) => summary;
 
 export class SessionStore {
   private events: ParsedNetworkEvent[] = [];

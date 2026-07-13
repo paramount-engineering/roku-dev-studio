@@ -15,7 +15,8 @@ import { attachSearchHistory } from '../../modules/ui/search-history.js';
 import { filterWidthKey, filterHistoryKey } from '../../modules/ui/search-storage-keys.js';
 import {
   renderSidebarSequence,
-  renderStructureTree
+  renderStructureTree,
+  syncGroupToggleButton as syncGroupToggleButtonShared
 } from '../network-inspector/network-session-view.js';
 import {
   renderRequestPane,
@@ -26,7 +27,12 @@ import {
   type ResponsePaneTab
 } from '../network-inspector/network-detail.js';
 import { buildCurlCommand, buildHarArchive, isExportableEvent } from '../network-inspector/network-export.js';
-import { DETAIL_PANE_HTML, wireDetailInteractions } from '../network-inspector/network-detail-view.js';
+import {
+  DETAIL_PANE_HTML,
+  wireDetailInteractions,
+  syncBodyWrap as syncBodyWrapShared
+} from '../network-inspector/network-detail-view.js';
+import { paneBodyText as paneBodyTextShared, flashCopied } from '../network-inspector/network-copy.js';
 import { openFilterHelpModal } from '../network-inspector/network-filter-help.js';
 import { attachFoldToggle } from '../../modules/ui/structured-body.js';
 import { openConsoleUrlViewer } from '../../modules/console-log/console-url-modal.js';
@@ -126,31 +132,23 @@ function renderList(): void {
 /** Show the expand/collapse-all-groups control only in Group-by-Host view, and reflect the
  *  all-collapsed vs expanded state on its chevron/label (mirrors the live Network Inspector). */
 function syncGroupToggleButton(): void {
-  if (!(groupToggleBtn instanceof HTMLButtonElement)) return;
-  const hosts = state.lastStructureHosts;
-  const show = state.viewMode === 'structure' && hosts.length > 0;
-  groupToggleBtn.classList.toggle('is-visible', show);
-  groupToggleBtn.setAttribute('aria-hidden', show ? 'false' : 'true');
-  groupToggleBtn.tabIndex = show ? 0 : -1;
-  if (!show) return;
-  const allCollapsed = hosts.every((h) => state.collapsedHosts.has(h));
-  const chevron = groupToggleBtn.querySelector('.ni-struct-chevron');
-  if (chevron) chevron.textContent = allCollapsed ? '▶' : '▼';
-  const label = allCollapsed ? 'Expand all groups' : 'Collapse all groups';
-  groupToggleBtn.title = label;
-  groupToggleBtn.setAttribute('aria-label', label);
+  syncGroupToggleButtonShared(
+    groupToggleBtn,
+    state.viewMode,
+    state.lastStructureHosts,
+    state.collapsedHosts
+  );
 }
 
 
 function syncBodyWrap(): void {
-  requestBodyEl?.classList.toggle('ni-body-nowrap', !state.requestBodyWrap);
-  responseBodyEl?.classList.toggle('ni-body-nowrap', !state.responseBodyWrap);
-  const reqWrapBtn = $('[data-ni-wrap-toggle="request"]');
-  const resWrapBtn = $('[data-ni-wrap-toggle="response"]');
-  reqWrapBtn?.classList.toggle('is-active', state.requestBodyWrap);
-  reqWrapBtn?.setAttribute('aria-pressed', String(state.requestBodyWrap));
-  resWrapBtn?.classList.toggle('is-active', state.responseBodyWrap);
-  resWrapBtn?.setAttribute('aria-pressed', String(state.responseBodyWrap));
+  syncBodyWrapShared({
+    root: document,
+    requestBodyEl,
+    responseBodyEl,
+    requestWrap: state.requestBodyWrap,
+    responseWrap: state.responseBodyWrap
+  });
 }
 
 function renderDetail(): void {
@@ -197,21 +195,16 @@ async function copyText(text: string, btn: HTMLElement | null): Promise<void> {
   if (!text) return;
   try {
     await api.copyToClipboard(text);
-    btn?.classList.add('is-copied');
-    window.setTimeout(() => btn?.classList.remove('is-copied'), 1400);
+    flashCopied(btn);
   } catch {
     /* ignore */
   }
 }
 
 function paneBodyText(which: 'request' | 'response'): string {
-  const ev = selectedEvent();
-  if (ev) {
-    if (which === 'request' && state.requestTab === 'body') return ev.httpRequest?.body || '';
-    if (which === 'response' && state.responseTab === 'body') return ev.httpResponse?.body || '';
-  }
+  const showingBody = which === 'request' ? state.requestTab === 'body' : state.responseTab === 'body';
   const el = which === 'request' ? requestBodyEl : responseBodyEl;
-  return el instanceof HTMLElement ? (el.innerText || el.textContent || '').trim() : '';
+  return paneBodyTextShared(selectedEvent(), which, showingBody, el);
 }
 
 function closeCopyDropdown(): void {

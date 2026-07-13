@@ -8127,6 +8127,67 @@
       overflow: hidden;
       box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
     }
+    /* ── Network Inspector: Find modal ("Find in Traffic") ───────────────────────────── */
+    /* NON-blocking + docked top-right: no dim backdrop and click-through so the session list (left)
+       stays fully visible and interactive while Prev/Next jumps highlight + scroll rows behind. */
+    .ni-find-overlay { align-items: flex-start; justify-content: flex-end; background: transparent; pointer-events: none; }
+    .ni-find-modal { pointer-events: auto; margin: 12px 14px 0 0; background: var(--bg-secondary); border: 1px solid var(--border-hover); border-radius: 12px; width: min(540px, 92vw); display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 22px 64px rgba(0, 0, 0, 0.62); }
+    .ni-find-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid var(--border); background: linear-gradient(180deg, rgba(139, 92, 246, 0.05), transparent); }
+    .ni-find-title { margin: 0; font-size: 15px; font-weight: 600; color: var(--text-primary); }
+    .ni-find-close { background: transparent; border: none; color: var(--text-secondary); font-size: 20px; cursor: pointer; line-height: 1; }
+    .ni-find-close:hover { color: var(--text-primary); }
+    .ni-find-body { padding: 14px 16px; display: flex; flex-direction: column; gap: 12px; }
+    .ni-find-field { display: flex; align-items: center; gap: 6px; background: var(--bg-deep); border: 1px solid var(--border-hover); border-radius: 8px; padding: 4px 6px 4px 10px; }
+    .ni-find-field:focus-within { border-color: var(--accent-purple); }
+    .ni-find-field-icon { color: var(--text-muted); flex: 0 0 auto; }
+    .ni-find-input { flex: 1 1 auto; min-width: 0; background: transparent; border: none; outline: none; color: var(--text-primary); font: inherit; font-size: 13px; padding: 5px 2px; }
+    .ni-find-count { flex: 0 0 auto; font-size: 11.5px; color: var(--text-muted); white-space: nowrap; padding: 0 4px; font-variant-numeric: tabular-nums; }
+    .ni-find-count.is-empty { color: var(--accent-amber); }
+    .ni-find-nav { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 24px; background: transparent; border: none; border-radius: 6px; color: var(--text-secondary); cursor: pointer; }
+    .ni-find-nav:hover { background: var(--bg-tertiary); color: var(--text-primary); }
+    .ni-find-row { display: flex; align-items: center; gap: 10px; }
+    .ni-find-row-label { flex: 0 0 74px; font-size: 11px; font-weight: 600; color: var(--text-secondary); }
+    .ni-find-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+    .ni-find-chip { font-size: 11.5px; color: var(--text-secondary); background: var(--bg-deep); border: 1px solid var(--border-hover); border-radius: 999px; padding: 4px 11px; cursor: pointer; transition: background 0.12s, border-color 0.12s, color 0.12s; }
+    .ni-find-chip:hover { border-color: rgba(139, 92, 246, 0.5); }
+    .ni-find-chip.is-on { color: var(--text-primary); background: var(--accent-purple-dim); border-color: rgba(139, 92, 246, 0.5); }
+    .ni-find-opts { display: flex; gap: 6px; }
+    .ni-find-opt { font-family: ui-monospace, monospace; font-size: 12px; font-weight: 600; color: var(--text-secondary); background: var(--bg-deep); border: 1px solid var(--border-hover); border-radius: 6px; width: 30px; height: 26px; cursor: pointer; }
+    .ni-find-opt:hover { border-color: rgba(139, 92, 246, 0.5); }
+    .ni-find-opt.is-on { color: #fff; background: var(--accent-purple); border-color: var(--accent-purple); }
+    .ni-find-note { margin: 2px 0 0; padding-left: 16px; font-size: 11px; color: var(--text-muted); line-height: 1.5; }
+    .ni-find-note li { margin: 2px 0; }
+    .ni-find-note kbd { font-family: ui-monospace, monospace; font-size: 10px; background: var(--bg-deep); border: 1px solid var(--border); border-radius: 4px; padding: 1px 5px; }
+    /* Find matches get an amber LEFT BAR only — no row background. Background stays reserved for row
+       selection (what the user clicked / is viewing), so the two signals never compete. The bar
+       eases in (grows 0→3px + fades) so newly-matched requests announce themselves smoothly. */
+    .ni-find-match, .ni-find-current { box-shadow: inset 3px 0 0 var(--accent-amber); animation: niFindBarIn 0.24s ease; }
+    @keyframes niFindBarIn { from { box-shadow: inset 0 0 0 0 rgba(245, 158, 11, 0); } to { box-shadow: inset 3px 0 0 0 var(--accent-amber); } }
+    /* While the Find modal is open, matches are marked but their bars DON'T animate (the user is
+       typing, not watching the list). Removing `.ni-find-open` on close flips animation-name from
+       none → niFindBarIn on all current match rows at once, so they ease in together as the list
+       comes back into view. Newly-arriving matches while closed still animate individually. */
+    .ni-find-open .ni-find-match, .ni-find-open .ni-find-current { animation: none; }
+    /* Group-by-Host: when a group is COLLAPSED its matching leaves are hidden, so surface the match
+       on the host's expand chevron (amber). Expanding reverts it — the leaf bars show instead. */
+    .ni-struct-host-collapsed > .ni-struct-host-row.ni-find-group-match .ni-struct-chevron { color: var(--accent-amber); }
+    /* Active-search feedback on the Search button uses the SAME amber as the match bar; it eases in. */
+    .ni-find-btn { transition: color 0.25s ease, background-color 0.25s ease, border-color 0.25s ease; }
+    .ni-icon-btn.is-find-active { color: var(--accent-amber); border-color: rgba(245, 158, 11, 0.55); background: var(--accent-amber-dim); }
+    /* Search is the primary button; ↑ / ↓ / clear are child buttons that expand out of it (width +
+       fade + slide, lightly staggered) while a Find is active, so the user can walk + clear matches
+       from the header with the modal closed. */
+    .ni-find-btn-group { display: inline-flex; align-items: center; }
+    .ni-find-btn-group .ni-find-sub-btn { display: inline-flex; align-items: center; justify-content: center; width: 0; height: 26px; padding: 0; margin-left: 0; background: transparent; border: none; border-radius: 6px; color: var(--text-secondary); cursor: pointer; opacity: 0; transform: translateX(-6px); overflow: hidden; pointer-events: none; transition: width 0.2s ease, opacity 0.2s ease, transform 0.2s ease, margin 0.2s ease, color 0.12s, background 0.12s; }
+    .ni-find-btn-group.has-results .ni-find-sub-btn { width: 22px; margin-left: 1px; opacity: 1; transform: translateX(0); pointer-events: auto; }
+    .ni-find-btn-group.has-results .ni-find-sub-btn:nth-child(3) { transition-delay: 0.04s; }
+    .ni-find-btn-group.has-results .ni-find-sub-btn:nth-child(4) { transition-delay: 0.08s; }
+    .ni-find-btn-group .ni-find-sub-btn:hover { color: var(--text-primary); background: var(--bg-tertiary); }
+    .ni-find-btn-group .ni-find-clear-btn { color: var(--text-muted); }
+    @media (prefers-reduced-motion: reduce) {
+      .ni-find-match, .ni-find-current { animation: none; }
+      .ni-find-btn, .ni-find-btn-group .ni-find-sub-btn { transition: none; }
+    }
     .ni-filter-help-header { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; border-bottom: 1px solid var(--border); }
     .ni-filter-help-header h3 { margin: 0; font-size: 15px; font-weight: 600; }
     .ni-filter-help-close { background: transparent; border: none; color: var(--text-secondary); font-size: 20px; cursor: pointer; line-height: 1; }
@@ -8828,13 +8889,18 @@
       padding: 1px 6px;
       border-radius: 8px;
     }
-    .ni-struct-children { padding-left: 12px; }
+    /* No container indent: leaves span the full sidebar width so a Find match bar can sit flush at
+       the left edge (using what used to be empty indent gutter). The nesting indent moves onto the
+       leaf's own left padding below, so request text stays indented under its host. */
+    .ni-struct-children { padding-left: 0; }
     .ni-struct-leaf {
       display: grid;
       grid-template-columns: minmax(44px, auto) 1fr minmax(44px, auto);
       grid-template-rows: auto auto;
       gap: 2px 10px;
-      padding: 6px 10px 6px 8px;
+      /* Left padding carries the host-nesting indent (moved off .ni-struct-children) so the row's
+         left edge — where the Find match bar paints — is flush with the sidebar. */
+      padding: 6px 10px 6px 14px;
       cursor: pointer;
       border-radius: 4px;
       border-bottom: 1px solid rgba(255,255,255,0.04);
@@ -15150,6 +15216,20 @@
                 <span class="card-icon"><span class="icon icon-sm"><svg><use href="#icon-network"/></svg></span></span>
                 <span class="card-title">Network Inspector</span>
                 <div class="ni-header-tools">
+                  <div class="ni-find-btn-group">
+                    <button type="button" class="btn btn-secondary btn-sm ni-icon-btn ni-find-btn" data-ni-find title="Find in traffic — URL, payloads, headers, response bodies (⌘/Ctrl+F)" aria-label="Find in traffic">
+                      <span class="icon icon-sm"><svg><use href="#icon-zoom"/></svg></span>
+                    </button>
+                    <button type="button" class="ni-find-sub-btn" data-ni-find-prev title="Previous Match (Shift+↑)" aria-label="Previous Match">
+                      <span class="icon icon-xs"><svg><use href="#icon-chevron-up"/></svg></span>
+                    </button>
+                    <button type="button" class="ni-find-sub-btn" data-ni-find-next title="Next Match (Shift+↓)" aria-label="Next Match">
+                      <span class="icon icon-xs"><svg><use href="#icon-chevron-down"/></svg></span>
+                    </button>
+                    <button type="button" class="ni-find-sub-btn ni-find-clear-btn" data-ni-find-clear title="Clear Find results" aria-label="Clear Find results">
+                      <span class="icon icon-xs"><svg><use href="#icon-x"/></svg></span>
+                    </button>
+                  </div>
                   <div class="ni-download-menu" data-ni-download-menu>
                     <button type="button" class="btn btn-secondary btn-sm ni-icon-btn" data-ni-download-toggle title="Download session…" aria-haspopup="true" aria-expanded="false" aria-label="Download session">
                       <span class="icon icon-sm"><svg><use href="#icon-download"/></svg></span>

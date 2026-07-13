@@ -41,6 +41,7 @@
   "exports": {
     ".": "./index.ts",
     "./types": "./types.ts",
+    "./content-search": "./content-search.ts",
     "./prerequisites": "./prerequisites.ts",
     "./setup-guide": "./setup-guide.ts",
     "./packet-parser": "./packet-parser.ts",
