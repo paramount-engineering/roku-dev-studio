@@ -102,7 +102,7 @@ export type ConsoleFindBarHandle = {
   shouldFilterOut: (text: string) => boolean;
   /** Move focus to the find input (e.g. from a Cmd+F / Ctrl+F shortcut handler). */
   focusInput: () => void;
-  /** Programmatically navigate to the next / previous match, same as the bar's own buttons. */
+  /** Programmatically navigate to the next / Previous Match, same as the bar's own buttons. */
   searchNext: () => void;
   searchPrev: () => void;
   /** Toggle Find ⇄ Filter, mirroring the dropdown. Triggers a re-evaluation. */

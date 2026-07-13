@@ -3,9 +3,9 @@
  *
  * Bindings:
  *   Cmd/Ctrl+F            → focus find input
- *   Cmd/Ctrl+G  /  F3     → next match
+ *   Cmd/Ctrl+G  /  F3     → Next Match
  *   Shift+Cmd/Ctrl+G  /  Shift+F3
- *                          → previous match
+ *                         → Previous Match
  *   Cmd/Ctrl+Alt+F        → toggle Find ⇄ Filter mode
  *   Cmd/Ctrl+A            → copy the entire log model to the clipboard (only
  *                           when `selectAllAction` is provided; otherwise the
