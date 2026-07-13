@@ -5,6 +5,7 @@ import type { ConsoleFindOptions } from '../../modules/console-log/console-find-
 import { createLogFileWindowModel } from './log-file-window-model.js';
 import { makeCenteredSearchResizable } from '../../modules/ui/header-search-resize.js';
 import { searchWidthKey } from '../../modules/ui/search-storage-keys.js';
+import { inMemorySessionStore } from '../../modules/ui/in-memory-storage.js';
 
 /**
  * Local typed view of `window.roku` for this renderer window. Declared as a
@@ -173,7 +174,7 @@ async function main() {
     entries: model.entries,
     findBarHost: headerEl,
     // Standalone window → per-window history (cleared when the window closes).
-    historyStorage: window.sessionStorage,
+    historyStorage: inMemorySessionStore,
     onRangeChange: (start, end) => model.ensureWindow(start, end),
     remoteSearch: async (query, options) => {
       const r = await rokuApi.searchLogViewerFile(query, options);
@@ -192,7 +193,7 @@ async function main() {
   if (findHostEl instanceof HTMLElement && headerEl instanceof HTMLElement) {
     makeCenteredSearchResizable(findHostEl, {
       storageKey: searchWidthKey('logviewer'),
-      storage: window.sessionStorage,
+      storage: inMemorySessionStore,
       header: headerEl,
       leftGroupSelector: '.log-viewer-header-primary',
       rightGroupSelector: '#logViewerActions',

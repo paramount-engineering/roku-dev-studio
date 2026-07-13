@@ -14,6 +14,8 @@
  * history is safe; we only `preventDefault` when we actually navigate.
  */
 
+import { inMemorySessionStore } from './in-memory-storage.js';
+
 export interface SearchHistoryOptions {
   input: HTMLInputElement;
   /** Storage key for the persisted history array. */
@@ -31,7 +33,10 @@ export interface SearchHistoryOptions {
 export function attachSearchHistory(o: SearchHistoryOptions): { commit: (v: string) => void; dispose: () => void } {
   const { input } = o;
   const MAX = o.max ?? 50;
-  const store: Storage = o.storage ?? sessionStorage;
+  // Default to an in-memory store, NOT sessionStorage: the first sessionStorage touch on Electron's
+  // file:// origin stalls the renderer ~4s (see in-memory-storage.ts), and it landed on the first
+  // find bar built during a device connect. In-memory has identical per-window semantics here.
+  const store: Storage = o.storage ?? inMemorySessionStore;
 
   let history: string[] = []; // oldest → newest
   try {
