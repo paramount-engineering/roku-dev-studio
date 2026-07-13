@@ -175,25 +175,52 @@ export function getCaInfo(): {
   };
 }
 
+/**
+ * Generate an RSA keypair **without blocking the event loop**. node-forge's callback form drives the
+ * key generation as an incremental state machine that yields via `setImmediate` between steps, so the
+ * Electron main-process event loop keeps servicing IPC (device connect, discovery, UI) while the key
+ * is computed. The synchronous form froze the main thread for ~1s at proxy startup.
+ */
+function generateKeyPairAsync(bits: number): Promise<forge.pki.rsa.KeyPair> {
+  return new Promise((resolve, reject) => {
+    forge.pki.rsa.generateKeyPair({ bits }, (err, keypair) => {
+      if (err) reject(err);
+      else resolve(keypair);
+    });
+  });
+}
+
 // A single RSA keypair shared by every per-host leaf cert. Generating a fresh 2048-bit keypair per
 // hostname was a ~50-200ms synchronous stall on the TLS handshake hot path (every new SNI name).
 // A MITM leaf does not need a unique key — only a unique certificate (subject/SAN, CA-signed) — so
 // one keypair is generated once and reused, turning each leaf into just a sign() call.
 let sharedLeafKeys: forge.pki.rsa.KeyPair | null = null;
+let leafKeyPromise: Promise<forge.pki.rsa.KeyPair> | null = null;
 
 function getSharedLeafKeys(): forge.pki.rsa.KeyPair {
   if (!sharedLeafKeys) {
+    // Fallback: a TLS handshake arrived before warmLeafKeyPair() finished (rare — the proxy warms at
+    // start, well before a client is configured). Generate synchronously this once so the handshake
+    // isn't dropped; subsequent leaves reuse it.
     sharedLeafKeys = forge.pki.rsa.generateKeyPair(2048);
   }
   return sharedLeafKeys;
 }
 
 /**
- * Pre-generate the shared leaf keypair off the request hot path. The proxy calls this at start so
- * the one unavoidable keygen happens at startup rather than stalling the first HTTPS handshake.
+ * Pre-generate the shared leaf keypair off the request hot path, **asynchronously** so proxy startup
+ * never blocks the event loop. The proxy fires this (fire-and-forget) at start, so the one
+ * unavoidable keygen is ready before the first HTTPS handshake without stalling startup or connect.
  */
-export function warmLeafKeyPair(): void {
-  getSharedLeafKeys();
+export async function warmLeafKeyPair(): Promise<void> {
+  if (sharedLeafKeys) return;
+  if (!leafKeyPromise) leafKeyPromise = generateKeyPairAsync(2048);
+  try {
+    sharedLeafKeys = await leafKeyPromise;
+  } catch {
+    // Let a later warm (or the sync fallback in getSharedLeafKeys) retry.
+    leafKeyPromise = null;
+  }
 }
 
 export function createLeafCert(hostname: string, ca: CaMaterial): { certPem: string; keyPem: string } {

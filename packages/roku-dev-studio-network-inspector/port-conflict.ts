@@ -1,11 +1,16 @@
 /**
  * Best-effort detection of *which* local process is holding a TCP port, used to turn an opaque
  * `EADDRINUSE` from the MITM proxy into an actionable warning ("Charles (PID 1234) is using port
- * 8888 — close it or change the proxy port"). All probing is synchronous, short-timeout, and
- * wrapped so a missing/blocked OS tool degrades gracefully to "process unknown" rather than
- * throwing — the warning is still useful without the process name.
+ * 8888 — close it or change the proxy port"). All probing is **asynchronous** (spawned OS tools,
+ * short-timeout) so it never blocks the Electron main-process event loop — a synchronous `lsof`/`ps`
+ * probe here used to freeze all IPC (including device connect) for seconds on every EADDRINUSE.
+ * Each probe is wrapped so a missing/blocked OS tool degrades gracefully to "process unknown" rather
+ * than throwing — the warning is still useful without the process name.
  */
-import { execFileSync } from 'child_process';
+import { execFile } from 'child_process';
+import { promisify } from 'util';
+
+const execFileAsync = promisify(execFile);
 
 export type PortHolder = {
   pid?: number;
@@ -20,28 +25,29 @@ export function isAddressInUseError(message: string | undefined): boolean {
   return m.includes('eaddrinuse') || m.includes('address already in use') || m.includes('address in use');
 }
 
-function run(cmd: string, args: string[]): string {
+async function run(cmd: string, args: string[]): Promise<string> {
   try {
-    return execFileSync(cmd, args, {
+    const { stdout } = await execFileAsync(cmd, args, {
       encoding: 'utf8',
       timeout: 2500,
-      stdio: ['ignore', 'pipe', 'ignore'],
-      windowsHide: true
+      windowsHide: true,
+      maxBuffer: 1024 * 1024
     });
+    return stdout;
   } catch {
     return '';
   }
 }
 
 /** Resolve a fuller command line for a PID on macOS/Linux (best effort). */
-function psCommandForPid(pid: number): string | undefined {
-  const out = run('ps', ['-p', String(pid), '-o', 'command=']).trim();
+async function psCommandForPid(pid: number): Promise<string | undefined> {
+  const out = (await run('ps', ['-p', String(pid), '-o', 'command='])).trim();
   return out || undefined;
 }
 
 /** Resolve the executable path for a PID on macOS/Linux (best effort). */
-function psExecPathForPid(pid: number): string | undefined {
-  const out = run('ps', ['-p', String(pid), '-o', 'comm=']).trim();
+async function psExecPathForPid(pid: number): Promise<string | undefined> {
+  const out = (await run('ps', ['-p', String(pid), '-o', 'comm='])).trim();
   return out || undefined;
 }
 
@@ -64,8 +70,8 @@ function friendlyProcessName(command: string | undefined, execPath: string | und
 
 /** macOS / Linux: `lsof` gives the listening PID; `ps` resolves a clean name (not lsof's truncated,
  *  space-escaped COMMAND column). */
-function detectUnix(port: number): PortHolder | null {
-  const out = run('lsof', ['-nP', `-iTCP:${port}`, '-sTCP:LISTEN']);
+async function detectUnix(port: number): Promise<PortHolder | null> {
+  const out = await run('lsof', ['-nP', `-iTCP:${port}`, '-sTCP:LISTEN']);
   if (!out) return null;
   // Skip the header row; the first data row's columns are: COMMAND PID USER ...
   const lines = out.split('\n').map((l) => l.trim()).filter(Boolean);
@@ -75,8 +81,8 @@ function detectUnix(port: number): PortHolder | null {
     if (parts.length < 2) continue;
     const pid = Number(parts[1]);
     if (!Number.isFinite(pid)) continue;
-    const command = psCommandForPid(pid);
-    const execPath = psExecPathForPid(pid);
+    const command = await psCommandForPid(pid);
+    const execPath = await psExecPathForPid(pid);
     return {
       pid,
       // Never trust lsof's truncated COMMAND (`Roku\x20D`); resolve the real name from ps and fall
@@ -89,8 +95,8 @@ function detectUnix(port: number): PortHolder | null {
 }
 
 /** Windows: `netstat -ano` gives the PID listening on the port; `tasklist` maps it to an image name. */
-function detectWindows(port: number): PortHolder | null {
-  const out = run('netstat', ['-ano', '-p', 'TCP']);
+async function detectWindows(port: number): Promise<PortHolder | null> {
+  const out = await run('netstat', ['-ano', '-p', 'TCP']);
   if (!out) return null;
   let pid: number | undefined;
   for (const raw of out.split('\n')) {
@@ -111,7 +117,7 @@ function detectWindows(port: number): PortHolder | null {
     }
   }
   if (pid === undefined) return null;
-  const taskOut = run('tasklist', ['/FI', `PID eq ${pid}`, '/FO', 'CSV', '/NH']);
+  const taskOut = await run('tasklist', ['/FI', `PID eq ${pid}`, '/FO', 'CSV', '/NH']);
   let image: string | undefined;
   if (taskOut) {
     // CSV row: "image.exe","1234","Console","1","12,345 K"
@@ -126,11 +132,11 @@ function detectWindows(port: number): PortHolder | null {
  * Identify the process holding `port`, or null when it can't be determined (tool missing, port
  * already free by the time we probe, or insufficient permission). Never throws.
  */
-export function detectPortHolder(port: number): PortHolder | null {
+export async function detectPortHolder(port: number): Promise<PortHolder | null> {
   if (!Number.isFinite(port) || port <= 0) return null;
   try {
-    if (process.platform === 'win32') return detectWindows(port);
-    return detectUnix(port);
+    if (process.platform === 'win32') return await detectWindows(port);
+    return await detectUnix(port);
   } catch {
     return null;
   }
