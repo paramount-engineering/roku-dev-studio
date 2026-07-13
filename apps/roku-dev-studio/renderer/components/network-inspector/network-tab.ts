@@ -2441,6 +2441,9 @@ export function setupNetworkTab(
   }
 
   // ── Find in content (URL / headers / bodies) ──────────────────────────────────────────────
+  // Deferred visual update: when the modal is open, row badges + button color/child-animation are
+  // held here and applied only after close so they all play together when the list is back in view.
+  let pendingFindVisualUpdate: (() => void) | null = null;
   findModal = createNetworkFindModal({
     async search(options) {
       findQuery = options.query;
@@ -2470,7 +2473,6 @@ export function setupNetworkTab(
     },
     onResults(matches) {
       findMatches = new Map(matches.map((m) => [m.id, m]));
-      applyFindDecorations();
       // Re-sync the request currently in view so a new/updated search term highlights it right away
       // (don't scroll the body while the user is still typing).
       syncSelectedDetailFind(false);
@@ -2479,9 +2481,21 @@ export function setupNetworkTab(
       // search state hide rather than sitting there doing nothing.
       const order = visibleFindOrder();
       const hasResults = order.length > 0;
-      if (findBtn) findBtn.classList.toggle('is-find-active', hasResults);
-      // The group class drives the CSS expand/collapse animation for the ↑/↓/clear child buttons.
-      if (findBtnGroup) findBtnGroup.classList.toggle('has-results', hasResults);
+      if (findModal?.isOpen()) {
+        // Modal is open: defer row-badge decoration + button color/child-animation until close so
+        // they all play together when the list comes back into view (no animation fires behind the modal).
+        pendingFindVisualUpdate = () => {
+          applyFindDecorations();
+          if (findBtn) findBtn.classList.toggle('is-find-active', hasResults);
+          // The group class drives the CSS expand/collapse animation for the ↑/↓/clear child buttons.
+          if (findBtnGroup) findBtnGroup.classList.toggle('has-results', hasResults);
+        };
+      } else {
+        applyFindDecorations();
+        if (findBtn) findBtn.classList.toggle('is-find-active', hasResults);
+        // The group class drives the CSS expand/collapse animation for the ↑/↓/clear child buttons.
+        if (findBtnGroup) findBtnGroup.classList.toggle('has-results', hasResults);
+      }
       return order;
     },
     onNavigate(id, queryText) {
@@ -2494,6 +2508,7 @@ export function setupNetworkTab(
       applyFindDecorations();
     },
     onClear() {
+      pendingFindVisualUpdate = null; // cancel any deferred visual update from the last search
       findMatches = new Map();
       findCurrentId = null;
       findQuery = '';
@@ -2514,6 +2529,21 @@ export function setupNetworkTab(
     },
     onClose() {
       if (sessionListEl instanceof HTMLElement) sessionListEl.classList.remove('ni-find-open');
+      if (pendingFindVisualUpdate) {
+        // Rows that onNavigate silently tagged while the modal was open (ni-find-open suppressed
+        // their animation) must be stripped first so re-applying the classes triggers the entrance
+        // animation now that ni-find-open is gone and the list is back in view.
+        if (sessionListEl instanceof HTMLElement) {
+          sessionListEl.querySelectorAll('.ni-find-match, .ni-find-current').forEach((el) => {
+            el.classList.remove('ni-find-match', 'ni-find-current');
+          });
+          sessionListEl.querySelectorAll('.ni-find-group-match').forEach((el) => {
+            el.classList.remove('ni-find-group-match');
+          });
+        }
+        pendingFindVisualUpdate();
+        pendingFindVisualUpdate = null;
+      }
     }
   });
   findBtn?.addEventListener('click', () => findModal?.open(), listenerOpts);

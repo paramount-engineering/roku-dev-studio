@@ -211,6 +211,9 @@ export function createNetworkFindModal(cb: FindModalCallbacks): FindModalHandle 
             <span class="ni-find-field-icon icon icon-sm" aria-hidden="true"><svg><use href="#icon-zoom"/></svg></span>
             <input type="text" class="ni-find-input" data-find-input placeholder="Find text in URL, payloads, headers…" spellcheck="false" autocomplete="off" aria-label="Find text" value="${escapeHtml(query)}" />
             <span class="ni-find-count" data-find-count aria-live="polite"></span>
+            <button type="button" class="ni-find-nav" data-find-nav-prev title="Previous Match (Shift+Enter)" aria-label="Previous Match"><span class="icon icon-xs"><svg><use href="#icon-chevron-up"/></svg></span></button>
+            <button type="button" class="ni-find-nav" data-find-nav-next title="Next Match (Enter)" aria-label="Next Match"><span class="icon icon-xs"><svg><use href="#icon-chevron-down"/></svg></span></button>
+            <button type="button" class="ni-find-nav" data-find-nav-close title="Close (Esc)" aria-label="Close"><span class="icon icon-xs"><svg><use href="#icon-x"/></svg></span></button>
           </div>
           <div class="ni-find-row">
             <span class="ni-find-row-label">Search in</span>
@@ -237,6 +240,9 @@ export function createNetworkFindModal(cb: FindModalCallbacks): FindModalHandle 
     const input = el.querySelector('[data-find-input]') as HTMLInputElement | null;
 
     el.querySelector('.ni-find-close')?.addEventListener('click', close);
+    el.querySelector('[data-find-nav-prev]')?.addEventListener('click', () => navigate(-1));
+    el.querySelector('[data-find-nav-next]')?.addEventListener('click', () => navigate(1));
+    el.querySelector('[data-find-nav-close]')?.addEventListener('click', close);
     // Backdrop click (outside the dialog) closes.
     el.addEventListener('mousedown', (e) => {
       if (e.target === el) close();
