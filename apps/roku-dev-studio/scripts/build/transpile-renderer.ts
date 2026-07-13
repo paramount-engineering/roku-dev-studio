@@ -38,9 +38,54 @@ export function extractIndexStyleToCss(rendererRoot: string, rendererDist: strin
     console.warn('transpile-renderer: no <style> block in index.html — skipping network-session-viewer.css');
     return;
   }
+  // Guard against the recurring "chopped card headers" class of bug: a single mis-edit in this
+  // ~13k-line inline stylesheet (an unclosed `/* */`, a stray/missing `}`) makes the browser's CSS
+  // parser skip a whole run of rules — silently dropping globals like `.card-header { min-height }`,
+  // which collapses every card header. Nothing caught it before, so it kept shipping and getting
+  // re-fixed. Fail the build here instead, with a line number, the moment the block is malformed.
+  const styleLine = html.slice(0, match.index).split('\n').length; // 1-based line of `<style>`
+  validateIndexCss(match[1], styleLine);
+
   const header = '/* AUTO-GENERATED from renderer/index.html <style> by transpile-renderer.ts. Do not edit. */\n';
   fs.mkdirSync(rendererDist, { recursive: true });
   fs.writeFileSync(path.join(rendererDist, 'network-session-viewer.css'), header + match[1], 'utf-8');
+}
+
+/**
+ * Fail the build if index.html's inline `<style>` is structurally broken in a way that makes a CSS
+ * parser drop rules. Three cheap, false-positive-free checks: (1) `/*`↔`*​/` comment-delimiter
+ * balance, (2) brace balance (never dips negative, ends at zero — after stripping comments/strings),
+ * (3) esbuild's CSS parser must not hard-error. `lineOffset` maps offsets back to index.html lines.
+ */
+function validateIndexCss(css: string, lineOffset: number): void {
+  const fail = (msg: string, lineInCss?: number): never => {
+    const where = lineInCss != null ? ` (index.html line ~${lineOffset + lineInCss - 1})` : '';
+    throw new Error(`transpile-renderer: index.html <style> is malformed${where} — ${msg}. ` +
+      `A broken stylesheet silently drops CSS rules (e.g. chopped card headers). Fix before building.`);
+  };
+
+  const opens = (css.match(/\/\*/g) || []).length;
+  const closes = (css.match(/\*\//g) || []).length;
+  if (opens !== closes) fail(`unbalanced block comments (/*=${opens}, */=${closes}) — likely an unclosed /* … */`);
+
+  // Strip comments + quoted strings so braces inside them don't skew the count.
+  const stripped = css.replace(/\/\*[\s\S]*?\*\//g, '').replace(/"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'/g, '""');
+  let depth = 0;
+  let line = 1;
+  for (let i = 0; i < stripped.length; i++) {
+    const ch = stripped[i];
+    if (ch === '\n') line++;
+    else if (ch === '{') depth++;
+    else if (ch === '}' && --depth < 0) fail('a stray `}` closes a rule that was never opened', line);
+  }
+  if (depth !== 0) fail(`${depth} unclosed \`{\` — a rule is missing its closing brace`);
+
+  try {
+    esbuild.transformSync(css, { loader: 'css' });
+  } catch (e) {
+    const err = (e as { errors?: Array<{ text: string; location?: { line: number } }> }).errors?.[0];
+    fail(err?.text ?? String(e), err?.location?.line);
+  }
 }
 
 /**
