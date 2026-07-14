@@ -21,7 +21,8 @@
     "tcpdump"
   ],
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test test/*.test.ts"
   },
   "dependencies": {
     "adm-zip": "^0.5.17",
@@ -41,6 +42,7 @@
   "exports": {
     ".": "./index.ts",
     "./types": "./types.ts",
+    "./rewrite": "./rewrite.ts",
     "./content-search": "./content-search.ts",
     "./prerequisites": "./prerequisites.ts",
     "./setup-guide": "./setup-guide.ts",

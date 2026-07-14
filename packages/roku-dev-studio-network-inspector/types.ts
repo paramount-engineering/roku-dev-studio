@@ -247,6 +247,35 @@ export type MockResponse = {
   delayMs?: number;
 };
 
+/**
+ * A single Charles-style rewrite operation. Non-terminal: the request is still forwarded upstream
+ * (and its real response returned), with the named mutation applied. `target` says whether the op
+ * mutates the outgoing request or the incoming response.
+ *
+ *  - `set-header` / `remove-header`  (request or response) — `match` = header name, `value` = value.
+ *  - `set-status`  (response)        — `value` = new status code.
+ *  - `set-host`    (request)         — `value` = `host` or `host:port`; redirects upstream ("map remote").
+ *  - `set-path`    (request)         — `value` = new path (may include its own `?query`).
+ *  - `set-query` / `remove-query`    (request) — `match` = param name, `value` = value (set only).
+ *  - `body-replace` (request or response) — `match` = find text, `value` = replacement; `regex` treats
+ *    `match` as a global JS regex. Applies to textual bodies only (binary is left untouched).
+ */
+export type RewriteOp = {
+  target: 'request' | 'response';
+  type:
+    | 'set-header'
+    | 'remove-header'
+    | 'set-status'
+    | 'set-host'
+    | 'set-path'
+    | 'set-query'
+    | 'remove-query'
+    | 'body-replace';
+  match?: string;
+  value?: string;
+  regex?: boolean;
+};
+
 /** A per-host rule within a device's traffic rules. `host` matches a hostname exactly or by suffix. */
 export type HostTrafficRule = {
   host: string;
@@ -259,6 +288,8 @@ export type HostTrafficRule = {
   respond?: MockResponse;
   /** Fault injection: drop the connection (simulate a network failure / RST). */
   resetConnection?: boolean;
+  /** Rewrite ops applied to the forwarded request and/or its response (non-terminal). */
+  rewrite?: RewriteOp[];
 };
 
 /** Block/throttle rules for a single device (keyed by its IP), applied to proxied traffic. */
@@ -282,6 +313,8 @@ export type TrafficDecision = {
   respond?: MockResponse;
   /** Fault injection: drop the connection without responding. */
   resetConnection?: boolean;
+  /** Rewrite ops (from all matching host rules, in order) to apply while forwarding. */
+  rewrite?: RewriteOp[];
 };
 
 /** True throttle (some positive limit/latency), so callers can skip pacing when it's a no-op. */
@@ -291,20 +324,51 @@ export function throttleIsActive(t: TrafficThrottle | undefined): boolean {
     (typeof t.latencyMs === 'number' && t.latencyMs > 0);
 }
 
-/** A rule host matches a request hostname exactly or as a domain suffix (e.g. `paramount.com`). */
+/**
+ * Compile a `*`-wildcard pattern to a case-insensitive RegExp. Every regex metacharacter is escaped
+ * except `*`, which becomes `.*` (matches any run of characters, including dots). `anchored` wraps it
+ * in `^…$` for a full-string match (hosts); unanchored matches anywhere (path "contains" semantics).
+ */
+function globToRegExp(pattern: string, anchored: boolean): RegExp {
+  // Char-by-char so `*` → `.*` and every other regex metacharacter is escaped. (Deliberately not a
+  // char-class regex literal — that form trips esbuild's scanner in this transpile path.)
+  const specials = '.+?^${}()|[]\\/';
+  let body = '';
+  for (const ch of pattern) {
+    if (ch === '*') body += '.*';
+    else if (specials.includes(ch)) body += '\\' + ch;
+    else body += ch;
+  }
+  return new RegExp(anchored ? `^${body}$` : body, 'i');
+}
+
+/**
+ * A rule host matches a request hostname. Backward-compatible:
+ *  - no `*` → exact match OR domain-suffix (e.g. `paramount.com` also matches `www.paramount.com`).
+ *  - contains `*` → full-string glob (e.g. `*.paramountplus.com` or `www.*.paramountplus.com`),
+ *    so one rule can cover lower + prod environments. Wildcard patterns do NOT get the implicit
+ *    suffix behavior — use `*` to express exactly what you want to match.
+ */
 export function hostRuleMatches(ruleHost: string, hostname: string): boolean {
   const r = (ruleHost || '').trim().toLowerCase();
   const h = (hostname || '').trim().toLowerCase();
   if (!r || !h) return false;
+  if (r.includes('*')) return globToRegExp(r, true).test(h);
   return h === r || h.endsWith('.' + r);
 }
 
-/** A host rule applies when its host matches AND (no `pathContains`, or the path contains it). */
+/**
+ * A host rule applies when its host matches AND (no `pathContains`, or the path matches it).
+ * The path pattern is a case-insensitive substring by default; if it contains `*` it's treated as a
+ * glob matched anywhere in the path (e.g. a segment wildcard like `/v1/<any>/play`).
+ */
 function hostRuleApplies(rule: HostTrafficRule, hostname: string, path: string): boolean {
   if (!hostRuleMatches(rule.host, hostname)) return false;
-  const needle = (rule.pathContains || '').trim().toLowerCase();
+  const needle = (rule.pathContains || '').trim();
   if (!needle) return true;
-  return (path || '').toLowerCase().includes(needle);
+  const p = path || '';
+  if (needle.includes('*')) return globToRegExp(needle, false).test(p);
+  return p.toLowerCase().includes(needle.toLowerCase());
 }
 
 /**
@@ -344,16 +408,19 @@ export function resolveTrafficDecision(
   if (!rules) return { block: false };
   if (rules.blockAll) return { block: true };
   let throttle = throttleIsActive(rules.throttle) ? rules.throttle : undefined;
+  const rewrite: RewriteOp[] = [];
   if (Array.isArray(rules.hosts)) {
     for (const hr of rules.hosts) {
       if (!hostRuleApplies(hr, hostname, path)) continue;
+      // Terminal actions short-circuit — they never forward, so any rewrite on the same rule is moot.
       if (hr.block) return { block: true };
       if (hr.resetConnection) return { block: false, resetConnection: true };
       if (hr.respond) return { block: false, respond: hr.respond };
+      if (Array.isArray(hr.rewrite) && hr.rewrite.length) rewrite.push(...hr.rewrite);
       if (hr.throttle && throttleIsActive(hr.throttle)) throttle = combineThrottle(rules.throttle, hr.throttle);
     }
   }
-  return { block: false, throttle };
+  return { block: false, throttle, ...(rewrite.length ? { rewrite } : {}) };
 }
 
 export type NetworkInspectorSettingsSave = {
