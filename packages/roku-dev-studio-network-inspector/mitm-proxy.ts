@@ -6,8 +6,9 @@ import * as tls from 'tls';
 import * as zlib from 'zlib';
 import { createLeafCert, type CaMaterial } from './ca-store';
 import { parseRokuProxyTarget, normalizeProxyHostPort } from './roku-proxy-url';
-import type { MockResponse, NetworkHttpMessage, TrafficDecision, TrafficThrottle } from './types';
+import type { MockResponse, NetworkHttpMessage, RewriteOp, TrafficDecision, TrafficThrottle } from './types';
 import { throttleIsActive } from './types';
+import { opsFor, applyRequestUrl, applyHeaderOps, statusOverride, applyBodyReplace, hasBodyReplace } from './rewrite';
 
 /**
  * Write `body` to a sink at a throttled rate. `downKbps` paces output in ~50ms chunks to approximate
@@ -236,6 +237,44 @@ function toClientResponseHeaders(
   }
   out.connection = 'close';
   return out;
+}
+
+/**
+ * Serialize response header lines for the tunneled (HTTPS) path. Preserves multi-value headers
+ * (e.g. `set-cookie`) from the raw upstream headers, while honoring response rewrite ops: removed /
+ * overridden header names are dropped and re-added from the ops, and when the body was rewritten the
+ * stale `content-encoding` + `content-length` are replaced with the new (uncompressed) length.
+ * With no ops and no body change this reproduces the plain pass-through serialization.
+ */
+function serializeResponseHeaderLines(
+  raw: http.IncomingHttpHeaders,
+  resOps: RewriteOp[],
+  bodyReplaced: boolean,
+  newBodyLen: number
+): string {
+  const removed = new Set<string>();
+  const setters: Record<string, string> = {};
+  for (const op of resOps) {
+    if (op.type === 'remove-header' && op.match) removed.add(op.match.toLowerCase());
+    else if (op.type === 'set-header' && op.match) {
+      const k = op.match.toLowerCase();
+      removed.add(k);
+      setters[k] = op.value ?? '';
+    }
+  }
+  if (bodyReplaced) {
+    removed.add('content-encoding');
+    removed.add('content-length');
+  }
+  const lines: string[] = [];
+  for (const [k, v] of Object.entries(raw)) {
+    if (v == null || removed.has(k.toLowerCase())) continue;
+    const vals = Array.isArray(v) ? v : [v];
+    for (const vv of vals) lines.push(`${k}: ${vv}`);
+  }
+  for (const [k, v] of Object.entries(setters)) lines.push(`${k}: ${v}`);
+  if (bodyReplaced) lines.push(`content-length: ${newBodyLen}`);
+  return lines.join('\r\n');
 }
 
 function decodeRequestUrl(raw: string | undefined): string | undefined {
@@ -673,8 +712,7 @@ export class RokuMitmProxy {
     if (!target) return;
     const method = req.method || 'GET';
     const reqHeaders = normalizeHeaders(req.headers);
-    const outboundHeaders = stripHopByHop(reqHeaders);
-    outboundHeaders.host = target.hostname;
+    let outboundHeaders = stripHopByHop(reqHeaders); // host set after request rewrites, below
 
     // Apply per-device/host traffic rules. Block / mock / reset short-circuit before touching the
     // upstream; throttle is applied when writing the response below.
@@ -732,10 +770,38 @@ export class RokuMitmProxy {
       }
     }
 
-    const port = target.port ?? (target.scheme === 'https' ? 443 : 80);
+    // Request-side rewrites (host / path / query / header / body). The decision was matched on the
+    // ORIGINAL URL above; here we mutate what actually goes upstream ("map remote", header edits, …).
+    const reqOps = opsFor(decision.rewrite, 'request');
+    let effUrl = target.originalUrl;
+    let effHost = target.hostname;
+    let effScheme = target.scheme;
+    let effPort = target.port ?? (target.scheme === 'https' ? 443 : 80);
+    let effPath = target.path;
+    if (reqOps.length) {
+      effUrl = applyRequestUrl(reqOps, target.originalUrl);
+      try {
+        const eu = new URL(effUrl);
+        effHost = eu.hostname;
+        effScheme = eu.protocol === 'https:' ? 'https' : 'http';
+        effPort = eu.port ? Number(eu.port) : effScheme === 'https' ? 443 : 80;
+        effPath = `${eu.pathname}${eu.search}`;
+      } catch {
+        /* unparseable rewrite result — keep the original target parts */
+      }
+      outboundHeaders = applyHeaderOps(reqOps, outboundHeaders);
+      if (hasBodyReplace(reqOps) && reqBody.length && isTextualContentType(contentTypeOf(reqHeaders))) {
+        const { buffer: decoded } = decodeContentEncoding(reqBody, reqHeaders);
+        reqBody = Buffer.from(applyBodyReplace(reqOps, bodyToText(decoded, reqHeaders)), 'utf8');
+        delete outboundHeaders['content-encoding'];
+      }
+    }
+    outboundHeaders.host = effHost;
+
+    const port = effPort;
     const requestSnapshot: NetworkHttpMessage = {
       method,
-      url: target.originalUrl,
+      url: effUrl,
       headers: reqHeaders,
       ...encodeBody(reqBody, reqHeaders, false)
     };
@@ -744,13 +810,13 @@ export class RokuMitmProxy {
     const startedAtMs = Date.now();
 
     // Record immediately so the Network Inspector shows the request even if upstream fails.
-    this.emitTransaction(transactionId, deviceIp, target.hostname, port, requestSnapshot, {
+    this.emitTransaction(transactionId, deviceIp, effHost, port, requestSnapshot, {
       statusCode: 0,
       statusText: 'Pending',
       body: undefined
     }, startedAtMs);
 
-    const mod = target.scheme === 'https' ? https : http;
+    const mod = effScheme === 'https' ? https : http;
 
     // Guarantee exactly one outcome per transaction. Without this guard a late socket
     // 'error'/'timeout' after a successful response would re-emit and flip a completed
@@ -764,7 +830,7 @@ export class RokuMitmProxy {
         clearTimeout(hardTimer);
         hardTimer = null;
       }
-      this.emitTransaction(transactionId, deviceIp, target.hostname, port, requestSnapshot, responseSnapshot, startedAtMs);
+      this.emitTransaction(transactionId, deviceIp, effHost, port, requestSnapshot, responseSnapshot, startedAtMs);
       if (res.headersSent) {
         try {
           res.end();
@@ -800,28 +866,44 @@ export class RokuMitmProxy {
     await new Promise<void>((resolve) => {
       const upstream = mod.request(
         {
-          hostname: target.hostname,
+          hostname: effHost,
           port,
-          path: target.path,
+          path: effPath,
           method,
           headers: outboundHeaders,
           timeout: REQUEST_TIMEOUT_MS,
-          servername: target.scheme === 'https' ? target.hostname : undefined
+          servername: effScheme === 'https' ? effHost : undefined
         },
         async (upstreamRes) => {
           try {
-            const resHeaders = normalizeHeaders(upstreamRes.headers);
-            const { buffer: resBodyBuf, truncated: resTruncated } =
+            const resOps = opsFor(decision.rewrite, 'response');
+            const resHeaders0 = normalizeHeaders(upstreamRes.headers);
+            const read =
               method === 'HEAD'
                 ? { buffer: Buffer.alloc(0), truncated: false }
                 : await readResponseBody(upstreamRes);
+            // Response-side rewrites (status / header / body). Body-replace decodes gzip/br, edits the
+            // text, and drops content-encoding so the (now-plain) body is sent with a correct length.
+            let resBody = read.buffer;
+            let resHeaders = resHeaders0;
+            let effStatus = upstreamRes.statusCode ?? 502;
+            if (resOps.length) {
+              const st = statusOverride(resOps);
+              if (st !== undefined) effStatus = st;
+              resHeaders = applyHeaderOps(resOps, resHeaders0);
+              if (hasBodyReplace(resOps) && resBody.length && isTextualContentType(contentTypeOf(resHeaders0))) {
+                const { buffer: decoded } = decodeContentEncoding(resBody, resHeaders0);
+                resBody = Buffer.from(applyBodyReplace(resOps, bodyToText(decoded, resHeaders0)), 'utf8');
+                delete resHeaders['content-encoding'];
+              }
+            }
             const responseSnapshot: NetworkHttpMessage = {
-              statusCode: upstreamRes.statusCode,
+              statusCode: effStatus,
               statusText: upstreamRes.statusMessage,
               headers: resHeaders,
-              ...encodeBody(resBodyBuf, resHeaders, resTruncated)
+              ...encodeBody(resBody, resHeaders, read.truncated)
             };
-            finish(responseSnapshot, upstreamRes.statusCode ?? 502, resBodyBuf);
+            finish(responseSnapshot, effStatus, resBody);
           } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
             finish(
@@ -1077,7 +1159,7 @@ export class RokuMitmProxy {
     const fullUrl = pathPart.startsWith('http')
       ? pathPart
       : `https://${hostname}${pathPart.startsWith('/') ? pathPart : `/${pathPart}`}`;
-    const requestSnapshot: NetworkHttpMessage = {
+    let requestSnapshot: NetworkHttpMessage = {
       method,
       url: fullUrl,
       headers: hdrs,
@@ -1134,14 +1216,35 @@ export class RokuMitmProxy {
       return;
     }
 
+    // Request-side rewrites (terminal actions returned above). Match ran on the original URL.
+    const reqOps = opsFor(tlsDecision.rewrite, 'request');
+    let effUrl = fullUrl;
+    let effHdrs = hdrs;
+    let effBody = reqBodyBuf;
+    if (reqOps.length) {
+      effUrl = applyRequestUrl(reqOps, fullUrl);
+      effHdrs = applyHeaderOps(reqOps, hdrs);
+      if (hasBodyReplace(reqOps) && effBody.length && isTextualContentType(contentTypeOf(hdrs))) {
+        const { buffer: decoded } = decodeContentEncoding(effBody, hdrs);
+        effBody = Buffer.from(applyBodyReplace(reqOps, bodyToText(decoded, hdrs)), 'utf8');
+        delete effHdrs['content-encoding'];
+      }
+      requestSnapshot = {
+        method,
+        url: effUrl,
+        headers: effHdrs,
+        ...encodeBody(effBody, effHdrs, bodyTruncated)
+      };
+    }
+
     let parsedUrl: URL;
     try {
-      parsedUrl = new URL(fullUrl);
+      parsedUrl = new URL(effUrl);
     } catch {
       this.emitTransaction(newTransactionId(), deviceIp, hostname, port, requestSnapshot, {
         statusCode: 400,
         statusText: 'Bad Request',
-        body: `Malformed request URL: ${fullUrl}`
+        body: `Malformed request URL: ${effUrl}`
       });
       writeStatusAndClose(400, 'Bad Request', 'Malformed request URL');
       return;
@@ -1192,7 +1295,7 @@ export class RokuMitmProxy {
         port: parsedUrl.port ? Number(parsedUrl.port) : 443,
         path: `${parsedUrl.pathname}${parsedUrl.search}`,
         method,
-        headers: { ...stripHopByHop(hdrs), host: parsedUrl.hostname },
+        headers: { ...stripHopByHop(effHdrs), host: parsedUrl.hostname },
         timeout: REQUEST_TIMEOUT_MS,
         servername: parsedUrl.hostname
       },
@@ -1202,30 +1305,42 @@ export class RokuMitmProxy {
           return;
         }
         try {
-          const resHeaders = normalizeHeaders(upstreamRes.headers);
-          const { buffer: resBodyBuf, truncated: resTruncated } = await readResponseBody(upstreamRes);
+          const resOps = opsFor(tlsDecision.rewrite, 'response');
+          const resHeaders0 = normalizeHeaders(upstreamRes.headers);
+          const { buffer: rawBody, truncated: resTruncated } = await readResponseBody(upstreamRes);
           if (settled) return;
           settled = true;
           settle();
+          // Response-side rewrites (status / header / body). Body-replace decodes gzip/br, edits the
+          // text, and drops content-encoding so the plain body is written with a corrected length.
+          let resBody = rawBody;
+          let resHeaders = resHeaders0;
+          let effStatus = upstreamRes.statusCode ?? 502;
+          let bodyReplaced = false;
+          if (resOps.length) {
+            const st = statusOverride(resOps);
+            if (st !== undefined) effStatus = st;
+            resHeaders = applyHeaderOps(resOps, resHeaders0);
+            if (hasBodyReplace(resOps) && resBody.length && isTextualContentType(contentTypeOf(resHeaders0))) {
+              const { buffer: decoded } = decodeContentEncoding(resBody, resHeaders0);
+              resBody = Buffer.from(applyBodyReplace(resOps, bodyToText(decoded, resHeaders0)), 'utf8');
+              delete resHeaders['content-encoding'];
+              bodyReplaced = true;
+            }
+          }
           const responseSnapshot: NetworkHttpMessage = {
-            statusCode: upstreamRes.statusCode,
+            statusCode: effStatus,
             statusText: upstreamRes.statusMessage,
             headers: resHeaders,
-            ...encodeBody(resBodyBuf, resHeaders, resTruncated)
+            ...encodeBody(resBody, resHeaders, resTruncated)
           };
           this.emitTransaction(newTransactionId(), deviceIp, hostname, port, requestSnapshot, responseSnapshot);
 
-          const statusLine = `HTTP/1.1 ${upstreamRes.statusCode} ${upstreamRes.statusMessage}\r\n`;
-          const headerLines = Object.entries(upstreamRes.headers)
-            .flatMap(([k, v]) => {
-              if (v == null) return [];
-              const vals = Array.isArray(v) ? v : [v];
-              return vals.map((vv) => `${k}: ${vv}`);
-            })
-            .join('\r\n');
+          const statusLine = `HTTP/1.1 ${effStatus} ${upstreamRes.statusMessage}\r\n`;
+          const headerLines = serializeResponseHeaderLines(upstreamRes.headers, resOps, bodyReplaced, resBody.length);
           const payload = Buffer.concat([
             Buffer.from(`${statusLine}${headerLines}\r\n\r\n`, 'utf8'),
-            resBodyBuf
+            resBody
           ]);
           if (throttleIsActive(tlsDecision.throttle)) {
             writeBodyThrottled(
@@ -1260,7 +1375,7 @@ export class RokuMitmProxy {
 
     socket.once('close', onSocketClose);
 
-    if (reqBodyBuf.length) upstream.write(reqBodyBuf);
+    if (effBody.length) upstream.write(effBody);
     upstream.end();
   }
 }
