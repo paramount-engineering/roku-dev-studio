@@ -419,6 +419,14 @@ export function renderRequestOverview(ev: ParsedNetworkEvent, allEvents: ParsedN
   rows.push(overviewRow('Response', formatBytes(resSize)));
   rows.push(overviewRow('Total', formatBytes(reqSize + resSize)));
 
+  const reqHeaders = req?.headers && Object.keys(req.headers).length > 0 ? req.headers : null;
+  if (reqHeaders) {
+    rows.push(overviewSection('Request Headers'));
+    for (const [k, v] of Object.entries(reqHeaders)) {
+      rows.push(overviewRow(k, v));
+    }
+  }
+
   return `<div class="ni-overview-scroll"><table class="ni-overview-table">${rows.join('')}</table></div>`;
 }
 

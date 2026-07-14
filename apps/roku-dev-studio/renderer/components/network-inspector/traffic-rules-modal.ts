@@ -7,6 +7,7 @@ import type {
   DeviceTrafficRules,
   HostTrafficRule,
   MockResponse,
+  RewriteOp,
   TrafficThrottle
 } from '@shared/network-inspector/types.js';
 import { escapeHtml } from '../../modules/utils/dom.js';
@@ -86,13 +87,135 @@ function parseHostInput(raw: string): { host: string; path: string } | null {
   return { host, path };
 }
 
+// ── Rewrite editor ────────────────────────────────────────────────────────────────────────────
+// Charles-style per-rule rewrite ops (non-terminal: the request is still forwarded). Each op is a
+// {target, type, match?, value?, regex?} row. The available types depend on the target, and which
+// of match/value/regex apply depends on the type (see rewriteFieldConfig).
+type RwType = RewriteOp['type'];
+const REWRITE_TYPES: Record<'request' | 'response', { value: RwType; label: string }[]> = {
+  request: [
+    { value: 'set-host', label: 'Redirect host' },
+    { value: 'set-path', label: 'Set path' },
+    { value: 'set-query', label: 'Set query param' },
+    { value: 'remove-query', label: 'Remove query param' },
+    { value: 'set-header', label: 'Set header' },
+    { value: 'remove-header', label: 'Remove header' },
+    { value: 'body-replace', label: 'Replace in body' }
+  ],
+  response: [
+    { value: 'set-status', label: 'Set status' },
+    { value: 'set-header', label: 'Set header' },
+    { value: 'remove-header', label: 'Remove header' },
+    { value: 'body-replace', label: 'Replace in body' }
+  ]
+};
+
+/** Which fields a given op type uses, and their placeholder labels. */
+function rewriteFieldConfig(type: string): { match?: string; value?: string; regex?: boolean } {
+  switch (type) {
+    case 'set-header': return { match: 'Header name', value: 'Value' };
+    case 'remove-header': return { match: 'Header name' };
+    case 'set-status': return { value: 'Status code (e.g. 503)' };
+    case 'set-host': return { value: 'host or host:port' };
+    case 'set-path': return { value: '/new/path' };
+    case 'set-query': return { match: 'Param name', value: 'Value' };
+    case 'remove-query': return { match: 'Param name' };
+    case 'body-replace': return { match: 'Find', value: 'Replace with', regex: true };
+    default: return {};
+  }
+}
+
+function rwTypeOptions(target: 'request' | 'response', selected: string): string {
+  return REWRITE_TYPES[target]
+    .map((t) => `<option value="${t.value}"${t.value === selected ? ' selected' : ''}>${escapeHtml(t.label)}</option>`)
+    .join('');
+}
+
+/** One rewrite-op row. Fields are shown/relabeled after render + on target/type change by syncRewriteRow. */
+function rewriteOpHtml(op?: RewriteOp): string {
+  const target: 'request' | 'response' = op?.target === 'response' ? 'response' : 'request';
+  const type = op?.type || REWRITE_TYPES[target][0]!.value;
+  const match = escapeHtml(op?.match || '');
+  const value = escapeHtml(op?.value || '');
+  const regexOn = op?.regex ? ' checked' : '';
+  return `<div class="ni-rw-op" data-rw-op>
+      <select class="ni-rules-select ni-rw-target" data-rw-target aria-label="Rewrite target">
+        <option value="request"${target === 'request' ? ' selected' : ''}>Request</option>
+        <option value="response"${target === 'response' ? ' selected' : ''}>Response</option>
+      </select>
+      <select class="ni-rules-select ni-rw-type" data-rw-type aria-label="Rewrite type">${rwTypeOptions(target, type)}</select>
+      <input type="text" class="ni-rules-ct ni-rw-match" data-rw-match value="${match}" spellcheck="false" autocomplete="off" />
+      <input type="text" class="ni-rules-ct ni-rw-value" data-rw-value value="${value}" spellcheck="false" autocomplete="off" />
+      <label class="ni-rw-regex" data-rw-regex-wrap title="Treat Find as a regular expression"><input type="checkbox" data-rw-regex${regexOn} /> regex</label>
+      <button type="button" class="ni-host-rule-remove ni-rw-remove" data-rw-remove title="Remove rewrite" aria-label="Remove rewrite"><span class="icon icon-xs"><svg><use href="#icon-x"/></svg></span></button>
+    </div>`;
+}
+
+/** Show/hide + relabel a row's match/value/regex fields to match its current type. */
+function syncRewriteRow(row: Element): void {
+  const typeSel = row.querySelector('[data-rw-type]') as HTMLSelectElement | null;
+  const matchEl = row.querySelector('[data-rw-match]') as HTMLInputElement | null;
+  const valueEl = row.querySelector('[data-rw-value]') as HTMLInputElement | null;
+  const regexWrap = row.querySelector('[data-rw-regex-wrap]') as HTMLElement | null;
+  if (!typeSel) return;
+  const cfg = rewriteFieldConfig(typeSel.value);
+  if (matchEl) {
+    matchEl.hidden = !cfg.match;
+    matchEl.placeholder = cfg.match || '';
+  }
+  if (valueEl) {
+    valueEl.hidden = !cfg.value;
+    valueEl.placeholder = cfg.value || '';
+  }
+  if (regexWrap) regexWrap.hidden = !cfg.regex;
+}
+
+/** Read the rewrite ops from a rule row's editor, dropping incomplete rows. */
+function readRewriteOps(ruleRow: Element): RewriteOp[] {
+  const ops: RewriteOp[] = [];
+  ruleRow.querySelectorAll('[data-rw-op]').forEach((row) => {
+    const target = (row.querySelector('[data-rw-target]') as HTMLSelectElement | null)?.value === 'response'
+      ? 'response'
+      : 'request';
+    const type = (row.querySelector('[data-rw-type]') as HTMLSelectElement | null)?.value as RwType | undefined;
+    if (!type) return;
+    const cfg = rewriteFieldConfig(type);
+    const match = ((row.querySelector('[data-rw-match]') as HTMLInputElement | null)?.value || '').trim();
+    const value = (row.querySelector('[data-rw-value]') as HTMLInputElement | null)?.value ?? '';
+    const regex = (row.querySelector('[data-rw-regex]') as HTMLInputElement | null)?.checked === true;
+    // Drop rows missing a required field so half-filled ops don't silently no-op upstream.
+    if (cfg.match && !match) return;
+    if ((type === 'set-host' || type === 'set-path' || type === 'set-status') && !value.trim()) return;
+    const op: RewriteOp = { target, type };
+    if (cfg.match) op.match = match;
+    if (cfg.value) op.value = value;
+    if (cfg.regex && regex) op.regex = true;
+    ops.push(op);
+  });
+  return ops;
+}
+
+/** Scope badge text + `data-scope` value for a rule, aware of wildcard (`*`) patterns. Shared by
+ *  the initial render and the inline URL editor so the two never drift. */
+function ruleScope(host: string, path: string): { label: string; scope: string } {
+  const wild = host.includes('*') || path.includes('*');
+  if (path) return { label: wild ? 'Wildcard path' : 'Single path', scope: 'path' };
+  return { label: wild ? 'Wildcard host' : 'All requests', scope: 'all' };
+}
+
+/** Inner markup of `.ni-host-rule-id` (name + scope badge). Rebuilt in place after an inline edit. */
+function hostRuleIdHtml(host: string, path: string): string {
+  const displayName = escapeHtml(host + path);
+  const { label, scope } = ruleScope(host, path);
+  return `<span class="ni-host-rule-name" title="${displayName}">${displayName}</span>
+        <span class="ni-host-rule-scope" data-scope="${scope}">${label}</span>`;
+}
+
 function hostRowHtml(rule: HostTrafficRule): string {
   const host = (rule.host || '').trim();
   const path = (rule.pathContains || '').trim();
   const hostAttr = escapeHtml(host);
   const pathAttr = escapeHtml(path);
-  const displayName = escapeHtml(host + path);
-  const scopeLabel = path ? 'Single path' : 'All requests';
   const blockChecked = rule.block ? ' checked' : '';
   const kbps = rule.throttle?.downKbps && rule.throttle.downKbps > 0 ? rule.throttle.downKbps : 0;
   const latency = rule.throttle?.latencyMs && rule.throttle.latencyMs > 0 ? rule.throttle.latencyMs : '';
@@ -108,10 +231,8 @@ function hostRowHtml(rule: HostTrafficRule): string {
   return `<div class="ni-host-rule" data-host="${hostAttr}" data-path="${pathAttr}" data-mock-open="${mock ? '1' : '0'}">
     <div class="ni-host-rule-header" data-host-toggle role="button" tabindex="0" aria-expanded="true" title="Collapse / expand rule">
       <span class="ni-host-rule-caret" aria-hidden="true"><span class="icon icon-xs"><svg><use href="#icon-chevron-down"/></svg></span></span>
-      <div class="ni-host-rule-id">
-        <span class="ni-host-rule-name" title="${displayName}">${displayName}</span>
-        <span class="ni-host-rule-scope" data-scope="${path ? 'path' : 'all'}">${scopeLabel}</span>
-      </div>
+      <div class="ni-host-rule-id">${hostRuleIdHtml(host, path)}</div>
+      <button type="button" class="ni-host-rule-edit" data-host-edit title="Edit URL" aria-label="Edit URL"><span class="icon icon-xs"><svg><use href="#icon-edit-3"/></svg></span></button>
       <button type="button" class="ni-host-rule-remove" data-host-remove title="Delete rule" aria-label="Delete rule"><span class="icon icon-xs"><svg><use href="#icon-trash"/></svg></span></button>
     </div>
     <div class="ni-host-rule-controls">
@@ -143,6 +264,14 @@ function hostRowHtml(rule: HostTrafficRule): string {
         </label>
       </div>
       <textarea class="ni-rules-mock-body" data-mock-body rows="3" placeholder="Response Body (e.g. {&quot;error&quot;:&quot;forced&quot;})">${mockBody}</textarea>
+    </div>
+    <div class="ni-host-rule-rewrite" data-host-rewrite>
+      <div class="ni-rw-head">
+        <span class="ni-rw-title">Rewrite</span>
+        <span class="ni-rw-hint">applied when forwarding (not with Block / Reset / Mock)</span>
+        <button type="button" class="btn btn-secondary btn-sm ni-rw-add" data-rw-add>+ Add rewrite</button>
+      </div>
+      <div class="ni-rw-list" data-rw-list>${(rule.rewrite || []).map((op) => rewriteOpHtml(op)).join('')}</div>
     </div>
   </div>`;
 }
@@ -261,7 +390,7 @@ export async function openTrafficRulesModal(opts: {
             <span class="ni-rules-card-title">Per-Host Rules</span>
           </div>
           <div class="ni-rules-add">
-            <input type="text" class="ni-rules-add-input" data-add-host list="niHostSuggest" placeholder="api.example.com  or  api.example.com/v1/play" />
+            <input type="text" class="ni-rules-add-input" data-add-host list="niHostSuggest" placeholder="api.example.com   ·   *.example.com   ·   api.example.com/v1/*" title="Host, or host/path. Use * as a wildcard (e.g. *.example.com matches prod + staging, /v1/* matches any path under /v1/)." />
             <button type="button" class="btn btn-secondary btn-sm" data-add-host-btn>Add</button>
           </div>
           <div class="ni-host-rule-list" data-host-list>${hosts.map(hostRowHtml).join('')}</div>
@@ -420,16 +549,94 @@ export async function openTrafficRulesModal(opts: {
     header.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
   };
 
+  const ruleKey = (row: Element): string =>
+    ((row as HTMLElement).dataset.host || '') + ((row as HTMLElement).dataset.path || '');
+
+  // Inline edit of a rule's intercept URL. Swaps the read-only name for a text input pre-filled
+  // with `host+path`; on Enter/blur it re-parses (reusing parseHostInput), rejects duplicates, and
+  // updates the rule's identity (data-host/data-path) + scope badge in place. Escape cancels.
+  const startEditUrl = (row: HTMLElement): void => {
+    const idEl = row.querySelector('.ni-host-rule-id') as HTMLElement | null;
+    if (!idEl || idEl.querySelector('[data-host-edit-input]')) return;
+    row.classList.remove('is-collapsed');
+    row.querySelector('[data-host-toggle]')?.setAttribute('aria-expanded', 'true');
+    const current = (row.dataset.host || '') + (row.dataset.path || '');
+    idEl.innerHTML = `<input type="text" class="ni-host-rule-edit-input" data-host-edit-input value="${escapeHtml(current)}" spellcheck="false" autocomplete="off" aria-label="Edit intercept URL" />`;
+    const input = idEl.querySelector('[data-host-edit-input]') as HTMLInputElement;
+    input.focus();
+    input.select();
+    let done = false;
+    const restore = (): void => { idEl.innerHTML = hostRuleIdHtml(row.dataset.host || '', row.dataset.path || ''); };
+    const commit = (): void => {
+      if (done) return;
+      done = true;
+      const parsed = parseHostInput(input.value);
+      if (!parsed) { restore(); return; } // empty / unparseable → keep the original URL
+      const key = parsed.host + parsed.path;
+      const clash = Array.from(hostList?.querySelectorAll('.ni-host-rule') || []).some(
+        (r) => r !== row && ruleKey(r) === key
+      );
+      if (clash) { restore(); return; } // a rule with this URL already exists — leave unchanged
+      row.dataset.host = parsed.host;
+      row.dataset.path = parsed.path;
+      restore();
+    };
+    const cancel = (): void => { if (done) return; done = true; restore(); };
+    input.addEventListener('keydown', (e) => {
+      e.stopPropagation(); // don't let Enter/Space bubble to the header's collapse toggle
+      if (e.key === 'Enter') { e.preventDefault(); commit(); }
+      else if (e.key === 'Escape') { e.preventDefault(); cancel(); }
+    });
+    input.addEventListener('blur', commit);
+  };
+
   hostList?.addEventListener('click', (e) => {
     const target = e.target as HTMLElement;
+    if (target.closest('[data-host-edit-input]')) return; // clicks inside the editor don't toggle
     const rm = target.closest('[data-host-remove]');
     if (rm) {
       rm.closest('.ni-host-rule')?.remove();
       syncEmptyHint();
       return;
     }
+    const edit = target.closest('[data-host-edit]');
+    if (edit) {
+      const row = edit.closest('.ni-host-rule');
+      if (row) startEditUrl(row as HTMLElement);
+      return;
+    }
+    const rwAdd = target.closest('[data-rw-add]');
+    if (rwAdd) {
+      const list = rwAdd.closest('.ni-host-rule-rewrite')?.querySelector('[data-rw-list]');
+      if (list) {
+        list.insertAdjacentHTML('beforeend', rewriteOpHtml());
+        const newRow = list.lastElementChild;
+        if (newRow) syncRewriteRow(newRow);
+      }
+      return;
+    }
+    const rwRemove = target.closest('[data-rw-remove]');
+    if (rwRemove) {
+      rwRemove.closest('.ni-rw-op')?.remove();
+      return;
+    }
     const header = target.closest('[data-host-toggle]');
     if (header) toggleCollapse(header);
+  });
+
+  // Rewrite op: target change repopulates the type list; both target + type re-sync the fields.
+  hostList?.addEventListener('change', (e) => {
+    const t = e.target as HTMLElement;
+    const row = t.closest('[data-rw-op]');
+    if (!row) return;
+    if (t.matches('[data-rw-target]')) {
+      const targetVal = (t as HTMLSelectElement).value === 'response' ? 'response' : 'request';
+      const typeSel = row.querySelector('[data-rw-type]') as HTMLSelectElement | null;
+      if (typeSel) typeSel.innerHTML = rwTypeOptions(targetVal, REWRITE_TYPES[targetVal][0]!.value);
+      syncRewriteRow(row);
+    } else if (t.matches('[data-rw-type]')) {
+      syncRewriteRow(row);
+    }
   });
 
   hostList?.addEventListener('keydown', (e) => {
@@ -442,6 +649,8 @@ export async function openTrafficRulesModal(opts: {
 
   // Reflect the loaded rules' terminal actions on the throttle controls right away.
   hostList?.querySelectorAll('.ni-host-rule').forEach(syncRowThrottle);
+  // Relabel/hide each loaded rewrite row's fields to match its type.
+  hostList?.querySelectorAll('[data-rw-op]').forEach(syncRewriteRow);
 
   // "Block all proxied traffic" short-circuits everything — the device throttle and every per-host
   // rule become no-ops — so disable those controls (without clearing them) while it's on.
@@ -551,15 +760,17 @@ export async function openTrafficRulesModal(opts: {
           row.querySelector('[data-host-latency]') as HTMLInputElement | null
         );
         const mock = readMockResponse(row);
+        const rewrite = readRewriteOps(row);
         const pathContains = ((row as HTMLElement).dataset.path || '').trim();
         // A host row with no effect at all is dropped.
-        if (!block && !reset && !throttle && !mock) return;
+        if (!block && !reset && !throttle && !mock && rewrite.length === 0) return;
         const rule: HostTrafficRule = { host };
         if (pathContains) rule.pathContains = pathContains;
         if (block) rule.block = true;
         else if (reset) rule.resetConnection = true;
         else if (mock) rule.respond = mock;
         if (throttle) rule.throttle = throttle;
+        if (rewrite.length) rule.rewrite = rewrite;
         hostRules.push(rule);
       });
 
