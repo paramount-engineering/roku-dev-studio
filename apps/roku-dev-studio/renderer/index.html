@@ -8128,6 +8128,9 @@
       overflow: hidden;
       box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
     }
+    /* Traffic Rules needs a larger working area than the filter-help modal — per-host rules,
+       mock-response editors, etc. Widen it. */
+    .ni-rules-modal { width: min(880px, 94vw); }
     /* ── Network Inspector: Find modal ("Find in Traffic") ───────────────────────────── */
     /* NON-blocking + docked top-right: no dim backdrop and click-through so the session list (left)
        stays fully visible and interactive while Prev/Next jumps highlight + scroll rows behind. */
@@ -8206,7 +8209,7 @@
     .ni-filter-help-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
     .ni-filter-help-chip { font-family: ui-monospace, monospace; font-size: 11px; color: var(--text-primary); background: var(--bg-deep); border: 1px solid var(--border-hover); border-radius: 999px; padding: 3px 9px; cursor: pointer; transition: background 0.12s, border-color 0.12s; }
     .ni-filter-help-chip:hover { border-color: rgba(139, 92, 246, 0.5); background: rgba(139, 92, 246, 0.12); }
-    .ni-rules-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 16px 18px; border-bottom: 1px solid var(--border); background: linear-gradient(180deg, rgba(139, 92, 246, 0.05), transparent); }
+    .ni-rules-header { flex: 0 0 auto; display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 16px 18px; border-bottom: 1px solid var(--border); background: linear-gradient(180deg, rgba(139, 92, 246, 0.05), transparent); }
     .ni-rules-header-info { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
     .ni-rules-title { margin: 0; font-size: 17px; font-weight: 600; color: var(--text-primary); line-height: 1.2; }
     .ni-rules-device-line { display: flex; align-items: center; gap: 7px; min-width: 0; font-size: 12px; color: var(--text-secondary); }
@@ -8216,7 +8219,7 @@
     .ni-rules-device-ip { font-family: 'JetBrains Mono', ui-monospace, Menlo, Monaco, monospace; color: var(--text-secondary); white-space: nowrap; }
     .ni-rules-close { background: transparent; border: none; color: var(--text-secondary); font-size: 20px; cursor: pointer; line-height: 1; flex: 0 0 auto; }
     .ni-rules-close:hover { color: var(--text-primary); }
-    .ni-rules-body { padding: 16px 18px; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; }
+    .ni-rules-body { flex: 1 1 auto; min-height: 0; padding: 16px 18px; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; }
     .ni-rules-note { font-size: 12px; color: var(--text-muted); margin: 0; line-height: 1.5; }
     /* Card sections — mirror the app's grouped settings look */
     .ni-rules-card { display: flex; flex-direction: column; gap: 12px; background: var(--bg-deep); border: 1px solid var(--border); border-radius: 10px; padding: 14px; }
@@ -8269,9 +8272,10 @@
     .ni-rules-empty-hint[hidden] { display: none; }
     .ni-host-rule-flash { animation: niHostFlash 0.6s ease; }
     @keyframes niHostFlash { 0%, 100% { border-color: var(--border); } 35% { border-color: var(--accent-purple); box-shadow: 0 0 0 2px var(--accent-purple-dim); } }
-    /* The rules list scrolls inside the card (the modal body itself stays put) so long rule sets
-       don't push the footer off-screen. */
-    .ni-host-rule-list { display: flex; flex-direction: column; gap: 8px; max-height: 300px; overflow-y: auto; padding-right: 4px; }
+    /* Rules flow in the modal BODY, which is the single scroll region (`.ni-rules-body`,
+       flex:1/min-height:0); the header + footer stay pinned. No nested max-height/overflow here —
+       a second scroll container would trap the wheel over long rule sets / the mock editor. */
+    .ni-host-rule-list { display: flex; flex-direction: column; gap: 8px; }
     .ni-host-rule-list:empty { display: none; }
     .ni-host-rule { display: flex; flex-direction: column; gap: 0; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
     /* Grouped header band: the host/path identity sits on its own row so it's always visible, and
@@ -8283,7 +8287,8 @@
     .ni-host-rule.is-collapsed .ni-host-rule-caret { transform: rotate(-90deg); }
     .ni-host-rule.is-collapsed .ni-host-rule-header { border-bottom: none; }
     .ni-host-rule.is-collapsed .ni-host-rule-controls,
-    .ni-host-rule.is-collapsed .ni-host-rule-mock { display: none; }
+    .ni-host-rule.is-collapsed .ni-host-rule-mock,
+    .ni-host-rule.is-collapsed .ni-host-rule-rewrite { display: none; }
     .ni-host-rule-id { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; }
     .ni-host-rule-name { min-width: 0; font-size: 12.5px; font-weight: 600; font-family: 'JetBrains Mono', ui-monospace, Menlo, Monaco, monospace; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .ni-host-rule-scope { flex: 0 0 auto; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; padding: 2px 7px; border-radius: 999px; }
@@ -8334,6 +8339,10 @@
     .ni-host-rule-controls .ni-rules-latency:disabled { opacity: 0.4; cursor: not-allowed; }
     .ni-host-rule-remove { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; background: transparent; border: none; border-radius: 6px; color: var(--text-muted); cursor: pointer; line-height: 1; padding: 0; transition: background 0.12s ease, color 0.12s ease; }
     .ni-host-rule-remove:hover { color: var(--accent-red); background: var(--accent-red-dim); }
+    .ni-host-rule-edit { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; background: transparent; border: none; border-radius: 6px; color: var(--text-muted); cursor: pointer; line-height: 1; padding: 0; transition: background 0.12s ease, color 0.12s ease; }
+    .ni-host-rule-edit:hover { color: var(--accent-purple); background: rgba(139, 92, 246, 0.14); }
+    /* Inline URL editor: fills the id slot, monospace to match the rule name. */
+    .ni-host-rule-edit-input { flex: 1; min-width: 0; font-size: 12.5px; font-family: 'JetBrains Mono', ui-monospace, Menlo, Monaco, monospace; color: var(--text-primary); background: var(--bg-deep); border: 1px solid var(--accent-purple); border-radius: 6px; padding: 4px 8px; outline: none; }
     .ni-host-rule-mock { display: flex; flex-direction: column; gap: 6px; margin: 0 10px 10px; padding: 8px; border: 1px dashed var(--border-hover); border-radius: 6px; background: rgba(255,255,255,0.02); }
     .ni-host-rule-mock[hidden] { display: none; }
     .ni-mock-row { display: flex; align-items: flex-end; gap: 8px; }
@@ -8345,10 +8354,24 @@
     .ni-mock-field .ni-rules-input-suffix { width: 100%; }
     .ni-mock-num { width: 100%; box-sizing: border-box; background: var(--bg-deep); color: var(--text-primary); border: 1px solid var(--border-hover); border-radius: 6px; padding: 5px 8px; font: inherit; font-size: 12px; }
     .ni-rules-ct { width: 100%; box-sizing: border-box; background: var(--bg-deep); color: var(--text-primary); border: 1px solid var(--border-hover); border-radius: 6px; padding: 5px 8px; font: inherit; font-size: 12px; }
-    .ni-rules-mock-body { width: 100%; box-sizing: border-box; background: var(--bg-deep); color: var(--text-primary); border: 1px solid var(--border-hover); border-radius: 6px; padding: 6px 8px; font-family: ui-monospace, monospace; font-size: 12px; resize: vertical; }
+    .ni-rules-mock-body { width: 100%; box-sizing: border-box; min-height: 88px; max-height: 260px; overflow-y: auto; background: var(--bg-deep); color: var(--text-primary); border: 1px solid var(--border-hover); border-radius: 6px; padding: 6px 8px; font-family: ui-monospace, monospace; font-size: 12px; resize: vertical; }
+    /* ── Rewrite editor (per-host rule) ─────────────────────────────────────── */
+    .ni-host-rule-rewrite { display: flex; flex-direction: column; gap: 8px; margin: 0 10px 10px; padding: 8px; border: 1px dashed var(--border-hover); border-radius: 6px; background: rgba(255,255,255,0.02); }
+    .ni-rw-head { display: flex; align-items: center; gap: 8px; }
+    .ni-rw-title { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; color: var(--text-secondary); }
+    .ni-rw-hint { flex: 1; min-width: 0; font-size: 11px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .ni-rw-add { flex: 0 0 auto; }
+    .ni-rw-list { display: flex; flex-direction: column; gap: 6px; }
+    .ni-rw-list:empty { display: none; }
+    .ni-rw-op { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+    .ni-rw-op .ni-rw-target, .ni-rw-op .ni-rw-type { flex: 0 0 auto; width: auto; }
+    .ni-rw-op .ni-rw-match, .ni-rw-op .ni-rw-value { flex: 1 1 120px; min-width: 0; width: auto; }
+    .ni-rw-regex { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: var(--text-secondary); white-space: nowrap; cursor: pointer; }
+    .ni-rw-op [hidden] { display: none !important; }
+    .ni-rw-remove { flex: 0 0 auto; }
     .ni-rules-add { display: flex; gap: 8px; }
     .ni-rules-add-input { flex: 1; background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-hover); border-radius: 6px; padding: 6px 10px; font: inherit; font-size: 12px; }
-    .ni-rules-footer { display: flex; align-items: center; gap: 10px; justify-content: flex-end; padding: 12px 18px; border-top: 1px solid var(--border); }
+    .ni-rules-footer { flex: 0 0 auto; display: flex; align-items: center; gap: 10px; justify-content: flex-end; padding: 12px 18px; border-top: 1px solid var(--border); }
     .ni-rules-status { margin-right: auto; font-size: 12px; color: var(--accent-red); }
     .ni-sidebar-head {
       display: flex;

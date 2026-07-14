@@ -131,31 +131,71 @@ export function copyMonacoVendor(appDir: string, rendererDist: string): void {
   }
   fs.cpSync(src, dest, { recursive: true });
   pruneMonacoVendor(dest);
+  verifyMonacoVendor(dest);
 }
 
 /**
- * Drop the Monaco pieces the Fiddle window never loads (~7.6 MB of the ~13 MB `min/vs`).
- * Fiddle registers a fully-custom `brightscript` Monarch language (see fiddle.ts) and
- * never creates models for any built-in language, so:
- *   - `vs/language/*`     — TS/HTML/CSS/JSON worker language services (~6.9 MB), never requested.
- *   - `vs/basic-languages/*` — the 81 built-in syntax defs (~640 KB), never requested.
+ * Drop the Monaco pieces the Fiddle window never loads.
+ *
+ * Since monaco-editor 0.44 the `min` build is a bundled/hashed graph (Rollup), NOT the old
+ * classic `min/vs` layout. `vs/editor/editor.main` now hard-`define`-depends on
+ * `../basic-languages/monaco.contribution` (a registration stub — the individual syntax defs
+ * are separate top-level chunks it loads lazily), so that file MUST stay: pruning it makes the
+ * AMD loader never resolve `vs/editor/editor.main`, which silently hangs the Fiddle window on
+ * "Loading editor…" (and blocks `fiddle.ready()`, so the device list never arrives either).
+ *
+ * `vs/language/*` (the TS/HTML/CSS/JSON *service* registration) is NOT in editor.main's hard
+ * dep graph — it's pulled in lazily only when a model of one of those languages is created.
+ * Fiddle only ever creates its custom `brightscript` Monarch model, so it's safe to drop.
+ * (The heavy language *workers* live under `vs/assets/*.worker-*.js`, also lazy; left in place
+ * since they're keyed by hashed names and never requested.)
  *   - `vs/nls.messages.<locale>.js` — non-`en` UI localizations (the app ships en/en_GB only).
- * The AMD loader only fetches these on demand, so removing them can't break the editor.
- * `vs/editor`, `vs/base`, and `vs/loader.js` are required and kept.
  */
 function pruneMonacoVendor(dest: string): void {
   // The copied tree lives under `<dest>/vs/…` (Monaco's `min/vs` structure).
   const vs = path.join(dest, 'vs');
   if (!fs.existsSync(vs)) return;
-  const rmDirs = [path.join(vs, 'language'), path.join(vs, 'basic-languages')];
+  // NB: `basic-languages` is intentionally NOT pruned — it's a hard dependency of
+  // `editor.main` in the bundled build (see doc comment above).
+  const rmDirs = [path.join(vs, 'language')];
   for (const dir of rmDirs) {
     if (fs.existsSync(dir)) fs.rmSync(dir, { recursive: true, force: true });
   }
-  // Remove localized `nls.messages.<locale>.js`; keep the default `nls.messages.js`.
+  // Remove localized locale bundles (~1.6 MB), loaded lazily by the `nls.messages-loader!`
+  // plugin only for a non-`en` active locale (the app ships en/en_GB). The 0.55 build names
+  // these `nls.messages.<locale>.js.js` (note the doubled `.js`); the pattern intentionally
+  // does NOT match the loader plugin itself (`nls.messages-loader.js`, hyphen not dot) or a
+  // default `nls.messages.js`, both of which must stay.
   for (const name of fs.readdirSync(vs)) {
-    if (/^nls\.messages\.[^.]+\.js$/.test(name)) {
+    if (/^nls\.messages\.[a-z-]+\.js\.js$/i.test(name)) {
       fs.rmSync(path.join(vs, name), { force: true });
     }
+  }
+}
+
+/**
+ * Fail the build if the vendored Monaco is missing a file `vs/editor/editor.main` hard-depends
+ * on. A monaco-editor bump that reshuffles the bundle graph (or an over-eager prune) would
+ * otherwise ship a copy whose AMD `define` never resolves — the Fiddle window then hangs on
+ * "Loading editor…" at runtime with no error. This turns that silent runtime hang into a loud
+ * build failure. `basic-languages/monaco.contribution.js` is the exact dep whose removal caused
+ * that hang once (monaco 0.55 layout change), so it's the canonical guard target.
+ */
+function verifyMonacoVendor(dest: string): void {
+  const vs = path.join(dest, 'vs');
+  const required = [
+    path.join(vs, 'loader.js'),
+    path.join(vs, 'editor', 'editor.main.js'),
+    path.join(vs, 'basic-languages', 'monaco.contribution.js'),
+  ];
+  const missing = required.filter((p) => !fs.existsSync(p));
+  if (missing.length > 0) {
+    throw new Error(
+      `transpile-renderer: vendored Monaco is missing files the Fiddle AMD loader hard-requires ` +
+        `(the editor would hang on "Loading editor…"):\n${missing
+          .map((p) => `  - ${path.relative(dest, p)}`)
+          .join('\n')}\nCheck monaco-editor's min/ layout after a version bump and update pruneMonacoVendor.`
+    );
   }
 }
 
