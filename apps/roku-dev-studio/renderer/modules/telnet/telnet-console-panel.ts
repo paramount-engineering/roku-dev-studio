@@ -1,13 +1,10 @@
 import { errMessage } from '@shared/platform/err-util.js';
 import { rendererWarn, rendererError } from '../utils/logger.js';
 import { type StructuredConsolePayload } from '../console-log/structured-log-detect.js';
-import {
-  attachStructuredPillsToLine
-} from '../console-log/console-structured-view-modal.js';
-import { populateConsoleLineContentWithUrls } from '../console-log/console-url-detect.js';
 import { createConsoleDeferredHeavyDrain } from '../console-log/console-deferred-heavy-drain.js';
-import { DEFER_HEAVY_LINE_CHARS } from '../console-log/console-render-limits.js';
 import { mountConsoleLogSurface } from '../console-log/mount-console-log-surface.js';
+import { buildConsoleLogLineElement } from '../console-log/console-log-file-view.js';
+import { buildConsoleFindBarElement } from '../console-log/console-find-bar-markup.js';
 import { attachHeaderSearchResize } from '../ui/header-search-resize.js';
 import { searchWidthKey } from '../ui/search-storage-keys.js';
 import {
@@ -25,6 +22,13 @@ import {
   parseConsoleLineBatch
 } from '../console-log/console-line-parser.js';
 import { icon, setSafeHTML } from '../index.js';
+import {
+  openConsoleAnalyticsModal,
+  type ConsoleAnalyticsHandle,
+  type ConsoleAnalyticsSnapshot
+} from '../console-log/console-analytics-modal.js';
+import { revealAndFlashLine } from '../console-log/reveal-occurrence.js';
+import { recognizeBrsIssue, computeConsoleFindings, type ConsoleFindings } from '@shared/console/brightscript-error-catalog.js';
 import {
   debugTelnetIpcTargetsDevice,
   type DebugTelnetIpcPayload
@@ -62,6 +66,16 @@ export type TelnetPanelElement = HTMLElement & {
    * - `maxLines` (default 500, capped at 2000): max lines returned in one call.
    */
   getTelnetLogSnapshot?: (afterCursor?: number, maxLines?: number) => TelnetLogSnapshot;
+  /**
+   * Console Monitor findings — the recognized BrightScript issues in the buffer, aggregated exactly as
+   * the Console Monitor modal renders them (via the shared `computeConsoleFindings`). Backs the
+   * `console_monitor_findings` MCP tool.
+   */
+  getConsoleMonitorFindings?: () => ConsoleFindings & {
+    connected: boolean;
+    scannedLines: number;
+    totalCaptured: number;
+  };
   isTelnetConnected?: () => boolean;
   /**
    * Programmatically open the Telnet console connection, exactly as if the
@@ -114,7 +128,20 @@ export function setupTelnet(
   // Find/Filter has nothing to act on with an empty console, so hide the bar until logs
   // exist. We hide the inner `.telnet-find-bar`, not the `.telnet-find-slot` wrapper — the
   // slot stays as a flex spacer so Port/Connect remain right-aligned. Optional element.
+  //
+  // The bar markup is built from the shared `buildConsoleFindBarElement` (single source shared with
+  // the Log Viewer window) and injected into the template's `.telnet-find-slot` — ahead of the
+  // `.telnet-find-resize` drag handle — before any `.telnet-find-*` query runs below.
+  const findSlot = panel.querySelector<HTMLElement>('.telnet-find-slot');
+  if (findSlot && !findSlot.querySelector('.telnet-find-bar')) {
+    const bar = buildConsoleFindBarElement({ altShortcutHints: true });
+    bar.hidden = true; // shown by refreshLineCount once there are lines/spillover to search
+    findSlot.insertBefore(bar, findSlot.querySelector('.telnet-find-resize'));
+  }
   const findBarEl = panel.querySelector<HTMLElement>('.telnet-find-bar');
+  // Console analytics dashboard button (optional element). Enabled by refreshLineCount once there are
+  // in-memory log lines to analyze; opens the shared console-analytics-modal on click.
+  const dashboardBtn = panel.querySelector<HTMLButtonElement>('[data-telnet-dashboard]');
 
   // Downstream handlers reference statusEl, statusText, disconnectBtn, and clearBtn
   // without null checks. Assert them here so a reused fragment without these nodes
@@ -149,9 +176,21 @@ export function setupTelnet(
     timestamp: string | null;
     type: string;
     structuredTargets?: StructuredConsolePayload[];
+    /** Whether this line is a recognized BrightScript issue (see brightscript-error-catalog).
+     *  Computed once at construction; drives the Console Monitor button's enabled state. */
+    hasIssue?: boolean;
   };
   let isConnected = false;
   let logLines: TelnetLogEntry[] = [];
+
+  // Running count of recognized BrightScript issues in the in-memory buffer. The Console Monitor is a
+  // BrightScript-issue view (not an app-log view), so its button is enabled ONLY when this is > 0.
+  // Maintained incrementally at every logLines mutation so we never rescan the whole buffer on a batch.
+  let recognizedIssueCount = 0;
+  /** Recognized-issue test (shared with the monitor modal via the catalog's bounded recognizer). */
+  const lineHasBrsIssue = (text: string): boolean => recognizeBrsIssue(text) !== null;
+  const countIssues = (entries: TelnetLogEntry[]): number =>
+    entries.reduce((n, e) => n + (e.hasIssue ? 1 : 0), 0);
 
   /**
    * Disk-backed scrollback spill (see `main/console-spill.ts`).
@@ -419,6 +458,13 @@ export function setupTelnet(
     // Keyed on log presence, not connection, so logs that persist after disconnect stay searchable.
     if (findBarEl) findBarEl.hidden = logLines.length === 0 && spilledEntryCount === 0;
 
+    // The Console Monitor is a BrightScript-issue view, so its button is enabled ONLY when the buffer
+    // holds at least one recognized issue (error or warning) — never merely because there are lines.
+    // Independent of connection: recognized issues stay inspectable after disconnect.
+    if (dashboardBtn) dashboardBtn.disabled = recognizedIssueCount === 0;
+    // If the monitor is open, live-update it as new issues stream in (debounced inside).
+    scheduleAnalyticsRefresh();
+
     if (!lineCountEl) return;
     if (!isConnected) {
       lineCountEl.hidden = true;
@@ -588,46 +634,15 @@ export function setupTelnet(
     refreshLineCount();
   }
   
-  // Create a single log line DOM element
-  function createLogLineElement(logEntry: TelnetLogEntry, index: number) {
-    const lineEl = document.createElement('div');
-    lineEl.className = `telnet-log-line ${logEntry.type}`;
-    lineEl.dataset.lineIndex = String(index); // Index into logLines (find / structured viewer)
-    
-    if (logEntry.timestamp) {
-      const timestampEl = document.createElement('span');
-      timestampEl.className = 'telnet-log-timestamp';
-      timestampEl.textContent = `[${logEntry.timestamp}]`;
-      lineEl.appendChild(timestampEl);
-    }
-    
-    const contentEl = document.createElement('span');
-    contentEl.className = 'telnet-log-content';
-    const deferHeavy = logEntry.text.length >= DEFER_HEAVY_LINE_CHARS;
-    if (deferHeavy) {
-      contentEl.textContent = logEntry.text;
-    } else {
-      populateConsoleLineContentWithUrls(contentEl, logEntry.text);
-    }
-    lineEl.appendChild(contentEl);
-
-    if (logEntry.structuredTargets?.length) {
-      attachStructuredPillsToLine(lineEl, contentEl, logEntry.structuredTargets);
-    }
-    // JSON+ inline-tint binding now happens in the virtualizer's `onMount`
-    // callback (telnet-console-panel.ts: see virtualizer setup) so we don't
-    // double-paint when the line mounts. The deferred-heavy-line drain still
-    // re-binds after `populateConsoleLineContentWithUrls` rebuilds contentEl.
-
-    if (deferHeavy) {
-      enqueueDeferredTelnetHeavyLine({ entry: logEntry, lineEl, contentEl });
-    }
-
-    if (findBarHandle?.shouldFilterOut(logEntry.text)) {
-      lineEl.classList.add('filtered-out');
-    }
-    
-    return lineEl;
+  // The row DOM is built by the shared `buildConsoleLogLineElement` — the same builder the Log Viewer
+  // uses. The Console's only specialization is deferring heavy-line URL/structured detection off the
+  // streaming hot path (via the deferred-heavy-line drain), passed as `onDeferHeavy`. JSON+ inline-tint
+  // binding happens in the virtualizer's `onMount` callback, not here, so we don't double-paint.
+  function createLogLineElement(logEntry: TelnetLogEntry, index: number): HTMLElement {
+    return buildConsoleLogLineElement(logEntry, index, {
+      shouldFilterOut: (entry) => findBarHandle?.shouldFilterOut(entry.text) ?? false,
+      onDeferHeavy: (job) => enqueueDeferredTelnetHeavyLine(job)
+    });
   }
   
   /**
@@ -679,6 +694,7 @@ export function setupTelnet(
     // memory. `splice(0, n)` returns the removed segment in one call and is
     // measurably faster than n × `shift()` on large arrays.
     const trimmed = logLines.splice(0, overflow);
+    recognizedIssueCount -= countIssues(trimmed);
 
     const toRemove = overflow;
     if (toRemove > 0) {
@@ -824,8 +840,10 @@ export function setupTelnet(
       // the 12/24 toggle (en-US default would be 12).
       timestamp: timestamp ? new Date().toLocaleTimeString([], { hour12: false }) : null,
       type: p.type,
+      hasIssue: lineHasBrsIssue(p.text),
       ...(p.structuredTargets ? { structuredTargets: p.structuredTargets } : {})
     }));
+    recognizedIssueCount += countIssues(newEntries);
 
     ensureTelnetScrollbackRoom(newEntries.length);
 
@@ -914,6 +932,7 @@ export function setupTelnet(
             text: obj.t,
             timestamp: null,
             type: obj.ty,
+            hasIssue: lineHasBrsIssue(obj.t),
             ...(obj.st ? { structuredTargets: obj.st } : {})
           });
         } catch {
@@ -921,6 +940,7 @@ export function setupTelnet(
         }
       }
       if (spilled.length === 0) return;
+      recognizedIssueCount += countIssues(spilled);
 
       // Mutate the entries array in place (same reference the surface
       // observes) — `splice(0, 0, ...spilled)` prepends without losing the
@@ -1018,6 +1038,7 @@ export function setupTelnet(
           // surface holds the same `logLines` array reference (see
           // `clearConsoleLocal`), so reassigning would orphan the virtualizer.
           logLines.length = 0;
+          recognizedIssueCount = 0;
           virt.setCount(0);
           findBarHandle?.resetFindState();
           // Discard the previous session's disk spill before opening the fresh
@@ -1330,6 +1351,7 @@ export function setupTelnet(
     // virtualizer + find bar observing a stale array while new IPC batches
     // push into a fresh one: the line counter increments but nothing renders.
     logLines.length = 0;
+    recognizedIssueCount = 0;
     // Drive the row teardown THROUGH the virtualizer rather than blowing
     // away `outputEl.innerHTML`. The virtualizer's container element
     // (`virtualContainerEl`, appended to outputEl during setup) IS a child
@@ -1405,6 +1427,73 @@ export function setupTelnet(
     clearConsoleLocal();
   });
 
+  // Console analytics dashboard — opens a read-only breakdown of the in-memory buffer. Pass a shallow
+  // copy so streaming can keep mutating logLines underneath the open modal.
+  let analyticsHandle: ConsoleAnalyticsHandle | null = null;
+  let analyticsRefreshTimer: ReturnType<typeof setTimeout> | undefined;
+  let lastRenderedIssueCount = -1;
+
+  // The Console computes findings in-renderer from the live buffer (cheap; the buffer is resident).
+  // The modal itself is content-only — it renders whatever findings/timeSpan we hand it — so the
+  // windowed Log Viewer can feed it findings scanned in the main process instead.
+  const analyticsSnapshot = (): ConsoleAnalyticsSnapshot => {
+    let first: string | null = null;
+    let last: string | null = null;
+    for (const e of logLines) {
+      if (e.timestamp) {
+        if (first === null) first = e.timestamp;
+        last = e.timestamp;
+      }
+    }
+    return {
+      findings: computeConsoleFindings(logLines),
+      scannedLines: logLines.length,
+      timeSpan: { first, last },
+      meta: {
+        bufferedCount: logLines.length,
+        totalCount: spilledEntryCount + logLines.length
+      }
+    };
+  };
+
+  // Jump from a Monitor occurrence to its line in the live buffer. `index` is the buffer array index
+  // (== the virtualizer row index; see `computeConsoleFindings`). Unpin stick-to-bottom first, exactly
+  // as find navigation does, so a streaming tail doesn't fight the scroll.
+  const revealBufferLine = (index: number): void => {
+    if (index < 0 || index >= logLines.length) return;
+    if (pinnedToBottom) {
+      pinnedToBottom = false;
+      updateScrollToBottomAffordance();
+    }
+    revealAndFlashLine(virt, index);
+  };
+
+  dashboardBtn?.addEventListener('click', () => {
+    if (recognizedIssueCount === 0) return;
+    analyticsHandle?.close();
+    lastRenderedIssueCount = recognizedIssueCount;
+    analyticsHandle = openConsoleAnalyticsModal(
+      analyticsSnapshot,
+      () => {
+        analyticsHandle = null;
+        clearTimeout(analyticsRefreshTimer);
+      },
+      revealBufferLine
+    );
+  });
+
+  // While the monitor is open, re-render it (debounced) whenever the recognized-issue count changed —
+  // new issues (or new occurrences) that arrive since it opened show up without a manual reopen.
+  function scheduleAnalyticsRefresh(): void {
+    if (!analyticsHandle || recognizedIssueCount === lastRenderedIssueCount) return;
+    clearTimeout(analyticsRefreshTimer);
+    analyticsRefreshTimer = setTimeout(() => {
+      if (!analyticsHandle) return;
+      lastRenderedIssueCount = recognizedIssueCount;
+      analyticsHandle.refresh();
+    }, 400);
+  }
+
   const splitMenuCleanups: Array<() => void> = [];
   const registerSplitMenuCleanup = (fn: () => void) => {
     splitMenuCleanups.push(fn);
@@ -1478,6 +1567,15 @@ export function setupTelnet(
   };
   panel.isTelnetConnected = function () {
     return isConnected;
+  };
+  panel.getConsoleMonitorFindings = function () {
+    flushTelnetPendingLinesSync();
+    return {
+      connected: isConnected,
+      scannedLines: logLines.length,
+      totalCaptured: spilledEntryCount + logLines.length,
+      ...computeConsoleFindings(logLines)
+    };
   };
   panel.connectTelnet = connectTelnet;
   panel.disconnectTelnet = disconnectTelnet;
@@ -1564,6 +1662,8 @@ export function setupTelnet(
   
   // Store cleanup functions on panel for later removal
   panel._telnetCleanup = () => {
+    clearTimeout(analyticsRefreshTimer);
+    analyticsHandle?.close();
     for (const fn of splitMenuCleanups) fn();
     // Surface dispose tears down: find bar (clears caches + highlight
     // registry + listeners), document-level keydown shortcut listener,

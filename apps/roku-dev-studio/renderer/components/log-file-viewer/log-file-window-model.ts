@@ -64,6 +64,10 @@ export type LogFileWindowModel = {
   setFilter(matchLines: number[] | null): void;
   /** Current virtualizer row count for the active mode. */
   viewCount(): number;
+  /** Map a 0-based file line to its virtualizer row index for the active mode: identity in normal mode,
+   *  its position within the active filter in filter mode, or `null` when the line isn't in view (out
+   *  of range, or filtered out). Used to jump to a Console Monitor occurrence by file line. */
+  fileLineToViewIndex(fileLine: number): number | null;
   /** What Copy / Cmd+A should export: the whole file, or just the matching
    *  lines when a filter is active. The viewer reads the actual text from main. */
   exportSpec(): { kind: 'all' } | { kind: 'lines'; lines: number[] };
@@ -240,6 +244,11 @@ export function createLogFileWindowModel(cfg: LogFileWindowModelConfig): LogFile
     ensureWindow,
     setFilter,
     viewCount,
+    fileLineToViewIndex(fileLine) {
+      if (mode === 'normal') return fileLine >= 0 && fileLine < cfg.lineCount ? fileLine : null;
+      const i = matchLines.indexOf(fileLine);
+      return i >= 0 ? i : null;
+    },
     exportSpec() {
       return mode === 'filter' ? { kind: 'lines', lines: matchLines.slice() } : { kind: 'all' };
     },

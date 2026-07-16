@@ -59,10 +59,24 @@ export {
  * matches). Mirrors the live Console's `createLogLineElement`
  * (`telnet-console-panel.ts`).
  */
-function buildLogLineElement(
+export interface BuildConsoleLogLineOptions {
+  /** Mark the row `filtered-out` at build time (so rows that mount in Filter mode hide immediately). */
+  shouldFilterOut?: (entry: ConsoleLogFileEntry, lineIndex: number) => boolean;
+  /**
+   * Live-Console hook. When provided, heavy lines (>= `DEFER_HEAVY_LINE_CHARS`) render as PLAIN text
+   * now and are handed to this callback to have URL + structured detection run later, off the
+   * streaming hot path (the Console's deferred-heavy-line drain). When omitted (static Log Viewer),
+   * heavy lines get detection synchronously — the mounted-window count bounds the work, so there's no
+   * burst to defer. This is the ONLY behavioral difference between the two surfaces' row builders,
+   * which is why they share this one function.
+   */
+  onDeferHeavy?: (job: { entry: ConsoleLogFileEntry; lineEl: HTMLElement; contentEl: HTMLElement }) => void;
+}
+
+export function buildConsoleLogLineElement(
   entry: ConsoleLogFileEntry,
   index: number,
-  shouldFilterOut?: (entry: ConsoleLogFileEntry, lineIndex: number) => boolean
+  opts: BuildConsoleLogLineOptions = {}
 ): HTMLElement {
   const lineEl = document.createElement('div');
   lineEl.className = `telnet-log-line ${entry.type}`.trim();
@@ -77,13 +91,19 @@ function buildLogLineElement(
 
   const contentEl = document.createElement('span');
   contentEl.className = 'telnet-log-content';
-  populateConsoleLineContentWithUrls(contentEl, entry.text);
+  const heavy = entry.text.length >= DEFER_HEAVY_LINE_CHARS;
+  const defer = heavy && !!opts.onDeferHeavy;
+  if (defer) {
+    // URL detection is deferred to the drain; show the raw text meanwhile.
+    contentEl.textContent = entry.text;
+  } else {
+    populateConsoleLineContentWithUrls(contentEl, entry.text);
+  }
   lineEl.appendChild(contentEl);
 
-  // Heavy lines (>=6KB) had structured detection skipped during parse to keep
-  // `rawLogFileTextToEntries` fast. Now that the row is actually visible, run
-  // detection — bounded by the visible window size, not file size.
-  if (!entry.structuredTargets?.length && entry.text.length >= DEFER_HEAVY_LINE_CHARS) {
+  // Heavy lines had structured detection skipped during parse to keep parsing fast. The static viewer
+  // runs it now (bounded by the visible window); the deferred path runs it later in the drain.
+  if (!defer && heavy && !entry.structuredTargets?.length) {
     const d = detectStructuredConsoleLine(entry.text);
     if (d.length) entry.structuredTargets = d;
   }
@@ -92,7 +112,11 @@ function buildLogLineElement(
     attachStructuredPillsToLine(lineEl, contentEl, entry.structuredTargets);
   }
 
-  if (shouldFilterOut?.(entry, index)) {
+  if (defer) {
+    opts.onDeferHeavy!({ entry, lineEl, contentEl });
+  }
+
+  if (opts.shouldFilterOut?.(entry, index)) {
     lineEl.classList.add('filtered-out');
   }
 
@@ -226,7 +250,8 @@ export function mountConsoleLogFileView(
   outputEl.appendChild(containerEl);
 
   const buildLine =
-    opts.buildLineEl ?? ((entry, index) => buildLogLineElement(entry, index, opts.shouldFilterOut));
+    opts.buildLineEl ??
+    ((entry, index) => buildConsoleLogLineElement(entry, index, { shouldFilterOut: opts.shouldFilterOut }));
 
   const virtualizer = createConsoleVirtualizer({
     scrollEl: outputEl,

@@ -37,6 +37,7 @@ import {
 } from '../ui/find-highlight.js';
 import { attachSearchHistory } from '../ui/search-history.js';
 import { findHistoryKey } from '../ui/search-storage-keys.js';
+import { looksLikeRegex } from '@shared/platform/text-match.js';
 
 // Re-export so existing callers that imported these from the find-bar module
 // keep working after the helpers were extracted.
@@ -191,6 +192,19 @@ export function attachConsoleFindBar(opts: AttachConsoleFindBarOpts): ConsoleFin
   const findPrevEl = findPrevCandidate;
   const findNextEl = findNextCandidate;
   const findClearEl = findClearCandidate;
+  const regexBtnEl = root.querySelector<HTMLElement>('.telnet-option-btn[data-option="regex"]');
+
+  // Nudge (don't force) regex mode when the draft has strong regex signals and the toggle is still
+  // off: pulse the `.*` button so one click switches to a regex search. Mirrors the Find modal and
+  // the multi-keyword find bar.
+  const syncRegexSuggest = (): void => {
+    if (!regexBtnEl) return;
+    const suggest = !findOptions.regex && looksLikeRegex(findInputEl.value);
+    regexBtnEl.classList.toggle('is-suggested', suggest);
+    regexBtnEl.title = suggest
+      ? 'This looks like a regular expression — click to search by regex'
+      : 'Use Regular Expression (Alt+R)';
+  };
 
   let currentMode: 'find' | 'filter' = modeSelectEl.value === 'filter' ? 'filter' : 'find';
   let currentQuery = '';
@@ -576,6 +590,13 @@ export function attachConsoleFindBar(opts: AttachConsoleFindBarOpts): ConsoleFin
       searchAbortController = null;
     }
 
+    // Create the abort controller BEFORE the already-fully-scanned early return below: that path
+    // calls `finalizeAfterScan()`, which reads `controller` — declaring it later (in the chunked-scan
+    // setup) would leave it in the temporal dead zone and throw on a cache hit, so the stale count /
+    // highlights from the previous query would never get cleared (e.g. toggling regex off after on).
+    const controller = { abort: false };
+    searchAbortController = controller;
+
     const totalEntries = model.getEntryCount();
     if (entry.scannedUpTo >= totalEntries) {
       finalizeAfterScan();
@@ -595,8 +616,6 @@ export function attachConsoleFindBar(opts: AttachConsoleFindBarOpts): ConsoleFin
      * in ~36 RAF ticks (~600 ms), dominated by `matchAll` rather than scheduling.
      */
     const CHUNK_SIZE = 5000;
-    const controller = { abort: false };
-    searchAbortController = controller;
 
     function processChunk(): void {
       if (controller.abort) return;
@@ -862,6 +881,7 @@ export function attachConsoleFindBar(opts: AttachConsoleFindBarOpts): ConsoleFin
     if (option !== 'case' && option !== 'word' && option !== 'regex') return;
     findOptions[option] = !findOptions[option];
     btn.classList.toggle('active', findOptions[option]);
+    syncRegexSuggest();
     executeFindAction();
   };
 
@@ -872,6 +892,7 @@ export function attachConsoleFindBar(opts: AttachConsoleFindBarOpts): ConsoleFin
     }
     findCountEl.textContent = '';
     findBarEl.classList.remove('no-results');
+    syncRegexSuggest();
     clearTimeout(findTimeout);
     findTimeout = setTimeout(executeFindAction, 300);
   };
@@ -915,6 +936,7 @@ export function attachConsoleFindBar(opts: AttachConsoleFindBarOpts): ConsoleFin
       e.stopPropagation();
       findInputEl.value = '';
       currentQuery = '';
+      syncRegexSuggest();
       executeFindAction();
     }
   };
@@ -922,6 +944,7 @@ export function attachConsoleFindBar(opts: AttachConsoleFindBarOpts): ConsoleFin
   const onClearClick = (): void => {
     findInputEl.value = '';
     currentQuery = '';
+    syncRegexSuggest();
     executeFindAction();
   };
 
@@ -932,6 +955,7 @@ export function attachConsoleFindBar(opts: AttachConsoleFindBarOpts): ConsoleFin
   findPrevEl.addEventListener('click', searchPrev);
   findNextEl.addEventListener('click', searchNext);
   findClearEl.addEventListener('click', onClearClick);
+  syncRegexSuggest(); // reflect the initial input/regex-toggle state on the button
 
   // Up/Down arrow recall of previous find/filter terms (shared behavior).
   const historyHandle = attachSearchHistory({
