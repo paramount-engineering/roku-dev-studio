@@ -1,5 +1,6 @@
 import { IPC } from './shared/ipc/channels';
 import type { ConsoleFindOptions } from './renderer/modules/console-log/console-find-helpers';
+import type { ConsoleFindings } from './shared/console/brightscript-error-catalog';
 
 const { contextBridge, ipcRenderer } = require('electron');
 
@@ -43,6 +44,17 @@ contextBridge.exposeInMainWorld('roku', {
       success: boolean;
       hits?: Array<{ line: number; start: number; end: number }>;
       matchLines?: number[];
+      truncated?: boolean;
+      superseded?: boolean;
+      error?: string;
+    }>,
+  /** Console Monitor: whole-file BrightScript-issue scan. `findings` is the shared `ConsoleFindings`
+   *  shape the analytics modal renders. `superseded` means a newer scan started first — ignore. */
+  scanLogViewerFindings: () =>
+    ipcRenderer.invoke(IPC.LogViewerFindings) as Promise<{
+      success: boolean;
+      findings?: ConsoleFindings;
+      scannedLines?: number;
       truncated?: boolean;
       superseded?: boolean;
       error?: string;
