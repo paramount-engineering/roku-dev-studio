@@ -32,11 +32,49 @@ export const ALL_FIND_SCOPES: readonly NetworkFindScope[] = [
 /** Per-scope match counts for a single event. Zeroed scopes simply didn't match (or weren't searched). */
 export type NetworkFindScopeCounts = Record<NetworkFindScope, number>;
 
-export type NetworkFindMatch = {
-  id: string;
-  /** Total matches across all searched scopes — drives the row badge. */
+/** Per-term counts within one event (a single colored search term's hits). */
+export type NetworkFindTermCounts = {
+  /** Total matches for this term across the scopes it searched. */
   total: number;
   scopes: NetworkFindScopeCounts;
+};
+
+export type NetworkFindMatch = {
+  id: string;
+  /** Total matches across all searched scopes and all terms — drives the row badge. */
+  total: number;
+  /** Aggregate per-scope counts summed across every matched term. */
+  scopes: NetworkFindScopeCounts;
+  /**
+   * Per-term breakdown, keyed by term id — present only for multi-term runs
+   * ({@link matchEventContentMulti}). Only terms that actually matched appear here, so a row's badge
+   * can render one color segment per key. Absent for the legacy single-term {@link matchEventContent}.
+   */
+  terms?: Record<string, NetworkFindTermCounts>;
+};
+
+/**
+ * One colored search term in a multi-term Find. Each term carries its OWN scope/case/regex options
+ * (they are independent searches unioned together), plus a stable `id` the renderer maps to a color.
+ * `color` lives on the renderer's term model, not here — the engine is color-agnostic.
+ */
+export type NetworkFindTerm = {
+  id: string;
+  query: string;
+  scopes?: readonly NetworkFindScope[];
+  caseSensitive?: boolean;
+  regex?: boolean;
+};
+
+/** A multi-term Find request: an OR of up to a handful of independent terms. */
+export type NetworkFindRequest = {
+  terms: readonly NetworkFindTerm[];
+};
+
+/** A compiled term: its id paired with its matcher. Empty/invalid terms are dropped at compile time. */
+export type CompiledFindTerm = {
+  id: string;
+  matcher: ContentMatcher;
 };
 
 export type NetworkFindOptions = {
@@ -80,6 +118,17 @@ function countSubstring(haystack: string, needle: string): number {
   return count;
 }
 
+/**
+ * Remove ALL whitespace so a substring search is insensitive to formatting. The detail view
+ * pretty-prints JSON/XML (adding `: ` after colons, indentation, newlines) while the captured body is
+ * often minified — so a query copied from what the user *sees* wouldn't match the raw bytes (and vice
+ * versa). Stripping whitespace from both needle and haystack makes the match formatting-agnostic. Only
+ * substring terms use this; regex terms control their own whitespace.
+ */
+function stripWhitespace(s: string): string {
+  return s.replace(/\s+/g, '');
+}
+
 function countRegex(haystack: string, re: RegExp): number {
   // `re` carries the global flag; reset lastIndex so the matcher is reusable across haystacks.
   re.lastIndex = 0;
@@ -119,11 +168,17 @@ export function createContentMatcher(opts: NetworkFindOptions): ContentMatcher |
     return { scopes, count: (hay) => (hay ? countRegex(hay, re) : 0) };
   }
 
-  if (opts.caseSensitive) {
-    return { scopes, count: (hay) => (hay ? countSubstring(hay, raw) : 0) };
-  }
-  const needle = raw.toLowerCase();
-  return { scopes, count: (hay) => (hay ? countSubstring(hay.toLowerCase(), needle) : 0) };
+  // Whitespace-insensitive substring match (see stripWhitespace): a query keeps matching whether the
+  // body is minified or pretty-printed, and whether the user typed it with or without formatting spaces.
+  const needle = stripWhitespace(opts.caseSensitive ? raw : raw.toLowerCase());
+  // A whitespace-only query has nothing to match — treat it like an empty query (null = no matcher) so
+  // it's dropped rather than forcing a full disk-backed scan that can never hit.
+  if (!needle) return null;
+  return {
+    scopes,
+    count: (hay) =>
+      hay ? countSubstring(stripWhitespace(opts.caseSensitive ? hay : hay.toLowerCase()), needle) : 0
+  };
 }
 
 /** Flatten headers into the same `key: value` line form the detail view renders, for searching. */
@@ -183,4 +238,75 @@ export function findNeedsDetail(scopes: ReadonlySet<NetworkFindScope>): boolean 
     scopes.has('respHeaders') ||
     scopes.has('respBody')
   );
+}
+
+/**
+ * Compile every term of a multi-term request into a matcher, in order, dropping terms that are empty
+ * or don't yield a matcher (see {@link createContentMatcher}). Each term keeps its own scope/case/
+ * regex options — they're independent searches whose results are unioned (OR) per event.
+ */
+export function createContentMatchers(terms: readonly NetworkFindTerm[]): CompiledFindTerm[] {
+  const out: CompiledFindTerm[] = [];
+  for (const term of terms) {
+    const matcher = createContentMatcher({
+      query: term.query,
+      scopes: term.scopes,
+      caseSensitive: term.caseSensitive,
+      regex: term.regex
+    });
+    if (matcher) out.push({ id: term.id, matcher });
+  }
+  return out;
+}
+
+/** True when ANY compiled term needs the on-disk/heavy detail — the single disk read is shared. */
+export function findNeedsDetailMulti(terms: readonly CompiledFindTerm[]): boolean {
+  return terms.some((t) => findNeedsDetail(t.matcher.scopes));
+}
+
+/**
+ * Run all compiled terms over ONE event in a single pass and return the combined match, or `null`
+ * when no term matched. The per-scope text (URL / headers / bodies) is materialized once for the
+ * union of scopes any term wants, then reused across every term's matcher — so adding terms costs
+ * extra `count()` calls, never extra body reads. `terms` in the result holds only the terms that
+ * actually matched (each one becomes a color segment on the row); `scopes`/`total` aggregate them.
+ */
+export function matchEventContentMulti(
+  event: ParsedNetworkEvent,
+  terms: readonly CompiledFindTerm[]
+): NetworkFindMatch | null {
+  if (terms.length === 0) return null;
+
+  // Union of scopes across all terms → materialize each needed haystack exactly once.
+  const union = new Set<NetworkFindScope>();
+  for (const t of terms) for (const s of t.matcher.scopes) union.add(s);
+  const text: Record<NetworkFindScope, string> = {
+    url: union.has('url') ? urlText(event) : '',
+    reqHeaders: union.has('reqHeaders') ? headerText(event.httpRequest) : '',
+    reqBody: union.has('reqBody') ? bodyText(event.httpRequest) : '',
+    respHeaders: union.has('respHeaders') ? headerText(event.httpResponse) : '',
+    respBody: union.has('respBody') ? bodyText(event.httpResponse) : ''
+  };
+
+  const agg = zeroCounts();
+  const perTerm: Record<string, NetworkFindTermCounts> = {};
+  let grandTotal = 0;
+
+  for (const t of terms) {
+    const counts = zeroCounts();
+    let termTotal = 0;
+    for (const scope of t.matcher.scopes) {
+      const c = t.matcher.count(text[scope]);
+      counts[scope] = c;
+      termTotal += c;
+    }
+    if (termTotal > 0) {
+      perTerm[t.id] = { total: termTotal, scopes: counts };
+      for (const scope of ALL_FIND_SCOPES) agg[scope] += counts[scope];
+      grandTotal += termTotal;
+    }
+  }
+
+  if (grandTotal === 0) return null;
+  return { id: event.id, total: grandTotal, scopes: agg, terms: perTerm };
 }
