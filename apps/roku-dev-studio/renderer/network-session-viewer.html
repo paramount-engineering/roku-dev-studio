@@ -15,6 +15,42 @@
     .nsv-root .network-inspector-card { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; border: none; border-radius: 0; margin: 0; }
     .nsv-root .ni-charles-workspace { flex: 1 1 auto; min-height: 0; }
     .nsv-notice { padding: 6px 12px; font-size: 12px; color: var(--text-secondary, #aaa); }
+    /* Single header row: the filter is an IN-FLOW, drag-resizable field — NOT the live tab's absolutely
+       centered slot, which wraps to a second row when the title/side groups leave no centered room.
+       An in-flow flex item can't wrap to another row. Width is driven by --nsv-filter-w (drag handle). */
+    .nsv-root .ni-card-header { flex-wrap: nowrap; }
+    .nsv-root .ni-header-center {
+      position: static;
+      transform: none;
+      left: auto;
+      top: auto;
+      width: auto;
+      max-width: none;
+      flex: 0 1 var(--nsv-filter-w, 380px);
+      min-width: 240px;
+      pointer-events: auto;
+      gap: 8px;
+    }
+    .nsv-root .nsv-filter-resize {
+      flex: 0 0 auto;
+      align-self: stretch;
+      width: 10px;
+      margin-left: 2px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: col-resize;
+      background: transparent;
+    }
+    .nsv-root .nsv-filter-resize::before {
+      content: "";
+      width: 2px;
+      height: 16px;
+      border-radius: 2px;
+      background: var(--border-hover);
+    }
+    .nsv-root .nsv-filter-resize:hover::before,
+    .nsv-root .nsv-filter-resize.is-dragging::before { background: var(--accent-purple); }
   </style>
 </head>
 <body>
@@ -42,6 +78,12 @@
       <symbol id="icon-chevron-down" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
         <path d="m6 9 6 6 6-6"/>
       </symbol>
+      <symbol id="icon-chevron-up" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="m18 15-6-6-6 6"/>
+      </symbol>
+      <symbol id="icon-zoom" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+      </symbol>
       <symbol id="icon-terminal" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <polyline points="4 17 10 11 4 5"/><line x1="12" x2="20" y1="19" y2="19"/>
       </symbol>
@@ -64,14 +106,34 @@
           <div class="ni-header-start">
             <span class="card-icon"><span class="icon icon-sm"><svg><use href="#icon-network"/></svg></span></span>
             <span class="card-title">Network Session</span>
+            <div class="ni-header-tools">
+              <div class="ni-find-btn-group">
+                <button type="button" class="btn btn-secondary btn-sm ni-icon-btn ni-find-btn" data-ni-find title="Find in traffic — URL, payloads, headers, response bodies (⌘/Ctrl+F)" aria-label="Find in traffic">
+                  <span class="icon icon-sm"><svg><use href="#icon-zoom"/></svg></span>
+                </button>
+                <button type="button" class="ni-find-sub-btn" data-ni-find-prev title="Previous Match (Shift+↑)" aria-label="Previous Match">
+                  <span class="icon icon-xs"><svg><use href="#icon-chevron-up"/></svg></span>
+                </button>
+                <button type="button" class="ni-find-sub-btn" data-ni-find-next title="Next Match (Shift+↓)" aria-label="Next Match">
+                  <span class="icon icon-xs"><svg><use href="#icon-chevron-down"/></svg></span>
+                </button>
+                <button type="button" class="ni-find-sub-btn ni-find-clear-btn" data-ni-find-clear title="Clear Find results" aria-label="Clear Find results">
+                  <span class="icon icon-xs"><svg><use href="#icon-x"/></svg></span>
+                </button>
+              </div>
+            </div>
           </div>
           <div class="ni-header-center">
             <div class="ni-filter-wrap">
-              <input type="text" class="ni-filter-input" data-ni-filter placeholder="Filter sessions…" title="Filter sessions — click the info icon for supported syntax." />
+              <input type="text" class="ni-filter-input" data-ni-filter placeholder="Filter Traffic…" title="Filter Traffic — click the info icon for supported syntax." />
+              <button type="button" class="ni-filter-clear" data-ni-filter-clear title="Clear filter" aria-label="Clear filter" hidden>
+                <span class="icon icon-xs"><svg><use href="#icon-x"/></svg></span>
+              </button>
               <button type="button" class="ni-filter-help" data-ni-filter-help title="Filtering help &amp; supported syntax" aria-label="Filtering help">
                 <span class="icon icon-xs"><svg><use href="#icon-info"/></svg></span>
               </button>
             </div>
+            <div class="nsv-filter-resize" data-nsv-filter-resize role="separator" aria-orientation="vertical" title="Drag to resize the filter (double-click to reset)"></div>
             <span class="ni-session-count" data-ni-session-count>0</span>
           </div>
           <div class="ni-header-tools">
