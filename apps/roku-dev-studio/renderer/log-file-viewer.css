@@ -822,6 +822,17 @@ body {
 .icon-xs {
   font-size: 12px;
 }
+/* Larger sizes to match the main window's icon scale (index.html) — the standalone window only had
+   xs/sm, so any md/lg/xl icon (e.g. the Monitor button) fell back to the tiny base size. */
+.icon-md {
+  font-size: 16px;
+}
+.icon-lg {
+  font-size: 20px;
+}
+.icon-xl {
+  font-size: 24px;
+}
 .icon svg {
   width: 1em;
   height: 1em;
@@ -912,6 +923,19 @@ body {
   background: var(--accent-purple-dim);
   color: var(--accent-purple);
   border-color: var(--accent-purple);
+}
+
+/* Nudge (don't force) regex mode: when the query looks like a deliberate regex and the toggle is
+   still off, pulse the ".*" button so one click enables regex. Mirrors the main-window find bars. */
+.telnet-option-btn.is-suggested:not(.active) {
+  color: var(--accent-purple);
+  border-color: var(--accent-purple);
+  animation: niRxPulse 1.4s ease-in-out infinite;
+}
+
+@keyframes niRxPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
 }
 
 .telnet-find-count {

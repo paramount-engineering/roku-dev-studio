@@ -30,45 +30,29 @@
     <symbol id="icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
       <polyline points="20 6 9 17 4 12"/>
     </symbol>
+    <symbol id="icon-monitor" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="10.5" cy="10.5" r="8"/>
+      <path d="m21 21-4.4-4.4"/>
+      <path d="M4.6 10.5 Q10.5 5 16.4 10.5 Q10.5 16 4.6 10.5 Z"/>
+      <circle cx="10.5" cy="10.5" r="2.3" fill="currentColor" stroke="none"/>
+    </symbol>
   </svg>
   <header id="logViewerHeader" class="log-viewer-header">
     <div class="log-viewer-header-primary">
       <h1 id="logViewerTitle" class="log-viewer-title">Log file</h1>
       <p id="logViewerStatus" class="log-viewer-status"></p>
     </div>
-    <div id="logViewerFindHost" class="log-viewer-find-host" hidden>
-      <div class="telnet-find-bar">
-        <select class="telnet-mode-select" aria-label="Find or filter mode">
-          <option value="find">Find</option>
-          <option value="filter">Filter</option>
-        </select>
-        <div class="telnet-find-input-wrapper">
-          <input
-            type="text"
-            class="telnet-find-input"
-            placeholder="Find..."
-            spellcheck="false"
-            aria-label="Find or filter query"
-          />
-          <div class="telnet-find-options">
-            <button type="button" class="telnet-option-btn" data-option="case" title="Match Case" aria-label="Match Case">Aa</button>
-            <button type="button" class="telnet-option-btn" data-option="word" title="Match Whole Word" aria-label="Match Whole Word">ab</button>
-            <button type="button" class="telnet-option-btn" data-option="regex" title="Use Regular Expression" aria-label="Use Regular Expression">.*</button>
-          </div>
-        </div>
-        <span class="telnet-find-count" aria-live="polite"></span>
-        <button type="button" class="btn btn-icon telnet-find-prev" title="Previous (Shift+Enter)" aria-label="Previous Match">
-          <span class="icon icon-xs"><svg><use href="#icon-chevron-up" /></svg></span>
-        </button>
-        <button type="button" class="btn btn-icon telnet-find-next" title="Next (Enter)" aria-label="Next Match">
-          <span class="icon icon-xs"><svg><use href="#icon-chevron-down" /></svg></span>
-        </button>
-        <button type="button" class="btn btn-icon telnet-find-clear" title="Clear" aria-label="Clear find">
-          <span class="icon icon-xs"><svg><use href="#icon-x" /></svg></span>
-        </button>
-      </div>
-    </div>
+    <!-- The `.telnet-find-bar` is injected at runtime from the shared `buildConsoleFindBarElement`
+         (see log-file-viewer.ts), so this window and the Console panel share one markup source. -->
+    <div id="logViewerFindHost" class="log-viewer-find-host" hidden></div>
     <div id="logViewerActions" class="log-viewer-actions" hidden>
+      <button
+        type="button"
+        class="btn btn-secondary log-viewer-monitor-btn"
+        title="Console Monitor — scan this file for recognized BrightScript issues"
+      >
+        <span class="icon icon-md"><svg><use href="#icon-monitor" /></svg></span> Monitor
+      </button>
       <button
         type="button"
         class="btn btn-secondary log-viewer-copy-btn"

@@ -496,6 +496,26 @@ export function setupActionScripts(panel: DevicePanelRoot, device, api) {
   );
 
   registerMcpTool(
+    'console_monitor_findings',
+    handlerKey,
+    async () => {
+      const telnetPanel = panel as unknown as {
+        getConsoleMonitorFindings?: () => unknown;
+      };
+      const findings = typeof telnetPanel.getConsoleMonitorFindings === 'function'
+        ? telnetPanel.getConsoleMonitorFindings()
+        : null;
+      if (!findings) {
+        return {
+          ok: false,
+          error: 'Telnet console is not initialised on this device tab. Open the Telnet Console tab in Dev Studio and connect first.'
+        };
+      }
+      return { ok: true, data: findings };
+    }
+  );
+
+  registerMcpTool(
     'telnet_connect',
     handlerKey,
     async () => {

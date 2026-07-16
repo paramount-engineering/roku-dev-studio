@@ -258,9 +258,14 @@ function transpileSharedForRenderer(appDir: string, rendererDist: string): void 
   const sharedOut = path.join(rendererDist, 'shared');
 
   // 1) Local shared modules with no external dependencies: a plain per-file transpile is enough
-  //    (their relative imports resolve as-is in the renderer dist tree).
+  //    (their relative imports resolve as-is in the renderer dist tree). `shared/console/*` is the
+  //    pure BrightScript-issue catalog + findings aggregator, shared by the live Console and the Log
+  //    Viewer window (and the main-process findings scan); walking the dir means new pure shared
+  //    modules there are emitted automatically. A miss here 404s and takes down the ESM graph.
+  const consoleSharedDir = path.join(sharedRoot, 'console');
   const plainEntries = [
     path.join(sharedRoot, 'ipc', 'debug-telnet-connection-id.ts'),
+    ...(fs.existsSync(consoleSharedDir) ? walkTsFiles(consoleSharedDir) : []),
   ].filter((p) => fs.existsSync(p));
   if (plainEntries.length > 0) {
     fs.mkdirSync(sharedOut, { recursive: true });
@@ -310,6 +315,8 @@ function verifyRendererDist(appDir: string, rendererDist: string): void {
     path.join(rendererDist, 'shared', 'network-inspector', 'setup-guide.js'),
     // Shared logger shim — imported broadly across the renderer; a 404 takes down the ESM graph.
     path.join(rendererDist, 'shared', 'logging', 'logger.js'),
+    // Shared BrightScript catalog — imported by the Console panel + Log Viewer (Console Monitor).
+    path.join(rendererDist, 'shared', 'console', 'brightscript-error-catalog.js'),
   ];
   const missing = required.filter((p) => !fs.existsSync(p));
   if (missing.length > 0) {
