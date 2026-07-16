@@ -1037,6 +1037,43 @@ const TELNET_DISCONNECT: RokuOp<{ device?: string }, unknown> = {
   execute: rendererOnlyExecute('telnet_disconnect')
 };
 
+const CONSOLE_MONITOR_FINDINGS: RokuOp<{ device?: string }, unknown> = {
+  id: 'console_monitor_findings',
+  title: 'Console Monitor: BrightScript Findings',
+  description:
+    'Analyze the in-memory BrightScript debug console (port 8085) buffer and return the recognized ' +
+    'BrightScript ISSUES — the same findings the Console Monitor UI shows. ' +
+    'Returns `{ connected, scannedLines, totalCaptured, totalIssues, issueTypeCount, byCategory, findings }`, ' +
+    'where each finding is `{ id, title, category, severity, meaning, cause, fix, docsUrl?, count, lines }` ' +
+    'and `lines` is that issue\'s unique console lines with per-line `count` and (when present) `file`/`line`. ' +
+    'Only Roku/BrightScript-emitted diagnostics (`BRIGHTSCRIPT: ERROR:`/`WARNING:`, rendezvous, FormatJSON, ' +
+    'roUrlEvent, …) are recognized — NOT arbitrary app log output. ' +
+    'Findings only accumulate while the console is **connected**: if `connected` is false call `telnet_connect` first.',
+  runIn: 'renderer',
+  destructive: false,
+  inputSchema: {
+    type: 'object',
+    properties: {
+      device: { type: 'string', description: 'Optional target device (IP or serial). Omit to use the focused tab.' }
+    },
+    additionalProperties: false
+  },
+  outputSchema: {
+    type: 'object',
+    properties: {
+      connected: { type: 'boolean' },
+      scannedLines: { type: 'number' },
+      totalCaptured: { type: 'number' },
+      totalIssues: { type: 'number' },
+      issueTypeCount: { type: 'number' },
+      byCategory: { type: 'array' },
+      findings: { type: 'array' }
+    },
+    additionalProperties: true
+  },
+  execute: rendererOnlyExecute('console_monitor_findings')
+};
+
 // =============================================================================
 // Registries
 // =============================================================================
@@ -1061,7 +1098,8 @@ const ALL_OPS: ReadonlyArray<RokuOp<Record<string, unknown>, unknown>> = Object.
   APP_FUNCTION,
   GET_TELNET_LOG,
   TELNET_CONNECT,
-  TELNET_DISCONNECT
+  TELNET_DISCONNECT,
+  CONSOLE_MONITOR_FINDINGS
 ] as unknown as ReadonlyArray<RokuOp<Record<string, unknown>, unknown>>);
 
 /** Convenience filters. */
