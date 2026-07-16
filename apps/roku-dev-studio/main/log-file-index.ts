@@ -26,6 +26,11 @@
 
 import { TextDecoder } from 'util';
 import { consoleDisplayText } from '../renderer/modules/console-log/console-display-text';
+import {
+  recognizeBrsIssue,
+  computeConsoleFindings,
+  type ConsoleFindings
+} from '../shared/console/brightscript-error-catalog';
 
 const fs = require('fs');
 
@@ -347,14 +352,6 @@ export async function searchFile(
   const matchLines: number[] = [];
   let truncated = false;
 
-  const fd = fs.openSync(index.filePath, 'r');
-  const buf = Buffer.alloc(SCAN_CHUNK_BYTES);
-  const decoder = new TextDecoder(index.encoding, { fatal: false });
-  let filePos = index.bomBytes;
-  let lineNo = 0;
-  // Carry of the last, not-yet-newline-terminated line across chunk reads.
-  let pending = '';
-
   const matchLine = (raw: string, line: number): void => {
     // Match against the *display* text — ANSI-stripped + truncated, exactly what
     // the renderer paints — so hit offsets land on the right characters when the
@@ -379,10 +376,34 @@ export async function searchFile(
     }
   };
 
+  const { aborted } = await streamFileLines(index, matchLine, shouldAbort);
+  return { hits, matchLines, truncated: truncated || aborted };
+}
+
+/**
+ * Stream every line of the indexed file to `onLine(text, lineNo)`, chunked so the file is never
+ * resident whole, yielding to the event loop between chunks so a long scan doesn't freeze main.
+ * `shouldAbort` is polled between chunks; a mid-scan abort resolves `{ aborted: true }`. Shared by
+ * {@link searchFile} and {@link scanFileFindings} so the chunk/decode/newline-carry logic lives once.
+ */
+async function streamFileLines(
+  index: LogFileIndex,
+  onLine: (rawLine: string, lineNo: number) => void,
+  shouldAbort: () => boolean
+): Promise<{ aborted: boolean }> {
+  const fd = fs.openSync(index.filePath, 'r');
+  const buf = Buffer.alloc(SCAN_CHUNK_BYTES);
+  const decoder = new TextDecoder(index.encoding, { fatal: false });
+  let filePos = index.bomBytes;
+  let lineNo = 0;
+  // Carry of the last, not-yet-newline-terminated line across chunk reads.
+  let pending = '';
+  let aborted = false;
+
   try {
     while (filePos < index.fileSize) {
       if (shouldAbort()) {
-        truncated = true;
+        aborted = true;
         break;
       }
       const n = fs.readSync(fd, buf, 0, SCAN_CHUNK_BYTES, filePos);
@@ -401,18 +422,43 @@ export async function searchFile(
       pending = combined.slice(nlIdx + 1);
       const lines = ready.split('\n');
       for (const text of lines) {
-        matchLine(text, lineNo++);
+        onLine(text, lineNo++);
       }
       // Yield between chunks so the main-process event loop stays responsive.
       await new Promise<void>((r) => setImmediate(r));
     }
     // Final partial line (file without a trailing newline).
-    if (!shouldAbort() && pending.length > 0) {
-      matchLine(pending, lineNo++);
+    if (!aborted && !shouldAbort() && pending.length > 0) {
+      onLine(pending, lineNo++);
     }
   } finally {
     fs.closeSync(fd);
   }
 
-  return { hits, matchLines, truncated };
+  return { aborted };
+}
+
+/**
+ * Whole-file Console Monitor scan: recognize BrightScript issues on every line and aggregate them via
+ * the shared {@link computeConsoleFindings} (the single source of truth also used by the live Console
+ * and the `console_monitor_findings` MCP tool). Only issue lines are retained during the scan, so
+ * memory stays bounded even on very large files. `scannedLines` is the total lines examined.
+ */
+export async function scanFileFindings(
+  index: LogFileIndex,
+  shouldAbort: () => boolean
+): Promise<{ findings: ConsoleFindings; scannedLines: number; truncated: boolean }> {
+  // `index` carries the 0-based file line number so the Console Monitor can jump straight to an
+  // occurrence in the Log Viewer (see `ConsoleFindingLine.indices`).
+  const issueLines: { text: string; index: number }[] = [];
+  let scannedLines = 0;
+  const onLine = (raw: string, lineNo: number): void => {
+    // Match the *display* text (ANSI-stripped, trailing \r absorbed) — the same 1:1 contract the find
+    // scan and the renderer's line rendering use, so recognition sees exactly what's on screen.
+    const text = consoleDisplayText(raw.endsWith('\r') ? raw.slice(0, -1) : raw);
+    scannedLines++;
+    if (recognizeBrsIssue(text)) issueLines.push({ text, index: lineNo });
+  };
+  const { aborted } = await streamFileLines(index, onLine, shouldAbort);
+  return { findings: computeConsoleFindings(issueLines), scannedLines, truncated: aborted };
 }

@@ -21,10 +21,12 @@ import {
   readLineRange,
   readLines,
   searchFile,
+  scanFileFindings,
   LOG_VIEWER_MAX_LINES,
   type LogFileIndex
 } from './log-file-index';
 import { buildSearchRegex, type ConsoleFindOptions } from '../renderer/modules/console-log/console-find-helpers';
+import type { ConsoleFindings } from '../shared/console/brightscript-error-catalog';
 
 const fs = require('fs');
 const path = require('path');
@@ -46,6 +48,8 @@ type LogViewerState = {
   filePath: string;
   index: LogFileIndex | null;
   searchToken: number;
+  /** Bumped per Console Monitor scan so a newer scan supersedes an in-flight one. */
+  findingsToken: number;
 };
 const logViewerStateByWindowId = new Map<number, LogViewerState>();
 
@@ -198,6 +202,38 @@ export function registerLogViewerIpc(ipcMain: IpcMain): void {
       };
     }
   );
+
+  // Console Monitor: whole-file BrightScript-issue scan. Mirrors the search handler's token/abort
+  // pattern so a newer scan supersedes an in-flight one, and reuses the shared `computeConsoleFindings`
+  // (via `scanFileFindings`) so the Log Viewer's findings match the live Console's exactly.
+  ipcMain.handle(
+    IPC.LogViewerFindings,
+    async (
+      event: IpcMainInvokeEvent
+    ): Promise<{
+      success: boolean;
+      findings?: ConsoleFindings;
+      scannedLines?: number;
+      truncated?: boolean;
+      superseded?: boolean;
+      error?: string;
+    }> => {
+      const got = stateForEvent(event);
+      if ('error' in got) return { success: false, error: got.error };
+      const { state } = got;
+      if (!state.index) return { success: false, error: 'File not prepared' };
+
+      const myToken = ++state.findingsToken;
+      const result = await scanFileFindings(state.index, () => state.findingsToken !== myToken);
+      if (state.findingsToken !== myToken) return { success: true, superseded: true };
+      return {
+        success: true,
+        findings: result.findings,
+        scannedLines: result.scannedLines,
+        truncated: result.truncated
+      };
+    }
+  );
 }
 
 export function openLogFileViewerWindow(parent: ElectronBrowserWindow | undefined, filePath: string): void {
@@ -237,7 +273,7 @@ export function openLogFileViewerWindow(parent: ElectronBrowserWindow | undefine
     }
   });
 
-  logViewerStateByWindowId.set(child.id, { filePath: resolved, index: null, searchToken: 0 });
+  logViewerStateByWindowId.set(child.id, { filePath: resolved, index: null, searchToken: 0, findingsToken: 0 });
   child.once('closed', () => {
     logViewerStateByWindowId.delete(child.id);
   });
