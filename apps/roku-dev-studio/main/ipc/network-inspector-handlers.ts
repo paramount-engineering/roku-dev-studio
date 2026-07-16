@@ -10,7 +10,8 @@ import {
 import type { NetworkTrafficRules } from '../../shared/network-inspector/types';
 import {
   ALL_FIND_SCOPES,
-  type NetworkFindOptions,
+  type NetworkFindRequest,
+  type NetworkFindTerm,
   type NetworkFindScope
 } from '../../shared/network-inspector/content-search';
 import {
@@ -54,23 +55,45 @@ function readBootConfig(settings: Record<string, unknown>, userDataPath?: string
   };
 }
 
-/** Validate the renderer-supplied Find options, or null when there's no usable query. */
-function sanitizeFindOptions(raw: unknown): NetworkFindOptions | null {
+/** Hard cap on colored Find terms accepted from the renderer (matches the modal's palette size). */
+const MAX_FIND_TERMS = 5;
+
+/** Validate one renderer-supplied Find term, or null when it has no usable query. Color is a
+ *  renderer-only concern (results come back keyed by `id`), so it isn't accepted here. */
+function sanitizeFindTerm(raw: unknown, index: number): NetworkFindTerm | null {
   if (!raw || typeof raw !== 'object') return null;
-  const o = raw as Record<string, unknown>;
-  const query = typeof o.query === 'string' ? o.query : '';
+  const t = raw as Record<string, unknown>;
+  const query = typeof t.query === 'string' ? t.query : '';
   if (!query) return null;
-  const scopes = Array.isArray(o.scopes)
-    ? o.scopes.filter((s): s is NetworkFindScope =>
+  const id = typeof t.id === 'string' && t.id ? t.id : `t${index}`;
+  const scopes = Array.isArray(t.scopes)
+    ? t.scopes.filter((s): s is NetworkFindScope =>
         (ALL_FIND_SCOPES as readonly string[]).includes(s as string)
       )
     : undefined;
   return {
+    id,
     query,
-    scopes,
-    caseSensitive: o.caseSensitive === true,
-    regex: o.regex === true
+    scopes: scopes && scopes.length > 0 ? scopes : undefined,
+    caseSensitive: t.caseSensitive === true,
+    regex: t.regex === true
   };
+}
+
+/** Validate the renderer-supplied multi-term Find request, or null when no term has a usable query.
+ *  Caps the term count at {@link MAX_FIND_TERMS} so a hostile/buggy renderer can't fan out unboundedly. */
+function sanitizeFindOptions(raw: unknown): NetworkFindRequest | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const o = raw as Record<string, unknown>;
+  const rawTerms = Array.isArray(o.terms) ? o.terms : [];
+  const terms: NetworkFindTerm[] = [];
+  for (const rt of rawTerms) {
+    if (terms.length >= MAX_FIND_TERMS) break;
+    const term = sanitizeFindTerm(rt, terms.length);
+    if (term) terms.push(term);
+  }
+  if (terms.length === 0) return null;
+  return { terms };
 }
 
 function setupNetworkInspectorHandlers(
