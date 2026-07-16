@@ -4,9 +4,10 @@
  * Unlike the shared single-query {@link import('./find-bar.js').createFindBar} (ECP / App Connector /
  * simple bodies), this bar searches for SEVERAL keywords at once — rendered as removable colored chips
  * — so the Find modal's up-to-5 search entries can be seeded straight into the detail panes and the
- * user can keep adding their own. User-typed chips are substring (case-insensitive, whitespace-agnostic);
- * chips seeded from the modal's `.*` entries carry a `regex` flag and match via a compiled RegExp. Both
- * kinds show as chips, count, navigate, and highlight — regex just isn't authorable from the pane input.
+ * user can keep adding their own. User-typed chips are substring (case-insensitive, whitespace-agnostic)
+ * by default; toggling the inline `.*` button (or accepting the "looks like a regex" nudge that pulses it)
+ * commits the next chip as a regex instead. Chips seeded from the modal's `.*` entries carry the same
+ * `regex` flag and match via a compiled RegExp. Both kinds show as chips, count, navigate, and highlight.
  *
  * Engine mirrors find-bar.ts: it walks the rendered text of one scroll container into a cached flat
  * string + segment index, computes cheap numeric match offsets (union across all keywords, capped),
@@ -21,7 +22,7 @@ import {
   paintMatchHighlights,
   setCurrentMatchHighlight
 } from './find-highlight.js';
-import { compileGlobalSearchRegex } from '@shared/platform/text-match.js';
+import { compileGlobalSearchRegex, looksLikeRegex } from '@shared/platform/text-match.js';
 
 /**
  * One search chip. `regex` terms (seeded from the modal's `.*` entries) match via a compiled RegExp
@@ -86,6 +87,7 @@ export function buildMultiFindBarElement(): HTMLElement {
     `<div class="mkw-bar-fields" data-mkw-fields>` +
     `<input type="text" class="mkw-bar-input" data-mkw-input placeholder="Search…" spellcheck="false" aria-label="Search" />` +
     `</div>` +
+    `<button type="button" class="mkw-bar-opt" data-mkw-regex title="Use Regular Expression" aria-pressed="false" aria-label="Use regular expression">.*</button>` +
     `<span class="mkw-bar-hint" data-mkw-hint>Press <kbd>Enter</kbd> to search multiple words</span>` +
     `<span class="mkw-bar-count" data-mkw-count aria-live="polite"></span>` +
     `<button type="button" class="mkw-bar-btn" data-mkw-prev title="Previous Match (Shift+Enter)" aria-label="Previous Match"><span class="icon icon-xs"><svg><use href="#icon-chevron-up"/></svg></span></button>` +
@@ -122,6 +124,9 @@ export function createMultiFindBar(opts: MultiFindOptions): MultiFindHandle | nu
   const clearEl = clearCandidate;
   // The wrapping area that holds the chips + input (grows; the count/nav buttons stay pinned right).
   const fieldsEl = (barEl.querySelector('[data-mkw-fields]') as HTMLElement | null) ?? boxEl;
+  // The inline `.*` toggle: when on, a committed chip (and the live draft preview) is a regex. Optional
+  // so an older markup without it still works — the bar just stays substring-only.
+  const regexBtn = barEl.querySelector('[data-mkw-regex]') as HTMLElement | null;
 
   ensureFindHighlightStyles(highlightId);
 
@@ -129,6 +134,9 @@ export function createMultiFindBar(opts: MultiFindOptions): MultiFindHandle | nu
   let keywords: MkwKeyword[] = [];
   let matchOffsets: MatchOffset[] = [];
   let currentIndex = -1;
+  // Whether the NEXT chip the user commits (and the live draft preview) is a regex. Sticky, like an
+  // editor's regex toggle; seeded modal chips carry their own flag independent of this.
+  let regexMode = false;
   let debounce: ReturnType<typeof setTimeout> | undefined;
 
   const emitChange = (): void => {
@@ -141,6 +149,19 @@ export function createMultiFindBar(opts: MultiFindOptions): MultiFindHandle | nu
   // draft in the input — that's the moment it teaches that each Enter adds another keyword.
   const updateHint = (): void => {
     barEl.classList.toggle('mkw-has-draft', inputEl.value.trim().length > 0);
+  };
+
+  // Nudge (don't force) regex mode when the draft has strong regex signals and the toggle is still
+  // off: pulse the `.*` button so one click switches the next chip to a regex. Mirrors the Find modal.
+  const syncRegexUi = (): void => {
+    if (!regexBtn) return;
+    regexBtn.classList.toggle('is-on', regexMode);
+    regexBtn.setAttribute('aria-pressed', String(regexMode));
+    const suggest = !regexMode && looksLikeRegex(inputEl.value);
+    regexBtn.classList.toggle('is-suggested', suggest);
+    regexBtn.title = suggest
+      ? 'This looks like a regular expression — click to search by regex'
+      : 'Use Regular Expression';
   };
 
   let full = '';
@@ -364,7 +385,7 @@ export function createMultiFindBar(opts: MultiFindOptions): MultiFindHandle | nu
         const badge = document.createElement('span');
         badge.className = 'mkw-chip-rx';
         badge.textContent = '.*';
-        badge.title = 'Regular expression (edit in the Find modal)';
+        badge.title = 'Regular expression';
         chip.append(badge);
       }
       const label = document.createElement('span');
@@ -390,9 +411,10 @@ export function createMultiFindBar(opts: MultiFindOptions): MultiFindHandle | nu
       return;
     }
     const color = ADD_PALETTE[keywords.length % ADD_PALETTE.length]!;
-    keywords.push({ text: t, color });
+    keywords.push(regexMode ? { text: t, color, regex: true } : { text: t, color });
     inputEl.value = '';
     updateHint();
+    syncRegexUi();
     renderChips();
     runSearch(true);
     emitChange();
@@ -412,6 +434,7 @@ export function createMultiFindBar(opts: MultiFindOptions): MultiFindHandle | nu
     keywords = [];
     inputEl.value = '';
     updateHint();
+    syncRegexUi();
     clearTimeout(debounce);
     matchOffsets = [];
     currentIndex = -1;
@@ -423,11 +446,14 @@ export function createMultiFindBar(opts: MultiFindOptions): MultiFindHandle | nu
 
   const onInput = (): void => {
     updateHint();
+    syncRegexUi();
     // Live-preview the in-progress keyword alongside the committed chips (debounced).
     clearTimeout(debounce);
     debounce = setTimeout(() => {
       const draft = inputEl.value.trim();
-      const withDraft = draft ? [...keywords, { text: draft, color: '#94a3b8' }] : keywords;
+      const withDraft = draft
+        ? [...keywords, { text: draft, color: '#94a3b8', regex: regexMode }]
+        : keywords;
       const saved = keywords;
       keywords = withDraft;
       computeMatches();
@@ -453,6 +479,7 @@ export function createMultiFindBar(opts: MultiFindOptions): MultiFindHandle | nu
         e.stopPropagation();
         inputEl.value = '';
         updateHint();
+        syncRegexUi();
         runSearch(false);
       } else if (keywords.length > 0) {
         e.stopPropagation();
@@ -464,8 +491,17 @@ export function createMultiFindBar(opts: MultiFindOptions): MultiFindHandle | nu
     }
   };
 
+  // Toggling regex mode re-runs the live preview so the draft reflects the new interpretation at once.
+  const onRegexToggle = (): void => {
+    regexMode = !regexMode;
+    syncRegexUi();
+    inputEl.focus();
+    onInput();
+  };
+
   inputEl.addEventListener('input', onInput);
   inputEl.addEventListener('keydown', onKeydown);
+  regexBtn?.addEventListener('click', onRegexToggle);
   prevEl.addEventListener('click', prev);
   nextEl.addEventListener('click', next);
   clearEl.addEventListener('click', () => {
@@ -478,6 +514,7 @@ export function createMultiFindBar(opts: MultiFindOptions): MultiFindHandle | nu
   });
 
   barEl.hidden = true;
+  syncRegexUi(); // reflect the initial (off) regex-toggle state on the button
 
   return {
     setVisible(v: boolean) {
@@ -503,6 +540,7 @@ export function createMultiFindBar(opts: MultiFindOptions): MultiFindHandle | nu
         .map((k) => ({ text: k.text, color: k.color, regex: k.regex, caseSensitive: k.caseSensitive }));
       inputEl.value = '';
       updateHint();
+      syncRegexUi();
       clearTimeout(debounce);
       renderChips();
       if (visible) runSearch(jumpToFirst);
@@ -525,6 +563,7 @@ export function createMultiFindBar(opts: MultiFindOptions): MultiFindHandle | nu
       clearTimeout(debounce);
       inputEl.removeEventListener('input', onInput);
       inputEl.removeEventListener('keydown', onKeydown);
+      regexBtn?.removeEventListener('click', onRegexToggle);
       prevEl.removeEventListener('click', prev);
       nextEl.removeEventListener('click', next);
       clearFindHighlights(highlightId);

@@ -171,6 +171,11 @@ var init_channels = __esm({
        *  of matching line numbers Filter mode collapses the file down to. A newer
        *  Search invoke supersedes any in-flight scan for the same window. */
       LogViewerSearch: "log-viewer:search",
+      /** Renderer → main (invoke): scan the whole file for recognized BrightScript issues (the Console
+       *  Monitor findings) and answer `{ success, findings?, scannedLines?, error? }`, where `findings`
+       *  is the shared `ConsoleFindings` shape. Runs whole-file in main (like `LogViewerSearch`) so the
+       *  windowed renderer never has to hold the file resident. */
+      LogViewerFindings: "log-viewer:findings",
       /**
        * Standalone Network Session Viewer window. `NetSessionViewerLoad` (renderer → main, invoke)
        * parses the file the window was opened with (native `.rds-network-inspector.json` bundle, HAR

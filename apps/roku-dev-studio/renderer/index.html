@@ -5519,7 +5519,18 @@
     .telnet-line-count[hidden] {
       display: none;
     }
-    
+
+    /* Console Monitor button — a standard secondary icon button (same size as the copy/download/clear
+       toolbar buttons via `.card-header-actions .btn.btn-icon`); `.btn-secondary:disabled` dims it
+       until there are recognized issues. Small left margin to separate it from the line count. */
+    .telnet-dashboard-btn { margin-left: 8px; }
+
+    /* ---- Console analytics modal ---- */
+    /* Console Monitor modal styles moved to modules/console-log/console-analytics-modal.ts
+       (`ensureConsoleAnalyticsStyles`, injected on open) so the main window AND the standalone Log
+       Viewer window share one source. Only `.telnet-an-overlay` positioning is duplicated there,
+       matching the global `.modal-overlay` base above. */
+
     .telnet-status-dot {
       width: 8px;
       height: 8px;
@@ -5747,6 +5758,15 @@
       background: var(--accent-purple-dim);
       color: var(--accent-purple);
       border-color: var(--accent-purple);
+    }
+
+    /* Nudge (don't force) regex mode: when the query looks like a deliberate regex and the toggle is
+       still off, pulse the ".*" button so one click enables regex. Mirrors the Network Inspector
+       find surfaces (.ni-find-opt.is-suggested / .mkw-bar-opt.is-suggested). */
+    .telnet-option-btn.is-suggested:not(.active) {
+      color: var(--accent-purple);
+      border-color: var(--accent-purple);
+      animation: niRxPulse 1.4s ease-in-out infinite;
     }
     
     .telnet-find-count {
@@ -9094,6 +9114,9 @@
       border-bottom: 1px solid var(--border);
     }
     .ni-port-modal-icon { color: #fca5a5; flex: 0 0 auto; display: inline-flex; }
+    /* "Port freed" confirmation: swap the warning red for a success green. */
+    .ni-port-modal-icon.is-resolved { color: #6ee7b7; }
+    .ni-port-modal-msg-ok { color: var(--text-primary); margin-bottom: 0; }
     .ni-port-modal-header h3 { margin: 0; font-size: 14px; font-weight: 700; flex: 1 1 auto; color: var(--text-primary); }
     .ni-port-modal-close {
       border: none;
@@ -9683,6 +9706,11 @@
     .mkw-bar.mkw-has-draft .mkw-bar-count { display: none; }
     .mkw-bar-btn { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 22px; background: transparent; border: none; border-radius: 6px; color: var(--text-secondary); cursor: pointer; flex-shrink: 0; }
     .mkw-bar-btn:hover { background: var(--bg-secondary); color: var(--text-primary); }
+    /* Inline `.*` regex toggle — mirrors the Find modal's regex option, incl. the "looks like a regex" pulse. */
+    .mkw-bar-opt { display: inline-flex; align-items: center; justify-content: center; min-width: 24px; height: 22px; padding: 0 5px; font-family: var(--font-mono, ui-monospace, monospace); font-size: 11px; font-weight: 700; background: transparent; border: none; border-radius: 6px; color: var(--text-secondary); cursor: pointer; flex-shrink: 0; }
+    .mkw-bar-opt:hover { background: var(--bg-secondary); color: var(--text-primary); }
+    .mkw-bar-opt.is-on { color: #fff; background: var(--accent-purple); }
+    .mkw-bar-opt.is-suggested:not(.is-on) { color: var(--accent-purple); box-shadow: inset 0 0 0 1px var(--accent-purple); animation: niRxPulse 1.4s ease-in-out infinite; }
     /* One row: the box holds the chips + input (flowing) with the count + nav buttons pinned inline at the right. */
     .mkw-bar-box { display: flex; align-items: center; gap: 4px; width: 100%; min-height: 30px; padding: 3px 4px 3px 8px; background: var(--bg-deep); border: 1px solid var(--border-hover); border-radius: 8px; cursor: text; }
     .mkw-bar-box:focus-within { border-color: var(--accent-purple); }
@@ -13669,6 +13697,12 @@
     <symbol id="icon-grid" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/>
     </symbol>
+    <symbol id="icon-monitor" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="10.5" cy="10.5" r="8"/>
+      <path d="m21 21-4.4-4.4"/>
+      <path d="M4.6 10.5 Q10.5 5 16.4 10.5 Q10.5 16 4.6 10.5 Z"/>
+      <circle cx="10.5" cy="10.5" r="2.3" fill="currentColor" stroke="none"/>
+    </symbol>
     <symbol id="icon-settings" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>
     </symbol>
@@ -14978,25 +15012,11 @@
                   </div>
                 </div>
               </div>
+              <!-- The `.telnet-find-bar` is injected at mount time from the shared
+                   `buildConsoleFindBarElement` (see telnet-console-panel.ts) so the Console and the
+                   Log Viewer window share one markup source. The slot (flex spacer, keeps Port/Connect
+                   right-aligned) and the resize drag handle stay here as the surrounding chrome. -->
               <div class="telnet-find-slot">
-                <div class="telnet-find-bar" hidden>
-                  <select class="telnet-mode-select">
-                    <option value="find">Find</option>
-                    <option value="filter">Filter</option>
-                  </select>
-                  <div class="telnet-find-input-wrapper">
-                    <input type="text" class="telnet-find-input" placeholder="Find...">
-                    <div class="telnet-find-options">
-                      <button class="telnet-option-btn" data-option="case" title="Match Case (Alt+C)">Aa</button>
-                      <button class="telnet-option-btn" data-option="word" title="Match Whole Word (Alt+W)">ab</button>
-                      <button class="telnet-option-btn" data-option="regex" title="Use Regular Expression (Alt+R)">.*</button>
-                    </div>
-                  </div>
-                  <span class="telnet-find-count"></span>
-                  <button class="btn btn-icon telnet-find-prev" title="Previous (Shift+Enter)"><span class="icon icon-xs"><svg><use href="#icon-chevron-up"/></svg></span></button>
-                  <button class="btn btn-icon telnet-find-next" title="Next (Enter)"><span class="icon icon-xs"><svg><use href="#icon-chevron-down"/></svg></span></button>
-                  <button class="btn btn-icon telnet-find-clear" title="Clear"><span class="icon icon-xs"><svg><use href="#icon-x"/></svg></span></button>
-                </div>
                 <div class="telnet-find-resize" role="separator" aria-orientation="vertical" title="Drag to widen search (double-click to reset)"></div>
               </div>
               <div class="card-header-actions">
@@ -15005,6 +15025,11 @@
                      panel's `addLogLinesBatch` / `ensureTelnetScrollbackRoom`
                      paths so trim is reflected too. -->
                 <span class="telnet-line-count" aria-live="polite" hidden></span>
+                <!-- Console analytics dashboard. Enabled only once there are log lines to analyze
+                     (toggled by the panel's refreshLineCount). Opens the shared console-analytics-modal. -->
+                <button type="button" class="btn btn-secondary btn-icon telnet-dashboard-btn" data-telnet-dashboard title="Console Monitor" aria-label="Console Monitor" disabled>
+                  <span class="icon icon-md"><svg><use href="#icon-monitor"/></svg></span>
+                </button>
                 <span class="telnet-port-badge">Port 8085</span>
                 <span class="telnet-status disconnected">
                   <span class="telnet-status-dot"></span>
