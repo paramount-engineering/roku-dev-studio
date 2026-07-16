@@ -64,15 +64,22 @@ export { isBpfLaunchDaemonInstalled, installBpfAccessMacOS } from './bpf-access-
 // Session Viewer (over in-memory events) so search semantics stay identical.
 export {
   createContentMatcher,
+  createContentMatchers,
   matchEventContent,
+  matchEventContentMulti,
   findNeedsDetail,
+  findNeedsDetailMulti,
   ALL_FIND_SCOPES
 } from './content-search';
 export type {
   NetworkFindScope,
   NetworkFindScopeCounts,
+  NetworkFindTermCounts,
   NetworkFindMatch,
   NetworkFindOptions,
+  NetworkFindTerm,
+  NetworkFindRequest,
+  CompiledFindTerm,
   ContentMatcher
 } from './content-search';
 export { installCaptureAccessLinux } from './capture-access-linux';
@@ -83,11 +90,11 @@ import { RokuMitmProxy } from './mitm-proxy';
 import { mitmTransactionToEvent } from './mitm-events';
 import { NetworkDetailStore } from './detail-store';
 import {
-  createContentMatcher,
-  matchEventContent,
-  findNeedsDetail,
+  createContentMatchers,
+  matchEventContentMulti,
+  findNeedsDetailMulti,
   type NetworkFindMatch,
-  type NetworkFindOptions
+  type NetworkFindRequest
 } from './content-search';
 import { extractFrameIps } from './packet-parser';
 import { exportCaCertToFile, exportCaPemToFile } from './channel-ca-inject';
@@ -340,6 +347,12 @@ export class NetworkInspectorService {
   // On-disk store for full headers/bodies; memory keeps only lightweight summaries.
   private detailStore: NetworkDetailStore | null = null;
   private userDataPath: string | undefined;
+  // Incremental Find cache: memoized per-event match result for the CURRENT term signature. A captured
+  // event is immutable once its detail is available, so re-searching every event on each live refresh
+  // is wasted work — with the cache, a same-signature re-search only computes newly-arrived events
+  // (O(Δ) instead of O(N) disk reads). Invalidated when the term set changes or events are removed.
+  private findCache = new Map<string, NetworkFindMatch | null>();
+  private findCacheSig = '';
   /** Device IPs for which the UI has paused session recording (events are dropped). */
   private pausedRecordingDeviceIps = new Set<string>();
   // Per-device block/throttle rules (keyed by device IP), enforced by the MITM proxy on proxied
@@ -718,23 +731,60 @@ export class NetworkInspectorService {
    */
   async searchEvents(
     deviceIp: string,
-    options: NetworkFindOptions,
+    request: NetworkFindRequest,
     maxResults = 2000
   ): Promise<NetworkFindMatch[]> {
-    const matcher = createContentMatcher(options);
-    if (!matcher) return [];
+    // Compile every colored term once; each keeps its own scope/case/regex. Empty/invalid terms drop.
+    const terms = createContentMatchers(request?.terms ?? []);
+    if (terms.length === 0) {
+      this.findCache.clear();
+      this.findCacheSig = '';
+      return [];
+    }
+    // The memoized results are valid for exactly ONE term signature (query/scopes/case/regex/id — id
+    // matters because the per-term breakdown is keyed by it). A change invalidates the whole cache.
+    const sig = JSON.stringify(request?.terms ?? []);
+    if (sig !== this.findCacheSig) {
+      this.findCache.clear();
+      this.findCacheSig = sig;
+    }
     const summaries = this.eventBuffer.filter((e) => this.eventMatchesDeviceQuery(e, deviceIp));
-    const needsDetail = findNeedsDetail(matcher.scopes) && !!this.detailStore;
+    // A single disk read per event feeds ALL terms — needsDetail is the union across terms.
+    const needsDetail = findNeedsDetailMulti(terms) && !!this.detailStore;
     const results: NetworkFindMatch[] = [];
     for (const summary of summaries) {
       if (results.length >= maxResults) break;
-      // Pull full detail only when a header/body scope is active and the event has it on disk;
+      // Reuse the memoized result for an already-searched, immutable event (undefined = not yet cached;
+      // null = searched, no match).
+      const cached = this.findCache.get(summary.id);
+      if (cached !== undefined) {
+        if (cached) results.push(cached);
+        continue;
+      }
+      // Pull full detail only when some term needs headers/bodies and the event has it on disk;
       // otherwise the summary (which carries the URL) is enough.
       let event: ParsedNetworkEvent | null = summary;
+      // Whether we searched the event's FINAL content — the only state safe to memoize. For a URL-only
+      // search the summary is authoritative; for a detail-scoped search we must have actually fetched
+      // the detail. `detailAvailable` can flip true a beat before the body is retrievable (a live-
+      // capture race), so a null get() means "not final yet" — search the summary but DON'T cache the
+      // miss, or a late-arriving body would be lost behind a poisoned null.
+      let final = !needsDetail;
+      // Capture the event's mutation stamp BEFORE the awaited disk read. If a concurrent upsertEvent
+      // rewrites this event while we await (e.g. a MITM response body arriving mid-search), its stamp
+      // changes — so the bytes we read may be stale and we must NOT memoize the result (recompute next
+      // search). eventSeq is bumped on every upsert; `undefined` for the no-detail path (no await, no race).
+      const seqBefore = this.eventSeq.get(summary.id);
       if (needsDetail && summary.detailAvailable) {
-        event = (await this.detailStore!.get(summary.id)) ?? summary;
+        const detail = await this.detailStore!.get(summary.id);
+        if (detail) {
+          event = detail;
+          final = true;
+        }
       }
-      const match = matchEventContent(event, matcher);
+      const match = matchEventContentMulti(event, terms);
+      if (final && seqBefore !== undefined && this.eventSeq.get(summary.id) !== seqBefore) final = false;
+      if (final) this.findCache.set(summary.id, match);
       if (match) results.push(match);
     }
     return results;
@@ -760,6 +810,8 @@ export class NetworkInspectorService {
       this.eventBuffer = this.eventBuffer.filter((e) => !matches(e));
       this.pendingEvents = this.pendingEvents.filter((e) => !matches(e));
     }
+    // Removed events' ids may be reused conceptually; drop the whole Find cache (clearing is rare).
+    this.findCache.clear();
     this.broadcastStatus();
     return { cleared: before - this.eventBuffer.length };
   }
@@ -918,6 +970,8 @@ export class NetworkInspectorService {
     this.eventBuffer = [];
     this.eventSeq.clear();
     this.rawPacketsByDevice.clear();
+    this.findCache.clear();
+    this.findCacheSig = '';
     if (this.detailStore) {
       this.detailStore.dispose();
       this.detailStore = null;
@@ -1369,6 +1423,10 @@ export class NetworkInspectorService {
 
   private upsertEvent(full: ParsedNetworkEvent): void {
     if (!this.shouldRecordEvent(full)) return;
+    // This event's content is (re)written now — drop any memoized Find result so the next search
+    // recomputes against the fresh detail. Critical for MITM, where the body arrives in a LATER put()
+    // than the initial summary; without this, a match computed on the partial event would stick.
+    this.findCache.delete(full.id);
     // Persist the heavy headers/body to disk; keep only a lightweight summary in memory.
     const store = this.ensureDetailStore();
     const stored = store ? store.put(full) : false;
@@ -1396,6 +1454,7 @@ export class NetworkInspectorService {
     for (const e of removed) {
       this.detailStore?.remove(e.id);
       this.eventSeq.delete(e.id);
+      this.findCache.delete(e.id);
     }
   }
 
