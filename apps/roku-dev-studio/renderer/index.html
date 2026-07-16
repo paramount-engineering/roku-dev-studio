@@ -8134,50 +8134,123 @@
     /* ── Network Inspector: Find modal ("Find in Traffic") ───────────────────────────── */
     /* NON-blocking + docked top-right: no dim backdrop and click-through so the session list (left)
        stays fully visible and interactive while Prev/Next jumps highlight + scroll rows behind. */
-    .ni-find-overlay { align-items: flex-start; justify-content: flex-end; background: transparent; pointer-events: none; }
+    /* Blocking modal: inherits the base .modal-overlay dim backdrop + pointer-events, so while Find is
+       open the app behind it is NOT interactive and a click on the backdrop closes it (handled in
+       network-find-modal.ts). (Previously this was a pass-through overlay — pointer-events:none — which
+       let clicks fall through to the request list.) */
+    .ni-find-overlay { }
     .ni-find-modal { pointer-events: auto; margin: 12px 14px 0 0; background: var(--bg-secondary); border: 1px solid var(--border-hover); border-radius: 12px; width: min(540px, 92vw); display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 22px 64px rgba(0, 0, 0, 0.62); }
     .ni-find-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid var(--border); background: linear-gradient(180deg, rgba(139, 92, 246, 0.05), transparent); }
     .ni-find-title { margin: 0; font-size: 15px; font-weight: 600; color: var(--text-primary); }
     .ni-find-close { background: transparent; border: none; color: var(--text-secondary); font-size: 20px; cursor: pointer; line-height: 1; }
     .ni-find-close:hover { color: var(--text-primary); }
     .ni-find-body { padding: 14px 16px; display: flex; flex-direction: column; gap: 12px; }
-    .ni-find-field { display: flex; align-items: center; gap: 6px; background: var(--bg-deep); border: 1px solid var(--border-hover); border-radius: 8px; padding: 4px 6px 4px 10px; }
-    .ni-find-field:focus-within { border-color: var(--accent-purple); }
-    .ni-find-field-icon { color: var(--text-muted); flex: 0 0 auto; }
-    .ni-find-input { flex: 1 1 auto; min-width: 0; background: transparent; border: none; outline: none; color: var(--text-primary); font: inherit; font-size: 13px; padding: 5px 2px; }
-    .ni-find-count { flex: 0 0 auto; font-size: 11.5px; color: var(--text-muted); white-space: nowrap; padding: 0 4px; font-variant-numeric: tabular-nums; }
-    .ni-find-count.is-empty { color: var(--accent-amber); }
-    .ni-find-nav { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 24px; background: transparent; border: none; border-radius: 6px; color: var(--text-secondary); cursor: pointer; }
-    .ni-find-nav:hover { background: var(--bg-tertiary); color: var(--text-primary); }
-    .ni-find-row { display: flex; align-items: center; gap: 10px; }
-    .ni-find-row-label { flex: 0 0 74px; font-size: 11px; font-weight: 600; color: var(--text-secondary); }
-    .ni-find-chips { display: flex; flex-wrap: wrap; gap: 6px; }
-    .ni-find-chip { font-size: 11.5px; color: var(--text-secondary); background: var(--bg-deep); border: 1px solid var(--border-hover); border-radius: 999px; padding: 4px 11px; cursor: pointer; transition: background 0.12s, border-color 0.12s, color 0.12s; }
+    /* Each colored search entry is its OWN bordered card: a top row (color swatch, find-bar box,
+       delete/trash, hit count) and a row of scope on/off chips beneath. */
+    .ni-find-terms { display: flex; flex-direction: column; gap: 10px; }
+    .ni-find-term { display: flex; flex-direction: column; gap: 8px; border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; }
+    .ni-find-term-top { display: flex; align-items: center; gap: 8px; }
+    /* Small fixed-size color swatch (opens the color popover) — sized to the input, not the whole card. */
+    .ni-find-swatch-cell { position: relative; flex: 0 0 auto; display: flex; }
+    .ni-find-swatch { width: 26px; height: 26px; border-radius: 6px; border: 1px solid rgba(255, 255, 255, 0.28); cursor: pointer; padding: 0; }
+    .ni-find-swatch:hover { border-color: var(--text-primary); }
+    /* The find-bar box: input grows, inline controls (clear / match-case / regex) dock at the right. */
+    .ni-find-box { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 2px; background: var(--bg-deep); border: 1px solid var(--border-hover); border-radius: 8px; padding: 2px 4px 2px 10px; }
+    .ni-find-box:focus-within { border-color: var(--accent-purple); }
+    .ni-find-input { flex: 1 1 auto; min-width: 0; background: transparent; border: none; outline: none; color: var(--text-primary); font: inherit; font-size: 13px; padding: 6px 2px; }
+    .ni-find-inline-btn { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; height: 24px; min-width: 26px; padding: 0 5px; background: transparent; border: none; border-radius: 6px; color: var(--text-secondary); cursor: pointer; font-family: ui-monospace, monospace; font-size: 12px; font-weight: 600; }
+    .ni-find-inline-btn:hover { background: var(--bg-tertiary); color: var(--text-primary); }
+    .ni-find-clear-input { font-family: inherit; font-size: 16px; line-height: 1; color: var(--text-muted); }
+    .ni-find-opt.is-on { color: #fff; background: var(--accent-purple); }
+    /* Auto-detect nudge: pulse the .* button when the query looks like a regex but regex is still off. */
+    .ni-find-opt.is-suggested:not(.is-on) { color: var(--accent-purple); box-shadow: inset 0 0 0 1px var(--accent-purple); animation: niRxPulse 1.4s ease-in-out infinite; }
+    @keyframes niRxPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+    /* One-click "Use regex" hint row, shown under the box only while a regex-like query has regex off. */
+    .ni-find-rx-hint { display: flex; align-items: center; gap: 8px; margin-top: 7px; font-size: 11.5px; color: var(--text-secondary); }
+    .ni-find-rx-hint[hidden] { display: none; }
+    .ni-find-rx-icon { font-family: ui-monospace, monospace; font-weight: 700; color: var(--accent-purple); }
+    .ni-find-rx-enable { padding: 2px 9px; font-size: 11px; font-weight: 600; border-radius: 6px; border: 1px solid var(--accent-purple); background: transparent; color: var(--accent-purple); cursor: pointer; transition: background 0.12s; }
+    .ni-find-rx-enable:hover { background: color-mix(in srgb, var(--accent-purple) 22%, transparent); }
+    /* Delete-this-entry (trash) — outside the box but inside the card. Reads destructive on hover. */
+    .ni-find-term-delete { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; background: transparent; border: none; border-radius: 6px; color: var(--text-muted); cursor: pointer; transition: color 0.12s, background 0.12s; }
+    .ni-find-term-delete:hover { color: var(--accent-red); background: var(--accent-red-dim); }
+    .ni-find-term-delete svg { width: 15px; height: 15px; }
+    /* FIXED width so the box to its left never resizes as the hit count changes digits. */
+    .ni-find-term-hits { flex: 0 0 52px; width: 52px; text-align: right; font-size: 11.5px; color: var(--text-secondary); font-variant-numeric: tabular-nums; overflow: hidden; white-space: nowrap; }
+    .ni-find-term-hits.is-zero { color: var(--text-muted); opacity: 0.6; }
+    .ni-find-term-hits.is-error { color: var(--accent-amber); font-weight: 700; }
+    /* Scope on/off chips (URL / Request Body / Response Body / Headers), centered under the box. */
+    .ni-find-scope-row { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; }
+    .ni-find-chip { font-size: 11px; color: var(--text-secondary); background: var(--bg-deep); border: 1px solid var(--border-hover); border-radius: 999px; padding: 3px 10px; cursor: pointer; transition: background 0.12s, border-color 0.12s, color 0.12s; }
     .ni-find-chip:hover { border-color: rgba(139, 92, 246, 0.5); }
     .ni-find-chip.is-on { color: var(--text-primary); background: var(--accent-purple-dim); border-color: rgba(139, 92, 246, 0.5); }
-    .ni-find-opts { display: flex; gap: 6px; }
-    .ni-find-opt { font-family: ui-monospace, monospace; font-size: 12px; font-weight: 600; color: var(--text-secondary); background: var(--bg-deep); border: 1px solid var(--border-hover); border-radius: 6px; width: 30px; height: 26px; cursor: pointer; }
-    .ni-find-opt:hover { border-color: rgba(139, 92, 246, 0.5); }
-    .ni-find-opt.is-on { color: #fff; background: var(--accent-purple); border-color: var(--accent-purple); }
+    /* Runs full width, exactly the width of a search-entry card, directly below the last one. */
+    .ni-find-add { width: 100%; text-align: center; font-size: 12px; color: var(--accent-purple); background: transparent; border: 1px dashed var(--border-hover); border-radius: 8px; padding: 8px 12px; cursor: pointer; transition: background 0.12s, border-color 0.12s; }
+    .ni-find-add:hover:not(:disabled) { border-color: var(--accent-purple); background: var(--accent-purple-dim); }
+    .ni-find-add:disabled { opacity: 0.4; cursor: default; }
+    .ni-find-footer { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+    .ni-find-count { font-size: 11.5px; color: var(--text-muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+    .ni-find-count.is-empty { color: var(--accent-amber); }
+    .ni-find-nav-group { display: inline-flex; gap: 2px; }
+    .ni-find-nav { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 24px; background: transparent; border: none; border-radius: 6px; color: var(--text-secondary); cursor: pointer; }
+    .ni-find-nav:hover { background: var(--bg-tertiary); color: var(--text-primary); }
+    /* Color popover — portaled to <body> (position:fixed) so its expandable inline picker isn't
+       clipped by the modal's overflow. Presets are squares; the custom-picker toggle is a ringed
+       rainbow CIRCLE so it's obviously "pick anything" and not another preset. */
+    /* Above the modal overlay (z-index 1000) so the picker isn't hidden behind the blocking backdrop. */
+    .ni-find-pop { position: fixed; z-index: 1100; background: var(--bg-secondary); border: 1px solid var(--border-hover); border-radius: 8px; padding: 8px; box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5); }
+    .ni-find-color-pop { display: flex; flex-direction: column; gap: 8px; }
+    .ni-find-color-swatches { display: flex; align-items: center; gap: 8px; }
+    .ni-find-color-swatch { width: 22px; height: 22px; border-radius: 5px; border: 2px solid transparent; cursor: pointer; padding: 0; }
+    .ni-find-color-swatch.is-on { border-color: var(--text-primary); }
+    .ni-find-color-custom { width: 24px; height: 24px; border-radius: 50%; cursor: pointer; padding: 0; background: conic-gradient(from 0deg, #ef4444, #f59e0b, #eab308, #22c55e, #06b6d4, #3b82f6, #a855f7, #ec4899, #ef4444); border: 2px solid var(--bg-secondary); box-shadow: 0 0 0 1.5px var(--border-hover); }
+    .ni-find-color-custom:hover { box-shadow: 0 0 0 1.5px var(--text-primary); }
+    /* Inline HSV picker that expands within the popover (replaces the OS-native picker window). Only
+       shown after the rainbow circle is clicked — the class `display:flex` would otherwise beat the UA
+       `[hidden]` rule, so re-assert display:none while hidden. */
+    /* No fixed width — stretches to the popover width, which the presets row above sets, so opening
+       the picker doesn't widen the popover. */
+    .ni-find-picker { display: flex; flex-direction: column; gap: 8px; align-self: stretch; }
+    .ni-find-picker[hidden] { display: none; }
+    .ni-find-picker-sv { position: relative; width: 100%; height: 120px; border-radius: 6px; cursor: crosshair; touch-action: none; }
+    .ni-find-picker-thumb { position: absolute; width: 12px; height: 12px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.55); transform: translate(-50%, -50%); pointer-events: none; }
+    .ni-find-picker-hue { position: relative; width: 100%; height: 12px; border-radius: 6px; cursor: pointer; touch-action: none; background: linear-gradient(to right, #f00 0%, #ff0 17%, #0f0 33%, #0ff 50%, #00f 67%, #f0f 83%, #f00 100%); }
+    .ni-find-picker-hue-thumb { position: absolute; top: 50%; width: 12px; height: 12px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.55); transform: translate(-50%, -50%); pointer-events: none; }
+    .ni-find-picker-foot { display: flex; align-items: center; gap: 8px; }
+    .ni-find-picker-preview { flex: 0 0 auto; width: 22px; height: 22px; border-radius: 5px; border: 1px solid var(--border-hover); }
+    .ni-find-picker-hex { flex: 1 1 auto; min-width: 0; background: var(--bg-deep); border: 1px solid var(--border-hover); border-radius: 6px; color: var(--text-primary); font: inherit; font-family: ui-monospace, monospace; font-size: 12px; padding: 5px 8px; outline: none; }
+    .ni-find-picker-hex:focus { border-color: var(--accent-purple); }
     .ni-find-note { margin: 2px 0 0; padding-left: 16px; font-size: 11px; color: var(--text-muted); line-height: 1.5; }
     .ni-find-note li { margin: 2px 0; }
     .ni-find-note kbd { font-family: ui-monospace, monospace; font-size: 10px; background: var(--bg-deep); border: 1px solid var(--border); border-radius: 4px; padding: 1px 5px; }
-    /* Find matches get an amber LEFT BAR only — no row background. Background stays reserved for row
-       selection (what the user clicked / is viewing), so the two signals never compete. The bar
-       eases in (grows 0→3px + fades) so newly-matched requests announce themselves smoothly. */
-    .ni-find-match, .ni-find-current { box-shadow: inset 3px 0 0 var(--accent-amber); animation: niFindBarIn 0.24s ease; }
-    @keyframes niFindBarIn { from { box-shadow: inset 0 0 0 0 rgba(245, 158, 11, 0); } to { box-shadow: inset 3px 0 0 0 var(--accent-amber); } }
+    /* Find matches get a LEFT BAR only — no row background. Background stays reserved for row
+       selection (what the user clicked / is viewing), so the two signals never compete. The bar is a
+       ::before pseudo (independent of the row's background shorthand used by hover/selection) so it
+       can carry MULTIPLE colors: `--ni-find-bar` is set inline per row to a solid color (one matched
+       term) or a hard-stop vertical gradient (one equal segment per matched term). It eases in
+       (grows from the left + fades) so newly-matched requests announce themselves smoothly. */
+    .ni-find-match { position: relative; }
+    .ni-find-match::before {
+      content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 6px; pointer-events: none;
+      background: var(--ni-find-bar, var(--accent-amber));
+      transform-origin: left center; animation: niFindBarIn 0.24s ease;
+    }
+    @keyframes niFindBarIn { from { transform: scaleX(0); opacity: 0; } to { transform: scaleX(1); opacity: 1; } }
     /* While the Find modal is open, matches are marked but their bars DON'T animate (the user is
        typing, not watching the list). Removing `.ni-find-open` on close flips animation-name from
        none → niFindBarIn on all current match rows at once, so they ease in together as the list
        comes back into view. Newly-arriving matches while closed still animate individually. */
-    .ni-find-open .ni-find-match, .ni-find-open .ni-find-current { animation: none; }
-    /* Group-by-Host: when a group is COLLAPSED its matching leaves are hidden, so surface the match
-       on the host's expand chevron (amber). Expanding reverts it — the leaf bars show instead. */
-    .ni-struct-host-collapsed > .ni-struct-host-row.ni-find-group-match .ni-struct-chevron { color: var(--accent-amber); }
-    /* Active-search feedback on the Search button uses the SAME amber as the match bar; it eases in. */
+    .ni-find-open .ni-find-match::before { animation: none; }
+    /* Group-by-Host: when a group is COLLAPSED its matching leaves are hidden, so surface the match on
+       the host's expand chevron — in the SAME cyan as the active-search button (kept out of the term
+       palette, and away from RDS purple) so it reads as "results here", not as a term color. Expanding
+       reverts it — the leaf bars show instead. */
+    .ni-struct-host-collapsed > .ni-struct-host-row.ni-find-group-match .ni-struct-chevron { color: var(--accent-cyan); }
+    /* Active-search feedback on the Search button uses CYAN — a neutral UI/status hue kept out of the
+       term palette (amber/blue/green/rose/violet) so "there are results" never reads as a term color.
+       It eases in via the transition below. */
     .ni-find-btn { transition: color 0.25s ease, background-color 0.25s ease, border-color 0.25s ease; }
-    .ni-icon-btn.is-find-active { color: var(--accent-amber); border-color: rgba(245, 158, 11, 0.55); background: var(--accent-amber-dim); }
+    .ni-icon-btn.is-find-active { color: var(--accent-cyan); border-color: rgba(34, 211, 238, 0.55); background: rgba(34, 211, 238, 0.15); }
     /* Search is the primary button; ↑ / ↓ / clear are child buttons that expand out of it (width +
        fade + slide, lightly staggered) while a Find is active, so the user can walk + clear matches
        from the header with the modal closed. */
@@ -8189,7 +8262,7 @@
     .ni-find-btn-group .ni-find-sub-btn:hover { color: var(--text-primary); background: var(--bg-tertiary); }
     .ni-find-btn-group .ni-find-clear-btn { color: var(--text-muted); }
     @media (prefers-reduced-motion: reduce) {
-      .ni-find-match, .ni-find-current { animation: none; }
+      .ni-find-match::before { animation: none; }
       .ni-find-btn, .ni-find-btn-group .ni-find-sub-btn { transition: none; }
     }
     .ni-filter-help-header { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; border-bottom: 1px solid var(--border); }
@@ -8924,13 +8997,15 @@
       gap: 2px 10px;
       /* Left padding carries the host-nesting indent (moved off .ni-struct-children) so the row's
          left edge — where the Find match bar paints — is flush with the sidebar. */
-      padding: 6px 10px 6px 14px;
+      /* Slightly taller than the sequence rows so grouped requests don't feel clustered — and the
+         full-height Find match bar reads more legibly. */
+      padding: 10px 10px 10px 14px;
       cursor: pointer;
       border-radius: 4px;
       border-bottom: 1px solid rgba(255,255,255,0.04);
       align-items: center;
       content-visibility: auto;
-      contain-intrinsic-size: auto 46px;
+      contain-intrinsic-size: auto 54px;
     }
     .ni-struct-leaf:hover { background: rgba(255,255,255,0.04); }
     .ni-struct-leaf-selected { background: rgba(139,92,246,0.22); }
@@ -9594,6 +9669,32 @@
       color: var(--text-muted);
       font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
     }
+    /* ── Multi-keyword chip find bar (Network Inspector Request/Response bodies) ──────
+       A chip-input variant of the find bar: several colored keyword chips + an add input, seeded
+       from the Find modal's non-regex entries. Match highlights reuse the shared amber tint. */
+    .mkw-bar { display: flex; padding: 6px 8px; flex-shrink: 0; border-bottom: 1px solid var(--border); background: var(--bg-tertiary); }
+    .mkw-bar-count { font-size: 11px; color: var(--text-muted); font-variant-numeric: tabular-nums; padding: 0 3px; white-space: nowrap; flex-shrink: 0; }
+    .mkw-bar.mkw-bar-empty .mkw-bar-count { color: var(--accent-amber); }
+    /* Discoverability hint: only while there's an uncommitted draft in the input. */
+    .mkw-bar-hint { display: none; align-items: center; gap: 3px; font-size: 10px; color: var(--text-muted); white-space: nowrap; flex-shrink: 0; padding: 0 4px; }
+    .mkw-bar-hint kbd { font-size: 9px; padding: 0 3px; border: 1px solid var(--border-hover); border-radius: 3px; background: var(--bg-secondary); }
+    .mkw-bar.mkw-has-draft .mkw-bar-hint { display: inline-flex; }
+    /* While drafting, the running count is redundant with the hint — hide it to keep the row calm. */
+    .mkw-bar.mkw-has-draft .mkw-bar-count { display: none; }
+    .mkw-bar-btn { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 22px; background: transparent; border: none; border-radius: 6px; color: var(--text-secondary); cursor: pointer; flex-shrink: 0; }
+    .mkw-bar-btn:hover { background: var(--bg-secondary); color: var(--text-primary); }
+    /* One row: the box holds the chips + input (flowing) with the count + nav buttons pinned inline at the right. */
+    .mkw-bar-box { display: flex; align-items: center; gap: 4px; width: 100%; min-height: 30px; padding: 3px 4px 3px 8px; background: var(--bg-deep); border: 1px solid var(--border-hover); border-radius: 8px; cursor: text; }
+    .mkw-bar-box:focus-within { border-color: var(--accent-purple); }
+    .mkw-bar-fields { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; flex: 1 1 auto; min-width: 0; }
+    .mkw-chip { display: inline-flex; align-items: center; gap: 5px; max-width: 100%; padding: 2px 4px 2px 9px; font-size: 12px; color: var(--text-primary); border-radius: 999px; background: color-mix(in srgb, var(--mkw-chip-color) 22%, transparent); border: 1px solid color-mix(in srgb, var(--mkw-chip-color) 55%, transparent); }
+    .mkw-chip-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .mkw-chip-regex { padding-left: 5px; }
+    .mkw-chip-regex .mkw-chip-label { font-family: var(--font-mono, monospace); font-style: italic; }
+    .mkw-chip-rx { font-family: var(--font-mono, monospace); font-size: 9px; font-weight: 700; line-height: 1; padding: 1px 3px; border-radius: 3px; background: color-mix(in srgb, var(--mkw-chip-color) 35%, transparent); color: var(--text-primary); }
+    .mkw-chip-remove { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; padding: 0; font-size: 14px; line-height: 1; background: transparent; border: none; border-radius: 50%; color: var(--text-secondary); cursor: pointer; }
+    .mkw-chip-remove:hover { background: rgba(255,255,255,0.14); color: var(--text-primary); }
+    .mkw-bar-input { flex: 1 1 80px; min-width: 80px; background: transparent; border: none; outline: none; color: var(--text-primary); font: inherit; font-size: 12px; padding: 3px 2px; }
     /* ── Shared simple find bar (ECP Results, App Connector, Network Inspector) ──────
        Match highlights are painted via the CSS Custom Highlight API; their `::highlight()`
        rules are injected per-surface by modules/ui/find-bar.ts, so only structural styles
@@ -15303,7 +15404,7 @@
                   <span>Proxy Port Unavailable</span>
                 </button>
                 <div class="ni-filter-wrap">
-                  <input type="text" class="ni-filter-input" data-ni-filter placeholder="Filter sessions…" title="Filter sessions — click the info icon for supported syntax." />
+                  <input type="text" class="ni-filter-input" data-ni-filter placeholder="Filter Traffic…" title="Filter Traffic — click the info icon for supported syntax." />
                   <button type="button" class="ni-filter-clear" data-ni-filter-clear title="Clear filter" aria-label="Clear filter" hidden>
                     <span class="icon icon-xs"><svg><use href="#icon-x"/></svg></span>
                   </button>
