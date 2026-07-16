@@ -10,9 +10,8 @@
 import type { ParsedNetworkEvent } from '@shared/network-inspector/types';
 import { buildStructureGroups, type NetworkSession } from '../network-inspector/network-sessions.js';
 import { SessionStore } from '../network-inspector/network-session-store.js';
-import { makeCenteredSearchResizable } from '../../modules/ui/header-search-resize.js';
 import { attachSearchHistory } from '../../modules/ui/search-history.js';
-import { filterWidthKey, filterHistoryKey } from '../../modules/ui/search-storage-keys.js';
+import { filterHistoryKey } from '../../modules/ui/search-storage-keys.js';
 import {
   renderSidebarSequence,
   renderStructureTree,
@@ -41,6 +40,19 @@ import {
   getEmbeddedStructuredPayload,
   type EmbeddedPane
 } from '../network-inspector/network-embedded-structured.js';
+import { createNetworkFindModal, type FindModalHandle } from '../network-inspector/network-find-modal.js';
+import {
+  createContentMatchers,
+  matchEventContentMulti,
+  type NetworkFindMatch,
+  type NetworkFindRequest
+} from '@shared/network-inspector/content-search.js';
+import {
+  createMultiFindBar,
+  buildMultiFindBarElement,
+  type MultiFindHandle
+} from '../../modules/ui/multi-keyword-find-bar.js';
+import { createPaneFindStore, sameKeywordTexts } from '../../modules/ui/pane-find-store.js';
 
 type RokuApi = {
   loadNetworkSession: () => Promise<{
@@ -78,13 +90,38 @@ const state = {
 
 const $ = <T extends Element = HTMLElement>(sel: string): T | null => document.querySelector<T>(sel);
 
+// "Find in content" (multi-term) — mirrors the live tab, but searches the in-memory events directly
+// (bodies are inlined in the loaded file, so no IPC / disk store). Matches badge the list with a
+// colored left bar (one segment per matched term); there are no in-body find bars in this window yet.
+let findModal: FindModalHandle | null = null;
+let findMatches = new Map<string, NetworkFindMatch>();
+let findTermInfo = new Map<string, { color: string; query: string }>();
+let findCurrentId: string | null = null;
+// In-body multi-keyword find bars for the Request/Response panes, seeded from the Find modal's
+// non-regex entries (same behavior as the live Network Inspector).
+let requestSearch: MultiFindHandle | null = null;
+let responseSearch: MultiFindHandle | null = null;
+// Per-request divergence for the detail-pane find bars (shared with the live tab via pane-find-store).
+// One file per viewer window, so the store lives for the window's lifetime (no reset). Modal terms are
+// unioned in only for a Find match; a non-match shows purely that request's own stored terms.
+const paneFind = createPaneFindStore({
+  modalSeedFor: (id) => (findMatches.has(id) ? (findModal?.getSeedTerms() ?? []) : []),
+  getSelectedId: () => store.getSelectedId()
+});
+
 // Inject the shared detail-pane markup before the per-pane queries below read from it, so this
 // window and the live inspector render from one source (network-detail-view.ts).
 const detailPaneHost = $('[data-ni-detail]');
 if (detailPaneHost) detailPaneHost.innerHTML = DETAIL_PANE_HTML;
 
 const filterInput = $<HTMLInputElement>('[data-ni-filter]');
+const filterClearBtn = $<HTMLElement>('[data-ni-filter-clear]');
 const filterHelpBtn = $<HTMLElement>('[data-ni-filter-help]');
+
+/** Show the filter's clear (×) button only while the filter has text (mirrors the live tab). */
+function syncFilterClear(): void {
+  if (filterClearBtn) filterClearBtn.hidden = !filterInput?.value;
+}
 const sessionListEl = $('[data-ni-session-list]');
 const sessionPaneEl = $('[data-ni-session-pane]');
 const sessionCountEl = $('[data-ni-session-count]');
@@ -102,6 +139,11 @@ const reqFormatWrap = $('[data-ni-req-format-wrap]');
 const resFormatWrap = $('[data-ni-res-format-wrap]');
 const reqTruncatedBadge = $('[data-ni-req-truncated]');
 const resTruncatedBadge = $('[data-ni-res-truncated]');
+const findBtn = $<HTMLButtonElement>('[data-ni-find]');
+const findBtnGroup = findBtn?.closest('.ni-find-btn-group') as HTMLElement | null;
+const findPrevBtn = $('[data-ni-find-prev]');
+const findNextBtn = $('[data-ni-find-next]');
+const findClearBtn = $('[data-ni-find-clear]');
 
 function filteredSessions(): NetworkSession[] {
   return store.filteredSessions();
@@ -127,6 +169,79 @@ function renderList(): void {
     sessionCountEl.textContent = sessions.length === total ? `${total}` : `${sessions.length}/${total}`;
   }
   syncGroupToggleButton();
+  // Matching rows are rebuilt by the innerHTML above, so re-badge them from the current match set.
+  applyFindDecorations();
+}
+
+/** Build the CSS `background` for a row's left bar: one equal-height color segment per matched term. */
+function findBarGradient(match: NetworkFindMatch): string {
+  const colors: string[] = [];
+  for (const [termId, info] of findTermInfo) {
+    if (match.terms?.[termId]) colors.push(info.color);
+  }
+  if (colors.length === 0) return 'var(--accent-amber)';
+  if (colors.length === 1) return colors[0]!;
+  const step = 100 / colors.length;
+  const stops = colors
+    .map((c, i) => `${c} ${(i * step).toFixed(3)}% ${((i + 1) * step).toFixed(3)}%`)
+    .join(', ');
+  return `linear-gradient(to bottom, ${stops})`;
+}
+
+/** Badge matching rows with a colored (segmented) left bar; flag collapsed host groups that hold a
+ *  match (CSS tints their chevron cyan). Idempotent so the entrance animation only fires on
+ *  newly-matched/freshly-rendered rows. */
+function applyFindDecorations(): void {
+  if (!(sessionListEl instanceof HTMLElement)) return;
+  sessionListEl.querySelectorAll('[data-event-id]').forEach((row) => {
+    const el = row as HTMLElement;
+    const id = el.dataset.eventId;
+    const match = id ? findMatches.get(id) : undefined;
+    el.classList.toggle('ni-find-match', !!match);
+    el.classList.toggle('ni-find-current', !!match && id === findCurrentId);
+    if (match) el.style.setProperty('--ni-find-bar', findBarGradient(match));
+    else el.style.removeProperty('--ni-find-bar');
+  });
+  sessionListEl.querySelectorAll('.ni-struct-host').forEach((host) => {
+    const hasMatch = !!host.querySelector('.ni-struct-children .ni-find-match');
+    host
+      .querySelector(':scope > .ni-struct-host-row')
+      ?.classList.toggle('ni-find-group-match', hasMatch);
+  });
+}
+
+/** The ordered set Find's Prev/Next walks — visible (filtered-in) matches in on-screen order. */
+function visibleFindOrder(): string[] {
+  if (state.viewMode === 'structure' && sessionListEl instanceof HTMLElement) {
+    return Array.from(sessionListEl.querySelectorAll('.ni-struct-leaf[data-event-id]'))
+      .map((el) => (el as HTMLElement).dataset.eventId)
+      .filter((id): id is string => !!id && findMatches.has(id));
+  }
+  return filteredSessions()
+    .map((s) => s.eventId)
+    .filter((id) => findMatches.has(id));
+}
+
+/** Select + scroll to a matched event, revealing its host group first when collapsed. */
+function navigateToFind(id: string): void {
+  findCurrentId = id;
+  if (state.viewMode === 'structure' && sessionListEl instanceof HTMLElement) {
+    const row = sessionListEl.querySelector(`[data-event-id="${id}"]`);
+    const hostName = row
+      ?.closest('.ni-struct-host')
+      ?.querySelector('[data-struct-toggle]')
+      ?.getAttribute('data-struct-toggle');
+    if (hostName && state.collapsedHosts.has(hostName)) {
+      state.collapsedHosts.delete(hostName);
+      renderList();
+    }
+  }
+  selectEvent(id);
+  (sessionListEl instanceof HTMLElement
+    ? sessionListEl.querySelector(`[data-event-id="${id}"]`)
+    : null
+  )?.scrollIntoView({ block: 'nearest' });
+  applyFindDecorations();
 }
 
 /** Show the expand/collapse-all-groups control only in Group-by-Host view, and reflect the
@@ -173,6 +288,62 @@ function renderDetail(): void {
   reqTruncatedBadge?.toggleAttribute('hidden', !(state.requestTab === 'body' && ev.httpRequest?.bodyTruncated));
   resTruncatedBadge?.toggleAttribute('hidden', !(state.responseTab === 'body' && ev.httpResponse?.bodyTruncated));
   syncBodyWrap();
+  syncBodyFind();
+}
+
+/** Show/hide the body find bars per active tab and seed them with the view-time union (this request's
+ *  own terms + the modal's terms, regex + substring). A passive reseed with an unchanged chip set is
+ *  skipped so the nav cursor survives (this window has no live churn, but tab toggles route through here). */
+function syncBodyFind(): void {
+  requestSearch?.setVisible(state.requestTab === 'body');
+  responseSearch?.setVisible(state.responseTab === 'body');
+  const id = store.getSelectedId();
+  if (!id) return;
+  for (const which of ['request', 'response'] as const) {
+    const bar = which === 'request' ? requestSearch : responseSearch;
+    if (!bar) continue;
+    const eff = paneFind.computeEffective(id, which);
+    if (sameKeywordTexts(eff, bar.getKeywords())) bar.refresh();
+    else bar.setKeywords(eff, false);
+  }
+}
+
+/** Focus a pane's find bar on ⌘/Ctrl+F while it's visible; swallow so the list Find modal
+ *  (bound at document level) doesn't also open. */
+function bindBodyFindShortcut(target: HTMLElement, handle: MultiFindHandle): void {
+  target.addEventListener('keydown', (e) => {
+    if ((e.metaKey || e.ctrlKey) && (e.key === 'f' || e.key === 'F')) {
+      if (!handle.isVisible()) return;
+      e.preventDefault();
+      e.stopPropagation();
+      handle.focus();
+    }
+  });
+}
+
+function setupBodyFind(): void {
+  if (requestBodyEl instanceof HTMLElement) {
+    const bar = buildMultiFindBarElement();
+    requestBodyEl.insertAdjacentElement('beforebegin', bar);
+    requestSearch = createMultiFindBar({
+      bodyEl: requestBodyEl,
+      barEl: bar,
+      highlightId: 'ni-find-request',
+      onChange: (kws) => paneFind.applyPaneEdit('request', kws)
+    });
+    if (requestSearch) bindBodyFindShortcut(requestBodyEl, requestSearch);
+  }
+  if (responseBodyEl instanceof HTMLElement) {
+    const bar = buildMultiFindBarElement();
+    responseBodyEl.insertAdjacentElement('beforebegin', bar);
+    responseSearch = createMultiFindBar({
+      bodyEl: responseBodyEl,
+      barEl: bar,
+      highlightId: 'ni-find-response',
+      onChange: (kws) => paneFind.applyPaneEdit('response', kws)
+    });
+    if (responseSearch) bindBodyFindShortcut(responseBodyEl, responseSearch);
+  }
 }
 
 function selectEvent(id: string): void {
@@ -213,33 +384,68 @@ function closeCopyDropdown(): void {
 }
 
 function wireEvents(): void {
-  // Centered, drag-to-resize behavior for the session filter (shares the
-  // `.ni-header-center` CSS generated from index.html).
-  const nsvHeaderCenter = $('.ni-header-center');
-  if (nsvHeaderCenter instanceof HTMLElement) {
-    makeCenteredSearchResizable(nsvHeaderCenter, {
-      storageKey: filterWidthKey('nsv'),
-      leftGroupSelector: '.ni-header-start',
-      rightGroupSelector: '.ni-header-tools',
-      minWidthPx: 280
+  // In-flow, drag-to-resize session filter (see the `.nsv-root .ni-header-center` overrides). Dragging
+  // the right-edge handle sets the `--nsv-filter-w` CSS var; double-click resets to the CSS default.
+  // In-flow → it can NEVER wrap to a second row (the live tab's centered slot did). Window-lifetime
+  // width, so no cross-session persistence needed.
+  const headerCenter = $('.ni-header-center');
+  const filterResizeHandle = $('[data-nsv-filter-resize]');
+  if (headerCenter instanceof HTMLElement && filterResizeHandle instanceof HTMLElement) {
+    const MIN_W = 240;
+    const maxW = (): number => {
+      const header = headerCenter.closest('.ni-card-header');
+      // Stay clear of the side groups so the single row never overflows.
+      return header instanceof HTMLElement ? Math.max(MIN_W, header.clientWidth - 340) : 900;
+    };
+    let startX = 0;
+    let startW = 0;
+    const onMove = (e: PointerEvent): void => {
+      const w = Math.round(Math.min(maxW(), Math.max(MIN_W, startW + (e.clientX - startX))));
+      headerCenter.style.setProperty('--nsv-filter-w', `${w}px`);
+    };
+    const onUp = (): void => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      document.body.style.userSelect = '';
+      filterResizeHandle.classList.remove('is-dragging');
+    };
+    filterResizeHandle.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0) return;
+      e.preventDefault();
+      startX = e.clientX;
+      startW = headerCenter.offsetWidth;
+      document.body.style.userSelect = 'none';
+      filterResizeHandle.classList.add('is-dragging');
+      window.addEventListener('pointermove', onMove);
+      window.addEventListener('pointerup', onUp);
     });
+    filterResizeHandle.addEventListener('dblclick', () => headerCenter.style.removeProperty('--nsv-filter-w'));
   }
 
-  filterInput?.addEventListener('input', () => {
+  const applyFilter = (): void => {
+    if (!filterInput) return;
     store.setQuery(filterInput.value);
+    syncFilterClear();
     renderList();
-  });
+    findModal?.refresh();
+  };
+
+  filterInput?.addEventListener('input', applyFilter);
   // Up/Down arrow recall of previous filter terms (shared behavior).
   if (filterInput) {
     attachSearchHistory({
       input: filterInput,
       storageKey: filterHistoryKey('nsv'),
-      onChange: () => {
-        store.setQuery(filterInput.value);
-        renderList();
-      }
+      onChange: applyFilter
     });
   }
+
+  filterClearBtn?.addEventListener('click', () => {
+    if (!filterInput || !filterInput.value) return;
+    filterInput.value = '';
+    applyFilter();
+    filterInput.focus();
+  });
 
   filterHelpBtn?.addEventListener('click', () => {
     openFilterHelpModal((term) => {
@@ -247,8 +453,7 @@ function wireEvents(): void {
       // Append the picked example (comma-OR), then apply immediately.
       const current = filterInput.value.trim();
       filterInput.value = current ? `${current}, ${term}` : term;
-      store.setQuery(filterInput.value);
-      renderList();
+      applyFilter();
       filterInput.focus();
     });
   });
@@ -257,6 +462,7 @@ function wireEvents(): void {
     state.viewMode = groupByHostInput.checked ? 'structure' : 'sequence';
     sessionPaneEl?.setAttribute('data-view', state.viewMode);
     renderList();
+    findModal?.refresh();
   });
 
   layoutToggleBtn?.addEventListener('click', () => {
@@ -358,8 +564,84 @@ function updateCopyCaretVisibility(): void {
   (copyCaretEl as HTMLElement | null)?.toggleAttribute('hidden', !exportable);
 }
 
+function setupFind(): void {
+  findModal = createNetworkFindModal({
+    async search(request: NetworkFindRequest) {
+      // In-memory search: bodies are inlined in the loaded file, so run the matcher directly over
+      // every event (no IPC / disk store like the live tab).
+      const terms = createContentMatchers(request.terms ?? []);
+      if (terms.length === 0) return [];
+      const out: NetworkFindMatch[] = [];
+      for (const ev of store.all) {
+        const m = matchEventContentMulti(ev, terms);
+        if (m) out.push(m);
+      }
+      return out;
+    },
+    onResults(matches, termInfo) {
+      findMatches = new Map(matches.map((m) => [m.id, m]));
+      findTermInfo = termInfo;
+      const order = visibleFindOrder();
+      const hasResults = order.length > 0;
+      applyFindDecorations();
+      findBtn?.classList.toggle('is-find-active', hasResults);
+      findBtnGroup?.classList.toggle('has-results', hasResults);
+      return order;
+    },
+    getCurrentId: () => store.getSelectedId(),
+    onNavigate(id) {
+      // Select + reveal; the ensuing renderDetail → syncBodyFind seeds the pane bars for the new row.
+      navigateToFind(id);
+    },
+    onClear() {
+      findMatches = new Map();
+      findTermInfo = new Map();
+      findCurrentId = null;
+      // Modal terms gone; a request's OWN pane terms persist, so re-seed (rather than wipe) the current
+      // panes — they now show just this request's user terms.
+      syncBodyFind();
+      applyFindDecorations();
+      findBtn?.classList.remove('is-find-active');
+      findBtnGroup?.classList.remove('has-results');
+    },
+    onOpen() {
+      if (sessionListEl instanceof HTMLElement) sessionListEl.classList.add('ni-find-open');
+    },
+    onClose() {
+      // Strip + re-apply so the match bars ease in together now that `.ni-find-open` (which suppressed
+      // the entrance animation while typing) is gone and the list is back to the user's focus.
+      if (sessionListEl instanceof HTMLElement) {
+        sessionListEl.classList.remove('ni-find-open');
+        sessionListEl
+          .querySelectorAll('.ni-find-match, .ni-find-current')
+          .forEach((el) => el.classList.remove('ni-find-match', 'ni-find-current'));
+        sessionListEl
+          .querySelectorAll('.ni-find-group-match')
+          .forEach((el) => el.classList.remove('ni-find-group-match'));
+      }
+      applyFindDecorations();
+    }
+  });
+  findBtn?.addEventListener('click', () => findModal?.open());
+  findClearBtn?.addEventListener('click', () => findModal?.clear());
+  findPrevBtn?.addEventListener('click', () => findModal?.prev());
+  findNextBtn?.addEventListener('click', () => findModal?.next());
+  document.addEventListener('keydown', (e) => {
+    if ((e.metaKey || e.ctrlKey) && (e.key === 'f' || e.key === 'F')) {
+      e.preventDefault();
+      findModal?.open();
+    } else if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && e.shiftKey && findModal?.isActive()) {
+      e.preventDefault();
+      if (e.key === 'ArrowDown') findModal.next();
+      else findModal.prev();
+    }
+  });
+}
+
 async function main(): Promise<void> {
   wireEvents();
+  setupFind();
+  setupBodyFind();
   const res = await api.loadNetworkSession();
   if (!res?.success || !res.events) {
     if (sessionListEl instanceof HTMLElement) {
