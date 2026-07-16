@@ -1,5 +1,9 @@
 import { setConsoleViewerModalTitlePrefix } from '../../modules/console-log/console-modal-title.js';
 import { mountConsoleLogSurface } from '../../modules/console-log/mount-console-log-surface.js';
+import { buildConsoleFindBarElement } from '../../modules/console-log/console-find-bar-markup.js';
+import { openConsoleAnalyticsModal } from '../../modules/console-log/console-analytics-modal.js';
+import { revealAndFlashLine } from '../../modules/console-log/reveal-occurrence.js';
+import type { ConsoleFindings } from '@shared/console/brightscript-error-catalog.js';
 import { consoleDisplayText } from '../../modules/console-log/console-line-parser.js';
 import type { ConsoleFindOptions } from '../../modules/console-log/console-find-helpers.js';
 import { createLogFileWindowModel } from './log-file-window-model.js';
@@ -37,6 +41,14 @@ type LogViewerRokuApi = {
   readLogViewerLines: (
     lines: number[]
   ) => Promise<{ success: boolean; lines?: Array<{ line: number; text: string }>; error?: string }>;
+  scanLogViewerFindings: () => Promise<{
+    success: boolean;
+    findings?: ConsoleFindings;
+    scannedLines?: number;
+    truncated?: boolean;
+    superseded?: boolean;
+    error?: string;
+  }>;
   searchLogViewerFile: (
     query: string,
     options: ConsoleFindOptions
@@ -62,6 +74,7 @@ async function main() {
   const findHostEl = document.getElementById('logViewerFindHost');
   const actionsEl = document.getElementById('logViewerActions');
   const copyBtn = actionsEl?.querySelector<HTMLButtonElement>('.log-viewer-copy-btn') ?? null;
+  const monitorBtn = actionsEl?.querySelector<HTMLButtonElement>('.log-viewer-monitor-btn') ?? null;
 
   if (!(outputEl instanceof HTMLElement)) return;
 
@@ -90,6 +103,11 @@ async function main() {
   }
 
   setStatus('Indexing…');
+  // Inject the find bar from the shared builder (same markup source as the Console panel). No
+  // Alt+ shortcut hints here — this standalone window doesn't bind them.
+  if (findHostEl && !findHostEl.querySelector('.telnet-find-bar')) {
+    findHostEl.appendChild(buildConsoleFindBarElement());
+  }
   findHostEl?.removeAttribute('hidden');
   if (actionsEl) actionsEl.removeAttribute('hidden');
 
@@ -210,6 +228,46 @@ async function main() {
   setStatus(`${lineCount.toLocaleString()} lines`);
 
   copyBtn?.addEventListener('click', () => void copyExport('Copied to clipboard'));
+
+  // Console Monitor: scan the whole file in main, then open the shared analytics modal with the
+  // findings. Static file → one-shot snapshot, no live refresh. The scan supersedes itself in main,
+  // so a rapid re-click just repaints with the latest result.
+  let monitorFindings: ConsoleFindings | null = null;
+  let monitorScanned = 0;
+  monitorBtn?.addEventListener('click', () => {
+    if (monitorBtn.disabled) return;
+    monitorBtn.disabled = true;
+    flashStatus('Scanning for issues…');
+    void rokuApi
+      .scanLogViewerFindings()
+      .then((r) => {
+        if (!r.success || r.superseded || !r.findings) {
+          if (!r.superseded) flashStatus(r.error || 'Scan failed');
+          return;
+        }
+        monitorFindings = r.findings;
+        monitorScanned = r.scannedLines ?? lineCount;
+        openConsoleAnalyticsModal(
+          () => ({
+            findings: monitorFindings ?? { totalIssues: 0, issueTypeCount: 0, byCategory: [], findings: [] },
+            scannedLines: monitorScanned,
+            timeSpan: { first: null, last: null },
+            meta: { bufferedCount: monitorScanned, totalCount: monitorScanned }
+          }),
+          undefined,
+          // Findings carry 0-based file line numbers (from the whole-file scan). Map to a view row
+          // (identity in normal mode; the filter position when a filter is active) and reveal it.
+          (fileLine) => {
+            const viewIndex = model.fileLineToViewIndex(fileLine);
+            if (viewIndex === null) return;
+            revealAndFlashLine(surface.view, viewIndex);
+          }
+        );
+      })
+      .finally(() => {
+        monitorBtn.disabled = false;
+      });
+  });
 }
 
 void main();
