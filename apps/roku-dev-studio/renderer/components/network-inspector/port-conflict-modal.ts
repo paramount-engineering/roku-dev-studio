@@ -25,6 +25,21 @@ let currentOverlay: HTMLElement | null = null;
 let currentKey = '';
 let dismissedKey = '';
 let onKeyHandler: ((e: KeyboardEvent) => void) | null = null;
+let autoDismissTimer: ReturnType<typeof setTimeout> | null = null;
+/** What Escape / the backdrop / the × button do RIGHT NOW. In the conflict state this also remembers
+ *  the dismissal (so the same conflict doesn't immediately reopen); once the modal has morphed into
+ *  the "port freed" confirmation it's just a plain close. Swapped by {@link showResolvedState}. */
+let closeAction: () => void = () => closeInternal();
+
+/** How long the "port is free again" confirmation lingers before closing itself. */
+const AUTO_DISMISS_MS = 4500;
+
+function clearAutoDismiss(): void {
+  if (autoDismissTimer) {
+    clearTimeout(autoDismissTimer);
+    autoDismissTimer = null;
+  }
+}
 
 function conflictKey(c: PortConflictInfo): string {
   return `${c.port}|${c.pid ?? ''}|${c.processName ?? ''}`;
@@ -58,6 +73,7 @@ function bodyHtml(c: PortConflictInfo): string {
 }
 
 function closeInternal(): void {
+  clearAutoDismiss();
   if (currentOverlay) {
     currentOverlay.remove();
     currentOverlay = null;
@@ -69,9 +85,53 @@ function closeInternal(): void {
   currentKey = '';
 }
 
-/** Close the modal if it's open (e.g. the conflict cleared or the user left the Network tab). */
+/** Immediately close the modal if it's open, no confirmation — used when the user leaves the Network
+ *  tab or the panel tears down (a lingering auto-dismissing toast makes no sense once they've left). */
 export function hidePortConflictModal(): void {
   closeInternal();
+}
+
+/**
+ * Morph the OPEN conflict modal into a brief "the port is free again" confirmation that auto-dismisses
+ * after {@link AUTO_DISMISS_MS} (the user can close it sooner). No-op unless a CONFLICT is currently
+ * shown (`currentKey` set): if the modal was never opened, the user already closed it, or it's already
+ * showing the confirmation, there's nothing to confirm — so this won't reopen anything or keep
+ * re-arming the timer as the background status poll keeps reporting "no conflict".
+ */
+export function resolvePortConflictModal(): void {
+  if (!currentOverlay || !currentKey) return;
+  showResolvedState();
+}
+
+/** Swap the modal's icon/title/body to the success state, drop the footer, and arm the auto-dismiss. */
+function showResolvedState(): void {
+  const overlay = currentOverlay;
+  if (!overlay) return;
+  clearAutoDismiss();
+  // The conflict is gone: forget any remembered dismissal and stop treating this as an active conflict,
+  // so a later poll reporting "free" won't re-enter here, and a genuinely NEW conflict reopens cleanly.
+  dismissedKey = '';
+  currentKey = '';
+  // A manual close from here is just a close — it must NOT re-arm dismissal for the (now stale) key.
+  closeAction = () => closeInternal();
+
+  const icon = overlay.querySelector('.ni-port-modal-icon');
+  const title = overlay.querySelector('.ni-port-modal-header h3');
+  const body = overlay.querySelector('[data-ni-port-modal-body]');
+  const footer = overlay.querySelector('.ni-port-modal-footer');
+  overlay.querySelector('.ni-port-modal')?.classList.add('is-resolved');
+  if (icon) {
+    icon.classList.add('is-resolved');
+    icon.innerHTML = '<span class="icon icon-sm"><svg><use href="#icon-check"/></svg></span>';
+  }
+  if (title) title.textContent = 'Proxy Port Available';
+  if (body) {
+    body.innerHTML =
+      '<p class="ni-port-modal-msg ni-port-modal-msg-ok">The proxy port is free again — Network Inspector can capture traffic. This message closes automatically.</p>';
+  }
+  footer?.remove();
+
+  autoDismissTimer = setTimeout(() => closeInternal(), AUTO_DISMISS_MS);
 }
 
 /**
@@ -109,21 +169,23 @@ export function showPortConflictModal(conflict: PortConflictInfo, opts?: { force
   document.body.appendChild(overlay);
   currentOverlay = overlay;
 
-  const dismiss = (): void => {
+  // While a conflict is shown, closing also remembers the dismissal. `closeAction` is read late (on
+  // each event) so it picks up the swap to a plain close once the modal morphs to the "freed" state.
+  closeAction = (): void => {
     dismissedKey = key;
     closeInternal();
   };
   onKeyHandler = (e: KeyboardEvent): void => {
-    if (e.key === 'Escape') dismiss();
+    if (e.key === 'Escape') closeAction();
   };
   document.addEventListener('keydown', onKeyHandler);
-  attachBackdropClickToClose(overlay, dismiss);
-  overlay.querySelector('.ni-port-modal-close')?.addEventListener('click', dismiss);
+  attachBackdropClickToClose(overlay, () => closeAction());
+  overlay.querySelector('.ni-port-modal-close')?.addEventListener('click', () => closeAction());
 
   // Port changes happen in Settings → Network Inspector only; this button takes the user there.
   overlay.querySelector('[data-ni-port-modal-settings]')?.addEventListener('click', () => {
     window.roku?.openSettings?.('network-inspector');
-    dismiss();
+    closeAction();
   });
 
   // Manual "check now" — re-fetch live status (faster than the ~4s background poll). Updates the
@@ -140,9 +202,8 @@ export function showPortConflictModal(conflict: PortConflictInfo, opts?: { force
         const res = await api.networkInspectorGetStatus();
         const next = (res && res.status && res.status.mitmPortConflict) || null;
         if (!next) {
-          // Port is free now — clear the dismissal so a future conflict re-opens, then close.
-          dismissedKey = '';
-          closeInternal();
+          // Port is free now — confirm it (auto-dismisses), same feedback as the background poll.
+          showResolvedState();
           return;
         }
         currentKey = conflictKey(next as PortConflictInfo);

@@ -26,28 +26,12 @@ import type {
   NetworkFindRequest,
   NetworkFindScope
 } from '@shared/network-inspector/content-search';
-import { isLikelyRedos, MAX_REGEX_PATTERN_LENGTH } from '@shared/platform/text-match.js';
+import { isLikelyRedos, looksLikeRegex, MAX_REGEX_PATTERN_LENGTH } from '@shared/platform/text-match.js';
 
 /** The four user-facing scope chips, mapped to the engine's granular scopes. */
 type ChipKey = 'url' | 'request' | 'response' | 'headers';
 
 const CHIP_ORDER: ChipKey[] = ['url', 'request', 'response', 'headers'];
-
-/**
- * Heuristic: does this query look like a *deliberate* regular expression? Only STRONG signals that are
- * meaningless (or very rare) in a literal search count — a bare `.`, `?`, or `*` (common in URLs/paths)
- * does NOT trigger, so we never nudge on an ordinary text search. Used to suggest (not force) regex mode.
- */
-function looksLikeRegex(query: string): boolean {
-  const s = query.trim();
-  if (!s) return false;
-  if (/\\[a-zA-Z0-9.\/(){}[\]^$|+*?-]/.test(s)) return true; // an escape like \s \d \. \w \\
-  if (/\[[^\]]+\]/.test(s)) return true; // a character class [...]
-  if (/\([^)]*\|[^)]*\)/.test(s)) return true; // an alternation group (a|b)
-  if (/\{\d+(?:,\d*)?\}/.test(s)) return true; // a quantifier {n} {n,} {n,m}
-  if (/\.[*+]/.test(s)) return true; // .* or .+
-  return s.startsWith('^') || s.endsWith('$'); // an anchor
-}
 
 const CHIP_LABELS: Record<ChipKey, { label: string; short: string; title: string }> = {
   url: { label: 'URL', short: 'URL', title: 'Request URL, hostname and SNI' },

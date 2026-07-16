@@ -25,10 +25,9 @@ import { openConsoleUrlViewer } from '../../modules/console-log/console-url-moda
 import { openConsoleStructuredViewer } from '../../modules/console-log/console-structured-view-modal.js';
 import { getEmbeddedStructuredPayload } from './network-embedded-structured.js';
 import { makeCenteredSearchResizable } from '../../modules/ui/header-search-resize.js';
-import { attachSearchHistory } from '../../modules/ui/search-history.js';
 import { filterWidthKey, filterHistoryKey } from '../../modules/ui/search-storage-keys.js';
 import { DETAIL_PANE_HTML, wireDetailInteractions, syncBodyWrap as syncBodyWrapShared } from './network-detail-view.js';
-import { openFilterHelpModal } from './network-filter-help.js';
+import { wireNetworkFilterControls } from './network-filter-help.js';
 import { openTrafficRulesModal } from './traffic-rules-modal.js';
 import {
   buildCurlCommand,
@@ -40,7 +39,11 @@ import {
 } from './network-export.js';
 import { showToast } from '../../modules/utils/ui.js';
 import { openHotspotCaptureSetupModal } from './hotspot-setup-modal.js';
-import { showPortConflictModal, hidePortConflictModal } from './port-conflict-modal.js';
+import {
+  showPortConflictModal,
+  hidePortConflictModal,
+  resolvePortConflictModal
+} from './port-conflict-modal.js';
 import {
   networkInspectorHasCaptureSetupAction,
   type NiSetupPlatform
@@ -61,6 +64,11 @@ import {
 import { createNetworkFindModal, type FindModalHandle } from './network-find-modal.js';
 import { paneBodyText, flashCopied } from './network-copy.js';
 import type { NetworkFindMatch } from '@shared/network-inspector/content-search';
+import {
+  applyFindDecorations as applyFindDecorationsShared,
+  visibleFindOrder as visibleFindOrderShared,
+  type FindTermInfo
+} from './network-find-decorations.js';
 import { attachFoldToggle, MAX_STRUCTURED_BYTES } from '../../modules/ui/structured-body.js';
 import { attachSelectAll } from '../../modules/ui/select-all.js';
 
@@ -367,7 +375,7 @@ export function setupNetworkTab(
   let findMatches = new Map<string, NetworkFindMatch>();
   // Term id → {color, query}, in term order — drives the multi-color segmented row bar and the
   // per-row body-highlight seed. Rebuilt each search.
-  let findTermInfo = new Map<string, { color: string; query: string }>();
+  let findTermInfo: FindTermInfo = new Map();
   let findCurrentId: string | null = null;
   // The Find modal's non-regex terms as {text,color}, used to seed the detail-pane multi-keyword find
   // bars + the URL/header seed highlight for the selected request. Sourced live from the modal.
@@ -732,63 +740,27 @@ export function setupNetworkTab(
 
   /** Build the CSS `background` value for a row's left bar: one equal-height color segment per matched
    *  term (in term order). One color → a solid bar; N colors → hard-stop vertical thirds/quarters. */
-  function findBarGradient(match: NetworkFindMatch): string {
-    const colors: string[] = [];
-    for (const [termId, info] of findTermInfo) {
-      if (match.terms?.[termId]) colors.push(info.color);
-    }
-    if (colors.length === 0) return 'var(--accent-amber)';
-    if (colors.length === 1) return colors[0]!;
-    const step = 100 / colors.length;
-    const stops = colors
-      .map((c, i) => `${c} ${(i * step).toFixed(3)}% ${((i + 1) * step).toFixed(3)}%`)
-      .join(', ');
-    return `linear-gradient(to bottom, ${stops})`;
-  }
-
-  /** Badge matching rows with a colored left bar (one segment per matched term) and emphasize the
-   *  currently-focused match. Re-applied after every list repaint since matching rows get rebuilt. */
+  /** Badge matching rows + emphasize the focused match + flag collapsed host groups — delegates to the
+   *  shared decorator (network-find-decorations.ts), shared with the standalone Session Viewer. */
   function applyFindDecorations(): void {
     if (!(sessionListEl instanceof HTMLElement)) return;
-    // Idempotent toggle (not remove-all-then-re-add): a row that's already a match keeps its class
-    // untouched, so the CSS bar-appear animation only fires when a row NEWLY becomes a match (or is
-    // freshly rendered) — never re-triggering on every repaint/scroll. The gradient is a CSS var so
-    // recoloring/adding a term restyles the bar in place without replaying the entrance animation.
-    sessionListEl.querySelectorAll('[data-event-id]').forEach((row) => {
-      const el = row as HTMLElement;
-      const id = el.dataset.eventId;
-      const match = id ? findMatches.get(id) : undefined;
-      const isMatch = !!match;
-      el.classList.toggle('ni-find-match', isMatch);
-      el.classList.toggle('ni-find-current', isMatch && id === findCurrentId);
-      if (isMatch) el.style.setProperty('--ni-find-bar', findBarGradient(match!));
-      else el.style.removeProperty('--ni-find-bar');
-    });
-    // Group-by-Host: a collapsed group hides its leaves (and their bars), so flag host rows whose
-    // group contains a match. CSS tints the chevron cyan ONLY while collapsed; expanding reverts it
-    // and the individual request bars take over.
-    sessionListEl.querySelectorAll('.ni-struct-host').forEach((host) => {
-      const hasMatch = !!host.querySelector('.ni-struct-children .ni-find-match');
-      host
-        .querySelector(':scope > .ni-struct-host-row')
-        ?.classList.toggle('ni-find-group-match', hasMatch);
+    applyFindDecorationsShared({
+      listEl: sessionListEl,
+      matches: findMatches,
+      termInfo: findTermInfo,
+      currentId: findCurrentId
     });
   }
 
-  /** The ordered set Find's Prev/Next walks. In Group-by-Host view it follows the on-screen group
-   *  order (all matches in one host, then the next host) — including matches inside collapsed groups,
-   *  which navigation reveals — so jumping tracks what the user sees. In sequence view it's plain
-   *  capture order. */
+  /** The ordered set Find's Prev/Next walks — visible (filtered-in) matches in on-screen order
+   *  (Group-by-Host follows DOM leaf order; sequence view follows capture order). */
   function visibleFindOrder(): string[] {
-    if (state.viewMode === 'structure' && sessionListEl instanceof HTMLElement) {
-      // DOM order of the leaves == host-group order (collapsed groups still render their leaves).
-      return Array.from(sessionListEl.querySelectorAll('.ni-struct-leaf[data-event-id]'))
-        .map((el) => (el as HTMLElement).dataset.eventId)
-        .filter((id): id is string => !!id && findMatches.has(id));
-    }
-    return filteredSessions()
-      .map((s) => s.eventId)
-      .filter((id) => findMatches.has(id));
+    return visibleFindOrderShared({
+      viewMode: state.viewMode,
+      listEl: sessionListEl instanceof HTMLElement ? sessionListEl : null,
+      sequenceIds: filteredSessions().map((s) => s.eventId),
+      matches: findMatches
+    });
   }
 
   function pickDefaultSelection(sessions: ReturnType<typeof filteredSessions>): void {
@@ -1950,7 +1922,9 @@ export function setupNetworkTab(
       // device panels won't stack duplicate dialogs.
       if (networkTabForeground) showPortConflictModal(next);
     } else {
-      hidePortConflictModal();
+      // Conflict cleared. If the modal is up showing that conflict, morph it into a brief "port is
+      // free again" confirmation that auto-dismisses; otherwise (nothing open) this is a no-op.
+      resolvePortConflictModal();
     }
     // The empty-state hint references the conflict, so repaint it when the conflict appears/clears.
     if (nextKey !== prevKey && state.events.length === 0) {
@@ -2139,33 +2113,16 @@ export function setupNetworkTab(
     }, 160);
   }
 
-  filterInput?.addEventListener('input', applyFilterChange, listenerOpts);
-  // Up/Down arrow recall of previous filter terms (shared behavior).
-  const niFilterHistory = filterInput
-    ? attachSearchHistory({
-        input: filterInput,
-        storageKey: filterHistoryKey('ni', device.ip || 'unknown'),
-        onChange: () => applyFilterChange()
-      })
-    : null;
-
-  filterClearBtn?.addEventListener('click', () => {
-    if (!filterInput || !filterInput.value) return;
-    filterInput.value = '';
-    applyFilterChange();
-    filterInput.focus();
-  }, listenerOpts);
-
-  filterHelpBtn?.addEventListener('click', () => {
-    openFilterHelpModal((term) => {
-      if (!filterInput) return;
-      // Clicking an example chip appends the term (comma-OR) and applies it immediately.
-      const current = filterInput.value.trim();
-      filterInput.value = current ? `${current}, ${term}` : term;
-      applyFilterChange();
-      filterInput.focus();
-    });
-  }, listenerOpts);
+  // Input + Up/Down history + clear + help — via the shared wiring (network-filter-help.ts). Pass
+  // listenerOpts so all three listeners abort on dispose; the handle disposes the history binding.
+  const filterControls = wireNetworkFilterControls({
+    filterInput,
+    filterClearBtn,
+    filterHelpBtn,
+    historyStorageKey: filterHistoryKey('ni', device.ip || 'unknown'),
+    onApply: applyFilterChange,
+    listenerOptions: listenerOpts
+  });
 
   groupByHostInput?.addEventListener('change', () => {
     state.viewMode = groupByHostInput.checked ? 'structure' : 'sequence';
@@ -2658,7 +2615,7 @@ export function setupNetworkTab(
     destroy() {
       listenerAc.abort();
       niFilterResize?.dispose();
-      niFilterHistory?.dispose();
+      filterControls.dispose();
       requestSearch?.dispose();
       responseSearch?.dispose();
       findModal?.destroy();

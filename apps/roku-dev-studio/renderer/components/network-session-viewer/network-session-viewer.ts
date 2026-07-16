@@ -10,7 +10,6 @@
 import type { ParsedNetworkEvent } from '@shared/network-inspector/types';
 import { buildStructureGroups, type NetworkSession } from '../network-inspector/network-sessions.js';
 import { SessionStore } from '../network-inspector/network-session-store.js';
-import { attachSearchHistory } from '../../modules/ui/search-history.js';
 import { filterHistoryKey } from '../../modules/ui/search-storage-keys.js';
 import {
   renderSidebarSequence,
@@ -32,7 +31,7 @@ import {
   syncBodyWrap as syncBodyWrapShared
 } from '../network-inspector/network-detail-view.js';
 import { paneBodyText as paneBodyTextShared, flashCopied } from '../network-inspector/network-copy.js';
-import { openFilterHelpModal } from '../network-inspector/network-filter-help.js';
+import { wireNetworkFilterControls } from '../network-inspector/network-filter-help.js';
 import { attachFoldToggle } from '../../modules/ui/structured-body.js';
 import { openConsoleUrlViewer } from '../../modules/console-log/console-url-modal.js';
 import { openConsoleStructuredViewer } from '../../modules/console-log/console-structured-view-modal.js';
@@ -53,6 +52,11 @@ import {
   type MultiFindHandle
 } from '../../modules/ui/multi-keyword-find-bar.js';
 import { createPaneFindStore, sameKeywordTexts } from '../../modules/ui/pane-find-store.js';
+import {
+  applyFindDecorations as applyFindDecorationsShared,
+  visibleFindOrder as visibleFindOrderShared,
+  type FindTermInfo
+} from '../network-inspector/network-find-decorations.js';
 
 type RokuApi = {
   loadNetworkSession: () => Promise<{
@@ -95,7 +99,7 @@ const $ = <T extends Element = HTMLElement>(sel: string): T | null => document.q
 // colored left bar (one segment per matched term); there are no in-body find bars in this window yet.
 let findModal: FindModalHandle | null = null;
 let findMatches = new Map<string, NetworkFindMatch>();
-let findTermInfo = new Map<string, { color: string; query: string }>();
+let findTermInfo: FindTermInfo = new Map();
 let findCurrentId: string | null = null;
 // In-body multi-keyword find bars for the Request/Response panes, seeded from the Find modal's
 // non-regex entries (same behavior as the live Network Inspector).
@@ -173,53 +177,26 @@ function renderList(): void {
   applyFindDecorations();
 }
 
-/** Build the CSS `background` for a row's left bar: one equal-height color segment per matched term. */
-function findBarGradient(match: NetworkFindMatch): string {
-  const colors: string[] = [];
-  for (const [termId, info] of findTermInfo) {
-    if (match.terms?.[termId]) colors.push(info.color);
-  }
-  if (colors.length === 0) return 'var(--accent-amber)';
-  if (colors.length === 1) return colors[0]!;
-  const step = 100 / colors.length;
-  const stops = colors
-    .map((c, i) => `${c} ${(i * step).toFixed(3)}% ${((i + 1) * step).toFixed(3)}%`)
-    .join(', ');
-  return `linear-gradient(to bottom, ${stops})`;
-}
-
-/** Badge matching rows with a colored (segmented) left bar; flag collapsed host groups that hold a
- *  match (CSS tints their chevron cyan). Idempotent so the entrance animation only fires on
- *  newly-matched/freshly-rendered rows. */
+/** Badge matching rows + flag collapsed host groups that hold a match — delegates to the shared
+ *  decorator (network-find-decorations.ts), shared with the live Network Inspector tab. */
 function applyFindDecorations(): void {
   if (!(sessionListEl instanceof HTMLElement)) return;
-  sessionListEl.querySelectorAll('[data-event-id]').forEach((row) => {
-    const el = row as HTMLElement;
-    const id = el.dataset.eventId;
-    const match = id ? findMatches.get(id) : undefined;
-    el.classList.toggle('ni-find-match', !!match);
-    el.classList.toggle('ni-find-current', !!match && id === findCurrentId);
-    if (match) el.style.setProperty('--ni-find-bar', findBarGradient(match));
-    else el.style.removeProperty('--ni-find-bar');
-  });
-  sessionListEl.querySelectorAll('.ni-struct-host').forEach((host) => {
-    const hasMatch = !!host.querySelector('.ni-struct-children .ni-find-match');
-    host
-      .querySelector(':scope > .ni-struct-host-row')
-      ?.classList.toggle('ni-find-group-match', hasMatch);
+  applyFindDecorationsShared({
+    listEl: sessionListEl,
+    matches: findMatches,
+    termInfo: findTermInfo,
+    currentId: findCurrentId
   });
 }
 
 /** The ordered set Find's Prev/Next walks — visible (filtered-in) matches in on-screen order. */
 function visibleFindOrder(): string[] {
-  if (state.viewMode === 'structure' && sessionListEl instanceof HTMLElement) {
-    return Array.from(sessionListEl.querySelectorAll('.ni-struct-leaf[data-event-id]'))
-      .map((el) => (el as HTMLElement).dataset.eventId)
-      .filter((id): id is string => !!id && findMatches.has(id));
-  }
-  return filteredSessions()
-    .map((s) => s.eventId)
-    .filter((id) => findMatches.has(id));
+  return visibleFindOrderShared({
+    viewMode: state.viewMode,
+    listEl: sessionListEl instanceof HTMLElement ? sessionListEl : null,
+    sequenceIds: filteredSessions().map((s) => s.eventId),
+    matches: findMatches
+  });
 }
 
 /** Select + scroll to a matched event, revealing its host group first when collapsed. */
@@ -430,32 +407,14 @@ function wireEvents(): void {
     findModal?.refresh();
   };
 
-  filterInput?.addEventListener('input', applyFilter);
-  // Up/Down arrow recall of previous filter terms (shared behavior).
-  if (filterInput) {
-    attachSearchHistory({
-      input: filterInput,
-      storageKey: filterHistoryKey('nsv'),
-      onChange: applyFilter
-    });
-  }
-
-  filterClearBtn?.addEventListener('click', () => {
-    if (!filterInput || !filterInput.value) return;
-    filterInput.value = '';
-    applyFilter();
-    filterInput.focus();
-  });
-
-  filterHelpBtn?.addEventListener('click', () => {
-    openFilterHelpModal((term) => {
-      if (!filterInput) return;
-      // Append the picked example (comma-OR), then apply immediately.
-      const current = filterInput.value.trim();
-      filterInput.value = current ? `${current}, ${term}` : term;
-      applyFilter();
-      filterInput.focus();
-    });
+  // Input + Up/Down history + clear + help — via the shared wiring (network-filter-help.ts). Window
+  // lifetime, so the returned dispose handle is unused (no AbortController teardown like the live tab).
+  wireNetworkFilterControls({
+    filterInput,
+    filterClearBtn,
+    filterHelpBtn,
+    historyStorageKey: filterHistoryKey('nsv'),
+    onApply: applyFilter
   });
 
   groupByHostInput?.addEventListener('change', () => {
