@@ -37,6 +37,23 @@ export function safeRegexEscape(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+/**
+ * Heuristic: does this query look like a *deliberate* regular expression? Only STRONG signals that are
+ * meaningless (or very rare) in a literal search count — a bare `.`, `?`, or `*` (common in URLs/paths)
+ * does NOT trigger, so we never nudge on an ordinary text search. Used across the find surfaces to
+ * suggest (not force) regex mode when the user has typed a pattern with the regex toggle still off.
+ */
+export function looksLikeRegex(query: string): boolean {
+  const s = query.trim();
+  if (!s) return false;
+  if (/\\[a-zA-Z0-9./(){}[\]^$|+*?-]/.test(s)) return true; // an escape like \s \d \. \w \\
+  if (/\[[^\]]+\]/.test(s)) return true; // a character class [...]
+  if (/\([^)]*\|[^)]*\)/.test(s)) return true; // an alternation group (a|b)
+  if (/\{\d+(?:,\d*)?\}/.test(s)) return true; // a quantifier {n} {n,} {n,m}
+  if (/\.[*+]/.test(s)) return true; // .* or .+
+  return s.startsWith('^') || s.endsWith('$'); // an anchor
+}
+
 export type CompileRegexOptions = {
   /** Treat `query` as a JS regular expression (subject to the ReDoS guard). */
   regex?: boolean;

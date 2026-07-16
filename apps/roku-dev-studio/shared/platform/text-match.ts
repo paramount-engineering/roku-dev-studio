@@ -15,6 +15,7 @@ export {
   MAX_FIND_QUERY_LENGTH,
   isLikelyRedos,
   safeRegexEscape,
+  looksLikeRegex,
   compileGlobalSearchRegex,
   type CompileRegexOptions
 } from 'roku-dev-studio-platform/text-match';
