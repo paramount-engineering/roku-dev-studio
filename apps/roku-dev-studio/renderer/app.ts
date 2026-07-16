@@ -685,24 +685,26 @@ function registerRelayAutoConnect(): void {
       }
       if (!device) device = { ip, deviceName: r.name || ip, modelName: r.name || 'Roku' };
 
-      const alreadyConnected = state.connectedDevices.has(ip);
+      // connectDevice is idempotent — a brand-new device opens a tab; an
+      // already-connected one just re-activates its existing tab.
       connectDevice(device);
-      if (alreadyConnected) return; // console already handled by the existing tab
 
-      // Connect the console too, unless the relay's auto-console was off for this
-      // run (console step 'skipped'). Defer a tick so the panel finishes wiring.
-      if (r.console?.state !== 'skipped') {
-        const conn = state.connectedDevices.get(ip) as { tabId?: string } | undefined;
-        const panel = conn?.tabId ? (document.getElementById(conn.tabId) as { connectTelnet?: () => Promise<void> } | null) : null;
-        if (panel?.connectTelnet) {
-          setTimeout(() => {
-            try {
-              void panel.connectTelnet!();
-            } catch (e) {
-              rendererWarn('[SideloadRelay] auto console connect failed', e);
-            }
-          }, 0);
-        }
+      // Always bring the console up on a successful relay — no matter the prior
+      // state (device fresh or already-connected, console dropped, never up, or
+      // even auto-console off for this run). `connectTelnet` is idempotent
+      // (`if (isConnected) return`), so a healthy console is a no-op — no bounce;
+      // a dropped/never-connected one gets (re)connected. Defer a tick so a
+      // freshly-created panel finishes wiring.
+      const conn = state.connectedDevices.get(ip) as { tabId?: string } | undefined;
+      const panel = conn?.tabId ? (document.getElementById(conn.tabId) as { connectTelnet?: () => Promise<void> } | null) : null;
+      if (panel?.connectTelnet) {
+        setTimeout(() => {
+          try {
+            void panel.connectTelnet!();
+          } catch (e) {
+            rendererWarn('[SideloadRelay] auto console connect failed', e);
+          }
+        }, 0);
       }
     } catch (e) {
       rendererError('[SideloadRelay] auto-connect failed', e);
