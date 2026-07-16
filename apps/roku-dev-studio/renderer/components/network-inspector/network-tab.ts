@@ -46,11 +46,12 @@ import {
   type NiSetupPlatform
 } from '@shared/network-inspector/setup-guide.js';
 import {
-  createFindBar,
-  buildFindBarElement,
-  bindFindShortcut,
-  type FindBarHandle
-} from '../../modules/ui/find-bar.js';
+  createMultiFindBar,
+  buildMultiFindBarElement,
+  type MultiFindHandle,
+  type MkwKeyword
+} from '../../modules/ui/multi-keyword-find-bar.js';
+import { createPaneFindStore, sameKeywordTexts } from '../../modules/ui/pane-find-store.js';
 import {
   supportsCssHighlights,
   ensureFindHighlightStyles,
@@ -357,20 +358,38 @@ export function setupNetworkTab(
   const responseBodyEl = panel.querySelector('[data-ni-response-body]');
   // Per-pane find-in-body controllers (shared simple find bar). The bars are built + inserted in
   // the init block below; null when the body elements are missing (defensive).
-  let requestSearch: FindBarHandle | null = null;
-  let responseSearch: FindBarHandle | null = null;
+  let requestSearch: MultiFindHandle | null = null;
+  let responseSearch: MultiFindHandle | null = null;
   // "Find in content" (URL/headers/bodies) modal + its result state. Distinct from the toolbar
   // Filter (summary-only). Matches badge the session list ("keep all + badge & jump"); the focused
   // match seeds the detail-pane find bars so the hit highlights in the body too.
   let findModal: FindModalHandle | null = null;
   let findMatches = new Map<string, NetworkFindMatch>();
+  // Term id → {color, query}, in term order — drives the multi-color segmented row bar and the
+  // per-row body-highlight seed. Rebuilt each search.
+  let findTermInfo = new Map<string, { color: string; query: string }>();
   let findCurrentId: string | null = null;
-  // The active Find query (empty when no search). The detail pane highlights it — in the URL/headers
-  // views and the body find bar — for ANY selected request that is a Find match, so viewing any hit
-  // (jumped-to or clicked) shows where the term occurs. Set from the search callback.
-  let findQuery = '';
+  // The Find modal's non-regex terms as {text,color}, used to seed the detail-pane multi-keyword find
+  // bars + the URL/header seed highlight for the selected request. Sourced live from the modal.
+  const currentSeedKeywords = (): MkwKeyword[] => findModal?.getSeedKeywords() ?? [];
+  // Per-request divergence for the detail-pane find bars — the store + union + edit-diff live in the
+  // shared `pane-find-store.ts`; this host only supplies the modal terms (match-gated) + selected id.
+  const paneFind = createPaneFindStore({
+    modalSeedFor: (id) => (findMatches.has(id) ? (findModal?.getSeedTerms() ?? []) : []),
+    getSelectedId: () => state.selectedEventId
+  });
   // Guards the live re-search while the Find modal is open — only re-run when events/filter change.
   let lastFindRefreshSig = '';
+  // Debounce the live re-search: a capture burst bumps eventsVersion every frame, so coalesce into one
+  // search after the traffic settles (the incremental main-process cache makes each search cheap, but
+  // this keeps us from firing one IPC round-trip per frame during heavy capture).
+  let findRefreshTimer: ReturnType<typeof setTimeout> | undefined;
+  const scheduleLiveFindRefresh = (): void => {
+    clearTimeout(findRefreshTimer);
+    findRefreshTimer = setTimeout(() => {
+      if (findModal?.isActive()) findModal.refresh();
+    }, 180);
+  };
   const requestFormatWrapEl = panel.querySelector('[data-ni-req-format-wrap]');
   const responseFormatWrapEl = panel.querySelector('[data-ni-res-format-wrap]');
   const requestTruncatedBadgeEl = panel.querySelector('[data-ni-req-truncated]');
@@ -711,21 +730,42 @@ export function setupNetworkTab(
     }
   }
 
-  /** Tint matching rows (and emphasize the currently-focused match) so hits are easy to scan.
-   *  Re-applied after every list repaint since matching rows get rebuilt. */
+  /** Build the CSS `background` value for a row's left bar: one equal-height color segment per matched
+   *  term (in term order). One color → a solid bar; N colors → hard-stop vertical thirds/quarters. */
+  function findBarGradient(match: NetworkFindMatch): string {
+    const colors: string[] = [];
+    for (const [termId, info] of findTermInfo) {
+      if (match.terms?.[termId]) colors.push(info.color);
+    }
+    if (colors.length === 0) return 'var(--accent-amber)';
+    if (colors.length === 1) return colors[0]!;
+    const step = 100 / colors.length;
+    const stops = colors
+      .map((c, i) => `${c} ${(i * step).toFixed(3)}% ${((i + 1) * step).toFixed(3)}%`)
+      .join(', ');
+    return `linear-gradient(to bottom, ${stops})`;
+  }
+
+  /** Badge matching rows with a colored left bar (one segment per matched term) and emphasize the
+   *  currently-focused match. Re-applied after every list repaint since matching rows get rebuilt. */
   function applyFindDecorations(): void {
     if (!(sessionListEl instanceof HTMLElement)) return;
     // Idempotent toggle (not remove-all-then-re-add): a row that's already a match keeps its class
     // untouched, so the CSS bar-appear animation only fires when a row NEWLY becomes a match (or is
-    // freshly rendered) — never re-triggering on every repaint/scroll.
+    // freshly rendered) — never re-triggering on every repaint/scroll. The gradient is a CSS var so
+    // recoloring/adding a term restyles the bar in place without replaying the entrance animation.
     sessionListEl.querySelectorAll('[data-event-id]').forEach((row) => {
-      const id = (row as HTMLElement).dataset.eventId;
-      const isMatch = !!id && findMatches.has(id);
-      row.classList.toggle('ni-find-match', isMatch);
-      row.classList.toggle('ni-find-current', isMatch && id === findCurrentId);
+      const el = row as HTMLElement;
+      const id = el.dataset.eventId;
+      const match = id ? findMatches.get(id) : undefined;
+      const isMatch = !!match;
+      el.classList.toggle('ni-find-match', isMatch);
+      el.classList.toggle('ni-find-current', isMatch && id === findCurrentId);
+      if (isMatch) el.style.setProperty('--ni-find-bar', findBarGradient(match!));
+      else el.style.removeProperty('--ni-find-bar');
     });
     // Group-by-Host: a collapsed group hides its leaves (and their bars), so flag host rows whose
-    // group contains a match. CSS turns the chevron amber ONLY while collapsed; expanding reverts it
+    // group contains a match. CSS tints the chevron cyan ONLY while collapsed; expanding reverts it
     // and the individual request bars take over.
     sessionListEl.querySelectorAll('.ni-struct-host').forEach((host) => {
       const hasMatch = !!host.querySelector('.ni-struct-children .ni-find-match');
@@ -904,11 +944,11 @@ export function setupNetworkTab(
   const SEED_HL_RESPONSE = 'ni-detail-seed-response';
   const SEED_HL_CAP = 2000;
 
-  function paintSeedInPane(el: HTMLElement, id: string, query: string): void {
+  function paintSeedInPane(el: HTMLElement, id: string, keywords: string[]): void {
     ensureFindHighlightStyles(id);
     clearFindHighlights(id);
-    if (!query || !supportsCssHighlights) return;
-    const needle = query.toLowerCase();
+    const needles = keywords.map((k) => k.toLowerCase()).filter((n) => n.length > 0);
+    if (needles.length === 0 || !supportsCssHighlights) return;
     const ranges: Range[] = [];
     const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
     let node: Node | null;
@@ -916,48 +956,62 @@ export function setupNetworkTab(
       const text = node.nodeValue ?? '';
       if (!text) continue;
       const hay = text.toLowerCase();
-      let idx = hay.indexOf(needle);
-      while (idx !== -1 && ranges.length < SEED_HL_CAP) {
-        const range = document.createRange();
-        try {
-          range.setStart(node, idx);
-          range.setEnd(node, idx + needle.length);
-          ranges.push(range);
-        } catch {
-          /* ignore an un-rangeable node */
+      for (const needle of needles) {
+        let idx = hay.indexOf(needle);
+        while (idx !== -1 && ranges.length < SEED_HL_CAP) {
+          const range = document.createRange();
+          try {
+            range.setStart(node, idx);
+            range.setEnd(node, idx + needle.length);
+            ranges.push(range);
+          } catch {
+            /* ignore an un-rangeable node */
+          }
+          idx = hay.indexOf(needle, idx + needle.length);
         }
-        idx = hay.indexOf(needle, idx + needle.length);
       }
     }
     paintMatchHighlights(id, ranges);
   }
 
-  /** Paint (or clear) the Find-term highlight for one pane's non-body tabs. */
+  /** Paint (or clear) the seed-keyword highlight for one pane's non-body tabs. */
   function syncPaneSeedHighlight(which: 'request' | 'response'): void {
     const el = which === 'request' ? requestBodyEl : responseBodyEl;
     const tab = which === 'request' ? state.requestTab : state.responseTab;
     const id = which === 'request' ? SEED_HL_REQUEST : SEED_HL_RESPONSE;
-    if (!(el instanceof HTMLElement) || tab === 'body' || !selectedIsFindMatch()) {
+    const keywords = currentSeedKeywords().map((k) => k.text);
+    if (!(el instanceof HTMLElement) || tab === 'body' || !selectedIsFindMatch() || keywords.length === 0) {
       clearFindHighlights(id);
       return;
     }
-    paintSeedInPane(el, id, findQuery);
+    paintSeedInPane(el, id, keywords);
   }
 
-  /** True when the currently-selected request is a Find match (so its detail should show the term). */
+  /** True when the currently-selected request is a Find match (so its detail should show the terms). */
   function selectedIsFindMatch(): boolean {
-    return !!findQuery && !!state.selectedEventId && findMatches.has(state.selectedEventId);
+    return !!state.selectedEventId && findMatches.has(state.selectedEventId);
   }
 
-  /** Push the active Find query into the in-body Request/Response find bars for a matching selected
-   *  request. Called from afterBodyRender (covers async detail load + tab switches) AND directly on
-   *  Find navigation (covers re-committing on the already-selected request, which doesn't re-render).
-   *  The body find only searches the *rendered body*, so a request matched via URL/headers will show
-   *  "No results" here even though it's a valid Find match — that's expected. */
+  /** Seed the in-body Request/Response find bars for the selected request. The chip set is the
+   *  view-time union of that request's stored user terms + the modal's terms (regex + substring; see
+   *  {@link createPaneFindStore}). The body find only searches the *rendered body*, so a request
+   *  matched via URL/headers may show no in-body results even though it's a valid match — expected. */
+  function seedPane(which: 'request' | 'response', id: string, jumpToFirst: boolean): void {
+    const bar = which === 'request' ? requestSearch : responseSearch;
+    if (!bar) return;
+    const eff = paneFind.computeEffective(id, which);
+    // On a PASSIVE reseed (live-event refresh, jumpToFirst=false) skip the re-push when the chip set is
+    // unchanged — otherwise every incoming request would reset the nav cursor (the orange current-match)
+    // even though nothing changed. Explicit actions (selection/navigation) always reseed + jump.
+    if (!jumpToFirst && sameKeywordTexts(eff, bar.getKeywords())) return;
+    bar.setKeywords(eff, jumpToFirst);
+  }
+
   function seedDetailFind(which: 'request' | 'response' | 'both' = 'both', jumpToFirst = true): void {
-    if (!selectedIsFindMatch()) return;
-    if (which !== 'response') requestSearch?.setQuery(findQuery, jumpToFirst);
-    if (which !== 'request') responseSearch?.setQuery(findQuery, jumpToFirst);
+    const id = state.selectedEventId;
+    if (!id) return;
+    if (which !== 'response') seedPane('request', id, jumpToFirst);
+    if (which !== 'request') seedPane('response', id, jumpToFirst);
   }
 
   /** Re-apply the Find term to the CURRENTLY-selected request's detail (body find bars + URL/header
@@ -1316,7 +1370,7 @@ export function setupNetworkTab(
         const sig = `${eventsVersion}|${effProxiedOnly()}|${state.viewMode}|${filterInput?.value || ''}`;
         if (sig !== lastFindRefreshSig) {
           lastFindRefreshSig = sig;
-          findModal.refresh();
+          scheduleLiveFindRefresh();
         }
       }
     });
@@ -2313,6 +2367,8 @@ export function setupNetworkTab(
     state.events = [];
     eventIndex.clear();
     lastSeqByIp.clear();
+    // Per-request body-search terms are keyed by event id; those ids are gone now.
+    paneFind.clear();
     state.selectedEventId = null;
     selectedDetail = null;
     detailLoadToken++;
@@ -2418,24 +2474,45 @@ export function setupNetworkTab(
 
   // Build + insert the find bar just above each body scroll area, then wire it. Visibility is
   // driven by the Body tab in syncPaneChrome (no search on Overview / Headers).
+  /** Focus a pane's find bar on ⌘/Ctrl+F, but only while it's visible (inert on non-Body tabs). */
+  function bindBodyFindShortcut(target: HTMLElement, handle: MultiFindHandle): () => void {
+    const onKey = (e: KeyboardEvent): void => {
+      if ((e.metaKey || e.ctrlKey) && (e.key === 'f' || e.key === 'F')) {
+        if (!handle.isVisible()) return;
+        e.preventDefault();
+        handle.focus();
+      }
+    };
+    target.addEventListener('keydown', onKey);
+    return () => target.removeEventListener('keydown', onKey);
+  }
+
   if (requestBodyEl instanceof HTMLElement) {
-    const bar = buildFindBarElement('Find in Body');
+    const bar = buildMultiFindBarElement();
     requestBodyEl.insertAdjacentElement('beforebegin', bar);
-    requestSearch = createFindBar({ bodyEl: requestBodyEl, barEl: bar, highlightId: 'ni-find-request' });
+    requestSearch = createMultiFindBar({
+      bodyEl: requestBodyEl,
+      barEl: bar,
+      highlightId: 'ni-find-request',
+      onChange: (kws) => paneFind.applyPaneEdit('request', kws)
+    });
     if (requestSearch) {
-      const unbind = bindFindShortcut(requestBodyEl, requestSearch);
-      listenerAc.signal.addEventListener('abort', unbind);
+      listenerAc.signal.addEventListener('abort', bindBodyFindShortcut(requestBodyEl, requestSearch));
     }
     // Cmd/Ctrl+A selects all text in the focused body pane (not the whole page).
     listenerAc.signal.addEventListener('abort', attachSelectAll(requestBodyEl));
   }
   if (responseBodyEl instanceof HTMLElement) {
-    const bar = buildFindBarElement('Find in Body');
+    const bar = buildMultiFindBarElement();
     responseBodyEl.insertAdjacentElement('beforebegin', bar);
-    responseSearch = createFindBar({ bodyEl: responseBodyEl, barEl: bar, highlightId: 'ni-find-response' });
+    responseSearch = createMultiFindBar({
+      bodyEl: responseBodyEl,
+      barEl: bar,
+      highlightId: 'ni-find-response',
+      onChange: (kws) => paneFind.applyPaneEdit('response', kws)
+    });
     if (responseSearch) {
-      const unbind = bindFindShortcut(responseBodyEl, responseSearch);
-      listenerAc.signal.addEventListener('abort', unbind);
+      listenerAc.signal.addEventListener('abort', bindBodyFindShortcut(responseBodyEl, responseSearch));
     }
     listenerAc.signal.addEventListener('abort', attachSelectAll(responseBodyEl));
   }
@@ -2445,8 +2522,7 @@ export function setupNetworkTab(
   // held here and applied only after close so they all play together when the list is back in view.
   let pendingFindVisualUpdate: (() => void) | null = null;
   findModal = createNetworkFindModal({
-    async search(options) {
-      findQuery = options.query;
+    async search(request) {
       const api = window.roku;
       if (!api?.networkInspectorFind) return [];
       // Search each watched device's captured traffic and merge (ids are globally unique).
@@ -2456,7 +2532,7 @@ export function setupNetworkTab(
       await Promise.all(
         ips.map(async (ip) => {
           try {
-            const res = await api.networkInspectorFind(ip, options);
+            const res = await api.networkInspectorFind(ip, request);
             const matches = (res?.matches ?? []) as NetworkFindMatch[];
             for (const m of matches) {
               if (!seen.has(m.id)) {
@@ -2471,11 +2547,15 @@ export function setupNetworkTab(
       );
       return merged;
     },
-    onResults(matches) {
+    onResults(matches, termInfo) {
       findMatches = new Map(matches.map((m) => [m.id, m]));
-      // Re-sync the request currently in view so a new/updated search term highlights it right away
-      // (don't scroll the body while the user is still typing).
-      syncSelectedDetailFind(false);
+      findTermInfo = termInfo;
+      // Reseed the editable body find-bars ONLY when the selection or seed-set changed (not on every
+      // live-event refresh — that would wipe keywords the user typed in the panes). The URL/header
+      // seed highlight is cheap + non-editable, so refresh it every time.
+      seedDetailFind('both', false); // self-guarded: reseeds only on a selection/seed-set change
+      syncPaneSeedHighlight('request');
+      syncPaneSeedHighlight('response');
       // Navigation walks only the VISIBLE (filtered-in) matches, so drive the header controls off
       // that set too: if the toolbar Filter hides every match, the ↑/↓/clear buttons and the amber
       // search state hide rather than sitting there doing nothing.
@@ -2498,9 +2578,9 @@ export function setupNetworkTab(
       }
       return order;
     },
-    onNavigate(id, queryText) {
+    getCurrentId: () => state.selectedEventId,
+    onNavigate(id) {
       findCurrentId = id;
-      findQuery = queryText;
       selectEventById(id);
       // Re-sync here too: when Find re-commits on the ALREADY-selected request, selectEventById is a
       // no-op (no re-render) so afterBodyRender won't fire. Jump to the first hit on commit.
@@ -2510,11 +2590,12 @@ export function setupNetworkTab(
     onClear() {
       pendingFindVisualUpdate = null; // cancel any deferred visual update from the last search
       findMatches = new Map();
+      findTermInfo = new Map();
       findCurrentId = null;
-      findQuery = '';
-      // Drop the seeded highlight from the detail-pane find bars + the URL/header highlight.
-      requestSearch?.clear();
-      responseSearch?.clear();
+      // The modal terms are gone, but a request's OWN pane terms are independent of the modal search,
+      // so re-seed (rather than wipe) the current panes — they now show just this request's user terms
+      // (empty union → empty bar). The URL/header seed tint clears.
+      seedDetailFind('both', false);
       clearFindHighlights(SEED_HL_REQUEST);
       clearFindHighlights(SEED_HL_RESPONSE);
       applyFindDecorations();
@@ -2581,6 +2662,7 @@ export function setupNetworkTab(
       requestSearch?.dispose();
       responseSearch?.dispose();
       findModal?.destroy();
+      clearTimeout(findRefreshTimer);
       if (networkTabForeground) hidePortConflictModal();
       stopPolling();
       if (filterDebounceTimer) {
