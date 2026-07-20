@@ -38,7 +38,7 @@
     "test": "tsx --test test/*.test.ts"
   },
   "dependencies": {
-    "archiver": "^5.3.2",
+    "archiver": "^8.0.0",
     "commander": "^15.0.0"
   },
   "devDependencies": {
