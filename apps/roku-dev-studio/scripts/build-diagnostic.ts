@@ -62,7 +62,8 @@ function buildWin(): void {
 
 function buildMac(): void {
   console.log('[build:mac:diagnostic] Packaging macOS arm64 dmg + zip…');
-  run('npx', ['electron-builder', '--mac', 'dmg:arm64', 'zip:arm64', ...DIAGNOSTIC_FLAGS]);
+  // Route through the resilient wrapper (retries the transient DMG "Resource busy" unmount flake).
+  run('npx', ['tsx', 'scripts/build/electron-builder-mac.ts', 'dmg:arm64', 'zip:arm64', ...DIAGNOSTIC_FLAGS]);
   console.log('');
   console.log('[build:mac:diagnostic] Done.');
   console.log('  apps/roku-dev-studio/dist/mac/arm64/Roku Dev Studio Diagnostic-<version>-arm64.dmg');
@@ -88,7 +89,8 @@ function buildLinux(): void {
 function buildAll(): void {
   console.log('[build:all:diagnostic] Packaging mac + linux + win in parallel…');
   const flagStr = DIAGNOSTIC_FLAGS.join(' ');
-  const macCmd = `electron-builder --mac dmg:arm64 zip:arm64 ${flagStr} -c.npmRebuild=false`;
+  // Resilient wrapper for the mac leg (retries the transient DMG "Resource busy" unmount flake).
+  const macCmd = `tsx scripts/build/electron-builder-mac.ts dmg:arm64 zip:arm64 ${flagStr} -c.npmRebuild=false`;
   const linuxCmd = `electron-builder --linux ${flagStr} -c.deb.packageName=roku-dev-studio-diagnostic -c.appImage.artifactName=Roku-Dev-Studio-Diagnostic-\\\${version}-\\\${arch}.\\\${ext} -c.npmRebuild=false`;
   const winCmd = `electron-builder --win nsis --x64 ${flagStr} -c.win.target=nsis -c.nsis.artifactName=Roku-Dev-Studio-Diagnostic-Setup-\\\${version}.\\\${ext} -c.npmRebuild=false`;
   run('npx', [
