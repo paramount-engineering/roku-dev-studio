@@ -1042,13 +1042,16 @@ const CONSOLE_MONITOR_FINDINGS: RokuOp<{ device?: string }, unknown> = {
   title: 'Console Monitor: BrightScript Findings',
   description:
     'Analyze the in-memory BrightScript debug console (port 8085) buffer and return the recognized ' +
-    'BrightScript ISSUES — the same findings the Console Monitor UI shows. ' +
-    'Returns `{ connected, scannedLines, totalCaptured, totalIssues, issueTypeCount, byCategory, findings }`, ' +
+    'BrightScript ISSUES and CRASHES — the same data the Console Monitor UI shows. ' +
+    'Returns `{ connected, scannedLines, totalCaptured, totalIssues, issueTypeCount, byCategory, findings, crashes }`, ' +
     'where each finding is `{ id, title, category, severity, meaning, cause, fix, docsUrl?, count, lines }` ' +
     'and `lines` is that issue\'s unique console lines with per-line `count` and (when present) `file`/`line`. ' +
+    '`crashes` are Micro Debugger dumps (uncaught runtime errors): each is ' +
+    '`{ message, code?, file?, line?, backtrace[], count, exited?, app?, raw }` where `backtrace` is the stack ' +
+    '(`{ depth, func, file?, line? }`, innermost first) and `exited` marks a fatal `EXIT_BRIGHTSCRIPT_CRASH`. ' +
     'Only Roku/BrightScript-emitted diagnostics (`BRIGHTSCRIPT: ERROR:`/`WARNING:`, rendezvous, FormatJSON, ' +
     'roUrlEvent, …) are recognized — NOT arbitrary app log output. ' +
-    'Findings only accumulate while the console is **connected**: if `connected` is false call `telnet_connect` first.',
+    'Data only accumulates while the console is **connected**: if `connected` is false call `telnet_connect` first.',
   runIn: 'renderer',
   destructive: false,
   inputSchema: {
@@ -1067,7 +1070,8 @@ const CONSOLE_MONITOR_FINDINGS: RokuOp<{ device?: string }, unknown> = {
       totalIssues: { type: 'number' },
       issueTypeCount: { type: 'number' },
       byCategory: { type: 'array' },
-      findings: { type: 'array' }
+      findings: { type: 'array' },
+      crashes: { type: 'array' }
     },
     additionalProperties: true
   },

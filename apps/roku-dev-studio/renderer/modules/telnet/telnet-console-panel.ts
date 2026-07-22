@@ -28,7 +28,12 @@ import {
   type ConsoleAnalyticsSnapshot
 } from '../console-log/console-analytics-modal.js';
 import { revealAndFlashLine } from '../console-log/reveal-occurrence.js';
-import { recognizeBrsIssue, computeConsoleFindings, type ConsoleFindings } from '@shared/console/brightscript-error-catalog.js';
+import {
+  recognizeBrsIssue,
+  computeConsoleFindings,
+  detectBrsCrashes,
+  type ConsoleFindings
+} from '@shared/console/brightscript-error-catalog.js';
 import {
   debugTelnetIpcTargetsDevice,
   type DebugTelnetIpcPayload
@@ -1040,7 +1045,8 @@ export function setupTelnet(
           logLines.length = 0;
           recognizedIssueCount = 0;
           virt.setCount(0);
-          findBarHandle?.resetFindState();
+          // Keep any active query armed against the fresh session (see clearConsoleLocal).
+          findBarHandle?.onLinesCleared();
           // Discard the previous session's disk spill before opening the fresh
           // one below, otherwise its old trimmed history could be auto-loaded
           // back into the clean view on scroll-up.
@@ -1363,7 +1369,9 @@ export function setupTelnet(
     // setCount(0) walks the mounted map and runs `onUnmount` per row, then
     // recomputes layout against the now-empty model.
     virt.setCount(0);
-    findBarHandle?.resetFindState();
+    // Not resetFindState(): keep the query active and re-arm its scan against the cleared buffer, so the
+    // find count auto-repopulates as new matching lines stream in (it doesn't die until retyped).
+    findBarHandle?.onLinesCleared();
     // Wipe the disk spill too — the user explicitly asked for a clean
     // slate; keeping spilled history would be misleading. Then drop the
     // spillId so subsequent trims don't try to write to a deleted file.
@@ -1446,7 +1454,8 @@ export function setupTelnet(
       }
     }
     return {
-      findings: computeConsoleFindings(logLines),
+      // Crashes need the whole ordered buffer (multi-line Micro Debugger dumps), not just issue lines.
+      findings: computeConsoleFindings(logLines, detectBrsCrashes(logLines.map((e) => e.text))),
       scannedLines: logLines.length,
       timeSpan: { first, last },
       meta: {
@@ -1574,7 +1583,7 @@ export function setupTelnet(
       connected: isConnected,
       scannedLines: logLines.length,
       totalCaptured: spilledEntryCount + logLines.length,
-      ...computeConsoleFindings(logLines)
+      ...computeConsoleFindings(logLines, detectBrsCrashes(logLines.map((e) => e.text)))
     };
   };
   panel.connectTelnet = connectTelnet;

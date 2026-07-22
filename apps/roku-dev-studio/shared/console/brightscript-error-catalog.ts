@@ -776,6 +776,20 @@ export const BRS_ERROR_CATALOG: readonly BrsErrorEntry[] = [
     fix: 'Close other telnet/VS Code sessions to the device.',
     docsUrl: DBG_PORTS,
     severity: 'warning'
+  },
+  {
+    // Roku's definitive fatal-crash exit line. Recognized so the Console Monitor button enables even for
+    // an exit-only crash (no Micro Debugger dump); the crash scanner then consumes this line, so it
+    // surfaces as a CRASH (with the exit noted), not as a duplicate single-line finding.
+    id: 'app-crash-exit',
+    title: 'Channel exited on a BrightScript crash',
+    category: 'Debugger',
+    signatures: ['exit_brightscript_crash'],
+    meaning: 'The channel process terminated because a BrightScript thread crashed (an uncaught runtime error).',
+    cause: 'An uncaught runtime error on a thread with no handler.',
+    fix: 'See the crash + backtrace in Console Monitor; guard the faulting call with try/catch or fix the faulting line.',
+    docsUrl: DBG_CONSOLE_8085,
+    severity: 'error'
   }
 ] as const;
 
@@ -914,6 +928,52 @@ export interface ConsoleFinding {
   lines: ConsoleFindingLine[];
 }
 
+/** One frame of a crash backtrace, as printed by the Micro Debugger (`#N Function … / file/line: …`). */
+export interface BrsCrashFrame {
+  /** The `#N` index as printed. `#0` is the outermost (entry) call; the highest number is the crash site. */
+  depth: number;
+  /** The function signature text, e.g. `fw_asstring(input As Dynamic) As String`. */
+  func: string;
+  /** Source file the frame is in (`pkg:/…`), if parsed. */
+  file?: string;
+  /** 1-based source line within `file`. */
+  line?: number;
+}
+
+/**
+ * A recognized app crash: the BrightScript **Micro Debugger** dump an UNCAUGHT runtime error prints to
+ * telnet (an error line followed by a `Backtrace:` stack). Distinct from a single-line
+ * {@link ConsoleFinding} — a crash suspends the thread and carries a stack. We capture the meaningful
+ * data (message, code, crash site, backtrace) but deliberately do NOT interpret *why* it happened —
+ * a crash has many possible causes.
+ */
+export interface BrsCrash {
+  /** The clean error message that triggered the crash, e.g. `Type Mismatch. Unable to cast "Integer" to "String".` */
+  message: string;
+  /** The `&hXX` runtime code — the Micro Debugger DOES print this (unlike ordinary telnet error lines). */
+  code?: string;
+  /** Crash-site file (`pkg:/…`), from the error line or the innermost frame. */
+  file?: string;
+  /** 1-based crash-site source line. */
+  line?: number;
+  /** Backtrace frames in printed order (innermost/crash site first, down to the entry function). */
+  backtrace: BrsCrashFrame[];
+  /** How many times this identical crash (same message + backtrace) occurred. */
+  count: number;
+  /** True when the app process was seen to terminate on this crash — a `…EXIT_BRIGHTSCRIPT_CRASH…`
+   *  line (Roku's definitive "the channel exited because BrightScript crashed" signal). Set on the
+   *  matching dump when one is nearby, else stands alone as an exit-only crash. */
+  exited?: boolean;
+  /** Channel name from the exit line (`Exiting '<app>'`), when known. */
+  app?: string;
+  /** The raw dump text (error line + backtrace), for copy. */
+  raw: string;
+  /** Console/log line positions every occurrence of this crash block occupied — same index space as
+   *  {@link ConsoleFindingLine.indices}. Lets {@link computeConsoleFindings} exclude these lines from the
+   *  single-line pass (a crash isn't also a stray "STOP"/type-mismatch finding) and lets the UI jump to it. */
+  indices: number[];
+}
+
 /** The full Console Monitor result: what the modal renders and what the MCP tool returns. */
 export interface ConsoleFindings {
   /** Total recognized-issue occurrences (sum of every finding's count). */
@@ -924,6 +984,230 @@ export interface ConsoleFindings {
   byCategory: { category: BrsErrorCategory; count: number }[];
   /** Findings, most-frequent first. */
   findings: ConsoleFinding[];
+  /** Recognized crashes (Micro Debugger dumps), most-frequent first. Separate from `findings` because a
+   *  crash is a multi-line block with a backtrace, not a single diagnostic line. */
+  crashes: BrsCrash[];
+}
+
+// ── Crash (Micro Debugger dump) detection ────────────────────────────────────────────────────────
+
+/** A crash dump begins with one of these Micro Debugger banners. */
+const CRASH_START = /^(?:brightscript micro debugger\.?|suspending threads\.{2,3}?)$/i;
+/** The `Backtrace:` header that precedes the stack. */
+const BACKTRACE_HEADER = /^backtrace:?$/i;
+/** A stack frame header: `#4  Function fw_asstring(input As Dynamic) As String`. */
+const FRAME_HEADER = /^#(\d+)\s+(?:function\s+)?(.*\S)?\s*$/i;
+/** A stack frame location: `   file/line: pkg:/…xml(2305)`. */
+const FRAME_LOCATION = /^\s*file\/line:\s*(.+?)\((\d+)\)\s*$/i;
+/** The Micro Debugger's error line, which — unlike ordinary telnet — DOES carry the `&hXX` code:
+ *  `Type Mismatch. Unable to cast "Integer" to "String". (runtime error &h18) in pkg:/…xml(2305)`. */
+const RUNTIME_ERROR_LINE = /^(.*?)\s*\(runtime error (&h[0-9a-f]+)\)\s+in\s+(.+?)\((\d+)\)\s*$/i;
+/** Roku's definitive fatal-crash exit line: `… UI: Exiting 'AVIA Reference App', id 'dev',
+ *  EXIT_BRIGHTSCRIPT_CRASH, thrd 1538`. May appear with a Micro Debugger dump or on its own. */
+const EXIT_CRASH_LINE = /EXIT_BRIGHTSCRIPT_CRASH/;
+/** A fatal exit within this many lines AFTER a dump is treated as the SAME crash (marks it `exited`);
+ *  beyond it, the exit stands alone. Generous because thread-teardown noise sits between them. */
+const EXIT_CORRELATION_WINDOW = 150;
+
+function crashKey(c: BrsCrash): string {
+  return `${c.message}||${c.backtrace.map((f) => `${f.depth}:${f.file ?? ''}:${f.line ?? ''}`).join('>')}`;
+}
+
+/** Parse a buffered candidate block into a crash, or null when it isn't one (no backtrace with frames). */
+function parseCrashBlock(block: readonly { text: string; index: number }[]): BrsCrash | null {
+  const btIdx = block.findIndex((b) => BACKTRACE_HEADER.test(b.text.trim()));
+  if (btIdx < 0) return null; // a Micro Debugger banner with no backtrace (e.g. a bare STOP) — not a crash
+
+  const backtrace: BrsCrashFrame[] = [];
+  for (let i = btIdx + 1; i < block.length; i++) {
+    const t = block[i]!.text.trim();
+    const head = FRAME_HEADER.exec(t);
+    if (head) {
+      backtrace.push({ depth: Number(head[1]), func: (head[2] ?? '').trim() });
+      continue;
+    }
+    const loc = FRAME_LOCATION.exec(block[i]!.text);
+    if (loc && backtrace.length > 0) {
+      const frame = backtrace[backtrace.length - 1]!;
+      frame.file = loc[1]!.trim();
+      frame.line = Number(loc[2]);
+    }
+  }
+  if (backtrace.length === 0) return null;
+
+  // Error line = the last non-blank line before `Backtrace:`.
+  let errorText = '';
+  for (let i = btIdx - 1; i >= 0; i--) {
+    if (block[i]!.text.trim()) {
+      errorText = block[i]!.text.trim();
+      break;
+    }
+  }
+  let message = '';
+  let code: string | undefined;
+  let file: string | undefined;
+  let line: number | undefined;
+  const m = RUNTIME_ERROR_LINE.exec(errorText);
+  if (m) {
+    message = m[1]!.trim();
+    code = m[2]!.toLowerCase();
+    file = m[3]!.trim();
+    line = Number(m[4]);
+  } else if (errorText) {
+    message = extractBrsErrorMessage(errorText);
+    const loc = extractBrsErrorLocation(errorText);
+    if (loc) {
+      file = loc.file;
+      line = loc.line;
+    }
+  }
+  // Fall back to the innermost frame (highest #) for the crash site when the error line lacked one.
+  if (!file && backtrace.length > 0) {
+    const innermost = backtrace.reduce((a, b) => (b.depth > a.depth ? b : a));
+    file = innermost.file;
+    line = innermost.line;
+  }
+  if (!message) message = 'Crash (BrightScript Micro Debugger)';
+
+  // `raw` for copy: the error line through the last backtrace line (skip the source-listing/digest noise).
+  const rawStart = errorText ? block.findIndex((b) => b.text.trim() === errorText) : btIdx;
+  const raw = block
+    .slice(rawStart < 0 ? btIdx : rawStart)
+    .map((b) => b.text)
+    .join('\n');
+
+  return {
+    message,
+    ...(code ? { code } : {}),
+    ...(file ? { file } : {}),
+    ...(line !== undefined ? { line } : {}),
+    backtrace,
+    count: 1,
+    raw,
+    indices: block.map((b) => b.index)
+  };
+}
+
+/**
+ * Stateful, streaming crash scanner. Feed every console/log line in order via `push(text, index)`
+ * (`index` is the line's position — array index for the live buffer, file line number for the Log
+ * Viewer), then call `finish()` for the deduped crashes. Streaming so the windowed Log Viewer's
+ * main-process scan can detect crashes without holding the whole file resident; the live Console feeds
+ * its whole buffer through the same code via {@link detectBrsCrashes}.
+ */
+export function createCrashScanner(): {
+  push(text: string, index: number): void;
+  finish(): BrsCrash[];
+} {
+  const dedup = new Map<string, BrsCrash>();
+  let block: { text: string; index: number }[] = [];
+  let phase: 'pre' | 'frames' = 'pre';
+  /** Cap a candidate block so a lone banner (never followed by a backtrace) can't buffer unbounded. */
+  const MAX_BLOCK_LINES = 600;
+  /** The dump crash emitted most recently, so a fatal-exit line right after it marks the SAME crash. */
+  let lastCrash: BrsCrash | null = null;
+  let lastCrashEnd = -Infinity;
+
+  const emit = (crash: BrsCrash): void => {
+    const key = crashKey(crash);
+    const existing = dedup.get(key);
+    if (existing) {
+      existing.count += 1;
+      existing.indices.push(...crash.indices);
+      lastCrash = existing;
+    } else {
+      dedup.set(key, crash);
+      lastCrash = crash;
+    }
+    lastCrashEnd = Math.max(...crash.indices);
+  };
+
+  const finalize = (): void => {
+    if (block.length === 0) return;
+    const crash = parseCrashBlock(block);
+    block = [];
+    phase = 'pre';
+    if (crash) emit(crash);
+  };
+
+  const start = (text: string, index: number): void => {
+    block = [{ text, index }];
+    phase = 'pre';
+  };
+
+  /** Handle a fatal `EXIT_BRIGHTSCRIPT_CRASH` line: attach it to the just-seen dump crash when close by,
+   *  otherwise record it as an exit-only crash (a crash with no captured dump/backtrace). */
+  const handleExit = (text: string, index: number): void => {
+    const app = /Exiting\s+'([^']+)'/.exec(text)?.[1];
+    if (lastCrash && index - lastCrashEnd <= EXIT_CORRELATION_WINDOW) {
+      lastCrash.exited = true;
+      if (app && !lastCrash.app) lastCrash.app = app;
+      lastCrash.indices.push(index);
+      return;
+    }
+    const message = app ? `App exited — BrightScript crash (${app})` : 'App exited — BrightScript crash';
+    const key = `exit||${message}`;
+    const existing = dedup.get(key);
+    if (existing) {
+      existing.count += 1;
+      existing.indices.push(index);
+    } else {
+      dedup.set(key, {
+        message,
+        exited: true,
+        ...(app ? { app } : {}),
+        backtrace: [],
+        count: 1,
+        raw: text.trim(),
+        indices: [index]
+      });
+    }
+  };
+
+  return {
+    push(text, index) {
+      const trimmed = text.trim();
+      // A fatal-exit line can interleave with (or follow) a dump; close any open block first so it can
+      // correlate against the completed crash.
+      if (EXIT_CRASH_LINE.test(text)) {
+        finalize();
+        handleExit(text, index);
+        return;
+      }
+      if (block.length === 0) {
+        if (CRASH_START.test(trimmed) || RUNTIME_ERROR_LINE.test(trimmed)) start(text, index);
+        return;
+      }
+      if (phase === 'pre') {
+        // Consecutive banners ("BrightScript Micro Debugger." then "Suspending threads…") are one
+        // dump's preamble — keep appending; the backtrace is what flips us into frame parsing.
+        block.push({ text, index });
+        if (BACKTRACE_HEADER.test(trimmed)) phase = 'frames';
+        else if (block.length >= MAX_BLOCK_LINES) finalize();
+        return;
+      }
+      // phase === 'frames': frames are contiguous `#N` / `file/line:` pairs; anything else ends the block.
+      if (FRAME_HEADER.test(trimmed) || FRAME_LOCATION.test(text)) {
+        block.push({ text, index });
+        return;
+      }
+      finalize();
+      // The line that ended the block may itself start the next dump.
+      if (CRASH_START.test(trimmed) || RUNTIME_ERROR_LINE.test(trimmed)) start(text, index);
+    },
+    finish() {
+      finalize();
+      return Array.from(dedup.values()).sort((a, b) => b.count - a.count);
+    }
+  };
+}
+
+/** Batch convenience over {@link createCrashScanner}: detect crashes in an ordered list of console lines
+ *  (the live Console feeds its resident buffer here; `index` is each line's array position). */
+export function detectBrsCrashes(lines: readonly string[]): BrsCrash[] {
+  const scanner = createCrashScanner();
+  lines.forEach((text, i) => scanner.push(text, i));
+  return scanner.finish();
 }
 
 /**
@@ -944,7 +1228,8 @@ export const OCCURRENCE_POSITION_CAP = 200;
  * fall back to the entry's ordinal in `entries` (== its buffer/virtualizer row index).
  */
 export function computeConsoleFindings(
-  entries: readonly { text: string; hasIssue?: boolean; index?: number }[]
+  entries: readonly { text: string; hasIssue?: boolean; index?: number }[],
+  crashes: readonly BrsCrash[] = []
 ): ConsoleFindings {
   const agg = new Map<
     string,
@@ -953,11 +1238,19 @@ export function computeConsoleFindings(
   const catCount = new Map<BrsErrorCategory, number>();
   let totalIssues = 0;
 
+  // Lines already accounted for by a crash dump — excluded from the single-line pass so a crash isn't
+  // ALSO counted as a stray "STOP statement" (its Micro Debugger banner) or a duplicate type-mismatch
+  // (its error line). Same index space as `pos` / `e.index` below.
+  const crashConsumed = new Set<number>();
+  for (const c of crashes) for (const i of c.indices) crashConsumed.add(i);
+
   // Ordinal of the current entry within `entries` — the live Console's fallback position (it maps 1:1
   // to the virtualizer row index). Advances for EVERY entry, including skipped ones, so it stays aligned.
   let pos = -1;
   for (const e of entries) {
     pos++;
+    const idx = e.index ?? pos;
+    if (crashConsumed.has(idx)) continue;
     if (e.hasIssue === false) continue;
     const match = recognizeBrsIssue(e.text);
     if (!match) continue;
@@ -975,7 +1268,7 @@ export function computeConsoleFindings(
       a.lines.set(e.text, bucket);
     }
     bucket.count++;
-    if (bucket.indices.length < OCCURRENCE_POSITION_CAP) bucket.indices.push(e.index ?? pos);
+    if (bucket.indices.length < OCCURRENCE_POSITION_CAP) bucket.indices.push(idx);
   }
 
   const findings: ConsoleFinding[] = [...agg.values()]
@@ -1017,5 +1310,5 @@ export function computeConsoleFindings(
     count: catCount.get(category) ?? 0
   })).filter((c) => c.count > 0);
 
-  return { totalIssues, issueTypeCount: agg.size, byCategory, findings };
+  return { totalIssues, issueTypeCount: agg.size, byCategory, findings, crashes: [...crashes] };
 }
