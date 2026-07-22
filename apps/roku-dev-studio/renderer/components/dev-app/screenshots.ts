@@ -110,29 +110,65 @@ export function setupScreenshots(
     });
   }
   
-  // Copy screenshot
+  // ── Copy / Save / Clear actions ──────────────────────────────────────────────────────────────
+  // Extracted from the button handlers so the right-click context menu can trigger the exact same
+  // behavior (see the `contextmenu` handler below).
+
+  /** Copy the current screenshot to the clipboard as a PNG. Throws on failure (caller reports it). */
+  async function copyScreenshotToClipboard(): Promise<void> {
+    if (!currentScreenshotUrl) return;
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    await new Promise((resolve, reject) => {
+      img.onload = resolve;
+      img.onerror = reject;
+      img.src = currentScreenshotUrl;
+    });
+    const canvas = document.createElement('canvas');
+    canvas.width = img.naturalWidth;
+    canvas.height = img.naturalHeight;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('Could not get canvas context');
+    ctx.drawImage(img, 0, 0);
+    const blob = await new Promise<Blob | null>((resolve) => {
+      canvas.toBlob((b) => resolve(b), 'image/png');
+    });
+    if (!blob) throw new Error('Could not encode screenshot');
+    await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+  }
+
+  /** Save the current screenshot to a file via the native dialog. Reports its own status. */
+  async function saveScreenshotToFile(): Promise<void> {
+    if (!currentScreenshotUrl) return;
+    try {
+      const result = await window.roku.saveScreenshot(currentScreenshotTempFile, currentScreenshotUrl);
+      if (result.success) {
+        showStatusMessage(screenshotStatus, '✓ Saved to: ' + result.filePath, 'success');
+      } else if (result.error !== 'Save cancelled') {
+        showStatusMessage(screenshotStatus, '✗ ' + result.error, 'error');
+      }
+    } catch (error: unknown) {
+      showStatusMessage(screenshotStatus, '✗ ' + errMessage(error), 'error');
+    }
+  }
+
+  /** Clear the current screenshot — drop the image and return to the placeholder. */
+  function clearScreenshot(): void {
+    currentScreenshotUrl = '';
+    currentScreenshotTempFile = '';
+    screenshotImage.removeAttribute('src');
+    screenshotImage.style.display = 'none';
+    if (screenshotPlaceholder) screenshotPlaceholder.style.display = '';
+    screenshotStatus.innerHTML = '';
+    showScreenshotButtons(false);
+  }
+
+  // Copy screenshot (button) — copy + a brief "Copied!" flash on the button itself.
   if (copyScreenshotBtn) {
     copyScreenshotBtn.addEventListener('click', async () => {
       if (!currentScreenshotUrl) return;
       try {
-        const img = new Image();
-        img.crossOrigin = 'anonymous';
-        await new Promise((resolve, reject) => {
-          img.onload = resolve;
-          img.onerror = reject;
-          img.src = currentScreenshotUrl;
-        });
-        const canvas = document.createElement('canvas');
-        canvas.width = img.naturalWidth;
-        canvas.height = img.naturalHeight;
-        const ctx = canvas.getContext('2d');
-        if (!ctx) throw new Error('Could not get canvas context');
-        ctx.drawImage(img, 0, 0);
-        const blob = await new Promise<Blob | null>((resolve) => {
-          canvas.toBlob((b) => resolve(b), 'image/png');
-        });
-        if (!blob) throw new Error('Could not encode screenshot');
-        await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+        await copyScreenshotToClipboard();
         copyScreenshotBtn.title = 'Copied!';
         setSafeHTML(copyScreenshotBtn, icon('check', 'icon-xs'));
         setTimeout(() => {
@@ -144,34 +180,53 @@ export function setupScreenshots(
       }
     });
   }
-  
-  // Save screenshot
+
+  // Save screenshot (button)
   if (saveScreenshotBtn) {
-    saveScreenshotBtn.addEventListener('click', async () => {
-      if (!currentScreenshotUrl) return;
-      try {
-        const result = await window.roku.saveScreenshot(currentScreenshotTempFile, currentScreenshotUrl);
-        if (result.success) {
-          showStatusMessage(screenshotStatus, '✓ Saved to: ' + result.filePath, 'success');
-        } else if (result.error !== 'Save cancelled') {
-          showStatusMessage(screenshotStatus, '✗ ' + result.error, 'error');
-        }
-      } catch (error: unknown) {
-        showStatusMessage(screenshotStatus, '✗ ' + errMessage(error), 'error');
-      }
-    });
+    saveScreenshotBtn.addEventListener('click', () => void saveScreenshotToFile());
   }
 
-  // Clear screenshot — drop the current image and return to the placeholder.
+  // Clear screenshot (button)
   if (clearScreenshotBtn) {
-    clearScreenshotBtn.addEventListener('click', () => {
-      currentScreenshotUrl = '';
-      currentScreenshotTempFile = '';
-      screenshotImage.removeAttribute('src');
-      screenshotImage.style.display = 'none';
-      if (screenshotPlaceholder) screenshotPlaceholder.style.display = '';
-      screenshotStatus.innerHTML = '';
-      showScreenshotButtons(false);
+    clearScreenshotBtn.addEventListener('click', clearScreenshot);
+  }
+
+  // Right-click the screenshot preview → the same Copy / Save / Clear actions as the toolbar buttons,
+  // shown only when there's a screenshot (matching the buttons' visibility). Uses the native menu via
+  // the main process (`window.roku.showContextMenu`), consistent with the device card + Network Inspector.
+  // NOTE: action names avoid the literal `'copy'`, which the main handler treats as a built-in TEXT
+  // clipboard write (it would blank the clipboard); we do the image copy in the renderer instead.
+  const screenshotContainer = screenshotImage.closest('.screenshot-container');
+  if (screenshotContainer instanceof HTMLElement) {
+    screenshotContainer.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      if (!currentScreenshotUrl) return; // nothing to act on — no menu, mirrors the hidden buttons
+      void (async () => {
+        const items = [
+          { label: 'Copy Screenshot', action: 'copy-screenshot' },
+          { label: 'Save Screenshot As…', action: 'save-screenshot' },
+          { type: 'separator' },
+          { label: 'Clear Screenshot', action: 'clear-screenshot' }
+        ];
+        let res: { action?: string } | null = null;
+        try {
+          res = (await window.roku.showContextMenu(items)) as { action?: string } | null;
+        } catch {
+          return;
+        }
+        if (res?.action === 'copy-screenshot') {
+          try {
+            await copyScreenshotToClipboard();
+            showStatusMessage(screenshotStatus, '✓ Copied to clipboard', 'success');
+          } catch (error: unknown) {
+            showStatusMessage(screenshotStatus, 'Failed to copy: ' + errMessage(error), 'error');
+          }
+        } else if (res?.action === 'save-screenshot') {
+          await saveScreenshotToFile();
+        } else if (res?.action === 'clear-screenshot') {
+          clearScreenshot();
+        }
+      })();
     });
   }
 
