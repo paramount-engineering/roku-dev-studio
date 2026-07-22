@@ -6,6 +6,7 @@
 import { isTelnetOutputComplete } from './telnet-utils.js';
 import { TELNET_TIMEOUT } from './constants.js';
 import { rendererError } from './logger.js';
+import { S } from '@shared/strings/index.js';
 
 export interface TelnetSystemRunApi {
   ip: string;
@@ -131,17 +132,17 @@ export async function runTelnetSystemCommandSession(
     if (!connectResult.success) {
       return {
         ok: false,
-        error: `Failed to connect to Telnet (port 8080): ${connectResult.error || 'Unknown'}`
+        error: S.utils.failedToConnectTelnet(connectResult.error || S.utils.unknownError)
       };
     }
 
-    onStatus?.('Connected. Setting up listener...');
+    onStatus?.(S.utils.connectedSettingUpListener);
 
     if (api.isRemote) {
       const roku = window.roku;
       if (!roku?.remoteTelnetSystemPollData) {
         await api.telnetSystemDisconnect().catch(() => {});
-        return { ok: false, error: 'Remote Telnet poll not available' };
+        return { ok: false, error: S.utils.remoteTelnetPollUnavailable };
       }
       const pollData = async () => {
         try {
@@ -181,7 +182,7 @@ export async function runTelnetSystemCommandSession(
       const roku = window.roku;
       if (!roku?.onTelnetSystemData) {
         await api.telnetSystemDisconnect().catch(() => {});
-        return { ok: false, error: 'Telnet system data listener not available' };
+        return { ok: false, error: S.utils.telnetDataListenerUnavailable };
       }
       dataCleanup = roku.onTelnetSystemData((data: { ip: string; data: string }) => {
         if (data.ip === api.ip) {
@@ -206,7 +207,7 @@ export async function runTelnetSystemCommandSession(
 
     await new Promise((resolve) => setTimeout(resolve, 1000));
 
-    onStatus?.('Sending command...');
+    onStatus?.(S.utils.sendingCommand);
 
     dataLengthAtCommandSend = allData.length;
     const sendResult = await api.telnetSystemSend(command);
@@ -216,17 +217,17 @@ export async function runTelnetSystemCommandSession(
     if (!sendResult.success) {
       if (dataCleanup) dataCleanup();
       await api.telnetSystemDisconnect();
-      return { ok: false, error: `Failed to send command: ${sendResult.error || 'Unknown'}` };
+      return { ok: false, error: S.utils.failedToSendCommand(sendResult.error || S.utils.unknownError) };
     }
 
-    onStatus?.('Waiting for output...');
+    onStatus?.(S.utils.waitingForOutput);
 
     const startTime = Date.now();
     while (!outputComplete && Date.now() - startTime < timeout) {
       if (typeof shouldStop === 'function' && shouldStop()) {
         if (dataCleanup) dataCleanup();
         await api.telnetSystemDisconnect().catch(() => {});
-        return { ok: false, error: 'Stopped', stopped: true };
+        return { ok: false, error: S.utils.stopped, stopped: true };
       }
       await new Promise((resolve) => setTimeout(resolve, 200));
     }

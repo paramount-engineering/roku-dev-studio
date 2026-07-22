@@ -2,25 +2,27 @@
  * Client-side validation for TrackerTask registry commands (roRegistry: string values per key).
  */
 
+import { S } from '@shared/strings/index.js';
+
 export function isBlank(s: unknown): boolean {
   return s == null || String(s).trim() === '';
 }
 
 export function validateAddRegistrySection(name: unknown, section: unknown): string | null {
   if (isBlank(name)) {
-    return 'Section name is required.';
+    return S.inspector.sectionNameRequired;
   }
   if (section == null || typeof section !== 'object' || Array.isArray(section)) {
-    return 'Section must be a JSON object (not an array).';
+    return S.inspector.sectionMustBeJsonObject;
   }
   const sec = section as Record<string, unknown>;
   for (const k of Object.keys(sec)) {
     if (isBlank(k)) {
-      return 'Section object keys cannot be empty or whitespace-only.';
+      return S.inspector.sectionKeysNotEmpty;
     }
     const v = sec[k];
     if (typeof v !== 'string') {
-      return `Each value must be a string (roRegistry stores strings). Key "${k}" is not a string — use quoted strings in JSON.`;
+      return S.inspector.eachValueMustBeString(k);
     }
   }
   return null;
@@ -28,21 +30,21 @@ export function validateAddRegistrySection(name: unknown, section: unknown): str
 
 export function validateRegistrySectionPick(sectionName: unknown): string | null {
   if (isBlank(sectionName)) {
-    return 'Select a section from the list.';
+    return S.inspector.selectSectionFromList;
   }
   return null;
 }
 
 export function validateRegistryKeyPick(key: unknown): string | null {
   if (isBlank(key)) {
-    return 'Select a key from the list.';
+    return S.inspector.selectKeyFromList;
   }
   return null;
 }
 
 export function validateRegistryKeyText(key: unknown): string | null {
   if (isBlank(key)) {
-    return 'Enter a field key.';
+    return S.inspector.enterFieldKey;
   }
   return null;
 }

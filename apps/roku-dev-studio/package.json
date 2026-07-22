@@ -14,6 +14,7 @@
     "pretypecheck:renderer": "tsx scripts/build/ensure-modern-screenshot-vendor.ts && tsx scripts/build/ensure-tanstack-virtual-vendor.ts",
     "typecheck:renderer": "tsc --noEmit -p tsconfig.renderer.json",
     "verify:structured-pills": "tsx scripts/verify-structured-pills.ts",
+    "verify:i18n": "tsx scripts/verify-i18n-keys.ts",
     "typecheck:scripts": "tsc --noEmit -p tsconfig.scripts.json",
     "dev:solid": "tsx scripts/build/index.ts && concurrently -k \"npm run renderer:solid:dev\" \"wait-on tcp:127.0.0.1:5173 && cross-env RDS_SOLID_RENDERER=1 tsx scripts/run-electron.ts\"",
     "build:desktop": "tsx scripts/build/index.ts",

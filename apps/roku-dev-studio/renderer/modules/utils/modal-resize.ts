@@ -11,6 +11,8 @@
  * `is-resized` lets CSS drop the default max-w/h caps so the explicit size wins.
  */
 
+import { S } from '@shared/strings/index.js';
+
 // Smallest the user can shrink a resized modal to (px), so it never collapses past usability.
 const RESIZE_MIN_W = 360;
 const RESIZE_MIN_H = 220;
@@ -21,7 +23,7 @@ export function attachModalResize(modal: HTMLElement): () => void {
   const handle = document.createElement('div');
   handle.className = 'modal-resize-handle';
   handle.setAttribute('aria-hidden', 'true');
-  handle.title = 'Drag to resize';
+  handle.title = S.utils.dragToResize;
   modal.appendChild(handle);
 
   const onPointerDown = (e: PointerEvent): void => {

@@ -11,6 +11,7 @@ import {
   processTelnetSystemCommandOutput
 } from '../../modules/utils/telnet-system-command-run.js';
 import type { OutputArea } from '../../modules/ui/output-area.js';
+import { S } from '@shared/strings/index.js';
 
 /** `remove_plugin` responses are short, so we wrap up faster than the default
  *  Query-tab thresholds that are tuned for verbose commands like `plugins`. */
@@ -32,16 +33,12 @@ export function setupRemovePlugin(panel: HTMLElement, api: QueriesDeviceApi, out
     const appId = removePluginInput.value.trim();
 
     if (!appId) {
-      outputArea.display('<span style="color: var(--accent-yellow);">Please enter an App ID</span>', true);
+      outputArea.display(`<span style="color: var(--accent-yellow);">${S.queries.enterAppId}</span>`, true);
       removePluginInput.focus();
       return;
     }
 
-    if (
-      !confirm(
-        `Remove Plugin "${appId}"?\n\nThis will remove the app from this device and all devices linked to the same Roku account.`
-      )
-    ) {
+    if (!confirm(S.queries.confirmRemovePlugin(appId))) {
       return;
     }
 
@@ -52,7 +49,7 @@ export function setupRemovePlugin(panel: HTMLElement, api: QueriesDeviceApi, out
     }
 
     outputArea.display(
-      '<span style="color: var(--accent-yellow);">Connecting to Telnet (port 8080)...</span>',
+      `<span style="color: var(--accent-yellow);">${S.queries.connectingToTelnet}</span>`,
       true
     );
 
@@ -69,10 +66,10 @@ export function setupRemovePlugin(panel: HTMLElement, api: QueriesDeviceApi, out
 
     if (!result.ok) {
       outputArea.display(
-        `<span style="color: var(--accent-red);">Error: ${escapeHtml(result.error)}</span>`,
+        `<span style="color: var(--accent-red);">${S.queries.errorText(escapeHtml(result.error))}</span>`,
         true
       );
-      outputArea.originalContent = `Error: ${result.error}`;
+      outputArea.originalContent = S.queries.errorText(result.error);
       removePluginBtn.disabled = false;
       if (iconElement) iconElement.classList.remove('icon-loading');
       return;
@@ -111,9 +108,9 @@ export function setupRemovePlugin(panel: HTMLElement, api: QueriesDeviceApi, out
         true
       );
     } else {
-      outputArea.originalContent = 'No response received';
+      outputArea.originalContent = S.queries.noResponseReceived;
       outputArea.display(
-        '<span style="color: var(--accent-yellow);">No response received from command</span>',
+        `<span style="color: var(--accent-yellow);">${S.queries.noResponseFromCommand}</span>`,
         true
       );
     }

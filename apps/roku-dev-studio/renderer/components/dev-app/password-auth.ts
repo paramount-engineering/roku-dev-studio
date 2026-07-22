@@ -3,6 +3,7 @@
 import { icon, setSafeHTML, escapeHtml } from '../../modules/utils/index.js';
 import { getStoredPassword, savePassword, removePassword } from '../../modules/utils/storage.js';
 import type { DevAppApi, DevicePanelRoot, PasswordAuthElements } from './dev-app-types.js';
+import { S } from '@shared/strings/index.js';
 
 /**
  * Setup password authentication
@@ -29,9 +30,9 @@ export function setupPasswordAuth(
   
   function formatAuthStatusLabel(authenticated: boolean, detail?: string): string {
     if (authenticated) {
-      return icon('circle', 'icon-xs', 'icon-green') + ' Authenticated';
+      return icon('circle', 'icon-xs', 'icon-green') + ' ' + S.devApp.authenticated;
     }
-    const base = icon('circle', 'icon-xs', 'icon-red') + ' Not Authenticated';
+    const base = icon('circle', 'icon-xs', 'icon-red') + ' ' + S.devApp.notAuthenticated;
     if (detail) {
       // `detail` can be a device/API-supplied error string — escape it before
       // it lands in the HTML passed to `setSafeHTML` (the title attribute path
@@ -66,10 +67,10 @@ export function setupPasswordAuth(
     isAuthenticated = authenticated;
     if (authStatus) {
       if (authenticated) {
-        setSafeHTML(authStatus, icon('circle', 'icon-xs', 'icon-green') + ' Authenticated');
+        setSafeHTML(authStatus, icon('circle', 'icon-xs', 'icon-green') + ' ' + S.devApp.authenticated);
         authStatus.className = 'auth-status authenticated';
       } else {
-        setSafeHTML(authStatus, icon('circle', 'icon-xs', 'icon-red') + ' Not Authenticated');
+        setSafeHTML(authStatus, icon('circle', 'icon-xs', 'icon-red') + ' ' + S.devApp.notAuthenticated);
         authStatus.className = 'auth-status not-authenticated';
       }
     }
@@ -79,7 +80,7 @@ export function setupPasswordAuth(
   async function verifyPassword() {
     const password = passwordInput.value.trim();
     if (!password) {
-      updateAuthStatus(false, 'Enter a developer password.');
+      updateAuthStatus(false, S.devApp.enterDeveloperPassword);
       return false;
     }
     
@@ -92,10 +93,10 @@ export function setupPasswordAuth(
       const result = await api.verifyDevAuth(password);
 
       if (!result) {
-        updateAuthStatus(false, 'Verification failed — no response from the Dev App.');
+        updateAuthStatus(false, S.devApp.verificationNoResponse);
         if (verifyPasswordBtn) {
           verifyPasswordBtn.disabled = false;
-          verifyPasswordBtn.textContent = 'Verify';
+          verifyPasswordBtn.textContent = S.devApp.verify;
         }
         return false;
       }
@@ -129,14 +130,14 @@ export function setupPasswordAuth(
       
       if (verifyPasswordBtn) {
         verifyPasswordBtn.disabled = false;
-        verifyPasswordBtn.textContent = 'Verify';
+        verifyPasswordBtn.textContent = S.devApp.verify;
       }
       return authOk;
     } catch (e) {
       updateAuthStatus(false);
       if (verifyPasswordBtn) {
         verifyPasswordBtn.disabled = false;
-        verifyPasswordBtn.textContent = 'Verify';
+        verifyPasswordBtn.textContent = S.devApp.verify;
       }
       return false;
     }

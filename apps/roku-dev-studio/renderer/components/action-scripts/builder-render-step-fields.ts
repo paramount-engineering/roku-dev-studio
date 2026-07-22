@@ -20,6 +20,7 @@ import {
   syncRaleNodeFieldWaitValueRows,
   syncIfConditionValueRows
 } from './builder-step-helpers.js';
+import { S } from '@shared/strings/index.js';
 
 /**
  * @param {object} ctx
@@ -69,14 +70,14 @@ export function createRenderStepFields(ctx) {
         builderStepFields,
         `
         <div class="builder-field-group">
-          <label>Query</label>
+          <label>${S.actionScripts.labelQuery}</label>
           <select class="builder-query-preset action-scripts-select">
             ${QUERY_PRESETS.map((p) => `<option value="${escapeAttr(p.endpoint)}">${escapeHtml(p.label)}</option>`).join('')}
-            <option value="">Custom...</option>
+            <option value="">${S.actionScripts.optionCustom}</option>
           </select>
         </div>
         <div class="builder-field-group builder-query-custom-row" style="display: none;">
-          <label>Endpoint</label>
+          <label>${S.actionScripts.labelEndpoint}</label>
           <input type="text" class="builder-field-endpoint" placeholder="/query/… or telnet:plugins / telnet:free">
         </div>
       `
@@ -101,7 +102,7 @@ export function createRenderStepFields(ctx) {
         builderStepFields,
         `
         <div class="builder-field-group">
-          <label>Command (legacy type — use Device Query for new steps)</label>
+          <label>${S.actionScripts.labelSystemTelnetCommand}</label>
           <select class="builder-system-telnet-preset action-scripts-select">
             ${SYSTEM_TELNET_PRESETS.map(
               (p) =>
@@ -127,9 +128,9 @@ export function createRenderStepFields(ctx) {
         builderStepFields,
         `
         <div class="builder-field-group">
-          <label>Key</label>
+          <label>${S.actionScripts.labelKey}</label>
           <select class="builder-field-key builder-field-key-select action-scripts-select">
-            <option value="">-- Select key --</option>
+            <option value="">${S.actionScripts.optionSelectKey}</option>
             ${keyOpts}
           </select>
         </div>
@@ -142,8 +143,8 @@ export function createRenderStepFields(ctx) {
         builderStepFields,
         `
         <div class="builder-field-group">
-          <label>Text</label>
-          <input type="text" class="builder-field-text" placeholder="Text to send">
+          <label>${S.actionScripts.labelText}</label>
+          <input type="text" class="builder-field-text" placeholder="${S.actionScripts.placeholderTextToSend}">
         </div>
       `
       );
@@ -154,11 +155,11 @@ export function createRenderStepFields(ctx) {
         builderStepFields,
         `
         <div class="builder-field-group">
-          <label>App ID</label>
+          <label>${S.actionScripts.labelAppId}</label>
           <input type="text" class="builder-field-appId" placeholder="12345">
         </div>
         <div class="builder-field-group">
-          <label>Params (optional)</label>
+          <label>${S.actionScripts.labelParamsOptional}</label>
           <input type="text" class="builder-field-params" placeholder="">
         </div>
       `
@@ -170,18 +171,18 @@ export function createRenderStepFields(ctx) {
         builderStepFields,
         `
         <div class="builder-field-group">
-          <label>File path</label>
+          <label>${S.actionScripts.labelFilePath}</label>
           <div class="builder-file-path-row">
-            <input type="text" class="builder-field-filePath" placeholder="Paste path or choose file" title="Path to .zip package. Paste here or use Choose File.">
-            <button type="button" class="btn btn-secondary builder-choose-file-btn" title="Choose file (.zip)" aria-label="Choose file">
+            <input type="text" class="builder-field-filePath" placeholder="${S.actionScripts.placeholderPastePathOrChoose}" title="${S.actionScripts.titleFilePathZip}">
+            <button type="button" class="btn btn-secondary builder-choose-file-btn" title="${S.actionScripts.chooseFileTitle}" aria-label="${S.actionScripts.chooseFileAria}">
               <span class="builder-choose-file-btn__icon" aria-hidden="true"><svg width="18" height="18" aria-hidden="true"><use href="#icon-folder"/></svg></span>
-              <span class="builder-choose-file-btn__text">Choose File</span>
+              <span class="builder-choose-file-btn__text">${S.actionScripts.chooseFileBtn}</span>
             </button>
           </div>
         </div>
         <div class="builder-field-group">
-          <label>Password</label>
-          <input type="password" class="builder-field-password" placeholder="Dev Password">
+          <label>${S.actionScripts.labelPassword}</label>
+          <input type="password" class="builder-field-password" placeholder="${S.actionScripts.placeholderDevPassword}">
         </div>
       `
       );
@@ -200,8 +201,8 @@ export function createRenderStepFields(ctx) {
         builderStepFields,
         `
         <div class="builder-field-group">
-          <label>Password</label>
-          <input type="password" class="builder-field-password" placeholder="Dev Password">
+          <label>${S.actionScripts.labelPassword}</label>
+          <input type="password" class="builder-field-password" placeholder="${S.actionScripts.placeholderDevPassword}">
         </div>
       `
       );
@@ -216,18 +217,18 @@ export function createRenderStepFields(ctx) {
               return `<option value="${escapeAttr(name)}">${escapeHtml(name)}</option>`;
             })
             .join('')
-        : '<option value="">Connect App Connector first</option>';
+        : `<option value="">${S.actionScripts.optionConnectAppConnectorFirst}</option>`;
       setSafeHTML(
         builderStepFields,
         `
         <div class="builder-field-group builder-app-function-fn">
-          <label>Function</label>
+          <label>${S.actionScripts.labelFunction}</label>
           <select class="builder-field-functionName action-scripts-select">${opts}</select>
         </div>
         <div class="builder-app-function-params"></div>
         <div class="builder-field-group">
-          <label>Set Var (optional)</label>
-          <input type="text" class="builder-field-assignToVar" placeholder="e.g. varX" autocomplete="off" spellcheck="false" title="Letters, digits, underscore; start with letter or _">
+          <label>${S.actionScripts.labelSetVarOptional}</label>
+          <input type="text" class="builder-field-assignToVar" placeholder="${S.actionScripts.placeholderVarExample}" autocomplete="off" spellcheck="false" title="${S.actionScripts.titleVarNameRules}">
         </div>
       `
       );
@@ -241,7 +242,7 @@ export function createRenderStepFields(ctx) {
         if (params.length === 0) {
           setSafeHTML(
             paramsContainer,
-            '<div class="builder-params-empty">' + (name ? 'No parameters' : 'Select a function') + '</div>'
+            '<div class="builder-params-empty">' + (name ? S.actionScripts.noParameters : S.actionScripts.selectAFunction) + '</div>'
           );
           paramsContainer.className = 'builder-app-function-params';
           return;
@@ -301,15 +302,15 @@ export function createRenderStepFields(ctx) {
         builderStepFields,
         `
         <div class="builder-field-group builder-rale-cmd-group">
-          <label>Command</label>
+          <label>${S.actionScripts.labelCommand}</label>
           <select class="builder-field-rale-command action-scripts-select">${cmdOpts}</select>
         </div>
         <div class="builder-field-group builder-rale-assign-group">
-          <label>Set Var (optional)</label>
-          <input type="text" class="builder-field-assignToVar" placeholder="e.g. varX" autocomplete="off" spellcheck="false" title="Letters, digits, underscore; start with letter or _">
+          <label>${S.actionScripts.labelSetVarOptional}</label>
+          <input type="text" class="builder-field-assignToVar" placeholder="${S.actionScripts.placeholderVarExample}" autocomplete="off" spellcheck="false" title="${S.actionScripts.titleVarNameRules}">
         </div>
         <div class="builder-rale-params-block">
-          <span class="builder-rale-params-heading">Parameters</span>
+          <span class="builder-rale-params-heading">${S.actionScripts.labelParameters}</span>
           <div class="builder-rale-params-row">
             <div class="rale-params-container builder-rale-command-params"></div>
           </div>
@@ -328,16 +329,16 @@ export function createRenderStepFields(ctx) {
         builderStepFields,
         `
         <div class="builder-field-group">
-          <label>Label (optional)</label>
-          <input type="text" class="builder-field-label" placeholder="e.g. After login">
+          <label>${S.actionScripts.labelLabelOptional}</label>
+          <input type="text" class="builder-field-label" placeholder="${S.actionScripts.placeholderScreenshotLabel}">
         </div>
         <div class="builder-field-group">
-          <label>Wait Before (ms)</label>
+          <label>${S.actionScripts.labelWaitBeforeMs}</label>
           <input type="number" class="builder-field-screenshot-waitBeforeMs" value="100" placeholder="100" min="0">
         </div>
         <div class="builder-field-group">
-          <label>Wait After (ms)</label>
-          <input type="number" class="builder-field-screenshot-waitAfterTriggerMs" value="" placeholder="1500 (default)" min="0" title="Time to wait after triggering capture before first download. Increase if image is truncated or UI is slow (e.g. HUD).">
+          <label>${S.actionScripts.labelWaitAfterMs}</label>
+          <input type="number" class="builder-field-screenshot-waitAfterTriggerMs" value="" placeholder="${S.actionScripts.placeholderWaitAfterDefault}" min="0" title="${S.actionScripts.titleWaitAfter}">
         </div>
       `
       );
@@ -345,11 +346,11 @@ export function createRenderStepFields(ctx) {
     }
     if (type === 'devicePerformance') {
       const chartOpts = [
-        { value: '', label: 'Choose chart…' },
-        { value: 'objects', label: 'BrightScript Objects' },
-        { value: 'cpu', label: 'CPU Usage' },
-        { value: 'memory', label: 'System Memory' },
-        { value: 'aboveAll', label: 'Above All' }
+        { value: '', label: S.actionScripts.optionChooseChart },
+        { value: 'objects', label: S.actionScripts.chartObjects },
+        { value: 'cpu', label: S.actionScripts.chartCpu },
+        { value: 'memory', label: S.actionScripts.chartMemory },
+        { value: 'aboveAll', label: S.actionScripts.chartAboveAll }
       ]
         .map(
           (o) =>
@@ -360,14 +361,14 @@ export function createRenderStepFields(ctx) {
         builderStepFields,
         `
         <div class="builder-field-group">
-          <label>Chart</label>
+          <label>${S.actionScripts.labelChart}</label>
           <select class="builder-field-device-performance-chart action-scripts-select" required>
             ${chartOpts}
           </select>
         </div>
         <div class="builder-field-group">
-          <label>Label (optional)</label>
-          <input type="text" class="builder-field-device-performance-label" placeholder="e.g. After navigation">
+          <label>${S.actionScripts.labelLabelOptional}</label>
+          <input type="text" class="builder-field-device-performance-label" placeholder="${S.actionScripts.placeholderPerfLabel}">
         </div>
       `
       );
@@ -375,7 +376,7 @@ export function createRenderStepFields(ctx) {
     }
     if (type === 'wait') {
       const waitModeOptions =
-        '<option value="delay">Fixed Delay (ms)</option><option value="condition">Until Condition</option>';
+        `<option value="delay">${S.actionScripts.waitModeFixedDelay}</option><option value="condition">${S.actionScripts.waitModeUntilCondition}</option>`;
       const stateOptions = MEDIA_PLAYER_STATES.map(
         (s) => `<option value="${escapeAttr(s.value)}">${escapeHtml(s.label)}</option>`
       ).join('');
@@ -386,35 +387,35 @@ export function createRenderStepFields(ctx) {
         builderStepFields,
         `
         <div class="builder-field-group builder-wait-grid-slot-wait-mode">
-          <label>Wait Type</label>
+          <label>${S.actionScripts.labelWaitType}</label>
           <select class="builder-field-wait-mode action-scripts-select">${waitModeOptions}</select>
         </div>
         <div class="builder-field-group builder-wait-delay-row builder-wait-grid-slot-delay">
-          <label>Delay (ms)</label>
+          <label>${S.actionScripts.labelDelayMs}</label>
           <input type="number" class="builder-field-wait-delayMs" value="2000" placeholder="2000" min="0">
         </div>
         <div class="builder-field-group builder-wait-condition-rows builder-wait-grid-slot-source" style="display: none;">
-          <label>Source</label>
+          <label>${S.actionScripts.labelSource}</label>
           <select class="builder-field-wait-source action-scripts-select" data-wait-prev-src="">
-            <option value="media-player">Media Player</option>
-            <option value="rale-node-field">RALE Node Field</option>
+            <option value="media-player">${S.actionScripts.sourceMediaPlayer}</option>
+            <option value="rale-node-field">${S.actionScripts.sourceRaleNodeField}</option>
           </select>
         </div>
         <div class="builder-wait-mp-row builder-wait-condition-rows" style="display: none;">
           <div class="builder-wait-mp-inner">
             <div class="builder-field-group">
-              <label>State</label>
+              <label>${S.actionScripts.labelState}</label>
               <select class="builder-field-wait-state action-scripts-select">
-                <option value="">-- Select state --</option>
+                <option value="">${S.actionScripts.optionSelectState}</option>
                 ${stateOptions}
               </select>
             </div>
             <div class="builder-field-group">
-              <label>Timeout (ms)</label>
+              <label>${S.actionScripts.labelTimeoutMs}</label>
               <input type="number" class="builder-field-timeoutMs builder-wait-timeout--mp" value="300000" placeholder="300000" min="0">
             </div>
             <div class="builder-field-group">
-              <label>Poll Interval (ms)</label>
+              <label>${S.actionScripts.labelPollIntervalMs}</label>
               <input type="number" class="builder-field-pollIntervalMs builder-wait-poll--mp" value="2000" placeholder="2000" min="0">
             </div>
           </div>
@@ -423,42 +424,42 @@ export function createRenderStepFields(ctx) {
           <div class="builder-wait-rale-inner">
             <div class="builder-wait-rale-row-main">
               <div class="builder-field-group builder-wait-rale-path-col">
-                <label>Path (JSON array)</label>
+                <label>${S.actionScripts.labelPathJsonArray}</label>
                 <textarea class="builder-field-wait-path action-scripts-select" rows="2" spellcheck="false">[]</textarea>
               </div>
               <div class="builder-field-group">
-                <label>Node ID</label>
-                <input type="text" class="builder-field-wait-node-id action-scripts-select" placeholder="Node ID">
+                <label>${S.actionScripts.labelNodeId}</label>
+                <input type="text" class="builder-field-wait-node-id action-scripts-select" placeholder="${S.actionScripts.labelNodeId}">
               </div>
               <div class="builder-field-group">
-                <label>Field name</label>
-                <input type="text" class="builder-field-wait-field action-scripts-select" placeholder="Field in FieldList">
+                <label>${S.actionScripts.labelFieldName}</label>
+                <input type="text" class="builder-field-wait-field action-scripts-select" placeholder="${S.actionScripts.placeholderFieldInFieldList}">
               </div>
               <div class="builder-field-group">
-                <label>Operator</label>
+                <label>${S.actionScripts.labelOperator}</label>
                 <select class="builder-field-wait-operator action-scripts-select">${opOptions}</select>
               </div>
             </div>
             <div class="builder-wait-rale-row-bottom">
               <div class="builder-field-group builder-wait-rale-value-cell">
-                <label class="builder-field-wait-value-label">Value (is)</label>
-                <input type="text" class="builder-field-wait-value action-scripts-select" placeholder="Compare string">
+                <label class="builder-field-wait-value-label">${S.actionScripts.valueWithOperator('is')}</label>
+                <input type="text" class="builder-field-wait-value action-scripts-select" placeholder="${S.actionScripts.placeholderCompareString}">
               </div>
               <div class="builder-field-group builder-wait-rale-ci-cell">
                 <span class="builder-wait-rale-ci-label-spacer" aria-hidden="true">&nbsp;</span>
                 <div class="builder-wait-ci-row-inner">
                   <label class="builder-wait-ci-inline">
                     <input type="checkbox" class="builder-field-wait-caseInsensitive">
-                    <span class="builder-wait-ci-text">Case-insensitive</span>
+                    <span class="builder-wait-ci-text">${S.actionScripts.caseInsensitive}</span>
                   </label>
                 </div>
               </div>
               <div class="builder-field-group">
-                <label>Timeout (ms)</label>
+                <label>${S.actionScripts.labelTimeoutMs}</label>
                 <input type="number" class="builder-field-timeoutMs builder-wait-timeout--rale" value="300000" placeholder="300000" min="0">
               </div>
               <div class="builder-field-group">
-                <label>Poll Interval (ms)</label>
+                <label>${S.actionScripts.labelPollIntervalMs}</label>
                 <input type="number" class="builder-field-pollIntervalMs builder-wait-poll--rale" value="2000" placeholder="2000" min="0">
               </div>
             </div>
@@ -516,18 +517,18 @@ export function createRenderStepFields(ctx) {
         builderStepFields,
         `
         <div class="builder-field-group builder-if-grid-slot-condition">
-          <label>Condition source</label>
+          <label>${S.actionScripts.labelConditionSource}</label>
           <select class="builder-field-if-source action-scripts-select">
-            <option value="media-player">Media Player</option>
-            <option value="active-app">Active App</option>
-            <option value="rale-node-field">RALE Node Field</option>
-            <option value="variables">Variables</option>
+            <option value="media-player">${S.actionScripts.sourceMediaPlayer}</option>
+            <option value="active-app">${S.actionScripts.sourceActiveApp}</option>
+            <option value="rale-node-field">${S.actionScripts.sourceRaleNodeField}</option>
+            <option value="variables">${S.actionScripts.sourceVariables}</option>
           </select>
         </div>
         <div class="builder-field-group builder-if-grid-slot-mp-state builder-if-panel">
-          <label>State</label>
+          <label>${S.actionScripts.labelState}</label>
           <select class="builder-field-if-state action-scripts-select">
-            <option value="">-- Select state --</option>
+            <option value="">${S.actionScripts.optionSelectState}</option>
             ${stateOptions}
           </select>
         </div>
@@ -535,33 +536,33 @@ export function createRenderStepFields(ctx) {
           <div class="builder-wait-rale-inner">
             <div class="builder-wait-rale-row-main">
               <div class="builder-field-group builder-wait-rale-path-col">
-                <label>Path (JSON array)</label>
+                <label>${S.actionScripts.labelPathJsonArray}</label>
                 <textarea class="builder-field-if-rale-path action-scripts-select" rows="2" spellcheck="false">[]</textarea>
               </div>
               <div class="builder-field-group">
-                <label>Node ID</label>
-                <input type="text" class="builder-field-if-rale-node-id action-scripts-select" placeholder="Node ID">
+                <label>${S.actionScripts.labelNodeId}</label>
+                <input type="text" class="builder-field-if-rale-node-id action-scripts-select" placeholder="${S.actionScripts.labelNodeId}">
               </div>
               <div class="builder-field-group">
-                <label>Field name</label>
-                <input type="text" class="builder-field-if-rale-field action-scripts-select" placeholder="Field in FieldList">
+                <label>${S.actionScripts.labelFieldName}</label>
+                <input type="text" class="builder-field-if-rale-field action-scripts-select" placeholder="${S.actionScripts.placeholderFieldInFieldList}">
               </div>
               <div class="builder-field-group">
-                <label>Operator</label>
+                <label>${S.actionScripts.labelOperator}</label>
                 <select class="builder-field-if-rale-operator action-scripts-select">${opOptions}</select>
               </div>
             </div>
             <div class="builder-wait-rale-row-bottom builder-if-rale-row-bottom--two-cols">
               <div class="builder-field-group builder-if-rale-value-cell builder-wait-rale-value-cell">
-                <label class="builder-field-if-rale-value-label">Value (is)</label>
-                <input type="text" class="builder-field-if-rale-value action-scripts-select" placeholder="Compare string">
+                <label class="builder-field-if-rale-value-label">${S.actionScripts.valueWithOperator('is')}</label>
+                <input type="text" class="builder-field-if-rale-value action-scripts-select" placeholder="${S.actionScripts.placeholderCompareString}">
               </div>
               <div class="builder-field-group builder-if-rale-ci-cell builder-wait-rale-ci-cell">
                 <span class="builder-wait-rale-ci-label-spacer" aria-hidden="true">&nbsp;</span>
                 <div class="builder-wait-ci-row-inner">
                   <label class="builder-wait-ci-inline">
                     <input type="checkbox" class="builder-field-if-rale-caseInsensitive">
-                    <span class="builder-wait-ci-text">Case-insensitive</span>
+                    <span class="builder-wait-ci-text">${S.actionScripts.caseInsensitive}</span>
                   </label>
                 </div>
               </div>
@@ -570,26 +571,26 @@ export function createRenderStepFields(ctx) {
         </div>
         <div class="builder-if-active-app-panel builder-if-panel" style="display:none">
           <div class="builder-field-group">
-            <label>Attribute</label>
+            <label>${S.actionScripts.labelAttribute}</label>
             <select class="builder-field-if-active-app-attribute action-scripts-select">
               ${activeAppAttrOptions}
             </select>
           </div>
           <div class="builder-if-compare-row builder-if-active-app-compare-row">
             <div class="builder-field-group">
-              <label>Operator</label>
+              <label>${S.actionScripts.labelOperator}</label>
               <select class="builder-field-if-active-app-operator action-scripts-select">${opOptions}</select>
             </div>
             <div class="builder-field-group builder-if-active-app-value-cell">
-              <label class="builder-field-if-active-app-value-label">Value (is)</label>
-              <input type="text" class="builder-field-if-active-app-value action-scripts-select" placeholder="e.g. dev, 837, YouTube">
+              <label class="builder-field-if-active-app-value-label">${S.actionScripts.valueWithOperator('is')}</label>
+              <input type="text" class="builder-field-if-active-app-value action-scripts-select" placeholder="${S.actionScripts.placeholderActiveAppValue}">
             </div>
             <div class="builder-field-group builder-if-active-app-ci-cell builder-wait-rale-ci-cell">
               <span class="builder-wait-rale-ci-label-spacer" aria-hidden="true">&nbsp;</span>
               <div class="builder-wait-ci-row-inner">
                 <label class="builder-wait-ci-inline">
                   <input type="checkbox" class="builder-field-if-active-app-caseInsensitive">
-                  <span class="builder-wait-ci-text">Case-insensitive</span>
+                  <span class="builder-wait-ci-text">${S.actionScripts.caseInsensitive}</span>
                 </label>
               </div>
             </div>
@@ -597,24 +598,24 @@ export function createRenderStepFields(ctx) {
         </div>
         <div class="builder-if-vars-panel builder-if-panel" style="display:none">
           <div class="builder-field-group">
-            <label>Variable Path</label>
+            <label>${S.actionScripts.labelVariablePath}</label>
             <input type="text" class="builder-field-if-variablePath action-scripts-select" placeholder="myVar or data.items.0.id">
           </div>
           <div class="builder-if-compare-row builder-if-vars-compare-row">
             <div class="builder-field-group">
-              <label>Operator</label>
+              <label>${S.actionScripts.labelOperator}</label>
               <select class="builder-field-if-vars-operator action-scripts-select">${opOptions}</select>
             </div>
             <div class="builder-field-group builder-if-vars-value-cell">
-              <label class="builder-field-if-vars-value-label">Value (is)</label>
-              <input type="text" class="builder-field-if-vars-value action-scripts-select" placeholder="Compare Value">
+              <label class="builder-field-if-vars-value-label">${S.actionScripts.valueWithOperator('is')}</label>
+              <input type="text" class="builder-field-if-vars-value action-scripts-select" placeholder="${S.actionScripts.placeholderCompareValue}">
             </div>
             <div class="builder-field-group builder-if-vars-ci-cell builder-wait-rale-ci-cell">
               <span class="builder-wait-rale-ci-label-spacer" aria-hidden="true">&nbsp;</span>
               <div class="builder-wait-ci-row-inner">
                 <label class="builder-wait-ci-inline">
                   <input type="checkbox" class="builder-field-if-vars-caseInsensitive">
-                  <span class="builder-wait-ci-text">Case-insensitive</span>
+                  <span class="builder-wait-ci-text">${S.actionScripts.caseInsensitive}</span>
                 </label>
               </div>
             </div>
@@ -660,9 +661,9 @@ export function createRenderStepFields(ctx) {
         builderStepFields,
         `
         <div class="builder-field-group">
-          <label>POST</label>
+          <label>${S.actionScripts.labelPost}</label>
           <select class="builder-field-endpoint builder-post-preset action-scripts-select">
-            <option value="">-- Select POST --</option>
+            <option value="">${S.actionScripts.optionSelectPost}</option>
             ${postOpts}
           </select>
         </div>
@@ -670,6 +671,6 @@ export function createRenderStepFields(ctx) {
       );
       return;
     }
-    setSafeHTML(builderStepFields, '<p>No extra fields for this type.</p>');
+    setSafeHTML(builderStepFields, `<p>${S.actionScripts.noExtraFields}</p>`);
   };
 }

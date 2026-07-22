@@ -31,6 +31,7 @@ import {
 } from './find-highlight.js';
 import { attachSearchHistory } from './search-history.js';
 import { findHistoryKey } from './search-storage-keys.js';
+import { S } from '@shared/strings/index.js';
 
 export type FindBarHandle = {
   /** Show/hide the bar. Hiding drops highlights; the query is retained for next show. */
@@ -72,7 +73,7 @@ type MatchOffset = { start: number; end: number };
 
 /** Build the standardized find-bar markup. Insert it next to a scroll container, then pass it to
  *  {@link createFindBar} as `barEl`. */
-export function buildFindBarElement(placeholder = 'Find'): HTMLElement {
+export function buildFindBarElement(placeholder: string = S.ui.findPlaceholder): HTMLElement {
   const bar = document.createElement('div');
   bar.className = 'find-bar';
   bar.hidden = true;
@@ -84,9 +85,9 @@ export function buildFindBarElement(placeholder = 'Find'): HTMLElement {
     `<span class="find-bar-icon icon icon-xs"><svg><use href="#icon-zoom"/></svg></span>` +
     `<input type="text" class="find-bar-input" data-find-input placeholder="${placeholder}" spellcheck="false" aria-label="${placeholder}" />` +
     `<span class="find-bar-count" data-find-count aria-live="polite"></span>` +
-    `<button type="button" class="find-bar-btn" data-find-prev title="Previous Match (Shift+Enter)" aria-label="Previous Match"><span class="icon icon-xs"><svg><use href="#icon-chevron-up"/></svg></span></button>` +
-    `<button type="button" class="find-bar-btn" data-find-next title="Next Match (Enter)" aria-label="Next Match"><span class="icon icon-xs"><svg><use href="#icon-chevron-down"/></svg></span></button>` +
-    `<button type="button" class="find-bar-btn" data-find-clear title="Clear search (Esc)" aria-label="Clear search"><span class="icon icon-xs"><svg><use href="#icon-x"/></svg></span></button>` +
+    `<button type="button" class="find-bar-btn" data-find-prev title="${S.ui.prevMatchTitle}" aria-label="${S.ui.prevMatch}"><span class="icon icon-xs"><svg><use href="#icon-chevron-up"/></svg></span></button>` +
+    `<button type="button" class="find-bar-btn" data-find-next title="${S.ui.nextMatchTitle}" aria-label="${S.ui.nextMatch}"><span class="icon icon-xs"><svg><use href="#icon-chevron-down"/></svg></span></button>` +
+    `<button type="button" class="find-bar-btn" data-find-clear title="${S.ui.clearSearchTitle}" aria-label="${S.ui.clearSearch}"><span class="icon icon-xs"><svg><use href="#icon-x"/></svg></span></button>` +
     `</div>`;
   return bar;
 }
@@ -266,13 +267,13 @@ export function createFindBar(opts: FindBarOptions): FindBarHandle | null {
       return;
     }
     if (matchOffsets.length === 0) {
-      countEl.textContent = 'No results';
+      countEl.textContent = S.ui.noResults;
       barEl.classList.add('find-bar-empty');
       return;
     }
     barEl.classList.remove('find-bar-empty');
     const total = matchOffsets.length >= MAX_MATCHES ? `${MAX_MATCHES}+` : `${matchOffsets.length}`;
-    countEl.textContent = `${currentIndex + 1} of ${total}`;
+    countEl.textContent = S.ui.matchCountOf(currentIndex + 1, total);
   }
 
   function runSearch(jumpToFirst: boolean): void {

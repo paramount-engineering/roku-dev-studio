@@ -7,6 +7,7 @@ import {
   closeModalWithOriginMotion
 } from '../../modules/utils/modal-origin-motion.js';
 import { attachBackdropClickToClose } from '../../modules/utils/modal-backdrop-click.js';
+import { S } from '@shared/strings/index.js';
 import type { DevicePanelRoot, DisplayResponseFn, RaleSendCommand } from './inspector-types.js';
 import type { NodeUpdateContext } from './inspector-node-update-helpers.js';
 
@@ -37,38 +38,38 @@ export function parseValueForRaleFieldType(
     const s = raw.trim().toLowerCase();
     if (s === 'true' || s === '1') return { ok: true, value: true };
     if (s === 'false' || s === '0') return { ok: true, value: false };
-    return { ok: false, error: 'Boolean: use true or false' };
+    return { ok: false, error: S.inspector.parseBoolean };
   }
   if (t === 'integer') {
     const n = Number.parseInt(raw.trim(), 10);
-    if (Number.isNaN(n)) return { ok: false, error: 'Integer: invalid number' };
+    if (Number.isNaN(n)) return { ok: false, error: S.inspector.parseInteger };
     return { ok: true, value: n };
   }
   if (t === 'float') {
     const n = Number.parseFloat(raw.trim());
-    if (Number.isNaN(n)) return { ok: false, error: 'Float: invalid number' };
+    if (Number.isNaN(n)) return { ok: false, error: S.inspector.parseFloat };
     return { ok: true, value: n };
   }
   if (t === 'color') {
     const n = Number.parseInt(raw.trim(), 10);
-    if (Number.isNaN(n)) return { ok: false, error: 'Color: use integer (e.g. -16777216)' };
+    if (Number.isNaN(n)) return { ok: false, error: S.inspector.parseColor };
     return { ok: true, value: n };
   }
   if (t === 'vector2d' || t === 'rect2d') {
     try {
       const v = JSON.parse(raw.trim());
       if (!Array.isArray(v)) {
-        return { ok: false, error: `${t}: JSON array required` };
+        return { ok: false, error: S.inspector.jsonArrayRequired(t) };
       }
       if (t === 'vector2d' && v.length < 2) {
-        return { ok: false, error: 'Vector2d: at least two elements, e.g. [0,0]' };
+        return { ok: false, error: S.inspector.parseVector2d };
       }
       if (t === 'rect2d' && v.length < 4) {
-        return { ok: false, error: 'Rect2d: four elements, e.g. [0,0,100,100]' };
+        return { ok: false, error: S.inspector.parseRect2d };
       }
       return { ok: true, value: v };
     } catch (e) {
-      return { ok: false, error: `${t}: invalid JSON array` };
+      return { ok: false, error: S.inspector.invalidJsonArray(t) };
     }
   }
   if (t === 'array') {
@@ -78,7 +79,7 @@ export function parseValueForRaleFieldType(
         const v = JSON.parse(s);
         if (Array.isArray(v)) return { ok: true, value: v };
       } catch (e) {
-        return { ok: false, error: 'Array: invalid JSON array' };
+        return { ok: false, error: S.inspector.parseArray };
       }
     }
     return { ok: true, value: s.split(',').map((x: string) => x.trim()) };
@@ -88,9 +89,9 @@ export function parseValueForRaleFieldType(
       const v = JSON.parse(raw.trim());
       if (v && typeof v === 'object' && !Array.isArray(v)) return { ok: true, value: v };
     } catch (e) {
-      return { ok: false, error: 'assocarray: JSON object required' };
+      return { ok: false, error: S.inspector.parseAssocArray };
     }
-    return { ok: false, error: 'assocarray: JSON object required' };
+    return { ok: false, error: S.inspector.parseAssocArray };
   }
   if (t === 'node') {
     return { ok: true, value: raw.trim() };
@@ -119,7 +120,7 @@ function ensureTypeOption(typeSelectEl: HTMLSelectElement, fieldType: string) {
 
 function outcomeFromRaleResult(result: unknown): { ok: boolean; message: string } {
   if (!result) {
-    return { ok: false, message: 'No response from device.' };
+    return { ok: false, message: `${S.inspector.noResponseFromDevice}.` };
   }
   const r = result as { success?: boolean; data?: unknown; error?: string };
   if (r.success && r.data !== undefined) {
@@ -133,7 +134,7 @@ function outcomeFromRaleResult(result: unknown): { ok: boolean; message: string 
     }
     return { ok: true, message: '' };
   }
-  return { ok: false, message: String(r.error || 'Command failed') };
+  return { ok: false, message: String(r.error || S.inspector.commandFailed) };
 }
 
 export function setupNodeUpdatePanel(panel: DevicePanelRoot, options: NodeUpdatePanelOptions) {
@@ -302,9 +303,8 @@ export function setupNodeUpdatePanel(panel: DevicePanelRoot, options: NodeUpdate
       rowTypeEl.hidden = false;
       rowValEl.hidden = false;
       typeSel.disabled = false;
-      if (valueLabel) valueLabel.textContent = 'New value';
-      valArea.placeholder =
-        'Initial value for the new field (scalars, true/false, JSON for arrays / objects)';
+      if (valueLabel) valueLabel.textContent = S.inspector.newValueLabel;
+      valArea.placeholder = S.inspector.addValuePlaceholder;
     } else if (a === 'remove') {
       rowFldEl.hidden = false;
       rowAddEl.hidden = true;
@@ -316,17 +316,16 @@ export function setupNodeUpdatePanel(panel: DevicePanelRoot, options: NodeUpdate
       rowTypeEl.hidden = false;
       rowValEl.hidden = false;
       typeSel.disabled = true;
-      if (valueLabel) valueLabel.textContent = 'Value';
-      valArea.placeholder =
-        'Scalars, true/false, JSON for arrays / vectors / objects';
+      if (valueLabel) valueLabel.textContent = S.inspector.valueLabel;
+      valArea.placeholder = S.inspector.updateValuePlaceholder;
     }
 
     if (a === 'remove') {
-      apply.textContent = 'Remove Field';
+      apply.textContent = S.inspector.removeFieldBtn;
     } else if (a === 'add') {
-      apply.textContent = 'Add Field';
+      apply.textContent = S.inspector.addFieldBtn;
     } else {
-      apply.textContent = 'Update Field';
+      apply.textContent = S.inspector.updateFieldBtn;
     }
   }
 
@@ -394,7 +393,7 @@ export function setupNodeUpdatePanel(panel: DevicePanelRoot, options: NodeUpdate
     const ctx = getLastGetNodeContext?.();
     if (!ctx || !Array.isArray(ctx.path)) {
       displayResponseFn(
-        { command: 'setField', error: 'No node context — run Get Node by ID first.' },
+        { command: 'setField', error: S.inspector.noNodeContext },
         true
       );
       return;
@@ -438,9 +437,9 @@ export function setupNodeUpdatePanel(panel: DevicePanelRoot, options: NodeUpdate
 
     const ctx = getLastGetNodeContext?.();
     if (!ctx || !Array.isArray(ctx.path)) {
-      showModalFeedback('No node context — run Get Node by ID first.', 'error');
+      showModalFeedback(S.inspector.noNodeContext, 'error');
       displayResponseFn(
-        { command: 'setField', error: 'No node context — run Get Node by ID first.' },
+        { command: 'setField', error: S.inspector.noNodeContext },
         true
       );
       return;
@@ -454,14 +453,14 @@ export function setupNodeUpdatePanel(panel: DevicePanelRoot, options: NodeUpdate
       fieldName = String(selField.value || '').trim();
     }
     if (!fieldName) {
-      showModalFeedback('Field name is required.', 'error');
+      showModalFeedback(S.inspector.fieldNameRequired, 'error');
       return;
     }
 
     const connectionId = getConnectionId();
     if (!connectionId) {
-      showModalFeedback('Not connected.', 'error');
-      displayResponseFn({ command: 'setField', error: 'Not connected' }, true);
+      showModalFeedback(`${S.inspector.notConnected}.`, 'error');
+      displayResponseFn({ command: 'setField', error: S.inspector.notConnected }, true);
       return;
     }
 
@@ -469,7 +468,7 @@ export function setupNodeUpdatePanel(panel: DevicePanelRoot, options: NodeUpdate
     if (modalBox) modalBox.setAttribute('aria-busy', 'true');
 
     try {
-      showModalFeedback('Selecting node…', 'loading');
+      showModalFeedback(S.inspector.selectingNode, 'loading');
 
       const sel = await sendCommand('selectNode', { path: ctx.path });
       if (!sel.success) {
@@ -502,13 +501,13 @@ export function setupNodeUpdatePanel(panel: DevicePanelRoot, options: NodeUpdate
       }
 
       if (action === 'remove') {
-        showModalFeedback('Removing field…', 'loading');
+        showModalFeedback(S.inspector.removingField, 'loading');
         const rm = await sendCommand('removeField', { field: fieldName });
         formatRaleCommandResponse(rm, 'removeField', displayResponseFn);
         const out = outcomeFromRaleResult(rm);
         if (out.ok) {
           successfulFieldMutationsInModal += 1;
-          showModalFeedback(`Removed field "${fieldName}".`, 'success');
+          showModalFeedback(S.inspector.removedField(fieldName), 'success');
         } else {
           showModalFeedback(out.message, 'error');
         }
@@ -527,7 +526,7 @@ export function setupNodeUpdatePanel(panel: DevicePanelRoot, options: NodeUpdate
         return;
       }
 
-      showModalFeedback(action === 'add' ? 'Adding field…' : 'Updating field…', 'loading');
+      showModalFeedback(action === 'add' ? S.inspector.addingField : S.inspector.updatingField, 'loading');
 
       const setRes = await sendCommand('setField', {
         field: fieldName,
@@ -538,8 +537,10 @@ export function setupNodeUpdatePanel(panel: DevicePanelRoot, options: NodeUpdate
       const out = outcomeFromRaleResult(setRes);
       if (out.ok) {
         successfulFieldMutationsInModal += 1;
-        const verb = action === 'add' ? 'Added' : 'Updated';
-        showModalFeedback(`${verb} field "${fieldName}".`, 'success');
+        showModalFeedback(
+          action === 'add' ? S.inspector.addedField(fieldName) : S.inspector.updatedField(fieldName),
+          'success'
+        );
       } else {
         showModalFeedback(out.message, 'error');
       }

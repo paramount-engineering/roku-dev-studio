@@ -618,7 +618,7 @@ function setupSystemHandlers(
       const payloadRec = payload as Record<string, unknown>;
       const blocks = payloadRec.blocks;
       if (!Array.isArray(blocks) || blocks.length === 0) {
-        drawSingleLine('No results to save.');
+        drawSingleLine('No Results to save.');
       } else {
         for (const block of blocks as Record<string, unknown>[]) {
           const depth = Math.min(12, Math.max(0, Number(block.depth) || 0));

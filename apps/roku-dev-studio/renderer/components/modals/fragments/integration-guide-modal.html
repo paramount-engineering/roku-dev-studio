@@ -2,10 +2,10 @@
 <div class="modal-overlay integration-guide-modal" id="integrationGuideModal" aria-hidden="true">
   <div class="modal integration-guide-modal-box">
     <div class="modal-header">
-      <span class="modal-title"><span class="icon icon-md"><svg>
+      <span class="modal-title" data-i18n="modals.integrationGuide.title"><span class="icon icon-md"><svg>
             <use href="#icon-book" />
           </svg></span> Integration Guide</span>
-      <button type="button" class="modal-close integration-guide-modal-close" aria-label="Close"><span
+      <button type="button" class="modal-close integration-guide-modal-close" aria-label="Close" data-i18n-aria-label="common.close"><span
           class="icon icon-sm"><svg>
             <use href="#icon-x" />
           </svg></span></button>
@@ -15,7 +15,7 @@
 
         <!-- Section: What is TrackerTask -->
         <div class="guide-section">
-          <h4 class="guide-section-title"><span class="icon icon-sm"><svg>
+          <h4 class="guide-section-title" data-i18n="modals.integrationGuide.whatIsHeading"><span class="icon icon-sm"><svg>
                 <use href="#icon-info" />
               </svg></span> What is TrackerTask?</h4>
           <p>
@@ -23,16 +23,16 @@
               Layout Editor)</strong> -
             Roku's official developer tool for inspecting and debugging SceneGraph applications in real-time.
           </p>
-          <p>
+          <p data-i18n="modals.integrationGuide.trackerTaskEnabling">
             The TrackerTask establishes a socket connection between your Roku app and external tools, enabling:
           </p>
           <ul>
-            <li>Real-time node inspection and modification</li>
-            <li>Live view of UI element boundaries</li>
-            <li>Registry management</li>
-            <li>Logging and debugging</li>
+            <li data-i18n="modals.integrationGuide.enablingPoint1">Real-time node inspection and modification</li>
+            <li data-i18n="modals.integrationGuide.enablingPoint2">Live view of UI element boundaries</li>
+            <li data-i18n="modals.integrationGuide.enablingPoint3">Registry management</li>
+            <li data-i18n="modals.integrationGuide.enablingPoint4">Logging and debugging</li>
           </ul>
-          <p>
+          <p data-i18n="modals.integrationGuide.extendsBody">
             The App Connector extends this functionality with two custom functions that allow you to expose and execute
             your app's custom BrightScript functions from this desktop tool.
           </p>
@@ -40,10 +40,10 @@
 
         <!-- Section: Custom Functions Added -->
         <div class="guide-section">
-          <h4 class="guide-section-title"><span class="icon icon-sm"><svg>
+          <h4 class="guide-section-title" data-i18n="modals.integrationGuide.customFunctionsHeading"><span class="icon icon-sm"><svg>
                 <use href="#icon-zap" />
               </svg></span> Custom Functions for App Connector</h4>
-          <p>Two functions have been added to the TrackerTask to enable the App Connector Functionality:</p>
+          <p data-i18n="modals.integrationGuide.customFunctionsBody">Two functions have been added to the TrackerTask to enable the App Connector functionality:</p>
 
           <div class="guide-code-block">
             <div class="guide-code-header">
@@ -87,7 +87,7 @@
 
         <!-- Section: Implementing in Your Scene -->
         <div class="guide-section">
-          <h4 class="guide-section-title"><span class="icon icon-sm"><svg>
+          <h4 class="guide-section-title" data-i18n="modals.integrationGuide.implementingHeading"><span class="icon icon-sm"><svg>
                 <use href="#icon-code" />
               </svg></span> Implementing in Your Scene</h4>
           <p>
@@ -113,7 +113,7 @@
 
         <!-- Section: GetExternalControlFunctions -->
         <div class="guide-section">
-          <h4 class="guide-section-title"><span class="icon icon-sm"><svg>
+          <h4 class="guide-section-title" data-i18n="modals.integrationGuide.getExternalHeading"><span class="icon icon-sm"><svg>
                 <use href="#icon-upload" />
               </svg></span> GetExternalControlFunctions Implementation</h4>
           <p>
@@ -161,7 +161,7 @@
           </div>
 
           <div class="guide-note">
-            <div class="guide-note-title">📝 Supported Parameter Types</div>
+            <div class="guide-note-title" data-i18n="modals.integrationGuide.supportedParamsTitle">📝 Supported Parameter Types</div>
             <p>
               <strong>Boolean</strong> · <strong>Integer</strong> · <strong>LongInteger</strong> ·
               <strong>Float</strong> ·
@@ -173,10 +173,10 @@
 
         <!-- Section: ExecuteFunction -->
         <div class="guide-section">
-          <h4 class="guide-section-title"><span class="icon icon-sm"><svg>
+          <h4 class="guide-section-title" data-i18n="modals.integrationGuide.executeFunctionHeading"><span class="icon icon-sm"><svg>
                 <use href="#icon-play" />
               </svg></span> ExecuteFunction Implementation</h4>
-          <p>
+          <p data-i18n="modals.integrationGuide.executeFunctionBody">
             This function receives the function name and parameters array, then routes to the appropriate handler:
           </p>
 
@@ -216,10 +216,10 @@
 
         <!-- Section: TrackerTask Setup -->
         <div class="guide-section">
-          <h4 class="guide-section-title"><span class="icon icon-sm"><svg>
+          <h4 class="guide-section-title" data-i18n="modals.integrationGuide.setupHeading"><span class="icon icon-sm"><svg>
                 <use href="#icon-settings" />
               </svg></span> TrackerTask Setup</h4>
-          <p>
+          <p data-i18n="modals.integrationGuide.setupBody">
             Add the TrackerTask component to your project and create an instance in your MainScene:
           </p>
 
@@ -244,12 +244,12 @@
 
         <!-- Actions -->
         <div class="guide-actions">
-          <button class="btn btn-primary guide-save-btn">
+          <button class="btn btn-primary guide-save-btn" data-i18n="modals.integrationGuide.saveBtn">
             <span class="icon icon-sm"><svg>
                 <use href="#icon-save" />
               </svg></span> Save TrackerTask.xml
           </button>
-          <button class="btn btn-secondary guide-copy-btn">
+          <button class="btn btn-secondary guide-copy-btn" data-i18n="modals.integrationGuide.copyBtn">
             <span class="icon icon-sm"><svg>
                 <use href="#icon-copy" />
               </svg></span> Copy Integration Info

@@ -72,23 +72,25 @@
       <div class="fiddle-brand">
         <span class="fiddle-brand-badge"><span class="icon icon-sm"><svg><use href="#icon-rocket"/></svg></span></span>
         <div class="fiddle-brand-copy">
-          <h1>BrightScript Fiddle</h1>
-          <p class="fiddle-subtitle">Run a quick BrightScript snippet on any connected device.</p>
+          <h1 data-i18n="fiddle.heading">BrightScript Fiddle</h1>
+          <p class="fiddle-subtitle" data-i18n="fiddle.subtitle">Run a quick BrightScript snippet on any connected device.</p>
         </div>
       </div>
     </div>
 
     <div class="fiddle-header-center">
       <label class="fiddle-device-picker">
-        <span class="fiddle-picker-label">Device</span>
+        <span class="fiddle-picker-label" data-i18n="fiddle.deviceLabel">Device</span>
         <div class="fiddle-picker-row">
-          <select id="fiddleDeviceSelect" aria-label="Select a device"></select>
+          <select id="fiddleDeviceSelect" aria-label="Select a device" data-i18n-aria-label="fiddle.selectDevice"></select>
           <button
             type="button"
             id="fiddleRefreshBtn"
             class="fiddle-picker-refresh"
-            title="Scan for devices"
-            aria-label="Scan for devices"
+            title="Scan for Devices"
+            aria-label="Scan for Devices"
+            data-i18n-title="fiddle.scanForDevices"
+            data-i18n-aria-label="fiddle.scanForDevices"
           >
             <span class="icon icon-sm"><svg><use href="#icon-refresh"/></svg></span>
           </button>
@@ -97,13 +99,13 @@
     </div>
 
     <div class="fiddle-header-right">
-      <button type="button" id="fiddleRunBtn" class="btn btn-primary" disabled title="Run (⌘/Ctrl+Enter)">
+      <button type="button" id="fiddleRunBtn" class="btn btn-primary" disabled title="Run (⌘/Ctrl+Enter)" data-i18n-title="fiddle.runBtnTitle">
         <span class="icon icon-sm"><svg><use href="#icon-play"/></svg></span>
-        <span>Run</span>
+        <span data-i18n="fiddle.runBtn">Run</span>
       </button>
-      <button type="button" id="fiddleStopBtn" class="btn btn-danger" disabled title="Uninstall fiddle channel">
+      <button type="button" id="fiddleStopBtn" class="btn btn-danger" disabled title="Uninstall Fiddle Channel" data-i18n-title="fiddle.stopBtnTitle">
         <span class="icon icon-sm"><svg><use href="#icon-stop"/></svg></span>
-        <span>Stop</span>
+        <span data-i18n="fiddle.stopBtn">Stop</span>
       </button>
     </div>
   </header>
@@ -111,18 +113,18 @@
   <div class="fiddle-status-row">
     <span id="fiddleStatus" class="fiddle-status">Ready.</span>
     <span id="fiddleDiagStatus" class="fiddle-diag-status clean"></span>
-    <span class="fiddle-caption">Run replaces the currently sideloaded channel on the selected device.</span>
+    <span class="fiddle-caption" data-i18n="fiddle.statusRowCaption">Run replaces the currently sideloaded channel on the selected device.</span>
   </div>
 
   <main class="fiddle-main">
     <section class="fiddle-pane fiddle-editor-pane">
       <div class="fiddle-pane-header">
-        <span class="fiddle-pane-label">
+        <span class="fiddle-pane-label" data-i18n="fiddle.codeLabel">
           <span class="icon icon-sm icon-accent"><svg><use href="#icon-code"/></svg></span>
           Code
         </span>
         <span class="fiddle-pane-spacer"></span>
-        <button type="button" id="fiddleClearCodeBtn" class="btn btn-ghost btn-icon" title="Reset to default snippet" aria-label="Reset editor to default snippet">
+        <button type="button" id="fiddleClearCodeBtn" class="btn btn-ghost btn-icon" title="Reset to default Snippet" aria-label="Reset editor to default Snippet" data-i18n-title="fiddle.resetSnippetTitle" data-i18n-aria-label="fiddle.resetSnippetAria">
           <span class="icon icon-sm"><svg><use href="#icon-reset"/></svg></span>
         </button>
       </div>
@@ -133,12 +135,12 @@
 
     <section class="fiddle-pane fiddle-terminal-pane">
       <div class="fiddle-pane-header">
-        <span class="fiddle-pane-label">
+        <span class="fiddle-pane-label" data-i18n="fiddle.terminalLabel">
           <span class="icon icon-sm icon-cyan"><svg><use href="#icon-terminal"/></svg></span>
           Terminal
         </span>
         <span class="fiddle-pane-spacer"></span>
-        <button type="button" id="fiddleClearBtn" class="btn btn-ghost btn-icon" title="Clear terminal" aria-label="Clear terminal">
+        <button type="button" id="fiddleClearBtn" class="btn btn-ghost btn-icon" title="Clear Terminal" aria-label="Clear Terminal" data-i18n-title="fiddle.clearTerminal" data-i18n-aria-label="fiddle.clearTerminal">
           <span class="icon icon-sm"><svg><use href="#icon-trash"/></svg></span>
         </button>
       </div>
@@ -151,31 +153,31 @@
       <div class="modal-header">
         <div class="modal-title-row">
           <span class="icon icon-md icon-accent"><svg><use href="#icon-lock"/></svg></span>
-          <span id="fiddlePasswordTitle" class="modal-title">Developer Password Required</span>
+          <span id="fiddlePasswordTitle" class="modal-title" data-i18n="fiddle.passwordModalTitle">Developer Password Required</span>
         </div>
-        <button type="button" class="modal-close" id="fiddlePasswordCancel" aria-label="Close">
+        <button type="button" class="modal-close" id="fiddlePasswordCancel" aria-label="Close" data-i18n-aria-label="common.close">
           <span class="icon icon-sm"><svg><use href="#icon-x"/></svg></span>
         </button>
       </div>
       <div class="modal-body">
         <p id="fiddlePasswordDeviceLabel" class="fiddle-modal-device"></p>
-        <p class="fiddle-modal-hint">
+        <p class="fiddle-modal-hint" data-i18n="fiddle.passwordModalHint">
           Sideloading requires the device's developer password&mdash;the one you set when enabling Developer Mode.
         </p>
         <label class="fiddle-field">
-          <span>Password</span>
-          <input type="password" id="fiddlePasswordInput" autocomplete="off" spellcheck="false" placeholder="Enter developer password" />
+          <span data-i18n="fiddle.passwordLabel">Password</span>
+          <input type="password" id="fiddlePasswordInput" autocomplete="off" spellcheck="false" placeholder="Enter Developer Password" data-i18n-placeholder="fiddle.passwordPlaceholder" />
         </label>
-        <p class="fiddle-modal-hint fiddle-modal-hint-muted">
+        <p class="fiddle-modal-hint fiddle-modal-hint-muted" data-i18n="fiddle.passwordModalHintMuted">
           This password is used only for this session. To save it for future use, verify Developer Mode in the main window.
         </p>
         <p id="fiddlePasswordError" class="fiddle-modal-error" hidden></p>
       </div>
       <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" id="fiddlePasswordCancelBtn">Cancel</button>
+        <button type="button" class="btn btn-secondary" id="fiddlePasswordCancelBtn" data-i18n="common.cancel">Cancel</button>
         <button type="button" class="btn btn-primary" id="fiddlePasswordSubmitBtn">
           <span class="icon icon-sm"><svg><use href="#icon-play"/></svg></span>
-          <span>Save &amp; Run</span>
+          <span data-i18n="fiddle.passwordSubmitBtn">Save &amp; Run</span>
         </button>
       </div>
     </div>

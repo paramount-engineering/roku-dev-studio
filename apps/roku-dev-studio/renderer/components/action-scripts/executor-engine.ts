@@ -39,6 +39,7 @@ import { queryEndpointToTelnetCommand, queryEndpointLabel } from './action-regis
 import { resolveDevPassword } from '../../modules/utils/dev-password.js';
 import { isRaleNotConnectedResult } from '../../modules/utils/rale-result-guards.js';
 import { normalizeRaleFunctions } from '../../modules/utils/rale-functions.js';
+import { S } from '@shared/strings/index.js';
 
 function errMsg(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
@@ -430,13 +431,13 @@ export function stepDescription(step, index) {
       const chart = step.chart != null ? String(step.chart) : '';
       const chartLab =
         chart === 'objects'
-          ? 'BrightScript Objects'
+          ? S.actionScripts.chartObjects
           : chart === 'cpu'
-            ? 'CPU Usage'
+            ? S.actionScripts.chartCpu
             : chart === 'memory'
-              ? 'System Memory'
+              ? S.actionScripts.chartMemory
               : chart === 'aboveAll'
-                ? 'Above All'
+                ? S.actionScripts.chartAboveAll
                 : chart || '?';
       return step.label
         ? `Device Performance (${step.label}) — ${chartLab}`
@@ -763,7 +764,7 @@ export async function runScript(script, context, callbacks) {
           }
           const password = resolvePassword(step);
           if (!password) {
-            result = { success: false, error: 'Developer Password required for Screenshot. Specify it in the script (devPassword) or enter it during validation.' };
+            result = { success: false, error: S.actionScripts.errScreenshotPassword };
           } else {
             const activeAppRes = await api.query('/query/active-app');
             const activeAppQueryOk = activeAppRes.success && typeof activeAppRes.data === 'string';
@@ -778,7 +779,7 @@ export async function runScript(script, context, callbacks) {
             } else if (!devAppActive) {
               result = {
                 success: false,
-                error: 'Screenshot requires the Developer App to be active. Launch your sideloaded channel from the Dev App tab first.'
+                error: S.actionScripts.errScreenshotDevApp
               };
             } else {
               const screenshotOpts = (step.waitAfterTriggerMs != null && Number(step.waitAfterTriggerMs) >= 0)
@@ -816,7 +817,7 @@ export async function runScript(script, context, callbacks) {
           if (typeof captureDevicePerformance !== 'function') {
             result = {
               success: false,
-              error: 'Device Performance is only available when running Action Scripts in Roku Dev Studio.'
+              error: S.actionScripts.errDevicePerformanceInRds
             };
             break;
           }

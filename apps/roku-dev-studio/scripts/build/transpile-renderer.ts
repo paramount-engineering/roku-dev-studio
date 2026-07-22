@@ -262,10 +262,15 @@ function transpileSharedForRenderer(appDir: string, rendererDist: string): void 
   //    pure BrightScript-issue catalog + findings aggregator, shared by the live Console and the Log
   //    Viewer window (and the main-process findings scan); walking the dir means new pure shared
   //    modules there are emitted automatically. A miss here 404s and takes down the ESM graph.
+  //    `shared/strings/*` is the pure UI-string catalog (per-area namespaces composed
+  //    in index.ts + the tiny i18n helper); walking it means new area files are
+  //    emitted automatically as the migration adds them.
   const consoleSharedDir = path.join(sharedRoot, 'console');
+  const stringsSharedDir = path.join(sharedRoot, 'strings');
   const plainEntries = [
     path.join(sharedRoot, 'ipc', 'debug-telnet-connection-id.ts'),
     ...(fs.existsSync(consoleSharedDir) ? walkTsFiles(consoleSharedDir) : []),
+    ...(fs.existsSync(stringsSharedDir) ? walkTsFiles(stringsSharedDir) : []),
   ].filter((p) => fs.existsSync(p));
   if (plainEntries.length > 0) {
     fs.mkdirSync(sharedOut, { recursive: true });

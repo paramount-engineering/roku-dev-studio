@@ -2,43 +2,43 @@
   <div class="modal-overlay action-scripts-import-modal" id="actionScriptsImportModal" aria-hidden="true">
     <div class="modal action-scripts-import-modal-box">
       <div class="modal-header">
-        <span class="modal-title action-scripts-import-modal-title">Import Action Script</span>
-        <button type="button" class="modal-close action-scripts-import-modal-close" aria-label="Close"><span class="icon icon-sm"><svg><use href="#icon-x"/></svg></span></button>
+        <span class="modal-title action-scripts-import-modal-title" data-i18n="modals.actionScriptsImport.title">Import Action Script</span>
+        <button type="button" class="modal-close action-scripts-import-modal-close" aria-label="Close" data-i18n-aria-label="common.close"><span class="icon icon-sm"><svg><use href="#icon-x"/></svg></span></button>
       </div>
       <div class="modal-body">
         <div class="action-scripts-import-upload-row">
-          <label class="action-scripts-import-label">Upload JSON</label>
+          <label class="action-scripts-import-label" data-i18n="modals.actionScriptsImport.uploadJsonLabel">Upload JSON</label>
           <input type="file" class="action-scripts-import-file-input" accept=".json,application/json" style="display: none;">
-          <button type="button" class="btn btn-secondary action-scripts-import-upload-btn">Choose File</button>
+          <button type="button" class="btn btn-secondary action-scripts-import-upload-btn" data-i18n="modals.actionScriptsImport.chooseFileBtn">Choose File</button>
         </div>
               <div class="action-scripts-import-paste-group">
                 <div class="action-scripts-import-paste-header">
-                  <label class="action-scripts-import-label">Paste or edit JSON</label>
-                  <button type="button" class="btn btn-secondary btn-sm action-scripts-import-clear-btn">Clear</button>
+                  <label class="action-scripts-import-label" data-i18n="modals.actionScriptsImport.pasteJsonLabel">Paste or Edit JSON</label>
+                  <button type="button" class="btn btn-secondary btn-sm action-scripts-import-clear-btn" data-i18n="common.clear">Clear</button>
                 </div>
                 <textarea class="action-scripts-import-textarea" placeholder='{"version":"1","steps":[{"type":"keypress","key":"Home"}]}' rows="10"></textarea>
                 <div class="action-scripts-import-error" role="alert"></div>
               </div>
               <div class="action-scripts-import-output-folder">
                 <div class="action-scripts-import-output-folder-row">
-                  <label class="action-scripts-import-label">Output Folder</label>
-                  <span class="action-scripts-import-output-folder-path">No folder selected</span>
-                  <button type="button" class="btn btn-secondary action-scripts-import-choose-folder-btn">Choose Folder</button>
+                  <label class="action-scripts-import-label" data-i18n="modals.actionScriptsImport.outputFolderLabel">Output Folder</label>
+                  <span class="action-scripts-import-output-folder-path" data-i18n="modals.actionScriptsImport.noFolderSelected">No folder selected</span>
+                  <button type="button" class="btn btn-secondary action-scripts-import-choose-folder-btn" data-i18n="modals.actionScriptsImport.chooseFolderBtn">Choose Folder</button>
                 </div>
-                <p class="action-scripts-import-output-warning">If no folder is selected, artifacts (e.g. screenshots) will not be saved when you run the script.</p>
+                <p class="action-scripts-import-output-warning" data-i18n="modals.actionScriptsImport.outputWarning">If no folder is selected, artifacts (e.g. screenshots) will not be saved when you run the script.</p>
               </div>
               <div class="action-scripts-import-dev-password" style="display: none;">
-                <p class="action-scripts-import-dev-password-required-msg" style="display: none;">This script requires a developer password. Enter it below.</p>
-                <label class="action-scripts-import-label" for="action-scripts-import-dev-password-input">Developer password</label>
-                <input type="password" id="action-scripts-import-dev-password-input" class="action-scripts-import-dev-password-input" placeholder="Enter developer password for screenshot / sideload steps" autocomplete="off">
+                <p class="action-scripts-import-dev-password-required-msg" style="display: none;" data-i18n="modals.actionScriptsImport.devPasswordRequiredMsg">This script requires a developer password. Enter it below.</p>
+                <label class="action-scripts-import-label" for="action-scripts-import-dev-password-input" data-i18n="modals.actionScriptsImport.devPasswordLabel">Developer Password</label>
+                <input type="password" id="action-scripts-import-dev-password-input" class="action-scripts-import-dev-password-input" placeholder="Enter developer password for screenshot / sideload steps" data-i18n-placeholder="modals.actionScriptsImport.devPasswordPlaceholder" autocomplete="off">
                 <div class="action-scripts-import-remember-row">
-                  <input type="checkbox" id="action-scripts-import-remember-password" class="action-scripts-import-remember-password" title="Save password for this device (same as Dev App password storage)">
-                  <label for="action-scripts-import-remember-password" class="action-scripts-import-remember-label">Remember password for this device</label>
+                  <input type="checkbox" id="action-scripts-import-remember-password" class="action-scripts-import-remember-password" title="Save password for this device (same as Dev App password storage)" data-i18n-title="modals.actionScriptsImport.rememberPasswordTitle">
+                  <label for="action-scripts-import-remember-password" class="action-scripts-import-remember-label" data-i18n="modals.actionScriptsImport.rememberPasswordLabel">Remember password for this device</label>
                 </div>
                 <p class="action-scripts-import-dev-password-hint">Required when the script has screenshot or sideload steps and does not include a <code>devPassword</code> field.</p>
               </div>
               <div class="action-scripts-import-actions">
-                <button type="button" class="btn btn-primary action-scripts-import-validate-btn">Validate and Import</button>
+                <button type="button" class="btn btn-primary action-scripts-import-validate-btn" data-i18n="modals.actionScriptsImport.validateImportBtn">Validate and Import</button>
               </div>
       </div>
     </div>

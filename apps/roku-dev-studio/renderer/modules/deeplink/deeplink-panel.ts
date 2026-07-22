@@ -16,6 +16,7 @@ import {
   syncSavedPresetDeleteButton,
   wireSavedPresetSelect
 } from './deeplink-presets.js';
+import { S } from '@shared/strings/index.js';
 
 type DeeplinkApi = {
   deeplink: (
@@ -31,14 +32,14 @@ function formatDeepLinkError(
 ): string {
   if (result.statusCode === 404) {
     if (appId.trim().toLowerCase() === 'dev') {
-      return 'Dev App is not sideloaded on this device. Open the Dev App tab, sideload your channel, then try again.';
+      return S.deeplink.devAppNotSideloaded;
     }
-    return `Channel "${appId}" was not found on this device. Sideload or install the app first, or pick a valid App ID from List apps.`;
+    return S.deeplink.channelNotFound(appId);
   }
   if (result.statusCode === 401 || result.statusCode === 403) {
-    return result.error || 'ECP access was denied on this device.';
+    return result.error || S.deeplink.ecpAccessDenied;
   }
-  return result.error || 'Deep link failed.';
+  return result.error || S.deeplink.deepLinkFailed;
 }
 
 function readDeepLinkFields(panel: HTMLElement): {
@@ -72,18 +73,18 @@ async function launchDeepLink(
   if (!fields) return false;
 
   if (!fields.appId) {
-    showStatusMessage(statusDiv, 'Please enter an App ID', 'warning');
+    showStatusMessage(statusDiv, S.deeplink.enterAppId, 'warning');
     return false;
   }
 
   const result = await api.deeplink(fields.appId, fields.contentId, fields.mediaType);
 
   if (result.success) {
-    showStatusMessage(statusDiv, '✓ Deep link launched successfully', 'success');
+    showStatusMessage(statusDiv, S.deeplink.launchedSuccess, 'success');
     return true;
   }
 
-  showStatusMessage(statusDiv, `Deep link failed: ${formatDeepLinkError(result, fields.appId)}`, 'error');
+  showStatusMessage(statusDiv, S.deeplink.deepLinkFailedDetail(formatDeepLinkError(result, fields.appId)), 'error');
   return false;
 }
 
@@ -157,7 +158,7 @@ function wireLaunchSplitMenu(panel: HTMLElement, api: DeeplinkApi, statusDiv: HT
     if (!fields) return;
 
     if (!fields.appId) {
-      showStatusMessage(statusDiv, 'Please enter an App ID', 'warning');
+      showStatusMessage(statusDiv, S.deeplink.enterAppId, 'warning');
       return;
     }
 
@@ -177,10 +178,10 @@ function wireLaunchSplitMenu(panel: HTMLElement, api: DeeplinkApi, statusDiv: HT
       applyPresetToPanel(panel, preset);
       const launched = await launchDeepLink(panel, api, statusDiv);
       if (launched) {
-        showStatusMessage(statusDiv, '✓ Saved and launched deep link', 'success');
+        showStatusMessage(statusDiv, S.deeplink.savedAndLaunched, 'success');
       }
     } catch (e) {
-      const message = e instanceof Error ? e.message : 'Failed to save deep link';
+      const message = e instanceof Error ? e.message : S.deeplink.failedToSave;
       showStatusMessage(statusDiv, message, 'error');
     }
   });
@@ -218,7 +219,7 @@ function wireSavedPresetDelete(panel: HTMLElement, statusDiv: HTMLElement): void
 
     const removed = await deleteDeeplinkPresetById(id);
     if (!removed) {
-      showStatusMessage(statusDiv, 'Saved deep link was not found.', 'warning');
+      showStatusMessage(statusDiv, S.deeplink.savedNotFound, 'warning');
       syncDeleteEnabled();
       return;
     }
@@ -230,7 +231,7 @@ function wireSavedPresetDelete(panel: HTMLElement, statusDiv: HTMLElement): void
     if (appIdInput) appIdInput.value = '';
     if (contentIdInput) contentIdInput.value = '';
     if (mediaTypeSelect) mediaTypeSelect.value = '';
-    showStatusMessage(statusDiv, 'Saved deep link deleted.', 'success');
+    showStatusMessage(statusDiv, S.deeplink.savedDeleted, 'success');
     syncDeleteEnabled();
   });
 }

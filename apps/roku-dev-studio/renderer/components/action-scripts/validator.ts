@@ -14,6 +14,8 @@
  * logic now lives in `validate-action-script.ts` next to the catalogs.
  */
 
+import { S } from '@shared/strings/index.js';
+
 type CanonicalError = {
   path: string;
   code: string;
@@ -136,18 +138,18 @@ export function parseAndValidateScript(
   validation?: RendererValidationResult;
 } {
   if (!text || typeof text !== 'string') {
-    return { parseError: 'No script content' };
+    return { parseError: S.actionScripts.noScriptContent };
   }
   const trimmed = text.trim();
   if (!trimmed) {
-    return { parseError: 'Script is empty' };
+    return { parseError: S.actionScripts.scriptEmpty };
   }
   let script: LooseScript;
   try {
     script = JSON.parse(trimmed);
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    return { parseError: msg || 'Invalid JSON' };
+    return { parseError: msg || S.actionScripts.invalidJsonShort };
   }
   const validation = validateScript(script, raleFunctions);
   return { script, validation };

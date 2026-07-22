@@ -14,10 +14,11 @@ import {
 } from '@shared/network-inspector/setup-guide.js';
 import { initSideloadRelaySection } from './sideload-relay-section.js';
 import { attachBackdropClickToClose } from '../../modules/utils/modal-backdrop-click.js';
+import { S, applyI18n } from '@shared/strings/index.js';
 
 const api = (window as any).settingsApi;
 if (!api) {
-  document.body.innerHTML = '<p class="settings-fatal">Settings API unavailable.</p>';
+  document.body.innerHTML = '<p class="settings-fatal">' + S.settings.apiUnavailable + '</p>';
   throw new Error('Settings API unavailable');
 }
 
@@ -38,6 +39,11 @@ if (typeof api.onPrivacyModeChanged === 'function') {
     applyPrivacyMode(enabled);
   });
 }
+
+// Localize the static settings.html shell (nav, section headers, toggle labels,
+// tooltips). Dynamically-built sections use `S.*` directly. Inline English is the
+// fallback for any unresolved key.
+applyI18n(document);
 
 // Set after getState() resolves; all usages are inside async callbacks or user-initiated actions
 // that can only fire after initialization completes.
@@ -251,7 +257,7 @@ function renderMcpClients() {
   if (!Array.isArray(mcpClientDetections) || mcpClientDetections.length === 0) {
     var empty = document.createElement('div');
     empty.className = 'mcp-clients-empty';
-    empty.textContent = 'No supported MCP clients detected on this system.';
+    empty.textContent = S.settings.mcpNoClients;
     container.appendChild(empty);
     return;
   }
@@ -269,9 +275,9 @@ function renderMcpClients() {
     nameLine.appendChild(document.createTextNode(String(det.label || id)));
     var statusIcon = document.createElement('span');
     statusIcon.className = 'mcp-client-status-icon ' + (installed ? 'installed' : 'not-installed');
-    statusIcon.title = installed ? 'Installed' : 'Not detected';
+    statusIcon.title = installed ? S.settings.mcpInstalled : S.settings.mcpNotDetected;
     statusIcon.setAttribute('role', 'img');
-    statusIcon.setAttribute('aria-label', installed ? 'Installed' : 'Not detected');
+    statusIcon.setAttribute('aria-label', installed ? S.settings.mcpInstalled : S.settings.mcpNotDetected);
     statusIcon.innerHTML = installed
       ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">' +
           '<circle cx="12" cy="12" r="10" fill="currentColor" opacity="0.18"/>' +
@@ -291,13 +297,13 @@ function renderMcpClients() {
       var openBtn = document.createElement('button') as HTMLButtonElement;
       openBtn.type = 'button';
       openBtn.className = 'mcp-client-config-btn';
-      openBtn.title = 'Open ' + String(det.configPath);
-      openBtn.setAttribute('aria-label', 'Open MCP config file for ' + String(det.label || id));
+      openBtn.title = S.settings.mcpOpenConfigTitle(String(det.configPath));
+      openBtn.setAttribute('aria-label', S.settings.mcpOpenConfigAria(String(det.label || id)));
       openBtn.innerHTML =
         '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">' +
           '<path d="M14 3h7v7M21 3l-9 9M5 5h5M5 12h7M5 19h14" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>' +
         '</svg>' +
-        '<span>Open Config File</span>';
+        '<span>' + S.settings.mcpOpenConfigFile + '</span>';
       openBtn.addEventListener('click', function () {
         if (!api.openMcpConfig) return;
         openBtn.disabled = true;
@@ -309,7 +315,7 @@ function renderMcpClients() {
     } else {
       var hint = document.createElement('span');
       hint.className = 'mcp-client-hint';
-      hint.textContent = 'Install ' + String(det.label || id) + ' to enable.';
+      hint.textContent = S.settings.mcpInstallToEnable(String(det.label || id));
       actionCol.appendChild(hint);
     }
     row.appendChild(actionCol);
@@ -322,7 +328,7 @@ function renderMcpClients() {
     input.id = 'mcpToggle_' + id;
     input.className = 'settings-toggle-input';
     input.setAttribute('role', 'switch');
-    input.setAttribute('aria-label', 'Enable MCP for ' + String(det.label || id));
+    input.setAttribute('aria-label', S.settings.mcpEnableAria(String(det.label || id)));
     input.checked = !!mcpClientsState[id];
     input.disabled = !installed;
     input.setAttribute('aria-checked', input.checked ? 'true' : 'false');
@@ -350,7 +356,7 @@ function setFolderDisplay(path: string) {
     d.classList.remove('empty');
     d.title = folderPath;
   } else {
-    d.textContent = 'No folder set';
+    d.textContent = S.settings.noFolderSet;
     d.classList.add('empty');
     d.title = '';
   }
@@ -402,11 +408,11 @@ function buildTimingRowsForKeys(containerId: string, keys: string[], state: any)
         '</div>' +
         '<div class="timing-field">' +
         '<div class="timing-field-stack">' +
-        '<span class="bound-label">Min: ' + CHART_HISTORY_MIN_MINUTES + ' min</span>' +
+        '<span class="bound-label">' + S.settings.timingBoundMin(CHART_HISTORY_MIN_MINUTES + ' min') + '</span>' +
         '<input type="number" class="input-num" data-timing-key="' + escapeHtml(key) +
         '" data-input-unit="minutes" value="' + escapeAttr(String(valMin)) +
         '" min="' + CHART_HISTORY_MIN_MINUTES + '" max="' + CHART_HISTORY_MAX_MINUTES + '" step="1" />' +
-        '<span class="bound-label">Max: ' + CHART_HISTORY_MAX_MINUTES + ' min</span>' +
+        '<span class="bound-label">' + S.settings.timingBoundMax(CHART_HISTORY_MAX_MINUTES + ' min') + '</span>' +
         '</div></div>';
     } else if (key === 'TOAST_DISPLAY_DURATION' || key === 'STATUS_MESSAGE_DURATION') {
       var valSec = toastStatusMsToDisplaySec(val);
@@ -417,11 +423,11 @@ function buildTimingRowsForKeys(containerId: string, keys: string[], state: any)
         '</div>' +
         '<div class="timing-field">' +
         '<div class="timing-field-stack">' +
-        '<span class="bound-label">Min: ' + TOAST_STATUS_SEC_MIN + '</span>' +
+        '<span class="bound-label">' + S.settings.timingBoundMin(TOAST_STATUS_SEC_MIN) + '</span>' +
         '<input type="number" class="input-num" data-timing-key="' + escapeHtml(key) +
         '" data-input-unit="seconds" value="' + escapeAttr(String(valSec)) +
         '" min="' + TOAST_STATUS_SEC_MIN + '" max="' + TOAST_STATUS_SEC_MAX + '" step="1" />' +
-        '<span class="bound-label">Max: ' + TOAST_STATUS_SEC_MAX + '</span>' +
+        '<span class="bound-label">' + S.settings.timingBoundMax(TOAST_STATUS_SEC_MAX) + '</span>' +
         '</div></div>';
     } else {
       row.innerHTML =
@@ -431,10 +437,10 @@ function buildTimingRowsForKeys(containerId: string, keys: string[], state: any)
         '</div>' +
         '<div class="timing-field">' +
         '<div class="timing-field-stack">' +
-        '<span class="bound-label">Min: ' + escapeHtml(String(m.min)) + '</span>' +
+        '<span class="bound-label">' + S.settings.timingBoundMin(escapeHtml(String(m.min))) + '</span>' +
         '<input type="number" class="input-num" data-timing-key="' + escapeHtml(key) +
         '" value="' + escapeAttr(String(val)) + '" min="' + m.min + '" max="' + m.max + '" />' +
-        '<span class="bound-label">Max: ' + escapeHtml(String(m.max)) + '</span>' +
+        '<span class="bound-label">' + S.settings.timingBoundMax(escapeHtml(String(m.max))) + '</span>' +
         '</div></div>';
     }
     container.appendChild(row);
@@ -523,7 +529,7 @@ function getTimingRowLabel(inp: any) {
   var row = inp.closest ? inp.closest('.timing-row') : null;
   var strong = row ? row.querySelector('.row-label strong') : null;
   if (strong && strong.textContent) return strong.textContent.trim();
-  return inp.getAttribute('data-timing-key') || 'Value';
+  return inp.getAttribute('data-timing-key') || S.settings.timingValueFallback;
 }
 
 function timingUnitSuffix(key: string | null) {
@@ -570,14 +576,14 @@ function validateTimingPanel(panelKey: string) {
       var unit = timingUnitSuffix(first.key);
       var msg;
       if (first.res.reason === 'empty' || first.res.reason === 'nan') {
-        msg = label + ' must be a whole number.';
+        msg = S.settings.timingMustBeWholeNumber(label);
       } else if (first.res.reason === 'low') {
-        msg = label + ' must be at least ' + first.res.min + unit + '.';
+        msg = S.settings.timingMustBeAtLeast(label, first.res.min + unit);
       } else {
-        msg = label + ' must be at most ' + first.res.max + unit + '.';
+        msg = S.settings.timingMustBeAtMost(label, first.res.max + unit);
       }
       if (invalid.length > 1) {
-        msg += ' (' + (invalid.length - 1) + ' more out of range)';
+        msg += S.settings.timingMoreOutOfRange(invalid.length - 1);
       }
       statusEl.textContent = msg;
       statusEl.className = 'section-save-status err';
@@ -603,8 +609,8 @@ function showTimingClampedNotice(inp: any, panelKey: string, clamp: any) {
   if (!statusEl) return;
   var label = getTimingRowLabel(inp);
   var unit = timingUnitSuffix(inp.getAttribute('data-timing-key'));
-  var which = clamp.reason === 'low' ? 'minimum' : 'maximum';
-  statusEl.textContent = label + ' adjusted to ' + clamp.snap + unit + ' (' + which + ').';
+  var which = clamp.reason === 'low' ? S.settings.timingClampMinimum : S.settings.timingClampMaximum;
+  statusEl.textContent = S.settings.timingClamped(label, clamp.snap + unit, which);
   statusEl.className = 'section-save-status';
 }
 
@@ -630,18 +636,18 @@ var keychainSnap: any = null;
 
 function describeSecretStoreStatus(status: string, backend: string, toggleOn: boolean) {
   if (!toggleOn) {
-    return 'Encryption toggle is off — remembered passwords are stored as plaintext on disk.';
+    return S.settings.keychainOff;
   }
   if (status === 'encrypted') {
-    return 'Storage: encrypted via ' + (backend || 'System Keychain') + '.';
+    return S.settings.keychainEncrypted(backend || S.settings.keychainDefaultBackend);
   }
   if (status === 'unencrypted') {
-    return 'Warning: toggle is on but this system uses basic text — passwords are Base64-encoded plaintext on disk. Use a Linux keyring (Secret Service/KWallet) for real encryption.';
+    return S.settings.keychainUnencrypted;
   }
   if (status === 'unavailable') {
-    return 'Warning: toggle is on but the OS keychain is unavailable — passwords stay in memory for this session only.';
+    return S.settings.keychainUnavailable;
   }
-  return 'Storage status: ' + status + (backend ? ' (' + backend + ')' : '') + '.';
+  return S.settings.keychainStatus(status, backend);
 }
 
 function updateKeychainStatusHint(toggleOn: boolean, snapshot: any) {
@@ -657,16 +663,16 @@ function updateNetworkInspectorStatusLine(state: any) {
   var line = el('niStatusLine');
   if (!line) return;
   if (!state || !state.networkInspectorEnabled) {
-    line.textContent = 'Status: disabled — save after enabling to start watching for hotspot clients.';
+    line.textContent = S.settings.niStatusDisabled;
     return;
   }
   var platformHint = HOST_PLATFORM === 'darwin'
-    ? 'bridge100 on macOS'
+    ? S.settings.niPlatformMac
     : HOST_PLATFORM === 'win32'
-      ? 'virtual adapter on Windows'
-      : 'hotspot interface on Linux';
-  var mitm = ' · MITM proxy on port ' + (state.networkInspectorMitmPort || 8888);
-  line.textContent = 'Status: enabled — waiting for hotspot interface (' + platformHint + ').' + mitm;
+      ? S.settings.niPlatformWin
+      : S.settings.niPlatformLinux;
+  var mitm = S.settings.niMitmSuffix(state.networkInspectorMitmPort || 8888);
+  line.textContent = S.settings.niStatusEnabled(platformHint) + mitm;
 }
 
 function updateBpfCaptureUi(available: boolean) {
@@ -676,7 +682,7 @@ function updateBpfCaptureUi(available: boolean) {
   if (headerBadge) {
     headerBadge.hidden = false;
     headerBadge.setAttribute('data-state', ok ? 'ok' : 'blocked');
-    headerBadge.textContent = ok ? 'Capture Access Enabled' : 'Setup Needed';
+    headerBadge.textContent = ok ? S.settings.captureAccessEnabled : S.settings.setupNeeded;
   }
   var headingEl = el('niBpfHeading');
   var explainEl = el('niBpfExplain');
@@ -691,8 +697,8 @@ function updateBpfCaptureUi(available: boolean) {
   var rowDescEl = el('niSetupRowDesc');
   if (rowDescEl) {
     rowDescEl.textContent = ok
-      ? 'Optional — only for hotspot DNS/SNI capture. Proxying needs no setup.'
-      : 'Hotspot capture needs setup — open to enable it. (Proxying still works.)';
+      ? S.settings.niSetupRowDescOk
+      : S.settings.niSetupRowDescNeeds;
   }
 }
 
@@ -766,9 +772,9 @@ function renderPlaceSelect() {
   if (niSelectedPlace !== 'local' && !niConnectedLocations.some(function (l) { return l.serverUrl === niSelectedPlace; })) {
     niSelectedPlace = 'local';
   }
-  var places = [{ value: 'local', label: 'Local (This Machine)' }].concat(
+  var places = [{ value: 'local', label: S.settings.placeLocal }].concat(
     niConnectedLocations.map(function (l) {
-      var label = l.host ? ((l.name || 'Remote') + ' (' + l.host + ')') : (l.name || l.serverUrl);
+      var label = l.host ? ((l.name || S.settings.placeRemoteFallback) + ' (' + l.host + ')') : (l.name || l.serverUrl);
       return { value: l.serverUrl, label: label };
     })
   );
@@ -806,8 +812,8 @@ function applyRemoteProbeResult(place: string, res: any) {
   var ni = res && res.networkInspector;
   if (!res || !res.success || !ni || ni.supported !== true) {
     var reason = (ni && ni.requiresRoot && ni.isRoot === false)
-      ? 'This location requires the remote server to run as root to enable Network Inspector.'
-      : 'This location does not support Network Inspector. Update this Remote Server for Network Inspector functionality.';
+      ? S.settings.niRemoteRequiresRoot
+      : S.settings.niRemoteUnsupported;
     setNiPlaceHint(reason, true);
     setNiControlsDisabled(true);
     setNiSectionUnsupported(true);
@@ -827,8 +833,8 @@ function applyRemoteProbeResult(place: string, res: any) {
   var autoDisabled = status && status.enabled === false && /^Network Inspector disabled:/i.test(String(status.lastError || ''));
   setNiPlaceHint(
     autoDisabled
-      ? String(status.lastError || 'Network Inspector is disabled.')
-      : 'Editing remote location settings. Capture runs on the remote server.',
+      ? String(status.lastError || S.settings.niDisabled)
+      : S.settings.niEditingRemote,
     true
   );
   renderNiPortConflict(status && status.mitmPortConflict ? status.mitmPortConflict : null);
@@ -840,7 +846,7 @@ function applyLocalNiRuntimeStatus(status: any) {
     setToggle('optNetworkInspector', false);
     if (niLocalSnapshot) niLocalSnapshot.enabled = false;
     setNiPlaceHint('', false);
-    var msg = String(status.lastError || 'Network Inspector is disabled.');
+    var msg = String(status.lastError || S.settings.niDisabled);
     if (msg !== niLastAutoDisableStatusMessage) {
       showTransientNiStatus(msg, true, 5000);
       niLastAutoDisableStatusMessage = msg;
@@ -860,7 +866,7 @@ function renderNiPortConflict(conflict: any) {
   if (!box) return;
   if (!conflict) { box.hidden = true; return; }
   box.hidden = false;
-  if (el('niPortConflictTitle')) el('niPortConflictTitle').textContent = conflict.title || 'Proxy Port Unavailable';
+  if (el('niPortConflictTitle')) el('niPortConflictTitle').textContent = conflict.title || S.settings.niPortConflictTitle;
   if (el('niPortConflictMsg')) el('niPortConflictMsg').textContent = conflict.message || '';
   var steps = el('niPortConflictSteps');
   if (steps) {
@@ -909,7 +915,7 @@ function applyNiPlace() {
   setNiControlsDisabled(true);
   renderNiPortConflict(null);
   if (!api.remoteNetworkProbe) {
-    setNiPlaceHint('Remote Network Inspector is not available in this build.', true);
+    setNiPlaceHint(S.settings.niRemoteUnavailable, true);
     setNiSectionUnsupported(true);
     return;
   }
@@ -917,13 +923,13 @@ function applyNiPlace() {
     applyRemoteProbeResult(place, niProbeCache[place]);
     return;
   }
-  setNiPlaceHint('Checking remote location…', true);
+  setNiPlaceHint(S.settings.niCheckingRemote, true);
   api.remoteNetworkProbe(place).then(function (res: any) {
     niProbeCache[place] = res;
     applyRemoteProbeResult(place, res);
   }).catch(function () {
     if (currentNiPlace() !== place) return;
-    setNiPlaceHint('Could not reach the remote location.', true);
+    setNiPlaceHint(S.settings.niCouldNotReachRemote, true);
     setNiControlsDisabled(true);
     setNiSectionUnsupported(true);
   });
@@ -1001,7 +1007,7 @@ function wireSaveButton(btnId: string, okMessage: string, statusId: string) {
           renderMcpClients();
         }
       } else {
-        setSectionStatus(statusId, (res && res.error) || 'Save failed', true);
+        setSectionStatus(statusId, (res && res.error) || S.settings.saveFailed, true);
       }
       if (panelKey) validateTimingPanel(panelKey);
     }).catch(function (e: any) {
@@ -1018,17 +1024,17 @@ function wireBpfInstallButton() {
     btnInstallBpf.addEventListener('click', function () {
       btnInstallBpf!.disabled = true;
       var statusEl = el('niBpfInstallStatus');
-      if (statusEl) statusEl.textContent = 'Waiting for administrator approval…';
+      if (statusEl) statusEl.textContent = S.settings.bpfWaitingApproval;
       api.installBpfAccess().then(function (res: any) {
         btnInstallBpf!.disabled = false;
         if (res && res.success) {
-          setSectionStatus('saveStatusNetworkInspector', 'Packet capture access installed.', false);
-          if (statusEl) statusEl.textContent = 'Installed — return to the Network Inspector tab.';
+          setSectionStatus('saveStatusNetworkInspector', S.settings.bpfInstalled, false);
+          if (statusEl) statusEl.textContent = S.settings.bpfInstalledHint;
           updateBpfCaptureUi(res.bpfCaptureAvailable !== false);
         } else if (res && res.error === 'cancelled') {
-          if (statusEl) statusEl.textContent = 'Cancelled.';
+          if (statusEl) statusEl.textContent = S.settings.bpfCancelled;
         } else {
-          setSectionStatus('saveStatusNetworkInspector', (res && res.error) || 'Setup failed.', true);
+          setSectionStatus('saveStatusNetworkInspector', (res && res.error) || S.settings.bpfSetupFailed, true);
           if (statusEl) statusEl.textContent = '';
         }
       }).catch(function (e: any) {
@@ -1054,7 +1060,7 @@ api.getState().then(function (state: any) {
     if (networkInspectorHasCaptureSetupAction(niSetupPlatform)) {
       bodyHtml +=
         '<div class="settings-section-actions" id="niBpfActions">' +
-        '<button type="button" class="btn btn-secondary btn-sm" id="btnInstallBpfAccess">Setup Packet Capture</button>' +
+        '<button type="button" class="btn btn-secondary btn-sm" id="btnInstallBpfAccess">' + S.settings.niSetupPacketCapture + '</button>' +
         '<span class="settings-row-desc" id="niBpfInstallStatus" aria-live="polite"></span>' +
         '</div>';
     }
@@ -1104,7 +1110,7 @@ api.getState().then(function (state: any) {
   };
   refreshConnectedPlaces();
   if (state.logFilePath && el('logPathHint')) {
-    el('logPathHint').textContent = 'Log file: ' + state.logFilePath;
+    el('logPathHint').textContent = S.settings.logFilePath(state.logFilePath);
   }
   setFolderDisplay(state.actionScriptDefaultSaveFolder || '');
   mcpClientDetections = Array.isArray(state.mcpClientDetections) ? state.mcpClientDetections : [];
@@ -1193,9 +1199,7 @@ var optKeychain = el('optRememberPasswordsInKeychain') as HTMLInputElement | nul
 if (optKeychain) {
   optKeychain.addEventListener('change', function () {
     if (optKeychain!.checked && keychainSnap && keychainSnap.status === 'unencrypted') {
-      var ok = window.confirm(
-        'Your system does not provide a real encryption keyring. Enabling this stores passwords as encoded plaintext on disk, not encrypted. Continue?'
-      );
+      var ok = window.confirm(S.settings.keychainUnencryptedConfirm);
       if (!ok) {
         optKeychain!.checked = false;
         setToggle('optRememberPasswordsInKeychain', false);
@@ -1218,9 +1222,7 @@ var optNi = el('optNetworkInspector') as HTMLInputElement | null;
 if (optNi) {
   optNi.addEventListener('change', function () {
     if (optNi!.checked) {
-      var ok = window.confirm(
-        'Network Inspector will capture Roku traffic and store it locally on this machine — through the MITM proxy and, if set up, hotspot/shared-network capture. Continue?'
-      );
+      var ok = window.confirm(S.settings.niConfirmEnable);
       if (!ok) {
         optNi!.checked = false;
         setToggle('optNetworkInspector', false);
@@ -1275,11 +1277,11 @@ if (niSetupModal instanceof HTMLElement) {
   attachBackdropClickToClose(niSetupModal, closeNiSetup);
 }
 
-wireSaveButton('btnSaveGeneral', 'General settings saved.', 'saveStatusGeneral');
-wireSaveButton('btnSaveActionScripts', 'Action Scripts settings saved.', 'saveStatusActionScripts');
-wireSaveButton('btnSaveDevicePerf', 'Device Performance settings saved.', 'saveStatusDevicePerf');
-wireSaveButton('btnSaveTiming', 'Timing & Network settings saved.', 'saveStatusTiming');
-wireSaveButton('btnSaveMcpServer', 'MCP Server settings saved.', 'saveStatusMcpServer');
+wireSaveButton('btnSaveGeneral', S.settings.generalSaved, 'saveStatusGeneral');
+wireSaveButton('btnSaveActionScripts', S.settings.actionScriptsSaved, 'saveStatusActionScripts');
+wireSaveButton('btnSaveDevicePerf', S.settings.devicePerfSaved, 'saveStatusDevicePerf');
+wireSaveButton('btnSaveTiming', S.settings.timingSaved, 'saveStatusTiming');
+wireSaveButton('btnSaveMcpServer', S.settings.mcpSaved, 'saveStatusMcpServer');
 
 (function wireNetworkInspectorSave() {
   var btn = el('btnSaveNetworkInspector') as HTMLButtonElement | null;
@@ -1298,9 +1300,9 @@ wireSaveButton('btnSaveMcpServer', 'MCP Server settings saved.', 'saveStatusMcpS
             maxRawPackets: clampNiMaxRawPackets(el('niMaxRawPackets') ? el('niMaxRawPackets').value : NI_MAX_RAW_PACKETS_DEFAULT),
             maxBodyKb: clampNiMaxBodyKb(el('niMaxBodyKb') ? el('niMaxBodyKb').value : NI_MAX_BODY_KB_DEFAULT)
           };
-          setSectionStatus('saveStatusNetworkInspector', 'Network Inspector settings saved.', false);
+          setSectionStatus('saveStatusNetworkInspector', S.settings.niSaved, false);
         } else {
-          setSectionStatus('saveStatusNetworkInspector', (res && (res.warning || res.error)) || 'Save failed', true);
+          setSectionStatus('saveStatusNetworkInspector', (res && (res.warning || res.error)) || S.settings.saveFailed, true);
         }
       }).catch(function (e: any) {
         btn!.disabled = false;
@@ -1310,7 +1312,7 @@ wireSaveButton('btnSaveMcpServer', 'MCP Server settings saved.', 'saveStatusMcpS
     }
     if (!api.remoteNetworkSetConfig) {
       btn!.disabled = false;
-      setSectionStatus('saveStatusNetworkInspector', 'Remote Network Inspector is not available in this build.', true);
+      setSectionStatus('saveStatusNetworkInspector', S.settings.niRemoteUnavailable, true);
       return;
     }
     var cfg = {
@@ -1321,9 +1323,9 @@ wireSaveButton('btnSaveMcpServer', 'MCP Server settings saved.', 'saveStatusMcpS
     api.remoteNetworkSetConfig(place, cfg).then(function (res: any) {
       btn!.disabled = false;
       if (res && res.success) {
-        setSectionStatus('saveStatusNetworkInspector', 'Saved to remote location.', false);
+        setSectionStatus('saveStatusNetworkInspector', S.settings.niSavedRemote, false);
       } else {
-        setSectionStatus('saveStatusNetworkInspector', (res && res.error) || 'Remote save failed', true);
+        setSectionStatus('saveStatusNetworkInspector', (res && res.error) || S.settings.niRemoteSaveFailed, true);
       }
     }).catch(function (e: any) {
       btn!.disabled = false;

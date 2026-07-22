@@ -18,6 +18,7 @@
  */
 
 import { inMemorySessionStore } from './in-memory-storage.js';
+import { S } from '@shared/strings/index.js';
 
 export interface HeaderSearchResizeOptions {
   /** Absolutely-centered element that holds the search box (its width is driven). */
@@ -207,7 +208,7 @@ export function makeCenteredSearchResizable(
   handle.className = 'hdr-search-resize';
   handle.setAttribute('role', 'separator');
   handle.setAttribute('aria-orientation', 'vertical');
-  handle.title = 'Drag to widen search (double-click to reset)';
+  handle.title = S.ui.resizeSearchTitle;
   barEl.appendChild(handle);
   return attachHeaderSearchResize({
     slot: barEl,

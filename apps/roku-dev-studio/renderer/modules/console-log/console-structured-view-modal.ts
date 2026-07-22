@@ -4,6 +4,7 @@ import type { StructuredConsolePayload } from './structured-log-detect.js';
 import { toggleFoldGroup } from './console-structured-syntax.js';
 import { renderStructuredInto, structuredBodyText } from '../ui/structured-body.js';
 import { attachSelectAll } from '../ui/select-all.js';
+import { S } from '@shared/strings/index.js';
 
 const OVERLAY_ID = 'telnetStructuredViewerOverlay';
 
@@ -121,10 +122,10 @@ const structuredModal = createSingletonConsoleModal({
   innerHTML: `
     <div class="modal telnet-structured-view-modal" role="dialog" aria-modal="true" aria-labelledby="telnetStructuredViewerTitle">
       <div class="modal-header">
-        <span class="modal-title" id="telnetStructuredViewerTitle">Console</span>
+        <span class="modal-title" id="telnetStructuredViewerTitle">${S.consoleLog.titlePrefix}</span>
         <div class="telnet-structured-view-modal-actions">
-          <button type="button" class="btn btn-secondary telnet-structured-view-copy" title="Copy Formatted Text">Copy</button>
-          <button type="button" class="modal-close telnet-structured-view-close" aria-label="Close"><span class="icon icon-sm"><svg><use href="#icon-x"/></svg></span></button>
+          <button type="button" class="btn btn-secondary telnet-structured-view-copy" title="${S.consoleLog.copyFormattedTitle}">${S.common.copy}</button>
+          <button type="button" class="modal-close telnet-structured-view-close" aria-label="${S.common.close}"><span class="icon icon-sm"><svg><use href="#icon-x"/></svg></span></button>
         </div>
       </div>
       <div class="modal-body telnet-structured-view-body">
@@ -166,9 +167,9 @@ const structuredModal = createSingletonConsoleModal({
         await window.roku.copyToClipboard(text);
         if (copyBtn instanceof HTMLElement) {
           const prev = copyBtn.textContent;
-          copyBtn.textContent = 'Copied';
+          copyBtn.textContent = S.consoleLog.copied;
           setTimeout(() => {
-            copyBtn.textContent = prev || 'Copy';
+            copyBtn.textContent = prev || S.common.copy;
           }, 1600);
         }
       } catch {
@@ -191,7 +192,7 @@ export function openConsoleStructuredViewer(
     const pre = overlay.querySelector('.telnet-structured-view-pre');
 
     if (title) {
-      const label = payload.kind === 'json' ? 'JSON' : 'XML';
+      const label = payload.kind === 'json' ? S.consoleLog.jsonLabel : S.consoleLog.xmlLabel;
       const prefix = options?.titlePrefix?.trim();
       // The structured viewer is a shared singleton (Console + Network Inspector). Honor an explicit
       // prefix so a payload opened from the Network Inspector isn't mislabeled "Console".
@@ -234,11 +235,11 @@ export function attachStructuredPillsToLine(
   const defaultHint =
     primary?.kind === 'json'
       ? hasNested
-        ? 'Click to view the full JSON for this line. Use JSON+ for nested fragments only.'
-        : 'Click to view formatted JSON (opens in a modal)'
+        ? S.consoleLog.hintJsonFullNested
+        : S.consoleLog.hintJsonFormatted
       : hasNested
-        ? 'Click to view the full XML for this line.'
-        : 'Click to view formatted XML (opens in a modal)';
+        ? S.consoleLog.hintXmlFull
+        : S.consoleLog.hintXmlFormatted;
   contentEl.title = defaultHint;
 
   const wrap = document.createElement('span');
@@ -248,16 +249,20 @@ export function attachStructuredPillsToLine(
     const structured = targets[i]!;
     const hint =
       structured.kind === 'json' && structured.fromEscapedString
-        ? 'Nested JSON only (from an escaped string). Does not open the full outer JSON.'
+        ? S.consoleLog.hintPillNestedJson
         : structured.kind === 'json'
-          ? 'Full JSON for this line (click the line text for the same).'
-          : 'Click to view formatted XML (opens in a modal)';
+          ? S.consoleLog.hintPillFullJson
+          : S.consoleLog.hintXmlFormatted;
     const pill = document.createElement('button');
     pill.type = 'button';
     pill.className = 'telnet-structured-view-pill';
     if (structured.fromEscapedString) pill.classList.add('telnet-structured-view-pill--nested');
     pill.textContent =
-      structured.kind === 'json' ? (structured.fromEscapedString ? 'JSON+' : 'JSON') : 'XML';
+      structured.kind === 'json'
+        ? structured.fromEscapedString
+          ? S.consoleLog.jsonPlusLabel
+          : S.consoleLog.jsonLabel
+        : S.consoleLog.xmlLabel;
     pill.title = hint;
     pill.setAttribute('aria-label', hint);
     pill.dataset.structuredIndex = String(i);

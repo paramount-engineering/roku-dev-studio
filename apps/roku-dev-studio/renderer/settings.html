@@ -11,25 +11,25 @@
   <div id="settingsAnimateRoot" class="settings-animate-root">
   <div class="settings-header">
     <h1>
-      <span>Settings</span>
+      <span data-i18n="settings.heading">Settings</span>
       <span class="settings-header-delim" aria-hidden="true">›</span>
       <span id="settingsHeaderSection" class="settings-header-section">General</span>
     </h1>
-    <button type="button" class="modal-close" id="btnHeaderClose" title="Close" aria-label="Close">
+    <button type="button" class="modal-close" id="btnHeaderClose" title="Close" aria-label="Close" data-i18n-title="common.close" data-i18n-aria-label="common.close">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
         <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
       </svg>
     </button>
   </div>
   <div class="settings-main">
-    <nav class="settings-nav" role="tablist" aria-label="Settings sections">
-      <button type="button" class="settings-nav-item active" role="tab" aria-selected="true" data-target="general" id="nav-general">General</button>
-      <button type="button" class="settings-nav-item" role="tab" aria-selected="false" data-target="action-scripts" id="nav-action-scripts">Action Scripts</button>
-      <button type="button" class="settings-nav-item" role="tab" aria-selected="false" data-target="device-performance" id="nav-device-performance">Device Performance</button>
-      <button type="button" class="settings-nav-item" role="tab" aria-selected="false" data-target="timing" id="nav-timing">Timing &amp; Network</button>
-      <button type="button" class="settings-nav-item" role="tab" aria-selected="false" data-target="network-inspector" id="nav-network-inspector">Network Inspector</button>
-      <button type="button" class="settings-nav-item" role="tab" aria-selected="false" data-target="sideload-relay" id="nav-sideload-relay">Sideload Relay</button>
-      <button type="button" class="settings-nav-item" role="tab" aria-selected="false" data-target="mcp-server" id="nav-mcp-server">MCP Server</button>
+    <nav class="settings-nav" role="tablist" aria-label="Settings sections" data-i18n-aria-label="settings.navAria">
+      <button type="button" class="settings-nav-item active" role="tab" aria-selected="true" data-target="general" id="nav-general" data-i18n="settings.tabGeneral">General</button>
+      <button type="button" class="settings-nav-item" role="tab" aria-selected="false" data-target="action-scripts" id="nav-action-scripts" data-i18n="settings.tabActionScripts">Action Scripts</button>
+      <button type="button" class="settings-nav-item" role="tab" aria-selected="false" data-target="device-performance" id="nav-device-performance" data-i18n="settings.tabDevicePerformance">Device Performance</button>
+      <button type="button" class="settings-nav-item" role="tab" aria-selected="false" data-target="timing" id="nav-timing" data-i18n="settings.tabTiming">Timing &amp; Network</button>
+      <button type="button" class="settings-nav-item" role="tab" aria-selected="false" data-target="network-inspector" id="nav-network-inspector" data-i18n="settings.tabNetworkInspector">Network Inspector</button>
+      <button type="button" class="settings-nav-item" role="tab" aria-selected="false" data-target="sideload-relay" id="nav-sideload-relay" data-i18n="settings.tabSideloadRelay">Sideload Relay</button>
+      <button type="button" class="settings-nav-item" role="tab" aria-selected="false" data-target="mcp-server" id="nav-mcp-server" data-i18n="settings.tabMcpServer">MCP Server</button>
     </nav>
     <div class="settings-content">
       <div class="settings-panel active" data-section="general" id="panel-general" role="tabpanel" aria-labelledby="nav-general" aria-hidden="false">
@@ -38,72 +38,72 @@
             <div class="settings-section">
               <div class="settings-row-toggle">
                 <div class="settings-row-text">
-                  <strong>Developer Mode</strong>
-                  <span class="settings-row-desc">Extra Logging in the Main Window (same as File → Developer Mode).</span>
+                  <strong data-i18n="settings.developerMode">Developer Mode</strong>
+                  <span class="settings-row-desc" data-i18n="settings.developerModeDesc">Extra logging in the main window (same as File → Developer Mode).</span>
                 </div>
                 <label class="settings-toggle-wrap" for="optDevMode">
-                  <input type="checkbox" id="optDevMode" class="settings-toggle-input" role="switch" aria-label="Developer mode" aria-checked="false" />
+                  <input type="checkbox" id="optDevMode" class="settings-toggle-input" role="switch" aria-label="Developer mode" aria-checked="false" data-i18n-aria-label="settings.developerModeAria" />
                   <span class="settings-toggle-ui" aria-hidden="true"></span>
                 </label>
               </div>
               <div class="settings-row-toggle">
                 <div class="settings-row-text">
-                  <strong>Privacy Mode</strong>
-                  <span class="settings-row-desc">Mask IPs and Serial Numbers in the UI (same as File → Privacy Mode).</span>
+                  <strong data-i18n="settings.privacyMode">Privacy Mode</strong>
+                  <span class="settings-row-desc" data-i18n="settings.privacyModeDesc">Mask IPs and Serial-Numbers in the UI (same as File → Privacy Mode).</span>
                 </div>
                 <label class="settings-toggle-wrap" for="optPrivacy">
-                  <input type="checkbox" id="optPrivacy" class="settings-toggle-input" role="switch" aria-label="Privacy mode" aria-checked="false" />
+                  <input type="checkbox" id="optPrivacy" class="settings-toggle-input" role="switch" aria-label="Privacy mode" aria-checked="false" data-i18n-aria-label="settings.privacyModeAria" />
                   <span class="settings-toggle-ui" aria-hidden="true"></span>
                 </label>
               </div>
               <div class="settings-row-toggle">
                 <div class="settings-row-text">
-                  <strong>Debug Logging to File</strong>
-                  <span class="settings-row-desc" id="logPathHint">Writes to the log file under app user data when enabled.</span>
+                  <strong data-i18n="settings.debugLogging">Debug Logging to File</strong>
+                  <span class="settings-row-desc" id="logPathHint" data-i18n="settings.debugLogHint">Writes to the log file under app user data when enabled.</span>
                 </div>
                 <label class="settings-toggle-wrap" for="optDebugLog">
-                  <input type="checkbox" id="optDebugLog" class="settings-toggle-input" role="switch" aria-label="Debug logging to file" aria-checked="false" />
+                  <input type="checkbox" id="optDebugLog" class="settings-toggle-input" role="switch" aria-label="Debug logging to file" aria-checked="false" data-i18n-aria-label="settings.debugLoggingAria" />
                   <span class="settings-toggle-ui" aria-hidden="true"></span>
                 </label>
               </div>
               <div class="settings-row-toggle">
                 <div class="settings-row-text">
-                  <strong>Use Keyboard for Roku Remote</strong>
-                  <span class="settings-row-desc">When on, you can use the keyboard to control the Roku. Keyboard shortcuts are listed in the Remote Help modal.</span>
+                  <strong data-i18n="settings.useKeyboardRemote">Use Keyboard for Roku Remote</strong>
+                  <span class="settings-row-desc" data-i18n="settings.useKeyboardRemoteDesc">When On, you can use the keyboard to control the Roku. Keyboard shortcuts are listed in the Remote Help modal.</span>
                 </div>
                 <label class="settings-toggle-wrap" for="optKeyboardRemote">
-                  <input type="checkbox" id="optKeyboardRemote" class="settings-toggle-input" role="switch" aria-label="Roku Remote - Use Keyboard " aria-checked="false" />
+                  <input type="checkbox" id="optKeyboardRemote" class="settings-toggle-input" role="switch" aria-label="Roku Remote - Use Keyboard " aria-checked="false" data-i18n-aria-label="settings.useKeyboardRemoteAria" />
                   <span class="settings-toggle-ui" aria-hidden="true"></span>
                 </label>
               </div>
               <div class="settings-row-toggle">
                 <div class="settings-row-text">
-                  <strong>Auto Connect to Devices</strong>
-                  <span class="settings-row-desc">When On, the app will automatically connect to devices that were stayed connected when closing the App in the previous session.</span>
+                  <strong data-i18n="settings.autoConnect">Auto Connect to Devices</strong>
+                  <span class="settings-row-desc" data-i18n="settings.autoConnectDesc">When On, the app will automatically connect to devices that were stayed connected when closing the app in the previous session.</span>
                 </div>
                 <label class="settings-toggle-wrap" for="optAutoConnectLast">
-                  <input type="checkbox" id="optAutoConnectLast" class="settings-toggle-input" role="switch" aria-label="Auto Connect to Devices" aria-checked="false" />
+                  <input type="checkbox" id="optAutoConnectLast" class="settings-toggle-input" role="switch" aria-label="Auto Connect to Devices" aria-checked="false" data-i18n-aria-label="settings.autoConnect" />
                   <span class="settings-toggle-ui" aria-hidden="true"></span>
                 </label>
               </div>
               <div class="settings-row-toggle">
                 <div class="settings-row-text">
-                  <strong>Auto-Hide Sidebar</strong>
-                  <span class="settings-row-desc">When on, the Sidebar, which presents the devices list, will auto-toggle if the Sidebar was hidden in the previous session.</span>
+                  <strong data-i18n="settings.autoHideSidebar">Auto-Hide Sidebar</strong>
+                  <span class="settings-row-desc" data-i18n="settings.autoHideSidebarDesc">When On, the Sidebar, which presents the devices list, will auto-toggle if the Sidebar was hidden in the previous session.</span>
                 </div>
                 <label class="settings-toggle-wrap" for="optRememberSidebarToggle">
-                  <input type="checkbox" id="optRememberSidebarToggle" class="settings-toggle-input" role="switch" aria-label="Auto-Hide Sidebar" aria-checked="false" />
+                  <input type="checkbox" id="optRememberSidebarToggle" class="settings-toggle-input" role="switch" aria-label="Auto-Hide Sidebar" aria-checked="false" data-i18n-aria-label="settings.autoHideSidebar" />
                   <span class="settings-toggle-ui" aria-hidden="true"></span>
                 </label>
               </div>
               <div class="settings-row-toggle">
                 <div class="settings-row-text">
-                  <strong>Encrypt Saved Passwords with System Keychain</strong>
-                  <span class="settings-row-desc">When On, each device's "Remember password" entry is encrypted via the OS Keychain — your OS may prompt the first time. When Off, remembered passwords still persist across quit/relaunch but are stored unencrypted on disk.</span>
+                  <strong data-i18n="settings.encryptPasswords">Encrypt Saved Passwords with System Keychain</strong>
+                  <span class="settings-row-desc" data-i18n="settings.encryptPasswordsDesc">Encrypt each device's remembered password via the OS keychain. When Off, it persists but is stored unencrypted on disk.</span>
                   <span class="settings-row-desc settings-keychain-status" id="keychainStorageStatus" aria-live="polite"></span>
                 </div>
                 <label class="settings-toggle-wrap" for="optRememberPasswordsInKeychain">
-                  <input type="checkbox" id="optRememberPasswordsInKeychain" class="settings-toggle-input" role="switch" aria-label="Persist saved passwords in system keychain" aria-checked="false" />
+                  <input type="checkbox" id="optRememberPasswordsInKeychain" class="settings-toggle-input" role="switch" aria-label="Persist saved passwords in system keychain" aria-checked="false" data-i18n-aria-label="settings.encryptPasswordsAria" />
                   <span class="settings-toggle-ui" aria-hidden="true"></span>
                 </label>
               </div>
@@ -111,9 +111,9 @@
             </div>
           </div>
           <div class="section-save-dock">
-            <button type="button" class="btn-timing-reset" id="btnResetGeneral">Reset to Defaults</button>
+            <button type="button" class="btn-timing-reset" id="btnResetGeneral" data-i18n="settings.resetToDefaults">Reset to Defaults</button>
             <span class="section-save-status" id="saveStatusGeneral" aria-live="polite"></span>
-            <button type="button" class="btn btn-primary" id="btnSaveGeneral">Save</button>
+            <button type="button" class="btn btn-primary" id="btnSaveGeneral" data-i18n="common.save">Save</button>
           </div>
         </div>
       </div>
@@ -121,34 +121,34 @@
         <div class="settings-panel-fill">
           <div class="settings-panel-scroll">
             <div class="settings-section folder-scripts-block">
-              <p class="help-blurb">Default folder for screenshots and logs when a script needs saves. You can still pick another folder per run.</p>
+              <p class="help-blurb" data-i18n="settings.actionScriptsBlurb">Default folder for screenshots and logs when a script needs saves. You can still pick another folder per run.</p>
               <div class="folder-action-row">
                 <div class="folder-integrated">
                   <div id="folderDisplay" class="folder-integrated-path empty">No folder set</div>
-                  <button type="button" class="folder-integrated-btn" id="btnBrowseFolder">Choose folder…</button>
+                  <button type="button" class="folder-integrated-btn" id="btnBrowseFolder" data-i18n="settings.chooseFolder">Choose Folder…</button>
                 </div>
               </div>
             </div>
           </div>
           <div class="section-save-dock">
-            <button type="button" class="btn-timing-reset" id="btnResetActionScripts">Reset to Defaults</button>
+            <button type="button" class="btn-timing-reset" id="btnResetActionScripts" data-i18n="settings.resetToDefaults">Reset to Defaults</button>
             <span class="section-save-status" id="saveStatusActionScripts" aria-live="polite"></span>
-            <button type="button" class="btn btn-primary" id="btnSaveActionScripts">Save</button>
+            <button type="button" class="btn btn-primary" id="btnSaveActionScripts" data-i18n="common.save">Save</button>
           </div>
         </div>
       </div>
       <div class="settings-panel" data-section="device-performance" id="panel-device-performance" role="tabpanel" aria-labelledby="nav-device-performance" aria-hidden="true">
         <div class="settings-panel-fill">
           <div class="settings-panel-scroll">
-            <p class="help-blurb">Applies while <strong>Show Device Performance</strong> is on, the Roku has Developer Mode, and the Dev App is in the foreground. When <strong>Remember 'Show Device Performance'</strong> is on below, the Remote tab restores the quad layout per device.</p>
+            <p class="help-blurb">Applies while <strong>Show Device Performance</strong> is on, the Roku has Developer Mode, and the Dev App is in the foreground. When <strong>Remember 'Show Device Performance'</strong> is on below, the Remote Section restores the quad layout per device.</p>
             <div class="settings-section device-perf-unified-list">
               <div class="settings-row-toggle">
                 <div class="settings-row-text">
-                  <strong>Remember 'Show Device Performance'</strong>
-                  <span class="settings-row-desc">Restore whether <strong>Show Device Performance</strong> was on for each device. Turn off to always start with just the Remote tab until you enable it again.</span>
+                  <strong data-i18n="settings.rememberDevicePerf">Remember 'Show Device Performance'</strong>
+                  <span class="settings-row-desc">Restore whether <strong>Show Device Performance</strong> was on for each device. Turn off to always start with just the Remote Section until you enable it again.</span>
                 </div>
                 <label class="settings-toggle-wrap" for="optDevicePerfRememberQuad">
-                  <input type="checkbox" id="optDevicePerfRememberQuad" class="settings-toggle-input" role="switch" aria-label="Remember Device Performance show or hide per device" aria-checked="false" />
+                  <input type="checkbox" id="optDevicePerfRememberQuad" class="settings-toggle-input" role="switch" aria-label="Remember Device Performance show or hide per device" aria-checked="false" data-i18n-aria-label="settings.rememberDevicePerfAria" />
                   <span class="settings-toggle-ui" aria-hidden="true"></span>
                 </label>
               </div>
@@ -156,9 +156,9 @@
             </div>
           </div>
           <div class="section-save-dock">
-            <button type="button" class="btn-timing-reset" id="btnResetDevicePerf">Reset to Defaults</button>
+            <button type="button" class="btn-timing-reset" id="btnResetDevicePerf" data-i18n="settings.resetToDefaults">Reset to Defaults</button>
             <span class="section-save-status" id="saveStatusDevicePerf" aria-live="polite"></span>
-            <button type="button" class="btn btn-primary" id="btnSaveDevicePerf">Save</button>
+            <button type="button" class="btn btn-primary" id="btnSaveDevicePerf" data-i18n="common.save">Save</button>
           </div>
         </div>
       </div>
@@ -170,9 +170,9 @@
             </div>
           </div>
           <div class="section-save-dock">
-            <button type="button" class="btn-timing-reset" id="btnResetTiming">Reset to Defaults</button>
+            <button type="button" class="btn-timing-reset" id="btnResetTiming" data-i18n="settings.resetToDefaults">Reset to Defaults</button>
             <span class="section-save-status" id="saveStatusTiming" aria-live="polite"></span>
-            <button type="button" class="btn btn-primary" id="btnSaveTiming">Save</button>
+            <button type="button" class="btn btn-primary" id="btnSaveTiming" data-i18n="common.save">Save</button>
           </div>
         </div>
       </div>
@@ -185,9 +185,9 @@
             </div>
           </div>
           <div class="section-save-dock">
-            <button type="button" class="btn-timing-reset" id="btnResetMcpServer">Reset to Defaults</button>
+            <button type="button" class="btn-timing-reset" id="btnResetMcpServer" data-i18n="settings.resetToDefaults">Reset to Defaults</button>
             <span class="section-save-status" id="saveStatusMcpServer" aria-live="polite"></span>
-            <button type="button" class="btn btn-primary" id="btnSaveMcpServer">Save</button>
+            <button type="button" class="btn btn-primary" id="btnSaveMcpServer" data-i18n="common.save">Save</button>
           </div>
         </div>
       </div>
@@ -195,8 +195,8 @@
         <div class="settings-panel-fill">
           <div class="settings-panel-scroll">
             <div class="ni-place-bar" id="niPlaceRow" hidden>
-              <label class="ni-place-bar-label" for="niPlace">Location</label>
-              <select id="niPlace" class="ni-place-select" aria-label="Network Inspector location"></select>
+              <label class="ni-place-bar-label" for="niPlace" data-i18n="settings.location">Location</label>
+              <select id="niPlace" class="ni-place-select" aria-label="Network Inspector location" data-i18n-aria-label="settings.niPlaceAria"></select>
             </div>
             <span class="settings-status-line ni-place-hint" id="niPlaceHint" aria-live="polite" hidden></span>
             <div class="ni-port-conflict-warn" id="niPortConflictWarn" role="alert" hidden>
@@ -210,48 +210,48 @@
             <div class="settings-section" id="niSection">
               <div class="settings-row-toggle">
                 <div class="settings-row-text">
-                  <strong>Enable Network Inspector</strong>
-                  <span class="settings-row-desc">Inspect a device's network traffic. Decrypts your dev channel's HTTPS via the local proxy (any network); a hotspot also captures DNS/SNI. Stored locally only.</span>
+                  <strong data-i18n="settings.enableNetworkInspector">Enable Network Inspector</strong>
+                  <span class="settings-row-desc" data-i18n="settings.enableNetworkInspectorDesc">Inspect a device's network traffic. Decrypts your dev channel's HTTPS via the local proxy (any network); a hotspot also captures DNS/SNI. Stored locally only.</span>
                 </div>
                 <label class="settings-toggle-wrap" for="optNetworkInspector">
-                  <input type="checkbox" id="optNetworkInspector" class="settings-toggle-input" role="switch" aria-label="Enable Network Inspector" aria-checked="false" />
+                  <input type="checkbox" id="optNetworkInspector" class="settings-toggle-input" role="switch" aria-label="Enable Network Inspector" aria-checked="false" data-i18n-aria-label="settings.enableNetworkInspector" />
                   <span class="settings-toggle-ui" aria-hidden="true"></span>
                 </label>
               </div>
               <div class="settings-row-input">
                 <div class="settings-row-text">
-                  <strong>MITM Proxy Port</strong>
-                  <span class="settings-row-desc">Port the local decrypting proxy listens on. Route your sideloaded dev channel through it — works on any network (stock channels can't be intercepted).</span>
+                  <strong data-i18n="settings.mitmProxyPort">MITM Proxy Port</strong>
+                  <span class="settings-row-desc" data-i18n="settings.mitmProxyPortDesc">Port the local decrypting proxy listens on. Route your sideloaded dev channel through it — works on any network (stock channels can't be intercepted).</span>
                 </div>
-                <input type="number" id="niMitmPort" class="settings-text-input" min="1" max="65535" value="8888" aria-label="MITM proxy port" />
+                <input type="number" id="niMitmPort" class="settings-text-input" min="1" max="65535" value="8888" aria-label="MITM proxy port" data-i18n-aria-label="settings.mitmProxyPortAria" />
               </div>
               <div class="settings-row-input">
                 <div class="settings-row-text">
-                  <strong>Per-Device Packet Limit</strong>
-                  <span class="settings-row-desc">Max captured frames kept per device for the PCAP export. Higher = longer history, more memory. 100–100000.</span>
+                  <strong data-i18n="settings.packetLimit">Per-Device Packet Limit</strong>
+                  <span class="settings-row-desc" data-i18n="settings.packetLimitDesc">Max captured frames kept per device for the PCAP export. Higher = longer history, more memory. 100–100000.</span>
                 </div>
-                <input type="number" id="niMaxRawPackets" class="settings-text-input" min="100" max="100000" step="100" value="5000" aria-label="Per-device packet limit" />
+                <input type="number" id="niMaxRawPackets" class="settings-text-input" min="100" max="100000" step="100" value="5000" aria-label="Per-device packet limit" data-i18n-aria-label="settings.packetLimitAria" />
               </div>
               <div class="settings-row-input">
                 <div class="settings-row-text">
-                  <strong>Max Body Size (KB)</strong>
-                  <span class="settings-row-desc">How much of each request/response body is kept for viewing in the inspector. Larger = inspect big bodies (e.g. multi-MB JS) whole; over this, the body shows a "Body Truncated" badge. This never affects what the device receives. Applies to new traffic only — raising it won't restore bodies already captured and truncated. 64–16384 KB.</span>
+                  <strong data-i18n="settings.maxBodySize">Max Body Size (KB)</strong>
+                  <span class="settings-row-desc" data-i18n="settings.maxBodySizeDesc">How much of each request/response body is kept for viewing in the inspector. Larger = inspect big bodies (e.g. multi-MB JS) whole; over this, the body shows a "Body Truncated" badge. This never affects what the device receives. Applies to new traffic only — raising it won't restore bodies already captured and truncated. 64–16384 KB.</span>
                 </div>
-                <input type="number" id="niMaxBodyKb" class="settings-text-input" min="64" max="16384" step="64" value="4096" aria-label="Max retained body size in KB" />
+                <input type="number" id="niMaxBodyKb" class="settings-text-input" min="64" max="16384" step="64" value="4096" aria-label="Max retained body size in KB" data-i18n-aria-label="settings.maxBodySizeAria" />
               </div>
               <div class="settings-row-input" id="niSetupRow">
                 <div class="settings-row-text">
-                  <strong>Hotspot &amp; Capture Setup <span class="ni-attention-badge" id="niSetupBadge" hidden>Setup Needed</span></strong>
+                  <strong data-i18n="settings.hotspotCaptureSetup">Hotspot &amp; Capture Setup <span class="ni-attention-badge" id="niSetupBadge" hidden>Setup Needed</span></strong>
                   <span class="settings-row-desc" id="niSetupRowDesc">Optional — only for hotspot DNS/SNI capture. Proxying needs no setup.</span>
                 </div>
-                <button type="button" class="btn btn-secondary btn-sm" id="btnOpenNiSetup">View Setup</button>
+                <button type="button" class="btn btn-secondary btn-sm" id="btnOpenNiSetup" data-i18n="settings.viewSetup">View Setup</button>
               </div>
             </div>
           </div>
           <div class="section-save-dock">
-            <button type="button" class="btn-timing-reset" id="btnResetNetworkInspector">Reset to Defaults</button>
+            <button type="button" class="btn-timing-reset" id="btnResetNetworkInspector" data-i18n="settings.resetToDefaults">Reset to Defaults</button>
             <span class="section-save-status" id="saveStatusNetworkInspector" aria-live="polite"></span>
-            <button type="button" class="btn btn-primary" id="btnSaveNetworkInspector">Save</button>
+            <button type="button" class="btn btn-primary" id="btnSaveNetworkInspector" data-i18n="common.save">Save</button>
           </div>
         </div>
       </div>
@@ -260,16 +260,16 @@
           <div class="settings-panel-scroll">
             <ul class="help-blurb sr-intro">
               <li>Point your sideload tool (VS Code with the BrightScript extension, Eclipse, or the roku-deploy CLI)<span id="srRelayUrlWrap" hidden> — or a browser at <code id="srRelayUrl">http://…/</code></span> — here instead of a single Roku.</li>
-              <li>RDS accepts the sideload once, then installs it on every enabled target, launches the dev app, and opens each console.</li>
-              <li>Sideloads from this machine proceed automatically.</li>
-              <li>A sideload from another LAN device needs the Dev Password and asks you to allow it.</li>
+              <li data-i18n="settings.srIntro2">RDS accepts the sideload once, then installs it on every enabled target, launches the Dev App, and opens each console.</li>
+              <li data-i18n="settings.srIntro3">Sideloads from this machine proceed automatically.</li>
+              <li data-i18n="settings.srIntro4">A sideload from another LAN device needs the Dev Password and asks you to allow it.</li>
             </ul>
             <div id="sideloadRelayRoot" class="settings-section"></div>
           </div>
           <div class="section-save-dock">
-            <button type="button" class="btn-timing-reset" id="btnResetSideloadRelay">Reset to Defaults</button>
+            <button type="button" class="btn-timing-reset" id="btnResetSideloadRelay" data-i18n="settings.resetToDefaults">Reset to Defaults</button>
             <span class="section-save-status" id="saveStatusSideloadRelay" aria-live="polite"></span>
-            <button type="button" class="btn btn-primary" id="btnSaveSideloadRelay">Save</button>
+            <button type="button" class="btn btn-primary" id="btnSaveSideloadRelay" data-i18n="common.save">Save</button>
           </div>
         </div>
       </div>
@@ -283,7 +283,7 @@
           <h2 id="niSetupModalTitle">Hotspot Capture Setup</h2>
           <span class="ni-setup-header-badge" id="niSetupHeaderBadge" data-state="unknown" hidden></span>
         </div>
-        <button type="button" class="modal-close" id="niSetupModalClose" title="Close" aria-label="Close">
+        <button type="button" class="modal-close" id="niSetupModalClose" title="Close" aria-label="Close" data-i18n-title="common.close" data-i18n-aria-label="common.close">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
             <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
           </svg>

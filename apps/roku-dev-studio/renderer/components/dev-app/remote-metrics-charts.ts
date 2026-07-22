@@ -1,7 +1,9 @@
 /**
- * Parsers + SVG time-series drawing for Remote tab resource quadrants.
+ * Parsers + SVG time-series drawing for Remote Section resource quadrants.
  * Styled for dark UI; structure inspired by Roku Resource Monitor (legend + gridded plot).
  */
+
+import { S } from '@shared/strings/index.js';
 
 const NS = 'http://www.w3.org/2000/svg';
 
@@ -143,12 +145,12 @@ export function extractChanperfFailureMessage(xml: string): string | null {
   const errM = xml.match(/<error>([^<]*)<\/error>/i);
   const err = errM?.[1]?.trim() ?? '';
   if (err.length > 0) {
-    return `Channel performance unavailable: ${err}`;
+    return S.devApp.channelPerfUnavailable(err);
   }
   const stM = xml.match(/<status>([^<]*)<\/status>/i);
   const st = stM?.[1]?.trim() ?? '';
   if (/^failed$/i.test(st)) {
-    return 'Channel Performance unavailable (status failed).';
+    return S.devApp.channelPerfUnavailableFailed;
   }
   return null;
 }

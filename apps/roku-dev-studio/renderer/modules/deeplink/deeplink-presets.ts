@@ -7,6 +7,7 @@ import {
   closeModalWithOriginMotion,
   openModalOverlayActiveFromOpener
 } from '../utils/modal-origin-motion.js';
+import { S } from '@shared/strings/index.js';
 
 export type DeeplinkPreset = {
   id: string;
@@ -126,7 +127,7 @@ export function populateSavedPresetSelect(select: HTMLSelectElement): void {
 
   const placeholder = document.createElement('option');
   placeholder.value = '';
-  placeholder.textContent = '-- Select saved deep link --';
+  placeholder.textContent = S.deeplink.savedPresetPlaceholder;
   select.appendChild(placeholder);
 
   for (const preset of savedPresets) {
@@ -184,8 +185,8 @@ export async function saveDeeplinkPreset(
   name: string
 ): Promise<DeeplinkPreset> {
   const trimmedName = name.trim();
-  if (!trimmedName) throw new Error('Enter a name for this saved deep link.');
-  if (!fields.appId.trim()) throw new Error('App ID is required.');
+  if (!trimmedName) throw new Error(S.deeplink.enterPresetName);
+  if (!fields.appId.trim()) throw new Error(S.deeplink.appIdRequired);
 
   const normalized = {
     appId: fields.appId.trim(),
@@ -262,7 +263,7 @@ function setupSaveModalOnce(): void {
   confirmBtn?.addEventListener('click', () => {
     const name = nameInput?.value ?? '';
     if (!name.trim()) {
-      setSaveModalError('Enter a name for this saved deep link.');
+      setSaveModalError(S.deeplink.enterPresetName);
       nameInput?.focus();
       return;
     }

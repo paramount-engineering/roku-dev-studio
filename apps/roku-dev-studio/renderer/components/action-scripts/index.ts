@@ -17,6 +17,7 @@ import {
 } from '../../modules/mcp-bridge-client.js';
 import { getAppConnector } from '../../modules/app-connector/index.js';
 import { rendererWarn } from '../../modules/utils/logger.js';
+import { S } from '@shared/strings/index.js';
 
 export function setupActionScripts(panel: DevicePanelRoot, device, api) {
   const container = panel.querySelector('.action-scripts-container');
@@ -100,13 +101,13 @@ export function setupActionScripts(panel: DevicePanelRoot, device, api) {
       const api = builderApiRef.current;
       const load = api?.importFromValidatedJson;
       if (!api || typeof load !== 'function') {
-        showToast('Builder is not available on this tab.', 'error');
+        showToast(S.actionScripts.toastBuilderNotAvailable, 'error');
         return;
       }
       void Promise.resolve(load.call(api, json)).then((res) => {
         if (!res) return;
         if (!res.ok && res.message) showToast(res.message.replace(/\n/g, ' '), 'error');
-        else if (res.ok) showToast('Loaded in Builder', 'success');
+        else if (res.ok) showToast(S.actionScripts.toastLoadedInBuilder, 'success');
       });
     }
   });
@@ -263,10 +264,10 @@ export function setupActionScripts(panel: DevicePanelRoot, device, api) {
     try {
       const res = await Promise.resolve(load.call(apiRef, jsonScript));
       if (res && res.ok) {
-        showToast('AI Agent loaded a Script into the Builder', 'success');
+        showToast(S.actionScripts.toastAiAgentLoaded, 'success');
         return { ok: true };
       }
-      const msg = (res && res.message) || 'Could not load script';
+      const msg = (res && res.message) || S.actionScripts.toastCouldNotLoadScript;
       showToast(msg.replace(/\n/g, ' '), 'error');
       return { ok: false, message: msg };
     } catch (e) {
@@ -625,11 +626,11 @@ export function setupActionScripts(panel: DevicePanelRoot, device, api) {
       const ta = executorElements.executorTextarea;
       const raw = ta instanceof HTMLTextAreaElement ? ta.value.trim() : '';
       if (!raw) {
-        showToast('No script JSON in Executor to load.', 'error');
+        showToast(S.actionScripts.toastNoScriptInExecutor, 'error');
         return;
       }
       if (!hasExecutorSteps()) {
-        showToast('Add a non-empty "steps" array to the script JSON first.', 'error');
+        showToast(S.actionScripts.toastAddNonEmptySteps, 'error');
         return;
       }
       const impl = builderApiRef.current;
@@ -640,7 +641,7 @@ export function setupActionScripts(panel: DevicePanelRoot, device, api) {
         return;
       }
       builderTab.click();
-      showToast('Opened in Builder', 'success');
+      showToast(S.actionScripts.toastOpenedInBuilder, 'success');
     });
   }
 

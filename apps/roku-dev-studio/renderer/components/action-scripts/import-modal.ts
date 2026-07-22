@@ -17,6 +17,7 @@ import {
   playModalOpenMotion,
   closeModalWithOriginMotion
 } from '../../modules/utils/modal-origin-motion.js';
+import { S } from '@shared/strings/index.js';
 
 const MODAL_ID = 'actionScriptsImportModal';
 
@@ -46,11 +47,11 @@ export function formatScriptJson(text) {
   if (!raw) return { formatted: '', error: null };
   try {
     const parsed = JSON.parse(raw);
-    if (parsed == null || typeof parsed !== 'object') return { formatted: raw, error: 'Invalid script: must be an object' };
-    if (!Array.isArray(parsed.steps)) return { formatted: JSON.stringify(parsed, null, 2), error: 'Script must have a "steps" array' };
+    if (parsed == null || typeof parsed !== 'object') return { formatted: raw, error: S.actionScripts.errInvalidScriptObject };
+    if (!Array.isArray(parsed.steps)) return { formatted: JSON.stringify(parsed, null, 2), error: S.actionScripts.msgStepsArrayNoDot };
     return { formatted: JSON.stringify(parsed, null, 2), error: null };
   } catch (e) {
-    return { formatted: raw, error: e instanceof Error ? e.message : String(e) || 'Invalid JSON' };
+    return { formatted: raw, error: e instanceof Error ? e.message : String(e) || S.actionScripts.invalidJsonShort };
   }
 }
 
@@ -201,7 +202,7 @@ export function setupImportModal(container, device, api, context) {
 
   function functionsNotAvailableMessage(missingNames) {
     const list = Array.from(new Set(missingNames)).filter(Boolean).join(', ');
-    return `The following App Function(s) are not available from the app: ${list || '?'}. Ensure your channel exposes these functions (or remove these steps from the script), then try again.`;
+    return S.actionScripts.errMissingAppFunctions(list || '?');
   }
 
   /**
@@ -222,7 +223,7 @@ export function setupImportModal(container, device, api, context) {
     }
 
     const result = parseAndValidateScript(raw, raleFunctions);
-    if (result.parseError) return { ok: false, error: `Invalid JSON: ${result.parseError}` };
+    if (result.parseError) return { ok: false, error: S.actionScripts.invalidJson(result.parseError) };
     if (result.validation && !result.validation.valid) {
       const errors = result.validation.errors || [];
       const missingNames = errors
@@ -241,7 +242,7 @@ export function setupImportModal(container, device, api, context) {
           const si = e.stepIndex;
           if (si == null) return String(e.message);
           const entry = flatLabels[si];
-          return `Action ${stepPathToDisplayId(entry && entry.path, si)}: ${e.message}`;
+          return S.actionScripts.actionLabel(stepPathToDisplayId(entry && entry.path, si), e.message);
         })
         .join('\n');
       return { ok: false, error: errLines };
@@ -259,7 +260,7 @@ export function setupImportModal(container, device, api, context) {
         if (step && step.type === 'sideload' && step.filePath) {
           const res = await window.roku.actionScriptCheckFileExists(step.filePath);
           if (res && res.success && !res.exists)
-            return { ok: false, error: `Action ${stepPathToDisplayId([i])}: File not found: ${step.filePath}` };
+            return { ok: false, error: S.actionScripts.actionLabel(stepPathToDisplayId([i]), S.actionScripts.errFileNotFound(step.filePath)) };
         }
       }
     }
@@ -267,7 +268,7 @@ export function setupImportModal(container, device, api, context) {
   }
 
   const importModalTitleEl = modalRoot.querySelector('.action-scripts-import-modal-title') as HTMLElement | null;
-  const defaultImportTitle = importModalTitleEl?.textContent?.trim() || 'Import Action Script';
+  const defaultImportTitle = importModalTitleEl?.textContent?.trim() || S.actionScripts.importModalTitle;
 
   function openImportModal(
     prefillJson,
@@ -277,11 +278,11 @@ export function setupImportModal(container, device, api, context) {
     modalRoot._importTarget = options?.target === 'builder' ? 'builder' : 'executor';
     if (importModalTitleEl) {
       importModalTitleEl.textContent =
-        modalRoot._importTarget === 'builder' ? 'Import Script into Builder' : defaultImportTitle;
+        modalRoot._importTarget === 'builder' ? S.actionScripts.importIntoBuilderTitle : defaultImportTitle;
     }
     if (importValidateBtn) {
       importValidateBtn.textContent =
-        modalRoot._importTarget === 'builder' ? 'Validate and Load' : 'Validate and Import';
+        modalRoot._importTarget === 'builder' ? S.actionScripts.validateAndLoadBtn : S.actionScripts.validateAndImportBtn;
     }
     if (importOutputFolderSection) {
       if (modalRoot._importTarget === 'builder') {
@@ -316,7 +317,7 @@ export function setupImportModal(container, device, api, context) {
     } else {
       const currentPath = container.querySelector('.action-script-save-folder-path');
       let pathStr =
-        currentPath && currentPath.textContent && currentPath.textContent !== 'No folder selected'
+        currentPath && currentPath.textContent && currentPath.textContent !== S.actionScripts.noFolderSelected
           ? currentPath.textContent
           : '';
       if (!pathStr) {
@@ -325,7 +326,7 @@ export function setupImportModal(container, device, api, context) {
       }
       modalRoot._importOutputFolder = pathStr || null;
       if (importOutputFolderPath) {
-        importOutputFolderPath.textContent = pathStr || 'No folder selected';
+        importOutputFolderPath.textContent = pathStr || S.actionScripts.noFolderSelected;
         importOutputFolderPath.title = pathStr || '';
       }
     }
@@ -359,7 +360,7 @@ export function setupImportModal(container, device, api, context) {
 
   async function verifyPasswordForImport(importApi, password) {
     if (!importApi || typeof importApi.verifyDevAuth !== 'function') {
-      return { ok: false, error: 'Cannot verify password: device connection not available.' };
+      return { ok: false, error: S.actionScripts.errCannotVerifyPassword };
     }
     try {
       const result = await importApi.verifyDevAuth(password);
@@ -368,7 +369,7 @@ export function setupImportModal(container, device, api, context) {
       const authError = !!(result && result.authFailed);
       return { ok: false, error: result && result.error, authError };
     } catch (e) {
-      return { ok: false, error: errMsg(e) || 'Verification failed', authError: false };
+      return { ok: false, error: errMsg(e) || S.actionScripts.errVerificationFailed, authError: false };
     }
   }
 
@@ -376,14 +377,14 @@ export function setupImportModal(container, device, api, context) {
     if (!importTextarea || !importValidateBtn) return;
     const ctx = modalRoot._importContext;
     if (!ctx || !ctx.container) {
-      setImportError('Could not determine device for import. Close the modal and open Import again from this device tab.');
+      setImportError(S.actionScripts.errCouldNotDetermineDevice);
       return;
     }
     const { api: importApi, getDeviceSerial: serialForImport, container: importContainer } = ctx;
     try {
       const raw = importTextarea.value.trim();
       if (!raw) {
-        setImportError('Paste or upload a script (JSON).');
+        setImportError(S.actionScripts.errPasteOrUpload);
         return;
       }
       const { formatted, error } = formatScriptJson(raw);
@@ -395,11 +396,11 @@ export function setupImportModal(container, device, api, context) {
       try {
         parsed = JSON.parse(formatted);
       } catch (e) {
-        setImportError(errMsg(e) || 'Invalid script');
+        setImportError(errMsg(e) || S.actionScripts.errInvalidScript);
         return;
       }
       if (!parsed || typeof parsed !== 'object' || !Array.isArray(parsed.steps)) {
-        setImportError('Script must have a "steps" array.');
+        setImportError(S.actionScripts.msgStepsArray);
         return;
       }
 
@@ -408,7 +409,7 @@ export function setupImportModal(container, device, api, context) {
       const needsSaveFolder = scriptHasSaveActions(parsed);
       const hasSaveFolder = modalRoot._importOutputFolder && String(modalRoot._importOutputFolder).trim() !== '';
       if (!importToBuilder && needsSaveFolder && !hasSaveFolder) {
-        setImportError('Save folder is required for this Script (e.g. Screenshot step). Please choose a save folder.');
+        setImportError(S.actionScripts.errSaveFolderRequired);
         return;
       }
 
@@ -417,7 +418,7 @@ export function setupImportModal(container, device, api, context) {
       const resolvedPassword = resolvePassword(parsed, serialForImport, modalPasswordValue);
 
       if (!importToBuilder && needsPassword && !resolvedPassword) {
-        setImportError('Developer password is required and not in cache or script. Enter it below.');
+        setImportError(S.actionScripts.errDevPasswordRequired);
         updateDevPasswordVisibility(raw);
         showPasswordSectionAfterAuthFailure(true);
         if (importDevPasswordInput) importDevPasswordInput.focus();
@@ -427,7 +428,7 @@ export function setupImportModal(container, device, api, context) {
       if (!importToBuilder && needsPassword && resolvedPassword) {
         const btnLabel = importValidateBtn.textContent;
         importValidateBtn.disabled = true;
-        importValidateBtn.textContent = 'Verifying password…';
+        importValidateBtn.textContent = S.actionScripts.verifyingPassword;
         setImportError('');
         verifyPasswordForImport(importApi, resolvedPassword)
           .then((verification) => {
@@ -454,8 +455,8 @@ export function setupImportModal(container, device, api, context) {
               }
               setImportError(
                 verification.authError
-                  ? 'Authentication failed. Please check your password and try again.'
-                  : verification.error || 'Password verification failed.'
+                  ? S.actionScripts.errAuthFailed
+                  : verification.error || S.actionScripts.errPasswordVerificationFailed
               );
               return;
             }
@@ -478,7 +479,7 @@ export function setupImportModal(container, device, api, context) {
             }
             parsed.devPassword = resolvedPassword;
             importValidateBtn.disabled = true;
-            importValidateBtn.textContent = 'Validating…';
+            importValidateBtn.textContent = S.actionScripts.validating;
             setImportError('');
             return runFullValidation(parsed, formatted, importContainer, importApi);
           })
@@ -487,7 +488,7 @@ export function setupImportModal(container, device, api, context) {
             importValidateBtn.disabled = false;
             importValidateBtn.textContent = btnLabel;
             if (!validation.ok) {
-              setImportError(validation.error || 'Validation failed');
+              setImportError(validation.error || S.actionScripts.errValidationFailed);
               return;
             }
             finishImport(parsed);
@@ -495,21 +496,21 @@ export function setupImportModal(container, device, api, context) {
           .catch((e) => {
             importValidateBtn.disabled = false;
             importValidateBtn.textContent = btnLabel;
-            setImportError(errMsg(e) || 'Verification or validation failed');
+            setImportError(errMsg(e) || S.actionScripts.errVerificationOrValidationFailed);
           });
         return;
       }
 
       const btnLabel = importValidateBtn.textContent;
       importValidateBtn.disabled = true;
-      importValidateBtn.textContent = 'Validating…';
+      importValidateBtn.textContent = S.actionScripts.validating;
       setImportError('');
       runFullValidation(parsed, formatted, importContainer, importApi)
         .then((validation) => {
           importValidateBtn.disabled = false;
           importValidateBtn.textContent = btnLabel;
           if (!validation.ok) {
-            setImportError(validation.error || 'Validation failed');
+            setImportError(validation.error || S.actionScripts.errValidationFailed);
             return;
           }
           finishImport(parsed);
@@ -517,14 +518,14 @@ export function setupImportModal(container, device, api, context) {
         .catch((e) => {
           importValidateBtn.disabled = false;
           importValidateBtn.textContent = btnLabel;
-          setImportError(errMsg(e) || 'Validation failed');
+          setImportError(errMsg(e) || S.actionScripts.errValidationFailed);
         });
     } catch (e) {
-      setImportError(e instanceof Error ? e.message : String(e) || 'Invalid script');
+      setImportError(e instanceof Error ? e.message : String(e) || S.actionScripts.errInvalidScript);
       if (importValidateBtn) {
         importValidateBtn.disabled = false;
         importValidateBtn.textContent =
-          modalRoot._importTarget === 'builder' ? 'Validate and Load' : 'Validate and Import';
+          modalRoot._importTarget === 'builder' ? S.actionScripts.validateAndLoadBtn : S.actionScripts.validateAndImportBtn;
       }
     }
   }
@@ -611,7 +612,7 @@ export function setupImportModal(container, device, api, context) {
           setImportError(error || '');
           updateDevPasswordVisibility(formatted || text);
         };
-        reader.onerror = () => setImportError('Failed to read file');
+        reader.onerror = () => setImportError(S.actionScripts.errFailedToReadFile);
         reader.readAsText(file);
       });
     }

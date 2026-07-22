@@ -1,3 +1,5 @@
+import { S } from '@shared/strings/index.js';
+
 /**
  * Default `Console:`; log file viewer sets this to the opened file basename (separate window = own module state).
  */
@@ -14,6 +16,6 @@ export function setConsoleViewerModalTitlePrefix(prefix: string | null): void {
  */
 export function consoleViewerModalTitle(typeLabel: string): string {
   const t = typeLabel.trim();
-  const base = viewerModalTitlePrefix || 'Console';
+  const base = viewerModalTitlePrefix || S.consoleLog.titlePrefix;
   return t ? `${base}: ${t}` : base;
 }

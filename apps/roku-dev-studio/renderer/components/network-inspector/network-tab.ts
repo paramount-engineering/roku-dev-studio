@@ -71,6 +71,7 @@ import {
 } from './network-find-decorations.js';
 import { attachFoldToggle, MAX_STRUCTURED_BYTES } from '../../modules/ui/structured-body.js';
 import { attachSelectAll } from '../../modules/ui/select-all.js';
+import { S } from '@shared/strings/index.js';
 
 // Caps resident DOM rows so an extreme session count can't bloat the list. The event
 // buffer is already capped (MAX_EVENTS), so this only engages in heavy-capture sessions.
@@ -100,7 +101,7 @@ type MitmPortConflict = {
 };
 
 function renderCapNotice(total: number): string {
-  return `<div class="ni-cap-notice">Showing the latest ${MAX_RENDERED_ROWS} of ${total} sessions — use the filter to narrow results.</div>`;
+  return `<div class="ni-cap-notice">${S.networkInspector.capNotice(MAX_RENDERED_ROWS, total)}</div>`;
 }
 
 type NetworkTabState = {
@@ -171,17 +172,17 @@ function isHotspotClientIp(ip: string): boolean {
 function openLargeBodyInfoModal(kb: number): void {
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay ni-filter-help-overlay ni-large-body-overlay active';
-  const sizeLabel = kb > 0 ? `${kb.toLocaleString()} KB` : 'This body';
+  const sizeLabel = kb > 0 ? `${kb.toLocaleString()} KB` : S.networkInspector.thisBody;
   const limitKb = Math.round(MAX_STRUCTURED_BYTES / 1024).toLocaleString();
   overlay.innerHTML = `
-    <div class="ni-filter-help-modal" role="dialog" aria-modal="true" aria-label="Shown as Raw Text">
+    <div class="ni-filter-help-modal" role="dialog" aria-modal="true" aria-label="${S.networkInspector.shownAsRawText}">
       <div class="ni-filter-help-header">
-        <h3>Shown as Raw Text</h3>
-        <button type="button" class="modal-close ni-large-body-close" title="Close" aria-label="Close">×</button>
+        <h3>${S.networkInspector.shownAsRawText}</h3>
+        <button type="button" class="modal-close ni-large-body-close" title="${S.common.close}" aria-label="${S.common.close}">×</button>
       </div>
       <div class="ni-filter-help-body">
-        <p class="ni-filter-help-intro">This body is <strong>${escapeHtml(sizeLabel)}</strong> — larger than the ${escapeHtml(limitKb)} KB limit for rendering a collapsible, syntax-highlighted JSON/XML tree. To keep the inspector responsive, the <strong>entire</strong> body is shown as raw text instead. Nothing is truncated or hidden.</p>
-        <p class="ni-filter-help-note">Copy, Save, and Find still operate on the full body. Embedded JSON/XML fragments remain clickable. Select a smaller response to see the formatted tree.</p>
+        <p class="ni-filter-help-intro">${S.networkInspector.largeBodyIntro(escapeHtml(sizeLabel), escapeHtml(limitKb))}</p>
+        <p class="ni-filter-help-note">${S.networkInspector.largeBodyNote}</p>
       </div>
     </div>`;
   document.body.appendChild(overlay);
@@ -524,7 +525,7 @@ export function setupNetworkTab(
   }
 
   function detailLoadingHtml(): string {
-    return `<div class="ni-pane-empty">Loading captured data…</div>`;
+    return `<div class="ni-pane-empty">${S.networkInspector.loadingData}</div>`;
   }
 
   // The event whose headers/body should be rendered: the loaded detail if it matches the current
@@ -1082,24 +1083,25 @@ export function setupNetworkTab(
 
   function renderDecryptedOnlyEmpty(): void {
     if (!(sessionListEl instanceof HTMLElement)) return;
-    const proxyAddr = state.mitmListenAddress || 'machine-ip:8888';
+    const proxyAddr = state.mitmListenAddress || S.networkInspector.proxyAddrFallback;
     let mitmLine: string;
     if (state.mitmActive) {
-      mitmLine =
-        `MITM proxy is active at <strong>${escapeHtml(proxyAddr)}</strong> — route your Dev channel's requests through it to capture them.`;
+      mitmLine = S.networkInspector.mitmActiveLine(escapeHtml(proxyAddr));
     } else if (state.mitmPortConflict) {
       const c = state.mitmPortConflict;
-      const who = c.processName ? `${escapeHtml(c.processName)}${c.pid ? ` (PID ${c.pid})` : ''}` : 'another app';
-      mitmLine = `MITM proxy can't use port ${c.port} — ${who} is using it. Click <strong>Proxy Port Unavailable</strong> above to close it or change the port.`;
+      const who = c.processName
+        ? (c.pid ? S.networkInspector.holderWithPid(escapeHtml(c.processName), c.pid) : escapeHtml(c.processName))
+        : S.networkInspector.anotherApp;
+      mitmLine = S.networkInspector.mitmPortConflictLine(c.port, who);
     } else if (state.mitmLastError) {
-      mitmLine = `MITM proxy failed to start: ${escapeHtml(state.mitmLastError)}.`;
+      mitmLine = S.networkInspector.mitmFailedLine(escapeHtml(state.mitmLastError));
     } else if (state.mitmEnabled) {
-      mitmLine = 'MITM proxy is starting — relaunch Roku Dev Studio if this persists.';
+      mitmLine = S.networkInspector.mitmStarting;
     } else {
-      mitmLine = 'Enable <strong>MITM proxy</strong> in Settings → Network Inspector.';
+      mitmLine = S.networkInspector.enableMitmSettings;
     }
     sessionListEl.innerHTML =
-      `<div class="ni-session-empty"><p>No proxied sessions yet.</p>` + `<p class="ni-hint">${mitmLine}</p></div>`;
+      `<div class="ni-session-empty"><p>${S.networkInspector.noProxiedSessions}</p>` + `<p class="ni-hint">${mitmLine}</p></div>`;
     renderDetail();
   }
 
@@ -1250,26 +1252,26 @@ export function setupNetworkTab(
       const showCaptureError = !!state.captureError && (state.platform !== 'win32' || isAutoDisabledError);
       if (showCaptureError && state.mitmActive) {
         body =
-          `<p class="ni-hint">Hotspot capture is blocked, but the MITM proxy at <strong>${escapeHtml(state.mitmListenAddress || 'gateway:8888')}</strong> can still record proxied requests. Use <code>host:port</code> only in BrightScript (e.g. <code>192.168.2.1:8888</code>), not the device IP and not <code>http://</code>.</p>`;
+          `<p class="ni-hint">${S.networkInspector.hotspotBlockedMitmLine(escapeHtml(state.mitmListenAddress || S.networkInspector.gatewayAddrFallback))}</p>`;
       } else if (showCaptureError) {
         body = `<p class="ni-hint ni-hint-error">${escapeHtml(state.captureError)}</p>`;
       } else if (state.mitmActive && !state.captureActive) {
         // Shared Wi-Fi / no hotspot: only the MITM proxy is recording. Guide the user to point
         // their dev channel at the proxy address (host:port only, the machine's LAN IP).
-        const proxyAddr = state.mitmListenAddress || 'machine-ip:8888';
-        body = `<p class="ni-hint">MITM proxy is active at <code class="ni-hint-code">${escapeHtml(proxyAddr)}</code>. Route your dev channel through it to capture Network Requests.</p>`;
+        const proxyAddr = state.mitmListenAddress || S.networkInspector.proxyAddrFallback;
+        body = `<p class="ni-hint">${S.networkInspector.mitmActiveNoCaptureLine(escapeHtml(proxyAddr))}</p>`;
       } else if (state.captureActive || state.mitmActive) {
         const mitmHint = state.mitmActive
-          ? ' MITM proxy is decrypting dev-channel HTTPS routed through Roku Dev Studio.'
-          : ' HTTPS bodies are encrypted in hotspot capture mode — enable MITM in Settings for Dev channels.';
+          ? S.networkInspector.mitmDecryptingHint
+          : S.networkInspector.hotspotEncryptedHint;
         body =
-          '<p class="ni-hint">Capturing on Hotspot. Browse or play content on the Roku.</p>' +
+          `<p class="ni-hint">${S.networkInspector.capturingOnHotspot}</p>` +
           `<p class="ni-hint">${mitmHint}</p>`;
       } else {
         body =
-          '<p class="ni-hint">Connect the Roku to the same Wi‑Fi (or your machine hotspot), then enable the <strong>MITM proxy</strong> in Settings → Network Inspector to capture dev-channel HTTPS.</p>';
+          `<p class="ni-hint">${S.networkInspector.connectWifiHint}</p>`;
       }
-      sessionListEl.innerHTML = `<div class="ni-session-empty"><p>No sessions yet.</p>${body}</div>`;
+      sessionListEl.innerHTML = `<div class="ni-session-empty"><p>${S.networkInspector.noSessions}</p>${body}</div>`;
       renderDetail();
       updateListFabs();
       return;
@@ -1304,7 +1306,7 @@ export function setupNetworkTab(
     const wrap = listScrollWrap();
     if (wrap && !wrap.hasAttribute('tabindex')) {
       wrap.tabIndex = 0;
-      wrap.setAttribute('aria-label', 'Network session list. Use arrow keys to navigate.');
+      wrap.setAttribute('aria-label', S.networkInspector.sessionListAria);
     }
     bindListKeyboardNav();
 
@@ -1406,7 +1408,7 @@ export function setupNetworkTab(
     }
     if (layoutToggleBtn instanceof HTMLButtonElement) {
       const stacked = state.detailLayout === 'stacked';
-      layoutToggleBtn.title = 'Request and Response Panes - ' + (stacked ? 'Side by Side' : 'Stack Vertically');
+      layoutToggleBtn.title = S.networkInspector.layoutToggleTitle(stacked);
       layoutToggleBtn.setAttribute('aria-pressed', stacked ? 'false' : 'true');
       layoutToggleBtn.innerHTML = stacked ? '<span class="icon icon-sm"><svg><use href="#icon-layout-columns"/></svg></span>' : '<span class="icon icon-sm"><svg><use href="#icon-layout-rows"/></svg></span>';
     }
@@ -1428,8 +1430,8 @@ export function setupNetworkTab(
       proxiedFilterLabel.style.display = '';
       proxiedFilterLabel.classList.toggle('is-disabled', proxiedLocked);
       proxiedFilterLabel.title = proxiedLocked
-        ? 'All traffic is proxied through Roku Dev Studio in this mode, so this is always on. This control will be enabled when the Roku device is connected through the hotspot.'
-        : 'Show only requests proxied through Roku Dev Studio (full headers + body), hiding hotspot-capture SNI/DNS metadata';
+        ? S.networkInspector.proxiedLockedTitle
+        : S.networkInspector.proxiedUnlockedTitle;
     }
     // Both controls are always shown now, so the single-option centering no longer applies.
     if (sidebarOptionsEl) sidebarOptionsEl.classList.remove('ni-options-single');
@@ -1487,8 +1489,8 @@ export function setupNetworkTab(
     const mime = match?.[1] || 'application/octet-stream';
     const base64 = match?.[2] || '';
     const items: Array<Record<string, unknown>> = [];
-    if (isImage) items.push({ label: 'Copy Image', action: 'ni-copy-image' });
-    items.push({ label: isImage ? 'Save Image As…' : 'Save File…', action: 'ni-save-media' });
+    if (isImage) items.push({ label: S.networkInspector.copyImage, action: 'ni-copy-image' });
+    items.push({ label: isImage ? S.networkInspector.saveImageAs : S.networkInspector.saveFile, action: 'ni-save-media' });
     let res: { action?: string } | null = null;
     try {
       res = (await api.showContextMenu(items)) as { action?: string } | null;
@@ -1502,7 +1504,7 @@ export function setupNetworkTab(
       await api.saveBinaryFile?.({
         base64,
         defaultName: `response-${Date.now()}.${mimeToExt(mime)}`,
-        dialogTitle: isImage ? 'Save Image' : 'Save File'
+        dialogTitle: isImage ? S.networkInspector.saveImageDialog : S.networkInspector.saveFileDialog
       });
     }
   }
@@ -1636,12 +1638,12 @@ export function setupNetworkTab(
       const res = await api.networkInspectorExportPcap(ips.length > 0 ? ips : undefined);
       if (res?.success) {
         const n = typeof res.packetsWritten === 'number' ? res.packetsWritten : 0;
-        showToast(`Saved ${n} packet${n === 1 ? '' : 's'} to ${res.filePath || 'file'}.`, 'success');
+        showToast(S.networkInspector.savedPackets(n, res.filePath || S.networkInspector.fileFallback), 'success');
       } else if (res?.error && res.error !== 'cancelled') {
         showToast(res.error, 'error');
       }
     } catch (err) {
-      showToast(err instanceof Error ? err.message : 'Failed to save packet capture.', 'error');
+      showToast(err instanceof Error ? err.message : S.networkInspector.failedSavePcap, 'error');
     }
   }
 
@@ -1652,11 +1654,11 @@ export function setupNetworkTab(
     if (!api?.saveTextFile) return;
     const sessions = filteredSessions();
     if (sessions.length === 0) {
-      showToast('No requests to export.', 'warning');
+      showToast(S.networkInspector.noRequestsToExport, 'warning');
       return;
     }
     if (kind === 'har' && !sessions.some((s) => isExportableEvent(s.event))) {
-      showToast('No HTTP transactions to export as HAR.', 'warning');
+      showToast(S.networkInspector.noHttpToExport, 'warning');
       return;
     }
     try {
@@ -1669,15 +1671,15 @@ export function setupNetworkTab(
       const res = await api.saveTextFile({
         content,
         defaultName: kind === 'har' ? `${stem}.har` : `${stem}.${NETWORK_SESSION_FILE_EXT}`,
-        dialogTitle: kind === 'har' ? 'Export sessions as HAR' : 'Export network session'
+        dialogTitle: kind === 'har' ? S.networkInspector.exportHarDialog : S.networkInspector.exportSessionDialog
       });
       if (res?.success) {
-        showToast(`Exported ${events.length} request${events.length === 1 ? '' : 's'} to ${res.filePath || 'file'}.`, 'success');
+        showToast(S.networkInspector.exportedRequests(events.length, res.filePath || S.networkInspector.fileFallback), 'success');
       } else if (res?.error && res.error !== 'Save cancelled') {
         showToast(res.error, 'error');
       }
     } catch (err) {
-      showToast(err instanceof Error ? err.message : 'Failed to export session.', 'error');
+      showToast(err instanceof Error ? err.message : S.networkInspector.failedExportSession, 'error');
     }
   }
 
@@ -1689,10 +1691,10 @@ export function setupNetworkTab(
     const filtered = hasTextFilter || effProxiedOnly();
     if (filtered) {
       sessionCountEl.textContent = `${visible}/${captured}`;
-      sessionCountEl.title = `${visible} matching of ${captured} captured sessions`;
+      sessionCountEl.title = S.networkInspector.countMatchingTitle(visible, captured);
     } else {
       sessionCountEl.textContent = String(captured);
-      sessionCountEl.title = captured === 1 ? '1 captured session' : `${captured} captured sessions`;
+      sessionCountEl.title = S.networkInspector.capturedSessionsTitle(captured);
     }
   }
 
@@ -1708,10 +1710,10 @@ export function setupNetworkTab(
     const c = state.mitmPortConflict;
     if (c) {
       const who = c.processName ? ` (${c.processName}${c.pid ? ` · PID ${c.pid}` : ''})` : '';
-      return `Network Inspector unavailable — port ${c.port} is in use${who}.`;
+      return S.networkInspector.issuePortInUse(c.port, who);
     }
     if (state.mitmLastError) {
-      return `Network Inspector issue — MITM proxy: ${state.mitmLastError}`;
+      return S.networkInspector.issueMitm(state.mitmLastError);
     }
     return null;
   }
@@ -1737,14 +1739,14 @@ export function setupNetworkTab(
       captureToggleBtn.innerHTML =
         '<span class="icon icon-sm"><svg><use href="#icon-pause"/></svg></span>';
       captureToggleBtn.classList.add('is-capturing');
-      captureToggleBtn.title = 'Stop Capturing';
-      captureToggleBtn.setAttribute('aria-label', 'Stop Capturing');
+      captureToggleBtn.title = S.networkInspector.stopCapturing;
+      captureToggleBtn.setAttribute('aria-label', S.networkInspector.stopCapturing);
     } else {
       captureToggleBtn.innerHTML =
         '<span class="icon icon-sm"><svg><use href="#icon-play"/></svg></span>';
       captureToggleBtn.classList.remove('is-capturing');
-      captureToggleBtn.title = 'Start Capturing';
-      captureToggleBtn.setAttribute('aria-label', 'Start Capturing');
+      captureToggleBtn.title = S.networkInspector.startCapturing;
+      captureToggleBtn.setAttribute('aria-label', S.networkInspector.startCapturing);
     }
   }
 
@@ -1883,10 +1885,10 @@ export function setupNetworkTab(
     const isError = !!state.captureError;
     setupBadgeBtn.classList.toggle('is-error', isError);
     setupBadgeBtn.classList.toggle('is-warn', !isError);
-    if (setupBadgeLabel) setupBadgeLabel.textContent = isError ? 'Capture Blocked' : 'Capture Setup';
+    if (setupBadgeLabel) setupBadgeLabel.textContent = isError ? S.networkInspector.captureBlocked : S.networkInspector.captureSetup;
     setupBadgeBtn.title = failedPrereq
-      ? `${failedPrereq.title} — click for setup instructions`
-      : 'Hotspot Capture Setup — Click for Instructions';
+      ? S.networkInspector.setupBadgeTitlePrereq(failedPrereq.title)
+      : S.networkInspector.setupBadgeTitle;
   }
 
   /**
@@ -1899,7 +1901,7 @@ export function setupNetworkTab(
     const conflict = state.mitmPortConflict;
     portBadgeBtn.hidden = !conflict;
     if (conflict) {
-      portBadgeBtn.title = `${conflict.title} — click for details`;
+      portBadgeBtn.title = S.networkInspector.portBadgeTitle(conflict.title);
     }
   }
 
@@ -1935,7 +1937,7 @@ export function setupNetworkTab(
   async function runCaptureSetup(): Promise<{ success?: boolean; error?: string }> {
     const api = window.roku;
     if (!api?.networkInspectorInstallBpfAccess) {
-      return { success: false, error: 'Setup is not available in this build.' };
+      return { success: false, error: S.networkInspector.setupNotAvailable };
     }
     const res = await api.networkInspectorInstallBpfAccess();
     if (res?.success) {
@@ -2205,7 +2207,7 @@ export function setupNetworkTab(
     e.preventDefault();
     const pane = embBtn.closest('[data-ni-response-body]') ? 'response' : 'request';
     const payload = getEmbeddedStructuredPayload(pane, parseInt(embBtn.dataset.niEmbIdx, 10));
-    if (payload) openConsoleStructuredViewer(embBtn, payload, { titlePrefix: 'Network Inspector' });
+    if (payload) openConsoleStructuredViewer(embBtn, payload, { titlePrefix: S.networkInspector.titlePrefix });
   }, listenerOpts);
 
   if (detailPane instanceof HTMLElement) {
@@ -2216,10 +2218,10 @@ export function setupNetworkTab(
       detailPane,
       {
         onUrl: (anchor, url) =>
-          openConsoleUrlViewer(anchor, url, { titlePrefix: 'Network Inspector' }),
+          openConsoleUrlViewer(anchor, url, { titlePrefix: S.networkInspector.titlePrefix }),
         onEmbedded: (anchor, pane, idx) => {
           const payload = getEmbeddedStructuredPayload(pane, idx);
-          if (payload) openConsoleStructuredViewer(anchor, payload, { titlePrefix: 'Network Inspector' });
+          if (payload) openConsoleStructuredViewer(anchor, payload, { titlePrefix: S.networkInspector.titlePrefix });
         },
         onCopyMenuToggle: () => toggleCopyDropdown(),
         onCopyItem: (item, kind) => {
@@ -2688,7 +2690,7 @@ export function setupNetworkTab(
         networkTabForeground = false;
         stopPolling();
         // If the (now hidden) Network tab was the active section, its content pane would keep
-        // showing. Hide the pane and fall back to the Remote tab so the panel doesn't strand the
+        // showing. Hide the pane and fall back to the Remote Section so the panel doesn't strand the
         // user on a section whose selector button just disappeared.
         const wasActive = tabBtn.classList.contains('active') || tabContent.classList.contains('active');
         tabContent.classList.remove('active');
@@ -2743,7 +2745,7 @@ export function setupNetworkTab(
       const prevCaptureActiveStatus = state.captureActive;
       const hasCaptureError = !!status.lastError;
       if (hasCaptureError) {
-        state.captureError = String(status.lastError || 'Network Inspector error');
+        state.captureError = String(status.lastError || S.networkInspector.captureErrorFallback);
         state.captureActive = false;
       } else {
         state.captureError = null;

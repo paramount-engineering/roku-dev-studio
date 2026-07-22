@@ -17,12 +17,12 @@ export const SETTINGS_KEY_RDS_TIMING_OVERRIDES = 'rds-timing-overrides';
 export const SETTINGS_KEY_ACTION_SCRIPT_DEFAULT_SAVE_FOLDER = 'action-script-default-save-folder';
 
 /**
- * Per-device preference: Remote tab “Show Device Performance” (quad layout) when eligible.
+ * Per-device preference: Remote Section “Show Device Performance” (quad layout) when eligible.
  * Value is a plain object: `{ [deviceKey]: boolean }` where `deviceKey` is serial string or `ip:…`.
  */
 export const SETTINGS_KEY_DEVICE_PERFORMANCE_QUAD = 'device-performance-view-quad-v1';
 
-/** When true, restore Remote tab “Show Device Performance” per device from disk. Default off until enabled in Settings. */
+/** When true, restore Remote Section “Show Device Performance” per device from disk. Default off until enabled in Settings. */
 export const SETTINGS_KEY_DEVICE_PERF_REMEMBER_QUAD = 'devicePerformanceRememberQuadPerDevice';
 
 /** When true, arrow keys / Enter / etc. drive the Roku from the keyboard (see Settings → General). Default off. */

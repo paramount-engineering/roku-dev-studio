@@ -19,6 +19,7 @@ import { attachSelectAll } from '../../modules/ui/select-all.js';
 import { getActionScriptDefaultSaveFolder } from '../../modules/utils/app-user-settings.js';
 import { renderExecutorSteps } from './actions-list-view.js';
 import { flattenStepsPreorder, stepPathToDisplayId } from './action-script-tree.js';
+import { S } from '@shared/strings/index.js';
 
 /** Parsed script object kept after successful validation (executor UI + run). */
 type ExecutorScript = { steps?: unknown[] } & Record<string, unknown>;
@@ -101,17 +102,17 @@ export function setupExecutor(panel, api, context) {
     if (isRunning && !isPaused) {
       // Show pause icon while running
       if (useEl) useEl.setAttribute('href', '#icon-pause');
-      executorRunBtn.title = 'Pause execution';
+      executorRunBtn.title = S.actionScripts.runBtnPause;
       executorRunBtn.disabled = false;
     } else if (isRunning && isPaused) {
       // Show play icon to resume
       if (useEl) useEl.setAttribute('href', '#icon-play');
-      executorRunBtn.title = 'Resume execution';
+      executorRunBtn.title = S.actionScripts.runBtnResume;
       executorRunBtn.disabled = false;
     } else {
       // Idle: show play icon
       if (useEl) useEl.setAttribute('href', '#icon-play');
-      executorRunBtn.title = 'Run Action Script';
+      executorRunBtn.title = S.actionScripts.runBtnRun;
     }
     if (executorStopBtn) {
       executorStopBtn.disabled = !isRunning;
@@ -125,8 +126,7 @@ export function setupExecutor(panel, api, context) {
     setSafeHTML(executorStepsList, `
       <div class="executor-steps-list-empty">
         <p class="executor-steps-list-empty-text">
-          <strong>No actions loaded</strong><br><br>
-          Use <strong>Import Action Script</strong> above to paste or upload a JSON script, then click <strong>Validate and Import</strong> in the modal to load actions here.
+          ${S.actionScripts.emptyNoActions}
         </p>
       </div>
     `);
@@ -187,7 +187,7 @@ export function setupExecutor(panel, api, context) {
   function setSaveFolder(path) {
     chosenSaveFolder = path;
     if (executorSaveFolderDisplay) {
-      executorSaveFolderDisplay.textContent = path || 'No folder selected';
+      executorSaveFolderDisplay.textContent = path || S.actionScripts.noFolderSelected;
       executorSaveFolderDisplay.title = path || '';
     }
     if (executorSaveFolderBtn) executorSaveFolderBtn.style.display = path ? 'inline-flex' : 'none';
@@ -227,7 +227,7 @@ export function setupExecutor(panel, api, context) {
   function clearResults() {
     if (isRunning) return;
     if (!executorResults) return;
-    setSafeHTML(executorResults, '<p class="executor-results-placeholder">Validate and run to see results.</p>');
+    setSafeHTML(executorResults, `<p class="executor-results-placeholder">${S.actionScripts.resultsPlaceholder}</p>`);
     clearResultsRunInfo();
     updateResultsButtons();
   }
@@ -381,7 +381,7 @@ export function setupExecutor(panel, api, context) {
       waitSpinnerEl = document.createElement('div');
       waitSpinnerEl.className = 'executor-wait-spinner-wrap';
       waitSpinnerEl.setAttribute('aria-live', 'polite');
-      setSafeHTML(waitSpinnerEl, '<span class="executor-wait-spinner" aria-hidden="true"></span><span class="executor-wait-spinner-label">Waiting…</span>');
+      setSafeHTML(waitSpinnerEl, `<span class="executor-wait-spinner" aria-hidden="true"></span><span class="executor-wait-spinner-label">${S.actionScripts.waiting}</span>`);
       currentResultCardBody.appendChild(waitSpinnerEl);
       if (executorResults) executorResults.scrollTop = executorResults.scrollHeight;
     } else {
@@ -422,13 +422,13 @@ export function setupExecutor(panel, api, context) {
       if (statusEl instanceof HTMLElement) {
         statusEl.style.display = '';
         statusEl.className = `executor-result-block-status ${isError ? 'error' : 'success'}`;
-        statusEl.textContent = statusText || (isError ? '✗ Failed' : '✓ OK');
+        statusEl.textContent = statusText || (isError ? S.actionScripts.statusFailed : S.actionScripts.statusOk);
       }
       if (screenshotUrl) {
         const img = document.createElement('img');
         img.className = 'executor-result-screenshot';
         img.src = screenshotUrl;
-        img.alt = 'Screenshot';
+        img.alt = S.actionScripts.altScreenshot;
         // Preserve data URL for PDF export (browser may replace img.src with blob:)
         if (typeof screenshotUrl === 'string' && screenshotUrl.startsWith('data:')) {
           img.setAttribute('data-rtf-src', screenshotUrl);
@@ -451,7 +451,7 @@ export function setupExecutor(panel, api, context) {
           const img = document.createElement('img');
           img.className = 'executor-result-screenshot executor-result-performance-chart';
           img.src = url;
-          img.alt = cap || 'Device Performance Chart';
+          img.alt = cap || S.actionScripts.altDevicePerformanceChart;
           if (url.startsWith('data:')) {
             img.setAttribute('data-rtf-src', url);
           }
@@ -529,11 +529,11 @@ export function setupExecutor(panel, api, context) {
     const raw = executorTextarea.value.trim();
     if (executorValidationMessage) {
       executorValidationMessage.style.display = 'block';
-      setSafeHTML(executorValidationMessage, '<span class="validation-muted">Validating…</span>');
+      setSafeHTML(executorValidationMessage, `<span class="validation-muted">${S.actionScripts.validating}</span>`);
     }
     if (!raw) {
       if (executorValidationMessage) {
-        setSafeHTML(executorValidationMessage, '<span class="validation-error">Paste or upload a script (JSON).</span>');
+        setSafeHTML(executorValidationMessage, `<span class="validation-error">${S.actionScripts.errPasteOrUpload}</span>`);
       }
       return;
     }
@@ -573,7 +573,7 @@ export function setupExecutor(panel, api, context) {
     const result = parseAndValidateScript(raw, raleFunctions);
     if (result.parseError) {
       if (executorValidationMessage) {
-        setSafeHTML(executorValidationMessage, '<span class="validation-error">Invalid JSON: ' + escapeHtml(result.parseError) + '</span>');
+        setSafeHTML(executorValidationMessage, '<span class="validation-error">' + escapeHtml(S.actionScripts.invalidJson(result.parseError)) + '</span>');
         executorValidationMessage.style.display = 'block';
       }
       lastValidScript = null;
@@ -601,7 +601,7 @@ export function setupExecutor(panel, api, context) {
         .filter(Boolean);
       if (missingNames.length > 0) {
         const list = Array.from(new Set(missingNames)).filter(Boolean).join(', ');
-        const msg = `The following App Function(s) are not available from the app: ${list || '?'}. Ensure your channel exposes these functions (or remove these steps from the script), then try again.`;
+        const msg = S.actionScripts.errMissingAppFunctions(list || '?');
         if (executorValidationMessage) {
           setSafeHTML(executorValidationMessage, '<span class="validation-error">' + escapeHtml(msg) + '</span>');
           executorValidationMessage.style.display = 'block';
@@ -617,16 +617,16 @@ export function setupExecutor(panel, api, context) {
           }) => {
             const head =
               e.stepIndex != null
-                ? `Action ${stepPathToDisplayId(flatLabels[e.stepIndex] && flatLabels[e.stepIndex].path, e.stepIndex)}: ${e.message}`
+                ? S.actionScripts.actionLabel(stepPathToDisplayId(flatLabels[e.stepIndex] && flatLabels[e.stepIndex].path, e.stepIndex), e.message)
                 : e.message;
             // Inline hint: show allowed values when the canonical validator
             // returned an `expected` enum so the user knows the fix.
             // (Phase 0b — Q1=b inline hints from `.discussion-docs/unified-action-script-validation.md`.)
             if (Array.isArray(e.expected) && e.expected.length > 0) {
-              return `${head}\n   expected: ${e.expected.join(', ')}`;
+              return `${head}${S.actionScripts.expectedSuffix(e.expected.join(', '))}`;
             }
             if (typeof e.expected === 'string' && e.expected.length > 0) {
-              return `${head}\n   expected: ${e.expected}`;
+              return `${head}${S.actionScripts.expectedSuffix(e.expected)}`;
             }
             return head;
           })
@@ -659,14 +659,14 @@ export function setupExecutor(panel, api, context) {
         if (step && step.type === 'sideload' && step.filePath) {
           const res = await window.roku.actionScriptCheckFileExists(step.filePath);
           if (res && res.success && !res.exists) {
-            fileErrors.push({ stepIndex: i, message: `File not found: ${step.filePath}` });
+            fileErrors.push({ stepIndex: i, message: S.actionScripts.errFileNotFound(step.filePath) });
           }
         }
       }
       if (fileErrors.length > 0) {
         const flatFile = flattenStepsPreorder(result.script.steps || []);
         const errLines = fileErrors.map((e) =>
-          `Action ${stepPathToDisplayId(flatFile[e.stepIndex] && flatFile[e.stepIndex].path, e.stepIndex)}: ${e.message}`
+          S.actionScripts.actionLabel(stepPathToDisplayId(flatFile[e.stepIndex] && flatFile[e.stepIndex].path, e.stepIndex), e.message)
         ).join('\n');
         if (executorValidationMessage) {
           setSafeHTML(executorValidationMessage, '<span class="validation-error">' + escapeHtml(errLines) + '</span>');
@@ -692,9 +692,9 @@ export function setupExecutor(panel, api, context) {
     skippedSet = new Set();
     renderExecutorStepsList(result.script);
     clearResultsRunInfo();
-    if (executorResults) setSafeHTML(executorResults, '<p class="executor-results-placeholder">Validate and run to see results.</p>');
+    if (executorResults) setSafeHTML(executorResults, `<p class="executor-results-placeholder">${S.actionScripts.resultsPlaceholder}</p>`);
     if (executorValidationMessage) {
-      setSafeHTML(executorValidationMessage, '<span class="validation-success">✓ Valid</span>');
+      setSafeHTML(executorValidationMessage, `<span class="validation-success">${S.actionScripts.statusValid}</span>`);
       executorValidationMessage.style.display = 'block';
     }
 
@@ -706,7 +706,7 @@ export function setupExecutor(panel, api, context) {
     } else {
       hidePasswordPrompt();
       if (needsPw && hasPw && executorValidationMessage) {
-        executorValidationMessage.innerHTML += ' <span class="validation-muted" style="font-size:11px;">(using Dev Password from Auth)</span>';
+        executorValidationMessage.innerHTML += ` <span class="validation-muted" style="font-size:11px;">${S.actionScripts.usingDevPasswordFromAuth}</span>`;
       }
     }
 
@@ -739,7 +739,7 @@ export function setupExecutor(panel, api, context) {
             executorValidationMessage,
             '<span class="validation-muted">' +
               escapeHtml(
-                'Switched tab — Run is paused. Come back to Action Scripts to resume (if JSON is unchanged), or use Import → Validate and Import.'
+                S.actionScripts.switchedTabRunPaused
               ) +
               '</span>'
           );
@@ -752,7 +752,7 @@ export function setupExecutor(panel, api, context) {
         if (lastValidScript && lastValidatedRaw !== null && t === lastValidatedRaw) {
           runRequiresFreshValidation = false;
           if (executorValidationMessage) {
-            setSafeHTML(executorValidationMessage, '<span class="validation-success">✓ Valid</span>');
+            setSafeHTML(executorValidationMessage, `<span class="validation-success">${S.actionScripts.statusValid}</span>`);
             executorValidationMessage.style.display = 'block';
           }
         } else if (lastValidScript || lastValidatedRaw !== null) {
@@ -761,7 +761,7 @@ export function setupExecutor(panel, api, context) {
               executorValidationMessage,
               '<span class="validation-muted">' +
                 escapeHtml(
-                  'Script changed or needs validation — use Import Action Script → Validate and Import, or change JSON and validate.'
+                  S.actionScripts.scriptChangedNeedsValidation
                 ) +
                 '</span>'
             );
@@ -776,7 +776,7 @@ export function setupExecutor(panel, api, context) {
   executorTextarea.addEventListener('input', () => {
     const t = executorTextarea.value.trim();
     if (lastValidatedRaw !== null && t !== lastValidatedRaw) {
-      invalidateValidatedScript('Script changed — click Validate.');
+      invalidateValidatedScript(S.actionScripts.scriptChangedClickValidate);
     }
   });
 
@@ -873,7 +873,7 @@ export function setupExecutor(panel, api, context) {
             if (!existing) {
               const p = document.createElement('p');
               p.className = 'executor-results-placeholder';
-              p.textContent = 'Connecting to App Connector...';
+              p.textContent = S.actionScripts.connectingToAppConnector;
               executorResults.appendChild(p);
               executorResults.scrollTop = executorResults.scrollHeight;
             }
@@ -887,7 +887,7 @@ export function setupExecutor(panel, api, context) {
     const pad = (n) => String(n).padStart(2, '0');
     const runId = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}-${pad(now.getMinutes())}-${pad(now.getSeconds())}`;
     if (runInfoEl) {
-      runInfoEl.textContent = `Run started (${runId}) — ${stepCount} action${stepCount !== 1 ? 's' : ''}`;
+      runInfoEl.textContent = S.actionScripts.runStarted(runId, stepCount);
     }
 
     // Auto-connect to telnet console if checkbox is checked and not already connected
@@ -921,8 +921,7 @@ export function setupExecutor(panel, api, context) {
           if (typeof fn !== 'function') {
             return Promise.resolve({
               success: false,
-              error:
-                'Device performance is not available for this device. Open the Remote tab (with metrics) or reconnect the device.'
+              error: S.actionScripts.errDevicePerformanceUnavailable
             });
           }
           return fn(chart, opts);
@@ -933,7 +932,7 @@ export function setupExecutor(panel, api, context) {
           scrollStepIntoView(i);
           const rowDepth = runStepFlat[i] && typeof runStepFlat[i].depth === 'number' ? runStepFlat[i].depth : 0;
           const displayId = stepPathToDisplayId(runStepFlat[i] && runStepFlat[i].path, i);
-          startResultCard(`Action ${displayId}: ${desc}`, rowDepth);
+          startResultCard(S.actionScripts.actionLabel(displayId, desc), rowDepth);
         },
         onStepEnd: (i, result) => {
           if (!lastValidScript) return;
@@ -967,7 +966,7 @@ export function setupExecutor(panel, api, context) {
               : undefined;
           finishResultCard(
             failed,
-            failed ? (result.error || 'Failed') : skipped ? 'Skipped' : '✓ OK',
+            failed ? (result.error || S.actionScripts.statusFailedPlain) : skipped ? S.actionScripts.statusSkipped : S.actionScripts.statusOk,
             output,
             screenshotUrl,
             perf
@@ -977,7 +976,7 @@ export function setupExecutor(panel, api, context) {
           const message = errMsg(err);
           setStepState(i, 'error');
           if (currentResultCardBody) {
-            appendToResultCard(`Error: ${message}`, true);
+            appendToResultCard(S.actionScripts.errorLine(message), true);
             finishResultCard(true, message, '', undefined, undefined);
           }
         },
@@ -988,7 +987,7 @@ export function setupExecutor(panel, api, context) {
             p.style.marginTop = '12px';
             p.style.fontWeight = '600';
             p.style.color = wasStopped ? 'var(--accent-red)' : 'var(--accent-green)';
-            p.textContent = wasStopped ? 'Run stopped.' : 'Run completed.';
+            p.textContent = wasStopped ? S.actionScripts.runStopped : S.actionScripts.runCompleted;
             executorResults.appendChild(p);
             executorResults.scrollTop = executorResults.scrollHeight;
           }
@@ -1163,8 +1162,8 @@ export function setupExecutor(panel, api, context) {
         } else if (navigator.clipboard && navigator.clipboard.writeText) {
           await navigator.clipboard.writeText(plainText);
         }
-        executorResultsCopyBtn.title = 'Copied!';
-        setTimeout(() => { executorResultsCopyBtn.title = 'Copy Results'; }, 2000);
+        executorResultsCopyBtn.title = S.actionScripts.copiedFeedback;
+        setTimeout(() => { executorResultsCopyBtn.title = S.actionScripts.copyResultsTitle; }, 2000);
       } catch (e) {
         rendererError('Copy results failed:', e);
       }
@@ -1180,8 +1179,8 @@ export function setupExecutor(panel, api, context) {
         if (window.roku && window.roku.saveResultsPdf) {
           const res = await window.roku.saveResultsPdf(payload);
           if (res && res.success) {
-            executorResultsSaveBtn.title = 'Saved!';
-            setTimeout(() => { executorResultsSaveBtn.title = 'Save Results as PDF'; }, 2000);
+            executorResultsSaveBtn.title = S.actionScripts.savedFeedback;
+            setTimeout(() => { executorResultsSaveBtn.title = S.actionScripts.saveResultsTitle; }, 2000);
           }
         }
       } catch (e) {
@@ -1190,7 +1189,7 @@ export function setupExecutor(panel, api, context) {
     });
   }
 
-  // Clear Results button — clears logs and releases in-memory data (Save will have nothing until next run)
+  // Clear Results button — clears logs and releases in-memory data (Save will have nothing until next Run)
   if (executorResultsClearBtn) {
     executorResultsClearBtn.addEventListener('click', () => {
       clearResults();
@@ -1217,7 +1216,7 @@ export function setupExecutor(panel, api, context) {
       hidePasswordPrompt();
       showExecutorStepsEmptyState();
       if (executorResults) {
-        setSafeHTML(executorResults, '<p class="executor-results-placeholder">Validate and run to see results.</p>');
+        setSafeHTML(executorResults, `<p class="executor-results-placeholder">${S.actionScripts.resultsPlaceholder}</p>`);
       }
       clearResultsRunInfo();
       updateRunButtonState();

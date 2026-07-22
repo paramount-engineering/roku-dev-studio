@@ -12,6 +12,7 @@ import type {
 } from '@shared/network-inspector/types.js';
 import { escapeHtml } from '../../modules/utils/dom.js';
 import { attachBackdropClickToClose } from '../../modules/utils/modal-backdrop-click.js';
+import { S } from '@shared/strings/index.js';
 
 type RokuApi = {
   networkInspectorGetTrafficRules?: () => Promise<{ success?: boolean; rules?: Record<string, DeviceTrafficRules> }>;
@@ -63,8 +64,8 @@ function parseBandwidth(text: string): number {
 function bwComboHtml(selectedKbps: number, attr: string): string {
   const label = escapeHtml(kbpsToLabel(selectedKbps));
   return `<span class="ni-bw-combo">
-    <input type="text" class="ni-rules-select ni-rules-bw" value="${label}" placeholder="Unlimited" autocomplete="off" spellcheck="false" title="Pick a preset or type a custom limit (e.g. 3 Mbps or 1500 kbps)" ${attr} />
-    <button type="button" class="ni-bw-caret" data-bw-caret tabindex="-1" aria-label="Show bandwidth presets"><span class="icon icon-xs"><svg><use href="#icon-chevron-down"/></svg></span></button>
+    <input type="text" class="ni-rules-select ni-rules-bw" value="${label}" placeholder="Unlimited" autocomplete="off" spellcheck="false" title="${S.networkInspector.bwCustomTitle}" ${attr} />
+    <button type="button" class="ni-bw-caret" data-bw-caret tabindex="-1" aria-label="${S.networkInspector.bwPresetsAria}"><span class="icon icon-xs"><svg><use href="#icon-chevron-down"/></svg></span></button>
   </span>`;
 }
 
@@ -94,33 +95,33 @@ function parseHostInput(raw: string): { host: string; path: string } | null {
 type RwType = RewriteOp['type'];
 const REWRITE_TYPES: Record<'request' | 'response', { value: RwType; label: string }[]> = {
   request: [
-    { value: 'set-host', label: 'Redirect host' },
-    { value: 'set-path', label: 'Set path' },
-    { value: 'set-query', label: 'Set query param' },
-    { value: 'remove-query', label: 'Remove query param' },
-    { value: 'set-header', label: 'Set header' },
-    { value: 'remove-header', label: 'Remove header' },
-    { value: 'body-replace', label: 'Replace in body' }
+    { value: 'set-host', label: S.networkInspector.rwRedirectHost },
+    { value: 'set-path', label: S.networkInspector.rwSetPath },
+    { value: 'set-query', label: S.networkInspector.rwSetQuery },
+    { value: 'remove-query', label: S.networkInspector.rwRemoveQuery },
+    { value: 'set-header', label: S.networkInspector.rwSetHeader },
+    { value: 'remove-header', label: S.networkInspector.rwRemoveHeader },
+    { value: 'body-replace', label: S.networkInspector.rwBodyReplace }
   ],
   response: [
-    { value: 'set-status', label: 'Set status' },
-    { value: 'set-header', label: 'Set header' },
-    { value: 'remove-header', label: 'Remove header' },
-    { value: 'body-replace', label: 'Replace in body' }
+    { value: 'set-status', label: S.networkInspector.rwSetStatus },
+    { value: 'set-header', label: S.networkInspector.rwSetHeader },
+    { value: 'remove-header', label: S.networkInspector.rwRemoveHeader },
+    { value: 'body-replace', label: S.networkInspector.rwBodyReplace }
   ]
 };
 
 /** Which fields a given op type uses, and their placeholder labels. */
 function rewriteFieldConfig(type: string): { match?: string; value?: string; regex?: boolean } {
   switch (type) {
-    case 'set-header': return { match: 'Header name', value: 'Value' };
-    case 'remove-header': return { match: 'Header name' };
-    case 'set-status': return { value: 'Status code (e.g. 503)' };
-    case 'set-host': return { value: 'host or host:port' };
-    case 'set-path': return { value: '/new/path' };
-    case 'set-query': return { match: 'Param name', value: 'Value' };
-    case 'remove-query': return { match: 'Param name' };
-    case 'body-replace': return { match: 'Find', value: 'Replace with', regex: true };
+    case 'set-header': return { match: S.networkInspector.rwHeaderName, value: S.networkInspector.rwValue };
+    case 'remove-header': return { match: S.networkInspector.rwHeaderName };
+    case 'set-status': return { value: S.networkInspector.rwStatusCode };
+    case 'set-host': return { value: S.networkInspector.rwHostOrHostPort };
+    case 'set-path': return { value: S.networkInspector.rwNewPath };
+    case 'set-query': return { match: S.networkInspector.rwParamName, value: S.networkInspector.rwValue };
+    case 'remove-query': return { match: S.networkInspector.rwParamName };
+    case 'body-replace': return { match: S.networkInspector.rwFind, value: S.networkInspector.rwReplaceWith, regex: true };
     default: return {};
   }
 }
@@ -139,15 +140,15 @@ function rewriteOpHtml(op?: RewriteOp): string {
   const value = escapeHtml(op?.value || '');
   const regexOn = op?.regex ? ' checked' : '';
   return `<div class="ni-rw-op" data-rw-op>
-      <select class="ni-rules-select ni-rw-target" data-rw-target aria-label="Rewrite target">
-        <option value="request"${target === 'request' ? ' selected' : ''}>Request</option>
-        <option value="response"${target === 'response' ? ' selected' : ''}>Response</option>
+      <select class="ni-rules-select ni-rw-target" data-rw-target aria-label="${S.networkInspector.rewriteTargetAria}">
+        <option value="request"${target === 'request' ? ' selected' : ''}>${S.networkInspector.request}</option>
+        <option value="response"${target === 'response' ? ' selected' : ''}>${S.networkInspector.response}</option>
       </select>
-      <select class="ni-rules-select ni-rw-type" data-rw-type aria-label="Rewrite type">${rwTypeOptions(target, type)}</select>
+      <select class="ni-rules-select ni-rw-type" data-rw-type aria-label="${S.networkInspector.rewriteTypeAria}">${rwTypeOptions(target, type)}</select>
       <input type="text" class="ni-rules-ct ni-rw-match" data-rw-match value="${match}" spellcheck="false" autocomplete="off" />
       <input type="text" class="ni-rules-ct ni-rw-value" data-rw-value value="${value}" spellcheck="false" autocomplete="off" />
-      <label class="ni-rw-regex" data-rw-regex-wrap title="Treat Find as a regular expression"><input type="checkbox" data-rw-regex${regexOn} /> regex</label>
-      <button type="button" class="ni-host-rule-remove ni-rw-remove" data-rw-remove title="Remove rewrite" aria-label="Remove rewrite"><span class="icon icon-xs"><svg><use href="#icon-x"/></svg></span></button>
+      <label class="ni-rw-regex" data-rw-regex-wrap title="${S.networkInspector.regexTreatTitle}"><input type="checkbox" data-rw-regex${regexOn} /> ${S.networkInspector.regexLabel}</label>
+      <button type="button" class="ni-host-rule-remove ni-rw-remove" data-rw-remove title="${S.networkInspector.removeRewrite}" aria-label="${S.networkInspector.removeRewrite}"><span class="icon icon-xs"><svg><use href="#icon-x"/></svg></span></button>
     </div>`;
 }
 
@@ -199,8 +200,8 @@ function readRewriteOps(ruleRow: Element): RewriteOp[] {
  *  the initial render and the inline URL editor so the two never drift. */
 function ruleScope(host: string, path: string): { label: string; scope: string } {
   const wild = host.includes('*') || path.includes('*');
-  if (path) return { label: wild ? 'Wildcard path' : 'Single path', scope: 'path' };
-  return { label: wild ? 'Wildcard host' : 'All requests', scope: 'all' };
+  if (path) return { label: wild ? S.networkInspector.scopeWildcardPath : S.networkInspector.scopeSinglePath, scope: 'path' };
+  return { label: wild ? S.networkInspector.scopeWildcardHost : S.networkInspector.scopeAllRequests, scope: 'all' };
 }
 
 /** Inner markup of `.ni-host-rule-id` (name + scope badge). Rebuilt in place after an inline edit. */
@@ -229,47 +230,47 @@ function hostRowHtml(rule: HostTrafficRule): string {
   // `data-mock-open` reflects whether the canned-response editor starts expanded. The host + path
   // pair is the rule's identity (stored in data-host / data-path) so saving never re-parses the UI.
   return `<div class="ni-host-rule" data-host="${hostAttr}" data-path="${pathAttr}" data-mock-open="${mock ? '1' : '0'}">
-    <div class="ni-host-rule-header" data-host-toggle role="button" tabindex="0" aria-expanded="true" title="Collapse / expand rule">
+    <div class="ni-host-rule-header" data-host-toggle role="button" tabindex="0" aria-expanded="true" title="${S.networkInspector.collapseExpandRule}">
       <span class="ni-host-rule-caret" aria-hidden="true"><span class="icon icon-xs"><svg><use href="#icon-chevron-down"/></svg></span></span>
       <div class="ni-host-rule-id">${hostRuleIdHtml(host, path)}</div>
-      <button type="button" class="ni-host-rule-edit" data-host-edit title="Edit URL" aria-label="Edit URL"><span class="icon icon-xs"><svg><use href="#icon-edit-3"/></svg></span></button>
-      <button type="button" class="ni-host-rule-remove" data-host-remove title="Delete rule" aria-label="Delete rule"><span class="icon icon-xs"><svg><use href="#icon-trash"/></svg></span></button>
+      <button type="button" class="ni-host-rule-edit" data-host-edit title="${S.networkInspector.editUrl}" aria-label="${S.networkInspector.editUrl}"><span class="icon icon-xs"><svg><use href="#icon-edit-3"/></svg></span></button>
+      <button type="button" class="ni-host-rule-remove" data-host-remove title="${S.networkInspector.deleteRule}" aria-label="${S.networkInspector.deleteRule}"><span class="icon icon-xs"><svg><use href="#icon-trash"/></svg></span></button>
     </div>
     <div class="ni-host-rule-controls">
-      <label class="ni-host-rule-block"><input type="checkbox" data-host-block${blockChecked} /> Block</label>
-      <label class="ni-host-rule-flag" title="Drop the connection (simulate a network failure)"><input type="checkbox" data-host-reset${resetChecked} /> Reset</label>
-      <label class="ni-host-rule-flag" title="Return a canned response instead of forwarding upstream"><input type="checkbox" data-host-mock${mockOn} /> Mock</label>
+      <label class="ni-host-rule-block"><input type="checkbox" data-host-block${blockChecked} /> ${S.networkInspector.block}</label>
+      <label class="ni-host-rule-flag" title="${S.networkInspector.resetTitle}"><input type="checkbox" data-host-reset${resetChecked} /> ${S.common.reset}</label>
+      <label class="ni-host-rule-flag" title="${S.networkInspector.mockTitle}"><input type="checkbox" data-host-mock${mockOn} /> ${S.networkInspector.mock}</label>
       ${bwComboHtml(kbps, 'data-host-bw')}
-      <div class="ni-rules-input-suffix ni-host-latency-wrap" title="Added latency (ms)">
-        <input type="number" class="ni-rules-latency" data-host-latency min="0" max="10000" step="10" placeholder="Latency" value="${latency}" />
+      <div class="ni-rules-input-suffix ni-host-latency-wrap" title="${S.networkInspector.addedLatencyMsTitle}">
+        <input type="number" class="ni-rules-latency" data-host-latency min="0" max="10000" step="10" placeholder="${S.networkInspector.latencyPlaceholder}" value="${latency}" />
         <span class="ni-rules-suffix-unit">ms</span>
       </div>
     </div>
     <div class="ni-host-rule-mock" data-host-mock-editor${mock ? '' : ' hidden'}>
       <div class="ni-mock-row">
         <label class="ni-mock-field ni-mock-field-status">
-          <span class="ni-mock-field-label">Status</span>
-          <input type="number" class="ni-mock-num" data-mock-status min="100" max="599" placeholder="200" value="${mockStatus}" title="HTTP status code" />
+          <span class="ni-mock-field-label">${S.networkInspector.mockFieldStatus}</span>
+          <input type="number" class="ni-mock-num" data-mock-status min="100" max="599" placeholder="200" value="${mockStatus}" title="${S.networkInspector.httpStatusCodeTitle}" />
         </label>
         <label class="ni-mock-field ni-mock-field-ct">
-          <span class="ni-mock-field-label">Content-Type</span>
-          <input type="text" class="ni-rules-ct" data-mock-ct placeholder="application/json" value="${mockCt}" title="Response Content-Type" />
+          <span class="ni-mock-field-label">${S.networkInspector.mockFieldContentType}</span>
+          <input type="text" class="ni-rules-ct" data-mock-ct placeholder="application/json" value="${mockCt}" title="${S.networkInspector.responseContentType}" />
         </label>
         <label class="ni-mock-field ni-mock-field-delay">
-          <span class="ni-mock-field-label">Delay</span>
+          <span class="ni-mock-field-label">${S.networkInspector.mockFieldDelay}</span>
           <div class="ni-rules-input-suffix">
-            <input type="number" class="ni-rules-latency" data-mock-delay min="0" max="60000" step="50" placeholder="0" value="${mockDelay}" title="Delay before responding (ms)" />
+            <input type="number" class="ni-rules-latency" data-mock-delay min="0" max="60000" step="50" placeholder="0" value="${mockDelay}" title="${S.networkInspector.delayTitle}" />
             <span class="ni-rules-suffix-unit">ms</span>
           </div>
         </label>
       </div>
-      <textarea class="ni-rules-mock-body" data-mock-body rows="3" placeholder="Response Body (e.g. {&quot;error&quot;:&quot;forced&quot;})">${mockBody}</textarea>
+      <textarea class="ni-rules-mock-body" data-mock-body rows="3" placeholder="${S.networkInspector.mockBodyPlaceholder}">${mockBody}</textarea>
     </div>
     <div class="ni-host-rule-rewrite" data-host-rewrite>
       <div class="ni-rw-head">
-        <span class="ni-rw-title">Rewrite</span>
-        <span class="ni-rw-hint">applied when forwarding (not with Block / Reset / Mock)</span>
-        <button type="button" class="btn btn-secondary btn-sm ni-rw-add" data-rw-add>+ Add rewrite</button>
+        <span class="ni-rw-title">${S.networkInspector.rewriteTitle}</span>
+        <span class="ni-rw-hint">${S.networkInspector.rewriteHint}</span>
+        <button type="button" class="btn btn-secondary btn-sm ni-rw-add" data-rw-add>${S.networkInspector.addRewrite}</button>
       </div>
       <div class="ni-rw-list" data-rw-list>${(rule.rewrite || []).map((op) => rewriteOpHtml(op)).join('')}</div>
     </div>
@@ -334,22 +335,22 @@ export async function openTrafficRulesModal(opts: {
   // mono-styled chip beneath it. Serial is demoted to a hover title so the header stays clean
   // while the value is still discoverable.
   const deviceName = (opts.deviceName || '').trim();
-  const primaryName = deviceName || 'Roku Device';
+  const primaryName = deviceName || S.networkInspector.deviceFallbackName;
   // The serial lives in a native `title=` tooltip, which CSS blur can't mask — so
   // when Privacy Mode is on, drop it entirely (the IP chip below is `.device-ip`,
   // blurred by the shared rule). The modal is short-lived, so reading the class
   // once at build time is enough.
   const privacyOn = document.body.classList.contains('privacy-mode');
-  const serialTitle = opts.deviceSerial && !privacyOn ? `Serial ${opts.deviceSerial}` : '';
+  const serialTitle = opts.deviceSerial && !privacyOn ? S.networkInspector.serialTitle(opts.deviceSerial) : '';
 
   const overlay = document.createElement('div');
   // `.modal-overlay` is display:none until `.active` is added.
   overlay.className = 'modal-overlay ni-rules-overlay active';
   overlay.innerHTML = `
-    <div class="ni-rules-modal" role="dialog" aria-modal="true" aria-label="Traffic Rules">
+    <div class="ni-rules-modal" role="dialog" aria-modal="true" aria-label="${S.networkInspector.trafficRules}">
       <div class="ni-rules-header">
         <div class="ni-rules-header-info">
-          <h3 class="ni-rules-title">Traffic Rules</h3>
+          <h3 class="ni-rules-title">${S.networkInspector.trafficRules}</h3>
           <div class="ni-rules-device-line"${serialTitle ? ` title="${escapeHtml(serialTitle)}"` : ''}>
             <span class="ni-rules-device-dot" aria-hidden="true"></span>
             <span class="ni-rules-device-name">${escapeHtml(primaryName)}</span>
@@ -357,56 +358,56 @@ export async function openTrafficRulesModal(opts: {
             <span class="ni-rules-device-ip device-ip">${escapeHtml(opts.deviceIp)}</span>
           </div>
         </div>
-        <button type="button" class="modal-close ni-rules-close" title="Close" aria-label="Close">×</button>
+        <button type="button" class="modal-close ni-rules-close" title="${S.common.close}" aria-label="${S.common.close}">×</button>
       </div>
       <div class="ni-rules-body">
-        <p class="ni-rules-note">Applies only to traffic this device routes through the Roku Dev Studio proxy — its other (unproxied) traffic is unaffected. Changes take effect immediately.</p>
+        <p class="ni-rules-note">${S.networkInspector.rulesNote}</p>
 
         <section class="ni-rules-card">
           <div class="ni-rules-card-head">
-            <span class="ni-rules-card-title">Device Traffic</span>
+            <span class="ni-rules-card-title">${S.networkInspector.deviceTrafficTitle}</span>
           </div>
           <label class="ni-rules-toggle-row">
             <span class="ni-rules-toggle-text">
-              <span class="ni-rules-toggle-title">Block all proxied traffic</span>
-              <span class="ni-rules-toggle-desc">Reject every request routed through the proxy.</span>
+              <span class="ni-rules-toggle-title">${S.networkInspector.blockAllTitle}</span>
+              <span class="ni-rules-toggle-desc">${S.networkInspector.blockAllDesc}</span>
             </span>
             <input type="checkbox" class="ni-rules-switch" data-block-all${current.blockAll ? ' checked' : ''} />
           </label>
           <div class="ni-rules-field-grid" data-dev-throttle>
             <div class="ni-rules-field">
-              <label class="ni-rules-field-label" for="niDevBw">Bandwidth Limit</label>
+              <label class="ni-rules-field-label" for="niDevBw">${S.networkInspector.bandwidthLimit}</label>
               ${bwComboHtml(devKbps, 'data-dev-bw id="niDevBw"')}
             </div>
             <div class="ni-rules-field">
-              <label class="ni-rules-field-label" for="niDevLatency">Added Latency</label>
+              <label class="ni-rules-field-label" for="niDevLatency">${S.networkInspector.addedLatency}</label>
               <div class="ni-rules-input-suffix">
-                <input type="number" class="ni-rules-latency" id="niDevLatency" data-dev-latency min="0" max="10000" step="10" placeholder="0" value="${devLatency}" title="Added latency (ms)" />
+                <input type="number" class="ni-rules-latency" id="niDevLatency" data-dev-latency min="0" max="10000" step="10" placeholder="0" value="${devLatency}" title="${S.networkInspector.addedLatencyMsTitle}" />
                 <span class="ni-rules-suffix-unit">ms</span>
               </div>
             </div>
           </div>
         </section>
 
-        <p class="ni-rules-blocked-note" data-hosts-blocked hidden>Per-host rules don't apply while all proxied traffic is blocked.</p>
+        <p class="ni-rules-blocked-note" data-hosts-blocked hidden>${S.networkInspector.hostsBlockedNote}</p>
         <p class="ni-rules-throttle-note" data-hosts-throttle-note hidden></p>
         <section class="ni-rules-card" data-hosts-section>
           <div class="ni-rules-card-head">
-            <span class="ni-rules-card-title">Per-Host Rules</span>
+            <span class="ni-rules-card-title">${S.networkInspector.perHostRules}</span>
           </div>
           <div class="ni-rules-add">
-            <input type="text" class="ni-rules-add-input" data-add-host list="niHostSuggest" placeholder="api.example.com   ·   *.example.com   ·   api.example.com/v1/*" title="Host, or host/path. Use * as a wildcard (e.g. *.example.com matches prod + staging, /v1/* matches any path under /v1/)." />
-            <button type="button" class="btn btn-secondary btn-sm" data-add-host-btn>Add</button>
+            <input type="text" class="ni-rules-add-input" data-add-host list="niHostSuggest" placeholder="api.example.com   ·   *.example.com   ·   api.example.com/v1/*" title="${S.networkInspector.addHostTitle}" />
+            <button type="button" class="btn btn-secondary btn-sm" data-add-host-btn>${S.common.add}</button>
           </div>
           <div class="ni-host-rule-list" data-host-list>${hosts.map(hostRowHtml).join('')}</div>
-          <p class="ni-rules-empty-hint"${hosts.length ? ' hidden' : ''} data-host-empty>No rules yet — add a host or path above to override its behavior.</p>
+          <p class="ni-rules-empty-hint"${hosts.length ? ' hidden' : ''} data-host-empty>${S.networkInspector.noRulesYet}</p>
           <datalist id="niHostSuggest">${datalistOpts}</datalist>
         </section>
       </div>
       <div class="ni-rules-footer">
         <span class="ni-rules-status" data-rules-status aria-live="polite"></span>
-        <button type="button" class="btn btn-secondary" data-rules-cancel>Cancel</button>
-        <button type="button" class="btn btn-primary" data-rules-save>Save changes</button>
+        <button type="button" class="btn btn-secondary" data-rules-cancel>${S.common.cancel}</button>
+        <button type="button" class="btn btn-primary" data-rules-save>${S.networkInspector.saveChanges}</button>
       </div>
     </div>`;
 
@@ -566,7 +567,7 @@ export async function openTrafficRulesModal(opts: {
     row.classList.remove('is-collapsed');
     row.querySelector('[data-host-toggle]')?.setAttribute('aria-expanded', 'true');
     const current = (row.dataset.host || '') + (row.dataset.path || '');
-    idEl.innerHTML = `<input type="text" class="ni-host-rule-edit-input" data-host-edit-input value="${escapeHtml(current)}" spellcheck="false" autocomplete="off" aria-label="Edit intercept URL" />`;
+    idEl.innerHTML = `<input type="text" class="ni-host-rule-edit-input" data-host-edit-input value="${escapeHtml(current)}" spellcheck="false" autocomplete="off" aria-label="${S.networkInspector.editInterceptUrlAria}" />`;
     const input = idEl.querySelector('[data-host-edit-input]') as HTMLInputElement;
     input.focus();
     input.select();
@@ -689,9 +690,9 @@ export async function openTrafficRulesModal(opts: {
       hostsThrottleNote.hidden = !active;
       if (active) {
         const parts: string[] = [];
-        if (devKbps > 0) parts.push(`speed is capped to the Device Limit (${kbpsToLabel(devKbps)})`);
-        if (devLatency > 0) parts.push(`latency is floored to the Device Latency (${devLatency} ms)`);
-        hostsThrottleNote.textContent = `Per-Host ${parts.join(', and ')}.`;
+        if (devKbps > 0) parts.push(S.networkInspector.throttleCapSpeed(kbpsToLabel(devKbps)));
+        if (devLatency > 0) parts.push(S.networkInspector.throttleFloorLatency(devLatency));
+        hostsThrottleNote.textContent = S.networkInspector.throttleNote(parts);
       }
     }
   };
@@ -786,7 +787,7 @@ export async function openTrafficRulesModal(opts: {
 
       const statusEl = overlay.querySelector('[data-rules-status]');
       if (!api?.networkInspectorSetDeviceTrafficRules) {
-        if (statusEl) statusEl.textContent = 'Restart Roku Dev Studio to enable saving traffic rules.';
+        if (statusEl) statusEl.textContent = S.networkInspector.restartToSave;
         return;
       }
       try {
@@ -795,7 +796,7 @@ export async function openTrafficRulesModal(opts: {
         if (res?.success) {
           close();
         } else if (statusEl) {
-          statusEl.textContent = 'Failed to save Traffic Rules.';
+          statusEl.textContent = S.networkInspector.failedSaveRules;
         }
       } catch (err) {
         if (statusEl) statusEl.textContent = err instanceof Error ? err.message : String(err);

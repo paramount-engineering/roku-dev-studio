@@ -1,6 +1,6 @@
 /**
  * Bridges global keyboard-remote keypresses to the same debounced auto-screenshot
- * schedulers used by on-screen remote buttons (Remote tab vs Dev App tab).
+ * schedulers used by on-screen remote buttons (Remote Section vs Dev App tab).
  */
 
 import { SCREENSHOT_DEBOUNCE_DELAY } from './constants.js';

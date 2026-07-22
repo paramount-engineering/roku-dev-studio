@@ -1,5 +1,5 @@
 /**
- * Remote tab: quadrant metrics (chanperf + app-object-counts for active app).
+ * Remote Section: quadrant metrics (chanperf + app-object-counts for active app).
  * Q1 Remote · Q2 Objects · Q3 CPU · Q4 Memory — Resource Monitor–style charts when possible.
  */
 
@@ -35,6 +35,7 @@ import {
 } from './device-metrics-performance-step.js';
 import { pollDevAppForegroundAfterLaunch } from './dev-app-foreground-sync.js';
 import { rendererWarn } from '../../modules/utils/logger.js';
+import { S } from '@shared/strings/index.js';
 
 /** When active-app has no id, still query sideloaded dev package (often zero if another app is foreground). */
 const OBJECT_COUNTS_FALLBACK_APP_ID = 'dev';
@@ -79,14 +80,14 @@ function stateToClass(state: string): 'green' | 'amber' | 'red' | 'neutral' {
 /** Linux process-state letter → friendly label. */
 function stateToLabel(state: string): string {
   switch (state) {
-    case 'R': return 'Running';
-    case 'S': return 'Sleeping';
-    case 'I': return 'Idle';
-    case 't': return 'Tracing Stop';
-    case 'D': return 'Disk Wait';
-    case 'T': return 'Stopped';
-    case 'Z': return 'Zombie';
-    case 'X': return 'Dead';
+    case 'R': return S.devApp.stateRunning;
+    case 'S': return S.devApp.stateSleeping;
+    case 'I': return S.devApp.stateIdle;
+    case 't': return S.devApp.stateTracingStop;
+    case 'D': return S.devApp.stateDiskWait;
+    case 'T': return S.devApp.stateStopped;
+    case 'Z': return S.devApp.stateZombie;
+    case 'X': return S.devApp.stateDead;
     default: return state || '?';
   }
 }
@@ -325,19 +326,18 @@ function renderObjectsResourceMonitor(
   objectsRmSignatures.set(rm, sig);
 
   const now = new Date();
-  const timeStr = `Updated: ${now.toLocaleTimeString(undefined, {
+  const timeStr = S.devApp.updatedAt(now.toLocaleTimeString(undefined, {
     hour: '2-digit',
     minute: '2-digit',
     second: '2-digit'
-  })}`;
+  }));
 
   const hasDevTotalBytes = totalBytes != null && totalBytes > 0;
   const hasRowBytes = rows.some((r) => typeof r.bytes === 'number' && r.bytes > 0);
   if (memHint) {
     if (mode === 'memory' && !hasDevTotalBytes && !hasRowBytes && channelMemBytes > 0 && totalCount > 0) {
       memHint.hidden = false;
-      memHint.textContent =
-        'Memory is estimated from object counts and chanperf (“used”) memory when the device does not send per-type bytes.';
+      memHint.textContent = S.devApp.memoryEstimatedHint;
     } else {
       memHint.hidden = true;
       memHint.textContent = '';
@@ -414,7 +414,7 @@ function renderObjectsResourceMonitor(
   tLab.className = 'remote-objects-rm-label';
   const tName = document.createElement('span');
   tName.className = 'remote-objects-rm-name';
-  tName.textContent = 'Total BrightScript Objects';
+  tName.textContent = S.devApp.totalBrightScriptObjects;
   const tVal = document.createElement('span');
   tVal.className = 'remote-objects-rm-val';
   tVal.textContent = totalStr;
@@ -459,14 +459,14 @@ function renderObjectsResourceMonitor(
   }
 }
 
-/** Per-device Remote tab: developer mode + stable storage key (serial, else `ip:…`). */
+/** Per-device Remote Section: developer mode + stable storage key (serial, else `ip:…`). */
 export type RemoteTabMetricsContext = {
   developerEnabled: boolean;
   deviceKey: string;
 };
 
 /**
- * Wire chanperf / object-count polling to the Remote tab quadrant layout (`.remote-tab-metrics-root`).
+ * Wire chanperf / object-count polling to the Remote Section quadrant layout (`.remote-tab-metrics-root`).
  */
 export function setupRemoteTabMetrics(
   panel: DevicePanelRoot,
@@ -837,7 +837,7 @@ export function setupRemoteTabMetrics(
       }
 
     if (btn instanceof HTMLButtonElement) {
-      btn.title = 'Latest Device Performance (Click to Open Remote)';
+      btn.title = S.devApp.latestDevicePerfTitle;
     }
   }
 
@@ -858,10 +858,10 @@ export function setupRemoteTabMetrics(
       empty.className = 'remote-cpu-process-row';
       const lab = document.createElement('span');
       lab.className = 'remote-cpu-process-label';
-      lab.textContent = 'Process';
+      lab.textContent = S.devApp.processLabel;
       const val = document.createElement('span');
       val.className = 'remote-cpu-process-value';
-      val.textContent = 'Waiting for proc-stat sample…';
+      val.textContent = S.devApp.waitingForProcStat;
       empty.appendChild(lab);
       empty.appendChild(val);
       tableEl.appendChild(empty);
@@ -987,51 +987,51 @@ export function setupRemoteTabMetrics(
       faultsBlock.appendChild(card);
     };
 
-    addInfoRow('State', stateToLabel(ps.state), {
+    addInfoRow(S.devApp.stateFieldLabel, stateToLabel(ps.state), {
       leftDotClass: stateToClass(ps.state),
       valueSecondary: `(${ps.state})`
     });
 
     addInfoRow(
-      'Channel uptime',
-      `Stable for ${formatSecondsCompact(uptimeSec)}`,
+      S.devApp.channelUptime,
+      S.devApp.stableFor(formatSecondsCompact(uptimeSec)),
       {
-        valueSecondary: 'Since first observed',
+        valueSecondary: S.devApp.sinceFirstObserved,
         flicker: flickerUptime
       }
     );
 
-    addInfoRow('User CPU time', `${userSec.toFixed(2)} s`, {
+    addInfoRow(S.devApp.userCpuTime, `${userSec.toFixed(2)} s`, {
       valueSecondary: lastUserPct != null ? `· ${lastUserPct.toFixed(1)}%` : undefined
     });
-    addInfoRow('Kernel CPU time', `${sysSec.toFixed(2)} s`, {
+    addInfoRow(S.devApp.kernelCpuTime, `${sysSec.toFixed(2)} s`, {
       valueSecondary: lastSysPct != null ? `· ${lastSysPct.toFixed(1)}%` : undefined
     });
 
     if (ps.cutime > 0 || ps.cstime > 0) {
       const cUserSec = ps.cutime / clk;
       const cSysSec = ps.cstime / clk;
-      addInfoRow('Child CPU time', `${(cUserSec + cSysSec).toFixed(2)} s`, {
-        valueSecondary: `User ${cUserSec.toFixed(2)} · Kernel ${cSysSec.toFixed(2)}`
+      addInfoRow(S.devApp.childCpuTime, `${(cUserSec + cSysSec).toFixed(2)} s`, {
+        valueSecondary: S.devApp.childCpuTimeSecondary(cUserSec.toFixed(2), cSysSec.toFixed(2))
       });
     }
     if (ps.cminflt > 0 || ps.cmajflt > 0) {
       addInfoRow(
-        'Child faults',
+        S.devApp.childFaults,
         `${ps.cminflt.toLocaleString()} / ${ps.cmajflt.toLocaleString()}`,
-        { valueSecondary: 'Minor/Major' }
+        { valueSecondary: S.devApp.minorMajor }
       );
     }
 
-    addInfoRow('Clock tick rate', `${clk} Hz`);
+    addInfoRow(S.devApp.clockTickRate, `${clk} Hz`);
 
-    addFaultCard('Minor Faults', ps.minflt.toLocaleString(), {
+    addFaultCard(S.devApp.minorFaults, ps.minflt.toLocaleString(), {
       valueSecondary: `· ${formatRate(lastMinorRate ?? 0)}`,
       sparkRing: ringFaultsMinorPerSec,
       sparkColor: COL_FAULTS_MINOR
     });
     const majorActive = (lastMajorRate ?? 0) > 0;
-    addFaultCard('Major Faults', ps.majflt.toLocaleString(), {
+    addFaultCard(S.devApp.majorFaults, ps.majflt.toLocaleString(), {
       valueSecondary: `· ${formatRate(lastMajorRate ?? 0)}${majorActive ? '' : ' ✓'}`,
       sparkRing: ringFaultsMajorPerSec,
       sparkColor: COL_FAULTS_MAJOR,
@@ -1076,7 +1076,7 @@ export function setupRemoteTabMetrics(
       nowMs,
       maxSampleGapMs,
       hover: {
-        seriesLabels: { tot: 'Total', usr: 'User', sys: 'Kernel' }
+        seriesLabels: { tot: S.devApp.hoverTotal, usr: S.devApp.hoverUser, sys: S.devApp.hoverKernel }
       }
     });
   }
@@ -1180,11 +1180,11 @@ export function setupRemoteTabMetrics(
       maxSampleGapMs,
       hover: {
         seriesLabels: {
-          used: 'Used',
-          res: 'Resident',
-          anon: 'Anonymous',
-          sh: 'Shared',
-          lim: 'Limit'
+          used: S.devApp.hoverUsed,
+          res: S.devApp.hoverResident,
+          anon: S.devApp.hoverAnonymous,
+          sh: S.devApp.hoverShared,
+          lim: S.devApp.hoverLimit
         }
       }
     });
@@ -1236,10 +1236,10 @@ export function setupRemoteTabMetrics(
       elObjFallback.hidden = true;
       const emptyMsg =
         devAppForeground === false
-          ? 'No BrightScript object breakdown while the Dev App is in the background. Launch or switch to the Dev App on the device — metrics and object counts update only when it is in the foreground.'
+          ? S.devApp.objectsEmptyBackground
           : devAppForeground !== true
-            ? 'No BrightScript object breakdown yet. After the connection reports the foreground channel, launch the Dev App if you need sideloaded Dev App object counts.'
-            : 'No BrightScript object breakdown yet. Ensure Control by Mobile Apps (Network Access) is enabled and the foreground channel exposes object counts.';
+            ? S.devApp.objectsEmptyNoForeground
+            : S.devApp.objectsEmptyNoCounts;
       elObjRm.innerHTML = `<div class="remote-objects-rm-empty">${emptyMsg}</div>`;
       if (elObjFooter) {
         elObjFooter.hidden = true;
@@ -1282,11 +1282,11 @@ export function setupRemoteTabMetrics(
       const full = chanperfXml ? parseChanperfFull(chanperfXml) : null;
       let chanperfErr: string | null = null;
       if (!cp.success || typeof cp.data !== 'string') {
-        chanperfErr = cp.error || 'chanperf request failed';
+        chanperfErr = cp.error || S.devApp.chanperfRequestFailed;
       } else if (!full) {
         chanperfErr =
           extractChanperfFailureMessage(chanperfXml) ||
-          'Could not parse Channel Performance (Dev Mode / ECP / chanperf).';
+          S.devApp.couldNotParseChanperf;
       }
 
       const activeId =
@@ -1337,11 +1337,11 @@ export function setupRemoteTabMetrics(
         pushRing(ringFaultsMajorPerSec, null);
       }
 
-      const ocErr = oc.success ? null : oc.error || 'Object counts failed';
+      const ocErr = oc.success ? null : oc.error || S.devApp.objectCountsFailed;
       if (!full && !objectOk) {
         failStreak += 1;
         setError(
-          [chanperfErr, ocErr].filter(Boolean).join(' · ') || 'Device Metrics unavailable'
+          [chanperfErr, ocErr].filter(Boolean).join(' · ') || S.devApp.deviceMetricsUnavailable
         );
       } else {
         failStreak = 0;
@@ -1451,13 +1451,13 @@ export function setupRemoteTabMetrics(
         if (launchBtn.disabled) return;
         launchBtn.disabled = true;
         const prevLabel = launchBtn.textContent;
-        launchBtn.textContent = 'Launching…';
+        launchBtn.textContent = S.devApp.launchingProgress;
         void (async () => {
           try {
             await api.launch('dev');
             await pollDevAppForegroundAfterLaunch(panel, api);
           } catch (e: unknown) {
-            showToast(errMessage(e) || 'Launch failed', 'error');
+            showToast(errMessage(e) || S.devApp.launchFailed, 'error');
           } finally {
             launchBtn.disabled = false;
             if (prevLabel != null) launchBtn.textContent = prevLabel;
@@ -1527,22 +1527,22 @@ export function setupRemoteTabMetrics(
   } {
     if (installed === false) {
       return {
-        full: 'Device Performance Paused — Sideload Dev App to Resume',
-        short: 'Sideload to resume',
-        title: 'Device Performance Paused — Sideload Dev App to Resume'
+        full: S.devApp.pausedSideloadFull,
+        short: S.devApp.pausedSideloadShort,
+        title: S.devApp.pausedSideloadFull
       };
     }
     if (installed === true) {
       return {
-        full: 'Device Performance Paused — Launch Dev App to Resume',
-        short: 'Launch to resume',
-        title: 'Device Performance Paused — Launch Dev App to Resume'
+        full: S.devApp.pausedLaunchFull,
+        short: S.devApp.pausedLaunchShort,
+        title: S.devApp.pausedLaunchFull
       };
     }
     return {
-      full: 'Device Performance Paused — bring the Dev App to the foreground to resume.',
-      short: 'Device Performance paused',
-      title: 'Device Performance Paused — bring the Dev App to the foreground to resume.'
+      full: S.devApp.pausedUnknownFull,
+      short: S.devApp.pausedUnknownShort,
+      title: S.devApp.pausedUnknownFull
     };
   }
 
@@ -1599,8 +1599,7 @@ export function setupRemoteTabMetrics(
       if (!developerEnabled) {
         label.removeAttribute('title');
       } else if (devAppForeground !== true && !perfToggle.checked) {
-        label.title =
-          'Bring the Dev App to the foreground on the device to enable Device Performance.';
+        label.title = S.devApp.bringDevAppToForegroundTitle;
       } else if (devAppForeground === false && perfToggle.checked) {
         label.title = pausedNavMessage(devAppSideloadInstalled).title;
       } else {
@@ -1642,7 +1641,7 @@ export function setupRemoteTabMetrics(
     const ok = wrap.getAttribute('data-remote-layout') === 'quad';
     if (ok && panel.classList.contains('active') && document.visibilityState === 'visible') {
       showToast(
-        'Show Device Performance was turned on so an Action Script could capture charts.',
+        S.devApp.showDevicePerfAutoOnToast,
         'info'
       );
     }
@@ -1739,7 +1738,7 @@ export function setupRemoteTabMetrics(
   ).rokuDevicePerformanceCapture = (chart, opts) => {
     const id = String(chart ?? '').trim();
     if (!isDevicePerformanceChartId(id)) {
-      return Promise.resolve({ success: false, error: 'Invalid Device Performance chart type.' });
+      return Promise.resolve({ success: false, error: S.devApp.invalidChartType });
     }
     return runDevicePerformanceCaptureStep({
       chart: id as DevicePerformanceChartId,

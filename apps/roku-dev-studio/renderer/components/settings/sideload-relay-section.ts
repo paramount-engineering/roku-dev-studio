@@ -10,6 +10,7 @@
  */
 
 import { attachBackdropClickToClose } from '../../modules/utils/modal-backdrop-click.js';
+import { S } from '@shared/strings/index.js';
 
 interface Target {
   id: string;
@@ -143,8 +144,8 @@ function deviceGateFails(): boolean {
 /** Reasons the relay cannot be enabled right now (empty ⇒ OK to enable). */
 function gateReasons(): string[] {
   const reasons: string[] = [];
-  if (!passwordIsSet()) reasons.push('Set a Relay Dev Password so your IDE can authenticate with RDS.');
-  if (deviceGateFails()) reasons.push('Target at least one reachable device — open “Setup Devices” and enable a device that’s online.');
+  if (!passwordIsSet()) reasons.push(S.sideloadRelay.gateNeedPassword);
+  if (deviceGateFails()) reasons.push(S.sideloadRelay.gateNeedDevice);
   return reasons;
 }
 
@@ -160,7 +161,7 @@ function renderGateBanner(reasons: string[], attention = false): void {
   }
   el.removeAttribute('hidden');
   el.append(
-    h('div', { class: 'sr-gate-title' }, ['To enable Sideload Relay:']),
+    h('div', { class: 'sr-gate-title' }, [S.sideloadRelay.gateTitle]),
     h('ul', { class: 'sr-gate-list' }, reasons.map((r) => h('li', {}, [r])))
   );
   if (attention) {
@@ -204,17 +205,17 @@ function updateTargetSummary(): void {
   if (!el) return;
   const enabled = targets.filter((t) => t.enabled);
   if (!enabled.length) {
-    el.textContent = 'No devices targeted yet. Click “Setup Devices” to choose which Rokus receive each build.';
+    el.textContent = S.sideloadRelay.targetSummaryEmpty;
     return;
   }
   if (!scanned) {
-    el.textContent = `${enabled.length} device${enabled.length === 1 ? '' : 's'} targeted · checking reachability…`;
+    el.textContent = S.sideloadRelay.targetSummaryChecking(enabled.length);
     return;
   }
   const reachable = enabled.filter((t) => isReachable(t)).length;
   const offline = enabled.length - reachable;
-  let txt = `${reachable} enabled & reachable`;
-  if (offline > 0) txt += ` · ${offline} offline (skipped until reachable)`;
+  let txt = S.sideloadRelay.targetSummaryReachable(reachable);
+  if (offline > 0) txt += S.sideloadRelay.targetSummaryOfflineSuffix(offline);
   el.textContent = txt;
 }
 
@@ -232,7 +233,7 @@ function buildModalRows(): void {
       ip: t.ip,
       name: t.name,
       serial: t.serial,
-      location: t.location || (t.remote ? 'Remote' : 'Local'),
+      location: t.location || (t.remote ? S.sideloadRelay.locRemote : S.sideloadRelay.locLocal),
       remote: !!t.remote,
       serverUrl: t.serverUrl,
       locationId: t.locationId,
@@ -287,15 +288,15 @@ function renderModalTable(): void {
   table.textContent = '';
   table.append(
     h('div', { class: 'sr-dtable-head' }, [
-      h('span', {}, ['Location']),
-      h('span', {}, ['Device']),
-      h('span', {}, ['IP & Serial']),
-      h('span', { class: 'sr-col-center' }, ['Enabled']),
-      h('span', { class: 'sr-col-center' }, ['Reachable'])
+      h('span', {}, [S.sideloadRelay.colLocation]),
+      h('span', {}, [S.sideloadRelay.colDevice]),
+      h('span', {}, [S.sideloadRelay.colIpSerial]),
+      h('span', { class: 'sr-col-center' }, [S.sideloadRelay.colEnabled]),
+      h('span', { class: 'sr-col-center' }, [S.sideloadRelay.colReachable])
     ])
   );
   if (!modalRows.length) {
-    table.append(h('div', { class: 'sr-dtable-empty' }, ['No devices found. Make sure your Rokus are on and in dev mode, then Rescan.']));
+    table.append(h('div', { class: 'sr-dtable-empty' }, [S.sideloadRelay.emptyDevices]));
     updateModalSummary();
     return;
   }
@@ -310,7 +311,7 @@ function renderModalTable(): void {
       if (pwEditingKey === row.key) {
         enabledCell = renderPasswordEditor(row);
       } else {
-        const setBtn = h('button', { type: 'button', class: 'sr-pw-btn', title: 'Enter and validate the dev password to enable this device' }, ['🔒 Set Password']);
+        const setBtn = h('button', { type: 'button', class: 'sr-pw-btn', title: S.sideloadRelay.setPasswordTitle }, [S.sideloadRelay.setPasswordBtn]);
         setBtn.addEventListener('click', () => {
           pwEditingKey = row.key;
           renderModalTable();
@@ -318,7 +319,7 @@ function renderModalTable(): void {
         enabledCell = h('span', { class: 'sr-dt-cell-center' }, [setBtn]);
       }
     } else {
-      const toggle = h('input', { type: 'checkbox', class: 'settings-toggle-input', role: 'switch', 'aria-label': `Enable ${row.name}` }) as HTMLInputElement;
+      const toggle = h('input', { type: 'checkbox', class: 'settings-toggle-input', role: 'switch', 'aria-label': S.sideloadRelay.enableAriaLabel(row.name) }) as HTMLInputElement;
       toggle.checked = row.enabled;
       toggle.disabled = !row.reachable; // offline previously-targeted rows are locked
       toggle.setAttribute('aria-checked', row.enabled ? 'true' : 'false');
@@ -333,8 +334,8 @@ function renderModalTable(): void {
     }
 
     const reach = row.reachable
-      ? h('span', { class: 'sr-reach sr-reach-ok', title: 'Reachable now' }, ['✓'])
-      : h('span', { class: 'sr-reach sr-reach-off', title: 'Not reachable — skipped until it comes back online' }, ['○ offline']);
+      ? h('span', { class: 'sr-reach sr-reach-ok', title: S.sideloadRelay.reachableNow }, [S.sideloadRelay.reachableOk])
+      : h('span', { class: 'sr-reach sr-reach-off', title: S.sideloadRelay.reachableOffTitle }, [S.sideloadRelay.reachableOff]);
 
     table.append(
       h('div', { class: `sr-dtable-row${row.reachable ? '' : ' sr-row-off'}` }, [
@@ -359,13 +360,13 @@ function renderPasswordEditor(row: ModalRow): HTMLElement {
   const input = h('input', {
     type: 'password',
     class: 'sr-pw-input2',
-    placeholder: 'Dev password',
-    'aria-label': `Dev password for ${row.name}`,
+    placeholder: S.sideloadRelay.pwInputPlaceholder,
+    'aria-label': S.sideloadRelay.pwInputAriaLabel(row.name),
     autocomplete: 'off'
   }) as HTMLInputElement;
-  const validateBtn = h('button', { type: 'button', class: 'sr-pw-validate', title: `Validate & enable ${row.name}`, 'aria-label': 'Validate password' }, ['✓']);
+  const validateBtn = h('button', { type: 'button', class: 'sr-pw-validate', title: S.sideloadRelay.pwValidateTitle(row.name), 'aria-label': S.sideloadRelay.pwValidateAriaLabel }, [S.sideloadRelay.pwValidateChar]);
   const field = h('div', { class: 'sr-pw-field' }, [input, validateBtn]);
-  const cancelBtn = h('button', { type: 'button', class: 'sr-pw-cancel' }, ['Cancel']);
+  const cancelBtn = h('button', { type: 'button', class: 'sr-pw-cancel' }, [S.common.cancel]);
   const err = h('span', { class: 'sr-pw-err2', 'aria-live': 'polite' }, []);
 
   const fail = (msg: string) => {
@@ -381,7 +382,7 @@ function renderPasswordEditor(row: ModalRow): HTMLElement {
   const run = async () => {
     const password = input.value;
     if (!password) {
-      fail('Enter a password');
+      fail(S.sideloadRelay.pwEnterPassword);
       return;
     }
     validateBtn.setAttribute('disabled', '');
@@ -402,10 +403,10 @@ function renderPasswordEditor(row: ModalRow): HTMLElement {
         pwEditingKey = null;
         renderModalTable();
       } else {
-        fail((res && res.error) || 'Wrong password');
+        fail((res && res.error) || S.sideloadRelay.pwWrong);
       }
     } catch {
-      fail('Unreachable');
+      fail(S.sideloadRelay.pwUnreachable);
     } finally {
       validateBtn.classList.remove('busy');
     }
@@ -432,8 +433,8 @@ function updateModalSummary(): void {
   const enabledReachable = modalRows.filter((r) => r.enabled && r.reachable).length;
   const enabledOffline = modalRows.filter((r) => r.enabled && !r.reachable).length;
   const reachableTotal = modalRows.filter((r) => r.reachable).length;
-  let txt = `${enabledReachable} enabled & reachable of ${reachableTotal} online`;
-  if (enabledOffline > 0) txt += ` · ${enabledOffline} offline kept`;
+  let txt = S.sideloadRelay.modalSummary(enabledReachable, reachableTotal);
+  if (enabledOffline > 0) txt += S.sideloadRelay.modalSummaryOfflineSuffix(enabledOffline);
   el.textContent = txt;
 }
 
@@ -444,7 +445,7 @@ function setScanButtonScanning(scanning: boolean): void {
   btn.disabled = scanning;
   btn.classList.toggle('scanning', scanning);
   const text = btn.querySelector('.sr-scan-text');
-  if (text) text.textContent = scanning ? 'Scanning…' : 'Scan Devices';
+  if (text) text.textContent = scanning ? S.sideloadRelay.scanning : S.sideloadRelay.scanBtn;
 }
 
 async function scanDevices(force = false): Promise<void> {
@@ -470,10 +471,10 @@ async function scanDevices(force = false): Promise<void> {
       if (statusEl) {
         const local = discovered.filter((d) => !d.remote).length;
         const remote = discovered.length - local;
-        statusEl.textContent = `Found ${local} local${remote ? ` · ${remote} remote` : ''} dev device${discovered.length === 1 ? '' : 's'}.`;
+        statusEl.textContent = S.sideloadRelay.scanFound(local, remote, discovered.length);
       }
     } catch {
-      if (statusEl) statusEl.textContent = 'Scan failed.';
+      if (statusEl) statusEl.textContent = S.sideloadRelay.scanFailed;
     } finally {
       setScanButtonScanning(false);
     }
@@ -543,7 +544,7 @@ function buildDom(root: HTMLElement): void {
   // Password field with an inline show/hide eye toggle.
   const passwordRow = (id: string, title: string, desc: string, placeholder: string) => {
     const input = h('input', { type: 'password', id, class: 'settings-text-input sr-pw-reveal-input', 'aria-label': title, placeholder, autocomplete: 'off' }) as HTMLInputElement;
-    const eye = h('button', { type: 'button', class: 'sr-pw-eye', 'aria-label': 'Show password', 'aria-pressed': 'false', title: 'Show password' }, [EYE_SVG()]);
+    const eye = h('button', { type: 'button', class: 'sr-pw-eye', 'aria-label': S.sideloadRelay.showPassword, 'aria-pressed': 'false', title: S.sideloadRelay.showPassword }, [EYE_SVG()]);
     // The saved password lives in the backend, not the config. When revealing an
     // empty field that has a saved password, fetch and fill it; when hiding, if
     // the value is still exactly that fetched value (untouched), clear it again so
@@ -569,8 +570,8 @@ function buildDom(root: HTMLElement): void {
       }
       input.type = reveal ? 'text' : 'password';
       eye.setAttribute('aria-pressed', reveal ? 'true' : 'false');
-      eye.setAttribute('aria-label', reveal ? 'Hide password' : 'Show password');
-      eye.setAttribute('title', reveal ? 'Hide password' : 'Show password');
+      eye.setAttribute('aria-label', reveal ? S.sideloadRelay.hidePassword : S.sideloadRelay.showPassword);
+      eye.setAttribute('title', reveal ? S.sideloadRelay.hidePassword : S.sideloadRelay.showPassword);
       eye.classList.toggle('revealed', reveal);
       input.focus();
     });
@@ -584,19 +585,19 @@ function buildDom(root: HTMLElement): void {
   // and something needed to enable it is missing.
   root.append(h('div', { class: 'sr-gate-warning', id: 'srGateWarning', role: 'status', 'aria-live': 'polite', hidden: '' }, []));
 
-  root.append(toggleRow('optSideloadRelay', 'Enable Sideload Relay', 'Advertise RDS as a Roku over SSDP and accept sideloads. Off by default.'));
-  root.append(passwordRow('srPassword', 'Relay Dev Password', 'Password your IDE authenticates with (user rokudev). Blank keeps the saved one.', '••••••••'));
-  root.append(toggleRow('optSrAutoConsole', 'Auto-connect Console', 'Open the telnet 8085 console on each device after install.'));
-  root.append(toggleRow('optSrRetry', 'Retry once on failure', 'Retry a failed install one time before reporting it.'));
+  root.append(toggleRow('optSideloadRelay', S.sideloadRelay.enableTitle, S.sideloadRelay.enableDesc));
+  root.append(passwordRow('srPassword', S.sideloadRelay.passwordTitle, S.sideloadRelay.passwordDesc, '••••••••'));
+  root.append(toggleRow('optSrAutoConsole', S.sideloadRelay.autoConsoleTitle, S.sideloadRelay.autoConsoleDesc));
+  root.append(toggleRow('optSrRetry', S.sideloadRelay.retryTitle, S.sideloadRelay.retryDesc));
 
   // Targeted Devices summary row
   root.append(
     h('div', { class: 'settings-row-toggle sr-summary-row' }, [
       h('div', { class: 'settings-row-text' }, [
-        h('strong', {}, ['Targeted Devices']),
-        h('span', { class: 'settings-row-desc', id: 'srTargetSummary', 'aria-live': 'polite' }, ['Loading…'])
+        h('strong', {}, [S.sideloadRelay.targetedDevicesTitle]),
+        h('span', { class: 'settings-row-desc', id: 'srTargetSummary', 'aria-live': 'polite' }, [S.sideloadRelay.targetSummaryLoading])
       ]),
-      h('button', { type: 'button', class: 'btn btn-secondary btn-sm', id: 'srSetupBtn' }, ['Setup Devices'])
+      h('button', { type: 'button', class: 'btn btn-secondary btn-sm', id: 'srSetupBtn' }, [S.sideloadRelay.setupDevicesBtn])
     ])
   );
 
@@ -604,24 +605,22 @@ function buildDom(root: HTMLElement): void {
   const overlay = h('div', { class: 'sr-modal-overlay', id: 'srSetupOverlay', hidden: '' }, [
     h('div', { class: 'sr-modal' }, [
       h('div', { class: 'sr-modal-header' }, [
-        h('h2', {}, ['Setup Sideload Relay Devices']),
+        h('h2', {}, [S.sideloadRelay.modalTitle]),
         h('div', { class: 'sr-modal-header-actions' }, [
           h('button', { type: 'button', class: 'sr-scan-btn', id: 'srRescanBtn' }, [
-            h('span', { class: 'sr-scan-text' }, ['Scan Devices'])
+            h('span', { class: 'sr-scan-text' }, [S.sideloadRelay.scanBtn])
           ]),
-          h('button', { type: 'button', class: 'sr-modal-close', id: 'srModalClose', 'aria-label': 'Close' }, ['×'])
+          h('button', { type: 'button', class: 'sr-modal-close', id: 'srModalClose', 'aria-label': S.common.close }, ['×'])
         ])
       ]),
-      h('div', { class: 'sr-modal-sub' }, [
-        'Enabled + reachable devices receive every build you sideload through RDS. Previously-targeted devices that are offline stay listed (disabled) and rejoin automatically when reachable again.'
-      ]),
+      h('div', { class: 'sr-modal-sub' }, [S.sideloadRelay.modalSubtitle]),
       h('div', { class: 'sr-modal-toolbar' }, [h('span', { class: 'sr-scan-status', id: 'srScanStatus', 'aria-live': 'polite' }, [])]),
       h('div', { class: 'sr-modal-table-wrap' }, [h('div', { id: 'srDeviceTable' }, [])]),
       h('div', { class: 'sr-modal-footer' }, [
         h('span', { class: 'sr-modal-summary', id: 'srModalSummary', 'aria-live': 'polite' }, []),
         h('div', { class: 'sr-modal-actions' }, [
-          h('button', { type: 'button', class: 'btn btn-secondary btn-sm', id: 'srModalCancel' }, ['Cancel']),
-          h('button', { type: 'button', class: 'btn btn-primary btn-sm', id: 'srModalSave' }, ['Save'])
+          h('button', { type: 'button', class: 'btn btn-secondary btn-sm', id: 'srModalCancel' }, [S.common.cancel]),
+          h('button', { type: 'button', class: 'btn btn-primary btn-sm', id: 'srModalSave' }, [S.common.save])
         ])
       ])
     ])
@@ -661,7 +660,7 @@ async function save(): Promise<void> {
       setToggle('optSideloadRelay', false);
       renderGateBanner(reasons, true);
       if (status) {
-        status.textContent = 'Fix the items above before enabling Sideload Relay.';
+        status.textContent = S.sideloadRelay.fixBeforeEnable;
         status.classList.add('err');
       }
       return;
@@ -698,21 +697,21 @@ async function save(): Promise<void> {
   try {
     const res = await api.sideloadRelayApply(payload);
     if (res && res.success) {
-      if (status) status.textContent = 'Sideload Relay settings saved.';
+      if (status) status.textContent = S.sideloadRelay.saved;
       if (typedPassword) hasSavedPassword = true; // it's now persisted
       if (pwdInput) {
         pwdInput.value = '';
-        if (hasSavedPassword) pwdInput.placeholder = '•••••••• (saved)';
+        if (hasSavedPassword) pwdInput.placeholder = S.sideloadRelay.savedPasswordPlaceholder;
       }
       updateGateBanner();
       void refreshRelayUrlHint(); // enabling/disabling changes whether the URL applies
     } else if (status) {
-      status.textContent = (res && res.error) || 'Save failed';
+      status.textContent = (res && res.error) || S.sideloadRelay.saveFailed;
       status.classList.add('err');
     }
   } catch (e) {
     if (status) {
-      status.textContent = 'Save failed';
+      status.textContent = S.sideloadRelay.saveFailed;
       status.classList.add('err');
     }
   } finally {
@@ -788,7 +787,7 @@ export function initSideloadRelaySection(): void {
     setToggle('optSrRetry', cfg.retryOnFailure === true);
     hasSavedPassword = cfg.hasPassword === true;
     const pwdInput = document.getElementById('srPassword') as HTMLInputElement | null;
-    if (pwdInput && cfg.hasPassword) pwdInput.placeholder = '•••••••• (saved)';
+    if (pwdInput && cfg.hasPassword) pwdInput.placeholder = S.sideloadRelay.savedPasswordPlaceholder;
     targets = Array.isArray(cfg.targets)
       ? cfg.targets.map((t: any) => ({
           id: t.id,

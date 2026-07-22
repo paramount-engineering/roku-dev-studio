@@ -105,19 +105,19 @@
         <div class="card-header ni-card-header">
           <div class="ni-header-start">
             <span class="card-icon"><span class="icon icon-sm"><svg><use href="#icon-network"/></svg></span></span>
-            <span class="card-title">Network Session</span>
+            <span class="card-title" data-i18n="networkSessionViewer.networkSession">Network Session</span>
             <div class="ni-header-tools">
               <div class="ni-find-btn-group">
-                <button type="button" class="btn btn-secondary btn-sm ni-icon-btn ni-find-btn" data-ni-find title="Find in traffic — URL, payloads, headers, response bodies (⌘/Ctrl+F)" aria-label="Find in traffic">
+                <button type="button" class="btn btn-secondary btn-sm ni-icon-btn ni-find-btn" data-ni-find title="Find in Traffic — URL, Payloads, Headers, Response Bodies (⌘/Ctrl+F)" aria-label="Find in Traffic" data-i18n-title="networkSessionViewer.findBtnTitle" data-i18n-aria-label="networkSessionViewer.findBtnAria">
                   <span class="icon icon-sm"><svg><use href="#icon-zoom"/></svg></span>
                 </button>
-                <button type="button" class="ni-find-sub-btn" data-ni-find-prev title="Previous Match (Shift+↑)" aria-label="Previous Match">
+                <button type="button" class="ni-find-sub-btn" data-ni-find-prev title="Previous Match (Shift+↑)" aria-label="Previous Match" data-i18n-title="networkSessionViewer.findPrevTitle" data-i18n-aria-label="networkSessionViewer.findPrevAria">
                   <span class="icon icon-xs"><svg><use href="#icon-chevron-up"/></svg></span>
                 </button>
-                <button type="button" class="ni-find-sub-btn" data-ni-find-next title="Next Match (Shift+↓)" aria-label="Next Match">
+                <button type="button" class="ni-find-sub-btn" data-ni-find-next title="Next Match (Shift+↓)" aria-label="Next Match" data-i18n-title="networkSessionViewer.findNextTitle" data-i18n-aria-label="networkSessionViewer.findNextAria">
                   <span class="icon icon-xs"><svg><use href="#icon-chevron-down"/></svg></span>
                 </button>
-                <button type="button" class="ni-find-sub-btn ni-find-clear-btn" data-ni-find-clear title="Clear Find results" aria-label="Clear Find results">
+                <button type="button" class="ni-find-sub-btn ni-find-clear-btn" data-ni-find-clear title="Clear Find results" aria-label="Clear Find results" data-i18n-title="networkSessionViewer.findClear" data-i18n-aria-label="networkSessionViewer.findClear">
                   <span class="icon icon-xs"><svg><use href="#icon-x"/></svg></span>
                 </button>
               </div>
@@ -125,19 +125,19 @@
           </div>
           <div class="ni-header-center">
             <div class="ni-filter-wrap">
-              <input type="text" class="ni-filter-input" data-ni-filter placeholder="Filter Traffic…" title="Filter Traffic — click the info icon for supported syntax." />
-              <button type="button" class="ni-filter-clear" data-ni-filter-clear title="Clear filter" aria-label="Clear filter" hidden>
+              <input type="text" class="ni-filter-input" data-ni-filter placeholder="Filter Traffic…" title="Filter Traffic — click the info icon for supported syntax." data-i18n-placeholder="networkSessionViewer.filterPlaceholder" data-i18n-title="networkSessionViewer.filterTitle" />
+              <button type="button" class="ni-filter-clear" data-ni-filter-clear title="Clear filter" aria-label="Clear filter" data-i18n-title="networkSessionViewer.clearFilter" data-i18n-aria-label="networkSessionViewer.clearFilter" hidden>
                 <span class="icon icon-xs"><svg><use href="#icon-x"/></svg></span>
               </button>
-              <button type="button" class="ni-filter-help" data-ni-filter-help title="Filtering help &amp; supported syntax" aria-label="Filtering help">
+              <button type="button" class="ni-filter-help" data-ni-filter-help title="Filtering Help &amp; Supported Syntax" aria-label="Filtering help" data-i18n-title="networkSessionViewer.filterHelpTitle" data-i18n-aria-label="networkSessionViewer.filterHelpAria">
                 <span class="icon icon-xs"><svg><use href="#icon-info"/></svg></span>
               </button>
             </div>
-            <div class="nsv-filter-resize" data-nsv-filter-resize role="separator" aria-orientation="vertical" title="Drag to resize the filter (double-click to reset)"></div>
+            <div class="nsv-filter-resize" data-nsv-filter-resize role="separator" aria-orientation="vertical" title="Drag to resize the filter (double-click to reset)" data-i18n-title="networkSessionViewer.filterResizeTitle"></div>
             <span class="ni-session-count" data-ni-session-count>0</span>
           </div>
           <div class="ni-header-tools">
-            <button type="button" class="btn btn-secondary btn-sm ni-icon-btn" data-ni-layout-toggle title="Stack Request and Response vertically" aria-label="Toggle Detail Layout" aria-pressed="true">
+            <button type="button" class="btn btn-secondary btn-sm ni-icon-btn" data-ni-layout-toggle title="Stack Request and Response Vertically" aria-label="Toggle Detail Layout" aria-pressed="true" data-i18n-title="networkSessionViewer.layoutToggleTitle" data-i18n-aria-label="networkSessionViewer.layoutToggleAria">
               <span class="icon icon-sm"><svg><use href="#icon-layout-rows"/></svg></span>
             </button>
           </div>
@@ -148,18 +148,18 @@
         <div class="ni-charles-workspace" data-ni-workspace data-detail-layout="columns">
           <aside class="ni-sidebar" data-ni-session-pane data-view="sequence">
             <div class="ni-sidebar-head">
-              <button type="button" class="ni-group-toggle" data-ni-toggle-all-groups tabindex="-1" aria-hidden="true" title="Collapse all groups" aria-label="Collapse all groups">
+              <button type="button" class="ni-group-toggle" data-ni-toggle-all-groups tabindex="-1" aria-hidden="true" title="Collapse all groups" aria-label="Collapse all groups" data-i18n-title="networkSessionViewer.collapseGroups" data-i18n-aria-label="networkSessionViewer.collapseGroups">
                 <span class="ni-struct-chevron" aria-hidden="true">▼</span>
               </button>
               <div class="ni-sidebar-options">
-                <label class="ni-sidebar-option" title="Group sessions by hostname">
-                  <span class="ni-sidebar-option-label">Group by Host</span>
+                <label class="ni-sidebar-option" title="Group Sessions by Hostname" data-i18n-title="networkSessionViewer.groupByHostTitle">
+                  <span class="ni-sidebar-option-label" data-i18n="networkSessionViewer.groupByHost">Group by Host</span>
                   <input type="checkbox" data-ni-group-by-host />
                 </label>
               </div>
             </div>
             <div class="ni-sidebar-list" data-ni-session-list>
-              <div class="ni-session-empty">Loading…</div>
+              <div class="ni-session-empty" data-i18n="common.loading">Loading…</div>
             </div>
           </aside>
           <!-- Detail pane markup injected at runtime from network-detail-view.ts (DETAIL_PANE_HTML), shared with the live Network Inspector. -->

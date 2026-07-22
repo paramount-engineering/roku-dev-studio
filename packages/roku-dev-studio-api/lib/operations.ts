@@ -419,9 +419,9 @@ const INPUT_TEXT: RokuOp<{ ip: string; text: string }, unknown> = {
 
 const DEEP_LINK: RokuOp<{ ip: string; appId: string; contentId?: string; mediaType?: string }, unknown> = {
   id: 'deep_link',
-  title: 'Deep Link into an App',
+  title: 'Deep-Link into an App',
   description:
-    'Launch an app with a deep link (contentId + mediaType). Equivalent to /launch/<appId>?contentId=...&mediaType=... in ECP.',
+    'Launch an app with a Deep-Link (contentId + mediaType). Equivalent to /launch/<appId>?contentId=...&mediaType=... in ECP.',
   runIn: 'main',
   destructive: false,
   inputSchema: {

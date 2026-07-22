@@ -2,6 +2,8 @@
  * Lightweight JSON / XML syntax coloring for the telnet structured console modal (DOM spans, no deps).
  */
 
+import { S } from '@shared/strings/index.js';
+
 function span(className: string, text: string): HTMLSpanElement {
   const el = document.createElement('span');
   el.className = className;
@@ -262,7 +264,7 @@ function wrapFoldGroup(
   twisty.type = 'button';
   twisty.className = 'telnet-fold-twisty';
   twisty.setAttribute('aria-expanded', 'true');
-  twisty.setAttribute('aria-label', 'Collapse');
+  twisty.setAttribute('aria-label', S.consoleLog.collapse);
   twisty.tabIndex = -1;
   group.appendChild(twisty);
 
@@ -443,6 +445,6 @@ export function toggleFoldGroup(group: HTMLElement): void {
   const twisty = group.querySelector(':scope > .telnet-fold-twisty');
   if (twisty instanceof HTMLElement) {
     twisty.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
-    twisty.setAttribute('aria-label', collapsed ? 'Expand' : 'Collapse');
+    twisty.setAttribute('aria-label', collapsed ? S.consoleLog.expand : S.consoleLog.collapse);
   }
 }

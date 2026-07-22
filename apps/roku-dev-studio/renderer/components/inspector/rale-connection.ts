@@ -10,6 +10,7 @@ import { icon } from '../../modules/utils/index.js';
 import { DEFAULT_RALE_PORT } from '../../modules/utils/constants.js';
 import { ConnectionStatus } from '../../modules/ui/connection-status.js';
 import { getAppConnector, type AppConnector } from '../../modules/app-connector/index.js';
+import { S } from '@shared/strings/index.js';
 import type {
   DevicePanelRoot,
   DisplayResponseFn,
@@ -54,24 +55,24 @@ export function setupRaleConnection(
     switch (state.status) {
       case 'connecting':
         connectBtn.disabled = true;
-        connectBtn.textContent = 'Connecting...';
-        statusDisplay.setCustom('🟡 Connecting...', 'connecting');
+        connectBtn.textContent = S.inspector.connectingBtn;
+        statusDisplay.setCustom(S.inspector.connectingStatus, 'connecting');
         break;
       case 'reconnecting':
-        statusDisplay.setCustom('🟡 Reconnecting...', 'connecting');
+        statusDisplay.setCustom(S.inspector.reconnectingStatus, 'connecting');
         break;
       case 'connected':
         connectBtn.disabled = false;
-        connectBtn.textContent = 'Connect';
+        connectBtn.textContent = S.common.connect;
         updateConnectionUI(true);
         break;
       case 'disconnected':
       case 'idle':
         connectBtn.disabled = false;
-        connectBtn.textContent = 'Connect';
+        connectBtn.textContent = S.common.connect;
         updateConnectionUI(false);
         if (state.status === 'disconnected' && state.lastError) {
-          statusDisplay.setError('Disconnected');
+          statusDisplay.setError(S.common.disconnected);
         }
         if (state.status === 'disconnected' && state.message === 'Connection closed by device') {
           displayResponseFn({ status: 'Connection closed by device' });
@@ -96,7 +97,7 @@ export function setupRaleConnection(
     // Dev-App preflight is kept in the Inspector UX because the error message
     // here is more actionable than a generic connect failure. The connector
     // itself offers the same check for headless callers via `checkDevApp`.
-    displayResponseFn({ status: 'Checking if Dev App is active...' });
+    displayResponseFn({ status: S.inspector.checkingDevApp });
     try {
       const res = await api.query('/query/active-app');
       const queryOk = res.success && typeof res.data === 'string';
@@ -104,43 +105,42 @@ export function setupRaleConnection(
       if (!queryOk) {
         displayResponseFn(
           {
-            error:
-              'Could not verify Dev App status. The active-app query failed (network / ECP / developer mode?).',
-            hint: 'Check the device connection and developer mode, then try Connect again.'
+            error: S.inspector.couldNotVerifyDevAppQuery,
+            hint: S.inspector.checkConnectionHint
           },
           true
         );
-        statusDisplay.setError('Status Check Failed');
+        statusDisplay.setError(S.inspector.statusCheckFailed);
         userInitiatedConnect = false;
         return null;
       }
       if (!devAppActive) {
         displayResponseFn(
           {
-            error: 'Dev App is not running on the Roku device. Please launch the Sideloaded Dev App first.',
-            hint: 'Go to the Dev App tab and click "Launch" to start your sideloaded channel.'
+            error: S.inspector.devAppNotRunning,
+            hint: S.inspector.launchDevAppHint
           },
           true
         );
-        statusDisplay.setError('Dev App Not Active');
+        statusDisplay.setError(S.inspector.devAppNotActive);
         userInitiatedConnect = false;
         return null;
       }
     } catch (_) {
       displayResponseFn(
         {
-          error: 'Could not verify Dev App status.',
-          hint: 'Check the device connection and developer mode, then try Connect again.'
+          error: S.inspector.couldNotVerifyDevApp,
+          hint: S.inspector.checkConnectionHint
         },
         true
       );
-      statusDisplay.setError('Status Check Failed');
+      statusDisplay.setError(S.inspector.statusCheckFailed);
       userInitiatedConnect = false;
       return null;
     }
 
     const port = parseInt(portInput.value, 10) || DEFAULT_RALE_PORT;
-    displayResponseFn({ status: 'Waking up TrackerTask on port ' + port + '...' });
+    displayResponseFn({ status: S.inspector.wakingUpTrackerTask(port) });
     const rawLevel = logVerbositySelect ? parseInt(logVerbositySelect.value, 10) : 0;
     const logVerbosity = Number.isFinite(rawLevel) && rawLevel >= 0 && rawLevel <= 4 ? rawLevel : 0;
 
@@ -153,7 +153,7 @@ export function setupRaleConnection(
     });
 
     if (!result.ok || !result.connectionId) {
-      displayResponseFn({ error: result.error || 'Failed to connect' }, true);
+      displayResponseFn({ error: result.error || S.inspector.failedToConnect }, true);
       // The connector itself fires `setState({ status: 'disconnected' })` on
       // failure, which will reset the flag via the listener — but reset here
       // too, defensively, in case any path returns without that setState.
@@ -168,20 +168,20 @@ export function setupRaleConnection(
     // never runs and the UI would stay at "Disconnected". Calling
     // `updateConnectionUI(true)` here is idempotent if the listener did fire.
     connectBtn.disabled = false;
-    connectBtn.textContent = 'Connect';
+    connectBtn.textContent = S.common.connect;
     updateConnectionUI(true);
 
     const initData =
       result.initData && typeof result.initData === 'object' && !Array.isArray(result.initData)
         ? (result.initData as Record<string, unknown>)
         : {};
-    displayResponseFn({ status: 'Connected!', ...initData });
+    displayResponseFn({ status: S.inspector.connectedBang, ...initData });
     return { connectionId: result.connectionId, initResult: initData };
   }
 
   async function disconnect(): Promise<void> {
     await connector.disconnect();
-    displayResponseFn({ status: 'Disconnected' });
+    displayResponseFn({ status: S.common.disconnected });
   }
 
   disconnectBtn.addEventListener('click', () => {

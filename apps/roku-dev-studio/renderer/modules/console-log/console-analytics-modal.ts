@@ -17,6 +17,7 @@
 
 import { escapeHtml } from '../utils/dom.js';
 import { attachBackdropClickToClose } from '../utils/modal-backdrop-click.js';
+import { S } from '@shared/strings/index.js';
 import type {
   ConsoleFindings,
   ConsoleFinding,
@@ -187,12 +188,12 @@ function subtitleHtml(
   const crashTotal = f.crashes.reduce((n, c) => n + c.count, 0);
   const crashPart =
     crashTotal > 0
-      ? `<span class="telnet-an-sub-crash">${num(crashTotal)} crash${crashTotal === 1 ? '' : 'es'}</span> · `
+      ? `<span class="telnet-an-sub-crash">${S.consoleLog.crashCount(crashTotal)}</span> · `
       : '';
-  const summary = `${crashPart}${num(f.totalIssues)} issue${f.totalIssues === 1 ? '' : 's'} across ${num(scanned)} line${scanned === 1 ? '' : 's'}`;
+  const summary = `${crashPart}${S.consoleLog.issuesAcrossLines(f.totalIssues, scanned)}`;
   const spill =
     meta.totalCount > meta.bufferedCount
-      ? ` <span class="telnet-an-sub-note">(of ${num(meta.totalCount)} captured — older lines spilled to disk aren't scanned)</span>`
+      ? ` <span class="telnet-an-sub-note">${S.consoleLog.spillNote(meta.totalCount)}</span>`
       : '';
   const time =
     span.first && span.last
@@ -208,7 +209,7 @@ function categoryChips(f: ConsoleFindings): string {
         `<span class="telnet-an-cat"><span class="telnet-an-cat-name">${escapeHtml(category)}</span><span class="telnet-an-cat-count">${num(count)}</span></span>`
     )
     .join('');
-  return chips || `<p class="telnet-an-empty">No recognized BrightScript issues. 🎉</p>`;
+  return chips || `<p class="telnet-an-empty">${S.consoleLog.noRecognizedIssues}</p>`;
 }
 
 /** Scrollable table of the unique log lines for one issue, most-frequent first. When `navigable`, each
@@ -227,7 +228,7 @@ function issueLogTable(finding: ConsoleFinding, navigable: boolean): string {
       // Jump to the FIRST occurrence: for a dedup'd row all positions share the same text, so any is
       // "that occurrence"; the first is the top-to-bottom-reading choice.
       const navAttrs = canJump
-        ? ` class="telnet-an-log is-navigable" role="button" tabindex="0" data-nav-index="${l.indices[0]}" title="Go to this line in the log"`
+        ? ` class="telnet-an-log is-navigable" role="button" tabindex="0" data-nav-index="${l.indices[0]}" title="${S.consoleLog.goToLineTitle}"`
         : ' class="telnet-an-log"';
       const go = canJump ? `<span class="telnet-an-log-go" aria-hidden="true">→</span>` : '';
       return `<div${navAttrs}><code>${escapeHtml(l.message)}</code>${loc}<span class="telnet-an-log-count">${num(l.count)}</span>${go}</div>`;
@@ -235,7 +236,7 @@ function issueLogTable(finding: ConsoleFinding, navigable: boolean): string {
     .join('');
   const extra = finding.lines.length - LINE_CAP;
   const more =
-    extra > 0 ? `<p class="telnet-an-more">+${num(extra)} more unique line${extra === 1 ? '' : 's'}</p>` : '';
+    extra > 0 ? `<p class="telnet-an-more">${S.consoleLog.moreUniqueLines(extra)}</p>` : '';
   return `<div class="telnet-an-logs" data-issue-id="${escapeHtml(finding.id)}">${rows}</div>${more}`;
 }
 
@@ -243,7 +244,7 @@ function issuesList(f: ConsoleFindings, navigable: boolean): string {
   return f.findings
     .map((finding) => {
       const docs = finding.docsUrl
-        ? ` <a class="telnet-an-issue-docs" href="${escapeHtml(finding.docsUrl)}" target="_blank" rel="noreferrer">docs ↗</a>`
+        ? ` <a class="telnet-an-issue-docs" href="${escapeHtml(finding.docsUrl)}" target="_blank" rel="noreferrer">${S.consoleLog.docsLink}</a>`
         : '';
       return (
         `<details class="telnet-an-issue" data-issue-id="${escapeHtml(finding.id)}">` +
@@ -251,17 +252,17 @@ function issuesList(f: ConsoleFindings, navigable: boolean): string {
         `<span class="telnet-an-issue-badge">${num(finding.count)}</span>` +
         // Header = the REAL extracted message (not the paraphrased catalog title).
         `<span class="telnet-an-issue-title" title="${escapeHtml(finding.message)}">${escapeHtml(finding.message)}</span>` +
-        `<button type="button" class="telnet-an-copy" data-copy="${escapeHtml(finding.message)}" title="Copy message" aria-label="Copy error message"><span class="icon icon-xs"><svg><use href="#icon-copy"/></svg></span></button>` +
+        `<button type="button" class="telnet-an-copy" data-copy="${escapeHtml(finding.message)}" title="${S.consoleLog.copyMessageTitle}" aria-label="${S.consoleLog.copyMessageAria}"><span class="icon icon-xs"><svg><use href="#icon-copy"/></svg></span></button>` +
         `<span class="telnet-an-sev is-${finding.severity}">${escapeHtml(finding.severity)}</span>` +
         `</summary>` +
         `<div class="telnet-an-issue-body">` +
         `<p class="telnet-an-issue-kind">${escapeHtml(finding.category)} · ${escapeHtml(finding.title)}</p>` +
         `<dl class="telnet-an-meta">` +
-        `<dt>What</dt><dd>${escapeHtml(finding.meaning)}</dd>` +
-        `<dt>Cause</dt><dd>${escapeHtml(finding.cause)}</dd>` +
-        `<dt>Fix</dt><dd>${escapeHtml(finding.fix)}${docs}</dd>` +
+        `<dt>${S.consoleLog.labelWhat}</dt><dd>${escapeHtml(finding.meaning)}</dd>` +
+        `<dt>${S.consoleLog.labelCause}</dt><dd>${escapeHtml(finding.cause)}</dd>` +
+        `<dt>${S.consoleLog.labelFix}</dt><dd>${escapeHtml(finding.fix)}${docs}</dd>` +
         `</dl>` +
-        `<div class="telnet-an-occ-head">Occurrence${finding.lines.length === 1 ? '' : 's'}</div>` +
+        `<div class="telnet-an-occ-head">${S.consoleLog.occurrences(finding.lines.length)}</div>` +
         issueLogTable(finding, navigable) +
         `</div>` +
         `</details>`
@@ -278,7 +279,7 @@ function crashDomKey(c: BrsCrash): string {
 /** The backtrace stack for one crash — innermost (crash-site) frame first. */
 function backtraceHtml(c: BrsCrash): string {
   if (c.backtrace.length === 0) {
-    return `<p class="telnet-an-crash-note">The channel exited from a BrightScript crash; no backtrace was captured in this console output.</p>`;
+    return `<p class="telnet-an-crash-note">${S.consoleLog.noBacktrace}</p>`;
   }
   const frames = c.backtrace
     .map((fr) => {
@@ -304,27 +305,29 @@ function crashesList(crashes: BrsCrash[], navigable: boolean): string {
       const site = c.file
         ? `<span class="telnet-an-crash-site">${escapeHtml(c.file.split('/').pop() ?? c.file)}${c.line !== undefined ? '(' + num(c.line) + ')' : ''}</span>`
         : '';
-      const code = c.code ? ` · <span class="telnet-an-crash-code">runtime error ${escapeHtml(c.code)}</span>` : '';
+      const code = c.code
+        ? ` · <span class="telnet-an-crash-code">${S.consoleLog.runtimeErrorLabel} ${escapeHtml(c.code)}</span>`
+        : '';
       const exit = c.exited
-        ? `<span class="telnet-an-crash-exit" title="The channel process exited">exited${c.app ? ' · ' + escapeHtml(c.app) : ''}</span>`
+        ? `<span class="telnet-an-crash-exit" title="${S.consoleLog.exitedTitle}">${S.consoleLog.exitedLabel}${c.app ? ' · ' + escapeHtml(c.app) : ''}</span>`
         : '';
       const jump =
         navigable && c.indices.length > 0
-          ? `<button type="button" class="telnet-an-jump" data-nav-index="${c.indices[0]}" title="Go to this crash in the log" aria-label="Go to this crash in the log">→</button>`
+          ? `<button type="button" class="telnet-an-jump" data-nav-index="${c.indices[0]}" title="${S.consoleLog.goToCrashTitle}" aria-label="${S.consoleLog.goToCrashTitle}">→</button>`
           : '';
-      const kind = site || code ? `Crash · ${site}${code}` : 'Crash';
+      const kind = site || code ? `${S.consoleLog.crashKindLabel} · ${site}${code}` : S.consoleLog.crashKindLabel;
       return (
         `<details class="telnet-an-issue telnet-an-crash" data-crash-id="${escapeHtml(crashDomKey(c))}">` +
         `<summary>` +
         `<span class="telnet-an-issue-badge">${num(c.count)}</span>` +
         `<span class="telnet-an-issue-title" title="${escapeHtml(c.message)}">${escapeHtml(c.message)}${exit}</span>` +
-        `<button type="button" class="telnet-an-copy" data-copy="${escapeHtml(c.raw)}" title="Copy crash + backtrace" aria-label="Copy crash and backtrace"><span class="icon icon-xs"><svg><use href="#icon-copy"/></svg></span></button>` +
+        `<button type="button" class="telnet-an-copy" data-copy="${escapeHtml(c.raw)}" title="${S.consoleLog.copyCrashTitle}" aria-label="${S.consoleLog.copyCrashAria}"><span class="icon icon-xs"><svg><use href="#icon-copy"/></svg></span></button>` +
         jump +
-        `<span class="telnet-an-sev is-crash">crash</span>` +
+        `<span class="telnet-an-sev is-crash">${S.consoleLog.severityCrash}</span>` +
         `</summary>` +
         `<div class="telnet-an-issue-body">` +
         `<p class="telnet-an-issue-kind">${kind}</p>` +
-        `<div class="telnet-an-occ-head">Backtrace</div>` +
+        `<div class="telnet-an-occ-head">${S.consoleLog.backtraceHead}</div>` +
         backtraceHtml(c) +
         `</div>` +
         `</details>`
@@ -337,7 +340,7 @@ function bodyHtml(f: ConsoleFindings, navigable: boolean): string {
   // Crashes lead — they're the most severe thing in the buffer.
   const crashes =
     f.crashes.length > 0
-      ? `<section class="telnet-an-section"><h4>Crashes</h4>${crashesList(f.crashes, navigable)}</section>`
+      ? `<section class="telnet-an-section"><h4>${S.consoleLog.sectionCrashes}</h4>${crashesList(f.crashes, navigable)}</section>`
       : '';
   return (
     crashes +
@@ -345,7 +348,7 @@ function bodyHtml(f: ConsoleFindings, navigable: boolean): string {
     `<div class="telnet-an-cats">${categoryChips(f)}</div>` +
     `</section>` +
     (f.findings.length > 0
-      ? `<section class="telnet-an-section"><h4>Issues</h4>${issuesList(f, navigable)}</section>`
+      ? `<section class="telnet-an-section"><h4>${S.consoleLog.sectionIssues}</h4>${issuesList(f, navigable)}</section>`
       : '')
   );
 }
@@ -367,14 +370,14 @@ export function openConsoleAnalyticsModal(
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay telnet-an-overlay active';
   overlay.innerHTML = `
-    <div class="telnet-an-modal" role="dialog" aria-modal="true" aria-label="Console Monitor">
+    <div class="telnet-an-modal" role="dialog" aria-modal="true" aria-label="${S.consoleLog.monitorTitle}">
       <div class="telnet-an-header">
         <span class="telnet-an-icon" aria-hidden="true"><span class="icon icon-xl"><svg><use href="#icon-monitor"/></svg></span></span>
         <div class="telnet-an-title">
-          <h3>Console Monitor</h3>
+          <h3>${S.consoleLog.monitorTitle}</h3>
           <p class="telnet-an-sub" data-an-sub></p>
         </div>
-        <button type="button" class="telnet-an-close" title="Close" aria-label="Close">×</button>
+        <button type="button" class="telnet-an-close" title="${S.common.close}" aria-label="${S.common.close}">×</button>
       </div>
       <div class="telnet-an-body" data-an-body></div>
     </div>`;

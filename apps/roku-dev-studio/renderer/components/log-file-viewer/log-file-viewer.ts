@@ -10,6 +10,7 @@ import { createLogFileWindowModel } from './log-file-window-model.js';
 import { makeCenteredSearchResizable } from '../../modules/ui/header-search-resize.js';
 import { searchWidthKey } from '../../modules/ui/search-storage-keys.js';
 import { inMemorySessionStore } from '../../modules/ui/in-memory-storage.js';
+import { S, applyI18n } from '@shared/strings/index.js';
 
 /**
  * Local typed view of `window.roku` for this renderer window. Declared as a
@@ -67,6 +68,8 @@ type LogViewerRokuApi = {
 const rokuApi = window.roku as unknown as LogViewerRokuApi;
 
 async function main() {
+  // Localize the static log-file-viewer.html shell.
+  applyI18n(document);
   const statusEl = document.getElementById('logViewerStatus');
   const titleEl = document.getElementById('logViewerTitle');
   const outputEl = document.getElementById('logViewerOutput');
@@ -102,7 +105,7 @@ async function main() {
     }, 1500);
   }
 
-  setStatus('Indexing…');
+  setStatus(S.logFileViewer.indexing);
   // Inject the find bar from the shared builder (same markup source as the Console panel). No
   // Alt+ shortcut hints here — this standalone window doesn't bind them.
   if (findHostEl && !findHostEl.querySelector('.telnet-find-bar')) {
@@ -115,18 +118,18 @@ async function main() {
   try {
     res = await rokuApi.prepareLogViewerFile();
   } catch (e: unknown) {
-    setStatus(e instanceof Error ? e.message : 'Could not load file', true);
+    setStatus(e instanceof Error ? e.message : S.logFileViewer.couldNotLoadFile, true);
     return;
   }
   if (!res.success) {
-    setStatus(res.error || 'Could not load file', true);
+    setStatus(res.error || S.logFileViewer.couldNotLoadFile, true);
     return;
   }
 
   if (res.fileName) {
     setConsoleViewerModalTitlePrefix(res.fileName);
     if (titleEl) titleEl.textContent = res.fileName;
-    document.title = `Log Viewer ♦ ${res.fileName}`;
+    document.title = S.logFileViewer.documentTitle(res.fileName);
   }
   lineCount = res.lineCount ?? 0;
 
@@ -172,18 +175,18 @@ async function main() {
     try {
       text = await buildExportText();
     } catch {
-      flashStatus('Copy failed');
+      flashStatus(S.logFileViewer.copyFailed);
       return;
     }
     if (!text) {
-      flashStatus('Nothing to copy');
+      flashStatus(S.logFileViewer.nothingToCopy);
       return;
     }
     try {
       await rokuApi.copyToClipboard(text);
       flashStatus(feedbackPrefix);
     } catch {
-      flashStatus('Copy failed');
+      flashStatus(S.logFileViewer.copyFailed);
     }
   }
 
@@ -204,7 +207,7 @@ async function main() {
       };
     },
     onFilterLinesChange: (matchLines) => model.setFilter(matchLines),
-    onSelectAll: () => void copyExport('Copied entire log to clipboard')
+    onSelectAll: () => void copyExport(S.logFileViewer.copiedEntireLog)
   });
   model.bindSurface(surface);
   // Centered, drag-to-resize behavior for the find bar in the header.
@@ -225,9 +228,9 @@ async function main() {
   // load token, so at worst this costs one extra read.
   model.ensureWindow(0, Math.min(64, lineCount));
 
-  setStatus(`${lineCount.toLocaleString()} lines`);
+  setStatus(S.logFileViewer.linesCount(lineCount));
 
-  copyBtn?.addEventListener('click', () => void copyExport('Copied to clipboard'));
+  copyBtn?.addEventListener('click', () => void copyExport(S.logFileViewer.copiedToClipboard));
 
   // Console Monitor: scan the whole file in main, then open the shared analytics modal with the
   // findings. Static file → one-shot snapshot, no live refresh. The scan supersedes itself in main,
@@ -237,12 +240,12 @@ async function main() {
   monitorBtn?.addEventListener('click', () => {
     if (monitorBtn.disabled) return;
     monitorBtn.disabled = true;
-    flashStatus('Scanning for issues…');
+    flashStatus(S.logFileViewer.scanningForIssues);
     void rokuApi
       .scanLogViewerFindings()
       .then((r) => {
         if (!r.success || r.superseded || !r.findings) {
-          if (!r.superseded) flashStatus(r.error || 'Scan failed');
+          if (!r.superseded) flashStatus(r.error || S.logFileViewer.scanFailed);
           return;
         }
         monitorFindings = r.findings;

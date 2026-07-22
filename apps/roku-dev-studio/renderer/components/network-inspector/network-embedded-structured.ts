@@ -16,6 +16,7 @@
 import { escapeHtml } from '../../modules/utils/dom.js';
 import { prettyJson, prettyXml } from '../../modules/ui/structured-body.js';
 import type { StructuredConsolePayload } from '../../modules/console-log/structured-log-detect.js';
+import { S } from '@shared/strings/index.js';
 
 // Above this body size we skip embedded detection entirely (scan cost + the single non-chunked
 // <pre> we render when highlights exist). Smaller bodies still get the collapsible tree elsewhere.
@@ -215,7 +216,7 @@ export function buildEmbeddedBodyHtml(
     const label = r.kind === 'json' ? 'JSON' : 'XML';
     html +=
       `<span class="ni-embedded-structured ni-embedded-${r.kind}" role="button" tabindex="0" ` +
-      `data-ni-emb-idx="${idx}" title="Click to view formatted ${label} (opens in a modal)">` +
+      `data-ni-emb-idx="${idx}" title="${S.networkInspector.embeddedViewTitle(label)}">` +
       `${escapeHtml(raw)}</span>`;
     pos = r.end;
   }

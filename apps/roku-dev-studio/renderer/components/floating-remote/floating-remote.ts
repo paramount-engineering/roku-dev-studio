@@ -28,6 +28,7 @@ import { getPanelApi } from '../../modules/device-api/panel-api-registry.js';
 import { rendererError } from '../../modules/utils/logger.js';
 import { icon, escapeHtml, setSafeHTML } from '../../modules/utils/index.js';
 import type { DevAppApi } from '../dev-app/dev-app-types.js';
+import { S } from '@shared/strings/index.js';
 
 const ROOT_ID = 'floating-remote-root';
 const VISIBLE_CLASS = 'floating-remote-shell--visible';
@@ -72,13 +73,13 @@ export function mountFloatingRemote(): void {
   }
 
   root.innerHTML = `
-    <div class="floating-remote-shell" role="dialog" aria-label="Floating Remote">
+    <div class="floating-remote-shell" role="dialog" aria-label="${S.floatingRemote.dialogAriaLabel}">
       <div class="floating-remote-shell-handle" aria-hidden="false">
         <span class="floating-remote-shell-title">
           <span class="icon icon-sm" aria-hidden="true"><svg><use href="#icon-gamepad"/></svg></span>
-          Remote
+          ${S.floatingRemote.shellTitle}
         </span>
-        <button type="button" class="floating-remote-shell-close" title="Hide Floating Remote" aria-label="Hide Floating Remote">
+        <button type="button" class="floating-remote-shell-close" title="${S.floatingRemote.hide}" aria-label="${S.floatingRemote.hide}">
           <span class="icon icon-xs" aria-hidden="true"><svg><use href="#icon-x"/></svg></span>
         </button>
       </div>
@@ -232,9 +233,9 @@ function renderDevAppFooter(panel: HTMLElement): void {
   if (!installed) {
     setSafeHTML(
       footerEl,
-      `<button type="button" class="floating-remote-footer-btn floating-remote-footer-sideload" data-fr-sideload title="Sideload a dev channel">
+      `<button type="button" class="floating-remote-footer-btn floating-remote-footer-sideload" data-fr-sideload title="${S.floatingRemote.sideloadTitle}">
         <span class="icon icon-xs" aria-hidden="true"><svg><use href="#icon-rocket"/></svg></span>
-        Sideload Dev App
+        ${S.floatingRemote.sideloadDevApp}
       </button>`
     );
     footerEl.querySelector('[data-fr-sideload]')?.addEventListener('click', () => {
@@ -245,7 +246,7 @@ function renderDevAppFooter(panel: HTMLElement): void {
     return;
   }
 
-  const name = nameEl?.textContent?.trim() || 'Dev App';
+  const name = nameEl?.textContent?.trim() || S.floatingRemote.devAppFallbackName;
   const meta = panel.querySelector('.sideloaded-app-meta')?.textContent?.trim() || '';
   // Icon + title are one hover group; the tooltip carries the full (untruncated)
   // name plus the version line so the whole unit is self-describing.
@@ -263,8 +264,8 @@ function renderDevAppFooter(panel: HTMLElement): void {
       <span class="floating-remote-footer-name">${escapeHtml(name)}</span>
     </div>
     <div class="floating-remote-footer-actions">
-      ${canLaunch ? '<button type="button" class="floating-remote-footer-btn floating-remote-footer-launch" data-fr-launch title="Launch Dev App" aria-label="Launch Dev App"><span class="icon icon-xs" aria-hidden="true"><svg><use href="#icon-rocket"/></svg></span></button>' : ''}
-      <button type="button" class="floating-remote-footer-btn floating-remote-footer-delete" data-fr-delete title="Delete Dev App" aria-label="Delete Dev App"><span class="icon icon-xs" aria-hidden="true"><svg><use href="#icon-trash"/></svg></span></button>
+      ${canLaunch ? `<button type="button" class="floating-remote-footer-btn floating-remote-footer-launch" data-fr-launch title="${S.floatingRemote.launchDevApp}" aria-label="${S.floatingRemote.launchDevApp}"><span class="icon icon-xs" aria-hidden="true"><svg><use href="#icon-rocket"/></svg></span></button>` : ''}
+      <button type="button" class="floating-remote-footer-btn floating-remote-footer-delete" data-fr-delete title="${S.floatingRemote.deleteDevApp}" aria-label="${S.floatingRemote.deleteDevApp}"><span class="icon icon-xs" aria-hidden="true"><svg><use href="#icon-trash"/></svg></span></button>
     </div>`
   );
 
