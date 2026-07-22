@@ -1,0 +1,5 @@
+# Keep the build context small and force a clean rebuild of dist/.
+**/node_modules
+**/dist
+apps
+.git
