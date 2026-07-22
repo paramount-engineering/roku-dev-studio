@@ -15,6 +15,7 @@ import {
   type DebugTelnetDeviceRef
 } from '@shared/ipc/debug-telnet-connection-id.js';
 import { rendererWarn, rendererError } from '../../modules/utils/logger.js';
+import { S, applyI18n } from '@shared/strings/index.js';
 
 export {};
 
@@ -480,17 +481,17 @@ function renderDeviceOptions(
   // The snapshot coming from the main window is already filtered to
   // dev-enabled devices (Fiddle can't sideload anywhere else), so an empty
   // list means the user has no dev-enabled Rokus on the LAN / remote relays.
-  placeholder.textContent = devices.length ? 'Select a device' : 'No Dev Mode–enabled devices found';
+  placeholder.textContent = devices.length ? S.fiddle.selectDevice : S.fiddle.noDevices;
   placeholder.disabled = true;
   sel.appendChild(placeholder);
 
   for (const d of devices) {
     const opt = document.createElement('option');
     opt.value = d.id;
-    const label = d.name || d.modelName || 'Roku';
+    const label = d.name || d.modelName || S.fiddle.deviceFallbackName;
     // Lead with `[Remote]` on relay-reachable devices so it's the first thing
     // the user scans before the name; local devices just show "name (ip)".
-    const remotePrefix = d.isRemote ? '[Remote] ' : '';
+    const remotePrefix = d.isRemote ? S.fiddle.remotePrefix : '';
     // When Privacy Mode is on, mask the IP at the data layer — `<option>` text
     // can't be reliably blurred via CSS in Chromium's native picker, so the
     // only way to hide it from screen-share / over-the-shoulder viewers is
@@ -545,12 +546,12 @@ function applyDiagnostics(ctx: FiddleCtx, diagnostics: FiddleDiagnostic[]): void
   const diagEl = ctx.els.diagStatus;
   diagEl.classList.remove('clean');
   if (errCount === 0 && warnCount === 0) {
-    diagEl.textContent = 'No Issues';
+    diagEl.textContent = S.fiddle.noIssues;
     diagEl.classList.add('clean');
   } else if (errCount === 0) {
-    diagEl.textContent = `${warnCount} Warning${warnCount === 1 ? '' : 's'}`;
+    diagEl.textContent = S.fiddle.diagWarnings(warnCount);
   } else {
-    diagEl.textContent = `${errCount} Error${errCount === 1 ? '' : 's'}${warnCount ? `, ${warnCount} Warning${warnCount === 1 ? '' : 's'}` : ''}`;
+    diagEl.textContent = S.fiddle.diagErrors(errCount, warnCount);
   }
   diagEl.onclick = () => {
     if (!diagnostics.length) return;
@@ -626,7 +627,7 @@ function openPasswordModal(
     label.textContent = '';
     const nameSpan = document.createElement('span');
     nameSpan.className = 'fiddle-modal-device-name';
-    nameSpan.textContent = device.name || 'Roku';
+    nameSpan.textContent = device.name || S.fiddle.deviceFallbackName;
     const sepSpan = document.createElement('span');
     sepSpan.className = 'fiddle-modal-device-sep';
     sepSpan.textContent = ' — ';
@@ -657,7 +658,7 @@ function openPasswordModal(
       const pwd = input.value;
       if (!pwd) {
         errorEl.hidden = false;
-        errorEl.textContent = 'Password is required.';
+        errorEl.textContent = S.fiddle.passwordRequired;
         input.focus();
         return;
       }
@@ -687,12 +688,12 @@ function openPasswordModal(
 async function handleRun(ctx: FiddleCtx): Promise<void> {
   const deviceId = ctx.selectedDeviceId;
   if (!deviceId) {
-    setStatus(ctx, 'Select a device first.', 'error');
+    setStatus(ctx, S.fiddle.selectDeviceFirst, 'error');
     return;
   }
   const device = ctx.devices.find((d) => d.id === deviceId);
   if (!device) {
-    setStatus(ctx, 'Selected device is no longer available.', 'error');
+    setStatus(ctx, S.fiddle.deviceUnavailable, 'error');
     return;
   }
 
@@ -702,7 +703,7 @@ async function handleRun(ctx: FiddleCtx): Promise<void> {
   // Run reprompts fresh.
   const password = await resolveDevicePassword(ctx, device);
   if (!password) {
-    setStatus(ctx, 'Run cancelled — password required.', 'error');
+    setStatus(ctx, S.fiddle.runCancelledPassword, 'error');
     return;
   }
   ctx.sessionPasswords.set(device.id, password);
@@ -710,7 +711,7 @@ async function handleRun(ctx: FiddleCtx): Promise<void> {
   const code = ctx.model.getValue();
   ctx.isRunning = true;
   updateRunButton(ctx);
-  setStatus(ctx, 'Running...', 'running');
+  setStatus(ctx, S.fiddle.running, 'running');
 
   // Prepare a fresh run session and wipe all buffers so the previous run's
   // output never bleeds into the new one, even if the main-process clear IPC
@@ -733,7 +734,7 @@ async function handleRun(ctx: FiddleCtx): Promise<void> {
       ctx.currentRun = { runId: res.runId, active: false, beginSeen: false, endSeen: false };
     }
     if (!res || !res.success) {
-      setStatus(ctx, res?.error || 'Run failed.', 'error');
+      setStatus(ctx, res?.error || S.fiddle.runFailed, 'error');
       ctx.currentRun = null;
       if (res && res.authFailed) {
         // The Roku rejected this password. Drop the session copy so the next
@@ -747,13 +748,13 @@ async function handleRun(ctx: FiddleCtx): Promise<void> {
       // channel and eventually print [FIDDLE_BEGIN:…]. onTerminalData takes
       // over status updates from here, flipping to "Running on device…" when
       // BEGIN arrives and "Run complete." when END arrives.
-      setStatus(ctx, 'Sideload complete — waiting for output…', 'running');
+      setStatus(ctx, S.fiddle.sideloadWaiting, 'running');
       ctx.hasActiveFiddle = true;
       ctx.activeFiddleDeviceId = deviceId;
     }
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
-    setStatus(ctx, `Run failed: ${msg}`, 'error');
+    setStatus(ctx, S.fiddle.runFailedWith(msg), 'error');
     ctx.currentRun = null;
   } finally {
     ctx.isRunning = false;
@@ -770,14 +771,14 @@ function handleResetCode(ctx: FiddleCtx): void {
   const current = ctx.model.getValue();
   const isAlreadyDefault = current === DEFAULT_SNIPPET || current.trim() === '';
   if (!isAlreadyDefault) {
-    const ok = window.confirm('Reset the editor to the default snippet? Unsaved changes will be lost.');
+    const ok = window.confirm(S.fiddle.resetConfirm);
     if (!ok) return;
   }
   ctx.model.setValue(DEFAULT_SNIPPET);
   ctx.editor.setPosition({ lineNumber: 2, column: 5 });
   ctx.editor.focus();
   clearTerminal(ctx);
-  setStatus(ctx, 'Editor reset to default snippet.', 'success');
+  setStatus(ctx, S.fiddle.editorReset, 'success');
 }
 
 async function handleStop(ctx: FiddleCtx): Promise<void> {
@@ -790,17 +791,17 @@ async function handleStop(ctx: FiddleCtx): Promise<void> {
   const session = ctx.sessionPasswords.get(deviceId);
   ctx.isRunning = true;
   updateRunButton(ctx);
-  setStatus(ctx, 'Uninstalling...', 'running');
+  setStatus(ctx, S.fiddle.uninstalling, 'running');
   try {
     const res = await getWindowFiddle().stop({ deviceId, password: session });
     if (res && res.success) {
-      setStatus(ctx, 'BrightScript Fiddle channel removed.', 'success');
+      setStatus(ctx, S.fiddle.channelRemoved, 'success');
       if (ctx.activeFiddleDeviceId === deviceId) {
         ctx.hasActiveFiddle = false;
         ctx.activeFiddleDeviceId = null;
       }
     } else {
-      setStatus(ctx, res?.error || 'Stop failed.', 'error');
+      setStatus(ctx, res?.error || S.fiddle.stopFailed, 'error');
       if (res && res.authFailed) {
         ctx.sessionPasswords.delete(deviceId);
       }
@@ -836,7 +837,7 @@ function bindEvents(ctx: FiddleCtx): void {
   // Cmd/Ctrl + Enter runs the snippet.
   ctx.editor.addAction({
     id: 'rds-fiddle.run',
-    label: 'Run on Device',
+    label: S.fiddle.runOnDevice,
     keybindings: [ctx.monaco.KeyMod.CtrlCmd | ctx.monaco.KeyCode.Enter],
     contextMenuGroupId: 'navigation',
     run: () => {
@@ -885,7 +886,7 @@ function bindEvents(ctx: FiddleCtx): void {
         return;
       }
       ctx.suppressUntilBegin = false;
-      setStatus(ctx, 'Running on device…', 'running');
+      setStatus(ctx, S.fiddle.runningOnDevice, 'running');
     }
 
     appendTerminalChunk(ctx, payload.data);
@@ -895,7 +896,7 @@ function bindEvents(ctx: FiddleCtx): void {
     // subsequent chunks (post-run beacons, etc.) don't re-trigger anything.
     if (expectedRunId && !ctx.currentRun?.endSeen && payload.data.indexOf(endMarker) !== -1) {
       if (ctx.currentRun) ctx.currentRun.endSeen = true;
-      setStatus(ctx, 'Run complete.', 'success');
+      setStatus(ctx, S.fiddle.runComplete, 'success');
     }
   });
   bridge.onTerminalCleared(() => {
@@ -987,14 +988,14 @@ async function main(): Promise<void> {
 
   // Paint a pre-context status so the user sees "Loading editor..." before
   // Monaco has finished mounting — the real FiddleCtx isn't available yet.
-  paintStatus(els.status, 'Loading editor...', 'running');
+  paintStatus(els.status, S.fiddle.loadingEditor, 'running');
 
   let monaco: MonacoNamespace;
   try {
     monaco = await loadMonaco();
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
-    els.status.textContent = `Editor failed to load: ${msg}`;
+    els.status.textContent = S.fiddle.editorFailedToLoad(msg);
     els.status.classList.add('error');
     rendererError('[Fiddle] Monaco load failed:', err);
     return;
@@ -1043,6 +1044,8 @@ async function main(): Promise<void> {
 
   bindEvents(ctx);
   bindPrivacyMode(ctx);
+  // Localize the static fiddle.html shell (toolbar labels, tooltips, placeholder).
+  applyI18n(document);
   scheduleLint(ctx);
 
   // Wait for initial device snapshot from main.
@@ -1058,7 +1061,7 @@ async function main(): Promise<void> {
       ? payload.initialDeviceId
       : null;
     renderDeviceOptions(ctx, devices, false, forced);
-    setStatus(ctx, 'Ready.', '');
+    setStatus(ctx, S.fiddle.ready, '');
   });
 
   bridge.ready();

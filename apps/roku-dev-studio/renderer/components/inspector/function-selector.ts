@@ -2,6 +2,7 @@
 
 import { escapeHtml, setSafeHTML } from '../../modules/utils/index.js';
 import { RALE_BUILTIN_COMMANDS } from './rale-builtins.js';
+import { S } from '@shared/strings/index.js';
 import type {
   DevicePanelRoot,
   ExternalControlFunctionMeta,
@@ -37,20 +38,20 @@ export function setupFunctionSelector(
   // Render available functions in dropdown (App Connector + RALE optgroups)
   function renderFunctionsList(isConnected = false) {
     if (!isConnected) {
-      setSafeHTML(funcSelect, '<option value="">-- Connect to load functions --</option>');
+      setSafeHTML(funcSelect, `<option value="">${S.inspector.connectToLoadFunctions}</option>`);
       funcNameInput.value = '';
       if (funcParamHint) {
-        setSafeHTML(funcParamHint, 'Select a function to see parameter details');
+        setSafeHTML(funcParamHint, S.inspector.selectFunctionForParamDetails);
       }
       renderParamInputsFn([]);
       return;
     }
 
-    let html = '<option value="">-- Select a function --</option>';
-    html += '<optgroup label="App Connector Functions">';
+    let html = `<option value="">${S.inspector.selectAFunction}</option>`;
+    html += `<optgroup label="${S.inspector.appConnectorFunctions}">`;
     if (availableFunctions.length === 0) {
       html +=
-        '<option value="" disabled>No functions — implement GetExternalControlFunctions</option>';
+        `<option value="" disabled>${S.inspector.noFunctionsImplement}</option>`;
     } else {
       availableFunctions.forEach((func, index) => {
         const funcName = (func && func.name) || (typeof func === 'string' ? func : 'unknown');
@@ -58,7 +59,7 @@ export function setupFunctionSelector(
       });
     }
     html += '</optgroup>';
-    html += '<optgroup label="RALE Functions">';
+    html += `<optgroup label="${S.inspector.raleFunctions}">`;
     html += renderRaleOptgroup();
     html += '</optgroup>';
 
@@ -88,7 +89,7 @@ export function setupFunctionSelector(
         const raleCount = Object.keys(RALE_BUILTIN_COMMANDS).length;
         setSafeHTML(
           funcParamHint,
-          `<span style="color: var(--accent-green);">${appCount} App Function(s), ${raleCount} RALE command(s)</span>`
+          `<span style="color: var(--accent-green);">${S.inspector.functionCounts(appCount, raleCount)}</span>`
         );
       }
       return;
@@ -125,7 +126,7 @@ export function setupFunctionSelector(
       if (funcDesc) {
         hintHtml += `<div style="color: var(--text-secondary);">${escapeHtml(funcDesc)}</div>`;
       } else {
-        hintHtml += '<span style="color: var(--accent-green);">Ready to execute</span>';
+        hintHtml += `<span style="color: var(--accent-green);">${S.inspector.readyToExecute}</span>`;
       }
 
       if (funcParamHint) {

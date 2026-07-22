@@ -38,6 +38,7 @@ import {
   debugTelnetIpcTargetsDevice,
   type DebugTelnetIpcPayload
 } from '@shared/ipc/debug-telnet-connection-id.js';
+import { S } from '@shared/strings/index.js';
 
 export type TelnetConsoleDevice = { deviceName?: string; modelName?: string; ip: string };
 
@@ -490,13 +491,15 @@ export function setupTelnet(
           : n.toLocaleString();
     if (spilledEntryCount > 0) {
       lineCountEl.textContent = `${compact(buffered)} / ${compact(total)}`;
-      lineCountEl.title =
-        `${buffered.toLocaleString()} of ${total.toLocaleString()} lines — ` +
-        `${buffered.toLocaleString()} in memory, ${spilledEntryCount.toLocaleString()} spilled to disk` +
-        (spillCapHit ? ' (disk cap reached — older lines dropped)' : '');
+      lineCountEl.title = S.telnet.spillTooltip(
+        buffered.toLocaleString(),
+        total.toLocaleString(),
+        spilledEntryCount.toLocaleString(),
+        spillCapHit
+      );
     } else {
-      lineCountEl.textContent = `${compact(buffered)} ${buffered === 1 ? 'line' : 'lines'}`;
-      if (buffered >= 10_000) lineCountEl.title = `${buffered.toLocaleString()} lines`;
+      lineCountEl.textContent = S.telnet.linesCount(compact(buffered), buffered);
+      if (buffered >= 10_000) lineCountEl.title = S.telnet.linesCount(buffered.toLocaleString(), buffered);
       else lineCountEl.removeAttribute('title');
     }
   }
@@ -606,7 +609,7 @@ export function setupTelnet(
 
     if (connecting) {
       statusEl.className = 'telnet-status connecting';
-      statusText.textContent = 'Connecting...';
+      statusText.textContent = S.telnet.statusConnecting;
       connectBtn.disabled = true;
       if (isRelayConsole && connectSplit) {
         connectSplit.hidden = true;
@@ -614,7 +617,7 @@ export function setupTelnet(
       closeOpenTelnetSplitMenu?.();
     } else if (connected) {
       statusEl.className = 'telnet-status connected';
-      statusText.textContent = 'Connected';
+      statusText.textContent = S.common.connected;
       connectBtn.style.display = 'none';
       disconnectBtn.style.display = '';
       if (isRelayConsole && connectSplit) {
@@ -627,7 +630,7 @@ export function setupTelnet(
       if (placeholder) placeholder.remove();
     } else {
       statusEl.className = error ? 'telnet-status error' : 'telnet-status disconnected';
-      statusText.textContent = error ? `Error: ${error}` : 'Disconnected';
+      statusText.textContent = error ? S.telnet.errorStatusPrefix(error) : S.common.disconnected;
       connectBtn.style.display = '';
       connectBtn.disabled = false;
       disconnectBtn.style.display = 'none';
@@ -1081,18 +1084,18 @@ export function setupTelnet(
           updateConnectionState(true);
           const relayNote = api.isRemote
             ? options?.skipRelayBuffer
-              ? ' (via relay, skip existing logs buffer)'
-              : ' (via relay, replay buffer)'
+              ? S.telnet.relayNoteSkipBuffer
+              : S.telnet.relayNoteReplayBuffer
             : '';
-          addLogLine(`--- Connected to ${api.ip}:8085${relayNote} ---`, false);
+          addLogLine(S.telnet.lineConnectedTo(api.ip, relayNote), false);
         } else {
-          updateConnectionState(false, false, result.error || 'Connection failed');
-          addLogLine(`--- Connection failed: ${result.error || 'Unknown error'} ---`, false);
+          updateConnectionState(false, false, result.error || S.telnet.connectionFailed);
+          addLogLine(S.telnet.lineConnectionFailed(result.error || S.telnet.unknownError), false);
         }
       } catch (error) {
         const msg = errMessage(error);
         updateConnectionState(false, false, msg);
-        addLogLine(`--- Connection error: ${msg} ---`, false);
+        addLogLine(S.telnet.lineConnectionError(msg), false);
       }
     })();
     connectInFlight = promise.finally(() => {
@@ -1113,7 +1116,7 @@ export function setupTelnet(
     try {
       await api.telnetDisconnect();
       updateConnectionState(false);
-      addLogLine('--- Disconnected ---', false);
+      addLogLine(S.telnet.lineDisconnected, false);
     } catch (error) {
       rendererError('Telnet disconnect error:', error);
       throw error instanceof Error ? error : new Error(String(error));
@@ -1217,7 +1220,7 @@ export function setupTelnet(
 
       // Visual feedback
       const originalText = copyBtn.innerHTML;
-      setSafeHTML(copyBtn, '<span class="icon icon-xs"><svg><use href="#icon-check"/></svg></span> Copied!');
+      setSafeHTML(copyBtn, '<span class="icon icon-xs"><svg><use href="#icon-check"/></svg></span> ' + S.telnet.copied);
       setTimeout(() => {
         setSafeHTML(copyBtn, originalText);
       }, 2000);
@@ -1238,7 +1241,7 @@ export function setupTelnet(
 
         if (logsToSave.length === 0) {
           // Show feedback that there's nothing to save
-          setSafeHTML(saveBtn, icon('x', 'icon-xs') + ' No logs');
+          setSafeHTML(saveBtn, icon('x', 'icon-xs') + ' ' + S.telnet.saveNoLogs);
           setTimeout(() => {
             setSafeHTML(saveBtn, originalText);
           }, 2000);
@@ -1250,10 +1253,10 @@ export function setupTelnet(
         // Add header with device info and timestamp
         const header = [
           '='.repeat(80),
-          `Roku Console Logs`,
-          `Device: ${device.deviceName || device.modelName || 'Unknown'} (${device.ip})`,
-          `Saved: ${new Date().toLocaleString()}`,
-          `Total Lines: ${logsToSave.length}`,
+          S.telnet.saveHeaderTitle,
+          S.telnet.saveHeaderDevice(device.deviceName || device.modelName || S.telnet.saveHeaderUnknownDevice, device.ip),
+          S.telnet.saveHeaderSaved(new Date().toLocaleString()),
+          S.telnet.saveHeaderTotalLines(logsToSave.length),
           '='.repeat(80),
           ''
         ].join('\n');
@@ -1262,23 +1265,23 @@ export function setupTelnet(
         
         // Disable button during save
         saveBtn.disabled = true;
-        setSafeHTML(saveBtn, icon('refresh', 'icon-xs') + ' Saving...');
+        setSafeHTML(saveBtn, icon('refresh', 'icon-xs') + ' ' + S.telnet.saving);
         
         // Save to file
         const result = await window.roku.saveTextFile({
           content,
           defaultName: `roku-console-logs-${Date.now()}.txt`,
-          dialogTitle: 'Save Console Logs'
+          dialogTitle: S.telnet.saveDialogTitle
         });
         
         if (result.success) {
-          setSafeHTML(saveBtn, icon('check', 'icon-xs') + ' Saved!');
+          setSafeHTML(saveBtn, icon('check', 'icon-xs') + ' ' + S.telnet.saved);
           setTimeout(() => {
             setSafeHTML(saveBtn, originalText);
             saveBtn.disabled = false;
           }, 2000);
         } else {
-          setSafeHTML(saveBtn, icon('x', 'icon-xs') + ' Error');
+          setSafeHTML(saveBtn, icon('x', 'icon-xs') + ' ' + S.telnet.saveError);
           setTimeout(() => {
             setSafeHTML(saveBtn, originalText);
             saveBtn.disabled = false;
@@ -1287,7 +1290,7 @@ export function setupTelnet(
         }
       } catch (error) {
         rendererError('Error saving console logs:', error);
-        setSafeHTML(saveBtn, icon('x', 'icon-xs') + ' Error');
+        setSafeHTML(saveBtn, icon('x', 'icon-xs') + ' ' + S.telnet.saveError);
         saveBtn.disabled = false;
         setTimeout(() => {
           setSafeHTML(saveBtn, originalText);
@@ -1418,8 +1421,8 @@ export function setupTelnet(
         placeholder.className = 'telnet-placeholder';
         setSafeHTML(placeholder, `
           <span class="icon icon-lg"><svg><use href="#icon-terminal"/></svg></span>
-          <p>Connect to view BrightScript debug output</p>
-          <p class="telnet-hint">Requires Developer Mode enabled on the Roku device.<br>Only one telnet connection to a Roku device can be active at a time.</p>
+          <p>${S.telnet.placeholderTitle}</p>
+          <p class="telnet-hint">${S.telnet.placeholderHintDevMode}<br>${S.telnet.placeholderHintSingleConn}</p>
         `);
         // Reinsert the placeholder before the virtualizer's spacer
         // container so the cold-start sibling order (placeholder → container)
@@ -1637,12 +1640,7 @@ export function setupTelnet(
         ? (aliveMs < 1000 ? `${aliveMs}ms` : `${(aliveMs / 1000).toFixed(1)}s`)
         : null;
 
-      let summary = '--- Connection closed';
-      if (aliveStr !== null) summary += ` (alive ${aliveStr}`;
-      if (bytes >= 0) summary += `${aliveStr !== null ? ', ' : ' ('}received ${bytes} bytes`;
-      if (aliveStr !== null || bytes >= 0) summary += ')';
-      summary += ' ---';
-      addLogLine(summary, false);
+      addLogLine(S.telnet.lineConnectionClosed(aliveStr, bytes), false);
 
       // Heuristic hint: short-lived socket + zero bytes ⇒ Roku didn't
       // bind its log stream to us. Most common causes: another telnet
@@ -1653,19 +1651,19 @@ export function setupTelnet(
       // (firewall / Developer Mode off). hadError adds the OS-level
       // signal that the close was abnormal (RST etc.).
       if (aliveMs >= 0 && aliveMs < 5000 && bytes <= 0) {
-        addLogLine('--- Hint: Roku closed the socket quickly with no log data. Check that no other telnet client is connected to this device on port 8085 (BrightScript IDE, another Dev Studio window, a `telnet` terminal session, …) and that a sideloaded channel is currently running. ---', false);
+        addLogLine(S.telnet.hintNoLogData, false);
       } else if (payload.hadError) {
-        addLogLine('--- Hint: socket close was abnormal (TCP RST or similar). Roku may have rebooted or another client took the 8085 binding. ---', false);
+        addLogLine(S.telnet.hintAbnormalClose, false);
       }
 
-      updateConnectionState(false, false, payload.hadError ? 'Connection lost' : null);
+      updateConnectionState(false, false, payload.hadError ? S.telnet.connectionLost : null);
     }
   });
   
   const errorCleanup = window.roku.onTelnetError((data) => {
     const payload = data as DebugTelnetIpcPayload & { error?: string };
     if (isOurTelnetEvent(payload)) {
-      addLogLine(`--- Error: ${payload.error ?? 'Unknown error'} ---`, false);
+      addLogLine(S.telnet.lineError(payload.error ?? S.telnet.unknownError), false);
     }
   });
   

@@ -3,6 +3,8 @@
  * Does not match scheme-less or custom schemes (e.g. pkg:/) to avoid false positives.
  */
 
+import { S } from '@shared/strings/index.js';
+
 export type TextOrUrlPart = { type: 'text'; value: string } | { type: 'url'; value: string };
 
 /** Strip common trailing punctuation mistaken as part of the URL. */
@@ -53,7 +55,7 @@ export function createTelnetUrlSpan(url: string): HTMLSpanElement {
   span.dataset.url = url;
   span.setAttribute('role', 'link');
   span.textContent = url;
-  span.title = 'Click to preview in a modal · ⌘ or Ctrl+Click to open in browser';
+  span.title = S.consoleLog.urlSpanTitle;
   return span;
 }
 

@@ -7,6 +7,7 @@ import {
   runTelnetSystemCommandSession
 } from '../../modules/utils/telnet-system-command-run.js';
 import type { OutputArea } from '../../modules/ui/output-area.js';
+import { S } from '@shared/strings/index.js';
 
 export function setupTelnetCommands(
   panel: HTMLElement,
@@ -33,7 +34,7 @@ export function setupTelnetCommands(
         }
       }
 
-      outputArea.display('<span style="color: var(--accent-yellow);">Connecting to Telnet (port 8080)...</span>', true);
+      outputArea.display(`<span style="color: var(--accent-yellow);">${S.queries.connectingToTelnet}</span>`, true);
 
       try {
         await api.telnetSystemDisconnect();
@@ -41,9 +42,9 @@ export function setupTelnetCommands(
 
         const connectResult = await api.telnetSystemConnect();
         if (!connectResult.success) {
-          const errorContent = `Error: Failed to connect to Telnet (port 8080): ${connectResult.error}`;
+          const errorContent = S.queries.errorText(S.queries.failedToConnectTelnet(connectResult.error));
           outputArea.display(
-            `<span style="color: var(--accent-red);">Error: ${escapeHtml(connectResult.error || '')}</span>`,
+            `<span style="color: var(--accent-red);">${S.queries.errorText(escapeHtml(connectResult.error || ''))}</span>`,
             true
           );
           outputArea.originalContent = errorContent;
@@ -54,7 +55,7 @@ export function setupTelnetCommands(
           return;
         }
 
-        outputArea.display('<span style="color: var(--accent-yellow);">Connected. Setting up listener...</span>', true);
+        outputArea.display(`<span style="color: var(--accent-yellow);">${S.queries.connectedSettingUpListener}</span>`, true);
 
         const session = await runTelnetSystemCommandSession(api, command, {
           onStatus: (msg) =>
@@ -64,9 +65,9 @@ export function setupTelnetCommands(
             )
         });
         if (!session.ok) {
-          const errorContent = `Error: ${session.error}`;
+          const errorContent = S.queries.errorText(session.error);
           outputArea.display(
-            `<span style="color: var(--accent-red);">Error: ${escapeHtml(session.error)}</span>`,
+            `<span style="color: var(--accent-red);">${S.queries.errorText(escapeHtml(session.error))}</span>`,
             true
           );
           outputArea.originalContent = errorContent;
@@ -96,10 +97,10 @@ export function setupTelnetCommands(
             true
           );
         } else {
-          outputArea.originalContent = 'No output received';
+          outputArea.originalContent = S.queries.noOutputReceived;
           outputArea.display(
             `<div style="color: var(--accent-yellow);">
-            <p>No output received from command.</p>
+            <p>${S.queries.noOutputFromCommand}</p>
           </div>`,
             true
           );
@@ -109,8 +110,8 @@ export function setupTelnetCommands(
       } catch (error: unknown) {
         await api.telnetSystemDisconnect().catch(() => {});
         const msg = error instanceof Error ? error.message : String(error);
-        const errorContent = `Error: ${msg}`;
-        outputArea.display(`<span style="color: var(--accent-red);">Error: ${escapeHtml(msg)}</span>`, true);
+        const errorContent = S.queries.errorText(msg);
+        outputArea.display(`<span style="color: var(--accent-red);">${S.queries.errorText(escapeHtml(msg))}</span>`, true);
         outputArea.originalContent = errorContent;
       }
 

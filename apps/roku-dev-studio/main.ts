@@ -867,7 +867,7 @@ async function clearCacheAndReload(appState: AppWindowState) {
     type: 'question',
     title: 'Clear Cache and Reload',
     message: 'Clear all Cached Data and Reload the app?',
-    detail: 'This will clear: saved passwords, remote locations, device list state, minimized/collapsed state, and any other stored data. The app will then Reload. This cannot be undone.',
+    detail: 'This will clear: saved passwords, Remote Locations, device list state, minimized/collapsed state, and any other stored data. The app will then Reload. This cannot be undone.',
     buttons: ['Cancel', 'Clear and Reload'],
     defaultId: 0,
     cancelId: 0

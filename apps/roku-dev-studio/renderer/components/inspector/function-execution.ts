@@ -9,6 +9,7 @@ import { buildRaleArgsFromParamValues } from '../action-scripts/rale-command-par
 import { validateAndNormalizeRaleCommandArgs } from '../action-scripts/rale-command-validator.js';
 import { getAppConnector } from '../../modules/app-connector/index.js';
 import { rendererError } from '../../modules/utils/logger.js';
+import { S } from '@shared/strings/index.js';
 import type {
   DevicePanelRoot,
   DisplayResponseFn,
@@ -64,7 +65,7 @@ export function setupFunctionExecution(
     args: Record<string, unknown>
   ): Promise<{ success?: boolean; data?: unknown; error?: string }> {
     if (!getConnectionId()) {
-      return { success: false, error: 'Not connected' };
+      return { success: false, error: S.inspector.notConnected };
     }
     const connector = getAppConnector(panel, api);
     return await connector.command(command, args);
@@ -73,7 +74,7 @@ export function setupFunctionExecution(
   async function executeRaleBuiltin(selectionKey: string, functionParams: unknown[]) {
     const def = RALE_BUILTIN_COMMANDS[selectionKey as keyof typeof RALE_BUILTIN_COMMANDS];
     if (!def) {
-      displayResponseFn({ error: 'Unknown RALE Builtin' }, true);
+      displayResponseFn({ error: S.inspector.unknownRaleBuiltin }, true);
       return;
     }
     const cmd = def.command;
@@ -92,7 +93,7 @@ export function setupFunctionExecution(
     }
 
     if (cmd === 'getNodeById') {
-      displayResponseFn({ status: 'Sending getNodeById...', args });
+      displayResponseFn({ status: S.inspector.sending('getNodeById'), args });
       const result = await sendCommand('getNodeById', args);
       if (ralePayloadOk(result)) {
         onGetNodeByIdSuccess?.(args as { path: unknown[]; id: string });
@@ -102,21 +103,21 @@ export function setupFunctionExecution(
     }
 
     if (cmd === 'getNodeByName') {
-      displayResponseFn({ status: 'Sending getNodeByName...', args });
+      displayResponseFn({ status: S.inspector.sending('getNodeByName'), args });
       const result = await sendCommand('getNodeByName', args);
       formatRaleCommandResponse(result, 'getNodeByName', displayResponseFn);
       return;
     }
 
     if (cmd === 'getRegistrySections') {
-      displayResponseFn({ status: 'Sending getRegistrySections...', args: {} });
+      displayResponseFn({ status: S.inspector.sending('getRegistrySections'), args: {} });
       const result = await sendCommand('getRegistrySections', args);
       formatRaleCommandResponse(result, 'getRegistrySections', displayResponseFn);
       return;
     }
 
     if (cmd === 'clearRegistry') {
-      displayResponseFn({ status: 'Sending clearRegistry...', args: {} });
+      displayResponseFn({ status: S.inspector.sending('clearRegistry'), args: {} });
       const result = await sendCommand('clearRegistry', args);
       if (!ralePayloadOk(result)) {
         formatRaleCommandResponse(result, 'clearRegistry', displayResponseFn);
@@ -127,7 +128,7 @@ export function setupFunctionExecution(
     }
 
     if (cmd === 'addRegistrySection') {
-      displayResponseFn({ status: 'Sending addRegistrySection...', args });
+      displayResponseFn({ status: S.inspector.sending('addRegistrySection'), args });
       const result = await sendCommand('addRegistrySection', args);
       if (!ralePayloadOk(result)) {
         formatRaleCommandResponse(result, 'addRegistrySection', displayResponseFn);
@@ -138,7 +139,7 @@ export function setupFunctionExecution(
     }
 
     if (cmd === 'removeRegistrySection') {
-      displayResponseFn({ status: 'Sending removeRegistrySection...', args });
+      displayResponseFn({ status: S.inspector.sending('removeRegistrySection'), args });
       const result = await sendCommand('removeRegistrySection', args);
       if (!ralePayloadOk(result)) {
         formatRaleCommandResponse(result, 'removeRegistrySection', displayResponseFn);
@@ -149,7 +150,7 @@ export function setupFunctionExecution(
     }
 
     if (cmd === 'addRegistryField') {
-      displayResponseFn({ status: 'Sending addRegistryField...', args });
+      displayResponseFn({ status: S.inspector.sending('addRegistryField'), args });
       const result = await sendCommand('addRegistryField', args);
       if (!ralePayloadOk(result)) {
         formatRaleCommandResponse(result, 'addRegistryField', displayResponseFn);
@@ -160,7 +161,7 @@ export function setupFunctionExecution(
     }
 
     if (cmd === 'removeRegistryField') {
-      displayResponseFn({ status: 'Sending removeRegistryField...', args });
+      displayResponseFn({ status: S.inspector.sending('removeRegistryField'), args });
       const result = await sendCommand('removeRegistryField', args);
       if (!ralePayloadOk(result)) {
         formatRaleCommandResponse(result, 'removeRegistryField', displayResponseFn);
@@ -171,7 +172,7 @@ export function setupFunctionExecution(
     }
 
     if (cmd === 'editRegistryField') {
-      displayResponseFn({ status: 'Sending editRegistryField...', args });
+      displayResponseFn({ status: S.inspector.sending('editRegistryField'), args });
       const result = await sendCommand('editRegistryField', args);
       if (!ralePayloadOk(result)) {
         formatRaleCommandResponse(result, 'editRegistryField', displayResponseFn);
@@ -181,17 +182,17 @@ export function setupFunctionExecution(
       return;
     }
 
-    displayResponseFn({ error: 'Unhandled RALE builtin: ' + cmd }, true);
+    displayResponseFn({ error: S.inspector.unhandledRaleBuiltin(cmd) }, true);
   }
 
   // Fetch available functions from the Roku app
   async function fetchAvailableFunctions(setFunctionsFn: (funcs: unknown[]) => void) {
-    displayResponseFn({ status: 'Fetching available functions...' });
+    displayResponseFn({ status: S.inspector.fetchingFunctions });
 
     const result = await sendCommand('getExternalControlFunctions', {});
 
     if (!result) {
-      displayResponseFn({ error: 'No response from device' }, true);
+      displayResponseFn({ error: S.inspector.noResponseFromDevice }, true);
       return [];
     }
 
@@ -203,28 +204,28 @@ export function setupFunctionExecution(
         const list = Array.isArray(normalized) ? normalized : [];
         setFunctionsFn(list);
         displayResponseFn({
-          status: 'Found ' + list.length + ' function(s)',
+          status: S.inspector.foundFunctions(list.length),
           functions: list
         });
         return list;
       } else if (!inner.success) {
         displayResponseFn(
           {
-            error: 'getExternalControlFunctions returned false — make sure the SceneGraph scene implements this function',
+            error: S.inspector.getExternalControlFunctionsReturnedFalse,
             data: inner
           },
           true
         );
         return [];
       } else {
-        displayResponseFn({ status: 'No functions returned', data: inner });
+        displayResponseFn({ status: S.inspector.noFunctionsReturned, data: inner });
         return [];
       }
     } else {
       rendererError('Fetch functions result:', result);
       displayResponseFn(
         {
-          error: result.error || 'Failed to fetch functions',
+          error: result.error || S.inspector.failedToFetchFunctions,
           details: result
         },
         true
@@ -237,7 +238,7 @@ export function setupFunctionExecution(
   async function executeFunction() {
     const selectionKey = funcNameInput.value.trim();
     if (!selectionKey) {
-      displayResponseFn({ error: 'Please select a function to execute' }, true);
+      displayResponseFn({ error: S.inspector.selectFunctionToExecute }, true);
       return;
     }
 
@@ -248,7 +249,7 @@ export function setupFunctionExecution(
       return;
     }
 
-    displayResponseFn({ status: `Executing ${selectionKey}...`, params: functionParams });
+    displayResponseFn({ status: S.inspector.executing(selectionKey), params: functionParams });
 
     const result = await sendCommand('executeExternalControlFunction', {
       functionName: selectionKey,
@@ -266,7 +267,7 @@ export function setupFunctionExecution(
       } else {
         displayResponseFn(
           {
-            error: 'Function execution failed',
+            error: S.inspector.functionExecutionFailed,
             data: execData
           },
           true

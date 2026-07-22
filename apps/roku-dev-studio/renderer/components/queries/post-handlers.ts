@@ -2,6 +2,7 @@
 
 import { escapeHtml } from '../../modules/utils/index.js';
 import type { OutputArea } from '../../modules/ui/output-area.js';
+import { S } from '@shared/strings/index.js';
 
 export function setupPostButtons(
   panel: HTMLElement,
@@ -31,17 +32,17 @@ export function setupPostButtons(
         if (result.success && result.data) {
           outputArea.displayStructured(result.data);
         } else {
-          const err = result.error || 'Unknown error';
-          const errorContent = `Error: ${err}`;
-          outputArea.display(`<span style="color: var(--accent-red);">Error: ${escapeHtml(err)}</span>`, true);
+          const err = result.error || S.queries.unknownError;
+          const errorContent = S.queries.errorText(err);
+          outputArea.display(`<span style="color: var(--accent-red);">${S.queries.errorText(escapeHtml(err))}</span>`, true);
           outputArea.originalContent = errorContent;
         }
 
         checkOutputExpansion(outputArea.container);
       } catch (e) {
         const err = e instanceof Error ? e.message : String(e);
-        outputArea.display(`<span style="color: var(--accent-red);">Error: ${escapeHtml(err)}</span>`, true);
-        outputArea.originalContent = `Error: ${err}`;
+        outputArea.display(`<span style="color: var(--accent-red);">${S.queries.errorText(escapeHtml(err))}</span>`, true);
+        outputArea.originalContent = S.queries.errorText(err);
       } finally {
         (btn as HTMLButtonElement).disabled = false;
         if (originalText != null) btn.textContent = originalText;

@@ -27,6 +27,7 @@ import type {
   NetworkFindScope
 } from '@shared/network-inspector/content-search';
 import { isLikelyRedos, looksLikeRegex, MAX_REGEX_PATTERN_LENGTH } from '@shared/platform/text-match.js';
+import { S } from '@shared/strings/index.js';
 
 /** The four user-facing scope chips, mapped to the engine's granular scopes. */
 type ChipKey = 'url' | 'request' | 'response' | 'headers';
@@ -34,10 +35,10 @@ type ChipKey = 'url' | 'request' | 'response' | 'headers';
 const CHIP_ORDER: ChipKey[] = ['url', 'request', 'response', 'headers'];
 
 const CHIP_LABELS: Record<ChipKey, { label: string; short: string; title: string }> = {
-  url: { label: 'URL', short: 'URL', title: 'Request URL, hostname and SNI' },
-  request: { label: 'Request Body', short: 'Req', title: 'Request payload' },
-  response: { label: 'Response Body', short: 'Resp', title: 'Response payload' },
-  headers: { label: 'Headers', short: 'Hdr', title: 'Request and response headers' }
+  url: { label: S.networkInspector.chipUrl, short: 'URL', title: S.networkInspector.chipUrlTitle },
+  request: { label: S.networkInspector.chipRequest, short: 'Req', title: S.networkInspector.chipRequestTitle },
+  response: { label: S.networkInspector.chipResponse, short: 'Resp', title: S.networkInspector.chipResponseTitle },
+  headers: { label: S.networkInspector.chipHeaders, short: 'Hdr', title: S.networkInspector.chipHeadersTitle }
 };
 
 const CHIP_SCOPES: Record<ChipKey, NetworkFindScope[]> = {
@@ -230,13 +231,13 @@ export function createNetworkFindModal(cb: FindModalCallbacks): FindModalHandle 
       return;
     }
     if (navOrder.length === 0) {
-      countEl.textContent = 'No matches';
+      countEl.textContent = S.networkInspector.noMatches;
       countEl.classList.add('is-empty');
       return;
     }
     countEl.classList.remove('is-empty');
-    const hits = totalHits > 0 ? ` · ${totalHits} hit${totalHits === 1 ? '' : 's'}` : '';
-    countEl.textContent = `${navOrder.length} request${navOrder.length === 1 ? '' : 's'}${hits}`;
+    const hits = totalHits > 0 ? S.networkInspector.hitCount(totalHits) : '';
+    countEl.textContent = `${S.networkInspector.requestCount(navOrder.length)}${hits}`;
   }
 
   /** Update each term row's per-term hit count over the currently VISIBLE matches. */
@@ -400,16 +401,16 @@ export function createNetworkFindModal(cb: FindModalCallbacks): FindModalHandle 
       <div class="ni-find-color-swatches">
         ${PALETTE.map(
           (c) =>
-            `<button type="button" class="ni-find-color-swatch${c === term.color ? ' is-on' : ''}" data-color="${c}" style="background:${c}" title="${c}" aria-label="Set color ${c}"></button>`
+            `<button type="button" class="ni-find-color-swatch${c === term.color ? ' is-on' : ''}" data-color="${c}" style="background:${c}" title="${c}" aria-label="${S.networkInspector.setColorAria(c)}"></button>`
         ).join('')}
-        <button type="button" class="ni-find-color-custom" data-open-picker title="Custom color…" aria-label="Custom color"></button>
+        <button type="button" class="ni-find-color-custom" data-open-picker title="${S.networkInspector.customColorTitle}" aria-label="${S.networkInspector.customColorAria}"></button>
       </div>
       <div class="ni-find-picker" data-picker hidden>
         <div class="ni-find-picker-sv" data-picker-sv><span class="ni-find-picker-thumb" data-sv-thumb></span></div>
         <div class="ni-find-picker-hue" data-picker-hue><span class="ni-find-picker-hue-thumb" data-hue-thumb></span></div>
         <div class="ni-find-picker-foot">
           <span class="ni-find-picker-preview" data-picker-preview></span>
-          <input type="text" class="ni-find-picker-hex" data-picker-hex maxlength="7" spellcheck="false" autocomplete="off" aria-label="Hex color" />
+          <input type="text" class="ni-find-picker-hex" data-picker-hex maxlength="7" spellcheck="false" autocomplete="off" aria-label="${S.networkInspector.hexColorAria}" />
         </div>
       </div>`;
 
@@ -550,22 +551,22 @@ export function createNetworkFindModal(cb: FindModalCallbacks): FindModalHandle 
     row.innerHTML = `
       <div class="ni-find-term-top">
         <span class="ni-find-swatch-cell">
-          <button type="button" class="ni-find-swatch" data-term-color style="background:${term.color}" title="Change color" aria-label="Change term color"></button>
+          <button type="button" class="ni-find-swatch" data-term-color style="background:${term.color}" title="${S.networkInspector.changeColorTitle}" aria-label="${S.networkInspector.changeColorAria}"></button>
         </span>
         <div class="ni-find-box">
-          <input type="text" class="ni-find-input" data-term-input placeholder="Find" spellcheck="false" autocomplete="off" aria-label="Search term" />
-          <button type="button" class="ni-find-inline-btn ni-find-clear-input" data-term-clear title="Clear text" aria-label="Clear text">×</button>
-          <button type="button" class="ni-find-inline-btn ni-find-opt${term.caseSensitive ? ' is-on' : ''}" data-term-opt="case" title="Match case" aria-pressed="${term.caseSensitive}">Aa</button>
-          <button type="button" class="ni-find-inline-btn ni-find-opt${term.regex ? ' is-on' : ''}" data-term-opt="regex" title="Use regular expression" aria-pressed="${term.regex}">.*</button>
+          <input type="text" class="ni-find-input" data-term-input placeholder="${S.networkInspector.findPlaceholder}" spellcheck="false" autocomplete="off" aria-label="${S.networkInspector.searchTermAria}" />
+          <button type="button" class="ni-find-inline-btn ni-find-clear-input" data-term-clear title="${S.networkInspector.clearText}" aria-label="${S.networkInspector.clearText}">×</button>
+          <button type="button" class="ni-find-inline-btn ni-find-opt${term.caseSensitive ? ' is-on' : ''}" data-term-opt="case" title="${S.networkInspector.matchCase}" aria-pressed="${term.caseSensitive}">Aa</button>
+          <button type="button" class="ni-find-inline-btn ni-find-opt${term.regex ? ' is-on' : ''}" data-term-opt="regex" title="${S.networkInspector.useRegexTitle}" aria-pressed="${term.regex}">.*</button>
         </div>
-        <button type="button" class="ni-find-term-delete" data-term-delete title="Delete search entry" aria-label="Delete search entry">${TRASH_SVG}</button>
+        <button type="button" class="ni-find-term-delete" data-term-delete title="${S.networkInspector.deleteSearchEntry}" aria-label="${S.networkInspector.deleteSearchEntry}">${TRASH_SVG}</button>
         <span class="ni-find-term-hits" data-term-hits="${term.id}" aria-live="polite"></span>
       </div>
       <div class="ni-find-scope-row">${chips}</div>
       <div class="ni-find-rx-hint" data-rx-hint hidden>
         <span class="ni-find-rx-icon">.*</span>
-        <span>This looks like a regular expression.</span>
-        <button type="button" class="ni-find-rx-enable" data-rx-enable>Use Regex</button>
+        <span>${S.networkInspector.regexLikeHint}</span>
+        <button type="button" class="ni-find-rx-enable" data-rx-enable>${S.networkInspector.useRegexBtn}</button>
       </div>`;
 
     const input = row.querySelector<HTMLInputElement>('[data-term-input]');
@@ -722,21 +723,21 @@ export function createNetworkFindModal(cb: FindModalCallbacks): FindModalHandle 
     const el = document.createElement('div');
     el.className = 'modal-overlay ni-find-overlay active';
     el.innerHTML = `
-      <div class="ni-find-modal" role="dialog" aria-modal="true" aria-label="Find in Network traffic">
+      <div class="ni-find-modal" role="dialog" aria-modal="true" aria-label="${S.networkInspector.findAriaLabel}">
         <div class="ni-find-header">
-          <h3 class="ni-find-title">Find in Traffic</h3>
-          <button type="button" class="ni-find-close" title="Close (Esc)" aria-label="Close">×</button>
+          <h3 class="ni-find-title">${S.networkInspector.findTitle}</h3>
+          <button type="button" class="ni-find-close" title="${S.networkInspector.closeEsc}" aria-label="${S.common.close}">×</button>
         </div>
         <div class="ni-find-body">
           <div class="ni-find-terms" data-find-terms></div>
-          <button type="button" class="ni-find-add" data-find-add title="Add another search entry">+ Search More…</button>
+          <button type="button" class="ni-find-add" data-find-add title="${S.networkInspector.addSearchEntryTitle}">${S.networkInspector.addSearchEntry}</button>
           <ul class="ni-find-note">
-            <li>Each term gets a color; a request shows every matching term's color.</li>
-            <li>Whitespace is ignored — minified and pretty-printed bodies both match.</li>
-            <li>Binary (base64) bodies aren't searched.</li>
-            <li>Press <kbd>Enter</kbd> to jump to the first match and close.</li>
-            <li><kbd>Shift</kbd>+<kbd>Enter</kbd> adds another term (up to ${MAX_TERMS}).</li>
-            <li><kbd>Shift</kbd>+<kbd>↑</kbd>/<kbd>↓</kbd> (or the header arrows) move between matches.</li>
+            <li>${S.networkInspector.noteColor}</li>
+            <li>${S.networkInspector.noteWhitespace}</li>
+            <li>${S.networkInspector.noteBinary}</li>
+            <li>${S.networkInspector.noteEnter}</li>
+            <li>${S.networkInspector.noteShiftEnter(MAX_TERMS)}</li>
+            <li>${S.networkInspector.noteArrows}</li>
           </ul>
         </div>
       </div>`;

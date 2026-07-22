@@ -1,10 +1,11 @@
-// Roku Secret Screens modal (opened from Remote tab and Query / Device Queries footer)
+// Roku Secret Screens modal (opened from Remote Section and Query / Device Queries footer)
 
 import {
   openModalOverlayActiveFromOpener,
   closeModalWithOriginMotion
 } from '../../modules/utils/modal-origin-motion.js';
 import { attachBackdropClickToClose } from '../../modules/utils/modal-backdrop-click.js';
+import { S } from '@shared/strings/index.js';
 
 interface SecretSegment {
   label: string;
@@ -26,7 +27,7 @@ function repeatKeys(key: string, n: number): string[] {
 const SECRET_SCREENS_ORDERED: SecretScreenDef[] = [
   {
     id: 'developerSettings',
-    title: 'Developer Settings',
+    title: S.queries.developerSettings,
     segments: [
       { label: 'Home×3', keys: repeatKeys('Home', 3) },
       { label: 'Up×2', keys: repeatKeys('Up', 2) },
@@ -39,7 +40,7 @@ const SECRET_SCREENS_ORDERED: SecretScreenDef[] = [
   },
   {
     id: 'secretScreen',
-    title: 'Secret Screen',
+    title: S.queries.secretScreen,
     segments: [
       { label: 'Home×5', keys: repeatKeys('Home', 5) },
       { label: 'Fwd×3', keys: repeatKeys('Fwd', 3) },
@@ -48,7 +49,7 @@ const SECRET_SCREENS_ORDERED: SecretScreenDef[] = [
   },
   {
     id: 'secretScreen2',
-    title: 'Secret Screen 2',
+    title: S.queries.secretScreen2,
     segments: [
       { label: 'Home×5', keys: repeatKeys('Home', 5) },
       { label: 'Up', keys: ['Up'] },
@@ -60,7 +61,7 @@ const SECRET_SCREENS_ORDERED: SecretScreenDef[] = [
   },
   {
     id: 'wifiSecret',
-    title: 'Wi-Fi Secret Screen',
+    title: S.queries.wifiSecret,
     segments: [
       { label: 'Home×5', keys: repeatKeys('Home', 5) },
       { label: 'Up', keys: ['Up'] },
@@ -72,7 +73,7 @@ const SECRET_SCREENS_ORDERED: SecretScreenDef[] = [
   },
   {
     id: 'antennaSecret',
-    title: 'Antenna Secret Screen',
+    title: S.queries.antennaSecret,
     segments: [
       { label: 'Home×5', keys: repeatKeys('Home', 5) },
       { label: 'Fwd', keys: ['Fwd'] },
@@ -84,7 +85,7 @@ const SECRET_SCREENS_ORDERED: SecretScreenDef[] = [
   },
   {
     id: 'channelInfo',
-    title: 'Channel Info',
+    title: S.queries.channelInfo,
     segments: [
       { label: 'Home×3', keys: repeatKeys('Home', 3) },
       { label: 'Up×2', keys: repeatKeys('Up', 2) },
@@ -97,7 +98,7 @@ const SECRET_SCREENS_ORDERED: SecretScreenDef[] = [
   },
   {
     id: 'network',
-    title: 'Network',
+    title: S.queries.network,
     segments: [
       { label: 'Home×5', keys: repeatKeys('Home', 5) },
       { label: 'Right', keys: ['Right'] },
@@ -109,7 +110,7 @@ const SECRET_SCREENS_ORDERED: SecretScreenDef[] = [
   },
   {
     id: 'deviceReboot',
-    title: 'Reboot',
+    title: S.queries.reboot,
     reboot: true,
     dangerButton: true,
     segments: [
@@ -200,13 +201,13 @@ function renderSecretScreensList(mountEl: HTMLElement) {
     btn.className = `btn btn-sm secret-sequence-btn ${def.dangerButton ? 'btn-danger' : 'btn-primary'}`;
     btn.dataset.secretSequence = def.id;
     btn.innerHTML =
-      '<span class="icon icon-xs"><svg><use href="#icon-play"/></svg></span> ' + 'Run Sequence';
+      '<span class="icon icon-xs"><svg><use href="#icon-play"/></svg></span> ' + S.queries.runSequence;
     head.appendChild(btn);
 
     const row = document.createElement('div');
     row.className = 'secret-screen-segments';
     row.setAttribute('role', 'group');
-    row.setAttribute('aria-label', `${def.title} Key Sequence`);
+    row.setAttribute('aria-label', S.queries.keySequenceAria(def.title));
 
     for (const seg of def.segments) {
       const box = document.createElement('span');
@@ -237,7 +238,7 @@ async function sendSecretSequence(modal: HTMLElement, sequenceId: string, block:
   if (!cardBlock) return;
 
   if (def.reboot) {
-    const ok = window.confirm('This sends the key sequence that reboots the Roku. Continue?');
+    const ok = window.confirm(S.queries.confirmReboot);
     if (!ok) return;
   }
 

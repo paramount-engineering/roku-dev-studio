@@ -34,7 +34,7 @@ This repository is an **npm workspace** monorepo. Run **`npm install`** and **`n
 
 | Term | One-line meaning |
 |------|------------------|
-| **ECP** | External Control Protocol — Roku's HTTP API on port `8060` (keypress, launch, query, deep link). |
+| **ECP** | External Control Protocol — Roku's HTTP API on port `8060` (KeyPress, Launch, Query, Deep-Link). |
 | **Telnet 8085 / 8080** | The BrightScript debug console (`8085`) and dev system commands (`8080`) on a Developer-Mode Roku. |
 | **RALE** | Roku Advanced Layout Editor — Roku's SceneGraph inspection protocol over a TCP socket (default port `49200`), spoken by the `TrackerTask` component. |
 | **TrackerTask** | The BrightScript component channel developers add to their app to make it reachable from RALE / App Connector — see [`roku-components/README.md`](roku-components/README.md). |
@@ -73,13 +73,13 @@ Roku Dev Studio is available for:
 - **Works Locally & Remotely:** Control devices on local network or via remote server
 ![Remote](images/REMOTE.png)
 
-### 📊 Device Performance (Remote tab)
+### 📊 Device Performance (Remote Section)
 - **Live charts:** On **Remote**, turn on **Show Device Performance** for a quad layout with **CPU**, **memory**, and **object** charts (count or memory view where available).
 - **When it applies:** Charts reflect the running app when the device has **Developer Mode** on and your **sideloaded dev channel** is in the foreground.
 - **Settings → Device Performance:** Tune chart **sample interval** and **history** window; optional **Remember 'Show Device Performance'** restores whether the quad was on **per device** between sessions.
 - **Action Scripts:** Add **Device Performance** steps to capture chart cards into run results (for example PNGs included when you export results to PDF).
 
-![Remote tab with Show Device Performance on — BrightScript object counts (top right), CPU usage with total/user/kernel hover tooltip (bottom left), and System Memory used/resident/anonymous/shared/limit chart (bottom right)](images/REMOTE_WITH_DEVICE_PERFORMANCE.png)
+![Remote Section with Show Device Performance on — BrightScript object counts (top right), CPU usage with total/user/kernel hover tooltip (bottom left), and System Memory used/resident/anonymous/shared/limit chart (bottom right)](images/REMOTE_WITH_DEVICE_PERFORMANCE.png)
 
 ### 🔍 Device Discovery
 - **Automatic SSDP Discovery:** Automatically finds Roku devices on your local network
@@ -91,7 +91,7 @@ Roku Dev Studio is available for:
 - **Installed Apps Browser:** View and launch all apps installed on the device
 - **App Icons:** Display actual app icons loaded from the device in a grid layout
 - **Custom App Launch:** Launch any app by entering App ID
-- **Deep Linking:** Launch apps with specific content (movies, shows, channels)
+- **Deep-Linking:** Launch apps with specific content (movies, shows, channels)
 - **HDMI Inputs:** Switch to HDMI inputs on TV devices
 - **Remote Launch:** Launch apps on remote devices via server
 ![Apps](images/APPS.png)
@@ -226,14 +226,14 @@ Open with `Ctrl/Cmd+,` (or *Roku Dev Studio → Settings* on macOS, *File → Se
 - **Encrypted dev-password storage:** "Remember password" persists the Dev Password through Electron `safeStorage` — backed by macOS Keychain, Windows DPAPI, secret-service, or kwallet where available; UI shows the storage backend status (`encrypted` / `unencrypted` / `unavailable`)
 - **Settings persistence:** Preferences and device connections saved between sessions
 - **Quick Remote (Dev App tab):** Compact remote strip plus drag-drop sideload right next to the screenshot pane
-- **Secret Screens modal:** One-click presets for Roku's hidden screens — Developer Settings, Secret Screens 1–3, Wi-Fi info, Channel Info, Reboot variants — opened from the Remote tab and Query footer
+- **Secret Screens modal:** One-click presets for Roku's hidden screens — Developer Settings, Secret Screens 1–3, Wi-Fi info, Channel Info, Reboot variants — opened from the Remote Section and Query footer
 - **TrackerTask Export:** *Save TrackerTask.xml* from the App Connector → Integration Guide drops a ready-to-ship copy into your channel
 - **Clear Cache and Reload:** Wipe Chromium cache without restarting the app (File menu)
 
 
 ## Remote Server Setup
 
-Roku Dev Studio can control devices over the internet using a remote server bridge. This lets you manage devices in remote locations without being on the same network as the desktop app.
+Roku Dev Studio can control devices over the internet using a remote server bridge. This lets you manage devices in Remote Locations without being on the same network as the desktop app.
 
 ### 1. Run the relay server
 

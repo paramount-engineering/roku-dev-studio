@@ -16,6 +16,7 @@ import {
   conditionValueToInputString,
   stringifyPathForTextarea
 } from './builder-step-helpers.js';
+import { S } from '@shared/strings/index.js';
 
 /** Step JSON object in the builder (loose shape; validated on export). */
 type BuilderStep = Record<string, unknown>;
@@ -48,7 +49,7 @@ export function createBuilderStepForm(ctx) {
       if (type === 'systemTelnet' && !builderStepTypeSelect.querySelector('option[value="systemTelnet"]')) {
         const opt = document.createElement('option');
         opt.value = 'systemTelnet';
-        opt.textContent = 'Plugins / Memory (legacy JSON)';
+        opt.textContent = S.actionScripts.legacyPluginsMemoryOption;
         builderStepTypeSelect.appendChild(opt);
       }
       builderStepTypeSelect.value = type;

@@ -13,16 +13,17 @@ import {
   getPresetsForMediaType,
   type DeeplinkPreset
 } from './deeplink-presets.js';
+import { S } from '@shared/strings/index.js';
 
 export type MediaTypeEntry = { value: string; label: string };
 
 const SETTINGS_KEY = 'deeplink-custom-media-types';
 
 const DEFAULT_MEDIA_TYPES: MediaTypeEntry[] = [
-  { value: 'movie', label: 'Movie' },
-  { value: 'series', label: 'Series' },
-  { value: 'episode', label: 'Episode' },
-  { value: 'live', label: 'Live' }
+  { value: 'movie', label: S.deeplink.mediaTypeMovie },
+  { value: 'series', label: S.deeplink.mediaTypeSeries },
+  { value: 'episode', label: S.deeplink.mediaTypeEpisode },
+  { value: 'live', label: S.deeplink.mediaTypeLive }
 ];
 
 let customTypes: MediaTypeEntry[] = [];
@@ -55,18 +56,18 @@ function validateEntry(entry: MediaTypeEntry, excludeIndex?: number): string | n
   const label = normalizeLabel(entry.label);
   const labelKey = label.toLowerCase();
 
-  if (!label) return 'Enter a display name.';
-  if (!value) return 'Enter an ECP value.';
+  if (!label) return S.deeplink.enterDisplayName;
+  if (!value) return S.deeplink.enterEcpValue;
   if (!/^[a-z][a-z0-9_-]*$/.test(value)) {
-    return 'Value must start with a letter and use only letters, numbers, hyphens, or underscores.';
+    return S.deeplink.valueFormat;
   }
 
   for (const builtIn of DEFAULT_MEDIA_TYPES) {
     if (normalizeValue(builtIn.value) === value) {
-      return `"${builtIn.label}" is already a built-in media type.`;
+      return S.deeplink.builtInConflict(builtIn.label);
     }
     if (builtIn.label.toLowerCase() === labelKey) {
-      return `"${builtIn.label}" is already a built-in media type.`;
+      return S.deeplink.builtInConflict(builtIn.label);
     }
   }
 
@@ -74,10 +75,10 @@ function validateEntry(entry: MediaTypeEntry, excludeIndex?: number): string | n
     if (excludeIndex !== undefined && i === excludeIndex) continue;
     const existing = customTypes[i];
     if (normalizeValue(existing.value) === value) {
-      return 'A media type with this value already exists.';
+      return S.deeplink.valueExists;
     }
     if (existing.label.toLowerCase() === labelKey) {
-      return 'A media type with this name already exists.';
+      return S.deeplink.nameExists;
     }
   }
 
@@ -99,7 +100,7 @@ export function populateMediaTypeSelect(select: HTMLSelectElement): void {
 
   const placeholder = document.createElement('option');
   placeholder.value = '';
-  placeholder.textContent = '-- Select --';
+  placeholder.textContent = S.deeplink.mediaTypePlaceholder;
   select.appendChild(placeholder);
 
   for (const entry of getAllMediaTypes()) {
@@ -196,10 +197,7 @@ function promptDeleteMediaTypeWithPresets(
   }
 
   const count = linkedPresets.length;
-  lead.textContent =
-    count === 1
-      ? `"${entry.label}" is used by 1 saved deep link and cannot be removed until you decide what to do with it.`
-      : `"${entry.label}" is used by ${count} saved deep links and cannot be removed until you decide what to do with them.`;
+  lead.textContent = S.deeplink.mediaTypeInUse(entry.label, count);
   list.innerHTML = linkedPresets
     .map((preset) => `<li>${escapeHtml(preset.name)}</li>`)
     .join('');
@@ -249,10 +247,10 @@ function customEntryRowHtml(entry: MediaTypeEntry, index: number): string {
       <span class="deeplink-media-type-entry-value">${value}</span>
     </div>
     <div class="deeplink-media-type-entry-actions">
-      <button type="button" class="btn btn-secondary btn-icon deeplink-media-type-edit-btn" data-custom-edit="${index}" title="Edit" aria-label="Edit ${label}">
+      <button type="button" class="btn btn-secondary btn-icon deeplink-media-type-edit-btn" data-custom-edit="${index}" title="${S.common.edit}" aria-label="${S.deeplink.editAria(label)}">
         <span class="icon icon-xs"><svg><use href="#icon-edit-3"/></svg></span>
       </button>
-      <button type="button" class="btn btn-danger btn-icon deeplink-media-type-delete-btn" data-custom-delete="${index}" title="Delete" aria-label="Delete ${label}">
+      <button type="button" class="btn btn-danger btn-icon deeplink-media-type-delete-btn" data-custom-delete="${index}" title="${S.common.delete}" aria-label="${S.deeplink.deleteAria(label)}">
         <span class="icon icon-xs"><svg><use href="#icon-trash"/></svg></span>
       </button>
     </div>
@@ -265,17 +263,17 @@ function editEntryRowHtml(entry: MediaTypeEntry, index: number): string {
   return `<div class="deeplink-media-type-entry deeplink-media-type-entry--editing" data-custom-index="${index}">
     <div class="deeplink-media-type-edit-fields">
       <label class="deeplink-media-type-edit-field">
-        <span class="deeplink-media-type-edit-label">Display name</span>
+        <span class="deeplink-media-type-edit-label">${S.deeplink.editDisplayNameLabel}</span>
         <input type="text" class="deeplink-media-type-edit-label-input" value="${label}" maxlength="64" />
       </label>
       <label class="deeplink-media-type-edit-field">
-        <span class="deeplink-media-type-edit-label">ECP value</span>
+        <span class="deeplink-media-type-edit-label">${S.deeplink.editEcpValueLabel}</span>
         <input type="text" class="deeplink-media-type-edit-value-input" value="${value}" maxlength="64" />
       </label>
     </div>
     <div class="deeplink-media-type-entry-actions">
-      <button type="button" class="btn btn-primary btn-sm deeplink-media-type-save-edit-btn" data-custom-save="${index}">Save</button>
-      <button type="button" class="btn btn-secondary btn-sm deeplink-media-type-cancel-edit-btn" data-custom-cancel="${index}">Cancel</button>
+      <button type="button" class="btn btn-primary btn-sm deeplink-media-type-save-edit-btn" data-custom-save="${index}">${S.common.save}</button>
+      <button type="button" class="btn btn-secondary btn-sm deeplink-media-type-cancel-edit-btn" data-custom-cancel="${index}">${S.common.cancel}</button>
     </div>
   </div>`;
 }
@@ -285,7 +283,7 @@ function renderCustomEntriesList(): void {
   if (!list) return;
 
   if (customTypes.length === 0) {
-    list.innerHTML = '<p class="deeplink-media-types-empty">No custom media types yet.</p>';
+    list.innerHTML = `<p class="deeplink-media-types-empty">${S.deeplink.noCustomMediaTypes}</p>`;
     return;
   }
 

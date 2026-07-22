@@ -12,56 +12,57 @@
  * offline viewer needs — so this module deliberately owns only the parts that are truly identical.
  */
 import type { RequestPaneTab, ResponsePaneTab } from './network-detail.js';
+import { S } from '@shared/strings/index.js';
 
 /** The `.ni-inspector-pane` request/response markup. Inject into a host element, then query the
  *  `[data-ni-*]` hooks from it. Kept byte-for-byte in sync with the CSS contracts in index.html. */
 export const DETAIL_PANE_HTML = `
-  <div class="ni-inspector-empty">Select a session to inspect request and response.</div>
+  <div class="ni-inspector-empty">${S.networkInspector.emptyDetail}</div>
   <div class="ni-contents-split">
     <div class="ni-contents-pane" data-ni-request-pane>
       <div class="ni-contents-pane-head">
         <div class="ni-pane-head-left">
-          <div class="ni-contents-label">Request</div>
+          <div class="ni-contents-label">${S.networkInspector.request}</div>
           <div class="ni-pane-tabs" data-ni-pane-tabs="request">
-            <button type="button" class="ni-pane-tab active" data-ni-req-tab="overview">Overview</button>
-            <button type="button" class="ni-pane-tab" data-ni-req-tab="body">Body</button>
+            <button type="button" class="ni-pane-tab active" data-ni-req-tab="overview">${S.networkInspector.tabOverview}</button>
+            <button type="button" class="ni-pane-tab" data-ni-req-tab="body">${S.networkInspector.tabBody}</button>
           </div>
           <div class="ni-copy-menu" data-ni-copy-menu>
-            <button type="button" class="ni-pane-tool-btn ni-copy-main" data-ni-copy="request" title="Copy request body" aria-label="Copy request body">
+            <button type="button" class="ni-pane-tool-btn ni-copy-main" data-ni-copy="request" title="${S.networkInspector.copyRequestBody}" aria-label="${S.networkInspector.copyRequestBody}">
               <span class="icon icon-xs"><svg><use href="#icon-copy"/></svg></span>
             </button>
-            <button type="button" class="ni-pane-tool-btn ni-copy-caret" data-ni-copy-menu-toggle title="More copy options" aria-haspopup="true" aria-expanded="false" aria-label="More copy options" hidden>
+            <button type="button" class="ni-pane-tool-btn ni-copy-caret" data-ni-copy-menu-toggle title="${S.networkInspector.moreCopyOptions}" aria-haspopup="true" aria-expanded="false" aria-label="${S.networkInspector.moreCopyOptions}" hidden>
               <span class="icon icon-xs"><svg><use href="#icon-chevron-down"/></svg></span>
             </button>
             <div class="ni-copy-dropdown" data-ni-copy-dropdown role="menu" hidden>
               <button type="button" class="ni-copy-dropdown-item" data-ni-copy-item="body" role="menuitem">
-                <span class="ni-copy-item-icon icon icon-xs"><svg><use href="#icon-copy"/></svg></span>Copy Body
+                <span class="ni-copy-item-icon icon icon-xs"><svg><use href="#icon-copy"/></svg></span>${S.networkInspector.copyBody}
               </button>
               <button type="button" class="ni-copy-dropdown-item" data-ni-copy-item="curl" role="menuitem">
-                <span class="ni-copy-item-icon icon icon-xs"><svg><use href="#icon-terminal"/></svg></span>Copy as cURL
+                <span class="ni-copy-item-icon icon icon-xs"><svg><use href="#icon-terminal"/></svg></span>${S.networkInspector.copyAsCurl}
               </button>
               <button type="button" class="ni-copy-dropdown-item" data-ni-copy-item="har" role="menuitem">
-                <span class="ni-copy-item-icon icon icon-xs"><svg><use href="#icon-download"/></svg></span>Copy as HAR
+                <span class="ni-copy-item-icon icon icon-xs"><svg><use href="#icon-download"/></svg></span>${S.networkInspector.copyAsHar}
               </button>
             </div>
           </div>
         </div>
         <span class="ni-pane-badges">
-          <span class="ni-pane-badge ni-pane-badge--truncated" data-ni-req-truncated hidden title="The captured copy of this body exceeded the inspector's display cap, so what's shown here is incomplete. The full body was still delivered upstream. Use Copy for the captured portion.">Body Truncated</span>
+          <span class="ni-pane-badge ni-pane-badge--truncated" data-ni-req-truncated hidden title="${S.networkInspector.bodyTruncatedRequestTitle}">${S.networkInspector.bodyTruncated}</span>
         </span>
         <div class="ni-pane-head-right" data-ni-req-format-wrap hidden>
-          <button type="button" class="ni-pane-tool-btn is-active" data-ni-wrap-toggle="request" title="Disable word wrap" aria-pressed="true" aria-label="Toggle word wrap">
+          <button type="button" class="ni-pane-tool-btn is-active" data-ni-wrap-toggle="request" title="${S.networkInspector.disableWordWrap}" aria-pressed="true" aria-label="${S.networkInspector.toggleWordWrap}">
             <span class="icon icon-xs"><svg><use href="#icon-wrap-text"/></svg></span>
           </button>
           <div class="ni-pane-head-format">
-            <label class="ni-body-format-label">Format</label>
+            <label class="ni-body-format-label">${S.networkInspector.formatLabel}</label>
             <select class="ni-body-format-select" data-ni-body-format="request">
-              <option value="auto" selected>Auto</option>
-              <option value="json">JSON</option>
-              <option value="xml">XML</option>
-              <option value="raw">Raw</option>
+              <option value="auto" selected>${S.networkInspector.formatAuto}</option>
+              <option value="json">${S.networkInspector.formatJson}</option>
+              <option value="xml">${S.networkInspector.formatXml}</option>
+              <option value="raw">${S.networkInspector.formatRaw}</option>
             </select>
-            <button type="button" class="ni-pane-tool-btn ni-format-info-btn" data-ni-req-format-info hidden title="Why is this shown as raw text?" aria-label="Why is this shown as raw text?">
+            <button type="button" class="ni-pane-tool-btn ni-format-info-btn" data-ni-req-format-info hidden title="${S.networkInspector.whyRawText}" aria-label="${S.networkInspector.whyRawText}">
               <span class="icon icon-xs"><svg><use href="#icon-info"/></svg></span>
             </button>
           </div>
@@ -72,31 +73,31 @@ export const DETAIL_PANE_HTML = `
     <div class="ni-contents-pane" data-ni-response-pane>
       <div class="ni-contents-pane-head">
         <div class="ni-pane-head-left">
-          <div class="ni-contents-label">Response</div>
+          <div class="ni-contents-label">${S.networkInspector.response}</div>
           <div class="ni-pane-tabs" data-ni-pane-tabs="response">
-            <button type="button" class="ni-pane-tab active" data-ni-res-tab="headers">Headers</button>
-            <button type="button" class="ni-pane-tab" data-ni-res-tab="body">Body</button>
+            <button type="button" class="ni-pane-tab active" data-ni-res-tab="headers">${S.networkInspector.tabHeaders}</button>
+            <button type="button" class="ni-pane-tab" data-ni-res-tab="body">${S.networkInspector.tabBody}</button>
           </div>
-          <button type="button" class="ni-pane-tool-btn" data-ni-copy="response" title="Copy response body" aria-label="Copy response body">
+          <button type="button" class="ni-pane-tool-btn" data-ni-copy="response" title="${S.networkInspector.copyResponseBody}" aria-label="${S.networkInspector.copyResponseBody}">
             <span class="icon icon-xs"><svg><use href="#icon-copy"/></svg></span>
           </button>
         </div>
         <span class="ni-pane-badges">
-          <span class="ni-pane-badge ni-pane-badge--truncated" data-ni-res-truncated hidden title="The captured copy of this body exceeded the inspector's display cap, so what's shown here is incomplete. The full body was still delivered to the Roku. Use Copy for the captured portion.">Body Truncated</span>
+          <span class="ni-pane-badge ni-pane-badge--truncated" data-ni-res-truncated hidden title="${S.networkInspector.bodyTruncatedResponseTitle}">${S.networkInspector.bodyTruncated}</span>
         </span>
         <div class="ni-pane-head-right" data-ni-res-format-wrap hidden>
-          <button type="button" class="ni-pane-tool-btn is-active" data-ni-wrap-toggle="response" title="Disable word wrap" aria-pressed="true" aria-label="Toggle word wrap">
+          <button type="button" class="ni-pane-tool-btn is-active" data-ni-wrap-toggle="response" title="${S.networkInspector.disableWordWrap}" aria-pressed="true" aria-label="${S.networkInspector.toggleWordWrap}">
             <span class="icon icon-xs"><svg><use href="#icon-wrap-text"/></svg></span>
           </button>
           <div class="ni-pane-head-format">
-            <label class="ni-body-format-label">Format</label>
+            <label class="ni-body-format-label">${S.networkInspector.formatLabel}</label>
             <select class="ni-body-format-select" data-ni-body-format="response">
-              <option value="auto" selected>Auto</option>
-              <option value="json">JSON</option>
-              <option value="xml">XML</option>
-              <option value="raw">Raw</option>
+              <option value="auto" selected>${S.networkInspector.formatAuto}</option>
+              <option value="json">${S.networkInspector.formatJson}</option>
+              <option value="xml">${S.networkInspector.formatXml}</option>
+              <option value="raw">${S.networkInspector.formatRaw}</option>
             </select>
-            <button type="button" class="ni-pane-tool-btn ni-format-info-btn" data-ni-res-format-info hidden title="Why is this shown as raw text?" aria-label="Why is this shown as raw text?">
+            <button type="button" class="ni-pane-tool-btn ni-format-info-btn" data-ni-res-format-info hidden title="${S.networkInspector.whyRawText}" aria-label="${S.networkInspector.whyRawText}">
               <span class="icon icon-xs"><svg><use href="#icon-info"/></svg></span>
             </button>
           </div>
@@ -207,6 +208,6 @@ export function syncBodyWrap(opts: {
     const on = el.dataset.niWrapToggle === 'response' ? opts.responseWrap : opts.requestWrap;
     el.classList.toggle('is-active', on);
     el.setAttribute('aria-pressed', on ? 'true' : 'false');
-    el.title = on ? 'Disable word wrap' : 'Enable word wrap';
+    el.title = on ? S.networkInspector.disableWordWrap : S.networkInspector.enableWordWrap;
   });
 }

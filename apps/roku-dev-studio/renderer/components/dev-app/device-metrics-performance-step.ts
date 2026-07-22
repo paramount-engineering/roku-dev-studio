@@ -1,5 +1,5 @@
 /**
- * Action Script "devicePerformance" step: capture the Remote tab performance quad cards
+ * Action Script "devicePerformance" step: capture the Remote Section performance quad cards
  * (same DOM as live metrics) via canvas rasterization (`modern-screenshot` / DOM → PNG),
  * without switching device inner tabs or using `capturePage` viewport crops.
  */
@@ -10,6 +10,7 @@ import {
 } from '../action-scripts/action-registry.js';
 import type { ObjectCountRow, ProcStatParsed } from './remote-metrics-charts.js';
 import { domToPng } from '../../vendor/modern-screenshot.mjs';
+import { S } from '@shared/strings/index.js';
 
 /** Internal only: max wall time to wait for first usable metrics sample (not shown in UI). */
 const INTERNAL_FIRST_SAMPLE_WAIT_MS = 2000;
@@ -43,33 +44,33 @@ function performanceCapturePlan(chart: DevicePerformanceChartId): PerformanceCap
   switch (chart) {
     case 'cpu':
       return [
-        { sel: SEL_CPU, caption: 'CPU Usage (Graph)', cpuMode: 'percent' },
+        { sel: SEL_CPU, caption: S.devApp.captionCpuGraph, cpuMode: 'percent' },
         {
           sel: SEL_CPU,
-          caption: 'CPU Usage (Process)',
+          caption: S.devApp.captionCpuProcess,
           cpuMode: 'process',
           skipIfNoProcStat: true
         }
       ];
     case 'memory':
-      return [{ sel: SEL_MEM, caption: 'System Memory' }];
+      return [{ sel: SEL_MEM, caption: S.devApp.captionSystemMemory }];
     case 'objects':
       return [
-        { sel: SEL_OBJ, caption: 'BrightScript Objects (Count)', objectsMode: 'count' },
-        { sel: SEL_OBJ, caption: 'BrightScript Objects (Memory)', objectsMode: 'memory' }
+        { sel: SEL_OBJ, caption: S.devApp.captionObjectsCount, objectsMode: 'count' },
+        { sel: SEL_OBJ, caption: S.devApp.captionObjectsMemory, objectsMode: 'memory' }
       ];
     case 'aboveAll':
       return [
-        { sel: SEL_CPU, caption: 'CPU Usage (Graph)', cpuMode: 'percent' },
+        { sel: SEL_CPU, caption: S.devApp.captionCpuGraph, cpuMode: 'percent' },
         {
           sel: SEL_CPU,
-          caption: 'CPU Usage (Process)',
+          caption: S.devApp.captionCpuProcess,
           cpuMode: 'process',
           skipIfNoProcStat: true
         },
-        { sel: SEL_MEM, caption: 'System Memory' },
-        { sel: SEL_OBJ, caption: 'BrightScript Objects (Count)', objectsMode: 'count' },
-        { sel: SEL_OBJ, caption: 'BrightScript Objects (Memory)', objectsMode: 'memory' }
+        { sel: SEL_MEM, caption: S.devApp.captionSystemMemory },
+        { sel: SEL_OBJ, caption: S.devApp.captionObjectsCount, objectsMode: 'count' },
+        { sel: SEL_OBJ, caption: S.devApp.captionObjectsMemory, objectsMode: 'memory' }
       ];
     default: {
       const _exhaustive: never = chart;
@@ -289,7 +290,7 @@ async function captureQuadCardDomPng(getWrap: () => HTMLElement | null, selector
     }
     if (box.width < 4 || box.height < 4) {
       throw new Error(
-        'Performance card has no visible bounds. Enable “Show Device Performance” (quad layout) on the Remote tab.'
+        'Performance card has no visible bounds. Enable “Show Device Performance” (quad layout) on the Remote Section.'
       );
     }
     const dpr =
@@ -361,18 +362,18 @@ export async function runDevicePerformanceCaptureStep(
   const logNotes: string[] = [];
 
   if (!isDevicePerformanceChartId(chart)) {
-    return { success: false, error: 'Invalid Device Performance chart type.' };
+    return { success: false, error: S.devApp.invalidChartType };
   }
   if (!developerEnabled) {
     return {
       success: false,
-      error: 'Developer Mode must be enabled on this device to capture performance metrics.'
+      error: S.devApp.developerModeRequired
     };
   }
 
   let wrap = getWrap();
   if (!wrap) {
-    return { success: false, error: 'Remote metrics root not found for this device tab.' };
+    return { success: false, error: S.devApp.remoteMetricsRootNotFound };
   }
 
   let autoEnabledQuad = false;
@@ -380,8 +381,7 @@ export async function runDevicePerformanceCaptureStep(
     if (typeof ensureDevicePerformanceQuadVisible !== 'function') {
       return {
         success: false,
-        error:
-          'Device Performance cards are hidden. On the Remote tab, turn on “Show Device Performance” (quad layout), then run this step again.'
+        error: S.devApp.devicePerfHidden
       };
     }
     const turnedOn = await ensureDevicePerformanceQuadVisible();
@@ -389,8 +389,7 @@ export async function runDevicePerformanceCaptureStep(
     if (!turnedOn || wrap.getAttribute('data-remote-layout') !== 'quad') {
       return {
         success: false,
-        error:
-          'Could not show Device Performance automatically. On the Remote tab, turn on “Show Device Performance” (quad layout), then run this step again.'
+        error: S.devApp.couldNotShowDevicePerf
       };
     }
     autoEnabledQuad = true;
@@ -408,13 +407,13 @@ export async function runDevicePerformanceCaptureStep(
   try {
     while (Date.now() < deadline) {
       if (shouldStop && shouldStop()) {
-        return { success: false, error: 'Stopped' };
+        return { success: false, error: S.devApp.stopped };
       }
       await forceLiveSample();
       if (satisfiedForWait(cloneLiveRings())) break;
       const slept = await sleep(120, shouldStop);
       if (!slept) {
-        return { success: false, error: 'Stopped' };
+        return { success: false, error: S.devApp.stopped };
       }
     }
   } finally {
@@ -443,9 +442,7 @@ export async function runDevicePerformanceCaptureStep(
   const procStatAvailable = wrapHasProcStat(wrap);
   const plan = planRaw.filter((p) => {
     if (p.skipIfNoProcStat && !procStatAvailable) {
-      logNotes.push(
-        `Skipped "${p.caption}" capture — device has not produced <proc-stat> yet (requires Roku OS 15.2+).`
-      );
+      logNotes.push(S.devApp.skippedNoProcStat(p.caption));
       return false;
     }
     return true;
@@ -488,9 +485,7 @@ export async function runDevicePerformanceCaptureStep(
   if (!any) {
     return {
       success: false,
-      error:
-        logNotes[0] ||
-        'Could not capture Device Performance cards. Ensure the quad is visible and the window is not minimized.',
+      error: logNotes[0] || S.devApp.couldNotCaptureDevicePerf,
       logNotes: logNotes.length > 0 ? logNotes : undefined
     };
   }
@@ -506,7 +501,7 @@ export async function runDevicePerformanceCaptureStep(
     pngDataUrls,
     pngCaptions,
     textSummary: autoEnabledQuad
-      ? 'Show Device Performance (quad layout) was turned on automatically for this step.'
+      ? S.devApp.devicePerfAutoEnabledSummary
       : undefined,
     logNotes: logNotes.length > 0 ? logNotes : undefined
   };

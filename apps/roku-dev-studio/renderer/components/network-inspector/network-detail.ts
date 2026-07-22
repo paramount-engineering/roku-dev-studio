@@ -6,6 +6,7 @@ import {
   type EmbeddedPane
 } from './network-embedded-structured.js';
 import { MAX_STRUCTURED_BYTES, renderStructuredInto } from '../../modules/ui/structured-body.js';
+import { S } from '@shared/strings/index.js';
 
 export type BodyFormatMode = 'auto' | 'json' | 'xml' | 'raw';
 export type RequestPaneTab = 'overview' | 'body';
@@ -135,12 +136,12 @@ function renderMediaPreview(msg: NetworkHttpMessage | undefined): string | null 
   const mime = mediaMime(msg);
   const approxBytes = bodyByteSize(msg);
   if (msg.bodyTruncated) {
-    return `<div class="ni-body-large-note">Binary ${escapeHtml(mime || 'content')} was truncated during capture — preview unavailable. Use Copy for the captured base64.</div>`;
+    return `<div class="ni-body-large-note">${S.networkInspector.binaryTruncatedNote(escapeHtml(mime || S.networkInspector.mimeContent))}</div>`;
   }
   const dataUrl = `data:${mime || 'application/octet-stream'};base64,${msg.body}`;
-  const caption = `<div class="ni-media-caption">${escapeHtml(mime || 'binary')} · ${formatBytes(approxBytes)}</div>`;
+  const caption = `<div class="ni-media-caption">${escapeHtml(mime || S.networkInspector.mimeBinary)} · ${formatBytes(approxBytes)}</div>`;
   if (mime.startsWith('image/')) {
-    return `<div class="ni-media-wrap"><img class="ni-media-el ni-media-img" src="${dataUrl}" alt="Response image preview" />${caption}</div>`;
+    return `<div class="ni-media-wrap"><img class="ni-media-el ni-media-img" src="${dataUrl}" alt="${S.networkInspector.responseImageAlt}" />${caption}</div>`;
   }
   if (mime.startsWith('video/')) {
     return `<div class="ni-media-wrap"><video class="ni-media-el" src="${dataUrl}" controls preload="metadata"></video>${caption}</div>`;
@@ -148,7 +149,7 @@ function renderMediaPreview(msg: NetworkHttpMessage | undefined): string | null 
   if (mime.startsWith('audio/')) {
     return `<div class="ni-media-wrap"><audio class="ni-media-audio" src="${dataUrl}" controls preload="metadata"></audio>${caption}</div>`;
   }
-  return `<div class="ni-pane-empty">Binary content (${escapeHtml(mime || 'unknown type')}, ~${formatBytes(approxBytes)}) — not previewable. Use Copy for the captured base64.</div>`;
+  return `<div class="ni-pane-empty">${S.networkInspector.binaryNotPreviewable(escapeHtml(mime || S.networkInspector.mimeUnknownType), formatBytes(approxBytes))}</div>`;
 }
 
 // Very large bodies are split into line-chunks so the browser can paint only the
@@ -263,7 +264,7 @@ function renderBodyContent(
 
 function renderHeadersTable(msg: NetworkHttpMessage | undefined): string {
   if (!msg?.headers || Object.keys(msg.headers).length === 0) {
-    return `<div class="ni-pane-empty">(no headers)</div>`;
+    return `<div class="ni-pane-empty">${S.networkInspector.noHeaders}</div>`;
   }
   const statusLine =
     msg.statusCode != null
@@ -294,11 +295,11 @@ function relatedDns(events: ParsedNetworkEvent[], ev: ParsedNetworkEvent): Parse
 
 function requestStatusLabel(ev: ParsedNetworkEvent): string {
   const code = ev.httpResponse?.statusCode;
-  if (code === 0) return 'Pending';
+  if (code === 0) return S.networkInspector.statusPending;
   if (code == null) return '—';
-  if (code >= 200 && code < 400) return 'Complete';
-  if (code >= 400) return 'Failed';
-  return 'Complete';
+  if (code >= 200 && code < 400) return S.networkInspector.statusComplete;
+  if (code >= 400) return S.networkInspector.statusFailed;
+  return S.networkInspector.statusComplete;
 }
 
 function remoteAddress(ev: ParsedNetworkEvent): string {
@@ -334,8 +335,8 @@ function isInspectableUrl(url: string): boolean {
 
 function overviewUrlRow(url: string): string {
   const display = url || '—';
-  if (!isInspectableUrl(display)) return overviewRow('URL', display);
-  return `<tr><th>URL</th><td><button type="button" class="ni-overview-url-link" data-ni-url="${escapeHtml(display)}" title="View URL and query parameters">${escapeHtml(display)}</button></td></tr>`;
+  if (!isInspectableUrl(display)) return overviewRow(S.networkInspector.ovUrl, display);
+  return `<tr><th>${S.networkInspector.ovUrl}</th><td><button type="button" class="ni-overview-url-link" data-ni-url="${escapeHtml(display)}" title="${S.networkInspector.viewUrlTitle}">${escapeHtml(display)}</button></td></tr>`;
 }
 
 function overviewSection(title: string): string {
@@ -343,28 +344,24 @@ function overviewSection(title: string): string {
 }
 
 function buildHttpsRequestFallback(ev: ParsedNetworkEvent): string {
-  const host = ev.sni || ev.hostname || ev.destIp || 'unknown-host';
+  const host = ev.sni || ev.hostname || ev.destIp || S.networkInspector.unknownHost;
   const port = ev.destPort === 443 ? '' : `:${ev.destPort ?? 443}`;
-  return `CONNECT ${host}${port} (HTTPS — encrypted)
-
-Hotspot capture only sees the TLS handshake (SNI + IP), not JSON bodies.
-
-Enable MITM in Settings and route the channel through Roku Dev Studio to inspect bodies.`;
+  return S.networkInspector.httpsRequestFallback(host, port);
 }
 
 function buildHttpsResponseFallback(ev: ParsedNetworkEvent): string {
-  if (ev.mitm) return '(no response body captured)';
-  return 'HTTPS response body is encrypted. Enable the MITM proxy to inspect bodies here.';
+  if (ev.mitm) return S.networkInspector.noResponseBodyCaptured;
+  return S.networkInspector.httpsResponseEncrypted;
 }
 
 export function renderRequestOverview(ev: ParsedNetworkEvent, allEvents: ParsedNetworkEvent[]): string {
   if (ev.type !== 'http-transaction') {
     const rows = [
-      overviewRow('Type', ev.type),
-      overviewRow('Time', ev.timestamp || '—'),
-      overviewRow('Device', ev.deviceIp, 'device-ip'),
-      overviewRow('Host', ev.hostname || ev.sni || '—'),
-      overviewRow('Destination', ev.destIp ? `${ev.destIp}:${ev.destPort ?? ''}` : '—')
+      overviewRow(S.networkInspector.ovType, ev.type),
+      overviewRow(S.networkInspector.ovTime, ev.timestamp || '—'),
+      overviewRow(S.networkInspector.ovDevice, ev.deviceIp, 'device-ip'),
+      overviewRow(S.networkInspector.ovHost, ev.hostname || ev.sni || '—'),
+      overviewRow(S.networkInspector.ovDestination, ev.destIp ? `${ev.destIp}:${ev.destPort ?? ''}` : '—')
     ];
     return `<div class="ni-overview-scroll"><table class="ni-overview-table">${rows.join('')}</table></div>`;
   }
@@ -377,52 +374,52 @@ export function renderRequestOverview(ev: ParsedNetworkEvent, allEvents: ParsedN
   const resSize = bodyByteSize(res);
   const rows: string[] = [
     overviewUrlRow(req?.url || '—'),
-    overviewRow('Status', requestStatusLabel(ev)),
-    overviewRow('Response Code', res?.statusCode != null ? `${res.statusCode} ${res.statusText || ''}`.trim() : '—'),
-    overviewRow('Protocol', ev.mitm ? 'HTTP/1.1 (MITM)' : 'HTTP/1.1'),
-    overviewRow('Method', req?.method || '—'),
-    overviewRow('Request Content-Type', reqCt),
-    overviewRow('Response Content-Type', resCt),
-    overviewRow('Client Address', ev.deviceIp || '—', 'device-ip'),
-    overviewRow('Remote Address', remoteAddress(ev))
+    overviewRow(S.networkInspector.ovStatus, requestStatusLabel(ev)),
+    overviewRow(S.networkInspector.ovResponseCode, res?.statusCode != null ? `${res.statusCode} ${res.statusText || ''}`.trim() : '—'),
+    overviewRow(S.networkInspector.ovProtocol, ev.mitm ? 'HTTP/1.1 (MITM)' : 'HTTP/1.1'),
+    overviewRow(S.networkInspector.ovMethod, req?.method || '—'),
+    overviewRow(S.networkInspector.requestContentType, reqCt),
+    overviewRow(S.networkInspector.responseContentType, resCt),
+    overviewRow(S.networkInspector.ovClientAddress, ev.deviceIp || '—', 'device-ip'),
+    overviewRow(S.networkInspector.ovRemoteAddress, remoteAddress(ev))
   ];
-  if (ev.mitm) rows.push(overviewRow('Tags', 'MITM · Decrypted'));
+  if (ev.mitm) rows.push(overviewRow(S.networkInspector.ovTags, S.networkInspector.tagsMitmDecrypted));
   const dns = relatedDns(allEvents, ev);
   if (dns.length > 0) {
     rows.push(
       overviewRow(
-        'DNS',
+        S.networkInspector.ovDns,
         dns
           .map((d) =>
             d.type === 'dns-response'
               ? `${d.hostname} → ${(d.resolvedIps || []).join(', ')}`
-              : `Query ${d.hostname}`
+              : S.networkInspector.dnsQueryValue(d.hostname || '')
           )
           .join('; ')
       )
     );
   }
 
-  rows.push(overviewSection('TLS'));
+  rows.push(overviewSection(S.networkInspector.secTls));
   if (ev.mitm) {
-    rows.push(overviewRow('Protocol', 'HTTPS (decrypted via Roku Dev Studio MITM proxy)'));
-    rows.push(overviewRow('Notes', 'Proxied request — upstream TLS terminated at Roku Dev Studio'));
+    rows.push(overviewRow(S.networkInspector.ovProtocol, S.networkInspector.protocolHttpsDecrypted));
+    rows.push(overviewRow(S.networkInspector.ovNotes, S.networkInspector.notesProxied));
   } else {
-    rows.push(overviewRow('Protocol', ev.destPort === 443 || req?.url?.startsWith('https') ? 'HTTPS (encrypted)' : 'HTTP'));
-    rows.push(overviewRow('Notes', 'Hotspot capture — bodies not available without MITM'));
+    rows.push(overviewRow(S.networkInspector.ovProtocol, ev.destPort === 443 || req?.url?.startsWith('https') ? S.networkInspector.protocolHttpsEncrypted : 'HTTP'));
+    rows.push(overviewRow(S.networkInspector.ovNotes, S.networkInspector.notesHotspot));
   }
 
-  rows.push(overviewSection('Timing'));
-  rows.push(overviewRow('Request Start', ev.timestamp || '—'));
+  rows.push(overviewSection(S.networkInspector.secTiming));
+  rows.push(overviewRow(S.networkInspector.ovRequestStart, ev.timestamp || '—'));
 
-  rows.push(overviewSection('Size'));
-  rows.push(overviewRow('Request', formatBytes(reqSize)));
-  rows.push(overviewRow('Response', formatBytes(resSize)));
-  rows.push(overviewRow('Total', formatBytes(reqSize + resSize)));
+  rows.push(overviewSection(S.networkInspector.secSize));
+  rows.push(overviewRow(S.networkInspector.request, formatBytes(reqSize)));
+  rows.push(overviewRow(S.networkInspector.response, formatBytes(resSize)));
+  rows.push(overviewRow(S.networkInspector.ovTotal, formatBytes(reqSize + resSize)));
 
   const reqHeaders = req?.headers && Object.keys(req.headers).length > 0 ? req.headers : null;
   if (reqHeaders) {
-    rows.push(overviewSection('Request Headers'));
+    rows.push(overviewSection(S.networkInspector.secRequestHeaders));
     for (const [k, v] of Object.entries(reqHeaders)) {
       rows.push(overviewRow(k, v));
     }
@@ -439,7 +436,7 @@ export function renderRequestPane(
 ): string {
   if (ev.type === 'tls-handshake' || (ev.type === 'tcp-connection' && ev.destPort === 443)) {
     if (tab === 'overview') {
-      return `<div class="ni-overview-scroll"><table class="ni-overview-table">${overviewRow('Host', ev.sni || ev.hostname || '—')}${overviewRow('Type', 'HTTPS (TLS handshake)')}${overviewRow('Device', ev.deviceIp, 'device-ip')}</table></div>`;
+      return `<div class="ni-overview-scroll"><table class="ni-overview-table">${overviewRow(S.networkInspector.ovHost, ev.sni || ev.hostname || '—')}${overviewRow(S.networkInspector.ovType, S.networkInspector.typeHttpsTlsHandshake)}${overviewRow(S.networkInspector.ovDevice, ev.deviceIp, 'device-ip')}</table></div>`;
     }
     return `<pre class="ni-code-block">${escapeHtml(buildHttpsRequestFallback(ev))}</pre>`;
   }
@@ -447,10 +444,10 @@ export function renderRequestPane(
     if (tab === 'overview') {
       return renderRequestOverview(ev, allEvents);
     }
-    return `<pre class="ni-code-block">${escapeHtml(`DNS ${ev.type === 'dns-query' ? 'Query' : 'Response'}: ${ev.hostname || '—'}`)}</pre>`;
+    return `<pre class="ni-code-block">${escapeHtml(S.networkInspector.dnsBody(ev.type === 'dns-query', ev.hostname || '—'))}</pre>`;
   }
   if (tab === 'overview') return renderRequestOverview(ev, allEvents);
-  return renderBodyContent(ev.httpRequest, bodyFormat, '(no request body)', 'request');
+  return renderBodyContent(ev.httpRequest, bodyFormat, S.networkInspector.noRequestBody, 'request');
 }
 
 export function renderResponsePane(
@@ -459,18 +456,18 @@ export function renderResponsePane(
   bodyFormat: BodyFormatMode
 ): string {
   if (ev.type === 'tls-handshake' || (ev.type === 'tcp-connection' && ev.destPort === 443)) {
-    if (tab === 'headers') return `<div class="ni-pane-empty">(encrypted — no headers)</div>`;
+    if (tab === 'headers') return `<div class="ni-pane-empty">${S.networkInspector.encryptedNoHeaders}</div>`;
     return `<pre class="ni-code-block">${escapeHtml(buildHttpsResponseFallback(ev))}</pre>`;
   }
   if (ev.type === 'dns-query' || ev.type === 'dns-response') {
-    if (tab === 'headers') return `<div class="ni-pane-empty">(DNS — no HTTP headers)</div>`;
+    if (tab === 'headers') return `<div class="ni-pane-empty">${S.networkInspector.dnsNoHeaders}</div>`;
     const ips = (ev.resolvedIps || []).join('\n');
-    return `<pre class="ni-code-block">${escapeHtml(ev.type === 'dns-response' ? `;; ANSWER\n${ips || '(empty)'}` : '(Pending)')}</pre>`;
+    return `<pre class="ni-code-block">${escapeHtml(ev.type === 'dns-response' ? `;; ANSWER\n${ips || S.networkInspector.dnsAnswerEmpty}` : S.networkInspector.dnsPending)}</pre>`;
   }
   if (tab === 'headers') return renderHeadersTable(ev.httpResponse);
   const code = ev.httpResponse?.statusCode;
   const fallback =
-    code === 0 ? '(waiting for response…)' : code == null ? '(no response body)' : '(empty response body)';
+    code === 0 ? S.networkInspector.waitingForResponse : code == null ? S.networkInspector.noResponseBody : S.networkInspector.emptyResponseBody;
   return renderBodyContent(ev.httpResponse, bodyFormat, fallback, 'response');
 }
 

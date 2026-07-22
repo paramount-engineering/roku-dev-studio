@@ -12,6 +12,7 @@ import {
 } from '@shared/network-inspector/setup-guide.js';
 import { escapeHtml } from '../../modules/utils/dom.js';
 import { attachBackdropClickToClose } from '../../modules/utils/modal-backdrop-click.js';
+import { S } from '@shared/strings/index.js';
 
 export type SetupCaptureResult = { success?: boolean; error?: string };
 
@@ -31,13 +32,13 @@ export function openHotspotCaptureSetupModal(opts: {
     <div class="ni-setup-modal" role="dialog" aria-modal="true" aria-label="${escapeHtml(title)}">
       <div class="ni-setup-modal-header">
         <h3>${escapeHtml(title)}</h3>
-        <button type="button" class="ni-setup-modal-close" title="Close" aria-label="Close">×</button>
+        <button type="button" class="ni-setup-modal-close" title="${S.common.close}" aria-label="${S.common.close}">×</button>
       </div>
       <div class="ni-setup-modal-body ni-setup-guide">
 ${body}
 ${hasAction
       ? `        <div class="ni-setup-actions">
-          <button type="button" class="btn btn-primary btn-sm" data-ni-setup-run>Setup Packet Capture</button>
+          <button type="button" class="btn btn-primary btn-sm" data-ni-setup-run>${S.networkInspector.setupPacketCapture}</button>
           <span class="ni-setup-status" data-ni-setup-status aria-live="polite"></span>
         </div>`
       : ''}
@@ -63,25 +64,25 @@ ${hasAction
     runBtn?.addEventListener('click', async () => {
       runBtn.disabled = true;
       if (statusEl) {
-        statusEl.textContent = 'Requesting capture access…';
+        statusEl.textContent = S.networkInspector.requestingCaptureAccess;
         statusEl.classList.remove('is-error');
       }
       try {
         const res = await opts.onRunSetup!();
         if (res?.success) {
-          if (statusEl) statusEl.textContent = 'Capture access granted.';
+          if (statusEl) statusEl.textContent = S.networkInspector.captureAccessGranted;
           window.setTimeout(close, 1000);
           return;
         }
         const cancelled = res?.error === 'cancelled' || !res?.error;
         if (statusEl) {
-          statusEl.textContent = cancelled ? 'Setup was cancelled.' : (res?.error || 'Setup failed.');
+          statusEl.textContent = cancelled ? S.networkInspector.setupCancelled : (res?.error || S.networkInspector.setupFailed);
           statusEl.classList.toggle('is-error', !cancelled);
         }
         runBtn.disabled = false;
       } catch {
         if (statusEl) {
-          statusEl.textContent = 'Setup failed — please try again.';
+          statusEl.textContent = S.networkInspector.setupFailedRetry;
           statusEl.classList.add('is-error');
         }
         runBtn.disabled = false;

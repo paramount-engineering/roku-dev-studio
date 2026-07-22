@@ -16,6 +16,7 @@ import { attachFoldToggle, structuredBodyText, structuredFileExtension } from '.
 import { attachSelectAll } from '../../modules/ui/select-all.js';
 import { icon, setSafeHTML, DEFAULT_RALE_PORT } from '../../modules/utils/index.js';
 import { errMessage } from '@shared/platform/err-util.js';
+import { S } from '@shared/strings/index.js';
 import { rendererError } from '../../modules/utils/logger.js';
 import { setupNodeUpdatePanel } from './node-update-panel.js';
 import { formatRaleCommandResponse } from './node-lookup.js';
@@ -91,7 +92,7 @@ export function setupInspector(panel: DevicePanelRoot, _device: InspectorDevice,
 
   // Shared simple find bar, hosted inline in the Response card header to save vertical space. Shown
   // only while a response is present.
-  const responseFindBarEl = buildFindBarElement('Find in Response');
+  const responseFindBarEl = buildFindBarElement(S.inspector.findInResponse);
   responseFindBarEl.classList.add('find-bar-header');
   const responseCardHeader = responseOutput.closest('.card')?.querySelector(':scope > .card-header');
   if (responseCardHeader instanceof HTMLElement) {
@@ -194,7 +195,7 @@ export function setupInspector(panel: DevicePanelRoot, _device: InspectorDevice,
   };
 
   setupCopyButton(copyBtnEl, () => structuredBodyText(responseOutput), {
-    successText: '✓ Copied!',
+    successText: S.common.copied,
     duration: 2000
   });
 
@@ -204,7 +205,7 @@ export function setupInspector(panel: DevicePanelRoot, _device: InspectorDevice,
     void window.roku?.saveTextFile?.({
       content,
       defaultName: `app-connector-response-${Date.now()}.${structuredFileExtension(content)}`,
-      dialogTitle: 'Save Response'
+      dialogTitle: S.inspector.saveResponseTitle
     });
   });
 
@@ -230,7 +231,7 @@ export function setupInspector(panel: DevicePanelRoot, _device: InspectorDevice,
   // §2 and Anti-pattern #1.
   const sendCommand = async (command: string, args?: unknown) => {
     if (!connection.getConnectionId()) {
-      return { success: false, error: 'Not connected' };
+      return { success: false, error: S.inspector.notConnected };
     }
     return await connection.connector.command(command, args ?? {});
   };
@@ -238,7 +239,7 @@ export function setupInspector(panel: DevicePanelRoot, _device: InspectorDevice,
   async function refreshGetNodeByIdAfterModalClose() {
     if (!nodeUpdateInspectorState.searchArgs) return;
     if (!connection.getConnectionId()) return;
-    displayResponseFn({ status: 'Refreshing getNodeById…', args: nodeUpdateInspectorState.searchArgs });
+    displayResponseFn({ status: S.inspector.refreshing('getNodeById'), args: nodeUpdateInspectorState.searchArgs });
     const result = await sendCommand('getNodeById', nodeUpdateInspectorState.searchArgs);
     formatRaleCommandResponse(result, 'getNodeById', displayResponseFn);
   }
@@ -282,7 +283,7 @@ export function setupInspector(panel: DevicePanelRoot, _device: InspectorDevice,
 
   function updateConnectionUI(connected: boolean) {
     if (connected) {
-      setSafeHTML(connectionStatus, icon('circle', 'icon-xs', 'icon-green') + ' Connected');
+      setSafeHTML(connectionStatus, icon('circle', 'icon-xs', 'icon-green') + ' ' + S.common.connected);
       connectionStatus.className = 'rale-connection-status connected';
       connectBtn.style.display = 'none';
       disconnectBtn.style.display = 'flex';
@@ -300,10 +301,10 @@ export function setupInspector(panel: DevicePanelRoot, _device: InspectorDevice,
         functionSelector.setFunctions(cached as ExternalControlFunctionMeta[]);
       }
     } else {
-      setSafeHTML(connectionStatus, icon('circle', 'icon-xs', 'icon-muted') + ' Disconnected');
+      setSafeHTML(connectionStatus, icon('circle', 'icon-xs', 'icon-muted') + ' ' + S.common.disconnected);
       connectionStatus.className = 'rale-connection-status disconnected';
       connectBtn.style.display = 'flex';
-      connectBtn.textContent = 'Connect';
+      connectBtn.textContent = S.common.connect;
       connectBtn.disabled = false;
       disconnectBtn.style.display = 'none';
       portInput.disabled = false;
@@ -426,7 +427,7 @@ export function setupInspector(panel: DevicePanelRoot, _device: InspectorDevice,
         if (connection.connector.isConnected()) {
           displayResponseFn(
             {
-              error: 'Failed to auto-fetch functions. Click Refresh to try again.',
+              error: S.inspector.failedAutoFetchFunctions,
               details: errMessage(error)
             },
             true

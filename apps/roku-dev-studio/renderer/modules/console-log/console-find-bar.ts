@@ -38,6 +38,7 @@ import {
 import { attachSearchHistory } from '../ui/search-history.js';
 import { findHistoryKey } from '../ui/search-storage-keys.js';
 import { looksLikeRegex } from '@shared/platform/text-match.js';
+import { S } from '@shared/strings/index.js';
 
 // Re-export so existing callers that imported these from the find-bar module
 // keep working after the helpers were extracted.
@@ -206,9 +207,7 @@ export function attachConsoleFindBar(opts: AttachConsoleFindBarOpts): ConsoleFin
     if (!regexBtnEl) return;
     const suggest = !findOptions.regex && looksLikeRegex(findInputEl.value);
     regexBtnEl.classList.toggle('is-suggested', suggest);
-    regexBtnEl.title = suggest
-      ? 'This looks like a regular expression — click to search by regex'
-      : 'Use Regular Expression (Alt+R)';
+    regexBtnEl.title = suggest ? S.consoleLog.regexSuggestTitle : S.consoleLog.optRegexTitle(true);
   };
 
   let currentMode: 'find' | 'filter' = modeSelectEl.value === 'filter' ? 'filter' : 'find';
@@ -537,10 +536,10 @@ export function attachConsoleFindBar(opts: AttachConsoleFindBarOpts): ConsoleFin
     }
     if (flatHits.length === 0) {
       findCountEl.textContent =
-        scanPercent != null ? `Searching... ${scanPercent}%` : 'No results';
+        scanPercent != null ? S.consoleLog.searchingPct(scanPercent) : S.consoleLog.noResults;
       return;
     }
-    const base = `${currentHitIndex + 1} of ${flatHits.length}`;
+    const base = S.consoleLog.matchPosition(currentHitIndex + 1, flatHits.length);
     // When the total exceeds the paint cap, only the first
     // `HIGHLIGHT_PAINT_CAP` matches are visually highlighted; navigation
     // (Next/Prev) still covers all of them. Without this annotation users see
@@ -548,12 +547,13 @@ export function attachConsoleFindBar(opts: AttachConsoleFindBarOpts): ConsoleFin
     // `remoteTruncated` means the whole-file backend itself capped the result
     // set — there are more matches than we can navigate.
     const cappedNote = remoteTruncated
-      ? ' (First matches)'
+      ? S.consoleLog.firstMatchesNote
       : flatHits.length > HIGHLIGHT_PAINT_CAP
-        ? ' (Highlights capped)'
+        ? S.consoleLog.highlightsCappedNote
         : '';
     const navPart = `${base}${cappedNote}`;
-    findCountEl.textContent = scanPercent != null ? `${navPart} (Searching ${scanPercent}%)` : navPart;
+    findCountEl.textContent =
+      scanPercent != null ? `${navPart}${S.consoleLog.searchingSuffix(scanPercent)}` : navPart;
   }
 
   function applyFilter(): void {
@@ -612,7 +612,7 @@ export function attachConsoleFindBar(opts: AttachConsoleFindBarOpts): ConsoleFin
     // Only show the "Searching… X%" prefix when we have no hits yet; otherwise
     // the running count format ("1 of 60 (searching X%)") covers it.
     if (showProgress && flatHits.length === 0) {
-      findCountEl.textContent = 'Searching... 0%';
+      findCountEl.textContent = S.consoleLog.searchingPct(0);
     }
 
     /**
@@ -672,7 +672,7 @@ export function attachConsoleFindBar(opts: AttachConsoleFindBarOpts): ConsoleFin
         findBarEl.classList.remove('no-results');
         updateFindCountLabel();
       } else {
-        findCountEl.textContent = 'No results';
+        findCountEl.textContent = S.consoleLog.noResults;
         findBarEl.classList.add('no-results');
       }
     }
@@ -704,7 +704,7 @@ export function attachConsoleFindBar(opts: AttachConsoleFindBarOpts): ConsoleFin
     }
 
     const seq = ++remoteSearchSeq;
-    findCountEl.textContent = 'Searching…';
+    findCountEl.textContent = S.consoleLog.searchingRemote;
     findBarEl.classList.remove('no-results');
     void opts.remoteSearch!(currentQuery, findOptions).then(
       (res) => {
@@ -714,7 +714,7 @@ export function attachConsoleFindBar(opts: AttachConsoleFindBarOpts): ConsoleFin
         remoteTruncated = res.truncated;
         if (flatHits.length === 0) {
           currentHitIndex = -1;
-          findCountEl.textContent = 'No results';
+          findCountEl.textContent = S.consoleLog.noResults;
           findBarEl.classList.add('no-results');
           return;
         }
@@ -726,7 +726,7 @@ export function attachConsoleFindBar(opts: AttachConsoleFindBarOpts): ConsoleFin
       },
       () => {
         if (seq !== remoteSearchSeq) return;
-        findCountEl.textContent = 'Search failed';
+        findCountEl.textContent = S.consoleLog.searchFailed;
       }
     );
   }
@@ -745,7 +745,7 @@ export function attachConsoleFindBar(opts: AttachConsoleFindBarOpts): ConsoleFin
       return;
     }
     const seq = ++remoteSearchSeq;
-    findCountEl.textContent = 'Filtering…';
+    findCountEl.textContent = S.consoleLog.filteringRemote;
     findBarEl.classList.remove('no-results');
     void opts.remoteSearch!(currentQuery, findOptions).then(
       (res) => {
@@ -753,16 +753,16 @@ export function attachConsoleFindBar(opts: AttachConsoleFindBarOpts): ConsoleFin
         if (!res) return;
         opts.onFilterLinesChange!(res.matchLines);
         if (res.matchLines.length === 0) {
-          findCountEl.textContent = 'No results';
+          findCountEl.textContent = S.consoleLog.noResults;
           findBarEl.classList.add('no-results');
         } else {
-          findCountEl.textContent = `${res.matchLines.length.toLocaleString()} lines${res.truncated ? ' (capped)' : ''}`;
+          findCountEl.textContent = S.consoleLog.linesMatched(res.matchLines.length, res.truncated);
           findBarEl.classList.remove('no-results');
         }
       },
       () => {
         if (seq !== remoteSearchSeq) return;
-        findCountEl.textContent = 'Filter failed';
+        findCountEl.textContent = S.consoleLog.filterFailed;
       }
     );
   }
@@ -791,7 +791,7 @@ export function attachConsoleFindBar(opts: AttachConsoleFindBarOpts): ConsoleFin
     if (!maybeRx) {
       flatHits = [];
       currentEntry = null;
-      findCountEl.textContent = 'No results';
+      findCountEl.textContent = S.consoleLog.noResults;
       findBarEl.classList.add('no-results');
       return;
     }
@@ -1070,7 +1070,7 @@ export function attachConsoleFindBar(opts: AttachConsoleFindBarOpts): ConsoleFin
       if (flatHits.length > 0) rebindAllMountedLines();
       if (currentHitIndex >= 0) highlightCurrentMatch(false);
       if (flatHits.length === 0) {
-        findCountEl.textContent = 'No results';
+        findCountEl.textContent = S.consoleLog.noResults;
         findBarEl.classList.add('no-results');
       } else {
         updateFindCountLabel();

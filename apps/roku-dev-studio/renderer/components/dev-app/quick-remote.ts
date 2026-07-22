@@ -4,6 +4,7 @@ import type { DevAppApi, DevicePanelRoot } from './dev-app-types.js';
 import { SCREENSHOT_DEBOUNCE_DELAY } from '../../modules/utils/constants.js';
 import { scheduleAutoScreenshotAfterSendText } from '../../modules/utils/keyboard-remote-auto-screenshot-registry.js';
 import { rendererError } from '../../modules/utils/logger.js';
+import { S } from '@shared/strings/index.js';
 
 /** Options for `attachQuickRemoteKeys` shared between the Dev App card and the Floating Remote. */
 export interface AttachQuickRemoteKeysOptions {
@@ -55,7 +56,7 @@ async function sendTextViaApi(api: InputTextApi, text: string): Promise<boolean>
   return true;
 }
 
-/** Wire the Remote tab key buttons (solo + quad layouts). Scoped to the Remote inner tab only. */
+/** Wire the Remote Section key buttons (solo + quad layouts). Scoped to the Remote inner tab only. */
 export function wireRemoteTabKeyButtons(
   panel: HTMLElement,
   api: DevAppApi,
@@ -183,7 +184,7 @@ export function attachQuickRemoteKeys(
   }
 }
 
-/** Wire the Remote tab `.text-input` / `.send-text-btn` pair (solo + quad layouts). */
+/** Wire the Remote Section `.text-input` / `.send-text-btn` pair (solo + quad layouts). */
 export function wireRemoteTabSendText(
   panel: HTMLElement,
   api: InputTextApi,
@@ -208,7 +209,7 @@ export function wireRemoteTabSendText(
     onSendingChange: (sending) => {
       sendTextBtn.disabled = sending;
       if (sendTextLabel instanceof HTMLElement) {
-        sendTextLabel.textContent = sending ? 'Sending...' : 'Send Text';
+        sendTextLabel.textContent = sending ? S.devApp.sending : S.devApp.sendText;
       }
     },
   });

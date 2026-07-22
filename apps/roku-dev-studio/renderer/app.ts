@@ -24,6 +24,7 @@ import {
   QUERY_ENDPOINTS
 } from './modules/index.js';
 import { errMessage } from '@shared/platform/err-util.js';
+import { S, applyI18n } from '@shared/strings/index.js';
 import { devLog } from './modules/utils/dev-log.js';
 import { rendererWarn, rendererError } from './modules/utils/logger.js';
 import { initDeeplinkMediaTypes } from './modules/deeplink/deeplink-media-types.js';
@@ -901,7 +902,7 @@ function generateLocationId() {
   return 'loc-' + Date.now() + '-' + suffix;
 }
 
-// Load remote locations from localStorage
+// Load Remote Locations from localStorage
 async function loadRemoteLocations() {
   try {
     // Use file-based storage via IPC (more reliable than localStorage in Electron)
@@ -924,11 +925,11 @@ async function loadRemoteLocations() {
       devLog('[Remote Locations] No stored locations found');
     }
   } catch (e) {
-    rendererError('Failed to load remote locations:', e);
+    rendererError('Failed to load Remote Locations:', e);
   }
 }
 
-// Save remote locations to file storage (more reliable than localStorage)
+// Save Remote Locations to file storage (more reliable than localStorage)
 async function saveRemoteLocations() {
   try {
     const locations = Array.from(state.remoteLocations.values()).map(loc => ({
@@ -942,7 +943,7 @@ async function saveRemoteLocations() {
     const result = await window.roku.setSetting('remote-locations', locations);
     devLog('[Remote Locations] Save result:', result);
   } catch (e) {
-    rendererError('Failed to save remote locations:', e);
+    rendererError('Failed to save Remote Locations:', e);
   }
 }
 
@@ -954,10 +955,10 @@ async function addRemoteLocation(name, host, port) {
   // Check for duplicate host/IP
   for (const [id, existingLocation] of state.remoteLocations) {
     if (existingLocation.host.toLowerCase() === hostLower) {
-      throw new Error(`A location with host "${host}" already exists ("${existingLocation.name}").`);
+      throw new Error(S.app.locationHostExists(host, existingLocation.name));
     }
     if (existingLocation.serverUrl === serverUrl) {
-      throw new Error(`A location with this server address already exists ("${existingLocation.name}").`);
+      throw new Error(S.app.locationServerExists(existingLocation.name));
     }
   }
   
@@ -966,13 +967,13 @@ async function addRemoteLocation(name, host, port) {
     const healthResult = await window.roku.remoteHealth(serverUrl);
     
     if (!healthResult.success) {
-      throw new Error('Unable to connect to relay server. Please check the address and ensure the server is running.');
+      throw new Error(S.app.unableToConnectRelay);
     }
   } catch (e) {
     if (errMessage(e).includes('already exists')) {
       throw e; // Re-throw duplicate error
     }
-    throw new Error('Unable to connect to relay server. Please check the address and ensure the server is running.');
+    throw new Error(S.app.unableToConnectRelay);
   }
   
   // Server is reachable, now add the location
@@ -1175,7 +1176,7 @@ function getDefaultCapabilities() {
   };
 }
 
-// Refresh all remote locations
+// Refresh all Remote Locations
 async function refreshAllRemoteLocations(opts?: { notifyStartup?: boolean }) {
   const notifyStartup = opts?.notifyStartup !== false;
   const promises = Array.from(state.remoteLocations.keys()).map(id => refreshRemoteLocation(id));
@@ -1186,7 +1187,7 @@ async function refreshAllRemoteLocations(opts?: { notifyStartup?: boolean }) {
   }
 }
 
-// Render remote locations in sidebar
+// Render Remote Locations in sidebar
 function renderRemoteLocations() {
   const container = document.getElementById('remoteLocationsContainer');
   
@@ -1230,24 +1231,24 @@ function createRemoteLocationSection(location) {
     if (state.connectedDevices.has(deviceKey)) connectedCount++;
   });
   
-  const statusText = isScanning ? 'Scanning...' : 
-    location.status === 'online' ? '' : 
-    location.status === 'offline' ? 'Offline' : 
-    (location.status === 'connecting' || location.status === 'unknown') ? 'Connecting...' : '';
+  const statusText = isScanning ? S.common.scanning :
+    location.status === 'online' ? '' :
+    location.status === 'offline' ? S.app.statusOffline :
+    (location.status === 'connecting' || location.status === 'unknown') ? S.app.connecting : '';
   
   setSafeHTML(section, `
     <div class="location-header">
       <div class="location-header-top">
         <span class="location-status"></span>
         <span class="location-name">${escapeHtml(location.name)}</span>
-        <button class="location-action-btn icon-btn info-location" title="Server Info" style="${location.status === 'online' ? '' : 'display:none'}">${icon('info', 'icon-sm')}</button>
-        <button class="location-action-btn icon-btn primary refresh-location${isScanning ? ' scanning' : ''}" title="${isScanning ? 'Scanning...' : 'Refresh'}">${icon('refresh', 'icon-sm')}</button>
-        <button class="location-action-btn icon-btn danger delete-location" title="Remove">${icon('trash', 'icon-sm')}</button>
+        <button class="location-action-btn icon-btn info-location" title="${S.app.serverInfoTitle}" style="${location.status === 'online' ? '' : 'display:none'}">${icon('info', 'icon-sm')}</button>
+        <button class="location-action-btn icon-btn primary refresh-location${isScanning ? ' scanning' : ''}" title="${isScanning ? S.common.scanning : S.common.refresh}">${icon('refresh', 'icon-sm')}</button>
+        <button class="location-action-btn icon-btn danger delete-location" title="${S.common.remove}">${icon('trash', 'icon-sm')}</button>
         <span class="location-toggle">${icon('chevron-down', 'icon-sm')}</span>
       </div>
       <div class="location-header-bottom">
         <span class="location-server-url">${escapeHtml(location.host)}:${location.port}</span>
-        <span class="location-device-count">${location.devices.size} device${location.devices.size !== 1 ? 's' : ''}</span>
+        <span class="location-device-count">${S.app.deviceCount(location.devices.size)}</span>
       </div>
     </div>
     <div class="location-body">
@@ -1255,10 +1256,10 @@ function createRemoteLocationSection(location) {
         ${location.devices.size === 0 ? 
           `<div class="location-empty${isScanning || location.status === 'connecting' || location.status === 'unknown' ? ' scanning' : ''}">
             <div class="empty-icon">${icon(isScanning || location.status === 'connecting' || location.status === 'unknown' ? 'loader' : 'radar', 'icon-xl')}</div>
-            <p>${isScanning ? 'Scanning for devices...' : 
-                 (location.status === 'connecting' || location.status === 'unknown') ? 'Connecting to relay server...' :
-                 location.status === 'offline' ? 'Server offline' : 
-                 'No Roku devices found'}</p>
+            <p>${isScanning ? S.app.scanningForDevices :
+                 (location.status === 'connecting' || location.status === 'unknown') ? S.app.connectingToRelayServer :
+                 location.status === 'offline' ? S.app.serverOffline :
+                 S.app.noRokuDevicesFound}</p>
           </div>` : ''}
       </div>
     </div>
@@ -1322,7 +1323,7 @@ function createRemoteLocationSection(location) {
   
   section.querySelector('.delete-location')?.addEventListener('click', (e) => {
     e.stopPropagation();
-    if (confirm(`Remove location "${location.name}"?`)) {
+    if (confirm(S.app.confirmRemoveLocation(location.name))) {
       removeRemoteLocation(location.id);
     }
   });
@@ -1333,19 +1334,9 @@ function createRemoteLocationSection(location) {
 // Show server capabilities in a modal/popup
 function showServerCapabilities(location, opener?: HTMLElement | null) {
   const caps = location.capabilities || {};
-  const version = location.serverVersion || 'Unknown';
-  
-  const capabilityLabels = {
-    remote: { label: 'Remote Control', desc: 'Keypress and navigation commands' },
-    apps: { label: 'Apps', desc: 'List and launch installed apps' },
-    query: { label: 'Query', desc: 'Device info, media player status' },
-    devApp: { label: 'Dev App', desc: 'Sideload development channels' },
-    screenshot: { label: 'Screenshot', desc: 'Capture device screen' },
-    console: { label: 'Console', desc: 'BrightScript debug output' },
-    appConnector: { label: 'App Connector', desc: 'RALE TrackerTask integration' },
-    deepLink: { label: 'Deep Link', desc: 'Launch content with parameters' },
-    networkInspector: { label: 'Network Inspector', desc: 'Capture DNS/SNI/HTTP + MITM proxy' }
-  };
+  const version = location.serverVersion || S.app.unknown;
+
+  const capabilityLabels = S.app.serverCapabilities;
 
   // Most capabilities are plain booleans. Network Inspector is an object
   // ({ supported, requiresRoot, isRoot }) because it needs root on the server, so it has a
@@ -1355,12 +1346,12 @@ function showServerCapabilities(location, opener?: HTMLElement | null) {
       const ni = (caps as Record<string, unknown>)['networkInspector'] as
         | { supported?: boolean; requiresRoot?: boolean; isRoot?: boolean }
         | undefined;
-      if (ni && ni.supported === true) return { cls: 'supported', text: 'Supported' };
-      if (ni && ni.requiresRoot && ni.isRoot === false) return { cls: 'not-supported', text: 'Needs root' };
-      return { cls: 'not-supported', text: 'Not Supported' };
+      if (ni && ni.supported === true) return { cls: 'supported', text: S.app.capSupported };
+      if (ni && ni.requiresRoot && ni.isRoot === false) return { cls: 'not-supported', text: S.app.capNeedsRoot };
+      return { cls: 'not-supported', text: S.app.capNotSupported };
     }
     const enabled = (caps as Record<string, unknown>)[key] === true;
-    return { cls: enabled ? 'supported' : 'not-supported', text: enabled ? 'Supported' : 'Not Supported' };
+    return { cls: enabled ? 'supported' : 'not-supported', text: enabled ? S.app.capSupported : S.app.capNotSupported };
   }
 
   let capList = '';
@@ -1380,14 +1371,14 @@ function showServerCapabilities(location, opener?: HTMLElement | null) {
     <div class="server-info-modal">
       <div class="server-info-header">
         <h3>${icon('server', 'icon-md')} ${escapeHtml(location.name)}</h3>
-        <button class="modal-close close-modal-btn" title="Close">${icon('x', 'icon-sm')}</button>
+        <button class="modal-close close-modal-btn" title="${S.common.close}">${icon('x', 'icon-sm')}</button>
       </div>
       <div class="server-info-url">
         <span class="server-url-value location-server-url">${escapeHtml(location.host)}:${location.port}</span>
         <span class="server-version">v${escapeHtml(version)}</span>
       </div>
       <div class="server-capabilities">
-        <h4>Capabilities</h4>
+        <h4>${S.app.capabilitiesHeading}</h4>
         <div class="capabilities-list">
           ${capList}
         </div>
@@ -1441,15 +1432,15 @@ function createRemoteDeviceCard(device, locationId) {
   
   const softwareBuild = device.softwareBuild ? ` (${device.softwareBuild})` : '';
   const devBadge = isDeveloperEnabled 
-    ? `<span class="dev-badge enabled">${icon('wrench', 'icon-xs')} Dev</span>`
+    ? `<span class="dev-badge enabled">${icon('wrench', 'icon-xs')} ${S.app.devBadge}</span>`
     : '';
   const ecpMode = getEcpMode(device);
   const ecpBadge = ecpMode === 'Disabled'
-    ? `<span class="ecp-badge" title="Control by Mobile Apps is disabled">${icon('tv', 'icon-xs')} Remote off</span>`
+    ? `<span class="ecp-badge" title="${S.app.ecpBadgeDisabledTitle}">${icon('tv', 'icon-xs')} ${S.app.remoteOff}</span>`
     : ecpMode === 'Limited'
-      ? `<span class="ecp-badge ecp-badge-limited" title="ECP Limited: text, app launch, and query work; full keypress may not">${icon('tv', 'icon-xs')} ECP Limited</span>`
+      ? `<span class="ecp-badge ecp-badge-limited" title="${S.app.ecpBadgeLimitedTitle}">${icon('tv', 'icon-xs')} ${S.app.ecpLimited}</span>`
       : '';
-  const deviceType = isTv ? `${icon('tv', 'icon-sm')} TV` : `${icon('stb', 'icon-sm')} STB`;
+  const deviceType = isTv ? `${icon('tv', 'icon-sm')} ${S.app.deviceTypeTv}` : `${icon('stb', 'icon-sm')} ${S.app.deviceTypeStb}`;
   
   setSafeHTML(card, `
     <div class="device-card-header">
@@ -1458,14 +1449,14 @@ function createRemoteDeviceCard(device, locationId) {
         <div class="device-card-title-col">
           <div class="device-name">
             ${isConnected ? '<span class="status-dot"></span>' : ''}
-            ${escapeHtml(device.deviceName || device.modelName || 'Unknown Roku')}
+            ${escapeHtml(device.deviceName || device.modelName || S.app.unknownRoku)}
           </div>
         </div>
       </div>
       <div class="device-card-header-right">
         ${ecpBadge}
         ${devBadge}
-        <button class="device-toggle-btn" title="${isMinimized ? 'Expand' : 'Minimize'}">
+        <button class="device-toggle-btn" title="${isMinimized ? S.app.expand : S.app.minimize}">
           ${icon('chevron-down', 'icon-sm')}
         </button>
       </div>
@@ -1477,31 +1468,31 @@ function createRemoteDeviceCard(device, locationId) {
     </div>
     <div class="device-details">
       <div class="device-detail">
-        <span class="label">Type</span>
+        <span class="label">${S.app.labelType}</span>
         <span class="value">${deviceType}</span>
       </div>
       <div class="device-detail">
-        <span class="label">IP</span>
+        <span class="label">${S.app.labelIp}</span>
         <span class="value device-ip">${escapeHtml(device.ip)}</span>
       </div>
       <div class="device-detail">
-        <span class="label">Model</span>
-        <span class="value">${escapeHtml(device.modelNumber || 'N/A')}</span>
+        <span class="label">${S.app.labelModel}</span>
+        <span class="value">${escapeHtml(device.modelNumber || S.app.notAvailable)}</span>
       </div>
       <div class="device-detail">
-        <span class="label">Serial</span>
-        <span class="value device-serial">${escapeHtml(device.serialNumber || 'N/A')}</span>
+        <span class="label">${S.app.labelSerial}</span>
+        <span class="value device-serial">${escapeHtml(device.serialNumber || S.app.notAvailable)}</span>
       </div>
       ${device.softwareVersion ? `
       <div class="device-detail">
-        <span class="label">SW</span>
+        <span class="label">${S.app.labelSw}</span>
         <span class="value">${escapeHtml(device.softwareVersion)}${escapeHtml(softwareBuild)}</span>
       </div>
       ` : ''}
     </div>
     <div class="device-actions">
       <button class="connect-btn${isConnected ? ' connected' : ''}">
-        ${isConnected ? 'Disconnect' : 'Connect'}
+        ${isConnected ? S.common.disconnect : S.common.connect}
       </button>
     </div>
   `);
@@ -1521,7 +1512,7 @@ function createRemoteDeviceCard(device, locationId) {
     if (e) e.stopPropagation();
     const nowMinimized = !card.classList.contains('minimized');
     card.classList.toggle('minimized');
-    toggleBtn.title = nowMinimized ? 'Expand' : 'Minimize';
+    toggleBtn.title = nowMinimized ? S.app.expand : S.app.minimize;
     setDeviceMinimized(deviceKey, nowMinimized);
   };
   toggleBtn.addEventListener('click', toggleMinimize);
@@ -1584,7 +1575,7 @@ function connectRemoteDevice(device, locationId) {
   if (tabName instanceof HTMLElement) {
     const location = state.remoteLocations.get(locationId);
     setSafeHTML(tabName, icon('globe', 'icon-sm', 'icon-cyan') + ' ' + escapeHtml(device.deviceName));
-    tabName.title = `${device.deviceName} @ ${location?.name || 'Remote'}`;
+    tabName.title = S.app.atLocation(device.deviceName, location?.name || S.app.remote);
   }
   elements.tabBar.insertBefore(tab, elements.tabBar.querySelector('.tab-placeholder'));
   
@@ -1608,7 +1599,7 @@ function connectRemoteDevice(device, locationId) {
   // Activate the new tab
   activateTab(tabId);
   
-  // Update remote locations list
+  // Update Remote Locations list
   renderRemoteLocations();
 
   pushDeviceListToMcpBridge();
@@ -1871,9 +1862,9 @@ async function maybeAutoConnectLastDevice() {
   const { count, singleLabel } = connectRememberedListMatches(list);
 
   if (count === 1) {
-    showToast(`Connected to ${singleLabel} automatically.`, 'success');
+    showToast(S.app.connectedAutomatically(singleLabel), 'success');
   } else if (count > 1) {
-    showToast(`Connected to ${count} saved devices automatically.`, 'success');
+    showToast(S.app.connectedMultipleAutomatically(count), 'success');
   }
 }
 
@@ -1891,9 +1882,9 @@ async function tryAutoConnectRememberedMatchesAfterUserScan() {
   if (list.length === 0) return;
   const { count, singleLabel } = connectRememberedListMatches(list);
   if (count === 1) {
-    showToast(`Connected to ${singleLabel} automatically.`, 'success');
+    showToast(S.app.connectedAutomatically(singleLabel), 'success');
   } else if (count > 1) {
-    showToast(`Connected to ${count} saved devices automatically.`, 'success');
+    showToast(S.app.connectedMultipleAutomatically(count), 'success');
   }
 }
 
@@ -1976,7 +1967,7 @@ async function startScan() {
   void onStartupScansReady();
 }
 
-/** User-initiated scan: local network + all configured remote locations, then remembered-device auto-connect. */
+/** User-initiated scan: local network + all configured Remote Locations, then remembered-device auto-connect. */
 async function runFullUserScan() {
   devLog('runFullUserScan called, isScanning:', state.isScanning);
   if (state.isScanning) return;
@@ -2012,7 +2003,7 @@ async function runFullUserScan() {
 
 /**
  * User-initiated scan scoped to the Local Devices section only — does NOT
- * touch remote locations. Each remote location card has its own per-location
+ * touch Remote Locations. Each remote location card has its own per-location
  * refresh button that calls `refreshRemoteLocation(id)`. The full local +
  * remote scan is invoked from the title-bar Scan button (visible when the
  * sidebar is hidden) via `runFullUserScan`.
@@ -2109,7 +2100,7 @@ function addDiscoveredDevice(device) {
       const tabEl = document.querySelector(`.tab-item[data-tab-id="${connection.tabId}"]`);
       if (tabEl) {
         const nameEl = tabEl.querySelector('.tab-name');
-        if (nameEl) nameEl.textContent = device.deviceName || device.modelName || 'Unknown Roku';
+        if (nameEl) nameEl.textContent = device.deviceName || device.modelName || S.app.unknownRoku;
       }
       // Update panel: device name, IP, icon, and ECP/Dev Mode warnings
       const panel = document.getElementById(connection.tabId);
@@ -2117,7 +2108,7 @@ function addDiscoveredDevice(device) {
         const nameText = panel.querySelector('.panel-device-name-text');
         const ipEl = panel.querySelector('.device-ip');
         const iconEl = panel.querySelector('.device-panel-icon');
-        if (nameText) nameText.textContent = device.deviceName || device.modelName || 'Unknown Roku';
+        if (nameText) nameText.textContent = device.deviceName || device.modelName || S.app.unknownRoku;
         if (ipEl) ipEl.textContent = device.ip;
         if (iconEl) {
           setDevicePanelIcon(iconEl, device, { isRemote: false });
@@ -2154,7 +2145,7 @@ function updateScanButton(scanning) {
     const scanText = elements.scanBtn.querySelector('.scan-text');
 
     if (scanText) {
-      scanText.textContent = scanning ? 'Scanning...' : 'Scan';
+      scanText.textContent = scanning ? S.common.scanning : S.app.scan;
     }
     if (scanIcon instanceof HTMLElement) {
       setSafeHTML(scanIcon, scanning ? `<svg><use href="#icon-refresh"/></svg>` : `<svg><use href="#icon-radar"/></svg>`);
@@ -2169,7 +2160,7 @@ function updateScanButton(scanning) {
     const tIcon = tb.querySelector('.titlebar-scan-icon');
     const tText = tb.querySelector('.titlebar-scan-text');
     if (tText) {
-      tText.textContent = scanning ? 'Scanning...' : 'Scan';
+      tText.textContent = scanning ? S.common.scanning : S.app.scan;
     }
     if (tIcon instanceof HTMLElement) {
       setSafeHTML(tIcon, scanning ? `<svg><use href="#icon-refresh"/></svg>` : `<svg><use href="#icon-radar"/></svg>`);
@@ -2196,7 +2187,7 @@ function renderDeviceList() {
   // Update device count in header
   const deviceCountEl = document.getElementById('localDeviceCount');
   if (deviceCountEl) {
-    deviceCountEl.textContent = `${devices.length} device${devices.length !== 1 ? 's' : ''}`;
+    deviceCountEl.textContent = S.app.deviceCount(devices.length);
   }
   
   const localDevicesList = document.getElementById('localDevicesList');
@@ -2282,15 +2273,15 @@ function createDeviceCard(device) {
   
   const softwareBuild = device.softwareBuild ? ` (${device.softwareBuild})` : '';
   const devBadge = isDeveloperEnabled 
-    ? `<span class="dev-badge enabled">${icon('wrench', 'icon-xs')} Dev</span>`
+    ? `<span class="dev-badge enabled">${icon('wrench', 'icon-xs')} ${S.app.devBadge}</span>`
     : '';
   const ecpMode = getEcpMode(device);
   const ecpBadge = ecpMode === 'Disabled'
-    ? `<span class="ecp-badge" title="Control by Mobile Apps is disabled">${icon('tv', 'icon-xs')} Remote off</span>`
+    ? `<span class="ecp-badge" title="${S.app.ecpBadgeDisabledTitle}">${icon('tv', 'icon-xs')} ${S.app.remoteOff}</span>`
     : ecpMode === 'Limited'
-      ? `<span class="ecp-badge ecp-badge-limited" title="ECP Limited: text, app launch, and query work; full keypress may not">${icon('tv', 'icon-xs')} ECP Limited</span>`
+      ? `<span class="ecp-badge ecp-badge-limited" title="${S.app.ecpBadgeLimitedTitle}">${icon('tv', 'icon-xs')} ${S.app.ecpLimited}</span>`
       : '';
-  const deviceType = isTv ? `${icon('tv', 'icon-sm')} TV` : `${icon('stb', 'icon-sm')} STB`;
+  const deviceType = isTv ? `${icon('tv', 'icon-sm')} ${S.app.deviceTypeTv}` : `${icon('stb', 'icon-sm')} ${S.app.deviceTypeStb}`;
   
   setSafeHTML(card, `
     <div class="device-card-header">
@@ -2299,14 +2290,14 @@ function createDeviceCard(device) {
         <div class="device-card-title-col">
           <div class="device-name">
             ${isConnected ? '<span class="status-dot"></span>' : ''}
-            ${escapeHtml(device.deviceName || device.modelName || 'Unknown Roku')}
+            ${escapeHtml(device.deviceName || device.modelName || S.app.unknownRoku)}
           </div>
         </div>
       </div>
       <div class="device-card-header-right">
         ${ecpBadge}
         ${devBadge}
-        <button class="device-toggle-btn" title="${isMinimized ? 'Expand' : 'Minimize'}">
+        <button class="device-toggle-btn" title="${isMinimized ? S.app.expand : S.app.minimize}">
           ${icon('chevron-down', 'icon-sm')}
         </button>
       </div>
@@ -2318,31 +2309,31 @@ function createDeviceCard(device) {
     </div>
     <div class="device-details">
       <div class="device-detail">
-        <span class="label">Type</span>
+        <span class="label">${S.app.labelType}</span>
         <span class="value">${deviceType}</span>
       </div>
       <div class="device-detail">
-        <span class="label">IP</span>
+        <span class="label">${S.app.labelIp}</span>
         <span class="value device-ip">${escapeHtml(device.ip)}</span>
       </div>
       <div class="device-detail">
-        <span class="label">Model</span>
-        <span class="value">${escapeHtml(device.modelNumber || 'N/A')}</span>
+        <span class="label">${S.app.labelModel}</span>
+        <span class="value">${escapeHtml(device.modelNumber || S.app.notAvailable)}</span>
       </div>
       <div class="device-detail">
-        <span class="label">Serial</span>
-        <span class="value device-serial">${escapeHtml(device.serialNumber || 'N/A')}</span>
+        <span class="label">${S.app.labelSerial}</span>
+        <span class="value device-serial">${escapeHtml(device.serialNumber || S.app.notAvailable)}</span>
       </div>
       ${device.softwareVersion ? `
       <div class="device-detail">
-        <span class="label">SW</span>
+        <span class="label">${S.app.labelSw}</span>
         <span class="value">${escapeHtml(device.softwareVersion)}${escapeHtml(softwareBuild)}</span>
       </div>
       ` : ''}
     </div>
     <div class="device-actions">
       <button class="connect-btn${isConnected ? ' connected' : ''}">
-        ${isConnected ? 'Disconnect' : 'Connect'}
+        ${isConnected ? S.common.disconnect : S.common.connect}
       </button>
     </div>
   `);
@@ -2362,7 +2353,7 @@ function createDeviceCard(device) {
     if (e) e.stopPropagation();
     const nowMinimized = !card.classList.contains('minimized');
     card.classList.toggle('minimized');
-    toggleBtn.title = nowMinimized ? 'Expand' : 'Minimize';
+    toggleBtn.title = nowMinimized ? S.app.expand : S.app.minimize;
     setDeviceMinimized(device.ip, nowMinimized);
   };
   toggleBtn.addEventListener('click', toggleMinimize);
@@ -2406,27 +2397,19 @@ async function showDeviceContextMenu(device) {
   const items = [
     { label: `${device.deviceName}`, action: 'header' },
     { type: 'separator' },
-    { label: 'Copy Device Name', action: 'copy', value: device.deviceName },
-    { label: 'Copy IP Address', action: 'copy', value: device.ip },
-    { label: 'Copy Model Number', action: 'copy', value: device.modelNumber },
-    { label: 'Copy Serial Number', action: 'copy', value: device.serialNumber },
+    { label: S.app.copyDeviceName, action: 'copy', value: device.deviceName },
+    { label: S.app.copyIpAddress, action: 'copy', value: device.ip },
+    { label: S.app.copyModelNumber, action: 'copy', value: device.modelNumber },
+    { label: S.app.copySerialNumber, action: 'copy', value: device.serialNumber },
     { type: 'separator' },
-    { label: 'Copy All Details', action: 'copy', value: formatDeviceDetails(device) }
+    { label: S.app.copyAllDetails, action: 'copy', value: formatDeviceDetails(device) }
   ];
   
   await window.roku.showContextMenu(items);
 }
 
 function formatDeviceDetails(device) {
-  return `Device Name: ${device.deviceName}
-IP Address: ${device.ip}
-Model Name: ${device.modelName}
-Model Number: ${device.modelNumber}
-Serial Number: ${device.serialNumber}
-Software Version: ${device.softwareVersion || 'N/A'}
-Device ID: ${device.deviceId || 'N/A'}
-Network Type: ${device.networkType || 'N/A'}
-WiFi MAC: ${device.wifiMac || 'N/A'}`;
+  return S.app.deviceDetails(device);
 }
 
 // ============================================
@@ -2537,7 +2520,7 @@ function disconnectDevice(deviceKey) {
   // Update device list
   renderDeviceList();
   
-  // Update remote locations if this was a remote device
+  // Update Remote Locations if this was a remote device
   if (isRemote) {
     renderRemoteLocations();
   }
@@ -2552,7 +2535,7 @@ function createTab(device, tabId) {
   tab.dataset.ip = device.ip;
   // Stashed for the hover popup (Safari/Chrome-style) — the tab label itself is
   // truncated, so the full name/IP/model are surfaced on hover instead.
-  tab.dataset.deviceName = device.deviceName || device.modelName || 'Unknown Roku';
+  tab.dataset.deviceName = device.deviceName || device.modelName || S.app.unknownRoku;
   if (device.modelName) tab.dataset.modelName = device.modelName;
   if (device.modelNumber) tab.dataset.modelNumber = device.modelNumber;
 
@@ -2882,7 +2865,7 @@ function updateDeviceOfflineState(deviceKey, isOffline, isRemote = false) {
           statusDot.style.animation = 'none';
         }
         if (connectBtn instanceof HTMLElement) {
-          connectBtn.textContent = 'Reconnect';
+          connectBtn.textContent = S.app.reconnect;
           connectBtn.classList.remove('connected');
           connectBtn.classList.add('reconnect');
         }
@@ -2893,7 +2876,7 @@ function updateDeviceOfflineState(deviceKey, isOffline, isRemote = false) {
           statusDot.style.animation = 'pulse 2s ease-in-out infinite';
         }
         if (connectBtn instanceof HTMLElement) {
-          connectBtn.textContent = 'Disconnect';
+          connectBtn.textContent = S.common.disconnect;
           connectBtn.classList.add('connected');
           connectBtn.classList.remove('reconnect');
         }
@@ -2932,13 +2915,13 @@ function updateDeviceOfflineState(deviceKey, isOffline, isRemote = false) {
         if (isOffline) {
           panelDot.style.background = 'var(--accent-red)';
           panelDot.style.animation = 'none';
-          panelDot.title = 'Device offline';
-          panelDot.setAttribute('aria-label', 'Device offline');
+          panelDot.title = S.app.deviceOffline;
+          panelDot.setAttribute('aria-label', S.app.deviceOffline);
         } else {
           panelDot.style.background = 'var(--accent-green)';
           panelDot.style.animation = 'pulse 2s ease-in-out infinite';
-          panelDot.title = 'Connected';
-          panelDot.setAttribute('aria-label', 'Connected');
+          panelDot.title = S.common.connected;
+          panelDot.setAttribute('aria-label', S.common.connected);
         }
       }
 
@@ -2951,9 +2934,9 @@ function updateDeviceOfflineState(deviceKey, isOffline, isRemote = false) {
           setSafeHTML(newOverlay, `
             <div class="offline-content">
               <div class="offline-icon">${icon('wifi-off', 'icon-xl')}</div>
-              <h3>Device Offline</h3>
-              <p>Unable to connect to this Roku device.</p>
-              <button class="btn btn-primary retry-connection-btn">${icon('refresh', 'icon-xs')} Retry Connection</button>
+              <h3>${S.app.deviceOffline}</h3>
+              <p>${S.app.unableToConnectDevice}</p>
+              <button class="btn btn-primary retry-connection-btn">${icon('refresh', 'icon-xs')} ${S.app.retryConnection}</button>
             </div>
           `);
           const devicePanelRoot = panel.querySelector('.device-panel');
@@ -3100,7 +3083,7 @@ function openDeviceHardwareImageModal(imageSrc, device, opener?: HTMLElement | n
   modal.setAttribute('aria-modal', 'true');
   modal.setAttribute(
     'aria-label',
-    `${device.deviceName || device.modelName || 'Roku device'} — device image`
+    S.app.deviceImageAria(device.deviceName || device.modelName || S.app.rokuDevice)
   );
 
   const header = document.createElement('div');
@@ -3111,7 +3094,7 @@ function openDeviceHardwareImageModal(imageSrc, device, opener?: HTMLElement | n
 
   const titleEl = document.createElement('span');
   titleEl.className = 'device-hardware-image-modal-title';
-  titleEl.textContent = device.deviceName || device.modelName || 'Roku device';
+  titleEl.textContent = device.deviceName || device.modelName || S.app.rokuDevice;
   titleGroup.appendChild(titleEl);
 
   const ip = typeof device.ip === 'string' ? device.ip.trim() : '';
@@ -3120,8 +3103,8 @@ function openDeviceHardwareImageModal(imageSrc, device, opener?: HTMLElement | n
     ipRow.className = 'device-hardware-image-modal-ip-row';
     const dot = document.createElement('span');
     dot.className = 'status-dot';
-    dot.title = 'Connected';
-    dot.setAttribute('aria-label', 'Connected');
+    dot.title = S.common.connected;
+    dot.setAttribute('aria-label', S.common.connected);
     const ipEl = document.createElement('span');
     ipEl.className = 'device-ip';
     ipEl.textContent = ip;
@@ -3133,7 +3116,7 @@ function openDeviceHardwareImageModal(imageSrc, device, opener?: HTMLElement | n
   const closeBtn = document.createElement('button');
   closeBtn.type = 'button';
   closeBtn.className = 'modal-close device-hardware-image-modal-close';
-  closeBtn.setAttribute('aria-label', 'Close');
+  closeBtn.setAttribute('aria-label', S.common.close);
   setSafeHTML(closeBtn, icon('x', 'icon-sm'));
 
   const body = document.createElement('div');
@@ -3152,11 +3135,11 @@ function openDeviceHardwareImageModal(imageSrc, device, opener?: HTMLElement | n
 
   const footerItems: Array<{ label: string; value: string; end?: boolean }> = [];
   const footerModel = getDeviceHardwareImageModalFooterModel(device);
-  if (footerModel) footerItems.push({ label: 'Model', value: footerModel });
+  if (footerModel) footerItems.push({ label: S.app.labelModel, value: footerModel });
   const screenSize = getDeviceHardwareImageModalScreenSize(device);
   // Right-align Screen Size to the far edge of the footer (only meaningful when
   // Model is also present; on its own it just sits at the start).
-  if (screenSize) footerItems.push({ label: 'Screen Size', value: screenSize, end: footerItems.length > 0 });
+  if (screenSize) footerItems.push({ label: S.app.labelScreenSize, value: screenSize, end: footerItems.length > 0 });
   if (footerItems.length) {
     const footer = document.createElement('div');
     footer.className = 'device-hardware-image-modal-footer';
@@ -3190,12 +3173,12 @@ function openDeviceHardwareImageModal(imageSrc, device, opener?: HTMLElement | n
     swCell.className = 'device-hardware-image-modal-footer-item';
     const swLabel = document.createElement('span');
     swLabel.className = 'device-hardware-image-modal-footer-label';
-    swLabel.textContent = 'OS Version & Build';
+    swLabel.textContent = S.app.labelOsVersionBuild;
     const swValue = document.createElement('div');
     swValue.className = 'device-hardware-image-modal-footer-value';
     const swVersion = typeof device.softwareVersion === 'string' ? device.softwareVersion.trim() : '';
     const swBuild = typeof device.softwareBuild === 'string' ? device.softwareBuild.trim() : '';
-    swValue.textContent = swVersion ? `${swVersion}${swBuild ? ` (${swBuild})` : ''}` : 'Unknown';
+    swValue.textContent = swVersion ? `${swVersion}${swBuild ? ` (${swBuild})` : ''}` : S.app.unknown;
     swCell.appendChild(swLabel);
     swCell.appendChild(swValue);
 
@@ -3206,15 +3189,15 @@ function openDeviceHardwareImageModal(imageSrc, device, opener?: HTMLElement | n
     const checkBtn = document.createElement('button');
     checkBtn.type = 'button';
     checkBtn.className = 'btn btn-secondary device-hardware-image-modal-action-btn';
-    checkBtn.title = 'Check for Updates';
-    checkBtn.setAttribute('aria-label', 'Check for Updates');
+    checkBtn.title = S.app.checkForUpdates;
+    checkBtn.setAttribute('aria-label', S.app.checkForUpdates);
     setSafeHTML(checkBtn, icon('refresh', 'icon-md'));
 
     const restartBtn = document.createElement('button');
     restartBtn.type = 'button';
     restartBtn.className = 'btn btn-secondary device-hardware-image-modal-action-btn';
-    restartBtn.title = 'Restart Device';
-    restartBtn.setAttribute('aria-label', 'Restart Device');
+    restartBtn.title = S.app.restartDevice;
+    restartBtn.setAttribute('aria-label', S.app.restartDevice);
     setSafeHTML(restartBtn, icon('replay', 'icon-md'));
 
     const checkSlot = document.createElement('div');
@@ -3242,12 +3225,12 @@ function openDeviceHardwareImageModal(imageSrc, device, opener?: HTMLElement | n
       fn: (ip: string, password: string) => Promise<{ success?: boolean; message?: string; error?: string } | undefined>
     ) => {
       if (!actionIp) {
-        showToast('Device IP is unavailable.', 'error');
+        showToast(S.app.deviceIpUnavailable, 'error');
         return;
       }
       const pwd = getPwd();
       if (!pwd) {
-        showToast('Set this device’s developer password first (Dev App tab).', 'error');
+        showToast(S.app.setDevPasswordFirst, 'error');
         return;
       }
       checkBtn.disabled = true;
@@ -3256,12 +3239,12 @@ function openDeviceHardwareImageModal(imageSrc, device, opener?: HTMLElement | n
       try {
         const res = await fn(actionIp, pwd);
         if (res && res.success) {
-          showToast(res.message || `${label} succeeded.`, 'success');
+          showToast(res.message || S.app.actionSucceeded(label), 'success');
         } else {
-          showToast((res && res.error) || `${label} failed.`, 'error');
+          showToast((res && res.error) || S.app.actionFailed(label), 'error');
         }
       } catch (err) {
-        showToast(`${label} failed: ${errMessage(err)}`, 'error');
+        showToast(S.app.actionFailedWith(label, errMessage(err)), 'error');
       } finally {
         checkBtn.disabled = false;
         restartBtn.disabled = false;
@@ -3270,10 +3253,10 @@ function openDeviceHardwareImageModal(imageSrc, device, opener?: HTMLElement | n
     };
 
     checkBtn.addEventListener('click', () =>
-      runAction(checkBtn, 'Check for updates', (ip, pwd) => window.roku.checkForUpdate(ip, pwd))
+      runAction(checkBtn, S.app.checkForUpdatesLabel, (ip, pwd) => window.roku.checkForUpdate(ip, pwd))
     );
     restartBtn.addEventListener('click', () =>
-      runAction(restartBtn, 'Restart device', (ip, pwd) => window.roku.reboot(ip, pwd))
+      runAction(restartBtn, S.app.restartDeviceLabel, (ip, pwd) => window.roku.reboot(ip, pwd))
     );
   }
 
@@ -3389,7 +3372,7 @@ function setDevicePanelIcon(
   btn.className = 'device-panel-hardware-btn';
   btn.setAttribute(
     'aria-label',
-    `View larger image: ${device.deviceName || device.modelName || 'Roku device'}`
+    S.app.viewLargerImage(device.deviceName || device.modelName || S.app.rokuDevice)
   );
   btn.addEventListener('click', (e) => {
     e.stopPropagation();
@@ -3649,7 +3632,12 @@ function createDevicePanel(device, tabId, isRemote = false, serverUrl = null, lo
   }
   
   panel.appendChild(clonedTemplate);
-  
+
+  // Localize the cloned device-panel template's static text (inner-tab labels,
+  // tooltips, headers). The one-shot applyI18n(document) at startup can't reach this
+  // subtree because it's cloned per device here; dynamic values below use S.* directly.
+  applyI18n(panel);
+
   // Create the unified API adapter
   const api = createApiAdapter(isRemote, device.ip, serverUrl);
   // Expose it to cross-cutting code (e.g. global keyboard-remote shortcuts)
@@ -3674,14 +3662,14 @@ function createDevicePanel(device, tabId, isRemote = false, serverUrl = null, lo
         nameText,
         icon('globe', 'icon-sm', 'icon-cyan') +
           ' ' +
-          escapeHtml(device.deviceName || device.modelName || 'Unknown Roku')
+          escapeHtml(device.deviceName || device.modelName || S.app.unknownRoku)
       );
     }
     if (ipEl) {
-      ipEl.textContent = `${device.ip} @ ${location?.name || 'Remote'}`;
+      ipEl.textContent = S.app.atLocation(device.ip, location?.name || S.app.remote);
     }
   } else {
-    if (nameText) nameText.textContent = device.deviceName || device.modelName || 'Unknown Roku';
+    if (nameText) nameText.textContent = device.deviceName || device.modelName || S.app.unknownRoku;
     if (ipEl) ipEl.textContent = device.ip;
   }
   
@@ -3854,7 +3842,7 @@ function setupRemoteControls(panel, device, api) {
   let screenshotDebounceTimer: ReturnType<typeof setTimeout> | null = null;
   // SCREENSHOT_DEBOUNCE_DELAY is imported from modules/utils/constants.js
   
-  // Auto-screenshot function for Remote tab
+  // Auto-screenshot function for Remote Section
   async function takeAutoScreenshot() {
     if (!autoScreenshotCheckbox || !autoScreenshotCheckbox.checked) return;
     
@@ -3954,7 +3942,7 @@ function setupRemoteTabInputs(
         btn.dataset.launch = inp.id;
         const displayName = inp.label || inp.id.replace(/^tvinput\./, '');
         btn.textContent = displayName;
-        btn.title = `Switch to ${displayName}`;
+        btn.title = S.app.switchToInput(displayName);
         btn.addEventListener('click', async () => {
           btn.classList.add('pressed');
           try {
@@ -3995,8 +3983,8 @@ function setupApps(panel, device, api) {
   const appsTitle = panel.querySelector('.installed-apps-title');
   const rawListTitle = panel.querySelector('.raw-list-title');
   const setAppsTitle = (hasInputs: boolean) => {
-    if (appsTitle) appsTitle.textContent = hasInputs ? 'Installed Apps and TV Inputs' : 'Installed Apps';
-    if (rawListTitle) rawListTitle.textContent = hasInputs ? 'Apps and Inputs List' : 'Raw List of Apps';
+    if (appsTitle) appsTitle.textContent = hasInputs ? S.app.installedAppsAndTvInputs : S.app.installedApps;
+    if (rawListTitle) rawListTitle.textContent = hasInputs ? S.app.appsAndInputsList : S.app.rawListOfApps;
   };
   
   if (!appsGrid || !appsLoading || !appsEmpty || !refreshBtn) {
@@ -4033,7 +4021,7 @@ function setupApps(panel, device, api) {
     const btn = document.createElement('button');
     btn.className = 'app-btn-dynamic';
     btn.dataset.app = appId;
-    btn.title = `${appName}\nID: ${appId}\nClick to launch`;
+    btn.title = S.app.appTileTitle(appName, appId);
 
     setSafeHTML(btn, `
       <div class="app-icon-wrapper">
@@ -4152,12 +4140,12 @@ function setupApps(panel, device, api) {
         runWithConcurrency(iconTasks, 6);
       } else {
         appsEmpty.style.display = 'block';
-        setSafeHTML(appsEmpty, '<p>Failed to load apps: ' + escapeHtml(result.error || 'Unknown error') + '</p>');
+        setSafeHTML(appsEmpty, '<p>' + S.app.failedToLoadApps + ' ' + escapeHtml(result.error || S.app.unknownError) + '</p>');
       }
     } catch (error) {
       appsLoading.style.display = 'none';
       appsEmpty.style.display = 'block';
-      setSafeHTML(appsEmpty, '<p>Error: ' + escapeHtml(errMessage(error)) + '</p>');
+      setSafeHTML(appsEmpty, '<p>' + S.app.errorPrefix + ' ' + escapeHtml(errMessage(error)) + '</p>');
     }
   }
   
@@ -4242,13 +4230,13 @@ function setupApps(panel, device, api) {
         return `ID: ${app.id.padEnd(16)} │ ${app.name}${versionStr}\n`;
       };
 
-      let formatted = 'INSTALLED APPS\n' + '═'.repeat(50) + '\n\n';
+      let formatted = S.app.installedAppsHeader + '\n' + '═'.repeat(50) + '\n\n';
       for (const app of regularApps) {
         formatted += formatRow(app);
       }
 
       if (inputs.length > 0) {
-        formatted += '\nINPUTS\n' + '═'.repeat(50) + '\n\n';
+        formatted += '\n' + S.app.inputsHeader + '\n' + '═'.repeat(50) + '\n\n';
         for (const app of inputs) {
           formatted += formatRow(app);
         }
@@ -4256,7 +4244,7 @@ function setupApps(panel, device, api) {
 
       appsOutput.textContent = formatted || result.data;
     } else {
-      appsOutput.textContent = `Error: ${result.error}`;
+      appsOutput.textContent = `${S.app.errorPrefix} ${result.error}`;
     }
   }
   
@@ -4281,12 +4269,12 @@ function setupApps(panel, device, api) {
     const text = appsOutput.textContent;
     if (text) {
       await window.roku.copyToClipboard(text);
-      copyAppsBtn.title = 'Copied!';
+      copyAppsBtn.title = S.app.copied;
       setSafeHTML(copyAppsBtn, icon('check', 'icon-xs'));
       copyAppsBtn.classList.add('copied');
 
       setTimeout(() => {
-        copyAppsBtn.title = 'Copy list';
+        copyAppsBtn.title = S.app.copyList;
         setSafeHTML(copyAppsBtn, icon('copy', 'icon-xs'));
         copyAppsBtn.classList.remove('copied');
       }, 2000);
@@ -4414,7 +4402,7 @@ function isKeyboardRemoteShortcutContextActive(panel: HTMLElement): boolean {
   return isFloatingRemoteVisible();
 }
 
-/** Remote tab Send Text field, scoped to the active inner pane. */
+/** Remote Section Send Text field, scoped to the active inner pane. */
 function queryRemoteSendTextInput(panel: HTMLElement): HTMLInputElement | null {
   const el = panel.querySelector(
     '.inner-tab-content[data-inner-content="remote"] .text-input'
@@ -4578,7 +4566,7 @@ async function manualConnect() {
   if (!ip) return;
   
   elements.manualConnectBtn.disabled = true;
-  elements.manualConnectBtn.textContent = 'Connecting...';
+  elements.manualConnectBtn.textContent = S.app.connecting;
   
   try {
     const result = await window.roku.testConnection(ip);
@@ -4598,15 +4586,15 @@ async function manualConnect() {
       
       elements.manualIp.value = '';
     } else {
-      alert(`Could not connect to ${ip}. Make sure the Roku device is on and accessible.`);
+      alert(S.app.couldNotConnectToIp(ip));
     }
   } catch (error) {
-    alert(`Connection error: ${errMessage(error)}`);
+    alert(S.app.connectionError(errMessage(error)));
   }
-  
+
   if (elements.manualConnectBtn) {
     elements.manualConnectBtn.disabled = false;
-    elements.manualConnectBtn.textContent = 'Connect';
+    elements.manualConnectBtn.textContent = S.common.connect;
   }
 }
 
@@ -4691,18 +4679,18 @@ function setupRemoteLocationModal() {
     hostInput.style.borderColor = '';
     
     confirmBtn.disabled = true;
-    confirmBtn.textContent = 'Connecting...';
-    
+    confirmBtn.textContent = S.app.connecting;
+
     try {
       await addRemoteLocation(name, host, port);
       closeModal();
     } catch (e) {
       rendererError('Failed to add remote location:', e);
-      alert(errMessage(e) || 'Failed to connect to relay server');
+      alert(errMessage(e) || S.app.failedToConnectRelay);
     }
-    
+
     confirmBtn.disabled = false;
-    confirmBtn.textContent = 'Add Location';
+    confirmBtn.textContent = S.app.addLocation;
   });
   
   // Enter key to submit
@@ -4784,7 +4772,7 @@ function setupFramelessTitlebar(): void {
       banner.id = 'titlebarShellWarning';
       banner.className = 'titlebar-shell-warning';
       banner.setAttribute('role', 'alert');
-      banner.textContent = 'Window controls are unavailable. Quit and restart Roku Dev Studio.';
+      banner.textContent = S.app.windowControlsUnavailable;
       document.body.prepend(banner);
     }
     return;
@@ -4801,7 +4789,7 @@ function setupFramelessTitlebar(): void {
   const syncMaximizeButton = (maximized: boolean) => {
     if (!maximizeBtn) return;
     maximizeBtn.classList.toggle('titlebar-maximized', maximized);
-    const label = maximized ? 'Restore down' : 'Maximize';
+    const label = maximized ? S.app.restoreDown : S.app.maximize;
     maximizeBtn.title = label;
     maximizeBtn.setAttribute('aria-label', label);
   };
@@ -5214,6 +5202,9 @@ async function init() {
   setupFramelessTitlebar();
   const { ensureGlobalModalsMounted } = await import('./components/modals/mount-global-modals.js');
   await ensureGlobalModalsMounted();
+  // Localize the static index.html shell + the just-injected modal fragments in one
+  // pass (elements carry data-i18n* attributes; inline English is the fallback).
+  applyI18n(document);
   await initDeeplinkMediaTypes();
   await initDeeplinkPresets();
   setupKeyboardRemoteHelpModal();
@@ -5373,7 +5364,7 @@ async function init() {
   renderDeviceList();
   updateTabBarVisibility();
   
-  // Load remote locations AFTER initial render (non-blocking)
+  // Load Remote Locations AFTER initial render (non-blocking)
   setTimeout(() => {
     loadRemoteLocations()
       .then(() => {
@@ -5382,11 +5373,11 @@ async function init() {
           startupRemoteScanComplete = true;
           void onStartupScansReady();
         }
-        // Refresh remote locations after a short delay
+        // Refresh Remote Locations after a short delay
         setTimeout(refreshAllRemoteLocations, 500);
       })
       .catch((e) => {
-        rendererError('Failed to load remote locations:', e);
+        rendererError('Failed to load Remote Locations:', e);
         startupRemoteScanComplete = true;
         void onStartupScansReady();
       });
@@ -5564,7 +5555,7 @@ async function init() {
     viewLogsBtn.addEventListener('click', async () => {
       const openResult = await window.roku.openLogFile();
       if (!openResult.success) {
-        alert('Could not open log file: ' + openResult.error);
+        alert(S.app.couldNotOpenLogFile(openResult.error));
       }
     });
   }
@@ -5624,7 +5615,7 @@ async function init() {
       // Network body panes — highlights matches across all sections and
       // navigates between them. Always visible in the header; Ctrl/Cmd+F
       // focuses it while the modal is open.
-      const helpFindBarEl = buildFindBarElement('Search Help & Guide');
+      const helpFindBarEl = buildFindBarElement(S.app.searchHelpGuide);
       helpFindBarEl.classList.add('find-bar-header');
       const helpHeader = helpModal.querySelector('.modal-header');
       if (helpHeader instanceof HTMLElement) helpHeader.insertBefore(helpFindBarEl, helpModalClose);
@@ -5947,21 +5938,21 @@ function updateEcpWarnings(panel, device) {
     if (mode === 'Disabled') {
       warning.classList.add('visible');
       warning.dataset.ecpVariant = 'disabled';
-      if (titleEl) titleEl.textContent = 'Control by Mobile Apps Disabled';
-      if (descEl) setSafeHTML(descEl, 'Remote control is off. Enable "Control by Mobile Apps" → Network Access on your Roku device to use remote, apps, and text input.');
+      if (titleEl) titleEl.textContent = S.app.ecpWarnDisabledTitle;
+      if (descEl) setSafeHTML(descEl, S.app.ecpWarnDisabledDesc);
       if (subnetNote) subnetNote.classList.remove('visible');
     } else if (mode === 'Limited') {
       warning.classList.add('visible');
       warning.dataset.ecpVariant = 'limited';
-      if (titleEl) titleEl.textContent = 'Control by Mobile Apps: Limited';
-      if (descEl) setSafeHTML(descEl, 'Text input, app launch, and app query work. Full remote keypress may not be available—set Network Access to <strong>Permissive</strong> or <strong>Enabled</strong> for full remote.');
+      if (titleEl) titleEl.textContent = S.app.ecpWarnLimitedTitle;
+      if (descEl) setSafeHTML(descEl, S.app.ecpWarnLimitedDesc);
       if (subnetNote) subnetNote.classList.remove('visible');
     } else if (mode === 'Permissive' || mode === 'Enabled') {
       if (showSubnetWarning) {
         warning.classList.add('visible');
         warning.dataset.ecpVariant = 'subnet';
-        if (titleEl) titleEl.textContent = 'Permissive: Check Network';
-        if (descEl) descEl.textContent = 'Permissive mode accepts commands only from the same subnet. Your machine may be on a different subnet; if commands fail, check your network.';
+        if (titleEl) titleEl.textContent = S.app.ecpWarnSubnetTitle;
+        if (descEl) descEl.textContent = S.app.ecpWarnSubnetDesc;
         if (subnetNote) subnetNote.classList.add('visible');
       } else {
         warning.classList.remove('visible');
@@ -5995,13 +5986,13 @@ window.saveTrackerTask = async function() {
     // Request the TrackerTask content from main process
     const result = await window.roku.saveTrackerTask();
     if (result.success) {
-      showToast('TrackerTask.xml saved successfully!', 'success');
+      showToast(S.app.trackerTaskSaved, 'success');
     } else {
-      showToast('Failed to save TrackerTask.xml: ' + (result.error || 'Unknown error'), 'error');
+      showToast(S.app.failedToSaveTrackerTask + ' ' + (result.error || S.app.unknownError), 'error');
     }
   } catch (err) {
     rendererError('Error saving TrackerTask:', err);
-    showToast('Error saving TrackerTask: ' + errMessage(err), 'error');
+    showToast(S.app.errorSavingTrackerTask + ' ' + errMessage(err), 'error');
   }
 };
 
@@ -6066,10 +6057,10 @@ End Sub
 `.trim();
 
   navigator.clipboard.writeText(integrationInfo).then(() => {
-    showToast('Integration info copied to clipboard!', 'success');
+    showToast(S.app.integrationInfoCopied, 'success');
   }).catch(err => {
     rendererError('Failed to copy:', err);
-    showToast('Failed to copy to clipboard', 'error');
+    showToast(S.app.failedToCopyClipboard, 'error');
   });
 };
 
@@ -6153,7 +6144,7 @@ function runInit() {
   });
   init().catch((err) => {
     rendererError('App init failed:', err);
-    alert('App initialization failed: ' + errMessage(err));
+    alert(S.app.appInitFailed + ' ' + errMessage(err));
   });
 }
 if (document.readyState === 'loading') {
@@ -6164,5 +6155,5 @@ if (document.readyState === 'loading') {
 
 } catch (err) {
   rendererError('=== FATAL ERROR IN APP.JS ===', err);
-  alert('App initialization failed: ' + errMessage(err));
+  alert(S.app.appInitFailed + ' ' + errMessage(err));
 }

@@ -7,15 +7,16 @@
 import { escapeHtml } from '../../modules/utils/dom.js';
 import { attachBackdropClickToClose } from '../../modules/utils/modal-backdrop-click.js';
 import { attachSearchHistory } from '../../modules/ui/search-history.js';
+import { S } from '@shared/strings/index.js';
 
 /** Supported filter fields, shown in the help modal with clickable examples. */
 export const FILTER_HELP_FIELDS: Array<{ field: string; desc: string; examples: string[] }> = [
-  { field: 'host:', desc: 'Match the hostname (substring).', examples: ['host:roku.com', 'host:googlevideo'] },
-  { field: 'method:', desc: 'HTTP method.', examples: ['method:POST', 'method:GET'] },
-  { field: 'status:', desc: 'Status code, or a class like 4xx / 5xx.', examples: ['status:404', 'status:4xx', 'status:5xx'] },
-  { field: 'type:', desc: 'Response Content-Type (alias content-type:).', examples: ['type:json', 'type:image'] },
-  { field: 'kind:', desc: 'Session kind.', examples: ['kind:https', 'kind:dns', 'kind:tcp'] },
-  { field: 'path:', desc: 'URL path (substring; alias url:).', examples: ['path:/v1/play'] }
+  { field: 'host:', desc: S.networkInspector.filterDescHost, examples: ['host:roku.com', 'host:googlevideo'] },
+  { field: 'method:', desc: S.networkInspector.filterDescMethod, examples: ['method:POST', 'method:GET'] },
+  { field: 'status:', desc: S.networkInspector.filterDescStatus, examples: ['status:404', 'status:4xx', 'status:5xx'] },
+  { field: 'type:', desc: S.networkInspector.filterDescType, examples: ['type:json', 'type:image'] },
+  { field: 'kind:', desc: S.networkInspector.filterDescKind, examples: ['kind:https', 'kind:dns', 'kind:tcp'] },
+  { field: 'path:', desc: S.networkInspector.filterDescPath, examples: ['path:/v1/play'] }
 ];
 
 export interface NetworkFilterControlsOpts {
@@ -96,7 +97,7 @@ export function openFilterHelpModal(onPick: (term: string) => void): void {
     const chips = f.examples
       .map(
         (ex) =>
-          `<button type="button" class="ni-filter-help-chip" data-filter-term="${escapeHtml(ex)}" title="Add to Filter">${escapeHtml(ex)}</button>`
+          `<button type="button" class="ni-filter-help-chip" data-filter-term="${escapeHtml(ex)}" title="${S.networkInspector.addToFilter}">${escapeHtml(ex)}</button>`
       )
       .join('');
     return `<tr>
@@ -105,15 +106,15 @@ export function openFilterHelpModal(onPick: (term: string) => void): void {
     </tr>`;
   }).join('');
   overlay.innerHTML = `
-    <div class="ni-filter-help-modal" role="dialog" aria-modal="true" aria-label="Filter Help">
+    <div class="ni-filter-help-modal" role="dialog" aria-modal="true" aria-label="${S.networkInspector.filterHelpAria}">
       <div class="ni-filter-help-header">
-        <h3>Filtering Sessions</h3>
-        <button type="button" class="modal-close ni-filter-help-close" title="Close" aria-label="Close">×</button>
+        <h3>${S.networkInspector.filterHelpHeading}</h3>
+        <button type="button" class="modal-close ni-filter-help-close" title="${S.common.close}" aria-label="${S.common.close}">×</button>
       </div>
       <div class="ni-filter-help-body">
-        <p class="ni-filter-help-intro">Type free text to match host, path, method, status, kind, or Content-Type. Use <code>field:value</code> for precise matches, and separate terms with <strong>commas</strong> to match <strong>any</strong> of them (OR).</p>
+        <p class="ni-filter-help-intro">${S.networkInspector.filterHelpIntro}</p>
         <table class="ni-filter-help-table"><tbody>${rows}</tbody></table>
-        <p class="ni-filter-help-note">Example: <button type="button" class="ni-filter-help-chip" data-filter-term="host:roku.com, status:4xx, method:POST" title="Add to Filter">host:roku.com, status:4xx, method:POST</button> shows any session on roku.com <em>or</em> with a 4xx status <em>or</em> using POST. Click any example to add it.</p>
+        <p class="ni-filter-help-note">${S.networkInspector.filterHelpNoteLead}<button type="button" class="ni-filter-help-chip" data-filter-term="host:roku.com, status:4xx, method:POST" title="${S.networkInspector.addToFilter}">host:roku.com, status:4xx, method:POST</button>${S.networkInspector.filterHelpNoteExplain}</p>
       </div>
     </div>`;
   document.body.appendChild(overlay);

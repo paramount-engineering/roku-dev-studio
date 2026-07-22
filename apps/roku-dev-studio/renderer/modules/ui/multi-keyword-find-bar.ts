@@ -23,6 +23,7 @@ import {
   setCurrentMatchHighlight
 } from './find-highlight.js';
 import { compileGlobalSearchRegex, looksLikeRegex } from '@shared/platform/text-match.js';
+import { S } from '@shared/strings/index.js';
 
 /**
  * One search chip. `regex` terms (seeded from the modal's `.*` entries) match via a compiled RegExp
@@ -85,14 +86,14 @@ export function buildMultiFindBarElement(): HTMLElement {
   bar.innerHTML =
     `<div class="mkw-bar-box" data-mkw-box>` +
     `<div class="mkw-bar-fields" data-mkw-fields>` +
-    `<input type="text" class="mkw-bar-input" data-mkw-input placeholder="Search…" spellcheck="false" aria-label="Search" />` +
+    `<input type="text" class="mkw-bar-input" data-mkw-input placeholder="${S.ui.searchPlaceholder}" spellcheck="false" aria-label="${S.common.search}" />` +
     `</div>` +
-    `<button type="button" class="mkw-bar-opt" data-mkw-regex title="Use Regular Expression" aria-pressed="false" aria-label="Use regular expression">.*</button>` +
-    `<span class="mkw-bar-hint" data-mkw-hint>Press <kbd>Enter</kbd> to search multiple words</span>` +
+    `<button type="button" class="mkw-bar-opt" data-mkw-regex title="${S.ui.useRegex}" aria-pressed="false" aria-label="${S.ui.useRegexAria}">.*</button>` +
+    `<span class="mkw-bar-hint" data-mkw-hint>${S.ui.multiWordSearchHint}</span>` +
     `<span class="mkw-bar-count" data-mkw-count aria-live="polite"></span>` +
-    `<button type="button" class="mkw-bar-btn" data-mkw-prev title="Previous Match (Shift+Enter)" aria-label="Previous Match"><span class="icon icon-xs"><svg><use href="#icon-chevron-up"/></svg></span></button>` +
-    `<button type="button" class="mkw-bar-btn" data-mkw-next title="Next Match (Enter)" aria-label="Next Match"><span class="icon icon-xs"><svg><use href="#icon-chevron-down"/></svg></span></button>` +
-    `<button type="button" class="mkw-bar-btn" data-mkw-clear title="Clear search (Esc)" aria-label="Clear search"><span class="icon icon-xs"><svg><use href="#icon-x"/></svg></span></button>` +
+    `<button type="button" class="mkw-bar-btn" data-mkw-prev title="${S.ui.prevMatchTitle}" aria-label="${S.ui.prevMatch}"><span class="icon icon-xs"><svg><use href="#icon-chevron-up"/></svg></span></button>` +
+    `<button type="button" class="mkw-bar-btn" data-mkw-next title="${S.ui.nextMatchTitle}" aria-label="${S.ui.nextMatch}"><span class="icon icon-xs"><svg><use href="#icon-chevron-down"/></svg></span></button>` +
+    `<button type="button" class="mkw-bar-btn" data-mkw-clear title="${S.ui.clearSearchTitle}" aria-label="${S.ui.clearSearch}"><span class="icon icon-xs"><svg><use href="#icon-x"/></svg></span></button>` +
     `</div>`;
   return bar;
 }
@@ -159,9 +160,7 @@ export function createMultiFindBar(opts: MultiFindOptions): MultiFindHandle | nu
     regexBtn.setAttribute('aria-pressed', String(regexMode));
     const suggest = !regexMode && looksLikeRegex(inputEl.value);
     regexBtn.classList.toggle('is-suggested', suggest);
-    regexBtn.title = suggest
-      ? 'This looks like a regular expression — click to search by regex'
-      : 'Use Regular Expression';
+    regexBtn.title = suggest ? S.ui.regexSuggest : S.ui.useRegex;
   };
 
   let full = '';
@@ -343,7 +342,7 @@ export function createMultiFindBar(opts: MultiFindOptions): MultiFindHandle | nu
     }
     barEl.classList.remove('mkw-bar-empty');
     const total = matchOffsets.length >= MAX_MATCHES ? `${MAX_MATCHES}+` : `${matchOffsets.length}`;
-    countEl.textContent = currentIndex >= 0 ? `${currentIndex + 1} of ${total}` : total;
+    countEl.textContent = currentIndex >= 0 ? S.ui.matchCountOf(currentIndex + 1, total) : total;
   }
 
   function runSearch(jumpToFirst: boolean): void {
@@ -385,7 +384,7 @@ export function createMultiFindBar(opts: MultiFindOptions): MultiFindHandle | nu
         const badge = document.createElement('span');
         badge.className = 'mkw-chip-rx';
         badge.textContent = '.*';
-        badge.title = 'Regular expression';
+        badge.title = S.ui.regexBadgeTitle;
         chip.append(badge);
       }
       const label = document.createElement('span');
@@ -394,7 +393,7 @@ export function createMultiFindBar(opts: MultiFindOptions): MultiFindHandle | nu
       const rm = document.createElement('button');
       rm.type = 'button';
       rm.className = 'mkw-chip-remove';
-      rm.setAttribute('aria-label', `Remove ${kw.text}`);
+      rm.setAttribute('aria-label', S.ui.removeKeywordAria(kw.text));
       rm.textContent = '×';
       rm.addEventListener('click', () => removeKeyword(kw));
       chip.append(label, rm);

@@ -30,6 +30,7 @@ import { applyRaleArgsToBuilderParams } from './builder-step-helpers.js';
 import { createRenderStepFields } from './builder-render-step-fields.js';
 import { collectActionStepHelpContext, openActionStepHelpModal } from './action-step-help-modal.js';
 import { createBuilderStepForm } from './builder-step-form.js';
+import { S } from '@shared/strings/index.js';
 
 const STEP_TYPES = Object.keys(STEP_SCHEMA);
 
@@ -174,8 +175,8 @@ export function setupBuilder(panel, api, context) {
     const fields = builderStepFields instanceof HTMLElement ? builderStepFields : null;
     const sub = fields ? collectActionStepHelpContext(type, fields) : null;
     const detail = sub?.subtitle ? ` · ${sub.subtitle}` : '';
-    builderStepHelpBtn.title = `Help: ${typeLabel}${detail}`;
-    builderStepHelpBtn.setAttribute('aria-label', `Help: ${typeLabel}${detail}`);
+    builderStepHelpBtn.title = S.actionScripts.helpTooltip(typeLabel, detail);
+    builderStepHelpBtn.setAttribute('aria-label', S.actionScripts.helpTooltip(typeLabel, detail));
   }
 
   function renderStepFields(type: string) {
@@ -266,11 +267,11 @@ export function setupBuilder(panel, api, context) {
 
   function applyAddModeChrome() {
     if (builderFormHeading) {
-      builderFormHeading.textContent = 'Add Step';
+      builderFormHeading.textContent = S.actionScripts.addStep;
       builderFormHeading.classList.remove('builder-form-heading-update');
     }
     if (builderAddStepBtn) {
-      builderAddStepBtn.textContent = 'Add Action';
+      builderAddStepBtn.textContent = S.actionScripts.addActionBtn;
       builderAddStepBtn.classList.remove('builder-btn-update');
     }
     if (builderCancelEditBtn) builderCancelEditBtn.style.display = 'none';
@@ -310,11 +311,11 @@ export function setupBuilder(panel, api, context) {
     addFormVisible = false;
     resetAddPlacementToRoot();
     if (builderFormHeading) {
-      builderFormHeading.textContent = `Update Step ${index + 1}`;
+      builderFormHeading.textContent = S.actionScripts.updateStepHeading(index + 1);
       builderFormHeading.classList.add('builder-form-heading-update');
     }
     if (builderAddStepBtn) {
-      builderAddStepBtn.textContent = 'Update Action';
+      builderAddStepBtn.textContent = S.actionScripts.updateActionBtn;
       builderAddStepBtn.classList.add('builder-btn-update');
     }
     if (builderCancelEditBtn) builderCancelEditBtn.style.display = 'inline-flex';
@@ -340,7 +341,7 @@ export function setupBuilder(panel, api, context) {
       if (!ok) steps.push(clone);
     }
     afterMutation();
-    showToast('Action pasted', 'success');
+    showToast(S.actionScripts.toastActionPasted, 'success');
   }
 
   /** True if `inner` points to a descendant of the step at `outer`. */
@@ -388,7 +389,7 @@ export function setupBuilder(panel, api, context) {
         return;
       }
       if (isPathInsideSubtree(targetPath, fromPath)) {
-        showToast('Cannot move a step into its own If branch.', 'error');
+        showToast(S.actionScripts.toastCannotMoveIntoOwnBranch, 'error');
         return;
       }
       const targetLoc = getParentArrayAndIndex(steps, targetPath);
@@ -458,7 +459,7 @@ export function setupBuilder(panel, api, context) {
         const f = flattenStepsPreorder(steps);
         if (idx < 0 || idx >= f.length) return;
         copiedStep = JSON.parse(JSON.stringify(f[idx].step));
-        showToast('Action copied', 'success');
+        showToast(S.actionScripts.toastActionCopied, 'success');
         renderStepsList();
         requestAnimationFrame(() => {
           const row = builderStepsList?.querySelector(`.steps-list-builder-row[data-index="${idx}"]`);
@@ -522,7 +523,7 @@ export function setupBuilder(panel, api, context) {
       ) as HTMLSelectElement | null;
       const chart = chartEl && chartEl.value ? chartEl.value.trim() : '';
       if (!chart) {
-        showToast('Choose a chart type for Device Performance.', 'error');
+        showToast(S.actionScripts.toastChooseChartType, 'error');
         return;
       }
     }
@@ -549,7 +550,7 @@ export function setupBuilder(panel, api, context) {
         switchToAddMode();
         afterMutation();
         const actionNumber = updatedIndex + 1;
-        showToast(`Updated Action #${actionNumber}`, 'success');
+        showToast(S.actionScripts.toastUpdatedAction(actionNumber), 'success');
         requestAnimationFrame(() => {
           const row = builderStepsList?.querySelector(`.steps-list-builder-row[data-index="${updatedIndex}"]`);
           if (row) {
@@ -609,8 +610,8 @@ export function setupBuilder(panel, api, context) {
     } else if (navigator.clipboard && navigator.clipboard.writeText) {
       navigator.clipboard.writeText(json);
     }
-    if (builderCopyJsonBtn) builderCopyJsonBtn.textContent = 'Copied!';
-    setTimeout(() => { builderCopyJsonBtn.textContent = 'Copy Action Script'; }, 2000);
+    if (builderCopyJsonBtn) builderCopyJsonBtn.textContent = S.actionScripts.copiedFeedback;
+    setTimeout(() => { builderCopyJsonBtn.textContent = S.actionScripts.copyActionScriptBtn; }, 2000);
   });
 
   if (builderCopyToExecutorBtn && typeof onCopyToExecutor === 'function') {
@@ -627,8 +628,8 @@ export function setupBuilder(panel, api, context) {
     const json = updateOutputPreview();
     const writeRes = await window.roku.actionScriptWriteFile({ filePath: res.filePath, content: json, encoding: 'utf8' });
     if (writeRes.success) {
-      builderSaveScriptBtn.textContent = 'Saved!';
-      setTimeout(() => { builderSaveScriptBtn.textContent = 'Save Action Script'; }, 2000);
+      builderSaveScriptBtn.textContent = S.actionScripts.savedFeedback;
+      setTimeout(() => { builderSaveScriptBtn.textContent = S.actionScripts.saveActionScriptBtn; }, 2000);
     }
   });
 
@@ -673,15 +674,15 @@ export function setupBuilder(panel, api, context) {
    */
   async function importFromValidatedJson(text: string): Promise<{ ok: true } | { ok: false; message: string }> {
     const raw = (text || '').trim();
-    if (!raw) return { ok: false, message: 'No script JSON to load.' };
+    if (!raw) return { ok: false, message: S.actionScripts.msgNoScriptJson };
     let parsed: unknown;
     try {
       parsed = JSON.parse(raw);
     } catch (e) {
-      return { ok: false, message: `Invalid JSON: ${errMsg(e)}` };
+      return { ok: false, message: S.actionScripts.invalidJson(errMsg(e)) };
     }
     if (!parsed || typeof parsed !== 'object' || !Array.isArray((parsed as { steps?: unknown }).steps)) {
-      return { ok: false, message: 'Script must have a "steps" array.' };
+      return { ok: false, message: S.actionScripts.msgStepsArray };
     }
     const stepsArray = (parsed as { steps: unknown[] }).steps;
     const needsRale = scriptNeedsRaleConnection({ steps: stepsArray });
@@ -693,17 +694,17 @@ export function setupBuilder(panel, api, context) {
     }
     const result = parseAndValidateScript(raw, raleFunctions);
     if (result.parseError) {
-      return { ok: false, message: `Invalid JSON: ${result.parseError}` };
+      return { ok: false, message: S.actionScripts.invalidJson(result.parseError) };
     }
     const importValidation = result.validation;
     if (!importValidation || !importValidation.valid) {
       const flatLabels = flattenStepsPreorder(stepsArray);
       const errLines = (importValidation?.errors || []).map((e) =>
         e.stepIndex != null
-          ? `Action ${stepPathToDisplayId(flatLabels[e.stepIndex] && flatLabels[e.stepIndex].path, e.stepIndex)}: ${e.message}`
+          ? S.actionScripts.actionLabel(stepPathToDisplayId(flatLabels[e.stepIndex] && flatLabels[e.stepIndex].path, e.stepIndex), e.message)
           : e.message
       );
-      return { ok: false, message: `Validation:\n${errLines.join('\n')}` };
+      return { ok: false, message: S.actionScripts.msgValidation(errLines.join('\n')) };
     }
     snapshotSteps();
     steps = result.script.steps || [];

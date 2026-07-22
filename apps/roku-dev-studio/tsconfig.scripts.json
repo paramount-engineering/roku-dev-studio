@@ -6,7 +6,13 @@
     "noEmit": true,
     "strict": true,
     "skipLibCheck": true,
-    "esModuleInterop": true
+    "esModuleInterop": true,
+    // Some script-graph files reach renderer modules that import the shared UI-string
+    // catalog via `@shared/*` (e.g. console-log/console-structured-syntax.ts). Mirror the
+    // renderer/electron path mapping so it resolves here too. Relative target — no baseUrl.
+    "paths": {
+      "@shared/*": ["./shared/*"]
+    }
   },
   "include": ["scripts/**/*.ts"],
   "exclude": ["scripts/verify-structured-pills.ts"]

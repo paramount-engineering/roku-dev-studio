@@ -10,6 +10,7 @@
 
 import { showToast } from '../../modules/utils/ui.js';
 import { attachBackdropClickToClose } from '../../modules/utils/modal-backdrop-click.js';
+import { S } from '@shared/strings/index.js';
 
 interface UpdaterStatus {
   type: 'idle' | 'checking' | 'available' | 'not-available' | 'downloading' | 'ready' | 'error';
@@ -79,7 +80,7 @@ function renderReleaseNotesBody(body: string): string {
   // auto-generated downloads/installation table.
   const withoutSuffix = (body || '').replace(/\r\n?/g, '\n').replace(/\n---[\s\S]*$/, '');
   const trimmed = withoutSuffix.trim();
-  if (!trimmed) return '<p>No release notes provided for this release.</p>';
+  if (!trimmed) return `<p>${S.modals.noReleaseNotes}</p>`;
 
   const lines = trimmed.split('\n');
   const out: string[] = [];
@@ -212,7 +213,7 @@ function fetchLatestReleaseInfo(): Promise<LatestReleaseInfo> {
     }
     const json = result.info;
     const info: LatestReleaseInfo = {
-      title: String(json?.title || 'Latest Release'),
+      title: String(json?.title || S.modals.latestRelease),
       body: String(json?.body || ''),
       htmlUrl: String(json?.htmlUrl || LATEST_RELEASE_URL)
     };
@@ -286,16 +287,16 @@ function showReleaseNotesModal(opts: { originRect?: DOMRect } = {}): void {
   modal.innerHTML = `
     <div class="rds-release-notes-dialog" role="dialog" aria-modal="true" aria-labelledby="rdsReleaseNotesTitle">
       <div class="rds-release-notes-header">
-        <h3 id="rdsReleaseNotesTitle">Release Notes</h3>
+        <h3 id="rdsReleaseNotesTitle">${S.modals.releaseNotes}</h3>
         <div class="rds-release-notes-header-actions">
-          <button type="button" class="rds-release-notes-icon-btn" id="rdsReleaseNotesOpenPage" title="Open Release Page" aria-label="Open Release Page">
+          <button type="button" class="rds-release-notes-icon-btn" id="rdsReleaseNotesOpenPage" title="${S.modals.openReleasePage}" aria-label="${S.modals.openReleasePage}">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
               <polyline points="15 3 21 3 21 9"/>
               <line x1="10" y1="14" x2="21" y2="3"/>
             </svg>
           </button>
-          <button type="button" class="rds-release-notes-close" aria-label="Close">×</button>
+          <button type="button" class="rds-release-notes-close" aria-label="${S.common.close}">×</button>
         </div>
       </div>
       <div class="rds-release-notes-content" id="rdsReleaseNotesContent"></div>
@@ -315,7 +316,7 @@ function showReleaseNotesModal(opts: { originRect?: DOMRect } = {}): void {
   const applyInfo = (info: LatestReleaseInfo) => {
     // Update the modal heading to "v1.1.0 · Release Notes" once we know the version.
     const titleEl = document.getElementById('rdsReleaseNotesTitle');
-    if (titleEl) titleEl.textContent = `${info.title} · Release Notes`;
+    if (titleEl) titleEl.textContent = S.modals.versionedReleaseNotes(info.title);
     if (content) content.innerHTML = renderReleaseNotesBody(info.body);
     const openBtn = document.getElementById('rdsReleaseNotesOpenPage') as HTMLButtonElement | null;
     if (openBtn) {
@@ -330,7 +331,7 @@ function showReleaseNotesModal(opts: { originRect?: DOMRect } = {}): void {
   if (cachedLatestReleaseInfo) {
     applyInfo(cachedLatestReleaseInfo);
   } else if (content) {
-    content.innerHTML = `<div class="rds-release-notes-loading"><span class="rds-release-notes-spinner" aria-hidden="true"></span>Loading release notes…</div>`;
+    content.innerHTML = `<div class="rds-release-notes-loading"><span class="rds-release-notes-spinner" aria-hidden="true"></span>${S.modals.loadingReleaseNotes}</div>`;
   }
 
   // Smoothly expand out of the banner (if the caller passed its rect). Runs after content is
@@ -342,8 +343,8 @@ function showReleaseNotesModal(opts: { originRect?: DOMRect } = {}): void {
     fetchLatestReleaseInfo().then(applyInfo).catch((err) => {
       if (!content) return;
       content.innerHTML = `
-        <p>Could not load release notes right now.</p>
-        <p class="rds-release-notes-fallback">${escapeHtml(String(err?.message || err || 'Unknown error'))}</p>
+        <p>${S.modals.couldNotLoadReleaseNotes}</p>
+        <p class="rds-release-notes-fallback">${escapeHtml(String(err?.message || err || S.modals.unknownError))}</p>
       `;
     });
   }
@@ -709,15 +710,15 @@ function renderBanner(status: UpdaterStatus): void {
       <div class="rds-banner-header">
         <div class="rds-banner-icon">${iconSvg}</div>
         <div class="rds-banner-text">
-          <div class="rds-banner-title">Roku Dev Studio ${status.version ? `v${status.version}` : 'Update'} Available</div>
-          <div class="rds-banner-subtitle">A new version is ready to download.</div>
+          <div class="rds-banner-title">${S.modals.updateAvailableTitle(status.version)}</div>
+          <div class="rds-banner-subtitle">${S.modals.newVersionReady}</div>
         </div>
-        <button class="rds-banner-dismiss" aria-label="Dismiss update notification">×</button>
+        <button class="rds-banner-dismiss" aria-label="${S.modals.dismissUpdateNotification}">×</button>
       </div>
       <div class="rds-banner-actions">
-        <button class="rds-banner-btn rds-banner-btn-ghost" id="rdsUpdateReleaseNotes">Release Notes</button>
-        <button class="rds-banner-btn rds-banner-btn-ghost" id="rdsUpdateDismiss">Later</button>
-        <button class="rds-banner-btn rds-banner-btn-primary" id="rdsUpdateDownload">Download</button>
+        <button class="rds-banner-btn rds-banner-btn-ghost" id="rdsUpdateReleaseNotes">${S.modals.releaseNotes}</button>
+        <button class="rds-banner-btn rds-banner-btn-ghost" id="rdsUpdateDismiss">${S.modals.later}</button>
+        <button class="rds-banner-btn rds-banner-btn-primary" id="rdsUpdateDownload">${S.modals.download}</button>
       </div>`;
 
     document.body.appendChild(banner);
@@ -747,8 +748,8 @@ function renderBanner(status: UpdaterStatus): void {
       <div class="rds-banner-header">
         <div class="rds-banner-icon">${iconSvg}</div>
         <div class="rds-banner-text">
-          <div class="rds-banner-title">Downloading Update…</div>
-          <div class="rds-banner-subtitle">Please wait while the update is downloaded.</div>
+          <div class="rds-banner-title">${S.modals.downloadingUpdate}</div>
+          <div class="rds-banner-subtitle">${S.modals.pleaseWaitDownloading}</div>
         </div>
       </div>
       <div class="rds-banner-progress-wrap">
@@ -763,13 +764,13 @@ function renderBanner(status: UpdaterStatus): void {
       <div class="rds-banner-header">
         <div class="rds-banner-icon">${iconSvg}</div>
         <div class="rds-banner-text">
-          <div class="rds-banner-title">Roku Dev Studio ${status.version ? `v${status.version}` : 'Update'} Ready</div>
-          <div class="rds-banner-subtitle">Will be installed on restart.</div>
+          <div class="rds-banner-title">${S.modals.updateReadyTitle(status.version)}</div>
+          <div class="rds-banner-subtitle">${S.modals.installedOnRestart}</div>
         </div>
       </div>
       <div class="rds-banner-actions">
-        <button class="rds-banner-btn rds-banner-btn-ghost" id="rdsUpdateLater">Later</button>
-        <button class="rds-banner-btn rds-banner-btn-primary" id="rdsUpdateInstall">Restart & Install</button>
+        <button class="rds-banner-btn rds-banner-btn-ghost" id="rdsUpdateLater">${S.modals.later}</button>
+        <button class="rds-banner-btn rds-banner-btn-primary" id="rdsUpdateInstall">${S.modals.restartAndInstall}</button>
       </div>`;
 
     document.body.appendChild(banner);
@@ -780,21 +781,21 @@ function renderBanner(status: UpdaterStatus): void {
     });
 
   } else if (status.type === 'error') {
-    const msg = status.message ?? 'Update check failed.';
+    const msg = status.message ?? S.modals.updateCheckFailed;
     if (status.needsManualDownload || isMissingReleaseMetadataError(msg)) {
-      const bannerTitle = status.version ? `Roku Dev Studio v${status.version} Available` : 'New Update Available';
+      const bannerTitle = status.version ? S.modals.updateAvailableTitle(status.version) : S.modals.newUpdateAvailable;
       banner.innerHTML = `
         <div class="rds-banner-header">
           <div class="rds-banner-icon">${iconSvg}</div>
           <div class="rds-banner-text">
             <div class="rds-banner-title">${bannerTitle}</div>
-            <div class="rds-banner-subtitle">Please download the latest release to update.</div>
+            <div class="rds-banner-subtitle">${S.modals.pleaseDownloadLatest}</div>
           </div>
-          <button class="rds-banner-dismiss" aria-label="Dismiss">×</button>
+          <button class="rds-banner-dismiss" aria-label="${S.modals.dismiss}">×</button>
         </div>
         <div class="rds-banner-actions">
-          <button class="rds-banner-btn rds-banner-btn-ghost" id="rdsUpdateReleaseNotes">Release Notes</button>
-          <button class="rds-banner-btn rds-banner-btn-primary" id="rdsUpdateOpenLatest">Download</button>
+          <button class="rds-banner-btn rds-banner-btn-ghost" id="rdsUpdateReleaseNotes">${S.modals.releaseNotes}</button>
+          <button class="rds-banner-btn rds-banner-btn-primary" id="rdsUpdateOpenLatest">${S.modals.download}</button>
         </div>`;
 
       document.body.appendChild(banner);
@@ -821,10 +822,10 @@ function renderBanner(status: UpdaterStatus): void {
       <div class="rds-banner-header">
         <div class="rds-banner-icon">${iconSvg}</div>
         <div class="rds-banner-text">
-          <div class="rds-banner-title">Update Error</div>
+          <div class="rds-banner-title">${S.modals.updateError}</div>
           <div class="rds-banner-error">${msg.length > 120 ? msg.slice(0, 120) + '…' : msg}</div>
         </div>
-        <button class="rds-banner-dismiss" aria-label="Dismiss">×</button>
+        <button class="rds-banner-dismiss" aria-label="${S.modals.dismiss}">×</button>
       </div>`;
 
     document.body.appendChild(banner);
@@ -841,8 +842,7 @@ export function mountUpdateNotification(): void {
     // A user-initiated "Check for Updates" that found nothing surfaces a brief,
     // auto-dismissing confirmation toast (the automatic startup check stays silent).
     if (status?.type === 'not-available' && status.notifyNoUpdate) {
-      const v = status.version ? ` (v${status.version})` : '';
-      showToast(`You're up to date${v}.`, 'success');
+      showToast(S.modals.upToDate(status.version), 'success');
     }
     renderBanner(status);
   });

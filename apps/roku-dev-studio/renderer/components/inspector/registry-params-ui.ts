@@ -2,6 +2,7 @@
 
 import { escapeHtml, setSafeHTML } from '../../modules/utils/index.js';
 import { syncBuilderRaleParamRowHeights } from './rale-builder-param-row-sync.js';
+import { S } from '@shared/strings/index.js';
 import type { RaleSendCommand } from './inspector-types.js';
 
 export type RegistrySectionsMap = Record<string, Record<string, string>>;
@@ -25,11 +26,11 @@ export async function fetchRegistrySectionsData(
 ): Promise<{ ok: true; sections: RegistrySectionsMap } | { ok: false; message: string }> {
   const connectionId = getConnectionId();
   if (!connectionId) {
-    return { ok: false, message: 'Not connected' };
+    return { ok: false, message: S.inspector.notConnected };
   }
   const res = await sendCommand('getRegistrySections', {});
   if (!res || !res.success) {
-    return { ok: false, message: String(res?.error || 'Command failed') };
+    return { ok: false, message: String(res?.error || S.inspector.commandFailed) };
   }
   const data = res.data;
   if (data && typeof data === 'object' && !Array.isArray(data)) {
@@ -40,7 +41,7 @@ export async function fetchRegistrySectionsData(
     }
   }
   if (!isSectionMap(data)) {
-    return { ok: false, message: 'Unexpected registry response' };
+    return { ok: false, message: S.inspector.unexpectedRegistryResponse };
   }
   const dataObj = data;
   const sections: RegistrySectionsMap = {};
@@ -75,13 +76,13 @@ function attachTextareaResize(root: HTMLElement) {
 function sectionOptionsHtml(sections: RegistrySectionsMap, selected: string) {
   const names = Object.keys(sections).sort();
   let html =
-    '<option value="">— Select section —</option>' +
+    `<option value="">${S.inspector.selectSection}</option>` +
     names.map((n) => {
       const sel = n === selected ? ' selected' : '';
       return `<option value="${escapeHtml(n)}"${sel}>${escapeHtml(n)}</option>`;
     }).join('');
   if (names.length === 0) {
-    html += '<option value="" disabled>(no sections)</option>';
+    html += `<option value="" disabled>${S.inspector.noSections}</option>`;
   }
   return html;
 }
@@ -89,13 +90,13 @@ function sectionOptionsHtml(sections: RegistrySectionsMap, selected: string) {
 function keyOptionsHtml(fields: Record<string, string>, selected = '') {
   const keys = Object.keys(fields || {}).sort();
   let html =
-    '<option value="">— Select key —</option>' +
+    `<option value="">${S.inspector.selectKey}</option>` +
     keys.map((k) => {
       const sel = k === selected ? ' selected' : '';
       return `<option value="${escapeHtml(k)}"${sel}>${escapeHtml(k)}</option>`;
     }).join('');
   if (keys.length === 0) {
-    html += '<option value="" disabled>(no keys)</option>';
+    html += `<option value="" disabled>${S.inspector.noKeys}</option>`;
   }
   return html;
 }
@@ -119,7 +120,7 @@ export async function renderRegistryBuiltinParams(
 
   setSafeHTML(
     paramsContainer,
-    `<div class="rale-params-empty"><span style="color: var(--text-secondary);">Loading registry…</span></div>`
+    `<div class="rale-params-empty"><span style="color: var(--text-secondary);">${S.inspector.loadingRegistry}</span></div>`
   );
 
   // Latest-call-wins: rapidly switching RALE registry commands would otherwise let an
@@ -156,11 +157,11 @@ export async function renderRegistryBuiltinParams(
             <span class="param-name">name</span>
             <span class="param-type type-string">String</span>
           </label>
-          <select class="rale-param-input rale-registry-select" data-param-index="0" data-param-type="string" aria-label="Section to remove">
+          <select class="rale-param-input rale-registry-select" data-param-index="0" data-param-type="string" aria-label="${S.inspector.ariaSectionToRemove}">
             ${sectionOptionsHtml(sections, '')}
           </select>
         </div>
-        <p class="rale-registry-hint" style="font-size: 11px; color: var(--text-secondary); margin-top: 8px;">Sections loaded from the device. Execute removes the selected section.</p>
+        <p class="rale-registry-hint" style="font-size: 11px; color: var(--text-secondary); margin-top: 8px;">${S.inspector.removeSectionHint}</p>
       </div>
     `
     );
@@ -177,7 +178,7 @@ export async function renderRegistryBuiltinParams(
             <span class="param-name">sectionName</span>
             <span class="param-type type-string">String</span>
           </label>
-          <select class="rale-param-input rale-registry-select" data-param-index="0" data-param-type="string" aria-label="Section">
+          <select class="rale-param-input rale-registry-select" data-param-index="0" data-param-type="string" aria-label="${S.inspector.ariaSection}">
             ${sectionOptionsHtml(sections, firstSection)}
           </select>
         </div>
@@ -186,14 +187,14 @@ export async function renderRegistryBuiltinParams(
             <span class="param-name">key</span>
             <span class="param-type type-string">String</span>
           </label>
-          <textarea class="rale-param-input" data-param-index="1" data-param-type="string" rows="1" placeholder="Field key"></textarea>
+          <textarea class="rale-param-input" data-param-index="1" data-param-type="string" rows="1" placeholder="${S.inspector.fieldKeyPlaceholder}"></textarea>
         </div>
         <div class="rale-param-input-row">
           <label class="rale-param-label">
             <span class="param-name">value</span>
             <span class="param-type type-string">String</span>
           </label>
-          <textarea class="rale-param-input" data-param-index="2" data-param-type="string" rows="1" placeholder="String value"></textarea>
+          <textarea class="rale-param-input" data-param-index="2" data-param-type="string" rows="1" placeholder="${S.inspector.stringValuePlaceholder}"></textarea>
         </div>
       </div>
     `
@@ -214,7 +215,7 @@ export async function renderRegistryBuiltinParams(
             <span class="param-name">sectionName</span>
             <span class="param-type type-string">String</span>
           </label>
-          <select class="rale-param-input rale-registry-select rale-registry-section" data-param-index="0" data-param-type="string" aria-label="Section">
+          <select class="rale-param-input rale-registry-select rale-registry-section" data-param-index="0" data-param-type="string" aria-label="${S.inspector.ariaSection}">
             ${sectionOptionsHtml(sections, firstSection)}
           </select>
         </div>
@@ -223,7 +224,7 @@ export async function renderRegistryBuiltinParams(
             <span class="param-name">key</span>
             <span class="param-type type-string">String</span>
           </label>
-          <select class="rale-param-input rale-registry-select rale-registry-key" data-param-index="1" data-param-type="string" aria-label="Key">
+          <select class="rale-param-input rale-registry-select rale-registry-key" data-param-index="1" data-param-type="string" aria-label="${S.inspector.ariaKey}">
             ${keyOptionsHtml(firstSection ? sections[firstSection] : {}, fk)}
           </select>
         </div>
@@ -246,7 +247,7 @@ export async function renderRegistryBuiltinParams(
             <span class="param-name">sectionName</span>
             <span class="param-type type-string">String</span>
           </label>
-          <select class="rale-param-input rale-registry-select rale-registry-section" data-param-index="0" data-param-type="string" aria-label="Section">
+          <select class="rale-param-input rale-registry-select rale-registry-section" data-param-index="0" data-param-type="string" aria-label="${S.inspector.ariaSection}">
             ${sectionOptionsHtml(sections, firstSection)}
           </select>
         </div>
@@ -255,7 +256,7 @@ export async function renderRegistryBuiltinParams(
             <span class="param-name">key</span>
             <span class="param-type type-string">String</span>
           </label>
-          <select class="rale-param-input rale-registry-select rale-registry-key" data-param-index="1" data-param-type="string" aria-label="Key to replace">
+          <select class="rale-param-input rale-registry-select rale-registry-key" data-param-index="1" data-param-type="string" aria-label="${S.inspector.ariaKeyToReplace}">
             ${keyOptionsHtml(firstSection ? sections[firstSection] : {}, fk)}
           </select>
         </div>
@@ -264,14 +265,14 @@ export async function renderRegistryBuiltinParams(
             <span class="param-name">newKey</span>
             <span class="param-type type-string">String</span>
           </label>
-          <textarea class="rale-param-input" data-param-index="2" data-param-type="string" rows="1" placeholder="New key"></textarea>
+          <textarea class="rale-param-input" data-param-index="2" data-param-type="string" rows="1" placeholder="${S.inspector.newKeyPlaceholder}"></textarea>
         </div>
         <div class="rale-param-input-row">
           <label class="rale-param-label">
             <span class="param-name">newValue</span>
             <span class="param-type type-string">String</span>
           </label>
-          <textarea class="rale-param-input" data-param-index="3" data-param-type="string" rows="1" placeholder="New value"></textarea>
+          <textarea class="rale-param-input" data-param-index="3" data-param-type="string" rows="1" placeholder="${S.inspector.newValuePlaceholder}"></textarea>
         </div>
       </div>
     `

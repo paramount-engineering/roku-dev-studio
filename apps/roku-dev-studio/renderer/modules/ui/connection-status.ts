@@ -1,5 +1,6 @@
 // Reusable connection status display component
 import { icon, escapeHtml, setSafeHTML } from '../utils/dom.js';
+import { S } from '@shared/strings/index.js';
 
 /**
  * ConnectionStatus - Manages connection status display
@@ -13,13 +14,13 @@ export class ConnectionStatus {
 
   setConnected(): void {
     if (!this.element) return;
-    setSafeHTML(this.element, icon('circle', 'icon-xs', 'icon-green') + ' Connected');
+    setSafeHTML(this.element, icon('circle', 'icon-xs', 'icon-green') + ' ' + S.common.connected);
     this.element.className = 'rale-connection-status connected';
   }
 
   setDisconnected(): void {
     if (!this.element) return;
-    setSafeHTML(this.element, icon('circle', 'icon-xs', 'icon-muted') + ' Disconnected');
+    setSafeHTML(this.element, icon('circle', 'icon-xs', 'icon-muted') + ' ' + S.common.disconnected);
     this.element.className = 'rale-connection-status disconnected';
   }
 
@@ -27,7 +28,7 @@ export class ConnectionStatus {
     if (!this.element) return;
     setSafeHTML(
       this.element,
-      icon('circle', 'icon-xs', 'icon-red') + ' ' + escapeHtml(String(message || 'Error'))
+      icon('circle', 'icon-xs', 'icon-red') + ' ' + escapeHtml(String(message || S.ui.statusError))
     );
     this.element.className = 'rale-connection-status error';
   }

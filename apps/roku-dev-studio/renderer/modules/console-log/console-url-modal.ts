@@ -1,5 +1,6 @@
 import { createSingletonConsoleModal } from './singleton-console-modal.js';
 import { consoleViewerModalTitle } from './console-modal-title.js';
+import { S } from '@shared/strings/index.js';
 
 const OVERLAY_ID = 'telnetUrlViewerOverlay';
 
@@ -68,9 +69,9 @@ function createParamTable(rows: UrlModalParamRow[]): HTMLTableElement {
   const thead = document.createElement('thead');
   const headRow = document.createElement('tr');
   const thKey = document.createElement('th');
-  thKey.textContent = 'Key';
+  thKey.textContent = S.consoleLog.colKey;
   const thVal = document.createElement('th');
-  thVal.textContent = 'Value';
+  thVal.textContent = S.consoleLog.colValue;
   headRow.appendChild(thKey);
   headRow.appendChild(thVal);
   thead.appendChild(headRow);
@@ -125,7 +126,7 @@ function populateUrlModalBody(overlay: HTMLElement, url: string): void {
   if (rowGroups.length === 0) {
     const hint = document.createElement('p');
     hint.className = 'telnet-url-view-no-params';
-    hint.textContent = rawQuery ? 'Could not parse parameters.' : 'No query parameters.';
+    hint.textContent = rawQuery ? S.consoleLog.couldNotParseParams : S.consoleLog.noQueryParams;
     paramsEl.appendChild(hint);
     return;
   }
@@ -136,7 +137,7 @@ function populateUrlModalBody(overlay: HTMLElement, url: string): void {
     if (rowGroups.length > 1) {
       const lab = document.createElement('div');
       lab.className = 'telnet-url-view-param-set-label';
-      lab.textContent = `Parameter set ${i + 1}`;
+      lab.textContent = S.consoleLog.parameterSet(i + 1);
       wrap.appendChild(lab);
     }
     wrap.appendChild(createParamTable(rows));
@@ -153,16 +154,16 @@ const urlModal = createSingletonConsoleModal({
   innerHTML: `
     <div class="modal telnet-url-view-modal" role="dialog" aria-modal="true" aria-labelledby="telnetUrlViewerTitle">
       <div class="modal-header">
-        <span class="modal-title" id="telnetUrlViewerTitle">Console</span>
+        <span class="modal-title" id="telnetUrlViewerTitle">${S.consoleLog.titlePrefix}</span>
         <div class="telnet-url-view-modal-actions">
-          <button type="button" class="btn btn-secondary telnet-url-view-open" title="Open in Default Browser">Open in Browser</button>
-          <button type="button" class="btn btn-secondary telnet-url-view-copy" title="Copy URL">Copy</button>
-          <button type="button" class="modal-close telnet-url-view-close" aria-label="Close"><span class="icon icon-sm"><svg><use href="#icon-x"/></svg></span></button>
+          <button type="button" class="btn btn-secondary telnet-url-view-open" title="${S.consoleLog.openInBrowserTitle}">${S.consoleLog.openInBrowser}</button>
+          <button type="button" class="btn btn-secondary telnet-url-view-copy" title="${S.consoleLog.copyUrlTitle}">${S.common.copy}</button>
+          <button type="button" class="modal-close telnet-url-view-close" aria-label="${S.common.close}"><span class="icon icon-sm"><svg><use href="#icon-x"/></svg></span></button>
         </div>
       </div>
       <div class="modal-body telnet-url-view-body">
-        <div class="telnet-url-view-full-url" tabindex="0" aria-label="Full URL"></div>
-        <div class="telnet-url-view-params" aria-label="Query parameters"></div>
+        <div class="telnet-url-view-full-url" tabindex="0" aria-label="${S.consoleLog.fullUrlAria}"></div>
+        <div class="telnet-url-view-params" aria-label="${S.consoleLog.queryParamsAria}"></div>
       </div>
     </div>
   `,
@@ -189,9 +190,9 @@ const urlModal = createSingletonConsoleModal({
         await window.roku.copyToClipboard(raw);
         if (copyBtn instanceof HTMLElement) {
           const prev = copyBtn.textContent;
-          copyBtn.textContent = 'Copied';
+          copyBtn.textContent = S.consoleLog.copied;
           setTimeout(() => {
-            copyBtn.textContent = prev || 'Copy';
+            copyBtn.textContent = prev || S.common.copy;
           }, 1600);
         }
       } catch {
@@ -215,7 +216,9 @@ export function openConsoleUrlViewer(
     overlay.dataset.currentUrl = url.trim();
     if (title) {
       const prefix = options?.titlePrefix?.trim();
-      title.textContent = prefix ? `${prefix}: URL` : consoleViewerModalTitle('URL');
+      title.textContent = prefix
+        ? `${prefix}: ${S.consoleLog.urlLabel}`
+        : consoleViewerModalTitle(S.consoleLog.urlLabel);
     }
     populateUrlModalBody(overlay, url);
   });

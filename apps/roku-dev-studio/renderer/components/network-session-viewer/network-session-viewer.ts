@@ -57,6 +57,7 @@ import {
   visibleFindOrder as visibleFindOrderShared,
   type FindTermInfo
 } from '../network-inspector/network-find-decorations.js';
+import { S, applyI18n } from '@shared/strings/index.js';
 
 type RokuApi = {
   loadNetworkSession: () => Promise<{
@@ -465,10 +466,10 @@ function wireEvents(): void {
   // Detail pane: tabs, format, wrap, copy/export, URL links — via the shared dispatcher.
   if (detailPane instanceof HTMLElement) {
     wireDetailInteractions(detailPane, {
-      onUrl: (anchor, url) => openConsoleUrlViewer(anchor, url, { titlePrefix: 'Network Session' }),
+      onUrl: (anchor, url) => openConsoleUrlViewer(anchor, url, { titlePrefix: S.networkSessionViewer.networkSession }),
       onEmbedded: (anchor, pane, idx) => {
         const payload = getEmbeddedStructuredPayload(pane as EmbeddedPane, idx);
-        if (payload) openConsoleStructuredViewer(anchor, payload, { titlePrefix: 'Network Session' });
+        if (payload) openConsoleStructuredViewer(anchor, payload, { titlePrefix: S.networkSessionViewer.networkSession });
       },
       onCopyMenuToggle: () => {
         const dd = copyDropdownEl as HTMLElement | null;
@@ -616,18 +617,20 @@ function setupFind(): void {
 
 async function main(): Promise<void> {
   bindPrivacyMode();
+  // Localize the static session-viewer.html shell (toolbar, tab labels, tooltips).
+  applyI18n(document);
   wireEvents();
   setupFind();
   setupBodyFind();
   const res = await api.loadNetworkSession();
   if (!res?.success || !res.events) {
     if (sessionListEl instanceof HTMLElement) {
-      sessionListEl.innerHTML = `<div class="ni-session-empty">${escapeText(res?.error || 'Failed to load session.')}</div>`;
+      sessionListEl.innerHTML = `<div class="ni-session-empty">${escapeText(res?.error || S.networkSessionViewer.failedToLoadSession)}</div>`;
     }
     return;
   }
   store.setAll(res.events);
-  document.title = res.fileName ? `Network Session — ${res.fileName}` : 'Network Session';
+  document.title = res.fileName ? S.networkSessionViewer.windowTitleWithFile(res.fileName) : S.networkSessionViewer.networkSession;
   if (res.notice && noticeEl instanceof HTMLElement) {
     noticeEl.textContent = res.notice;
     noticeEl.hidden = false;

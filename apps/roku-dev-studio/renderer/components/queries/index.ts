@@ -15,6 +15,7 @@ import { attachFoldToggle, structuredBodyText, structuredFileExtension } from '.
 import { attachSelectAll } from '../../modules/ui/select-all.js';
 import type { DevicePanelRoot } from '../../types/device-panel-dom.js';
 import { rendererError } from '../../modules/utils/logger.js';
+import { S } from '@shared/strings/index.js';
 
 export function setupQueries(panel: DevicePanelRoot, api: QueriesDeviceApi): void {
   panel.rokuDevStudioApi = api;
@@ -64,7 +65,7 @@ export function setupQueries(panel: DevicePanelRoot, api: QueriesDeviceApi): voi
 
   // Shared simple find bar, hosted inline in the Results card header to save vertical space. Shown
   // only when results are present (driven by OutputArea display/clear).
-  const findBarEl = buildFindBarElement('Find in Results');
+  const findBarEl = buildFindBarElement(S.queries.findInResults);
   findBarEl.classList.add('find-bar-header');
   const resultsHeader = panel.querySelector('.query-results-card-header');
   if (resultsHeader instanceof HTMLElement) resultsHeader.appendChild(findBarEl);
@@ -110,7 +111,7 @@ export function setupQueries(panel: DevicePanelRoot, api: QueriesDeviceApi): voi
   // Copy/Save operate on the visible text (or the structured source for JSON/XML) — never the
   // rendered HTML, so plain-text command output (e.g. `free -m`) isn't mistaken for markup.
   setupCopyButton(copyBtn, () => structuredBodyText(queryOutput), {
-    successText: '✓ Copied!',
+    successText: S.common.copied,
     duration: 2000
   });
 
@@ -120,7 +121,7 @@ export function setupQueries(panel: DevicePanelRoot, api: QueriesDeviceApi): voi
     void window.roku?.saveTextFile?.({
       content,
       defaultName: `ecp-response-${Date.now()}.${structuredFileExtension(content)}`,
-      dialogTitle: 'Save Results'
+      dialogTitle: S.queries.saveResultsDialog
     });
   });
 

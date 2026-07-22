@@ -4,6 +4,7 @@ import {
   type NetworkSession,
   statusClass
 } from './network-sessions.js';
+import { S } from '@shared/strings/index.js';
 
 function sessionMetaHtml(s: NetworkSession): string {
   return `<span class="ni-row-meta">
@@ -31,13 +32,13 @@ function sidebarRowHtml(s: NetworkSession, selectedEventId: string | null): stri
   const sel = s.eventId === selectedEventId ? ' ni-sidebar-row-selected' : '';
   const mitm = s.decrypted ? ' ni-sidebar-row-mitm' : '';
   const ssl = s.decrypted
-    ? '<span class="ni-sidebar-ssl" title="Decrypted (MITM)">🔓</span>'
+    ? `<span class="ni-sidebar-ssl" title="${S.networkInspector.sslDecryptedTitle}">🔓</span>`
     : s.encrypted
-      ? '<span class="ni-sidebar-ssl" title="HTTPS (encrypted)">🔒</span>'
+      ? `<span class="ni-sidebar-ssl" title="${S.networkInspector.sslEncryptedTitle}">🔒</span>`
       : '<span class="ni-sidebar-ssl">—</span>';
   const path = s.path.length > 48 ? `${s.path.slice(0, 45)}…` : s.path;
   return `<div class="ni-sidebar-row${sel}${mitm}" data-event-id="${escapeHtml(s.eventId)}">
-    <span class="ni-sidebar-seq">${seqPillHtml(s.index, `Session #${s.index}`)}</span>
+    <span class="ni-sidebar-seq">${seqPillHtml(s.index, S.networkInspector.sessionNumber(s.index))}</span>
     ${ssl}
     <span class="ni-sidebar-host">${escapeHtml(s.host)}</span>
     <span class="ni-sidebar-path">${escapeHtml(s.method)} ${escapeHtml(path)}</span>
@@ -58,7 +59,7 @@ export function renderSidebarSequence(
   selectedEventId: string | null
 ): string {
   if (sessions.length === 0) {
-    return `<div class="ni-session-empty">No matching sessions.</div>`;
+    return `<div class="ni-session-empty">${S.networkInspector.noMatchingSessions}</div>`;
   }
   return `<div class="ni-sidebar-scroll">${renderSidebarRows(sessions, selectedEventId)}</div>`;
 }
@@ -69,7 +70,7 @@ function structureLeafHtml(s: NetworkSession, selectedEventId: string | null): s
   // Use the session's stable capture index (not a per-group ordinal) so a request keeps the same
   // number across sequence/grouped views and it doesn't renumber when older events are trimmed.
   return `<div class="ni-struct-leaf${sel}" data-event-id="${escapeHtml(s.eventId)}">
-    <span class="ni-struct-leaf-seq">${seqPillHtml(s.index, `Request #${s.index}`)}</span>
+    <span class="ni-struct-leaf-seq">${seqPillHtml(s.index, S.networkInspector.requestNumber(s.index))}</span>
     <span class="ni-struct-leaf-label">${escapeHtml(label)}</span>
     <span class="ni-struct-leaf-status">${statusPillHtml(s)}</span>
     ${sessionMetaHtml(s)}
@@ -91,7 +92,7 @@ export function renderStructureTree(
   noticeHtml = ''
 ): string {
   if (sessions.length === 0) {
-    return `<div class="ni-session-empty">No hosts yet. Structure groups traffic by hostname.</div>`;
+    return `<div class="ni-session-empty">${S.networkInspector.noHostsYet}</div>`;
   }
   const groups = buildStructureGroups(sessions);
   const html = groups
@@ -139,7 +140,7 @@ export function syncGroupToggleButton(
   const allCollapsed = hosts.every((h) => collapsedHosts.has(h));
   const chevron = btn.querySelector('.ni-struct-chevron');
   if (chevron) chevron.textContent = allCollapsed ? '▶' : '▼';
-  const label = allCollapsed ? 'Expand all groups' : 'Collapse all groups';
+  const label = allCollapsed ? S.networkInspector.expandAllGroups : S.networkInspector.collapseAllGroups;
   btn.title = label;
   btn.setAttribute('aria-label', label);
 }

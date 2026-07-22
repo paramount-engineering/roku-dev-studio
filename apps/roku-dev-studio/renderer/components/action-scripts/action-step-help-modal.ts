@@ -18,6 +18,7 @@ import {
   closeModalWithOriginMotion
 } from '../../modules/utils/modal-origin-motion.js';
 import { attachBackdropClickToClose } from '../../modules/utils/modal-backdrop-click.js';
+import { S } from '@shared/strings/index.js';
 
 export type ActionStepHelpContext = {
   actionType: string;
@@ -72,7 +73,7 @@ export function collectActionStepHelpContext(
   if (type === 'query') {
     const preset = selValue(root, '.builder-query-preset');
     if (preset === '') {
-      return { actionType: type, variantKey: 'query:custom', subtitle: 'Custom endpoint' };
+      return { actionType: type, variantKey: 'query:custom', subtitle: S.actionScripts.helpSubCustomEndpoint };
     }
     const meta = QUERY_PRESETS.find((p) => p.endpoint === preset);
     const subtitle = meta ? meta.label : preset;
@@ -82,7 +83,7 @@ export function collectActionStepHelpContext(
   if (type === 'post') {
     const ep = selValue(root, '.builder-post-preset');
     if (!ep) {
-      return { actionType: type, variantKey: 'post:__none__', subtitle: 'Select a POST' };
+      return { actionType: type, variantKey: 'post:__none__', subtitle: S.actionScripts.helpSubSelectPost };
     }
     const meta = POST_PRESETS.find((p) => p.endpoint === ep);
     return { actionType: type, variantKey: `post:${ep}`, subtitle: meta ? meta.label : ep };
@@ -91,29 +92,29 @@ export function collectActionStepHelpContext(
   if (type === 'wait') {
     const mode = selValue(root, '.builder-field-wait-mode') || 'delay';
     if (mode === 'delay') {
-      return { actionType: type, variantKey: 'wait:delay', subtitle: 'Fixed delay' };
+      return { actionType: type, variantKey: 'wait:delay', subtitle: S.actionScripts.helpSubFixedDelay };
     }
     const src = selValue(root, '.builder-field-wait-source') || 'media-player';
     const srcLabel =
       src === 'rale-node-field'
-        ? 'RALE Node Field'
+        ? S.actionScripts.sourceRaleNodeField
         : src === 'media-player'
-          ? 'Media player'
+          ? S.actionScripts.sourceMediaPlayer
           : src;
     return {
       actionType: type,
       variantKey: `wait:condition:${src}`,
-      subtitle: `Until condition · ${srcLabel}`
+      subtitle: S.actionScripts.helpUntilCondition(srcLabel)
     };
   }
 
   if (type === 'if') {
     const src = selValue(root, '.builder-field-if-source') || 'media-player';
     const labels: Record<string, string> = {
-      'media-player': 'Media player',
-      'active-app': 'Active App',
-      'rale-node-field': 'RALE Node Field',
-      variables: 'Variables'
+      'media-player': S.actionScripts.sourceMediaPlayer,
+      'active-app': S.actionScripts.sourceActiveApp,
+      'rale-node-field': S.actionScripts.sourceRaleNodeField,
+      variables: S.actionScripts.sourceVariables
     };
     return { actionType: type, variantKey: `if:${src}`, subtitle: labels[src] || src };
   }
@@ -121,7 +122,7 @@ export function collectActionStepHelpContext(
   if (type === 'raleCommand') {
     const cmd = selValue(root, '.builder-field-rale-command');
     if (!cmd) {
-      return { actionType: type, variantKey: 'raleCommand:__none__', subtitle: 'Select a command' };
+      return { actionType: type, variantKey: 'raleCommand:__none__', subtitle: S.actionScripts.helpSubSelectCommand };
     }
     const def = getRaleBuiltinDefForCommand(cmd);
     return {
@@ -134,7 +135,7 @@ export function collectActionStepHelpContext(
   if (type === 'appFunction') {
     const fn = selValue(root, '.builder-field-functionName');
     if (!fn) {
-      return { actionType: type, variantKey: 'appFunction:__none__', subtitle: 'Select a function' };
+      return { actionType: type, variantKey: 'appFunction:__none__', subtitle: S.actionScripts.selectAFunction };
     }
     return { actionType: type, variantKey: `appFunction:${fn}`, subtitle: fn };
   }
@@ -142,7 +143,7 @@ export function collectActionStepHelpContext(
   if (type === 'keypress') {
     const key = selValue(root, '.builder-field-key-select');
     if (!key) {
-      return { actionType: type, variantKey: 'keypress:__none__', subtitle: 'Select a key' };
+      return { actionType: type, variantKey: 'keypress:__none__', subtitle: S.actionScripts.helpSubSelectKey };
     }
     return { actionType: type, variantKey: `keypress:${key}`, subtitle: keypressLabelForValue(key) };
   }
@@ -153,7 +154,7 @@ export function collectActionStepHelpContext(
     return {
       actionType: type,
       variantKey: cmd ? `systemTelnet:${cmd}` : 'systemTelnet:__none__',
-      subtitle: meta ? meta.label : cmd || 'Select command'
+      subtitle: meta ? meta.label : cmd || S.actionScripts.helpSubSelectCommandShort
     };
   }
 
@@ -162,233 +163,49 @@ export function collectActionStepHelpContext(
 
 /** Exact variant → body HTML (modal body only). */
 const VARIANT_HELP_BODIES: Record<string, string> = {
-  'query:custom': `
-    <p>
-      <strong>Custom</strong> lets you type any Device Query path yourself: a normal <code>/query/…</code> ECP GET, or
-      dev-style values such as <code>telnet:plugins</code> / <code>telnet:free</code>.
-    </p>
-    <p>Use this when there is no preset for the endpoint you need. The value is sent as-is to the same query machinery as presets.</p>
-  `,
-  'query:telnet:plugins': `
-    <p>
-      Runs the developer <strong>plugins</strong> telnet command (packed channel list / plugin summary). This is the
-      same data as choosing the Plugins preset in older flows, expressed as a query preset.
-    </p>
-    <p>Requires developer access to the device (same as other dev-plugin queries).</p>
-  `,
-  'query:telnet:free': `
-    <p>
-      Runs the developer <strong>free</strong> telnet command (memory / heap style snapshot). Use it when you need a
-      quick memory readout during a script.
-    </p>
-  `,
-  'post:__none__': `
-    <p>Choose one of the <strong>POST</strong> presets (SGRendezvous, FW Beacons, etc.). Each option maps to a fixed path on the device.</p>
-  `,
-  'wait:delay': `
-    <p>
-      Pauses the script for the given number of <strong>milliseconds</strong> with no polling. Use after animations,
-      launches, or any step where you only need a fixed pause.
-    </p>
-  `,
-  'wait:condition:media-player': `
-    <p>
-      Polls <code>/query/media-player</code> until the player’s <strong>state</strong> matches your selection (play,
-      pause, buffer, …) or the <strong>timeout</strong> elapses.
-    </p>
-    <p>
-      Tune <strong>Poll interval</strong> to balance responsiveness vs load. If the condition never becomes true, the
-      step fails when the timeout is reached.
-    </p>
-  `,
-  'wait:condition:rale-node-field': `
-    <p>
-      Polls via <strong>RALE</strong> until a field on a scene node matches the comparison (operator + value). You must
-      supply path (JSON array), node id, field name, and timing fields.
-    </p>
-    <p>
-      Requires an App Connector connection at run time. Operators like <code>exists</code> / <code>notExists</code> may
-      hide the value field—see the form labels for the active mode.
-    </p>
-  `,
-  'if:media-player': `
-    <p>
-      Evaluates the current <strong>media player</strong> state once and runs either the <strong>then</strong> or
-      <strong>else</strong> branch. Pick the expected state (play, pause, …) to branch on.
-    </p>
-    <p>Unlike <strong>Wait</strong>, there is no polling: the condition is checked a single time when the step runs.</p>
-  `,
-  'if:active-app': `
-    <p>
-      Compares one attribute from <code>/query/active-app</code> (app id, type, version, name) using the operator and
-      value you set. Useful for branching when a specific channel is foregrounded.
-    </p>
-  `,
-  'if:rale-node-field': `
-    <p>
-      One-shot check of a <strong>RALE node field</strong> (path, node id, field, operator, value). Same shape as the
-      RALE side of a Wait condition, but evaluated once for branching.
-    </p>
-  `,
-  'if:variables': `
-    <p>
-      Compares a value stored in a <strong>script variable</strong> (from a previous RALE Command or App Function assign)
-      using the variable path and operator you configure.
-    </p>
-    <p>Requires script version 2 and earlier steps that populate the variable.</p>
-  `,
-  'raleCommand:__none__': `
-    <p>Select a <strong>RALE command</strong> from the list. Parameters and optional “Set Var” appear after a command is chosen.</p>
-  `,
-  'appFunction:__none__': `
-    <p>
-      Connect <strong>App Connector</strong> so your channel’s exported functions appear in the list, then pick a
-      function to see its parameters.
-    </p>
-  `,
-  'keypress:__none__': `
-    <p>Pick a <strong>remote key</strong> from the grouped list. The script sends that key over ECP when the step runs.</p>
-  `,
-  'systemTelnet:__none__': `
-    <p>Choose <strong>Plugins</strong> or <strong>Memory</strong> for this legacy step, or migrate to Device Query with the matching telnet presets.</p>
-  `,
-  'systemTelnet:plugins': `
-    <p>Legacy telnet <strong>plugins</strong> command. Prefer <strong>Device Query</strong> with preset <code>telnet:plugins</code> for new scripts.</p>
-  `,
-  'systemTelnet:free': `
-    <p>Legacy telnet <strong>free</strong> (memory) command. Prefer <strong>Device Query</strong> with preset <code>telnet:free</code> for new scripts.</p>
-  `
+  'query:custom': S.actionScripts.helpBodyQueryCustom,
+  'query:telnet:plugins': S.actionScripts.helpBodyQueryTelnetPlugins,
+  'query:telnet:free': S.actionScripts.helpBodyQueryTelnetFree,
+  'post:__none__': S.actionScripts.helpBodyPostNone,
+  'wait:delay': S.actionScripts.helpBodyWaitDelay,
+  'wait:condition:media-player': S.actionScripts.helpBodyWaitMediaPlayer,
+  'wait:condition:rale-node-field': S.actionScripts.helpBodyWaitRale,
+  'if:media-player': S.actionScripts.helpBodyIfMediaPlayer,
+  'if:active-app': S.actionScripts.helpBodyIfActiveApp,
+  'if:rale-node-field': S.actionScripts.helpBodyIfRale,
+  'if:variables': S.actionScripts.helpBodyIfVariables,
+  'raleCommand:__none__': S.actionScripts.helpBodyRaleNone,
+  'appFunction:__none__': S.actionScripts.helpBodyAppFunctionNone,
+  'keypress:__none__': S.actionScripts.helpBodyKeypressNone,
+  'systemTelnet:__none__': S.actionScripts.helpBodySystemTelnetNone,
+  'systemTelnet:plugins': S.actionScripts.helpBodySystemTelnetPlugins,
+  'systemTelnet:free': S.actionScripts.helpBodySystemTelnetFree
 };
 
 /** Fallback body per top-level action type (when no variant match). */
 const ACTION_FALLBACK_BODIES: Record<string, string> = {
-  query: `
-    <p>
-      Runs a read against the device: either a normal <strong>ECP GET</strong> on a <code>/query/…</code> path or a
-      dev-style endpoint such as <code>telnet:plugins</code> / <code>telnet:free</code>.
-    </p>
-    <p>Choose a preset for common endpoints, or <strong>Custom</strong> to type your own.</p>
-  `,
-  post: `
-    <p>
-      Sends an <strong>HTTP POST</strong> to the Roku on a fixed analytics / beacon path. Each preset maps to a
-      specific endpoint used in development workflows.
-    </p>
-  `,
-  keypress: `
-    <p>
-      Sends a <strong>remote control key</strong> over ECP. The help title reflects which key is currently selected when
-      you open this dialog.
-    </p>
-  `,
-  inputText: `
-    <p>
-      Sends <strong>keyboard-style text</strong> to the device (ECP input entry). The focused field or on-screen
-      keyboard receives the characters.
-    </p>
-  `,
-  launch: `
-    <p>
-      Launches a channel by <strong>app ID</strong>. Optional <strong>params</strong> can supply a deep link or launch
-      arguments depending on the channel.
-    </p>
-  `,
-  sideload: `
-    <p>
-      Uploads a package from the <strong>file path</strong> and installs it as the sideloaded developer channel. Supply a
-      developer password on the step or via script <code>devPassword</code> when required.
-    </p>
-  `,
-  deleteSideload: `
-    <p>Removes the sideloaded developer channel. Optional password matches your device’s dev security settings.</p>
-  `,
-  appFunction: `
-    <p>
-      Calls a <strong>BrightScript function</strong> over App Connector. The subtitle shows the <strong>selected
-      function</strong>. Parameters match the channel’s exported signature; use <strong>Set Var</strong> to capture a
-      return value for later steps.
-    </p>
-  `,
-  raleCommand: `
-    <p>
-      Runs a <strong>built-in RALE command</strong>. The subtitle shows the selected command; extended copy comes from
-      the command’s built-in description when available.
-    </p>
-  `,
-  devicePerformance: `
-    <p>
-      Snapshots <strong>Device Performance</strong> charts for the <strong>same device</strong> this script runs on (the
-      same connection as Device Query and keypress). Values follow the Remote tab history settings when live polling has
-      filled the charts; otherwise the step waits briefly for a fresh sample when needed.
-    </p>
-    <h4>Chart</h4>
-    <p>
-      <strong>BrightScript Objects</strong>, <strong>CPU Usage</strong>, <strong>System Memory</strong>, or
-      <strong>Above All</strong> (one combined result: CPU, then memory, then objects). CPU and memory are driven from the
-      same channel performance poll.
-    </p>
-    <h4>Optional label</h4>
-    <p>Shown in the results header, similar to the screenshot step.</p>
-  `,
-  screenshot: `
-    <p>
-      Captures the TV image through the <strong>Developer App</strong>. The Developer App should be active; a
-      developer password must be available on the step, script, or validation prompt.
-    </p>
-    <h4>Wait before (ms)</h4>
-    <p>
-      Pause in the executor <strong>before</strong> capture starts so the UI can settle (default 100 ms when you add
-      the step).
-    </p>
-    <h4>Wait after (ms)</h4>
-    <p>
-      After triggering capture, the executor waits before downloading <code>dev.jpg</code>. Increase if images are
-      truncated; empty uses <strong>1500 ms</strong> default.
-    </p>
-    <h4>Optional label</h4>
-    <p>Helps identify this capture in run output when a script takes multiple screenshots.</p>
-  `,
-  wait: `
-    <p>
-      Either a <strong>fixed delay</strong> or <strong>until a condition</strong> holds. The subtitle reflects the
-      current wait type and, for conditions, the data source (media player vs RALE node field).
-    </p>
-  `,
-  if: `
-    <p>
-      Branches into <strong>then</strong> / <strong>else</strong> step lists using a one-shot condition. The subtitle
-      reflects the selected condition source (media player, active app, RALE field, or variables). Requires script
-      version 2.
-    </p>
-  `,
-  systemTelnet: `
-    <p>
-      <strong>Legacy</strong> telnet-only step. Prefer <strong>Device Query</strong> with <code>telnet:plugins</code> or
-      <code>telnet:free</code> for new scripts.
-    </p>
-  `
+  query: S.actionScripts.helpFallbackQuery,
+  post: S.actionScripts.helpFallbackPost,
+  keypress: S.actionScripts.helpFallbackKeypress,
+  inputText: S.actionScripts.helpFallbackInputText,
+  launch: S.actionScripts.helpFallbackLaunch,
+  sideload: S.actionScripts.helpFallbackSideload,
+  deleteSideload: S.actionScripts.helpFallbackDeleteSideload,
+  appFunction: S.actionScripts.helpFallbackAppFunction,
+  raleCommand: S.actionScripts.helpFallbackRaleCommand,
+  devicePerformance: S.actionScripts.helpFallbackDevicePerformance,
+  screenshot: S.actionScripts.helpFallbackScreenshot,
+  wait: S.actionScripts.helpFallbackWait,
+  if: S.actionScripts.helpFallbackIf,
+  systemTelnet: S.actionScripts.helpFallbackSystemTelnet
 };
 
 function queryPresetBody(endpoint: string, label: string): string {
-  return `
-    <p>
-      Runs a <strong>Device Query</strong> for <strong>${escapeHtml(label)}</strong> using endpoint
-      <code>${escapeHtml(endpoint)}</code>.
-    </p>
-    <p>
-      Like all queries, this uses ECP (or the app’s dev-plugin path for telnet-style presets). The device must be
-      reachable on the network.
-    </p>
-  `;
+  return S.actionScripts.helpQueryPresetBody(escapeHtml(label), escapeHtml(endpoint));
 }
 
 function postPresetBody(label: string, endpoint: string): string {
-  return `
-    <p>
-      Sends an HTTP <strong>POST</strong> to <code>${escapeHtml(endpoint)}</code> (<strong>${escapeHtml(label)}</strong>).
-    </p>
-    <p>Use this for analytics / beacon flows that expect POST rather than GET.</p>
-  `;
+  return S.actionScripts.helpPostPresetBody(escapeHtml(label), escapeHtml(endpoint));
 }
 
 function findAppFunctionDescription(
@@ -443,13 +260,13 @@ function resolveBodyHtml(
       const fns = typeof getAppFunctions === 'function' ? getAppFunctions() : null;
       const desc = findAppFunctionDescription(fns, fn);
       const descBlock = desc
-        ? `<p><strong>App Function Description:</strong> ${escapeHtml(desc)}</p>`
+        ? S.actionScripts.helpAppFunctionDescription(escapeHtml(desc))
         : '';
       return `
         ${ACTION_FALLBACK_BODIES.appFunction}
-        <p><strong>Selected function:</strong> <code>${escapeHtml(fn)}</code></p>
+        ${S.actionScripts.helpSelectedFunction(escapeHtml(fn))}
         ${descBlock}
-        <p>Argument rows follow the App Connector metadata for this function; complex types use JSON in the field.</p>
+        ${S.actionScripts.helpAppFunctionArgs}
       `;
     }
   }
@@ -460,10 +277,7 @@ function resolveBodyHtml(
       const nice = keypressLabelForValue(key);
       return `
         ${ACTION_FALLBACK_BODIES.keypress}
-        <p>
-          <strong>Current key:</strong> ${escapeHtml(nice)} (<code>${escapeHtml(key)}</code>) — sent as a standard ECP
-          keypress when the step runs.
-        </p>
+        ${S.actionScripts.helpCurrentKey(escapeHtml(nice), escapeHtml(key))}
       `;
     }
   }
@@ -476,13 +290,13 @@ function resolveBodyHtml(
   if (meta && typeof meta.description === 'string') {
     return `<p>${escapeHtml(meta.description)}</p>`;
   }
-  return `<p>${escapeHtml(`No help text for “${actionType}”.`)}</p>`;
+  return `<p>${escapeHtml(S.actionScripts.helpNoText(actionType))}</p>`;
 }
 
 function modalTitle(ctx: ActionStepHelpContext): string {
   if (ctx.actionType === 'systemTelnet') {
-    const base = 'Plugins / Memory (legacy)';
-    return ctx.subtitle && ctx.subtitle !== 'Select command' ? `${base} · ${ctx.subtitle}` : base;
+    const base = S.actionScripts.helpSystemTelnetTitle;
+    return ctx.subtitle && ctx.subtitle !== S.actionScripts.helpSubSelectCommandShort ? `${base} · ${ctx.subtitle}` : base;
   }
   const meta = getSchema(ctx.actionType);
   const base = meta && typeof meta.label === 'string' ? meta.label : ctx.actionType;
@@ -538,7 +352,7 @@ export function openActionStepHelpModal(
           <span class="icon icon-sm"><svg><use href="#icon-info"/></svg></span>
           ${escapeHtml(titleText)}
         </span>
-        <button type="button" class="modal-close action-scripts-step-help-close" title="Close" aria-label="Close">
+        <button type="button" class="modal-close action-scripts-step-help-close" title="${S.common.close}" aria-label="${S.common.close}">
           <span class="icon icon-sm"><svg><use href="#icon-x"/></svg></span>
         </button>
       </div>

@@ -1,5 +1,7 @@
 // Custom query handler
 
+import { S } from '@shared/strings/index.js';
+
 export function setupCustomQuery(
   customQueryInput: HTMLInputElement | HTMLTextAreaElement,
   runCustomQueryBtn: HTMLButtonElement,
@@ -19,13 +21,13 @@ export function setupCustomQuery(
     }
 
     runCustomQueryBtn.disabled = true;
-    runCustomQueryBtn.textContent = 'Running...';
+    runCustomQueryBtn.textContent = S.queries.running;
 
     try {
       await runQuery(endpoint);
     } finally {
       runCustomQueryBtn.disabled = false;
-      runCustomQueryBtn.textContent = 'Run Query';
+      runCustomQueryBtn.textContent = S.queries.runQuery;
     }
   });
 

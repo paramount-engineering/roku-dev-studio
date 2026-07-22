@@ -1,6 +1,7 @@
 // Reusable copy button handler
 import { setSafeHTML } from '../utils/dom.js';
 import { rendererError } from '../utils/logger.js';
+import { S } from '@shared/strings/index.js';
 
 export interface CopyButtonOptions {
   successText?: string;
@@ -17,7 +18,7 @@ export function setupCopyButton(
 ): void {
   if (!button) return;
 
-  const { successText = '✓ Copied!', duration = 2000 } = options;
+  const { successText = S.common.copied, duration = 2000 } = options;
 
   const originalHTML = button.innerHTML;
   // Guard against rapid re-clicks: each click would otherwise start an overlapping

@@ -9,10 +9,11 @@
  */
 
 import { attachBackdropClickToClose } from '../../modules/utils/modal-backdrop-click.js';
+import { S } from '@shared/strings/index.js';
 
 interface FeatureDetail {
   blurb: string;
-  points: string[];
+  points: readonly string[];
 }
 
 /**
@@ -21,122 +22,18 @@ interface FeatureDetail {
  * through); this only supplies the longer explanation + capability bullets.
  */
 const FEATURE_DETAILS: Record<string, FeatureDetail> = {
-  'Device Discovery': {
-    blurb:
-      'Roku Dev Studio continuously scans your local network with SSDP so every Roku on the same subnet shows up automatically — no IP typing required.',
-    points: [
-      'Auto-detects Roku models, names, and IP addresses',
-      'Flags which devices have Developer Mode enabled',
-      'Refreshes as devices join or leave the network',
-      'One click to connect and start working'
-    ]
-  },
-  'Apps & Deep Linking': {
-    blurb:
-      'Browse every channel installed on the connected Roku, launch any of them instantly, and test deep links with custom content and media-type parameters.',
-    points: [
-      'Grid of installed apps (plus TV inputs on Roku TVs)',
-      'Launch from the grid or by app ID',
-      'Deep-link with contentId / mediaType for content-launch testing',
-      'Copy a raw ID + version list of everything installed'
-    ]
-  },
-  'Dev App': {
-    blurb:
-      'Sideload, control, and inspect your development channel end-to-end — from a zip upload to live screenshots of what is on screen.',
-    points: [
-      'Sideload a .zip dev channel with your developer password',
-      'Launch or delete the sideloaded app',
-      'Capture screenshots on demand or auto-capture',
-      'Copy, download, or clear captured images'
-    ]
-  },
-  'App Connector': {
-    blurb:
-      'Call BrightScript functions on your sideloaded channel remotely and see their return values — exercise code paths without touching the remote.',
-    points: [
-      'Invoke exported functions by name with arguments',
-      'Inspect the returned values inline',
-      'Runs against the live dev channel'
-    ]
-  },
-  Fiddle: {
-    blurb:
-      'A scratchpad for BrightScript: write snippets in a full Monaco editor and run them on a connected device with live linting.',
-    points: [
-      'Monaco editor with syntax highlighting',
-      'Live lint feedback as you type',
-      'One-click run on the connected Roku',
-      'Opens in its own dedicated window'
-    ]
-  },
-  'MCP Server': {
-    blurb:
-      'Expose Roku Dev Studio to AI agents over the Model Context Protocol, so assistants can drive your device inside your dev loop.',
-    points: [
-      'Launch apps, press keys, and capture screenshots via MCP tools',
-      'Query device state programmatically',
-      'Bring AI agents into your test and debug workflow'
-    ]
-  },
-  'Device Remote': {
-    blurb:
-      'A full on-screen Roku remote — every button of the physical remote, plus keyboard control and text entry.',
-    points: [
-      'D-pad, OK, Back, Home, Options, and Replay',
-      'Media transport: play/pause, rewind, fast-forward',
-      'Volume, mute, and power',
-      'Type text straight into on-device fields'
-    ]
-  },
-  Query: {
-    blurb:
-      'Read live state from the Roku over ECP (External Control Protocol) — device info, media-player status, installed apps, and the registry.',
-    points: [
-      'Device info: model, version, and network',
-      'Active app and media-player playback state',
-      'Installed apps list',
-      'Registry contents'
-    ]
-  },
-  Console: {
-    blurb:
-      "Stream the Roku's BrightScript debug output live over Telnet, with filtering and search to surface exactly what matters.",
-    points: [
-      'Live Telnet log stream',
-      'Filter and full-text search',
-      'Click URLs or JSON to inspect them in a modal',
-      'Save the log to a file'
-    ]
-  },
-  'Action Scripts': {
-    blurb:
-      'Automate repeatable device flows by chaining key presses, app launches, and RALE calls into a single runnable script.',
-    points: [
-      'Sequence keypresses, launches, and waits',
-      'Include RALE calls in the flow',
-      'Re-run flows for regression testing'
-    ]
-  },
-  'Network Inspector': {
-    blurb:
-      "Capture and inspect the Dev App's HTTP/HTTPS traffic through a built-in MITM proxy — like a browser's network tab for your channel.",
-    points: [
-      'See every request and response the channel makes',
-      'Inspect headers, bodies, and timing',
-      'Decrypt HTTPS via the MITM proxy',
-      'Group by host or view proxied sessions'
-    ]
-  },
-  'Remote Locations': {
-    blurb:
-      "Connect to Roku devices that aren't on your local network by routing through relay servers.",
-    points: [
-      'Reach devices anywhere via a relay server',
-      'Manage multiple remote locations',
-      'Same tooling as local devices'
-    ]
-  }
+  'Device Discovery': S.modals.features.deviceDiscovery,
+  'Apps & Deep Linking': S.modals.features.appsDeepLinking,
+  'Dev App': S.modals.features.devApp,
+  'App Connector': S.modals.features.appConnector,
+  Fiddle: S.modals.features.fiddle,
+  'MCP Server': S.modals.features.mcpServer,
+  'Device Remote': S.modals.features.deviceRemote,
+  Query: S.modals.features.query,
+  Console: S.modals.features.console,
+  'Action Scripts': S.modals.features.actionScripts,
+  'Network Inspector': S.modals.features.networkInspector,
+  'Remote Locations': S.modals.features.remoteLocations
 };
 
 const OVERLAY_CLASS = 'welcome-detail-overlay';
@@ -214,7 +111,7 @@ function buildModalMarkup(iconWrapHTML: string, title: string, desc: string, det
   const blurb = detail?.blurb ? `<p class="welcome-detail-blurb">${escapeHtml(detail.blurb)}</p>` : '';
   return `
     <div class="welcome-detail-modal" role="dialog" aria-modal="true" aria-label="${escapeHtml(title)}">
-      <button type="button" class="welcome-detail-close" aria-label="Close">
+      <button type="button" class="welcome-detail-close" aria-label="${S.common.close}">
         <span class="icon icon-sm"><svg><use href="#icon-x"/></svg></span>
       </button>
       <div class="welcome-detail-hero">

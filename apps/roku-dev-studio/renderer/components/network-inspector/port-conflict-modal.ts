@@ -10,6 +10,7 @@
  */
 import { escapeHtml } from '../../modules/utils/dom.js';
 import { attachBackdropClickToClose } from '../../modules/utils/modal-backdrop-click.js';
+import { S } from '@shared/strings/index.js';
 
 export type PortConflictInfo = {
   port: number;
@@ -47,10 +48,10 @@ function conflictKey(c: PortConflictInfo): string {
 
 /** Human label for the process holding the port. */
 function holderLabel(c: PortConflictInfo): string {
-  if (c.processName && c.pid) return `${escapeHtml(c.processName)} (PID ${c.pid})`;
+  if (c.processName && c.pid) return S.networkInspector.holderWithPid(escapeHtml(c.processName), c.pid);
   if (c.processName) return escapeHtml(c.processName);
-  if (c.pid) return `PID ${c.pid}`;
-  return 'Another app';
+  if (c.pid) return S.networkInspector.holderPidOnly(c.pid);
+  return S.networkInspector.holderAnotherApp;
 }
 
 /** Inner HTML for the modal body, re-rendered in place on refresh (footer/header stay wired). */
@@ -124,10 +125,10 @@ function showResolvedState(): void {
     icon.classList.add('is-resolved');
     icon.innerHTML = '<span class="icon icon-sm"><svg><use href="#icon-check"/></svg></span>';
   }
-  if (title) title.textContent = 'Proxy Port Available';
+  if (title) title.textContent = S.networkInspector.portResolvedTitle;
   if (body) {
     body.innerHTML =
-      '<p class="ni-port-modal-msg ni-port-modal-msg-ok">The proxy port is free again — Network Inspector can capture traffic. This message closes automatically.</p>';
+      `<p class="ni-port-modal-msg ni-port-modal-msg-ok">${S.networkInspector.portResolvedMsg}</p>`;
   }
   footer?.remove();
 
@@ -154,15 +155,15 @@ export function showPortConflictModal(conflict: PortConflictInfo, opts?: { force
       <div class="ni-port-modal-header">
         <span class="ni-port-modal-icon" aria-hidden="true"><span class="icon icon-sm"><svg><use href="#icon-warning"/></svg></span></span>
         <h3>${escapeHtml(conflict.title)}</h3>
-        <button type="button" class="ni-port-modal-close" title="Close" aria-label="Close">×</button>
+        <button type="button" class="ni-port-modal-close" title="${S.common.close}" aria-label="${S.common.close}">×</button>
       </div>
       <div class="ni-port-modal-body" data-ni-port-modal-body>${bodyHtml(conflict)}</div>
       <div class="ni-port-modal-footer">
-        <button type="button" class="btn btn-secondary btn-sm ni-port-modal-refresh" data-ni-port-modal-refresh title="Re-check Status" aria-label="Re-check Status">
+        <button type="button" class="btn btn-secondary btn-sm ni-port-modal-refresh" data-ni-port-modal-refresh title="${S.networkInspector.recheckStatus}" aria-label="${S.networkInspector.recheckStatus}">
           <span class="icon icon-sm"><svg><use href="#icon-refresh"/></svg></span>
-          <span>Refresh</span>
+          <span>${S.common.refresh}</span>
         </button>
-        <button type="button" class="btn btn-primary btn-sm" data-ni-port-modal-settings>Open Network Inspector Settings</button>
+        <button type="button" class="btn btn-primary btn-sm" data-ni-port-modal-settings>${S.networkInspector.openNetworkInspectorSettings}</button>
       </div>
     </div>`;
 

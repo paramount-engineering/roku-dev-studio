@@ -1,19 +1,19 @@
 <div class="modal-overlay deeplink-save-preset-modal" id="deeplinkSavePresetModal" aria-hidden="true">
   <div class="modal deeplink-save-preset-modal-box">
     <div class="modal-header">
-      <span class="modal-title"><span class="icon icon-md"><svg><use href="#icon-save"/></svg></span> Save Deep Link</span>
-      <button type="button" class="modal-close deeplink-save-preset-modal-close" aria-label="Close"><span class="icon icon-sm"><svg><use href="#icon-x"/></svg></span></button>
+      <span class="modal-title" data-i18n="modals.deeplinkSavePreset.title"><span class="icon icon-md"><svg><use href="#icon-save"/></svg></span> Save Deep-Link</span>
+      <button type="button" class="modal-close deeplink-save-preset-modal-close" aria-label="Close" data-i18n-aria-label="common.close"><span class="icon icon-sm"><svg><use href="#icon-x"/></svg></span></button>
     </div>
     <div class="modal-body">
-      <p class="deeplink-save-preset-hint">Give this deep link a name so you can pick it from the saved list on any device.</p>
+      <p class="deeplink-save-preset-hint" data-i18n="modals.deeplinkSavePreset.hint">Give this Deep-Link a name so you can pick it from the saved list on any device.</p>
       <label class="deeplink-save-preset-field">
-        <span class="deeplink-save-preset-label">Name</span>
-        <input type="text" id="deeplinkSavePresetName" placeholder="e.g., Netflix · Episode 12" maxlength="80" />
+        <span class="deeplink-save-preset-label" data-i18n="modals.deeplinkSavePreset.nameLabel">Name</span>
+        <input type="text" id="deeplinkSavePresetName" placeholder="e.g., Netflix · Episode 12" data-i18n-placeholder="modals.deeplinkSavePreset.namePlaceholder" maxlength="80" />
       </label>
       <p id="deeplinkSavePresetError" class="deeplink-save-preset-error" hidden></p>
       <div class="deeplink-save-preset-actions">
-        <button type="button" class="btn btn-secondary" id="deeplinkSavePresetCancel">Cancel</button>
-        <button type="button" class="btn btn-primary" id="deeplinkSavePresetConfirm">Save</button>
+        <button type="button" class="btn btn-secondary" id="deeplinkSavePresetCancel" data-i18n="common.cancel">Cancel</button>
+        <button type="button" class="btn btn-primary" id="deeplinkSavePresetConfirm" data-i18n="common.save">Save</button>
       </div>
     </div>
   </div>

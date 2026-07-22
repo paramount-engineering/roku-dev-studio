@@ -550,8 +550,8 @@
     "/device/{ip}/deeplink": {
       "post": {
         "tags": ["Apps"],
-        "summary": "Deep link to content",
-        "description": "Launch an app with deep link parameters to specific content",
+        "summary": "Deep-Link to content",
+        "description": "Launch an app with Deep-Link parameters to specific content",
         "operationId": "deeplink",
         "parameters": [
           {
@@ -572,7 +572,7 @@
                   },
                   "contentId": {
                     "type": "string",
-                    "description": "Content ID to deep link to"
+                    "description": "Content ID to Deep-Link to"
                   },
                   "mediaType": {
                     "type": "string",
@@ -591,7 +591,7 @@
         },
         "responses": {
           "200": {
-            "description": "Deep link launched",
+            "description": "Deep-Link launched",
             "content": {
               "application/json": {
                 "schema": {
@@ -1026,7 +1026,7 @@
       "post": {
         "tags": ["Console"],
         "summary": "Connect to BrightScript console",
-        "description": "Establish a telnet connection to port 8085 on the Roku device for BrightScript debug output. Returns a session ID to use with WebSocket streaming.",
+        "description": "Establish a telnet connection to port 8085 on the Roku device for BrightScript Debug Output. Returns a session ID to use with WebSocket streaming.",
         "operationId": "telnetConnect",
         "parameters": [
           {
@@ -1339,7 +1339,7 @@
               },
               "deepLink": {
                 "type": "boolean",
-                "description": "Deep linking support"
+                "description": "Deep-Linking support"
               }
             }
           },

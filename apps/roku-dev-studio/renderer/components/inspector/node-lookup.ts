@@ -1,5 +1,6 @@
 // Shared helpers for RALE path parsing and response formatting (used by Execute Function → RALE builtins)
 
+import { S } from '@shared/strings/index.js';
 import type { DisplayResponseFn } from './inspector-types.js';
 
 const RALE_OBJECT_PLACEHOLDER = '{object}';
@@ -234,13 +235,13 @@ export function parseRalePath(raw: string): { ok: true; path: unknown[] } | { ok
   try {
     const parsed = JSON.parse(trimmed);
     if (!Array.isArray(parsed)) {
-      return { ok: false, error: 'Path must be a JSON array (e.g. [] or [{"child":0}])' };
+      return { ok: false, error: S.inspector.pathMustBeJsonArray };
     }
     return { ok: true, path: parsed };
   } catch (e: unknown) {
     return {
       ok: false,
-      error: 'Invalid path JSON: ' + (e instanceof Error ? e.message : String(e))
+      error: S.inspector.invalidPathJson(e instanceof Error ? e.message : String(e))
     };
   }
 }
@@ -286,7 +287,7 @@ export function formatRaleCommandResponse(
     return;
   }
   displayResponseFn(
-    { command: command, error: (r.error as string) || 'Command failed', details: result },
+    { command: command, error: (r.error as string) || S.inspector.commandFailed, details: result },
     true
   );
 }

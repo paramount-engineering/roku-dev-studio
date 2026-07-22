@@ -2,6 +2,7 @@
 
 import { escapeHtml } from '../../modules/utils/index.js';
 import type { OutputArea } from '../../modules/ui/output-area.js';
+import { S } from '@shared/strings/index.js';
 
 export function setupQueryButtons(
   panel: HTMLElement,
@@ -31,9 +32,9 @@ export function setupQueryButtons(
         // clears the marker on every render, so re-add it here for Device Info.
         if (isDeviceInfo) outputArea.container?.classList.add('query-output--sensitive');
       } else {
-        const err = result.error || 'Unknown error';
-        const errorContent = `Error: ${err}`;
-        outputArea.display(`<span style="color: var(--accent-red);">Error: ${escapeHtml(err)}</span>`, true);
+        const err = result.error || S.queries.unknownError;
+        const errorContent = S.queries.errorText(err);
+        outputArea.display(`<span style="color: var(--accent-red);">${S.queries.errorText(escapeHtml(err))}</span>`, true);
         outputArea.originalContent = errorContent;
       }
 
@@ -41,8 +42,8 @@ export function setupQueryButtons(
     } catch (e) {
       // wrapApiCall in app.ts re-throws; without this the button would stay disabled.
       const err = e instanceof Error ? e.message : String(e);
-      outputArea.display(`<span style="color: var(--accent-red);">Error: ${escapeHtml(err)}</span>`, true);
-      outputArea.originalContent = `Error: ${err}`;
+      outputArea.display(`<span style="color: var(--accent-red);">${S.queries.errorText(escapeHtml(err))}</span>`, true);
+      outputArea.originalContent = S.queries.errorText(err);
     } finally {
       if (btn) btn.disabled = false;
     }

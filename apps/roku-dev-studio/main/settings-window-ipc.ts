@@ -123,7 +123,7 @@ export type SettingsWindowSavePayload = {
   debugLoggingEnabled: boolean;
   timingOverrides: Record<string, unknown>;
   actionScriptDefaultSaveFolder: string;
-  /** When true, Remote tab remembers Show Device Performance per device. Default off until enabled in Settings. */
+  /** When true, Remote Section remembers Show Device Performance per device. Default off until enabled in Settings. */
   devicePerformanceRememberQuadPerDevice: boolean;
   /** When true, keyboard drives the Roku only on Remote / Dev App inner tabs for the active device tab. */
   keyboardRemoteShortcutsEnabled: boolean;
@@ -135,7 +135,7 @@ export type SettingsWindowSavePayload = {
    * When true, Dev Passwords are persisted across launches via the OS
    * keychain (`safeStorage`). Default **off** — on macOS this causes a
    * one-time system password prompt the first time the keychain entry is
-   * accessed, which we want to keep opt-in. When off, Dev Passwords are
+   * accessed, which we want to keep opt-in. When Off, Dev Passwords are
    * remembered only for the current session (in-memory).
    */
   rememberPasswordsInKeychain: boolean;
@@ -204,7 +204,7 @@ function syncFileMenuCheckboxes(
   }
 }
 
-/** Connected remote locations (id/name/serverUrl) for the Settings Network Inspector place picker. */
+/** Connected Remote Locations (id/name/serverUrl) for the Settings Network Inspector place picker. */
 function readRemoteLocations(
   settings: Record<string, unknown>
 ): Array<{ id: string; name: string; serverUrl: string; host: string }> {

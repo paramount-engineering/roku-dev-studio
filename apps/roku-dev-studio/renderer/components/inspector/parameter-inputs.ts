@@ -4,6 +4,7 @@ import { escapeHtml, setSafeHTML } from '../../modules/utils/index.js';
 import { rendererWarn } from '../../modules/utils/logger.js';
 import { renderRegistryBuiltinParams, getRegistryBuiltinParamValues } from './registry-params-ui.js';
 import { syncBuilderRaleParamRowHeights } from './rale-builder-param-row-sync.js';
+import { S } from '@shared/strings/index.js';
 import type { RenderParamInputsOptions } from './inspector-types.js';
 
 /**
@@ -50,7 +51,7 @@ function getTypePlaceholder(type: string, paramName: string) {
   switch (t) {
     case 'boolean':
     case 'bool':
-      return 'true or false';
+      return S.inspector.booleanPlaceholder;
     case 'integer':
     case 'int':
       return '0';
@@ -61,7 +62,7 @@ function getTypePlaceholder(type: string, paramName: string) {
     case 'double':
       return '0.0';
     case 'string':
-      return 'Enter text...';
+      return S.inspector.stringPlaceholder;
     case 'roassociativearray':
     case 'associativearray':
     case 'object':
@@ -170,7 +171,7 @@ export function renderParamInputs(
   if (!params || params.length === 0) {
     setSafeHTML(paramsContainer, `
       <div class="rale-params-empty">
-        ${funcSelect?.value ? '✓ No parameters required' : 'Select a function to see parameters'}
+        ${funcSelect?.value ? S.inspector.noParamsRequired : S.inspector.selectFunctionForParams}
       </div>
     `);
     return;

@@ -4,6 +4,7 @@
 
 import { raleArgsToParamStrings } from './rale-command-param-ui.js';
 import { OPS_NEED_VALUE } from './action-script-if-client.js';
+import { S } from '@shared/strings/index.js';
 
 // Canonical HTML escaper lives in modules/utils/dom; re-exported here so existing action-script
 // imports keep working without a second implementation.
@@ -29,7 +30,7 @@ export function syncRaleNodeFieldWaitValueRows(stepFieldsRoot) {
   const valueLabel = panel.querySelector('.builder-field-wait-value-label');
   if (!operatorSel) return;
   const op = operatorSel.value || 'is';
-  if (valueLabel) valueLabel.textContent = `Value (${op})`;
+  if (valueLabel) valueLabel.textContent = S.actionScripts.valueWithOperator(op);
   const need = OPS_NEED_VALUE.has(op);
   const isRale = waitSource.value === 'rale-node-field';
   if (!isRale) return;
@@ -77,7 +78,7 @@ export function syncIfConditionValueRows(stepFieldsRoot) {
     const vCell = stepFieldsRoot.querySelector(cfg.valueCell);
     const ciCell = stepFieldsRoot.querySelector(cfg.ciCell);
     const vLabel = stepFieldsRoot.querySelector(cfg.valueLabel);
-    if (vLabel) vLabel.textContent = `Value (${op})`;
+    if (vLabel) vLabel.textContent = S.actionScripts.valueWithOperator(op);
     const disp = need ? '' : 'none';
     if (vCell) vCell.style.display = disp;
     if (ciCell) ciCell.style.display = disp;

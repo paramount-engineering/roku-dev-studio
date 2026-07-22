@@ -3159,7 +3159,7 @@
       white-space: nowrap;
     }
 
-    /* Remote tab: Q1 CPU · Q2 Remote · Q3 Objects · Q4 Memory */
+    /* Remote Section: Q1 CPU · Q2 Remote · Q3 Objects · Q4 Memory */
     .inner-tab-content[data-inner-content="remote"] {
       min-height: 0;
     }
@@ -4396,7 +4396,7 @@
       flex-shrink: 0;
     }
     
-    /* Vertical Remote Style (similar to main Remote tab) */
+    /* Vertical Remote Style (similar to main Remote Section) */
     .devapp-vertical-remote {
       display: flex;
       flex-direction: column;
@@ -13382,8 +13382,10 @@
         type="button"
         class="titlebar-sidebar-toggle"
         id="titlebarSidebarToggle"
-        title="Toggle sidebar"
-        aria-label="Toggle sidebar"
+        title="Toggle Sidebar"
+        data-i18n-title="app.titleBarToggleSidebar"
+        aria-label="Toggle Sidebar"
+        data-i18n-aria-label="app.titleBarToggleSidebar"
         aria-expanded="true"
         aria-controls="appSidebar"
       >
@@ -13399,22 +13401,26 @@
         type="button"
         class="titlebar-scan-btn"
         id="titlebarScanBtn"
-        title="Scan for local and remote devices"
-        aria-label="Scan for devices"
+        title="Scan for Local and Remote Devices"
+        data-i18n-title="app.titleBarScanTitle"
+        aria-label="Scan for Devices"
+        data-i18n-aria-label="app.titleBarScanAria"
         aria-busy="false"
       >
         <span class="icon icon-sm titlebar-scan-icon"><svg><use href="#icon-radar"/></svg></span>
-        <span class="titlebar-scan-text">Scan</span>
+        <span class="titlebar-scan-text" data-i18n="app.scan">Scan</span>
       </button>
       <button
         type="button"
         class="titlebar-help-btn"
         id="titlebarHelpBtn"
         title="Help & User Guide"
+        data-i18n-title="app.titleBarHelpTitle"
         aria-label="Help and Guide"
+        data-i18n-aria-label="app.titleBarHelpAria"
       >
         <span class="icon icon-sm"><svg><use href="#icon-book"/></svg></span>
-        <span>Help &amp; Guide</span>
+        <span data-i18n="app.helpAndGuide">Help &amp; Guide</span>
       </button>
     </div>
     <div class="titlebar-center">
@@ -13425,20 +13431,24 @@
         type="button"
         class="floating-remote-toggle-btn titlebar-floating-remote-btn"
         id="titlebarFloatingRemoteBtn"
-        title="Toggle a floating remote that follows you outside Remote and Dev App tabs"
+        title="Toggle a Floating Remote that follows you outside Remote and Dev App tabs"
+        data-i18n-title="app.floatingRemoteToggleTitle"
         aria-label="Toggle Floating Remote"
+        data-i18n-aria-label="app.floatingRemoteToggleAria"
         aria-pressed="false"
         hidden
       >
         <span class="icon icon-sm" aria-hidden="true"><svg><use href="#icon-gamepad"/></svg></span>
-        <span class="titlebar-floating-remote-btn-label">Floating Remote</span>
+        <span class="titlebar-floating-remote-btn-label" data-i18n="app.floatingRemote">Floating Remote</span>
       </button>
       <button
         type="button"
         class="titlebar-hamburger-btn"
         id="titlebarHamburgerBtn"
-        title="App menu"
-        aria-label="App menu"
+        title="App Menu"
+        data-i18n-title="app.appMenu"
+        aria-label="App Menu"
+        data-i18n-aria-label="app.appMenu"
         aria-haspopup="menu"
       >
         <span class="icon icon-sm" aria-hidden="true"><svg><use href="#icon-menu"/></svg></span>
@@ -13448,33 +13458,39 @@
           type="button"
           class="titlebar-zoom-btn titlebar-zoom-out"
           id="titlebarZoomOut"
-          title="Zoom out"
-          aria-label="Zoom out"
+          title="Zoom Out"
+          data-i18n-title="app.zoomOut"
+          aria-label="Zoom Out"
+          data-i18n-aria-label="app.zoomOut"
         >&#8722;</button>
         <button
           type="button"
           class="titlebar-zoom-label"
           id="titlebarZoomLabel"
-          title="Reset zoom to 100%"
+          title="Reset Zoom to 100%"
+          data-i18n-title="app.resetZoom"
           aria-label="Current zoom; click to reset to 100%"
+          data-i18n-aria-label="app.currentZoomAria"
         >100%</button>
         <button
           type="button"
           class="titlebar-zoom-btn titlebar-zoom-in"
           id="titlebarZoomIn"
-          title="Zoom in"
-          aria-label="Zoom in"
+          title="Zoom In"
+          data-i18n-title="app.zoomIn"
+          aria-label="Zoom In"
+          data-i18n-aria-label="app.zoomIn"
         >+</button>
       </div>
       <div class="titlebar-controls">
-        <button type="button" class="titlebar-control titlebar-minimize" title="Minimize" aria-label="Minimize">
+        <button type="button" class="titlebar-control titlebar-minimize" title="Minimize" data-i18n-title="app.minimize" aria-label="Minimize" data-i18n-aria-label="app.minimize">
           <span class="icon" aria-hidden="true"><svg><use href="#icon-win-minimize"/></svg></span>
         </button>
-        <button type="button" class="titlebar-control titlebar-maximize" title="Maximize" aria-label="Maximize">
+        <button type="button" class="titlebar-control titlebar-maximize" title="Maximize" data-i18n-title="app.maximize" aria-label="Maximize" data-i18n-aria-label="app.maximize">
           <span class="icon titlebar-maximize-glyph" aria-hidden="true"><svg><use href="#icon-win-maximize"/></svg></span>
           <span class="icon titlebar-restore-glyph" aria-hidden="true"><svg><use href="#icon-win-restore"/></svg></span>
         </button>
-        <button type="button" class="titlebar-control titlebar-close" title="Close" aria-label="Close">
+        <button type="button" class="titlebar-control titlebar-close" title="Close" data-i18n-title="common.close" aria-label="Close" data-i18n-aria-label="common.close">
           <span class="icon" aria-hidden="true"><svg><use href="#icon-win-close"/></svg></span>
         </button>
       </div>
@@ -13807,11 +13823,11 @@
           <div class="location-header" id="localDevicesHeader">
             <div class="location-header-top">
               <span class="location-status"></span>
-              <span class="location-name">Local</span>
+              <span class="location-name" data-i18n="app.sidebarLocal">Local</span>
               <span class="location-device-count" id="localDeviceCount">0 devices</span>
               <button class="location-action-btn primary" id="scanBtn">
                 <span class="scan-icon icon icon-sm"><svg><use href="#icon-radar"/></svg></span>
-                <span class="scan-text">Scan</span>
+                <span class="scan-text" data-i18n="app.scan">Scan</span>
               </button>
               <span class="location-toggle"><span class="icon icon-sm"><svg><use href="#icon-chevron-down"/></svg></span></span>
             </div>
@@ -13824,10 +13840,10 @@
               </div>
             </div>
             <div class="manual-connect">
-              <div class="manual-connect-title">Manual Connect</div>
+              <div class="manual-connect-title" data-i18n="app.manualConnect">Manual Connect</div>
               <div class="manual-connect-row">
                 <input type="text" id="manualIp" placeholder="192.168.1.100">
-                <button id="manualConnectBtn">Connect</button>
+                <button id="manualConnectBtn" data-i18n="common.connect">Connect</button>
               </div>
             </div>
           </div>
@@ -13840,19 +13856,19 @@
         <div class="add-location-section" id="addLocationSection">
           <button class="location-action-btn add" id="addLocationBtn" style="width: 100%; justify-content: center; padding: 12px; border-radius: 10px;">
             <span class="icon icon-md"><svg><use href="#icon-globe"/></svg></span>
-            <span>Add Remote Location</span>
+            <span data-i18n="app.addRemoteLocation">Add Remote Location</span>
           </button>
         </div>
       </div>
       
       <div class="sidebar-footer">
-        <button class="help-btn" id="viewLogsBtn" style="display: none;" title="View debug logs (Desktop/roku-connector-debug.log)">
+        <button class="help-btn" id="viewLogsBtn" style="display: none;" title="View Debug Logs (Desktop/roku-connector-debug.log)" data-i18n-title="app.viewLogsTitle">
           <span class="icon icon-sm"><svg><use href="#icon-terminal"/></svg></span>
-          <span>View Logs</span>
+          <span data-i18n="app.viewLogs">View Logs</span>
         </button>
         <button class="help-btn" id="helpBtn">
           <span class="icon icon-sm"><svg><use href="#icon-help"/></svg></span>
-          <span>Help & Guide</span>
+          <span data-i18n="app.helpAndGuide">Help & Guide</span>
         </button>
       </div>
     </aside>
@@ -14205,7 +14221,7 @@
             <!-- Hero Section (text-only) -->
             <div class="welcome-hero">
               <h1 class="welcome-title">Roku Dev Studio</h1>
-              <p class="welcome-subtitle">Discover Roku devices locally or via remote relays, sideload and deep-link channels, debug live BrightScript with a streaming Telnet console, automate end-to-end test flows, and bring AI agents into your dev loop over MCP.</p>
+              <p class="welcome-subtitle" data-i18n="app.welcomeSubtitle">Discover Roku devices locally or via remote relays, sideload and deep-link channels, debug live BrightScript with a streaming Telnet console, automate end-to-end test flows, and bring AI agents into your dev loop over MCP.</p>
             </div>
 
             <!--
@@ -14227,54 +14243,54 @@
                 <div class="feature-icon-wrapper purple">
                   <span class="icon"><svg><use href="#icon-radar"/></svg></span>
                 </div>
-                <div class="feature-title">Device Discovery</div>
+                <div class="feature-title" data-i18n="app.featureDeviceDiscovery">Device Discovery</div>
                 </div>
-                <div class="feature-desc">Auto-discover Roku devices on your local network via SSDP.</div>
+                <div class="feature-desc" data-i18n="app.featureDeviceDiscoveryDesc">Auto-discover Roku devices on your local network via SSDP.</div>
               </div>
               <div class="welcome-feature">
                 <div class="feature-header">
                 <div class="feature-icon-wrapper indigo">
                   <span class="icon"><svg><use href="#icon-app"/></svg></span>
                 </div>
-                <div class="feature-title">Apps &amp; Deep Linking</div>
+                <div class="feature-title" data-i18n="app.featureAppsDeepLinking">Apps &amp; Deep Linking</div>
                 </div>
-                <div class="feature-desc">Browse, Launch Apps, Use Deep Links with custom parameters.</div>
+                <div class="feature-desc" data-i18n="app.featureAppsDeepLinkingDesc">Browse, Launch Apps, Use Deep Links with custom parameters.</div>
               </div>
               <div class="welcome-feature">
                 <div class="feature-header">
                 <div class="feature-icon-wrapper amber">
                   <span class="icon"><svg><use href="#icon-zap"/></svg></span>
                 </div>
-                <div class="feature-title">Dev App</div>
+                <div class="feature-title" data-i18n="app.tabDevApp">Dev App</div>
                 </div>
-                <div class="feature-desc">Sideload dev channels and auto-capture Dev App screenshots.</div>
+                <div class="feature-desc" data-i18n="app.featureDevAppDesc">Sideload dev channels and auto-capture Dev App screenshots.</div>
               </div>
               <div class="welcome-feature">
                 <div class="feature-header">
                 <div class="feature-icon-wrapper teal">
                   <span class="icon"><svg><use href="#icon-plug"/></svg></span>
                 </div>
-                <div class="feature-title">App Connector</div>
+                <div class="feature-title" data-i18n="app.tabAppConnector">App Connector</div>
                 </div>
-                <div class="feature-desc">Execute BrightScript functions on a sideloaded App.</div>
+                <div class="feature-desc" data-i18n="app.featureAppConnectorDesc">Execute BrightScript functions on a sideloaded app.</div>
               </div>
               <div class="welcome-feature">
                 <div class="feature-header">
                 <div class="feature-icon-wrapper pink">
                   <span class="icon"><svg><use href="#icon-rocket"/></svg></span>
                 </div>
-                <div class="feature-title">Fiddle</div>
+                <div class="feature-title" data-i18n="app.featureFiddle">Fiddle</div>
                 </div>
-                <div class="feature-desc">Run BrightScript snippets on-device in a Monaco editor.</div>
+                <div class="feature-desc" data-i18n="app.featureFiddleDesc">Run BrightScript snippets on-device in a Monaco editor.</div>
               </div>
               <div class="welcome-feature">
                 <div class="feature-header">
                 <div class="feature-icon-wrapper orange">
                   <span class="icon"><svg><use href="#icon-mcp"/></svg></span>
                 </div>
-                <div class="feature-title">MCP Server</div>
+                <div class="feature-title" data-i18n="app.featureMcpServer">MCP Server</div>
                 </div>
-                <div class="feature-desc">Expose Roku Dev Studio to AI agents using MCP Server.</div>
+                <div class="feature-desc" data-i18n="app.featureMcpServerDesc">Expose Roku Dev Studio to AI agents using MCP Server.</div>
               </div>
 
               <!-- Row 2 -->
@@ -14283,54 +14299,54 @@
                 <div class="feature-icon-wrapper green">
                   <span class="icon"><svg><use href="#icon-gamepad"/></svg></span>
                 </div>
-                <div class="feature-title">Device Remote</div>
+                <div class="feature-title" data-i18n="app.featureDeviceRemote">Device Remote</div>
                 </div>
-                <div class="feature-desc">Full D-pad, media controls, and text input — like a real remote.</div>
+                <div class="feature-desc" data-i18n="app.featureDeviceRemoteDesc">Full D-pad, media controls, and text input — like a real remote.</div>
               </div>
               <div class="welcome-feature">
                 <div class="feature-header">
                 <div class="feature-icon-wrapper teal">
                   <span class="icon"><svg><use href="#icon-database"/></svg></span>
                 </div>
-                <div class="feature-title">Query</div>
+                <div class="feature-title" data-i18n="app.tabQuery">Query</div>
                 </div>
-                <div class="feature-desc">Query device info, media-player state, and registry over ECP.</div>
+                <div class="feature-desc" data-i18n="app.featureQueryDesc">Query device info, media-player state, and registry over ECP.</div>
               </div>
               <div class="welcome-feature">
                 <div class="feature-header">
                 <div class="feature-icon-wrapper red">
                   <span class="icon"><svg><use href="#icon-terminal"/></svg></span>
                 </div>
-                <div class="feature-title">Console</div>
+                <div class="feature-title" data-i18n="app.tabConsole">Console</div>
                 </div>
-                <div class="feature-desc">View BrightScript debug output via Telnet, Filter and Search.</div>
+                <div class="feature-desc" data-i18n="app.featureConsoleDesc">View BrightScript Debug Output via Telnet, Filter and Search</div>
               </div>
               <div class="welcome-feature">
                 <div class="feature-header">
                 <div class="feature-icon-wrapper blue">
                   <span class="icon"><svg><use href="#icon-code"/></svg></span>
                 </div>
-                <div class="feature-title">Action Scripts</div>
+                <div class="feature-title" data-i18n="app.tabActionScripts">Action Scripts</div>
                 </div>
-                <div class="feature-desc">Chain key presses, launches, and RALE calls into automated flows.</div>
+                <div class="feature-desc" data-i18n="app.featureActionScriptsDesc">Chain key presses, launches, and RALE calls into automated flows.</div>
               </div>
               <div class="welcome-feature">
                 <div class="feature-header">
                 <div class="feature-icon-wrapper indigo">
                   <span class="icon"><svg><use href="#icon-network"/></svg></span>
                 </div>
-                <div class="feature-title">Network Inspector</div>
+                <div class="feature-title" data-i18n="app.networkInspector">Network Inspector</div>
                 </div>
-                <div class="feature-desc">Inspect Dev App HTTP/HTTPS traffic via a MITM proxy.</div>
+                <div class="feature-desc" data-i18n="app.featureNetworkInspectorDesc">Inspect Dev App HTTP/HTTPS traffic via a MITM proxy.</div>
               </div>
               <div class="welcome-feature">
                 <div class="feature-header">
                 <div class="feature-icon-wrapper cyan">
                   <span class="icon"><svg><use href="#icon-globe"/></svg></span>
                 </div>
-                <div class="feature-title">Remote Locations</div>
+                <div class="feature-title" data-i18n="app.featureRemoteLocations">Remote Locations</div>
                 </div>
-                <div class="feature-desc">Connect to Roku devices anywhere via relay servers.</div>
+                <div class="feature-desc" data-i18n="app.featureRemoteLocationsDesc">Connect to Roku devices anywhere via relay servers.</div>
               </div>
             </div>
           </div>
@@ -14356,38 +14372,38 @@
         </div>
         <div class="device-panel-nav">
           <div class="inner-tabs">
-            <button class="inner-tab active" data-inner-tab="remote" aria-label="Remote"><span class="icon icon-sm"><svg><use href="#icon-gamepad"/></svg></span><span class="inner-tab-label">Remote</span></button>
-            <button class="inner-tab" data-inner-tab="apps" aria-label="Apps"><span class="icon icon-sm"><svg><use href="#icon-grid"/></svg></span><span class="inner-tab-label">Apps</span></button>
-            <button class="inner-tab" data-inner-tab="query" aria-label="Query"><span class="icon icon-sm"><svg><use href="#icon-database"/></svg></span><span class="inner-tab-label">Query</span></button>
-            <button class="inner-tab" data-inner-tab="devapp" aria-label="Dev App"><span class="icon icon-sm"><svg><use href="#icon-zap"/></svg></span><span class="inner-tab-label">Dev App</span></button>
-            <button class="inner-tab" data-inner-tab="telnet" aria-label="Console"><span class="icon icon-sm"><svg><use href="#icon-terminal"/></svg></span><span class="inner-tab-label">Console</span></button>
-            <button class="inner-tab" data-inner-tab="inspector" aria-label="App Connector"><span class="icon icon-sm"><svg><use href="#icon-plug"/></svg></span><span class="inner-tab-label">App Connector</span></button>
-            <button class="inner-tab" data-inner-tab="actionscripts" aria-label="Action Scripts"><span class="icon icon-sm"><svg><use href="#icon-code"/></svg></span><span class="inner-tab-label">Action Scripts</span></button>
-            <button class="inner-tab" data-inner-tab="network" aria-label="Network" style="display: none;"><span class="icon icon-sm"><svg><use href="#icon-network"/></svg></span><span class="inner-tab-label">Network</span></button>
+            <button class="inner-tab active" data-inner-tab="remote" aria-label="Remote" data-i18n-aria-label="app.tabRemote"><span class="icon icon-sm"><svg><use href="#icon-gamepad"/></svg></span><span class="inner-tab-label" data-i18n="app.tabRemote">Remote</span></button>
+            <button class="inner-tab" data-inner-tab="apps" aria-label="Apps" data-i18n-aria-label="app.tabApps"><span class="icon icon-sm"><svg><use href="#icon-grid"/></svg></span><span class="inner-tab-label" data-i18n="app.tabApps">Apps</span></button>
+            <button class="inner-tab" data-inner-tab="query" aria-label="Query" data-i18n-aria-label="app.tabQuery"><span class="icon icon-sm"><svg><use href="#icon-database"/></svg></span><span class="inner-tab-label" data-i18n="app.tabQuery">Query</span></button>
+            <button class="inner-tab" data-inner-tab="devapp" aria-label="Dev App" data-i18n-aria-label="app.tabDevApp"><span class="icon icon-sm"><svg><use href="#icon-zap"/></svg></span><span class="inner-tab-label" data-i18n="app.tabDevApp">Dev App</span></button>
+            <button class="inner-tab" data-inner-tab="telnet" aria-label="Console" data-i18n-aria-label="app.tabConsole"><span class="icon icon-sm"><svg><use href="#icon-terminal"/></svg></span><span class="inner-tab-label" data-i18n="app.tabConsole">Console</span></button>
+            <button class="inner-tab" data-inner-tab="inspector" aria-label="App Connector" data-i18n-aria-label="app.tabAppConnector"><span class="icon icon-sm"><svg><use href="#icon-plug"/></svg></span><span class="inner-tab-label" data-i18n="app.tabAppConnector">App Connector</span></button>
+            <button class="inner-tab" data-inner-tab="actionscripts" aria-label="Action Scripts" data-i18n-aria-label="app.tabActionScripts"><span class="icon icon-sm"><svg><use href="#icon-code"/></svg></span><span class="inner-tab-label" data-i18n="app.tabActionScripts">Action Scripts</span></button>
+            <button class="inner-tab" data-inner-tab="network" aria-label="Network" data-i18n-aria-label="app.tabNetwork" style="display: none;"><span class="icon icon-sm"><svg><use href="#icon-network"/></svg></span><span class="inner-tab-label" data-i18n="app.tabNetwork">Network</span></button>
           </div>
         </div>
         <div class="device-panel-right">
           <div class="device-panel-perf-wrap" data-device-panel-perf-wrap hidden>
-          <button type="button" class="device-panel-perf-btn" data-device-panel-perf-btn title="Open Remote tab">
+          <button type="button" class="device-panel-perf-btn" data-device-panel-perf-btn title="Open Remote Section">
             <span class="device-panel-perf-live" data-perf-strip-live>
               <span class="device-panel-perf-item">
                 <svg class="device-panel-perf-spark" data-strip-spark="cpu" aria-hidden="true"></svg>
                 <span class="device-panel-perf-caption">
-                  <span class="device-panel-perf-lbl">CPU</span>
+                  <span class="device-panel-perf-lbl" data-i18n="app.perfCpu">CPU</span>
                   <span class="device-panel-perf-val" data-strip-cpu>—</span>
                 </span>
               </span>
               <span class="device-panel-perf-item">
                 <svg class="device-panel-perf-spark" data-strip-spark="mem" aria-hidden="true"></svg>
                 <span class="device-panel-perf-caption">
-                  <span class="device-panel-perf-lbl">Mem</span>
+                  <span class="device-panel-perf-lbl" data-i18n="app.perfMem">Mem</span>
                   <span class="device-panel-perf-val" data-strip-mem>—</span>
                 </span>
               </span>
               <span class="device-panel-perf-item">
                 <svg class="device-panel-perf-spark" data-strip-spark="obj" aria-hidden="true"></svg>
                 <span class="device-panel-perf-caption">
-                  <span class="device-panel-perf-lbl">Obj</span>
+                  <span class="device-panel-perf-lbl" data-i18n="app.perfObj">Obj</span>
                   <span class="device-panel-perf-val" data-strip-obj>—</span>
                 </span>
               </span>
@@ -14398,30 +14414,30 @@
         </div>
           <div class="device-panel-paused-nav" data-device-panel-paused-nav hidden>
             <span class="device-panel-paused-nav-icon icon icon-xs" aria-hidden="true"><svg><use href="#icon-warning"/></svg></span>
-            <span class="device-panel-paused-nav-text" title="Device Performance Paused — bring the Dev App to the foreground to resume.">
-              <span class="device-panel-paused-nav-text-full" data-paused-text-full>Device Performance Paused — bring the Dev App to the foreground to resume.</span>
-              <span class="device-panel-paused-nav-text-short" data-paused-text-short>Device Performance paused</span>
+            <span class="device-panel-paused-nav-text" title="Device Performance Paused — bring the Dev App to the foreground to resume." data-i18n-title="app.devicePerfPaused">
+              <span class="device-panel-paused-nav-text-full" data-paused-text-full data-i18n="app.devicePerfPaused">Device Performance Paused — bring the Dev App to the foreground to resume.</span>
+              <span class="device-panel-paused-nav-text-short" data-paused-text-short data-i18n="app.devicePerfPausedShort">Device Performance Paused</span>
             </span>
-            <button type="button" class="btn btn-secondary btn-sm device-panel-nav-action-btn" data-paused-launch-dev hidden>Launch</button>
-            <button type="button" class="btn btn-secondary btn-sm device-panel-nav-action-btn device-panel-sideload-btn" data-paused-goto-sideload hidden title="Sideload Dev App">
-              <span class="device-panel-sideload-label-full">Sideload Dev App</span>
-              <span class="device-panel-sideload-label-short">Sideload</span>
+            <button type="button" class="btn btn-secondary btn-sm device-panel-nav-action-btn" data-paused-launch-dev hidden data-i18n="app.launch">Launch</button>
+            <button type="button" class="btn btn-secondary btn-sm device-panel-nav-action-btn device-panel-sideload-btn" data-paused-goto-sideload hidden title="Sideload Dev App" data-i18n-title="app.sideloadDevApp">
+              <span class="device-panel-sideload-label-full" data-i18n="app.sideloadDevApp">Sideload Dev App</span>
+              <span class="device-panel-sideload-label-short" data-i18n="app.sideload">Sideload</span>
             </button>
           </div>
         </div>
       </div>
       
       <div class="device-inner-panes">
-      <!-- Remote Tab (performance): Q1 Remote · Q2 Objects · Q3 CPU · Q4 Memory -->
+      <!-- Remote Section (performance): Q1 Remote · Q2 Objects · Q3 CPU · Q4 Memory -->
       <div class="inner-tab-content active" data-inner-content="remote">
         <!-- ECP / Control by Mobile Apps Warning -->
         <div class="ecp-mode-warning" data-warning="ecp-remote">
           <div class="ecp-mode-warning-content">
             <span class="ecp-mode-warning-icon"><span class="icon icon-sm"><svg><use href="#icon-info"/></svg></span></span>
             <div class="ecp-mode-warning-text">
-              <span class="ecp-mode-warning-title">Control by Mobile Apps Not Enabled</span>
+              <span class="ecp-mode-warning-title" data-i18n="app.ecpNotEnabledTitle">Control by Mobile Apps Not Enabled</span>
               <span class="ecp-mode-warning-desc">Remote control (keypress, apps, etc.) requires "Control by Mobile Apps" → Network Access to be set to <strong>Enabled</strong> on your Roku device.</span>
-              <button type="button" class="ecp-mode-warning-btn">
+              <button type="button" class="ecp-mode-warning-btn" data-i18n="app.howToEnable">
                 <span class="icon icon-xs"><svg><use href="#icon-help"/></svg></span>
                 How to Enable
               </button>
@@ -14430,17 +14446,17 @@
         </div>
         <div class="remote-tab-metrics-root" data-remote-layout="solo">
           <div class="remote-quadrant-grid">
-            <section class="remote-quad remote-quad-remote" aria-label="Remote control">
+            <section class="remote-quad remote-quad-remote" aria-label="Remote Control" data-i18n-aria-label="app.sectionRemoteControl">
               <div class="remote-quad-header remote-quad-remote-header">
                 <div class="remote-quad-remote-header-left">
-                  <span class="remote-quad-remote-header-title">Remote</span>
-                  <button type="button" class="keyboard-remote-help-btn" title="Keyboard shortcuts for this remote" aria-label="Keyboard Remote shortcuts help">
+                  <span class="remote-quad-remote-header-title" data-i18n="app.tabRemote">Remote</span>
+                  <button type="button" class="keyboard-remote-help-btn" title="Keyboard Shortcuts for this Remote" data-i18n-title="app.keyboardShortcutsRemoteTitle" aria-label="Keyboard Remote Shortcuts Help" data-i18n-aria-label="app.keyboardRemoteHelpAria">
                     <span class="icon icon-xs"><svg><use href="#icon-keyboard"/></svg></span>
                   </button>
                 </div>
                 <label class="remote-performance-toggle" data-remote-performance-wrap hidden>
                   <input type="checkbox" class="remote-performance-checkbox" data-remote-performance-toggle autocomplete="off" />
-                  <span>Show Device Performance</span>
+                  <span data-i18n="app.showDevicePerformance">Show Device Performance</span>
                 </label>
               </div>
               <div class="remote-quad-remote-scroll">
@@ -14451,36 +14467,36 @@
                   <div class="remote-main-col">
                     <div class="remote-container">
                       <div class="remote-side">
-                        <button class="side-btn" data-key="Back"><span class="icon icon-sm"><svg><use href="#icon-arrow-left"/></svg></span> Back</button>
-                        <button class="side-btn home" data-key="Home"><span class="icon icon-sm"><svg><use href="#icon-home"/></svg></span> Home</button>
-                        <button class="side-btn" data-key="Info"><span class="icon icon-sm"><svg><use href="#icon-options"/></svg></span> Options</button>
-                        <button class="side-btn" data-key="InstantReplay"><span class="icon icon-sm"><svg><use href="#icon-replay"/></svg></span> Replay</button>
+                        <button class="side-btn" data-key="Back" data-i18n="app.remoteBack"><span class="icon icon-sm"><svg><use href="#icon-arrow-left"/></svg></span> Back</button>
+                        <button class="side-btn home" data-key="Home" data-i18n="app.remoteHome"><span class="icon icon-sm"><svg><use href="#icon-home"/></svg></span> Home</button>
+                        <button class="side-btn" data-key="Info" data-i18n="app.remoteOptions"><span class="icon icon-sm"><svg><use href="#icon-options"/></svg></span> Options</button>
+                        <button class="side-btn" data-key="InstantReplay" data-i18n="app.remoteReplay"><span class="icon icon-sm"><svg><use href="#icon-replay"/></svg></span> Replay</button>
                       </div>
                       <div class="remote-dpad">
                         <button class="dpad-btn dpad-up" data-key="Up"><span class="icon"><svg><use href="#icon-chevron-up"/></svg></span></button>
                         <button class="dpad-btn dpad-left" data-key="Left"><span class="icon"><svg><use href="#icon-chevron-left"/></svg></span></button>
-                        <button class="dpad-btn dpad-center" data-key="Select">OK</button>
+                        <button class="dpad-btn dpad-center" data-key="Select" data-i18n="common.ok">OK</button>
                         <button class="dpad-btn dpad-right" data-key="Right"><span class="icon"><svg><use href="#icon-chevron-right"/></svg></span></button>
                         <button class="dpad-btn dpad-down" data-key="Down"><span class="icon"><svg><use href="#icon-chevron-down"/></svg></span></button>
                       </div>
                       <div class="remote-side">
-                        <button class="side-btn" data-key="VolumeUp">Vol +</button>
-                        <button class="side-btn" data-key="VolumeMute">Mute</button>
-                        <button class="side-btn" data-key="VolumeDown">Vol -</button>
-                        <button class="side-btn" data-key="PowerOff">Power</button>
+                        <button class="side-btn" data-key="VolumeUp" data-i18n="app.remoteVolUp">Vol +</button>
+                        <button class="side-btn" data-key="VolumeMute" data-i18n="app.remoteMute">Mute</button>
+                        <button class="side-btn" data-key="VolumeDown" data-i18n="app.remoteVolDown">Vol -</button>
+                        <button class="side-btn" data-key="PowerOff" data-i18n="app.remotePower">Power</button>
                       </div>
                     </div>
                     <div class="media-controls">
-                      <button class="media-btn" data-key="Rev"><span class="icon icon-md"><svg><use href="#icon-rewind"/></svg></span> Rewind</button>
-                      <button class="media-btn play" data-key="Play"><span class="icon icon-md"><svg><use href="#icon-play"/></svg></span> Play/Pause</button>
-                      <button class="media-btn" data-key="Fwd"><span class="icon icon-md"><svg><use href="#icon-fast-forward"/></svg></span> Forward</button>
+                      <button class="media-btn" data-key="Rev" data-i18n="app.remoteRewind"><span class="icon icon-md"><svg><use href="#icon-rewind"/></svg></span> Rewind</button>
+                      <button class="media-btn play" data-key="Play" data-i18n="app.remotePlayPause"><span class="icon icon-md"><svg><use href="#icon-play"/></svg></span> Play/Pause</button>
+                      <button class="media-btn" data-key="Fwd" data-i18n="app.remoteForward"><span class="icon icon-md"><svg><use href="#icon-fast-forward"/></svg></span> Forward</button>
                     </div>
                     <div class="text-input-section text-input-section--integrated">
                       <div class="text-input-wrap">
-                        <input type="text" class="text-input" placeholder="Type text to send to Roku...">
+                        <input type="text" class="text-input" placeholder="Type Text to send to Roku..." data-i18n-placeholder="app.sendTextPlaceholder">
                         <button type="button" class="btn btn-primary send-text-btn">
                           <span class="icon icon-sm"><svg><use href="#icon-send"/></svg></span>
-                          <span class="send-text-btn-label">Send Text</span>
+                          <span class="send-text-btn-label" data-i18n="app.sendText">Send Text</span>
                         </button>
                       </div>
                     </div>
@@ -14501,22 +14517,22 @@
                 `flex-shrink: 0` always sits flush on the card's bottom edge.
               -->
               <div class="remote-secret-screens-footer">
-                <button type="button" class="connection-card-footer-btn secret-screens-open-btn" title="Remote key sequences for Roku secret and diagnostic screens">
+                <button type="button" class="connection-card-footer-btn secret-screens-open-btn" title="Remote Key Sequences for Roku Secret and Diagnostic Screens" data-i18n-title="app.secretScreensTitle" data-i18n="app.rokuSecretScreens">
                   <span class="icon icon-xs"><svg><use href="#icon-user-secret"/></svg></span>
                   Roku Secret Screens
                 </button>
               </div>
             </section>
-            <section class="remote-quad remote-quad-objects" aria-label="BrightScript object counts (dev)">
+            <section class="remote-quad remote-quad-objects" aria-label="BrightScript Object Counts (Dev)" data-i18n-aria-label="app.sectionObjectCounts">
               <div class="remote-quad-header remote-quad-objects-header">
-                <span class="remote-quad-objects-header-title">BrightScript Objects</span>
+                <span class="remote-quad-objects-header-title" data-i18n="app.brightScriptObjects">BrightScript Objects</span>
                 <div class="remote-objects-header-center">
-                  <div class="remote-objects-mode-switch" role="tablist" aria-label="Object metrics mode">
-                    <button type="button" class="remote-objects-mode-btn is-active" role="tab" aria-selected="true" data-objects-mode="count">Count</button>
-                    <button type="button" class="remote-objects-mode-btn" role="tab" aria-selected="false" data-objects-mode="memory">Memory</button>
+                  <div class="remote-objects-mode-switch" role="tablist" aria-label="Object Metrics Mode" data-i18n-aria-label="app.objectMetricsMode">
+                    <button type="button" class="remote-objects-mode-btn is-active" role="tab" aria-selected="true" data-objects-mode="count" data-i18n="app.objectsModeCount">Count</button>
+                    <button type="button" class="remote-objects-mode-btn" role="tab" aria-selected="false" data-objects-mode="memory" data-i18n="app.objectsModeMemory">Memory</button>
                   </div>
                 </div>
-                <span class="remote-objects-top-label">Top 10</span>
+                <span class="remote-objects-top-label" data-i18n="app.objectsTop10">Top 10</span>
               </div>
               <div class="remote-objects-body">
                 <p class="remote-objects-mem-hint" data-objects-mem-hint hidden></p>
@@ -14527,13 +14543,13 @@
               </div>
               <div class="remote-quad-card-footer remote-objects-quad-footer" data-objects-footer hidden></div>
             </section>
-            <section class="remote-quad remote-quad-cpu" aria-label="CPU usage">
+            <section class="remote-quad remote-quad-cpu" aria-label="CPU Usage" data-i18n-aria-label="app.cpuUsage">
               <div class="remote-quad-header remote-quad-cpu-header">
-                <span class="remote-quad-cpu-header-title">CPU Usage</span>
+                <span class="remote-quad-cpu-header-title" data-i18n="app.cpuUsage">CPU Usage</span>
                 <div class="remote-cpu-mode-switch-wrap" data-cpu-mode-switch-wrap hidden>
-                  <div class="remote-cpu-mode-switch" role="tablist" aria-label="CPU metrics mode">
-                    <button type="button" class="remote-cpu-mode-btn is-active" role="tab" aria-selected="true" data-cpu-mode="percent">CPU %</button>
-                    <button type="button" class="remote-cpu-mode-btn" role="tab" aria-selected="false" data-cpu-mode="process">Process</button>
+                  <div class="remote-cpu-mode-switch" role="tablist" aria-label="CPU Metrics Mode" data-i18n-aria-label="app.cpuMetricsMode">
+                    <button type="button" class="remote-cpu-mode-btn is-active" role="tab" aria-selected="true" data-cpu-mode="percent" data-i18n="app.cpuModePercent">CPU %</button>
+                    <button type="button" class="remote-cpu-mode-btn" role="tab" aria-selected="false" data-cpu-mode="process" data-i18n="app.cpuModeProcess">Process</button>
                   </div>
                 </div>
               </div>
@@ -14545,14 +14561,14 @@
               </div>
               <div class="remote-quad-card-footer remote-chart-quad-footer" data-cpu-quad-footer>
                 <aside class="remote-chart-legend" data-legend="cpu">
-                  <div class="remote-legend-row" data-series="cpu-total"><span class="remote-legend-swatch" style="background:#f87171"></span><span class="remote-legend-label">Total</span><span class="remote-legend-val">—</span></div>
-                  <div class="remote-legend-row" data-series="cpu-user"><span class="remote-legend-swatch" style="background:#60a5fa"></span><span class="remote-legend-label">User</span><span class="remote-legend-val">—</span></div>
-                  <div class="remote-legend-row" data-series="cpu-sys"><span class="remote-legend-swatch" style="background:#4ade80"></span><span class="remote-legend-label">Kernel</span><span class="remote-legend-val">—</span></div>
+                  <div class="remote-legend-row" data-series="cpu-total"><span class="remote-legend-swatch" style="background:#f87171"></span><span class="remote-legend-label" data-i18n="app.legendTotal">Total</span><span class="remote-legend-val">—</span></div>
+                  <div class="remote-legend-row" data-series="cpu-user"><span class="remote-legend-swatch" style="background:#60a5fa"></span><span class="remote-legend-label" data-i18n="app.legendUser">User</span><span class="remote-legend-val">—</span></div>
+                  <div class="remote-legend-row" data-series="cpu-sys"><span class="remote-legend-swatch" style="background:#4ade80"></span><span class="remote-legend-label" data-i18n="app.legendKernel">Kernel</span><span class="remote-legend-val">—</span></div>
                 </aside>
               </div>
             </section>
-            <section class="remote-quad remote-quad-mem" aria-label="Memory usage">
-              <div class="remote-quad-header remote-quad-chart-title">System Memory</div>
+            <section class="remote-quad remote-quad-mem" aria-label="Memory Usage" data-i18n-aria-label="app.sectionMemoryUsage">
+              <div class="remote-quad-header remote-quad-chart-title" data-i18n="app.systemMemory">System Memory</div>
               <div class="remote-quad-chart-layout">
                 <div class="remote-chart-svg-wrap">
                   <svg class="remote-chart-svg" data-chart="mem" viewBox="0 0 420 200" preserveAspectRatio="xMidYMid meet" aria-hidden="true"></svg>
@@ -14560,11 +14576,11 @@
               </div>
               <div class="remote-quad-card-footer remote-chart-quad-footer">
                 <aside class="remote-chart-legend" data-legend="mem">
-                  <div class="remote-legend-row" data-series="mem-used"><span class="remote-legend-swatch" style="background:#f87171"></span><span class="remote-legend-label">Used</span><span class="remote-legend-val">—</span></div>
-                  <div class="remote-legend-row" data-series="mem-res"><span class="remote-legend-swatch" style="background:#60a5fa"></span><span class="remote-legend-label">Resident</span><span class="remote-legend-val">—</span></div>
-                  <div class="remote-legend-row" data-series="mem-anon"><span class="remote-legend-swatch" style="background:#c084fc"></span><span class="remote-legend-label">Anonymous</span><span class="remote-legend-val">—</span></div>
-                  <div class="remote-legend-row" data-series="mem-shared"><span class="remote-legend-swatch" style="background:#fb923c"></span><span class="remote-legend-label">Shared</span><span class="remote-legend-val">—</span></div>
-                  <div class="remote-legend-row" data-series="mem-limit"><span class="remote-legend-swatch remote-legend-swatch--mem-limit" aria-hidden="true"></span><span class="remote-legend-label">Limit</span><span class="remote-legend-val">—</span></div>
+                  <div class="remote-legend-row" data-series="mem-used"><span class="remote-legend-swatch" style="background:#f87171"></span><span class="remote-legend-label" data-i18n="app.legendUsed">Used</span><span class="remote-legend-val">—</span></div>
+                  <div class="remote-legend-row" data-series="mem-res"><span class="remote-legend-swatch" style="background:#60a5fa"></span><span class="remote-legend-label" data-i18n="app.legendResident">Resident</span><span class="remote-legend-val">—</span></div>
+                  <div class="remote-legend-row" data-series="mem-anon"><span class="remote-legend-swatch" style="background:#c084fc"></span><span class="remote-legend-label" data-i18n="app.legendAnonymous">Anonymous</span><span class="remote-legend-val">—</span></div>
+                  <div class="remote-legend-row" data-series="mem-shared"><span class="remote-legend-swatch" style="background:#fb923c"></span><span class="remote-legend-label" data-i18n="app.legendShared">Shared</span><span class="remote-legend-val">—</span></div>
+                  <div class="remote-legend-row" data-series="mem-limit"><span class="remote-legend-swatch remote-legend-swatch--mem-limit" aria-hidden="true"></span><span class="remote-legend-label" data-i18n="app.legendLimit">Limit</span><span class="remote-legend-val">—</span></div>
                 </aside>
               </div>
             </section>
@@ -14581,19 +14597,19 @@
             <div class="card" style="flex: 0 0 auto;">
               <div class="card-header" style="padding: 4px 12px;">
                 <span class="card-icon"><span class="icon icon-sm"><svg><use href="#icon-zap"/></svg></span></span>
-                <span class="card-title">Custom Launch</span>
+                <span class="card-title" data-i18n="app.customLaunch">Custom Launch</span>
                 <div class="card-header-actions">
-                  <button class="btn btn-success launch-custom-btn" style="padding: 4px 12px; font-size: 11px;">Launch</button>
+                  <button class="btn btn-success launch-custom-btn" style="padding: 4px 12px; font-size: 11px;" data-i18n="app.launch">Launch</button>
                 </div>
               </div>
               <div class="card-body" style="display: flex; flex-direction: column; gap: 12px;">
-                <input type="text" class="custom-app-id" placeholder="App ID (e.g., 12)" style="width: 100%; padding: 10px 14px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-primary); color: var(--text-primary); font-family: 'JetBrains Mono', monospace; font-size: 13px; box-sizing: border-box;">
+                <input type="text" class="custom-app-id" placeholder="App ID (e.g., 12)" data-i18n-placeholder="app.customAppIdPlaceholder" style="width: 100%; padding: 10px 14px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-primary); color: var(--text-primary); font-family: 'JetBrains Mono', monospace; font-size: 13px; box-sizing: border-box;">
                 <div class="tv-inputs-row" style="display: none; gap: 6px; flex-wrap: wrap; align-items: center; margin-top: 8px;">
-                  <span style="font-size: 11px; color: var(--text-muted);">TV Inputs:</span>
-                  <button class="btn btn-secondary hdmi-btn" data-app="tvinput.hdmi1" style="padding: 4px 8px; font-size: 10px;">HDMI 1</button>
-                  <button class="btn btn-secondary hdmi-btn" data-app="tvinput.hdmi2" style="padding: 4px 8px; font-size: 10px;">HDMI 2</button>
-                  <button class="btn btn-secondary hdmi-btn" data-app="tvinput.hdmi3" style="padding: 4px 8px; font-size: 10px;">HDMI 3</button>
-                  <button class="btn btn-secondary hdmi-btn" data-app="tvinput.hdmi4" style="padding: 4px 8px; font-size: 10px;">HDMI 4</button>
+                  <span style="font-size: 11px; color: var(--text-muted);" data-i18n="app.tvInputsLabel">TV Inputs:</span>
+                  <button class="btn btn-secondary hdmi-btn" data-app="tvinput.hdmi1" style="padding: 4px 8px; font-size: 10px;" data-i18n="app.hdmi1">HDMI 1</button>
+                  <button class="btn btn-secondary hdmi-btn" data-app="tvinput.hdmi2" style="padding: 4px 8px; font-size: 10px;" data-i18n="app.hdmi2">HDMI 2</button>
+                  <button class="btn btn-secondary hdmi-btn" data-app="tvinput.hdmi3" style="padding: 4px 8px; font-size: 10px;" data-i18n="app.hdmi3">HDMI 3</button>
+                  <button class="btn btn-secondary hdmi-btn" data-app="tvinput.hdmi4" style="padding: 4px 8px; font-size: 10px;" data-i18n="app.hdmi4">HDMI 4</button>
                 </div>
               </div>
             </div>
@@ -14602,17 +14618,17 @@
             <div class="card" style="flex: 0 0 auto;">
               <div class="card-header" style="padding: 4px 12px;">
                 <span class="card-icon"><span class="icon icon-sm"><svg><use href="#icon-link"/></svg></span></span>
-                <span class="card-title">Deep Link</span>
+                <span class="card-title" data-i18n="app.deepLink">Deep Link</span>
                 <div class="card-header-actions">
                   <div class="deeplink-launch-split">
                     <div class="deeplink-launch-split-buttons">
-                      <button type="button" class="btn btn-primary deeplink-launch-main"><span class="icon icon-xs"><svg><use href="#icon-link"/></svg></span> Launch</button>
-                      <button type="button" class="btn btn-primary deeplink-launch-caret" data-deeplink-launch-menu-toggle title="More launch options" aria-haspopup="menu" aria-expanded="false" aria-label="More launch options">
+                      <button type="button" class="btn btn-primary deeplink-launch-main" data-i18n="app.launch"><span class="icon icon-xs"><svg><use href="#icon-link"/></svg></span> Launch</button>
+                      <button type="button" class="btn btn-primary deeplink-launch-caret" data-deeplink-launch-menu-toggle title="More Launch Options" data-i18n-title="app.moreLaunchOptions" aria-haspopup="menu" aria-expanded="false" aria-label="More Launch Options" data-i18n-aria-label="app.moreLaunchOptions">
                         <span class="icon icon-xs"><svg><use href="#icon-chevron-down"/></svg></span>
                       </button>
                     </div>
                     <div class="deeplink-launch-dropdown" role="menu" hidden>
-                      <button type="button" class="deeplink-launch-dropdown-item" data-deeplink-save-launch role="menuitem">
+                      <button type="button" class="deeplink-launch-dropdown-item" data-deeplink-save-launch role="menuitem" data-i18n="app.saveAndLaunch">
                         <span class="icon icon-xs"><svg><use href="#icon-save"/></svg></span> Save and Launch
                       </button>
                     </div>
@@ -14621,35 +14637,35 @@
               </div>
               <div class="card-body" style="display: flex; flex-direction: column; gap: 8px; padding: 10px 12px 10px 12px;">
                 <div class="form-row deeplink-saved-row" style="grid-template-columns: 80px 1fr; margin: 0; gap: 8px;" hidden>
-                  <label style="font-size: 11px;">Saved</label>
+                  <label style="font-size: 11px;" data-i18n="app.deeplinkSaved">Saved</label>
                   <div class="deeplink-saved-field">
                     <select class="deeplink-saved-select" style="padding: 6px 10px; font-size: 12px;">
-                      <option value="">-- Select saved deep link --</option>
+                      <option value="" data-i18n="app.selectSavedDeepLink">-- Select Saved Deep Link --</option>
                     </select>
-                    <button type="button" class="btn btn-danger btn-icon deeplink-saved-delete-btn" title="Delete saved deep link" aria-label="Delete saved deep link" disabled>
+                    <button type="button" class="btn btn-danger btn-icon deeplink-saved-delete-btn" title="Delete Saved Deep Link" data-i18n-title="app.deleteSavedDeepLink" aria-label="Delete Saved Deep Link" data-i18n-aria-label="app.deleteSavedDeepLink" disabled>
                       <span class="icon icon-xs"><svg><use href="#icon-trash"/></svg></span>
                     </button>
                   </div>
                 </div>
                 <div class="form-row" style="grid-template-columns: 80px 1fr; margin: 0; gap: 8px;">
-                  <label style="font-size: 11px;">App ID</label>
-                  <input type="text" class="deeplink-app-id" placeholder="e.g., 31440" style="padding: 6px 10px; font-size: 12px;">
+                  <label style="font-size: 11px;" data-i18n="app.appId">App ID</label>
+                  <input type="text" class="deeplink-app-id" placeholder="e.g., 31440" data-i18n-placeholder="app.deeplinkAppIdPlaceholder" style="padding: 6px 10px; font-size: 12px;">
                 </div>
                 <div class="form-row" style="grid-template-columns: 80px 1fr; margin: 0; gap: 8px;">
-                  <label style="font-size: 11px;">Content ID</label>
-                  <input type="text" class="deeplink-content-id" placeholder="Content identifier" style="padding: 6px 10px; font-size: 12px;">
+                  <label style="font-size: 11px;" data-i18n="app.contentId">Content ID</label>
+                  <input type="text" class="deeplink-content-id" placeholder="Content Identifier" data-i18n-placeholder="app.contentIdPlaceholder" style="padding: 6px 10px; font-size: 12px;">
                 </div>
                 <div class="form-row deeplink-media-type-row" style="grid-template-columns: 80px 1fr; margin: 0; gap: 8px;">
-                  <label style="font-size: 11px;">Media Type</label>
+                  <label style="font-size: 11px;" data-i18n="app.mediaType">Media Type</label>
                   <div class="deeplink-media-type-field">
                     <select class="deeplink-media-type" style="padding: 6px 10px; font-size: 12px;">
-                      <option value="">-- Select --</option>
-                      <option value="movie">Movie</option>
-                      <option value="series">Series</option>
-                      <option value="episode">Episode</option>
-                      <option value="live">Live</option>
+                      <option value="" data-i18n="app.selectPlaceholder">-- Select --</option>
+                      <option value="movie" data-i18n="app.mediaTypeMovie">Movie</option>
+                      <option value="series" data-i18n="app.mediaTypeSeries">Series</option>
+                      <option value="episode" data-i18n="app.mediaTypeEpisode">Episode</option>
+                      <option value="live" data-i18n="app.mediaTypeLive">Live</option>
                     </select>
-                    <button type="button" class="btn btn-secondary btn-icon deeplink-media-type-manage-btn" title="Manage media types" aria-label="Manage media types">
+                    <button type="button" class="btn btn-secondary btn-icon deeplink-media-type-manage-btn" title="Manage Media Types" data-i18n-title="app.manageMediaTypes" aria-label="Manage Media Types" data-i18n-aria-label="app.manageMediaTypes">
                       <span class="icon icon-xs"><svg><use href="#icon-plus"/></svg></span>
                     </button>
                   </div>
@@ -14662,12 +14678,12 @@
             <div class="card" style="flex: 1; display: flex; flex-direction: column; min-height: 0; min-width: 0; overflow: hidden;">
               <div class="card-header" style="padding: 4px 12px; min-width: 0;">
                 <span class="card-icon"><span class="icon icon-sm"><svg><use href="#icon-list"/></svg></span></span>
-                <span class="card-title raw-list-title">Raw List of Apps</span>
+                <span class="card-title raw-list-title" data-i18n="app.rawListOfApps">Raw List of Apps</span>
                 <div class="card-header-actions is-left">
-                  <button class="btn btn-secondary btn-icon copy-apps-btn" title="Copy list" aria-label="Copy list" style="display: none;"><span class="icon icon-xs"><svg><use href="#icon-copy"/></svg></span></button>
+                  <button class="btn btn-secondary btn-icon copy-apps-btn" title="Copy List" data-i18n-title="app.copyList" aria-label="Copy List" data-i18n-aria-label="app.copyList" style="display: none;"><span class="icon icon-xs"><svg><use href="#icon-copy"/></svg></span></button>
                 </div>
                 <div class="card-header-actions" style="flex-shrink: 0;">
-                  <button class="btn btn-secondary list-apps-btn" style="padding: 4px 10px; font-size: 10px;"><span class="icon icon-xs"><svg><use href="#icon-refresh"/></svg></span> List</button>
+                  <button class="btn btn-secondary list-apps-btn" style="padding: 4px 10px; font-size: 10px;" data-i18n="app.listApps"><span class="icon icon-xs"><svg><use href="#icon-refresh"/></svg></span> List</button>
                 </div>
               </div>
               <div class="card-body" style="flex: 1; display: flex; flex-direction: column; min-height: 0; min-width: 0; overflow: hidden; padding: 10px 0 10px 12px;">
@@ -14680,21 +14696,21 @@
           <div class="card" style="flex: 1; min-width: 0; display: flex; flex-direction: column; min-height: 0;">
             <div class="card-header" style="padding: 4px 12px;">
               <span class="card-icon"><span class="icon icon-sm"><svg><use href="#icon-rocket"/></svg></span></span>
-              <span class="card-title installed-apps-title">Installed Apps</span>
-              <button class="btn btn-secondary refresh-apps-btn" style="margin-left: auto; padding: 6px 12px; font-size: 11px;"><span class="icon icon-xs"><svg><use href="#icon-refresh"/></svg></span> Refresh</button>
+              <span class="card-title installed-apps-title" data-i18n="app.installedApps">Installed Apps</span>
+              <button class="btn btn-secondary refresh-apps-btn" style="margin-left: auto; padding: 6px 12px; font-size: 11px;" data-i18n="common.refresh"><span class="icon icon-xs"><svg><use href="#icon-refresh"/></svg></span> Refresh</button>
             </div>
             <div class="card-body" style="flex: 1; display: flex; flex-direction: column; min-height: 0; overflow: hidden;">
-              <div class="apps-loading" style="display: none;">Loading apps...</div>
+              <div class="apps-loading" style="display: none;" data-i18n="app.loadingApps">Loading apps...</div>
               <!-- Apps grid and Inputs share one scroll area so the inputs row is never clipped -->
               <div class="apps-scroll-area" style="flex: 1; min-height: 0;">
                 <div class="installed-apps-grid" style="align-content: start;"></div>
                 <!-- Inputs (shown only when TV inputs are available) -->
                 <div class="installed-inputs-section" style="display: none; flex-direction: column; border-top: 1px solid var(--border); margin-top: 8px; padding-top: 8px;">
-                  <span class="installed-section-label" style="font-size: 11px; font-weight: 600; letter-spacing: 0.5px; text-transform: uppercase; color: var(--text-muted); padding: 0 6px 4px;">Inputs</span>
+                  <span class="installed-section-label" style="font-size: 11px; font-weight: 600; letter-spacing: 0.5px; text-transform: uppercase; color: var(--text-muted); padding: 0 6px 4px;" data-i18n="app.inputsSectionLabel">Inputs</span>
                   <div class="installed-inputs-grid"></div>
                 </div>
               </div>
-              <div class="apps-empty" style="display: none;">No apps found. Click Refresh to load.</div>
+              <div class="apps-empty" style="display: none;" data-i18n="app.noAppsFound">No apps found. Click Refresh to load.</div>
             </div>
           </div>
         </div>
@@ -14707,9 +14723,9 @@
           <div class="dev-mode-warning-content">
             <span class="dev-mode-warning-icon"><span class="icon icon-sm"><svg><use href="#icon-warning"/></svg></span></span>
             <div class="dev-mode-warning-text">
-              <span class="dev-mode-warning-title">Developer Mode Not Enabled</span>
-              <span class="dev-mode-warning-desc">Dev App sideloading requires Developer Mode to be enabled on your Roku device.</span>
-              <button class="dev-mode-warning-btn">
+              <span class="dev-mode-warning-title" data-i18n="app.developerModeNotEnabled">Developer Mode Not Enabled</span>
+              <span class="dev-mode-warning-desc" data-i18n="app.devAppDevModeDesc">Dev App sideloading requires Developer Mode to be enabled on your Roku device.</span>
+              <button class="dev-mode-warning-btn" data-i18n="app.howToEnable">
                 <span class="icon icon-xs"><svg><use href="#icon-help"/></svg></span>
                 How to Enable
               </button>
@@ -14721,9 +14737,9 @@
           <div class="ecp-mode-warning-content">
             <span class="ecp-mode-warning-icon"><span class="icon icon-sm"><svg><use href="#icon-info"/></svg></span></span>
             <div class="ecp-mode-warning-text">
-              <span class="ecp-mode-warning-title">Control by Mobile Apps Not Enabled</span>
+              <span class="ecp-mode-warning-title" data-i18n="app.ecpNotEnabledTitle">Control by Mobile Apps Not Enabled</span>
               <span class="ecp-mode-warning-desc">The Quick Remote and keypress features require "Control by Mobile Apps" → Network Access to be <strong>Enabled</strong> on your Roku device.</span>
-              <button type="button" class="ecp-mode-warning-btn">
+              <button type="button" class="ecp-mode-warning-btn" data-i18n="app.howToEnable">
                 <span class="icon icon-xs"><svg><use href="#icon-help"/></svg></span>
                 How to Enable
               </button>
@@ -14737,17 +14753,17 @@
             <div class="card">
               <div class="card-header" style="padding: 4px 12px;">
                 <span class="card-icon"><span class="icon icon-sm"><svg><use href="#icon-lock"/></svg></span></span>
-                <span class="card-title" style="font-size: 11px;">Auth</span>
+                <span class="card-title" style="font-size: 11px;" data-i18n="app.auth">Auth</span>
                 <span class="auth-status not-authenticated" style="margin-left: auto; font-size: 10px;"><span class="icon icon-xs icon-red"><svg><use href="#icon-circle"/></svg></span></span>
               </div>
               <div class="card-body" style="padding: 10px 12px;">
                 <div class="auth-input-row" style="margin-bottom: 6px;">
-                  <input type="password" class="dev-password" placeholder="Password">
-                  <button class="btn btn-primary verify-password-btn" style="padding: 6px 10px; font-size: 10px;">Verify</button>
+                  <input type="password" class="dev-password" placeholder="Password" data-i18n-placeholder="app.password">
+                  <button class="btn btn-primary verify-password-btn" style="padding: 6px 10px; font-size: 10px;" data-i18n="app.verify">Verify</button>
                 </div>
                 <label class="checkbox-label" style="font-size: 10px; display: flex; justify-content: center;">
                   <input type="checkbox" class="remember-password-checkbox">
-                  <span>Remember</span>
+                  <span data-i18n="app.remember">Remember</span>
                 </label>
               </div>
             </div>
@@ -14756,11 +14772,11 @@
             <div class="card sideloaded-app-card">
               <div class="card-header" style="padding: 4px 12px;">
                 <span class="card-icon"><span class="icon icon-sm"><svg><use href="#icon-package"/></svg></span></span>
-                <span class="card-title" style="font-size: 11px;">Dev App</span>
+                <span class="card-title" style="font-size: 11px;" data-i18n="app.tabDevApp">Dev App</span>
                 <div class="card-header-actions">
-                  <button class="btn btn-success launch-sideload-btn" style="display: none; padding: 3px 8px; font-size: 9px;"><span class="icon icon-xs"><svg><use href="#icon-rocket"/></svg></span> Launch</button>
-                  <button class="btn btn-icon btn-danger delete-sideload-btn" title="Delete" style="display: none; padding: 3px 5px; font-size: 10px;"><span class="icon icon-sm"><svg><use href="#icon-trash"/></svg></span></button>
-                  <button class="btn btn-icon btn-secondary refresh-sideloaded-btn" title="Refresh" style="padding: 3px 5px; font-size: 10px;"><span class="icon icon-sm"><svg><use href="#icon-refresh"/></svg></span></button>
+                  <button class="btn btn-success launch-sideload-btn" style="display: none; padding: 3px 8px; font-size: 9px;" data-i18n="app.launch"><span class="icon icon-xs"><svg><use href="#icon-rocket"/></svg></span> Launch</button>
+                  <button class="btn btn-icon btn-danger delete-sideload-btn" title="Delete" data-i18n-title="common.delete" style="display: none; padding: 3px 5px; font-size: 10px;"><span class="icon icon-sm"><svg><use href="#icon-trash"/></svg></span></button>
+                  <button class="btn btn-icon btn-secondary refresh-sideloaded-btn" title="Refresh" data-i18n-title="common.refresh" style="padding: 3px 5px; font-size: 10px;"><span class="icon icon-sm"><svg><use href="#icon-refresh"/></svg></span></button>
                 </div>
               </div>
               <div class="card-body" style="padding: 10px 12px;">
@@ -14770,14 +14786,14 @@
                 </div>
                 <div class="devapp-install-section" style="border-top: 1px solid var(--border); padding-top: 8px;">
                   <div class="install-drop-zone select-file-btn" style="padding: 14px 12px; cursor: pointer; border-radius: 6px; text-align: center; margin-bottom: 6px;">
-                    <div class="drop-zone-text" style="font-size: 11px;"><span class="icon icon-sm"><svg><use href="#icon-folder"/></svg></span> Select Package</div>
+                    <div class="drop-zone-text" style="font-size: 11px;" data-i18n="app.selectPackage"><span class="icon icon-sm"><svg><use href="#icon-folder"/></svg></span> Select Package</div>
                   </div>
                   <div class="selected-file-info" style="display: none; margin-bottom: 6px;">
                     <span class="selected-file-name" style="font-size: 9px;"></span>
-                    <button class="btn btn-icon btn-secondary clear-file-btn" title="Clear" style="padding: 2px 4px; font-size: 9px;"><span class="icon icon-xs"><svg><use href="#icon-x"/></svg></span></button>
+                    <button class="btn btn-icon btn-secondary clear-file-btn" title="Clear" data-i18n-title="common.clear" style="padding: 2px 4px; font-size: 9px;"><span class="icon icon-xs"><svg><use href="#icon-x"/></svg></span></button>
                   </div>
                   <input type="hidden" class="sideload-file-path">
-                  <button class="btn btn-primary sideload-btn" style="width: 100%; padding: 8px 10px; font-size: 10px;" disabled><span class="icon icon-xs"><svg><use href="#icon-rocket"/></svg></span> Install</button>
+                  <button class="btn btn-primary sideload-btn" style="width: 100%; padding: 8px 10px; font-size: 10px;" disabled data-i18n="app.install"><span class="icon icon-xs"><svg><use href="#icon-rocket"/></svg></span> Install</button>
                   <div class="sideload-status" style="font-size: 9px; margin-top: 4px;"></div>
                   <div class="sideload-progress" style="display: none; margin-top: 4px;">
                     <div class="progress-bar" style="height: 3px;"><div class="progress-fill"></div></div>
@@ -14790,27 +14806,27 @@
             <div class="card quick-remote-card">
               <div class="card-header" style="padding: 4px 12px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
                 <span class="card-icon"><span class="icon icon-sm"><svg><use href="#icon-gamepad"/></svg></span></span>
-                <span class="card-title" style="font-size: 11px;">Remote</span>
-                <button type="button" class="keyboard-remote-help-btn" title="Keyboard shortcuts for Quick Remote" aria-label="Keyboard Remote shortcuts help" style="margin-left: auto;">
+                <span class="card-title" style="font-size: 11px;" data-i18n="app.tabRemote">Remote</span>
+                <button type="button" class="keyboard-remote-help-btn" title="Keyboard Shortcuts for Quick Remote" data-i18n-title="app.keyboardShortcutsQuickRemoteTitle" aria-label="Keyboard Remote Shortcuts Help" data-i18n-aria-label="app.keyboardRemoteHelpAria" style="margin-left: auto;">
                   <span class="icon icon-xs"><svg><use href="#icon-keyboard"/></svg></span>
                 </button>
               </div>
               <div class="card-body" style="padding: 12px;">
                 <div class="devapp-vertical-remote">
                   <div class="devapp-nav-row">
-                    <button class="devapp-side-btn devapp-key" data-key="Back"><span class="icon icon-sm"><svg><use href="#icon-arrow-left"/></svg></span> Back</button>
-                    <button class="devapp-side-btn home devapp-key" data-key="Home"><span class="icon icon-sm"><svg><use href="#icon-home"/></svg></span> Home</button>
+                    <button class="devapp-side-btn devapp-key" data-key="Back" data-i18n="app.remoteBack"><span class="icon icon-sm"><svg><use href="#icon-arrow-left"/></svg></span> Back</button>
+                    <button class="devapp-side-btn home devapp-key" data-key="Home" data-i18n="app.remoteHome"><span class="icon icon-sm"><svg><use href="#icon-home"/></svg></span> Home</button>
                   </div>
                   <div class="devapp-v-dpad">
                     <button class="devapp-v-dpad-btn devapp-v-dpad-up devapp-key" data-key="Up"><span class="icon"><svg><use href="#icon-chevron-up"/></svg></span></button>
                     <button class="devapp-v-dpad-btn devapp-v-dpad-left devapp-key" data-key="Left"><span class="icon"><svg><use href="#icon-chevron-left"/></svg></span></button>
-                    <button class="devapp-v-dpad-btn devapp-v-dpad-center devapp-key" data-key="Select">OK</button>
+                    <button class="devapp-v-dpad-btn devapp-v-dpad-center devapp-key" data-key="Select" data-i18n="common.ok">OK</button>
                     <button class="devapp-v-dpad-btn devapp-v-dpad-right devapp-key" data-key="Right"><span class="icon"><svg><use href="#icon-chevron-right"/></svg></span></button>
                     <button class="devapp-v-dpad-btn devapp-v-dpad-down devapp-key" data-key="Down"><span class="icon"><svg><use href="#icon-chevron-down"/></svg></span></button>
                   </div>
                   <div class="devapp-options-row">
-                    <button class="devapp-side-btn devapp-key" data-key="Info"><span class="icon icon-sm"><svg><use href="#icon-options"/></svg></span> Options</button>
-                    <button class="devapp-side-btn devapp-key" data-key="InstantReplay"><span class="icon icon-sm"><svg><use href="#icon-replay"/></svg></span> Replay</button>
+                    <button class="devapp-side-btn devapp-key" data-key="Info" data-i18n="app.remoteOptions"><span class="icon icon-sm"><svg><use href="#icon-options"/></svg></span> Options</button>
+                    <button class="devapp-side-btn devapp-key" data-key="InstantReplay" data-i18n="app.remoteReplay"><span class="icon icon-sm"><svg><use href="#icon-replay"/></svg></span> Replay</button>
                   </div>
                   <div class="devapp-media-row">
                     <button class="devapp-v-media-btn devapp-key" data-key="Rev"><span class="icon icon-md"><svg><use href="#icon-rewind"/></svg></span></button>
@@ -14818,12 +14834,12 @@
                     <button class="devapp-v-media-btn devapp-key" data-key="Fwd"><span class="icon icon-md"><svg><use href="#icon-fast-forward"/></svg></span></button>
                   </div>
                   <div class="devapp-text-section">
-                    <input type="text" class="devapp-text-input" placeholder="Type text...">
-                    <button class="devapp-send-text-btn"><span class="icon icon-sm"><svg><use href="#icon-send"/></svg></span> Send</button>
+                    <input type="text" class="devapp-text-input" placeholder="Type Text..." data-i18n-placeholder="app.typeTextShortPlaceholder">
+                    <button class="devapp-send-text-btn" data-i18n="app.send"><span class="icon icon-sm"><svg><use href="#icon-send"/></svg></span> Send</button>
                   </div>
                   <label class="devapp-auto-screenshot">
                     <input type="checkbox" class="auto-screenshot-checkbox">
-                    <span><span class="icon icon-sm"><svg><use href="#icon-camera"/></svg></span> Auto Screenshot</span>
+                    <span data-i18n="app.autoScreenshot"><span class="icon icon-sm"><svg><use href="#icon-camera"/></svg></span> Auto Screenshot</span>
                   </label>
                 </div>
               </div>
@@ -14835,17 +14851,17 @@
             <div class="card">
               <div class="card-header" style="padding: 4px 10px;">
                 <span class="card-icon"><span class="icon icon-sm"><svg><use href="#icon-camera"/></svg></span></span>
-                <span class="card-title" style="font-size: 11px;">Screenshot</span>
+                <span class="card-title" style="font-size: 11px;" data-i18n="app.screenshot">Screenshot</span>
                 <div class="screenshot-actions">
-                  <button class="btn btn-secondary btn-icon copy-screenshot-btn" title="Copy screenshot" aria-label="Copy screenshot" style="display: none;"><span class="icon icon-xs"><svg><use href="#icon-copy"/></svg></span></button>
-                  <button class="btn btn-secondary btn-icon save-screenshot-btn" title="Download screenshot" aria-label="Download screenshot" style="display: none;"><span class="icon icon-xs"><svg><use href="#icon-download"/></svg></span></button>
-                  <button class="btn btn-secondary btn-icon clear-screenshot-btn" title="Clear screenshot" aria-label="Clear screenshot" style="display: none;"><span class="icon icon-xs"><svg><use href="#icon-clear-results"/></svg></span></button>
+                  <button class="btn btn-secondary btn-icon copy-screenshot-btn" title="Copy Screenshot" data-i18n-title="app.copyScreenshot" aria-label="Copy Screenshot" data-i18n-aria-label="app.copyScreenshot" style="display: none;"><span class="icon icon-xs"><svg><use href="#icon-copy"/></svg></span></button>
+                  <button class="btn btn-secondary btn-icon save-screenshot-btn" title="Download Screenshot" data-i18n-title="app.downloadScreenshot" aria-label="Download Screenshot" data-i18n-aria-label="app.downloadScreenshot" style="display: none;"><span class="icon icon-xs"><svg><use href="#icon-download"/></svg></span></button>
+                  <button class="btn btn-secondary btn-icon clear-screenshot-btn" title="Clear Screenshot" data-i18n-title="app.clearScreenshot" aria-label="Clear Screenshot" data-i18n-aria-label="app.clearScreenshot" style="display: none;"><span class="icon icon-xs"><svg><use href="#icon-clear-results"/></svg></span></button>
                 </div>
                 <!-- Capture status: centered in the header, fills the space between the
                      left actions and the Capture button (in flow, so it never overlaps them). -->
                 <div class="screenshot-status"></div>
                 <div class="card-header-actions">
-                  <button class="btn btn-primary screenshot-btn" style="padding: 5px 10px; font-size: 10px;"><span class="icon icon-xs"><svg><use href="#icon-camera"/></svg></span> Capture</button>
+                  <button class="btn btn-primary screenshot-btn" style="padding: 5px 10px; font-size: 10px;" data-i18n="app.capture"><span class="icon icon-xs"><svg><use href="#icon-camera"/></svg></span> Capture</button>
                 </div>
               </div>
               <div class="card-body">
@@ -14853,7 +14869,7 @@
                   <img class="screenshot-image" alt="Roku Screenshot" style="display: none;">
                   <div class="screenshot-placeholder">
                     <div style="opacity: 0.3;"><span class="icon icon-3xl"><svg><use href="#icon-image"/></svg></span></div>
-                    <p style="margin: 8px 0 0; font-size: 11px; color: var(--text-muted);">Click Capture</p>
+                    <p style="margin: 8px 0 0; font-size: 11px; color: var(--text-muted);" data-i18n="app.clickCapture">Click Capture</p>
                   </div>
                 </div>
               </div>
@@ -14869,9 +14885,9 @@
           <div class="dev-mode-warning-content">
             <span class="dev-mode-warning-icon"><span class="icon icon-sm"><svg><use href="#icon-warning"/></svg></span></span>
             <div class="dev-mode-warning-text">
-              <span class="dev-mode-warning-title">Developer Mode Not Enabled</span>
-              <span class="dev-mode-warning-desc">Some query features may be limited. Enable Developer Mode for full access.</span>
-              <button class="dev-mode-warning-btn">
+              <span class="dev-mode-warning-title" data-i18n="app.developerModeNotEnabled">Developer Mode Not Enabled</span>
+              <span class="dev-mode-warning-desc" data-i18n="app.queryDevModeDesc">Some query features may be limited. Enable Developer Mode for full access.</span>
+              <button class="dev-mode-warning-btn" data-i18n="app.howToEnable">
                 <span class="icon icon-xs"><svg><use href="#icon-help"/></svg></span>
                 How to Enable
               </button>
@@ -14884,20 +14900,20 @@
             <div class="card connection-card">
               <div class="card-header">
                 <span class="card-icon"><span class="icon icon-sm"><svg><use href="#icon-database"/></svg></span></span>
-                <span class="card-title">Device Queries</span>
+                <span class="card-title" data-i18n="app.deviceQueries">Device Queries</span>
               </div>
               <div class="card-body" style="display: flex; flex-direction: column; justify-content: flex-start;">
                 <div class="query-buttons" style="margin-bottom: 0;">
-                  <button class="btn btn-secondary query-btn" data-query="/query/device-info"><span class="icon icon-xs"><svg><use href="#icon-tv"/></svg></span> Device Info</button>
-                  <button class="btn btn-secondary query-btn" data-query="/query/apps"><span class="icon icon-xs"><svg><use href="#icon-grid"/></svg></span> All Apps</button>
-                  <button class="btn btn-secondary query-btn" data-query="/query/active-app"><span class="icon icon-xs"><svg><use href="#icon-play"/></svg></span> Active App</button>
-                  <button class="btn btn-secondary query-btn" data-query="/query/media-player"><span class="icon icon-xs"><svg><use href="#icon-image"/></svg></span> Media Player</button>
-                  <button class="btn btn-secondary telnet-cmd-btn" data-telnet-cmd="plugins"><span class="icon icon-xs"><svg><use href="#icon-plug"/></svg></span> Plugins</button>
-                  <button class="btn btn-secondary telnet-cmd-btn" data-telnet-cmd="free"><span class="icon icon-xs"><svg><use href="#icon-zap"/></svg></span> Memory</button>
+                  <button class="btn btn-secondary query-btn" data-query="/query/device-info" data-i18n="app.queryDeviceInfo"><span class="icon icon-xs"><svg><use href="#icon-tv"/></svg></span> Device Info</button>
+                  <button class="btn btn-secondary query-btn" data-query="/query/apps" data-i18n="app.queryAllApps"><span class="icon icon-xs"><svg><use href="#icon-grid"/></svg></span> All Apps</button>
+                  <button class="btn btn-secondary query-btn" data-query="/query/active-app" data-i18n="app.queryActiveApp"><span class="icon icon-xs"><svg><use href="#icon-play"/></svg></span> Active App</button>
+                  <button class="btn btn-secondary query-btn" data-query="/query/media-player" data-i18n="app.queryMediaPlayer"><span class="icon icon-xs"><svg><use href="#icon-image"/></svg></span> Media Player</button>
+                  <button class="btn btn-secondary telnet-cmd-btn" data-telnet-cmd="plugins" data-i18n="app.queryPlugins"><span class="icon icon-xs"><svg><use href="#icon-plug"/></svg></span> Plugins</button>
+                  <button class="btn btn-secondary telnet-cmd-btn" data-telnet-cmd="free" data-i18n="app.queryMemory"><span class="icon icon-xs"><svg><use href="#icon-zap"/></svg></span> Memory</button>
                 </div>
               </div>
               <div class="connection-card-footer">
-                <button type="button" class="connection-card-footer-btn secret-screens-open-btn" title="Remote key sequences for Roku secret and diagnostic screens">
+                <button type="button" class="connection-card-footer-btn secret-screens-open-btn" title="Remote Key Sequences for Roku Secret and Diagnostic Screens" data-i18n-title="app.secretScreensTitle" data-i18n="app.rokuSecretScreens">
                   <span class="icon icon-xs"><svg><use href="#icon-user-secret"/></svg></span>
                   Roku Secret Screens
                 </button>
@@ -14910,13 +14926,16 @@
             <div class="card">
               <div class="card-header">
                 <span class="card-icon"><span class="icon icon-sm"><svg><use href="#icon-code"/></svg></span></span>
-                <span class="card-title">Developer Queries</span>
+                <span class="card-title" data-i18n="app.developerQueries">Developer Queries</span>
                 <div class="card-header-actions">
                   <button
                     type="button"
                     class="btn btn-secondary open-fiddle-btn"
                     title="Open BrightScript Fiddle with this device preselected"
+                    data-i18n-title="app.openFiddleTitle"
                     aria-label="Open BrightScript Fiddle for this device"
+                    data-i18n-aria-label="app.openFiddleAria"
+                    data-i18n="app.openFiddle"
                     hidden
                   >
                     <span class="icon icon-xs"><svg><use href="#icon-code"/></svg></span>
@@ -14926,48 +14945,48 @@
               </div>
               <div class="card-body query-dev-queries-grid">
                 <div class="query-dev-cell">
-                  <div class="query-section-label">SceneGraph</div>
+                  <div class="query-section-label" data-i18n="app.qsSceneGraph">SceneGraph</div>
                   <div class="query-buttons">
-                    <button class="btn btn-secondary query-btn" data-query="/query/sgnodes/all">All Nodes</button>
-                    <button class="btn btn-secondary query-btn" data-query="/query/sgnodes/roots">Root Nodes</button>
+                    <button class="btn btn-secondary query-btn" data-query="/query/sgnodes/all" data-i18n="app.queryAllNodes">All Nodes</button>
+                    <button class="btn btn-secondary query-btn" data-query="/query/sgnodes/roots" data-i18n="app.queryRootNodes">Root Nodes</button>
                   </div>
                 </div>
                 <div class="query-dev-cell">
-                  <div class="query-section-label">SG Rendezvous</div>
+                  <div class="query-section-label" data-i18n="app.qsSgRendezvous">SG Rendezvous</div>
                   <div class="query-buttons">
-                    <button class="btn btn-success post-btn" data-post="/sgrendezvous/track"><span class="icon icon-xs"><svg><use href="#icon-play"/></svg></span> Track</button>
-                    <button class="btn btn-secondary query-btn" data-query="/query/sgrendezvous">Events</button>
-                    <button class="btn btn-danger post-btn" data-post="/sgrendezvous/untrack"><span class="icon icon-xs"><svg><use href="#icon-x"/></svg></span> Untrack</button>
+                    <button class="btn btn-success post-btn" data-post="/sgrendezvous/track" data-i18n="app.track"><span class="icon icon-xs"><svg><use href="#icon-play"/></svg></span> Track</button>
+                    <button class="btn btn-secondary query-btn" data-query="/query/sgrendezvous" data-i18n="app.events">Events</button>
+                    <button class="btn btn-danger post-btn" data-post="/sgrendezvous/untrack" data-i18n="app.untrack"><span class="icon icon-xs"><svg><use href="#icon-x"/></svg></span> Untrack</button>
                   </div>
                 </div>
                 <div class="query-dev-cell">
-                  <div class="query-section-label">FW Beacons</div>
+                  <div class="query-section-label" data-i18n="app.qsFwBeacons">FW Beacons</div>
                   <div class="query-buttons">
-                    <button class="btn btn-success post-btn" data-post="/fwbeacons/track/dev"><span class="icon icon-xs"><svg><use href="#icon-play"/></svg></span> Track</button>
-                    <button class="btn btn-secondary query-btn" data-query="/query/fwbeacons">Events</button>
-                    <button class="btn btn-danger post-btn" data-post="/fwbeacons/untrack"><span class="icon icon-xs"><svg><use href="#icon-x"/></svg></span> Untrack</button>
+                    <button class="btn btn-success post-btn" data-post="/fwbeacons/track/dev" data-i18n="app.track"><span class="icon icon-xs"><svg><use href="#icon-play"/></svg></span> Track</button>
+                    <button class="btn btn-secondary query-btn" data-query="/query/fwbeacons" data-i18n="app.events">Events</button>
+                    <button class="btn btn-danger post-btn" data-post="/fwbeacons/untrack" data-i18n="app.untrack"><span class="icon icon-xs"><svg><use href="#icon-x"/></svg></span> Untrack</button>
                   </div>
                 </div>
                 <div class="query-dev-cell">
-                  <div class="query-section-label">Performance</div>
+                  <div class="query-section-label" data-i18n="app.qsPerformance">Performance</div>
                   <div class="query-buttons">
-                    <button class="btn btn-secondary query-btn" data-query="/query/graphics-frame-rate">Frame Rate</button>
-                    <button class="btn btn-secondary query-btn" data-query="/query/chanperf">Channel Perf</button>
+                    <button class="btn btn-secondary query-btn" data-query="/query/graphics-frame-rate" data-i18n="app.queryFrameRate">Frame Rate</button>
+                    <button class="btn btn-secondary query-btn" data-query="/query/chanperf" data-i18n="app.queryChannelPerf">Channel Perf</button>
                   </div>
                 </div>
                 <div class="query-dev-cell">
-                  <div class="query-section-label">Other</div>
+                  <div class="query-section-label" data-i18n="app.qsOther">Other</div>
                   <div class="query-buttons">
-                    <button class="btn btn-secondary query-btn" data-query="/query/app-state/dev">App State</button>
-                    <button class="btn btn-secondary query-btn" data-query="/query/registry/dev">Registry</button>
-                    <button class="btn btn-secondary query-btn" data-query="/query/app-object-counts/dev">Object Counts</button>
+                    <button class="btn btn-secondary query-btn" data-query="/query/app-state/dev" data-i18n="app.queryAppState">App State</button>
+                    <button class="btn btn-secondary query-btn" data-query="/query/registry/dev" data-i18n="app.queryRegistry">Registry</button>
+                    <button class="btn btn-secondary query-btn" data-query="/query/app-object-counts/dev" data-i18n="app.queryObjectCounts">Object Counts</button>
                   </div>
                 </div>
                 <div class="query-dev-cell">
-                  <div class="query-section-label">Custom</div>
+                  <div class="query-section-label" data-i18n="app.qsCustom">Custom</div>
                   <div class="custom-query-row">
                     <input type="text" class="custom-query-input" placeholder="/query/...">
-                    <button class="btn btn-primary run-custom-query-btn">Run</button>
+                    <button class="btn btn-primary run-custom-query-btn" data-i18n="app.run">Run</button>
                   </div>
                 </div>
               </div>
@@ -14979,17 +14998,17 @@
             <div class="card">
               <div class="card-header query-results-card-header">
                 <span class="card-icon"><span class="icon icon-sm"><svg><use href="#icon-terminal"/></svg></span></span>
-                <span class="card-title">Results</span>
+                <span class="card-title" data-i18n="app.results">Results</span>
                 <div class="card-header-actions is-left">
-                  <button class="btn btn-secondary btn-icon copy-query-btn" title="Copy" aria-label="Copy" style="display: none;"><span class="icon icon-xs"><svg><use href="#icon-copy"/></svg></span></button>
-                  <button class="btn btn-secondary btn-icon save-query-btn" title="Save" aria-label="Save" style="display: none;"><span class="icon icon-xs"><svg><use href="#icon-download"/></svg></span></button>
-                  <button class="btn btn-secondary btn-icon clear-query-btn" title="Clear" aria-label="Clear" style="display: none;"><span class="icon icon-xs"><svg><use href="#icon-clear-results"/></svg></span></button>
+                  <button class="btn btn-secondary btn-icon copy-query-btn" title="Copy" data-i18n-title="common.copy" aria-label="Copy" data-i18n-aria-label="common.copy" style="display: none;"><span class="icon icon-xs"><svg><use href="#icon-copy"/></svg></span></button>
+                  <button class="btn btn-secondary btn-icon save-query-btn" title="Save" data-i18n-title="common.save" aria-label="Save" data-i18n-aria-label="common.save" style="display: none;"><span class="icon icon-xs"><svg><use href="#icon-download"/></svg></span></button>
+                  <button class="btn btn-secondary btn-icon clear-query-btn" title="Clear" data-i18n-title="common.clear" aria-label="Clear" data-i18n-aria-label="common.clear" style="display: none;"><span class="icon icon-xs"><svg><use href="#icon-clear-results"/></svg></span></button>
                 </div>
               </div>
               <div class="card-body">
                 <div class="remove-plugin-section" style="display: none; gap: 8px; align-items: center; padding: 12px; background: var(--bg-tertiary); border-radius: 8px; margin-bottom: 12px;">
-                  <input type="text" class="remove-plugin-input" placeholder="App ID (e.g., 987654_cf9a)" style="flex: 1; padding: 8px 12px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-primary); color: var(--text-primary); font-size: 12px; font-family: 'JetBrains Mono', monospace;">
-                  <button class="btn btn-danger remove-plugin-btn" style="padding: 8px 16px; white-space: nowrap;"><span class="icon icon-xs"><svg><use href="#icon-trash"/></svg></span> Remove Plugin</button>
+                  <input type="text" class="remove-plugin-input" placeholder="App ID (e.g., 987654_cf9a)" data-i18n-placeholder="app.removePluginPlaceholder" style="flex: 1; padding: 8px 12px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-primary); color: var(--text-primary); font-size: 12px; font-family: 'JetBrains Mono', monospace;">
+                  <button class="btn btn-danger remove-plugin-btn" style="padding: 8px 16px; white-space: nowrap;" data-i18n="app.removePlugin"><span class="icon icon-xs"><svg><use href="#icon-trash"/></svg></span> Remove Plugin</button>
                 </div>
                 <div class="output-area query-output hidden" tabindex="0"></div>
               </div>
@@ -15004,26 +15023,26 @@
           <div class="card telnet-card">
             <div class="card-header telnet-header">
               <span class="card-icon"><span class="icon icon-sm"><svg><use href="#icon-terminal"/></svg></span></span>
-              <span class="card-title">Telnet Console</span>
+              <span class="card-title" data-i18n="app.telnetConsole">Telnet Console</span>
               <div class="telnet-actions">
-                <button class="btn btn-secondary btn-icon telnet-copy-btn" title="Copy all logs" aria-label="Copy all logs">
+                <button class="btn btn-secondary btn-icon telnet-copy-btn" title="Copy All Logs" data-i18n-title="app.copyAllLogs" aria-label="Copy All Logs" data-i18n-aria-label="app.copyAllLogs">
                   <span class="icon icon-xs"><svg><use href="#icon-copy"/></svg></span>
                 </button>
-                <button class="btn btn-secondary btn-icon telnet-save-btn" title="Save logs to file" aria-label="Save logs to file">
+                <button class="btn btn-secondary btn-icon telnet-save-btn" title="Save Logs to File" data-i18n-title="app.saveLogsToFile" aria-label="Save Logs to File" data-i18n-aria-label="app.saveLogsToFile">
                   <span class="icon icon-xs"><svg><use href="#icon-download"/></svg></span>
                 </button>
                 <div class="telnet-split-control telnet-clear-split">
-                  <button type="button" class="btn btn-secondary btn-icon telnet-clear-btn telnet-split-main" title="Clear console" aria-label="Clear console">
+                  <button type="button" class="btn btn-secondary btn-icon telnet-clear-btn telnet-split-main" title="Clear Console" data-i18n-title="app.clearConsole" aria-label="Clear Console" data-i18n-aria-label="app.clearConsole">
                     <span class="icon icon-xs"><svg><use href="#icon-clear-results"/></svg></span>
                   </button>
-                  <button type="button" class="btn btn-secondary telnet-clear-menu-btn telnet-split-menu-btn" title="Clear options" aria-label="Clear options" aria-haspopup="menu" aria-expanded="false" hidden>
+                  <button type="button" class="btn btn-secondary telnet-clear-menu-btn telnet-split-menu-btn" title="Clear Options" data-i18n-title="app.clearOptions" aria-label="Clear Options" data-i18n-aria-label="app.clearOptions" aria-haspopup="menu" aria-expanded="false" hidden>
                     <span class="icon icon-xs"><svg><use href="#icon-chevron-down"/></svg></span>
                   </button>
                   <div class="telnet-split-menu telnet-clear-menu" role="menu" hidden>
-                    <button type="button" class="telnet-split-menu-item telnet-clear-menu-item" role="menuitem" data-clear-action="relay-buffer">
+                    <button type="button" class="telnet-split-menu-item telnet-clear-menu-item" role="menuitem" data-clear-action="relay-buffer" data-i18n="app.clearRelayOnly">
                       Clear (on Relay Server only)
                     </button>
-                    <button type="button" class="telnet-split-menu-item telnet-clear-menu-item" role="menuitem" data-clear-action="local-and-relay">
+                    <button type="button" class="telnet-split-menu-item telnet-clear-menu-item" role="menuitem" data-clear-action="local-and-relay" data-i18n="app.clearLocalAndRelay">
                       Clear (Local and on Relay Server)
                     </button>
                   </div>
@@ -15034,7 +15053,7 @@
                    Log Viewer window share one markup source. The slot (flex spacer, keeps Port/Connect
                    right-aligned) and the resize drag handle stay here as the surrounding chrome. -->
               <div class="telnet-find-slot">
-                <div class="telnet-find-resize" role="separator" aria-orientation="vertical" title="Drag to widen search (double-click to reset)"></div>
+                <div class="telnet-find-resize" role="separator" aria-orientation="vertical" title="Drag to widen Search Bar (double-click to reset)" data-i18n-title="app.findResizeTitle"></div>
               </div>
               <div class="card-header-actions">
                 <!-- Live line counter; hidden until first batch arrives so the
@@ -15044,29 +15063,29 @@
                 <span class="telnet-line-count" aria-live="polite" hidden></span>
                 <!-- Console analytics dashboard. Enabled only once there are log lines to analyze
                      (toggled by the panel's refreshLineCount). Opens the shared console-analytics-modal. -->
-                <button type="button" class="btn btn-secondary btn-icon telnet-dashboard-btn" data-telnet-dashboard title="Console Monitor" aria-label="Console Monitor" disabled>
+                <button type="button" class="btn btn-secondary btn-icon telnet-dashboard-btn" data-telnet-dashboard title="Console Monitor" data-i18n-title="app.consoleMonitor" aria-label="Console Monitor" data-i18n-aria-label="app.consoleMonitor" disabled>
                   <span class="icon icon-md"><svg><use href="#icon-monitor"/></svg></span>
                 </button>
-                <span class="telnet-port-badge">Port 8085</span>
+                <span class="telnet-port-badge" data-i18n="app.telnetPortBadge">Port 8085</span>
                 <span class="telnet-status disconnected">
                   <span class="telnet-status-dot"></span>
                   <span class="telnet-status-text">Disconnected</span>
                 </span>
                 <div class="telnet-split-control telnet-connect-split">
-                  <button type="button" class="btn btn-primary telnet-connect-btn telnet-split-main" title="Connect and pull relay buffer">
-                    <span class="icon icon-xs"><svg><use href="#icon-plug"/></svg></span><span class="telnet-btn-label">Connect</span>
+                  <button type="button" class="btn btn-primary telnet-connect-btn telnet-split-main" title="Connect and Pull Relay Buffer" data-i18n-title="app.connectPullRelayTitle">
+                    <span class="icon icon-xs"><svg><use href="#icon-plug"/></svg></span><span class="telnet-btn-label" data-i18n="common.connect">Connect</span>
                   </button>
-                  <button type="button" class="btn btn-primary telnet-connect-menu-btn telnet-split-menu-btn" title="Connect options" aria-label="Connect options" aria-haspopup="menu" aria-expanded="false" hidden>
+                  <button type="button" class="btn btn-primary telnet-connect-menu-btn telnet-split-menu-btn" title="Connect Options" data-i18n-title="app.connectOptions" aria-label="Connect Options" data-i18n-aria-label="app.connectOptions" aria-haspopup="menu" aria-expanded="false" hidden>
                     <span class="icon icon-xs"><svg><use href="#icon-chevron-down"/></svg></span>
                   </button>
                   <div class="telnet-split-menu telnet-connect-menu" role="menu" hidden>
-                    <button type="button" class="telnet-split-menu-item telnet-connect-menu-item" role="menuitem" data-connect-action="live-only">
+                    <button type="button" class="telnet-split-menu-item telnet-connect-menu-item" role="menuitem" data-connect-action="live-only" data-i18n="app.connectLiveOnly">
                       Connect (skip existing logs buffer)
                     </button>
                   </div>
                 </div>
-                <button class="btn btn-danger telnet-disconnect-btn" style="display: none;" title="Disconnect">
-                  <span class="icon icon-xs"><svg><use href="#icon-x"/></svg></span><span class="telnet-btn-label">Disconnect</span>
+                <button class="btn btn-danger telnet-disconnect-btn" style="display: none;" title="Disconnect" data-i18n-title="common.disconnect">
+                  <span class="icon icon-xs"><svg><use href="#icon-x"/></svg></span><span class="telnet-btn-label" data-i18n="common.disconnect">Disconnect</span>
                 </button>
               </div>
             </div>
@@ -15075,11 +15094,11 @@
                 <div class="telnet-output">
                   <div class="telnet-placeholder">
                     <span class="icon icon-lg"><svg><use href="#icon-terminal"/></svg></span>
-                    <p>Connect to view BrightScript debug output</p>
+                    <p data-i18n="app.telnetPlaceholder">Connect to view BrightScript Debug Output</p>
                     <p class="telnet-hint">Requires Developer Mode enabled on the Roku device.<br>Only one Telnet connection to a Roku device can be active at a time.</p>
                   </div>
                 </div>
-                <button type="button" class="telnet-scroll-to-bottom" hidden title="Jump to latest logs" aria-label="Jump to latest logs">
+                <button type="button" class="telnet-scroll-to-bottom" hidden title="Jump to Latest Logs" data-i18n-title="app.jumpToLatestLogs" aria-label="Jump to Latest Logs" data-i18n-aria-label="app.jumpToLatestLogs">
                   <span class="icon icon-sm"><svg><use href="#icon-chevron-down"/></svg></span>
                 </button>
               </div>
@@ -15095,9 +15114,9 @@
           <div class="dev-mode-warning-content">
             <span class="dev-mode-warning-icon"><span class="icon icon-sm"><svg><use href="#icon-warning"/></svg></span></span>
             <div class="dev-mode-warning-text">
-              <span class="dev-mode-warning-title">Developer Mode Not Enabled</span>
-              <span class="dev-mode-warning-desc">App Connector requires Developer Mode and a sideloaded channel with TrackerTask.</span>
-              <button class="dev-mode-warning-btn">
+              <span class="dev-mode-warning-title" data-i18n="app.developerModeNotEnabled">Developer Mode Not Enabled</span>
+              <span class="dev-mode-warning-desc" data-i18n="app.inspectorDevModeDesc">App Connector requires Developer Mode and a sideloaded channel with TrackerTask.</span>
+              <button class="dev-mode-warning-btn" data-i18n="app.howToEnable">
                 <span class="icon icon-xs"><svg><use href="#icon-help"/></svg></span>
                 How to Enable
               </button>
@@ -15112,34 +15131,34 @@
               <div class="card connection-card" style="height: 100%;">
                 <div class="card-header">
                   <span class="card-icon"><span class="icon icon-sm"><svg><use href="#icon-plug"/></svg></span></span>
-                  <span class="card-title">Connection</span>
+                  <span class="card-title" data-i18n="app.connection">Connection</span>
                   <span class="rale-connection-status disconnected"><span class="icon icon-xs icon-muted"><svg><use href="#icon-circle"/></svg></span> Disconnected</span>
                 </div>
                 <div class="card-body">
                   <div class="rale-connect-fields">
                     <label class="rale-connect-field">
-                      <span class="rale-connect-field-label">Port</span>
+                      <span class="rale-connect-field-label" data-i18n="app.port">Port</span>
                       <!-- Initial value; inspector setup overwrites from window.rdsSharedConstants (lib/shared-constants.js) -->
                       <input type="number" class="rale-port-input" value="49200" min="49152" max="65535">
                     </label>
                     <label class="rale-connect-field">
-                      <span class="rale-connect-field-label">Log Verbosity</span>
-                      <select class="rale-log-verbosity-select" title="RALE logger level applied on connect">
-                        <option value="0" selected>Off</option>
-                        <option value="1">Error</option>
-                        <option value="2">Warning</option>
-                        <option value="3">Info</option>
-                        <option value="4">Debug</option>
+                      <span class="rale-connect-field-label" data-i18n="app.logVerbosity">Log Verbosity</span>
+                      <select class="rale-log-verbosity-select" title="RALE Logger Level Applied on Connect" data-i18n-title="app.logVerbosityTitle">
+                        <option value="0" selected data-i18n="app.verbosityOff">Off</option>
+                        <option value="1" data-i18n="app.verbosityError">Error</option>
+                        <option value="2" data-i18n="app.verbosityWarning">Warning</option>
+                        <option value="3" data-i18n="app.verbosityInfo">Info</option>
+                        <option value="4" data-i18n="app.verbosityDebug">Debug</option>
                       </select>
                     </label>
                   </div>
                   <div style="margin-top: 14px; display: flex; gap: 8px;">
-                    <button class="btn btn-success rale-connect-btn" style="flex: 1;">Connect</button>
-                    <button class="btn btn-danger rale-disconnect-btn" style="flex: 1; display: none;">Disconnect</button>
+                    <button class="btn btn-success rale-connect-btn" style="flex: 1;" data-i18n="common.connect">Connect</button>
+                    <button class="btn btn-danger rale-disconnect-btn" style="flex: 1; display: none;" data-i18n="common.disconnect">Disconnect</button>
                   </div>
                 </div>
                 <div class="connection-card-footer">
-                  <button type="button" class="connection-card-footer-btn integration-guide-open-btn" title="How to integrate TrackerTask with App Connector">
+                  <button type="button" class="connection-card-footer-btn integration-guide-open-btn" title="How to integrate TrackerTask with App Connector" data-i18n-title="app.integrationGuideTitle" data-i18n="app.integrationGuide">
                     <span class="icon icon-xs"><svg><use href="#icon-book"/></svg></span>
                     Integration Guide
                   </button>
@@ -15152,29 +15171,29 @@
               <div class="card" style="height: 100%;">
                 <div class="card-header">
                   <span class="card-icon"><span class="icon icon-sm"><svg><use href="#icon-rocket"/></svg></span></span>
-                  <span class="card-title">Execute Function</span>
+                  <span class="card-title" data-i18n="app.executeFunction">Execute Function</span>
                   <div class="card-header-actions">
-                    <button class="btn btn-secondary rale-refresh-funcs-btn" disabled><span class="icon icon-xs"><svg><use href="#icon-refresh"/></svg></span> Refresh</button>
+                    <button class="btn btn-secondary rale-refresh-funcs-btn" disabled data-i18n="common.refresh"><span class="icon icon-xs"><svg><use href="#icon-refresh"/></svg></span> Refresh</button>
                   </div>
                 </div>
                 <div class="card-body">
                   <div class="execute-row">
                     <div class="rale-custom-cmd rale-function-column">
-                      <label>Function</label>
+                      <label data-i18n="app.functionLabel">Function</label>
                       <select class="rale-func-select" disabled>
-                        <option value="">-- Connect to load functions --</option>
+                        <option value="" data-i18n="app.connectToLoadFunctions">-- Connect to load functions --</option>
                       </select>
-                      <div class="func-param-hint">
+                      <div class="func-param-hint" data-i18n="app.selectFunctionParamHint">
                         Select a function to see parameter details
                       </div>
                       <div class="execute-actions">
-                        <button class="btn btn-primary rale-execute-btn" disabled><span class="icon icon-xs"><svg><use href="#icon-play"/></svg></span> Execute</button>
+                        <button class="btn btn-primary rale-execute-btn" disabled data-i18n="app.execute"><span class="icon icon-xs"><svg><use href="#icon-play"/></svg></span> Execute</button>
                       </div>
                     </div>
                     <div class="rale-custom-cmd rale-params-section">
-                      <label>Parameters</label>
+                      <label data-i18n="app.parameters">Parameters</label>
                       <div class="rale-params-container">
-                        <div class="rale-params-empty">
+                        <div class="rale-params-empty" data-i18n="app.selectFunctionParams">
                           Select a function to see parameters
                         </div>
                       </div>
@@ -15192,12 +15211,12 @@
             <div class="card">
               <div class="card-header">
                 <span class="card-icon"><span class="icon icon-sm"><svg><use href="#icon-terminal"/></svg></span></span>
-                <span class="card-title">Response</span>
+                <span class="card-title" data-i18n="app.response">Response</span>
                 <div class="card-header-actions is-left">
-                  <button type="button" class="btn btn-secondary rale-update-node-btn" style="display: none;" title="After Get Node by ID: selectNode then setField, removeField, or add field via setField">Update Node</button>
-                  <button class="btn btn-secondary btn-icon rale-copy-btn" title="Copy" aria-label="Copy" style="display: none;"><span class="icon icon-xs"><svg><use href="#icon-copy"/></svg></span></button>
-                  <button class="btn btn-secondary btn-icon rale-save-btn" title="Save" aria-label="Save" style="display: none;"><span class="icon icon-xs"><svg><use href="#icon-download"/></svg></span></button>
-                  <button class="btn btn-secondary btn-icon rale-clear-btn" title="Clear" aria-label="Clear" style="display: none;"><span class="icon icon-xs"><svg><use href="#icon-clear-results"/></svg></span></button>
+                  <button type="button" class="btn btn-secondary rale-update-node-btn" style="display: none;" title="After Get Node by ID: selectNode Then setField, removeField, or Add Field via setField" data-i18n-title="app.updateNodeBtnTitle" data-i18n="app.updateNode">Update Node</button>
+                  <button class="btn btn-secondary btn-icon rale-copy-btn" title="Copy" data-i18n-title="common.copy" aria-label="Copy" data-i18n-aria-label="common.copy" style="display: none;"><span class="icon icon-xs"><svg><use href="#icon-copy"/></svg></span></button>
+                  <button class="btn btn-secondary btn-icon rale-save-btn" title="Save" data-i18n-title="common.save" aria-label="Save" data-i18n-aria-label="common.save" style="display: none;"><span class="icon icon-xs"><svg><use href="#icon-download"/></svg></span></button>
+                  <button class="btn btn-secondary btn-icon rale-clear-btn" title="Clear" data-i18n-title="common.clear" aria-label="Clear" data-i18n-aria-label="common.clear" style="display: none;"><span class="icon icon-xs"><svg><use href="#icon-clear-results"/></svg></span></button>
                 </div>
               </div>
               <div class="card-body">
@@ -15211,10 +15230,10 @@
 
           <!-- Update node: selectNode + setField (uses path from Get Node by ID) -->
           <div class="modal-overlay rale-update-node-modal" aria-hidden="true">
-            <div class="modal rale-update-node-modal-box" role="dialog" aria-modal="true" aria-label="Update Node">
+            <div class="modal rale-update-node-modal-box" role="dialog" aria-modal="true" aria-label="Update Node" data-i18n-aria-label="app.updateNode">
               <div class="modal-header">
-                <span class="modal-title">Update Node</span>
-                <button type="button" class="modal-close rale-update-node-modal-close" aria-label="Close"><span class="icon icon-sm"><svg><use href="#icon-x"/></svg></span></button>
+                <span class="modal-title" data-i18n="app.updateNode">Update Node</span>
+                <button type="button" class="modal-close rale-update-node-modal-close" aria-label="Close" data-i18n-aria-label="common.close"><span class="icon icon-sm"><svg><use href="#icon-x"/></svg></span></button>
               </div>
               <div class="modal-body">
                 <p style="font-size: 12px; color: var(--text-secondary); margin: 0 0 16px; line-height: 1.45;">
@@ -15223,40 +15242,40 @@
                 <div class="rale-node-update-feedback" role="status" aria-live="polite" aria-atomic="true" hidden></div>
                 <div class="rale-update-node-fields" style="display: grid; gap: 12px;">
                   <div class="rale-update-label" style="display: flex; flex-direction: column; gap: 8px; font-size: 12px;">
-                    <span style="font-weight: 600; color: var(--text-secondary);">Action</span>
-                    <div class="rale-node-action-group" role="group" aria-label="Field action">
-                      <button type="button" class="rale-node-action-btn rale-node-action-btn--active" data-action="update" aria-pressed="true">Update Field</button>
-                      <button type="button" class="rale-node-action-btn" data-action="add" aria-pressed="false">Add Field</button>
-                      <button type="button" class="rale-node-action-btn" data-action="remove" aria-pressed="false">Remove Field</button>
+                    <span style="font-weight: 600; color: var(--text-secondary);" data-i18n="app.action">Action</span>
+                    <div class="rale-node-action-group" role="group" aria-label="Field Action" data-i18n-aria-label="app.fieldAction">
+                      <button type="button" class="rale-node-action-btn rale-node-action-btn--active" data-action="update" aria-pressed="true" data-i18n="app.updateField">Update Field</button>
+                      <button type="button" class="rale-node-action-btn" data-action="add" aria-pressed="false" data-i18n="app.addField">Add Field</button>
+                      <button type="button" class="rale-node-action-btn" data-action="remove" aria-pressed="false" data-i18n="app.removeField">Remove Field</button>
                     </div>
                   </div>
                   <label class="rale-update-label rale-node-row-field-select" style="display: flex; flex-direction: column; gap: 6px; font-size: 12px;">
-                    <span>Field</span>
+                    <span data-i18n="app.field">Field</span>
                     <select class="rale-node-field-select select" style="padding: 8px 10px; border-radius: 6px;"></select>
                   </label>
                   <label class="rale-update-label rale-node-row-add-name" style="display: flex; flex-direction: column; gap: 6px; font-size: 12px;" hidden>
-                    <span>Field Name</span>
-                    <input type="text" class="rale-node-field-add-name input" placeholder="e.g. text, visible, width" style="padding: 8px 10px; border-radius: 6px;">
+                    <span data-i18n="app.fieldName">Field Name</span>
+                    <input type="text" class="rale-node-field-add-name input" placeholder="e.g. text, visible, width" data-i18n-placeholder="app.fieldNamePlaceholder" style="padding: 8px 10px; border-radius: 6px;">
                   </label>
                   <label class="rale-update-label rale-node-row-type" style="display: flex; flex-direction: column; gap: 6px; font-size: 12px;">
-                    <span>Field Type</span>
+                    <span data-i18n="app.fieldType">Field Type</span>
                     <select class="rale-node-field-type select" style="padding: 8px 10px; border-radius: 6px;">
-                      <option value="string">String</option>
-                      <option value="integer">Integer</option>
-                      <option value="float">Float</option>
-                      <option value="boolean">Boolean</option>
-                      <option value="color">Color</option>
-                      <option value="array">Array</option>
-                      <option value="assocarray">AssocArray</option>
+                      <option value="string" data-i18n="app.typeString">String</option>
+                      <option value="integer" data-i18n="app.typeInteger">Integer</option>
+                      <option value="float" data-i18n="app.typeFloat">Float</option>
+                      <option value="boolean" data-i18n="app.typeBoolean">Boolean</option>
+                      <option value="color" data-i18n="app.typeColor">Color</option>
+                      <option value="array" data-i18n="app.typeArray">Array</option>
+                      <option value="assocarray" data-i18n="app.typeAssocArray">AssocArray</option>
                     </select>
                   </label>
                   <label class="rale-update-label rale-node-row-value" style="display: flex; flex-direction: column; gap: 6px; font-size: 12px;">
-                    <span class="rale-node-row-value-label">Value</span>
-                    <textarea class="rale-node-field-value textarea" rows="3" placeholder="Scalars, true/false, JSON for arrays / vectors / objects" style="padding: 8px 10px; border-radius: 6px; resize: vertical; min-height: 72px;"></textarea>
+                    <span class="rale-node-row-value-label" data-i18n="app.value">Value</span>
+                    <textarea class="rale-node-field-value textarea" rows="3" placeholder="Scalars, true/false, JSON for Arrays / Vectors / Objects" data-i18n-placeholder="app.fieldValuePlaceholder" style="padding: 8px 10px; border-radius: 6px; resize: vertical; min-height: 72px;"></textarea>
                   </label>
                   <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-top: 4px;">
-                    <button type="button" class="btn btn-primary rale-node-field-apply">Apply</button>
-                    <button type="button" class="btn btn-secondary rale-update-node-modal-cancel">Cancel</button>
+                    <button type="button" class="btn btn-primary rale-node-field-apply" data-i18n="common.apply">Apply</button>
+                    <button type="button" class="btn btn-secondary rale-update-node-modal-cancel" data-i18n="common.cancel">Cancel</button>
                   </div>
                 </div>
               </div>
@@ -15272,25 +15291,25 @@
             <div class="card-header action-scripts-card-header">
               <div class="action-scripts-card-header-left">
                 <span class="card-icon"><span class="icon icon-sm"><svg><use href="#icon-code"/></svg></span></span>
-                <span class="card-title">Action Scripts</span>
+                <span class="card-title" data-i18n="app.tabActionScripts">Action Scripts</span>
               </div>
               <div class="action-scripts-tabs">
-                <button type="button" class="action-scripts-subtab active action-scripts-builder-tab">Builder</button>
-                <button type="button" class="action-scripts-subtab action-scripts-executor-tab">Executor</button>
+                <button type="button" class="action-scripts-subtab active action-scripts-builder-tab" data-i18n="app.builder">Builder</button>
+                <button type="button" class="action-scripts-subtab action-scripts-executor-tab" data-i18n="app.executor">Executor</button>
               </div>
               <div class="action-scripts-card-header-right">
                 <div class="card-header-actions action-scripts-builder-header-actions">
-                  <button type="button" class="btn btn-secondary action-scripts-builder-copy-to-executor" disabled title="Add at least one action to enable">Copy to Executor</button>
-                  <button type="button" class="btn btn-secondary action-scripts-builder-copy-json" disabled title="Add at least one action to enable">Copy Action Script</button>
-                  <button type="button" class="btn btn-secondary action-scripts-builder-save-script" disabled title="Add at least one action to enable">Save Action Script</button>
+                  <button type="button" class="btn btn-secondary action-scripts-builder-copy-to-executor" disabled title="Add at least one action to enable" data-i18n-title="app.addActionToEnable" data-i18n="app.copyToExecutor">Copy to Executor</button>
+                  <button type="button" class="btn btn-secondary action-scripts-builder-copy-json" disabled title="Add at least one action to enable" data-i18n-title="app.addActionToEnable" data-i18n="app.copyActionScript">Copy Action Script</button>
+                  <button type="button" class="btn btn-secondary action-scripts-builder-save-script" disabled title="Add at least one action to enable" data-i18n-title="app.addActionToEnable" data-i18n="app.saveActionScript">Save Action Script</button>
                 </div>
                 <div class="card-header-actions action-scripts-executor-header-actions">
-                  <label class="executor-header-checkbox-label action-scripts-connect-console-label">
+                  <label class="executor-header-checkbox-label action-scripts-connect-console-label" data-i18n="app.connectToConsole">
                     <input type="checkbox" class="action-script-connect-console">
                     Connect to Console
                   </label>
-                  <button type="button" class="btn btn-secondary action-scripts-executor-edit-in-builder-btn" title="Open the current script in the Builder tab" disabled>Edit in Builder</button>
-                  <button type="button" class="btn btn-secondary action-scripts-executor-import-btn" title="Import or update the action script">Import Action Script</button>
+                  <button type="button" class="btn btn-secondary action-scripts-executor-edit-in-builder-btn" title="Open the Current Script in the Builder Tab" data-i18n-title="app.editInBuilderTitle" disabled data-i18n="app.editInBuilder">Edit in Builder</button>
+                  <button type="button" class="btn btn-secondary action-scripts-executor-import-btn" title="Import or Update the Action Script" data-i18n-title="app.importActionScriptTitle" data-i18n="app.importActionScript">Import Action Script</button>
                 </div>
               </div>
             </div>
@@ -15299,12 +15318,12 @@
                 <div class="action-scripts-builder-split-view" id="action-scripts-builder-split-view">
                   <div class="action-scripts-builder-steps-section">
                     <div class="section-header">
-                      <h4>Actions</h4>
+                      <h4 data-i18n="app.actions">Actions</h4>
                       <div class="section-header-actions">
-                        <button type="button" class="btn btn-icon btn-secondary builder-import-btn" title="Import script from file or paste JSON"><svg width="14" height="14"><use href="#icon-file-import"/></svg></button>
-                        <button type="button" class="btn btn-icon btn-secondary builder-undo-btn" title="Undo (Ctrl+Z)" disabled><svg width="14" height="14"><use href="#icon-undo"/></svg></button>
-                        <button type="button" class="btn btn-icon btn-secondary builder-redo-btn" title="Redo (Ctrl+Shift+Z)" disabled><svg width="14" height="14"><use href="#icon-redo"/></svg></button>
-                        <button type="button" class="btn btn-icon btn-secondary builder-clear-btn" title="Clear all actions" disabled><svg width="14" height="14"><use href="#icon-clear-actions"/></svg></button>
+                        <button type="button" class="btn btn-icon btn-secondary builder-import-btn" title="Import Script from File or Paste JSON" data-i18n-title="app.builderImportTitle"><svg width="14" height="14"><use href="#icon-file-import"/></svg></button>
+                        <button type="button" class="btn btn-icon btn-secondary builder-undo-btn" title="Undo (Ctrl+Z)" data-i18n-title="app.undoTitle" disabled><svg width="14" height="14"><use href="#icon-undo"/></svg></button>
+                        <button type="button" class="btn btn-icon btn-secondary builder-redo-btn" title="Redo (Ctrl+Shift+Z)" data-i18n-title="app.redoTitle" disabled><svg width="14" height="14"><use href="#icon-redo"/></svg></button>
+                        <button type="button" class="btn btn-icon btn-secondary builder-clear-btn" title="Clear All Actions" data-i18n-title="app.clearAllActions" disabled><svg width="14" height="14"><use href="#icon-clear-actions"/></svg></button>
                       </div>
                     </div>
                     <div class="action-scripts-builder-steps-list"></div>
@@ -15313,27 +15332,27 @@
                         <div class="action-scripts-builder-add-form-header">
                           <h4 class="action-scripts-builder-form-heading" aria-live="polite">Add Step</h4>
                           <div class="action-scripts-builder-add-form-header-actions">
-                            <button type="button" class="btn btn-icon btn-secondary action-scripts-builder-step-help-btn" title="Help for this action type" aria-label="Help for this action type"><span class="icon icon-sm"><svg><use href="#icon-info"/></svg></span></button>
-                            <button type="button" class="btn btn-icon btn-secondary action-scripts-builder-add-form-dismiss" title="Close" aria-label="Close add step"><svg width="14" height="14" aria-hidden="true"><use href="#icon-x"/></svg></button>
+                            <button type="button" class="btn btn-icon btn-secondary action-scripts-builder-step-help-btn" title="Help for This Action Type" data-i18n-title="app.helpForActionType" aria-label="Help for This Action Type" data-i18n-aria-label="app.helpForActionType"><span class="icon icon-sm"><svg><use href="#icon-info"/></svg></span></button>
+                            <button type="button" class="btn btn-icon btn-secondary action-scripts-builder-add-form-dismiss" title="Close" data-i18n-title="common.close" aria-label="Close Add Step" data-i18n-aria-label="app.closeAddStep"><svg width="14" height="14" aria-hidden="true"><use href="#icon-x"/></svg></button>
                           </div>
                         </div>
                         <div class="action-scripts-builder-step-fields-container">
-                          <label>Action Type</label>
+                          <label data-i18n="app.actionType">Action Type</label>
                           <select class="action-scripts-builder-type-select action-scripts-select"></select>
                         </div>
                         <div class="action-scripts-builder-step-fields"></div>
                         <div class="action-scripts-builder-add-step-wrap">
                           <span class="builder-add-step-label-spacer" aria-hidden="true">Action Type</span>
-                          <button type="button" class="btn btn-primary action-scripts-builder-add-step">Add Action</button>
-                          <button type="button" class="btn btn-secondary action-scripts-builder-cancel-edit" style="display: none;">Cancel</button>
+                          <button type="button" class="btn btn-primary action-scripts-builder-add-step" data-i18n="app.addAction">Add Action</button>
+                          <button type="button" class="btn btn-secondary action-scripts-builder-cancel-edit" style="display: none;" data-i18n="common.cancel">Cancel</button>
                         </div>
                       </div>
                     </div>
                   </div>
-                  <div class="action-scripts-builder-split-divider" title="Drag to resize" aria-label="Resize panels"></div>
+                  <div class="action-scripts-builder-split-divider" title="Drag to resize" data-i18n-title="app.dragToResize" aria-label="Resize Panels" data-i18n-aria-label="app.resizePanels"></div>
                   <div class="action-scripts-builder-output-section">
                     <div class="section-header action-scripts-builder-output-header">
-                      <h4>JSON</h4>
+                      <h4 data-i18n="app.json">JSON</h4>
                     </div>
                     <pre class="action-scripts-builder-output-preview"></pre>
                   </div>
@@ -15343,43 +15362,43 @@
                 <div class="action-scripts-executor-inner">
                 <div class="executor-import-section" style="display: none;" aria-hidden="true">
                   <div class="executor-input-row">
-                    <button type="button" class="btn btn-secondary action-script-executor-upload">Upload JSON</button>
-                    <span class="executor-input-hint">Or Paste below</span>
+                    <button type="button" class="btn btn-secondary action-script-executor-upload" data-i18n="app.uploadJson">Upload JSON</button>
+                    <span class="executor-input-hint" data-i18n="app.orPasteBelow">Or paste below</span>
                   </div>
                   <p class="executor-builder-nudge">Use the <strong>Builder</strong> tab to add and edit steps with guided fields. Use this area to validate, import, or run JSON.</p>
                   <textarea class="action-script-executor-textarea" placeholder='{"version":"1","steps":[{"type":"keypress","key":"Home"}]}' rows="6"></textarea>
                   <div class="executor-validate-row">
-                    <button type="button" class="btn btn-primary action-script-executor-validate">Validate</button>
+                    <button type="button" class="btn btn-primary action-script-executor-validate" data-i18n="app.validate">Validate</button>
                     <span class="action-script-executor-validation validation-message"></span>
                   </div>
                 </div>
                 <div class="executor-password-prompt" style="display: none;">
-                  <label class="executor-password-prompt-label">Developer password required by some actions (screenshot, sideload):</label>
+                  <label class="executor-password-prompt-label" data-i18n="app.devPasswordRequired">Developer password required by some actions (screenshot, sideload):</label>
                   <div class="executor-password-prompt-row">
-                    <input type="password" class="executor-password-prompt-input" placeholder="Enter developer password">
+                    <input type="password" class="executor-password-prompt-input" placeholder="Enter Developer Password" data-i18n-placeholder="app.enterDevPassword">
                     <span class="executor-password-prompt-hint">Enter it here and run again, or add <code>"devPassword": "..."</code> to your script JSON.</span>
                   </div>
                 </div>
                 <div class="executor-split-view">
                   <div class="executor-steps-panel">
                     <div class="section-header">
-                      <h4>Actions</h4>
+                      <h4 data-i18n="app.actions">Actions</h4>
                       <div class="section-header-actions">
-                        <button type="button" class="btn btn-icon btn-secondary action-script-executor-clear-actions" title="Clear actions" disabled><svg width="14" height="14"><use href="#icon-clear-actions"/></svg></button>
-                        <button type="button" class="btn btn-icon btn-success action-script-executor-run" title="Run action script" disabled><svg width="14" height="14"><use href="#icon-play"/></svg></button>
-                        <button type="button" class="btn btn-icon btn-danger action-script-executor-stop" title="Stop execution" disabled><svg width="14" height="14"><use href="#icon-stop"/></svg></button>
+                        <button type="button" class="btn btn-icon btn-secondary action-script-executor-clear-actions" title="Clear Actions" data-i18n-title="app.clearActions" disabled><svg width="14" height="14"><use href="#icon-clear-actions"/></svg></button>
+                        <button type="button" class="btn btn-icon btn-success action-script-executor-run" title="Run Action Script" data-i18n-title="app.runActionScript" disabled><svg width="14" height="14"><use href="#icon-play"/></svg></button>
+                        <button type="button" class="btn btn-icon btn-danger action-script-executor-stop" title="Stop Execution" data-i18n-title="app.stopExecution" disabled><svg width="14" height="14"><use href="#icon-stop"/></svg></button>
                       </div>
                     </div>
                     <div class="executor-steps-list"></div>
                   </div>
                   <div class="executor-results-panel">
                     <div class="section-header executor-results-panel-header">
-                      <h4>Results</h4>
+                      <h4 data-i18n="app.results">Results</h4>
                       <span class="executor-results-panel-run-info" aria-live="polite"></span>
                       <div class="section-header-actions">
-                        <button type="button" class="btn btn-icon btn-secondary executor-results-copy-btn" title="Copy results to clipboard" disabled><svg width="14" height="14"><use href="#icon-copy"/></svg></button>
-                        <button type="button" class="btn btn-icon btn-secondary executor-results-save-btn" title="Save results as PDF" disabled><svg width="14" height="14"><use href="#icon-save"/></svg></button>
-                        <button type="button" class="btn btn-icon btn-secondary executor-results-clear-btn" title="Clear results and free memory (Save will have nothing until next run)" disabled><svg width="14" height="14"><use href="#icon-trash"/></svg></button>
+                        <button type="button" class="btn btn-icon btn-secondary executor-results-copy-btn" title="Copy Results to Clipboard" data-i18n-title="app.copyResultsToClipboard" disabled><svg width="14" height="14"><use href="#icon-copy"/></svg></button>
+                        <button type="button" class="btn btn-icon btn-secondary executor-results-save-btn" title="Save Results as PDF" data-i18n-title="app.saveResultsAsPdf" disabled><svg width="14" height="14"><use href="#icon-save"/></svg></button>
+                        <button type="button" class="btn btn-icon btn-secondary executor-results-clear-btn" title="Clear Results and Free Memory (Save will have nothing until next Run)" data-i18n-title="app.clearResultsTitle" disabled><svg width="14" height="14"><use href="#icon-trash"/></svg></button>
                       </div>
                     </div>
                     <div class="executor-results" tabindex="0"></div>
@@ -15399,71 +15418,71 @@
             <div class="card-header ni-card-header">
               <div class="ni-header-start">
                 <span class="card-icon"><span class="icon icon-sm"><svg><use href="#icon-network"/></svg></span></span>
-                <span class="card-title">Network Inspector</span>
+                <span class="card-title" data-i18n="app.networkInspector">Network Inspector</span>
                 <div class="ni-header-tools">
                   <div class="ni-find-btn-group">
-                    <button type="button" class="btn btn-secondary btn-sm ni-icon-btn ni-find-btn" data-ni-find title="Find in traffic — URL, payloads, headers, response bodies (⌘/Ctrl+F)" aria-label="Find in traffic">
+                    <button type="button" class="btn btn-secondary btn-sm ni-icon-btn ni-find-btn" data-ni-find title="Find in Traffic — URL, Payloads, Headers, Response Bodies (⌘/Ctrl+F)" data-i18n-title="app.niFindTitle" aria-label="Find in Traffic" data-i18n-aria-label="app.niFindAria">
                       <span class="icon icon-sm"><svg><use href="#icon-zoom"/></svg></span>
                     </button>
-                    <button type="button" class="ni-find-sub-btn" data-ni-find-prev title="Previous Match (Shift+↑)" aria-label="Previous Match">
+                    <button type="button" class="ni-find-sub-btn" data-ni-find-prev title="Previous Match (Shift+↑)" data-i18n-title="app.niFindPrevTitle" aria-label="Previous Match" data-i18n-aria-label="app.niFindPrev">
                       <span class="icon icon-xs"><svg><use href="#icon-chevron-up"/></svg></span>
                     </button>
-                    <button type="button" class="ni-find-sub-btn" data-ni-find-next title="Next Match (Shift+↓)" aria-label="Next Match">
+                    <button type="button" class="ni-find-sub-btn" data-ni-find-next title="Next Match (Shift+↓)" data-i18n-title="app.niFindNextTitle" aria-label="Next Match" data-i18n-aria-label="app.niFindNext">
                       <span class="icon icon-xs"><svg><use href="#icon-chevron-down"/></svg></span>
                     </button>
-                    <button type="button" class="ni-find-sub-btn ni-find-clear-btn" data-ni-find-clear title="Clear Find results" aria-label="Clear Find results">
+                    <button type="button" class="ni-find-sub-btn ni-find-clear-btn" data-ni-find-clear title="Clear Find Results" data-i18n-title="app.niFindClear" aria-label="Clear Find Results" data-i18n-aria-label="app.niFindClear">
                       <span class="icon icon-xs"><svg><use href="#icon-x"/></svg></span>
                     </button>
                   </div>
                   <div class="ni-download-menu" data-ni-download-menu>
-                    <button type="button" class="btn btn-secondary btn-sm ni-icon-btn" data-ni-download-toggle title="Download session…" aria-haspopup="true" aria-expanded="false" aria-label="Download session">
+                    <button type="button" class="btn btn-secondary btn-sm ni-icon-btn" data-ni-download-toggle title="Download Session…" data-i18n-title="app.niDownloadTitle" aria-haspopup="true" aria-expanded="false" aria-label="Download Session" data-i18n-aria-label="app.niDownloadAria">
                       <span class="icon icon-sm"><svg><use href="#icon-download"/></svg></span>
                     </button>
                     <div class="ni-copy-dropdown ni-download-dropdown" data-ni-download-dropdown role="menu" hidden>
-                      <button type="button" class="ni-copy-dropdown-item" data-ni-download-item="har" role="menuitem">
-                        <span class="ni-copy-item-icon icon icon-xs"><svg><use href="#icon-download"/></svg></span>Export all as HAR
+                      <button type="button" class="ni-copy-dropdown-item" data-ni-download-item="har" role="menuitem" data-i18n="app.niExportHar">
+                        <span class="ni-copy-item-icon icon icon-xs"><svg><use href="#icon-download"/></svg></span>Export All as HAR
                       </button>
-                      <button type="button" class="ni-copy-dropdown-item" data-ni-download-item="bundle" role="menuitem">
-                        <span class="ni-copy-item-icon icon icon-xs"><svg><use href="#icon-download"/></svg></span>Export session (.rds-network-inspector.json)
+                      <button type="button" class="ni-copy-dropdown-item" data-ni-download-item="bundle" role="menuitem" data-i18n="app.niExportSession">
+                        <span class="ni-copy-item-icon icon icon-xs"><svg><use href="#icon-download"/></svg></span>Export Session (.rds-network-inspector.json)
                       </button>
-                      <button type="button" class="ni-copy-dropdown-item" data-ni-download-item="pcap" role="menuitem">
-                        <span class="ni-copy-item-icon icon icon-xs"><svg><use href="#icon-download"/></svg></span>Save packet capture (.pcap)
+                      <button type="button" class="ni-copy-dropdown-item" data-ni-download-item="pcap" role="menuitem" data-i18n="app.niSavePcap">
+                        <span class="ni-copy-item-icon icon icon-xs"><svg><use href="#icon-download"/></svg></span>Save Packet Capture (.pcap)
                       </button>
                     </div>
                   </div>
-                  <button type="button" class="btn btn-secondary btn-sm ni-icon-btn" data-ni-clear title="Clear session list">
+                  <button type="button" class="btn btn-secondary btn-sm ni-icon-btn" data-ni-clear title="Clear Session List" data-i18n-title="app.niClearTitle">
                     <span class="icon icon-sm"><svg><use href="#icon-clear-results"/></svg></span>
                   </button>
                 </div>
               </div>
               <div class="ni-header-center">
-                <button type="button" class="ni-setup-badge" data-ni-setup-badge hidden title="Hotspot capture setup needed — click for instructions">
+                <button type="button" class="ni-setup-badge" data-ni-setup-badge hidden title="Hotspot Capture Setup Needed — Click for Instructions" data-i18n-title="app.niSetupBadgeTitle">
                   <span class="ni-setup-badge-dot" aria-hidden="true">!</span>
-                  <span data-ni-setup-badge-label>Capture Setup</span>
+                  <span data-ni-setup-badge-label data-i18n="app.niCaptureSetup">Capture Setup</span>
                 </button>
-                <button type="button" class="ni-setup-badge is-error" data-ni-port-badge hidden title="Proxy Port Unavailable — click for details">
+                <button type="button" class="ni-setup-badge is-error" data-ni-port-badge hidden title="Proxy Port Unavailable — Click for Details" data-i18n-title="app.niPortBadgeTitle">
                   <span class="ni-setup-badge-dot" aria-hidden="true">!</span>
-                  <span>Proxy Port Unavailable</span>
+                  <span data-i18n="app.niProxyPortUnavailable">Proxy Port Unavailable</span>
                 </button>
                 <div class="ni-filter-wrap">
-                  <input type="text" class="ni-filter-input" data-ni-filter placeholder="Filter Traffic…" title="Filter Traffic — click the info icon for supported syntax." />
-                  <button type="button" class="ni-filter-clear" data-ni-filter-clear title="Clear filter" aria-label="Clear filter" hidden>
+                  <input type="text" class="ni-filter-input" data-ni-filter placeholder="Filter Traffic…" data-i18n-placeholder="app.niFilterPlaceholder" title="Filter Traffic — click the info icon for supported syntax." data-i18n-title="app.niFilterTitle" />
+                  <button type="button" class="ni-filter-clear" data-ni-filter-clear title="Clear Filter" data-i18n-title="app.niClearFilter" aria-label="Clear Filter" data-i18n-aria-label="app.niClearFilter" hidden>
                     <span class="icon icon-xs"><svg><use href="#icon-x"/></svg></span>
                   </button>
-                  <button type="button" class="ni-filter-help" data-ni-filter-help title="Filtering help &amp; supported syntax" aria-label="Filtering help">
+                  <button type="button" class="ni-filter-help" data-ni-filter-help title="Filtering Help &amp; Supported Syntax" data-i18n-title="app.niFilterHelpTitle" aria-label="Filtering Help" data-i18n-aria-label="app.niFilterHelpAria">
                     <span class="icon icon-xs"><svg><use href="#icon-info"/></svg></span>
                   </button>
                 </div>
-                <span class="ni-session-count" data-ni-session-count title="Captured sessions">0</span>
+                <span class="ni-session-count" data-ni-session-count title="Captured Sessions" data-i18n-title="app.niSessionCountTitle">0</span>
               </div>
-              <div class="card-header-actions ni-header-controls ni-btn-group" role="group" aria-label="Network Inspector controls">
+              <div class="card-header-actions ni-header-controls ni-btn-group" role="group" aria-label="Network Inspector Controls" data-i18n-aria-label="app.niControls">
                 <button type="button" class="btn btn-secondary btn-sm ni-icon-btn ni-capture-toggle is-capturing" data-ni-capture-toggle title="Stop Capturing" aria-label="Stop Capturing">
                   <span class="icon icon-sm"><svg><use href="#icon-pause"/></svg></span>
                 </button>
-                <button type="button" class="btn btn-secondary btn-sm ni-icon-btn" data-ni-layout-toggle title="Stack Request and Response vertically" aria-label="Toggle Detail Layout" aria-pressed="true">
+                <button type="button" class="btn btn-secondary btn-sm ni-icon-btn" data-ni-layout-toggle title="Stack Request and Response Vertically" aria-label="Toggle Detail Layout" data-i18n-aria-label="app.niToggleDetailLayout" aria-pressed="true">
                   <span class="icon icon-sm"><svg><use href="#icon-layout-rows"/></svg></span>
                 </button>
-                <button type="button" class="btn btn-secondary btn-sm ni-icon-btn" data-ni-configure title="Configure Traffic Rules" aria-label="Configure Traffic Rules">
+                <button type="button" class="btn btn-secondary btn-sm ni-icon-btn" data-ni-configure title="Configure Traffic Rules" data-i18n-title="app.niConfigureTitle" aria-label="Configure Traffic Rules" data-i18n-aria-label="app.niConfigureTitle">
                   <span class="icon icon-sm"><svg><use href="#icon-settings"/></svg></span>
                 </button>
               </div>
@@ -15476,21 +15495,21 @@
                       <span class="ni-struct-chevron" aria-hidden="true">▼</span>
                     </button>
                     <div class="ni-sidebar-options">
-                      <label class="ni-sidebar-option" title="Group sessions by hostname">
-                        <span class="ni-sidebar-option-label">Group by Host</span>
+                      <label class="ni-sidebar-option" title="Group Sessions by Hostname" data-i18n-title="app.niGroupByHostTitle">
+                        <span class="ni-sidebar-option-label" data-i18n="app.niGroupByHost">Group by Host</span>
                         <input type="checkbox" data-ni-group-by-host />
                       </label>
-                      <label class="ni-sidebar-option" data-ni-proxied-filter title="Show only requests proxied through RDS (full headers + body), hiding hotspot-capture SNI/DNS metadata">
-                        <span class="ni-sidebar-option-label">Proxied</span>
+                      <label class="ni-sidebar-option" data-ni-proxied-filter title="Show Only Requests Proxied Through RDS (Full Headers + Body), Hiding Hotspot-capture SNI/DNS Metadata" data-i18n-title="app.niProxiedTitle">
+                        <span class="ni-sidebar-option-label" data-i18n="app.niProxied">Proxied</span>
                         <input type="checkbox" data-ni-decrypted-only checked />
                       </label>
                     </div>
                   </div>
                   <div class="ni-sidebar-list" data-ni-session-list>
-                    <div class="ni-session-empty">Waiting for traffic…</div>
+                    <div class="ni-session-empty" data-i18n="app.niWaitingForTraffic">Waiting for traffic…</div>
                   </div>
                   <div class="ni-list-fabs" data-ni-list-fabs>
-                    <button type="button" class="ni-fab ni-fab-bottom" data-ni-scroll-bottom hidden title="Scroll to latest sessions" aria-label="Scroll to latest sessions">
+                    <button type="button" class="ni-fab ni-fab-bottom" data-ni-scroll-bottom hidden title="Scroll to Latest Sessions" data-i18n-title="app.niScrollBottom" aria-label="Scroll to Latest Sessions" data-i18n-aria-label="app.niScrollBottom">
                       <span class="icon icon-sm"><svg><use href="#icon-chevron-down"/></svg></span>
                     </button>
                   </div>
@@ -15516,7 +15535,7 @@
   <!-- Privacy Mode Badge -->
   <div id="privacyBadge" class="privacy-badge">
     <span class="icon icon-sm"><svg><use href="#icon-lock"/></svg></span>
-    <span>Privacy Mode</span>
+    <span data-i18n="app.privacyMode">Privacy Mode</span>
   </div>
 
   <div id="floating-remote-root" aria-live="polite"></div>
@@ -15524,32 +15543,33 @@
   <nav
     id="titlebarHamburgerMenu"
     class="titlebar-hamburger-menu"
-    aria-label="App menu"
+    aria-label="App Menu"
+    data-i18n-aria-label="app.appMenu"
     hidden
   >
     <ul class="titlebar-hamburger-menu-list" role="menu">
-      <li role="none"><button type="button" class="titlebar-hamburger-menu-item" role="menuitemcheckbox" data-menu-action="toggle-developer" aria-checked="false">Developer Mode</button></li>
-      <li role="none"><button type="button" class="titlebar-hamburger-menu-item" role="menuitemcheckbox" data-menu-action="toggle-privacy" aria-checked="false">Privacy Mode</button></li>
-      <li role="none"><button type="button" class="titlebar-hamburger-menu-item" role="menuitemcheckbox" data-menu-action="toggle-debug-logging" aria-checked="false">Debug Logging</button></li>
-      <li role="none" id="titlebarDiagnosticLogFolderItem" hidden><button type="button" class="titlebar-hamburger-menu-item" role="menuitem" data-menu-action="open-diagnostic-log-folder"><span class="titlebar-hamburger-menu-icon icon icon-sm" aria-hidden="true"><svg><use href="#icon-folder"/></svg></span>Open Diagnostic Logs Folder</button></li>
+      <li role="none"><button type="button" class="titlebar-hamburger-menu-item" role="menuitemcheckbox" data-menu-action="toggle-developer" aria-checked="false" data-i18n="app.developerMode">Developer Mode</button></li>
+      <li role="none"><button type="button" class="titlebar-hamburger-menu-item" role="menuitemcheckbox" data-menu-action="toggle-privacy" aria-checked="false" data-i18n="app.privacyMode">Privacy Mode</button></li>
+      <li role="none"><button type="button" class="titlebar-hamburger-menu-item" role="menuitemcheckbox" data-menu-action="toggle-debug-logging" aria-checked="false" data-i18n="app.debugLogging">Debug Logging</button></li>
+      <li role="none" id="titlebarDiagnosticLogFolderItem" hidden><button type="button" class="titlebar-hamburger-menu-item" role="menuitem" data-menu-action="open-diagnostic-log-folder" data-i18n="app.openDiagnosticLogsFolder"><span class="titlebar-hamburger-menu-icon icon icon-sm" aria-hidden="true"><svg><use href="#icon-folder"/></svg></span>Open Diagnostic Logs Folder</button></li>
       <li class="titlebar-hamburger-menu-sep" role="separator" aria-hidden="true"></li>
-      <li role="none"><button type="button" class="titlebar-hamburger-menu-item" role="menuitem" data-menu-action="open-log-file"><span class="titlebar-hamburger-menu-icon icon icon-sm" aria-hidden="true"><svg><use href="#icon-file-text"/></svg></span>Open Log File</button></li>
-      <li role="none"><button type="button" class="titlebar-hamburger-menu-item" role="menuitem" data-menu-action="open-fiddle"><span class="titlebar-hamburger-menu-icon icon icon-sm" aria-hidden="true"><svg><use href="#icon-code"/></svg></span>Open Fiddle</button></li>
-      <li role="none"><button type="button" class="titlebar-hamburger-menu-item" role="menuitem" data-menu-action="settings"><span class="titlebar-hamburger-menu-icon icon icon-sm" aria-hidden="true"><svg><use href="#icon-settings"/></svg></span>Settings</button></li>
-      <li role="none"><button type="button" class="titlebar-hamburger-menu-item" role="menuitem" data-menu-action="clear-cache"><span class="titlebar-hamburger-menu-icon icon icon-sm" aria-hidden="true"><svg><use href="#icon-refresh"/></svg></span>Clear Cache and Reload</button></li>
+      <li role="none"><button type="button" class="titlebar-hamburger-menu-item" role="menuitem" data-menu-action="open-log-file" data-i18n="app.openLogFile"><span class="titlebar-hamburger-menu-icon icon icon-sm" aria-hidden="true"><svg><use href="#icon-file-text"/></svg></span>Open Log File</button></li>
+      <li role="none"><button type="button" class="titlebar-hamburger-menu-item" role="menuitem" data-menu-action="open-fiddle" data-i18n="app.openFiddle"><span class="titlebar-hamburger-menu-icon icon icon-sm" aria-hidden="true"><svg><use href="#icon-code"/></svg></span>Open Fiddle</button></li>
+      <li role="none"><button type="button" class="titlebar-hamburger-menu-item" role="menuitem" data-menu-action="settings" data-i18n="app.settings"><span class="titlebar-hamburger-menu-icon icon icon-sm" aria-hidden="true"><svg><use href="#icon-settings"/></svg></span>Settings</button></li>
+      <li role="none"><button type="button" class="titlebar-hamburger-menu-item" role="menuitem" data-menu-action="clear-cache" data-i18n="app.clearCacheAndReload"><span class="titlebar-hamburger-menu-icon icon icon-sm" aria-hidden="true"><svg><use href="#icon-refresh"/></svg></span>Clear Cache and Reload</button></li>
       <li class="titlebar-hamburger-menu-sep" role="separator" aria-hidden="true"></li>
       <li role="none" class="titlebar-hamburger-menu-zoom-row">
-        <span class="titlebar-hamburger-menu-zoom-label"><span class="titlebar-hamburger-menu-icon icon icon-sm" aria-hidden="true"><svg><use href="#icon-zoom"/></svg></span>Zoom</span>
+        <span class="titlebar-hamburger-menu-zoom-label" data-i18n="app.zoom"><span class="titlebar-hamburger-menu-icon icon icon-sm" aria-hidden="true"><svg><use href="#icon-zoom"/></svg></span>Zoom</span>
         <div class="titlebar-hamburger-menu-zoom-controls">
-          <button type="button" class="titlebar-hamburger-menu-zoom-btn" data-menu-action="zoom-out" title="Zoom out" aria-label="Zoom out">&#8722;</button>
-          <button type="button" class="titlebar-hamburger-menu-zoom-pct" id="titlebarHamburgerZoomPct" data-menu-action="zoom-reset" title="Reset zoom to 100%" aria-label="Current zoom; click to reset to 100%">100%</button>
-          <button type="button" class="titlebar-hamburger-menu-zoom-btn" data-menu-action="zoom-in" title="Zoom in" aria-label="Zoom in">+</button>
+          <button type="button" class="titlebar-hamburger-menu-zoom-btn" data-menu-action="zoom-out" title="Zoom Out" data-i18n-title="app.zoomOut" aria-label="Zoom Out" data-i18n-aria-label="app.zoomOut">&#8722;</button>
+          <button type="button" class="titlebar-hamburger-menu-zoom-pct" id="titlebarHamburgerZoomPct" data-menu-action="zoom-reset" title="Reset Zoom to 100%" data-i18n-title="app.resetZoom" aria-label="Current zoom; click to reset to 100%" data-i18n-aria-label="app.currentZoomAria">100%</button>
+          <button type="button" class="titlebar-hamburger-menu-zoom-btn" data-menu-action="zoom-in" title="Zoom In" data-i18n-title="app.zoomIn" aria-label="Zoom In" data-i18n-aria-label="app.zoomIn">+</button>
         </div>
       </li>
       <li class="titlebar-hamburger-menu-sep" role="separator" aria-hidden="true"></li>
-      <li role="none"><button type="button" class="titlebar-hamburger-menu-item" role="menuitem" data-menu-action="about"><span class="titlebar-hamburger-menu-icon icon icon-sm" aria-hidden="true"><svg><use href="#icon-info"/></svg></span>About Roku Dev Studio</button></li>
+      <li role="none"><button type="button" class="titlebar-hamburger-menu-item" role="menuitem" data-menu-action="about" data-i18n="app.aboutRokuDevStudio"><span class="titlebar-hamburger-menu-icon icon icon-sm" aria-hidden="true"><svg><use href="#icon-info"/></svg></span>About Roku Dev Studio</button></li>
       <li class="titlebar-hamburger-menu-sep" role="separator" aria-hidden="true"></li>
-      <li role="none"><button type="button" class="titlebar-hamburger-menu-item" role="menuitem" data-menu-action="quit"><span class="titlebar-hamburger-menu-icon icon icon-sm" aria-hidden="true"><svg><use href="#icon-x"/></svg></span>Quit Roku Dev Studio</button></li>
+      <li role="none"><button type="button" class="titlebar-hamburger-menu-item" role="menuitem" data-menu-action="quit" data-i18n="app.quitRokuDevStudio"><span class="titlebar-hamburger-menu-icon icon icon-sm" aria-hidden="true"><svg><use href="#icon-x"/></svg></span>Quit Roku Dev Studio</button></li>
     </ul>
   </nav>
 

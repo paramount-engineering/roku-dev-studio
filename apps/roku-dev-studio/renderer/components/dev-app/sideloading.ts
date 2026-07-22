@@ -10,6 +10,7 @@ import {
   pollDevAppForegroundAfterLaunch,
   pollDevAppForegroundOnce
 } from './dev-app-foreground-sync.js';
+import { S } from '@shared/strings/index.js';
 
 /**
  * Setup sideloading functionality
@@ -133,7 +134,7 @@ export function setupSideloading(
 
       const resolveDropped = window.roku.resolveDroppedSideloadFile;
       if (typeof resolveDropped !== 'function') {
-        showStatusMessage(statusDiv, 'Drag and drop is not available in this build', 'error');
+        showStatusMessage(statusDiv, S.devApp.dragDropUnavailable, 'error');
         return;
       }
 
@@ -168,12 +169,12 @@ export function setupSideloading(
     const password = getPassword();
     
     if (!filePath || !password) {
-      showStatusMessage(statusDiv, 'Please select a file and enter your developer password', 'warning');
+      showStatusMessage(statusDiv, S.devApp.selectFileAndPassword, 'warning');
       return;
     }
-    
+
     sideloadBtn.disabled = true;
-    sideloadBtn.textContent = 'Installing...';
+    sideloadBtn.textContent = S.devApp.installing;
     progressDiv.style.display = 'block';
     statusDiv.innerHTML = '';
     let sideloadSucceeded = false;
@@ -214,10 +215,10 @@ export function setupSideloading(
       }
     } catch (error: unknown) {
       progressDiv.style.display = 'none';
-      showStatusMessage(statusDiv, '✗ ' + (errMessage(error) || 'Unknown error'), 'error');
+      showStatusMessage(statusDiv, '✗ ' + (errMessage(error) || S.devApp.unknownError), 'error');
     }
     
-    setSafeHTML(sideloadBtn, icon('rocket', 'icon-xs') + ' Install');
+    setSafeHTML(sideloadBtn, icon('rocket', 'icon-xs') + ' ' + S.devApp.install);
     sideloadBtn.disabled = false;
     updateSideloadButton();
     setTimeout(() => {
@@ -246,10 +247,10 @@ export function setupSideloading(
     deleteBtn.addEventListener('click', async () => {
       const password = getPassword();
       if (!password) {
-        showStatusMessage(delStatus, 'Please enter your developer password', 'warning');
+        showStatusMessage(delStatus, S.devApp.pleaseEnterDeveloperPassword, 'warning');
         return;
       }
-      if (!confirm('Delete Sideloaded Channel?')) return;
+      if (!confirm(S.devApp.deleteSideloadedChannelConfirm)) return;
 
       deleteBtn.disabled = true;
       deleteBtn.style.opacity = '0.5';

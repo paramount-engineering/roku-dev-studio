@@ -1,3 +1,5 @@
+import { S, applyI18n } from '@shared/strings/index.js';
+
 type AboutInfo = {
   appVersion: string;
   rokuDevStudioApiVersion: string;
@@ -26,13 +28,13 @@ function setText(id: string, text: string): void {
 
 function copyVersionInfo(info: AboutInfo): void {
   const text = [
-    'Roku Dev Studio Version: ' + info.appVersion,
-    'Roku Dev Studio API Version: ' + info.rokuDevStudioApiVersion,
-    'Electron Version: ' + info.electronVersion,
-    'Node.js Version: ' + info.nodeVersion,
-    'Chromium Version: ' + info.chromiumVersion,
-    'V8 Version: ' + info.v8Version,
-    'Operating System: ' + info.osType + ' ' + info.arch + ' ' + info.osRelease,
+    S.about.copyAppVersion(info.appVersion),
+    S.about.copyApiVersion(info.rokuDevStudioApiVersion),
+    S.about.copyElectronVersion(info.electronVersion),
+    S.about.copyNodeVersion(info.nodeVersion),
+    S.about.copyChromiumVersion(info.chromiumVersion),
+    S.about.copyV8Version(info.v8Version),
+    S.about.copyOperatingSystem(info.osType + ' ' + info.arch + ' ' + info.osRelease),
   ].join('\n');
 
   if (!api?.copy) return;
@@ -40,13 +42,16 @@ function copyVersionInfo(info: AboutInfo): void {
     const btn = document.getElementById('btnCopy');
     if (!btn) return;
     const orig = btn.textContent;
-    btn.textContent = 'Copied!';
+    btn.textContent = S.about.copied;
     setTimeout(() => { if (btn) btn.textContent = orig; }, 2000);
   }).catch(() => undefined);
 }
 
+// Localize the static about.html shell (field labels, buttons).
+applyI18n(document);
+
 if (!api?.getInfo) {
-  document.body.innerHTML = '<p style="color:#e0e0e0;padding:16px">About API unavailable.</p>';
+  document.body.innerHTML = '<p style="color:#e0e0e0;padding:16px">' + S.about.apiUnavailable + '</p>';
 } else {
   api.getInfo().then((info) => {
     const logo = document.getElementById('appLogo') as HTMLImageElement | null;
@@ -55,7 +60,7 @@ if (!api?.getInfo) {
       logo.onerror = () => { logo.style.display = 'none'; };
     }
 
-    setText('appVersion', 'Version ' + info.appVersion);
+    setText('appVersion', S.about.versionLabel(info.appVersion));
     setText('rdsApiVersion', info.rokuDevStudioApiVersion);
     setText('electronVersion', info.electronVersion);
     setText('nodeVersion', info.nodeVersion);
@@ -78,6 +83,6 @@ if (!api?.getInfo) {
     document.getElementById('btnOk')?.addEventListener('click', () => window.close());
     document.getElementById('btnCopy')?.addEventListener('click', () => copyVersionInfo(info));
   }).catch((err) => {
-    document.body.innerHTML = '<p style="color:#e0e0e0;padding:16px">Failed to load: ' + String(err) + '</p>';
+    document.body.innerHTML = '<p style="color:#e0e0e0;padding:16px">' + S.about.failedToLoad(String(err)) + '</p>';
   });
 }

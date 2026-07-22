@@ -19,6 +19,7 @@ import {
   type StepPath,
   type FlattenedStep
 } from './action-script-tree.js';
+import { S } from '@shared/strings/index.js';
 
 /** Where an "Add Step" row inserts relative to the tree. */
 export type BuilderAddPlacement =
@@ -83,10 +84,10 @@ export function ifBranchFromPath(path) {
  */
 function branchBadgeHtml(branch) {
   if (branch === 'else') {
-    return '<span class="steps-list-branch steps-list-branch--else">Else</span>';
+    return `<span class="steps-list-branch steps-list-branch--else">${S.actionScripts.branchElse}</span>`;
   }
   if (branch === 'then') {
-    return '<span class="steps-list-branch steps-list-branch--then">Then</span>';
+    return `<span class="steps-list-branch steps-list-branch--then">${S.actionScripts.branchThen}</span>`;
   }
   return '';
 }
@@ -116,13 +117,13 @@ export function getStepDetails(step: Record<string, unknown> | null | undefined)
     const chart = step.chart != null ? String(step.chart) : '';
     const lab =
       chart === 'objects'
-        ? 'BrightScript Objects'
+        ? S.actionScripts.chartObjects
         : chart === 'cpu'
-          ? 'CPU Usage'
+          ? S.actionScripts.chartCpu
           : chart === 'memory'
-            ? 'System Memory'
+            ? S.actionScripts.chartMemory
             : chart === 'aboveAll'
-              ? 'Above All'
+              ? S.actionScripts.chartAboveAll
               : chart || '—';
     return step.label ? `${lab} · ${step.label}` : lab;
   }
@@ -143,7 +144,7 @@ export function getStepDetails(step: Record<string, unknown> | null | undefined)
 
 export { stepDescription };
 
-const DRAG_HANDLE_HTML = '<span class="steps-list-drag-handle" title="Drag to reorder"><svg width="12" height="12"><use href="#icon-grip-vertical"/></svg></span>';
+const DRAG_HANDLE_HTML = `<span class="steps-list-drag-handle" title="${S.actionScripts.dragToReorder}"><svg width="12" height="12"><use href="#icon-grip-vertical"/></svg></span>`;
 
 /** Shared header row for both Builder and Executor (same columns, same look). */
 const STEPS_LIST_HEADER_HTML = `
@@ -151,8 +152,8 @@ const STEPS_LIST_HEADER_HTML = `
     ${DRAG_HANDLE_HTML}
     <span class="steps-list-tree-header" aria-hidden="true"></span>
     <span class="steps-list-num">#</span>
-    <span class="steps-list-type">Type</span>
-    <span class="steps-list-desc">Details</span>
+    <span class="steps-list-type">${S.actionScripts.columnType}</span>
+    <span class="steps-list-desc">${S.actionScripts.columnDetails}</span>
     <span class="steps-list-action"></span>
   </div>
 `;
@@ -278,7 +279,7 @@ function renderAddPlaceholderRow(depth, p, treeGutterHtml, showPasteStep) {
     p.kind === 'if-branch' ? p.branch : null;
   const branchHtml = branch ? branchBadgeHtml(branch) : '';
   const pasteBtn = showPasteStep
-    ? '<button type="button" class="btn btn-secondary steps-list-paste-step-btn" title="Paste copied action here" aria-label="Paste copied action here">Paste Step</button>'
+    ? `<button type="button" class="btn btn-secondary steps-list-paste-step-btn" title="${S.actionScripts.pasteActionTooltip}" aria-label="${S.actionScripts.pasteActionTooltip}">${S.actionScripts.pasteStepBtn}</button>`
     : '';
   return `<div class="steps-list-row steps-list-add-placeholder-row" data-placement="${escapeAttr(enc)}">
     <span class="steps-list-drag-handle steps-list-add-placeholder-grip" aria-hidden="true"></span>
@@ -286,7 +287,7 @@ function renderAddPlaceholderRow(depth, p, treeGutterHtml, showPasteStep) {
     <span class="steps-list-num steps-list-add-placeholder-muted">—</span>
     <div class="steps-list-add-placeholder-main">
       ${branchHtml}
-      <button type="button" class="btn btn-secondary steps-list-add-step-placeholder-btn">Add Step</button>
+      <button type="button" class="btn btn-secondary steps-list-add-step-placeholder-btn">${S.actionScripts.addStep}</button>
       ${pasteBtn}
     </div>
   </div>`;
@@ -369,12 +370,12 @@ function renderStepRow(
   const descHtml = escapeHtml(detailsStr);
   const branch = opts.ifBranch || null;
   const branchPrefix =
-    branch === 'else' ? 'Else branch. ' : branch === 'then' ? 'Then branch. ' : '';
+    branch === 'else' ? S.actionScripts.ariaElseBranchPrefix : branch === 'then' ? S.actionScripts.ariaThenBranchPrefix : '';
 
   if (opts.mode === 'builder') {
     const selectedClass = opts.selectedIndex === index ? ' steps-list-row-selected' : '';
     const ariaPressed = opts.selectedIndex === index;
-    const ariaLabel = `${branchPrefix}Action ${escapeAttr(num)}: ${escapeAttr(String(step.type ?? ''))}${detailsStr ? ', ' + escapeAttr(detailsStr) : ''}. Click to edit.`;
+    const ariaLabel = `${branchPrefix}${S.actionScripts.stepRowAria(escapeAttr(num), escapeAttr(String(step.type ?? '')), detailsStr ? escapeAttr(detailsStr) : '')}`;
     const typeCell = `<span class="steps-list-type">${branchBadgeHtml(branch)}<span class="steps-list-type-text">${typeHtml}</span></span>`;
     return `
       <div class="steps-list-row steps-list-builder-row${selectedClass}" data-index="${index}" role="button" tabindex="0" aria-pressed="${ariaPressed}" aria-label="${escapeAttr(ariaLabel)}">
@@ -384,8 +385,8 @@ function renderStepRow(
         ${typeCell}
         <span class="steps-list-desc">${descHtml}</span>
         <span class="steps-list-action steps-list-action-group">
-          <button type="button" class="steps-list-btn steps-list-btn-copy" data-index="${index}" title="Copy action" aria-label="Copy action"><span class="icon icon-sm"><svg><use href="#icon-copy"/></svg></span></button>
-          <button type="button" class="steps-list-btn steps-list-btn-remove" data-index="${index}" title="Remove action" aria-label="Remove action"><span class="icon icon-sm"><svg><use href="#icon-trash"/></svg></span></button>
+          <button type="button" class="steps-list-btn steps-list-btn-copy" data-index="${index}" title="${S.actionScripts.copyActionTooltip}" aria-label="${S.actionScripts.copyActionTooltip}"><span class="icon icon-sm"><svg><use href="#icon-copy"/></svg></span></button>
+          <button type="button" class="steps-list-btn steps-list-btn-remove" data-index="${index}" title="${S.actionScripts.removeActionTooltip}" aria-label="${S.actionScripts.removeActionTooltip}"><span class="icon icon-sm"><svg><use href="#icon-trash"/></svg></span></button>
         </span>
       </div>
     `;
@@ -398,9 +399,9 @@ function renderStepRow(
   const actionHtml = readOnly
     ? '<span class="steps-list-action-empty"></span>'
     : (state === 'pending' && !isMarkedSkipped)
-      ? `<button type="button" class="steps-list-btn steps-list-btn-skip" data-index="${index}" title="Skip this action" aria-label="Skip action">Skip</button>`
+      ? `<button type="button" class="steps-list-btn steps-list-btn-skip" data-index="${index}" title="${S.actionScripts.skipActionTooltip}" aria-label="${S.actionScripts.skipActionAria}">${S.actionScripts.skipBtn}</button>`
       : (state === 'pending' && isMarkedSkipped)
-        ? `<button type="button" class="steps-list-btn steps-list-btn-unskip" data-index="${index}" title="Run this action" aria-label="Unskip action">Unskip</button>`
+        ? `<button type="button" class="steps-list-btn steps-list-btn-unskip" data-index="${index}" title="${S.actionScripts.runActionTooltip}" aria-label="${S.actionScripts.unskipActionAria}">${S.actionScripts.unskipBtn}</button>`
         : '<span class="steps-list-action-empty"></span>';
 
   const validationErrClass = opts.validationError ? ' executor-step-validation-error' : '';
@@ -690,7 +691,7 @@ export function renderExecutorSteps(
   const flat = flattenStepsPreorder(steps);
 
   if (flat.length === 0) {
-    setSafeHTML(container, '<div class="steps-list-empty"><p class="steps-list-empty-text">No script loaded. Click <strong>Import Action Script</strong> above to import a script, or use the <strong>Builder</strong> tab to create one.</p></div>');
+    setSafeHTML(container, `<div class="steps-list-empty"><p class="steps-list-empty-text">${S.actionScripts.emptyNoScript}</p></div>`);
     container.classList.remove('steps-list-has-rows');
     return;
   }

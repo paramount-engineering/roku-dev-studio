@@ -10,6 +10,7 @@ import {
 import type { DevAppApi, DevicePanelRoot, ScreenshotElements } from './dev-app-types.js';
 import { errMessage } from './dev-app-types.js';
 import { rendererError } from '../../modules/utils/logger.js';
+import { S } from '@shared/strings/index.js';
 
 /**
  * Setup screenshot functionality
@@ -44,7 +45,7 @@ export function setupScreenshots(
   let devAppAllowsCapture = false;
   let captureInProgress = false;
 
-  const CAPTURE_DISABLED_TITLE = 'Launch the sideloaded Dev App on the device to capture a screenshot.';
+  const CAPTURE_DISABLED_TITLE = S.devApp.captureDisabledTitle;
 
   function updateScreenshotCaptureButtonState() {
     if (!screenshotBtn) return;
@@ -72,18 +73,18 @@ export function setupScreenshots(
   if (screenshotBtn) {
     screenshotBtn.addEventListener('click', async () => {
       if (!devAppAllowsCapture) {
-        showStatusMessage(screenshotStatus, 'Launch the Dev App on the device before capturing a screenshot.', 'warning');
+        showStatusMessage(screenshotStatus, S.devApp.launchBeforeCapture, 'warning');
         return;
       }
       const password = getPassword();
       if (!password) {
-        showStatusMessage(screenshotStatus, 'Please enter your developer password', 'warning');
+        showStatusMessage(screenshotStatus, S.devApp.pleaseEnterDeveloperPassword, 'warning');
         return;
       }
-      
+
       captureInProgress = true;
       updateScreenshotCaptureButtonState();
-      screenshotBtn.textContent = 'Capturing...';
+      screenshotBtn.textContent = S.devApp.capturing;
       screenshotStatus.innerHTML = '';
       
       try {
@@ -106,7 +107,7 @@ export function setupScreenshots(
 
       captureInProgress = false;
       updateScreenshotCaptureButtonState();
-      setSafeHTML(screenshotBtn, icon('camera', 'icon-xs') + ' Capture');
+      setSafeHTML(screenshotBtn, icon('camera', 'icon-xs') + ' ' + S.devApp.capture);
     });
   }
   
@@ -143,7 +144,7 @@ export function setupScreenshots(
     try {
       const result = await window.roku.saveScreenshot(currentScreenshotTempFile, currentScreenshotUrl);
       if (result.success) {
-        showStatusMessage(screenshotStatus, '✓ Saved to: ' + result.filePath, 'success');
+        showStatusMessage(screenshotStatus, S.devApp.savedTo(result.filePath), 'success');
       } else if (result.error !== 'Save cancelled') {
         showStatusMessage(screenshotStatus, '✗ ' + result.error, 'error');
       }
@@ -169,14 +170,14 @@ export function setupScreenshots(
       if (!currentScreenshotUrl) return;
       try {
         await copyScreenshotToClipboard();
-        copyScreenshotBtn.title = 'Copied!';
+        copyScreenshotBtn.title = S.devApp.copiedTitle;
         setSafeHTML(copyScreenshotBtn, icon('check', 'icon-xs'));
         setTimeout(() => {
-          copyScreenshotBtn.title = 'Copy screenshot';
+          copyScreenshotBtn.title = S.devApp.copyScreenshot;
           setSafeHTML(copyScreenshotBtn, icon('copy', 'icon-xs'));
         }, 2000);
       } catch (error: unknown) {
-        showStatusMessage(screenshotStatus, 'Failed to copy: ' + errMessage(error), 'error');
+        showStatusMessage(screenshotStatus, S.devApp.failedToCopy(errMessage(error)), 'error');
       }
     });
   }
@@ -203,10 +204,10 @@ export function setupScreenshots(
       if (!currentScreenshotUrl) return; // nothing to act on — no menu, mirrors the hidden buttons
       void (async () => {
         const items = [
-          { label: 'Copy Screenshot', action: 'copy-screenshot' },
-          { label: 'Save Screenshot As…', action: 'save-screenshot' },
+          { label: S.devApp.copyScreenshot, action: 'copy-screenshot' },
+          { label: S.devApp.saveScreenshotAs, action: 'save-screenshot' },
           { type: 'separator' },
-          { label: 'Clear Screenshot', action: 'clear-screenshot' }
+          { label: S.devApp.clearScreenshot, action: 'clear-screenshot' }
         ];
         let res: { action?: string } | null = null;
         try {
@@ -217,9 +218,9 @@ export function setupScreenshots(
         if (res?.action === 'copy-screenshot') {
           try {
             await copyScreenshotToClipboard();
-            showStatusMessage(screenshotStatus, '✓ Copied to clipboard', 'success');
+            showStatusMessage(screenshotStatus, S.devApp.copiedToClipboard, 'success');
           } catch (error: unknown) {
-            showStatusMessage(screenshotStatus, 'Failed to copy: ' + errMessage(error), 'error');
+            showStatusMessage(screenshotStatus, S.devApp.failedToCopy(errMessage(error)), 'error');
           }
         } else if (res?.action === 'save-screenshot') {
           await saveScreenshotToFile();

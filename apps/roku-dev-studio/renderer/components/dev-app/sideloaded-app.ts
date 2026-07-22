@@ -10,6 +10,7 @@ import type {
 } from './dev-app-types.js';
 import { pollDevAppForegroundAfterLaunch, pollDevAppForegroundOnce } from './dev-app-foreground-sync.js';
 import { rendererError } from '../../modules/utils/logger.js';
+import { S } from '@shared/strings/index.js';
 
 /**
  * Setup sideloaded app display
@@ -45,7 +46,7 @@ export function setupSideloadedApp(
         if (devAppMatch) {
           const appName = decodeHtmlEntities(devAppMatch[1]);
           const versionMatch = result.data.match(/<app id="dev"[^>]*version="([^"]*)"[^>]*>/);
-          const version = versionMatch ? versionMatch[1] : 'Unknown';
+          const version = versionMatch ? versionMatch[1] : S.devApp.unknown;
           
           sideloadedAppCard.style.display = 'block';
           setSafeHTML(sideloadedAppDetails, `
@@ -57,7 +58,7 @@ export function setupSideloadedApp(
               <div>
                 <div class="sideloaded-app-name">${escapeHtml(appName)}</div>
                 <div class="sideloaded-app-meta">
-                  <span>Version: ${escapeHtml(version)}</span>
+                  <span>${S.devApp.versionLabel} ${escapeHtml(version)}</span>
                 </div>
               </div>
             </div>
@@ -94,7 +95,7 @@ export function setupSideloadedApp(
           );
         } else {
           sideloadedAppCard.style.display = 'block';
-          setSafeHTML(sideloadedAppDetails, '<div class="sideloaded-none">No channel currently sideloaded</div>');
+          setSafeHTML(sideloadedAppDetails, `<div class="sideloaded-none">${S.devApp.noChannelSideloaded}</div>`);
           if (deleteBtn) deleteBtn.style.display = 'none';
           if (launchSideloadBtn) launchSideloadBtn.style.display = 'none';
           if (setDevAppAllowsCapture) setDevAppAllowsCapture(false);
@@ -106,7 +107,7 @@ export function setupSideloadedApp(
         // `/query/apps` itself failed — reset the card too, so we don't show a
         // stale "installed" state while other listeners have been told installed=false.
         sideloadedAppCard.style.display = 'block';
-        setSafeHTML(sideloadedAppDetails, '<div class="sideloaded-none">No channel currently sideloaded</div>');
+        setSafeHTML(sideloadedAppDetails, `<div class="sideloaded-none">${S.devApp.noChannelSideloaded}</div>`);
         if (deleteBtn) deleteBtn.style.display = 'none';
         if (launchSideloadBtn) launchSideloadBtn.style.display = 'none';
         if (setDevAppAllowsCapture) setDevAppAllowsCapture(false);
@@ -117,7 +118,7 @@ export function setupSideloadedApp(
     } catch (e) {
       rendererError('Failed to check sideloaded app:', e);
       sideloadedAppCard.style.display = 'block';
-      setSafeHTML(sideloadedAppDetails, '<div class="sideloaded-none">No channel currently sideloaded</div>');
+      setSafeHTML(sideloadedAppDetails, `<div class="sideloaded-none">${S.devApp.noChannelSideloaded}</div>`);
       if (deleteBtn) deleteBtn.style.display = 'none';
       if (launchSideloadBtn) launchSideloadBtn.style.display = 'none';
       if (setDevAppAllowsCapture) setDevAppAllowsCapture(false);
@@ -174,7 +175,7 @@ export function setupSideloadedApp(
   if (launchSideloadBtn) {
     launchSideloadBtn.addEventListener('click', async () => {
       launchSideloadBtn.disabled = true;
-      setSafeHTML(launchSideloadBtn, icon('rocket', 'icon-xs') + ' Launching');
+      setSafeHTML(launchSideloadBtn, icon('rocket', 'icon-xs') + ' ' + S.devApp.launching);
       try {
         await api.launch('dev');
         const foreground = await pollDevAppForegroundAfterLaunch(panel, api);
@@ -185,7 +186,7 @@ export function setupSideloadedApp(
         rendererError('Failed to launch dev app:', e);
       }
       launchSideloadBtn.disabled = false;
-      setSafeHTML(launchSideloadBtn, icon('rocket', 'icon-xs') + ' Launch');
+      setSafeHTML(launchSideloadBtn, icon('rocket', 'icon-xs') + ' ' + S.devApp.launch);
     });
   }
   
