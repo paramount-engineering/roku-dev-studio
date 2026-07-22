@@ -23,6 +23,22 @@ if (!api) {
 
 const INITIAL_SECTION = new URLSearchParams(window.location.search).get('section') || '';
 
+/**
+ * Toggle the `privacy-mode` body class so this window's masking CSS (see
+ * settings.css) blurs IPs/serials — e.g. the Sideload Relay device table —
+ * exactly as the main window does. Applied from the loaded state, live from the
+ * Privacy Mode toggle in this window, and from the main-process broadcast when
+ * the menu / another window flips it.
+ */
+function applyPrivacyMode(enabled: boolean): void {
+  document.body.classList.toggle('privacy-mode', !!enabled);
+}
+if (typeof api.onPrivacyModeChanged === 'function') {
+  api.onPrivacyModeChanged(function (enabled: boolean) {
+    applyPrivacyMode(enabled);
+  });
+}
+
 // Set after getState() resolves; all usages are inside async callbacks or user-initiated actions
 // that can only fire after initialization completes.
 let HOST_PLATFORM: string = '';
@@ -1048,6 +1064,7 @@ api.getState().then(function (state: any) {
 
   setToggle('optDevMode', !!state.developerModeEnabled);
   setToggle('optPrivacy', !!state.privacyModeEnabled);
+  applyPrivacyMode(!!state.privacyModeEnabled);
   setToggle('optDebugLog', !!state.debugLoggingEnabled);
   setToggle('optKeyboardRemote', state.keyboardRemoteShortcutsEnabled === true);
   setToggle('optAutoConnectLast', state.autoConnectLastDeviceEnabled === true);
@@ -1160,6 +1177,14 @@ if (btnResetGeneral) {
 wireToggleAria('optDevMode');
 wireToggleAria('optPrivacy');
 wireToggleAria('optDebugLog');
+// Preview masking live as the user flips Privacy Mode here (before Save), matching
+// the main window's immediate response to the File → Privacy Mode menu toggle.
+var optPrivacy = el('optPrivacy') as HTMLInputElement | null;
+if (optPrivacy) {
+  optPrivacy.addEventListener('change', function () {
+    applyPrivacyMode(!!optPrivacy!.checked);
+  });
+}
 wireToggleAria('optKeyboardRemote');
 wireToggleAria('optAutoConnectLast');
 wireToggleAria('optRememberSidebarToggle');

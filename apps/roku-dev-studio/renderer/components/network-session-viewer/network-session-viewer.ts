@@ -70,7 +70,24 @@ type RokuApi = {
   }>;
   copyToClipboard: (text: string) => Promise<unknown>;
   openExternal: (url: string) => Promise<unknown>;
+  getPrivacyMode?: () => Promise<{ enabled: boolean }>;
+  onPrivacyModeChanged?: (cb: (enabled: boolean) => void) => () => void;
 };
+
+/** Toggle the `privacy-mode` body class so the shared inspector CSS (device IPs,
+ *  client addresses) blurs here exactly as it does in the live tab. Optional bridge
+ *  methods keep an older preload from crashing the window (privacy just stays off). */
+function bindPrivacyMode(): void {
+  const apply = (enabled: boolean) => document.body.classList.toggle('privacy-mode', !!enabled);
+  if (typeof api.getPrivacyMode === 'function') {
+    api.getPrivacyMode().then((res) => apply(!!res?.enabled)).catch(() => {
+      /* handler unavailable (older main process) — leave privacy off */
+    });
+  }
+  if (typeof api.onPrivacyModeChanged === 'function') {
+    api.onPrivacyModeChanged((enabled) => apply(enabled));
+  }
+}
 
 const api = (window as unknown as { roku: RokuApi }).roku;
 
@@ -598,6 +615,7 @@ function setupFind(): void {
 }
 
 async function main(): Promise<void> {
+  bindPrivacyMode();
   wireEvents();
   setupFind();
   setupBodyFind();

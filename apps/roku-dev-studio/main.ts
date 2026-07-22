@@ -19,9 +19,9 @@ const { registerConsoleSpillIpc } = require('./main/console-spill');
 const {
   registerFiddleIpc,
   openFiddleWindow,
-  broadcastFiddleTerminalData,
-  broadcastFiddlePrivacyMode
+  broadcastFiddleTerminalData
 } = require('./main/fiddle-window');
+const { broadcastPrivacyModeToAllWindows } = require('./main/privacy-broadcast');
 const { registerBsFiddleIpc } = require('./main/ipc/bs-fiddle-handlers');
 const { showAboutDialog, registerAboutIpc } = require('./main/about-dialog');
 const { setupAutoUpdater } = require('./main/auto-updater');
@@ -369,12 +369,9 @@ function createWindow(appState: AppWindowState) {
             if (appState) {
               appState.privacyModeEnabled = privacyModeEnabled;
             }
-            if (win && win.webContents) {
-              win.webContents.send('privacy-mode-changed', privacyModeEnabled);
-            }
-            // Fan the toggle out to every open Fiddle window so its dropdown
-            // and password modal mask IPs in lockstep with the main window.
-            broadcastFiddlePrivacyMode(privacyModeEnabled);
+            // Fan the toggle out to every open window (main, Fiddle, Settings,
+            // Session Viewer, …) so they mask IPs/serials in lockstep.
+            broadcastPrivacyModeToAllWindows(privacyModeEnabled);
           }
         },
         {
@@ -835,12 +832,13 @@ app.whenReady().then(() => {
       secretStore.setEnabled(next);
     },
     notifyRenderer: (channel: string, data: unknown) => {
-      safeSendToRenderer(channel, data);
-      // Privacy Mode toggles need to reach every open Fiddle window too —
-      // the main renderer is no longer the only consumer of this signal.
+      // Privacy Mode must reach every open window (main, Fiddle, Settings,
+      // Session Viewer, …), not just the main renderer — each masks off it.
       if (channel === IPC.PrivacyModeChanged) {
-        broadcastFiddlePrivacyMode(!!data);
+        broadcastPrivacyModeToAllWindows(!!data);
+        return;
       }
+      safeSendToRenderer(channel, data);
     }
   });
 

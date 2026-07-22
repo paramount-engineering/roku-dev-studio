@@ -316,8 +316,9 @@ function remoteAddress(ev: ParsedNetworkEvent): string {
   return port ? `${host}:${port}` : host;
 }
 
-function overviewRow(name: string, value: string): string {
-  return `<tr><th>${escapeHtml(name)}</th><td>${escapeHtml(value)}</td></tr>`;
+function overviewRow(name: string, value: string, valueClass = ''): string {
+  const cls = valueClass ? ` class="${valueClass}"` : '';
+  return `<tr><th>${escapeHtml(name)}</th><td${cls}>${escapeHtml(value)}</td></tr>`;
 }
 
 function isInspectableUrl(url: string): boolean {
@@ -361,7 +362,7 @@ export function renderRequestOverview(ev: ParsedNetworkEvent, allEvents: ParsedN
     const rows = [
       overviewRow('Type', ev.type),
       overviewRow('Time', ev.timestamp || '—'),
-      overviewRow('Device', ev.deviceIp),
+      overviewRow('Device', ev.deviceIp, 'device-ip'),
       overviewRow('Host', ev.hostname || ev.sni || '—'),
       overviewRow('Destination', ev.destIp ? `${ev.destIp}:${ev.destPort ?? ''}` : '—')
     ];
@@ -382,7 +383,7 @@ export function renderRequestOverview(ev: ParsedNetworkEvent, allEvents: ParsedN
     overviewRow('Method', req?.method || '—'),
     overviewRow('Request Content-Type', reqCt),
     overviewRow('Response Content-Type', resCt),
-    overviewRow('Client Address', ev.deviceIp || '—'),
+    overviewRow('Client Address', ev.deviceIp || '—', 'device-ip'),
     overviewRow('Remote Address', remoteAddress(ev))
   ];
   if (ev.mitm) rows.push(overviewRow('Tags', 'MITM · Decrypted'));
@@ -438,7 +439,7 @@ export function renderRequestPane(
 ): string {
   if (ev.type === 'tls-handshake' || (ev.type === 'tcp-connection' && ev.destPort === 443)) {
     if (tab === 'overview') {
-      return `<div class="ni-overview-scroll"><table class="ni-overview-table">${overviewRow('Host', ev.sni || ev.hostname || '—')}${overviewRow('Type', 'HTTPS (TLS handshake)')}${overviewRow('Device', ev.deviceIp)}</table></div>`;
+      return `<div class="ni-overview-scroll"><table class="ni-overview-table">${overviewRow('Host', ev.sni || ev.hostname || '—')}${overviewRow('Type', 'HTTPS (TLS handshake)')}${overviewRow('Device', ev.deviceIp, 'device-ip')}</table></div>`;
     }
     return `<pre class="ni-code-block">${escapeHtml(buildHttpsRequestFallback(ev))}</pre>`;
   }

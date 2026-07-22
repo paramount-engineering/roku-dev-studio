@@ -302,21 +302,12 @@ export function onFiddleWindowClosed(cb: FiddleCloseCleanup): void {
   fiddleCloseCleanup = cb;
 }
 
-/**
- * Push the current Privacy Mode state to every open Fiddle window. Called from
- * `main.ts` whenever the user toggles Privacy Mode (File menu or Settings
- * window) so each Fiddle window can blur / mask IPs in lockstep with the main
- * window. Newly-opened Fiddle windows pull the same state on their own via
- * `getPrivacyMode()` (handled by the standard system IPC handler).
+/*
+ * Privacy Mode fan-out to Fiddle windows now goes through the shared
+ * `main/privacy-broadcast.ts` helper (which reaches EVERY open window, not just
+ * Fiddle). Newly-opened Fiddle windows still pull the current state on their own
+ * via `getPrivacyMode()` (the standard system IPC handler).
  */
-export function broadcastFiddlePrivacyMode(enabled: boolean): void {
-  if (fiddleWindowsById.size === 0) return;
-  for (const win of fiddleWindowsById.values()) {
-    if (win && !win.isDestroyed()) {
-      win.webContents.send(IPC.PrivacyModeChanged, !!enabled);
-    }
-  }
-}
 
 /** Tell any listening fiddle window to clear its terminal buffer. */
 export function broadcastFiddleTerminalCleared(winId: number): void {

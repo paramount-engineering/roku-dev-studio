@@ -335,7 +335,12 @@ export async function openTrafficRulesModal(opts: {
   // while the value is still discoverable.
   const deviceName = (opts.deviceName || '').trim();
   const primaryName = deviceName || 'Roku Device';
-  const serialTitle = opts.deviceSerial ? `Serial ${opts.deviceSerial}` : '';
+  // The serial lives in a native `title=` tooltip, which CSS blur can't mask — so
+  // when Privacy Mode is on, drop it entirely (the IP chip below is `.device-ip`,
+  // blurred by the shared rule). The modal is short-lived, so reading the class
+  // once at build time is enough.
+  const privacyOn = document.body.classList.contains('privacy-mode');
+  const serialTitle = opts.deviceSerial && !privacyOn ? `Serial ${opts.deviceSerial}` : '';
 
   const overlay = document.createElement('div');
   // `.modal-overlay` is display:none until `.active` is added.
@@ -349,7 +354,7 @@ export async function openTrafficRulesModal(opts: {
             <span class="ni-rules-device-dot" aria-hidden="true"></span>
             <span class="ni-rules-device-name">${escapeHtml(primaryName)}</span>
             <span class="ni-rules-device-sep" aria-hidden="true">•</span>
-            <span class="ni-rules-device-ip">${escapeHtml(opts.deviceIp)}</span>
+            <span class="ni-rules-device-ip device-ip">${escapeHtml(opts.deviceIp)}</span>
           </div>
         </div>
         <button type="button" class="modal-close ni-rules-close" title="Close" aria-label="Close">×</button>

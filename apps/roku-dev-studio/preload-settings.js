@@ -363,6 +363,16 @@ var init_channels = __esm({
 var { contextBridge, ipcRenderer } = require("electron");
 var { IPC: IPC2 } = (init_channels(), __toCommonJS(channels_exports));
 contextBridge.exposeInMainWorld("settingsApi", {
+  // Privacy Mode — mirrors the main/Fiddle bridge so the Settings window can blur
+  // IPs/serials (e.g. the Sideload Relay device table) in lockstep. Reads the
+  // current state at open; the main process fans `IPC.PrivacyModeChanged` to every
+  // open window so a menu / other-window toggle flows through live.
+  getPrivacyMode: () => ipcRenderer.invoke(IPC2.GetPrivacyMode),
+  onPrivacyModeChanged: (callback) => {
+    const handler = (_e, enabled) => callback(enabled);
+    ipcRenderer.on(IPC2.PrivacyModeChanged, handler);
+    return () => ipcRenderer.removeListener(IPC2.PrivacyModeChanged, handler);
+  },
   getState: () => ipcRenderer.invoke(IPC2.SettingsWindowGetState),
   save: (payload) => ipcRenderer.invoke(IPC2.SettingsWindowSave, payload),
   pickFolder: () => ipcRenderer.invoke(IPC2.SettingsWindowPickFolder),

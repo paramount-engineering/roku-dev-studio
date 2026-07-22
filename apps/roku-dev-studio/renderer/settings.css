@@ -1096,3 +1096,41 @@ ul.help-blurb li {
   30%, 50%, 70% { transform: translateX(-4px); }
   40%, 60% { transform: translateX(4px); }
 }
+
+/* ============================================================
+   Privacy Mode — mask sensitive info in the Settings window
+   ============================================================
+   Mirrors renderer/index.html's `body.privacy-mode` rules. `settings.ts`
+   toggles the body class from the loaded state / the Privacy Mode toggle /
+   the main-process broadcast. The Sideload Relay device table shows a device
+   IP + serial (`.sr-dt-ip` / `.sr-dt-serial`); the standard device-identity
+   classes are covered too so any current/future settings surface inherits
+   masking. Device NAME (`.sr-dt-name`) is intentionally left visible — a name
+   is required to identify the device and carries no address/serial. */
+body.privacy-mode .sr-dt-ip,
+body.privacy-mode .sr-dt-serial,
+body.privacy-mode .device-ip,
+body.privacy-mode .device-serial,
+body.privacy-mode .device-mac,
+body.privacy-mode .device-wifi-mac,
+body.privacy-mode .device-ethernet-mac,
+body.privacy-mode .remote-device-ip,
+body.privacy-mode .location-server-url,
+body.privacy-mode .info-value[data-privacy="mask"] {
+  filter: blur(5px);
+  user-select: none;
+  transition: filter 0.2s ease;
+}
+/* Reveal on hover for verification (matches the main window). */
+body.privacy-mode .sr-dt-ip:hover,
+body.privacy-mode .sr-dt-serial:hover,
+body.privacy-mode .device-ip:hover,
+body.privacy-mode .device-serial:hover,
+body.privacy-mode .device-mac:hover,
+body.privacy-mode .device-wifi-mac:hover,
+body.privacy-mode .device-ethernet-mac:hover,
+body.privacy-mode .remote-device-ip:hover,
+body.privacy-mode .location-server-url:hover,
+body.privacy-mode .info-value[data-privacy="mask"]:hover {
+  filter: blur(0);
+}

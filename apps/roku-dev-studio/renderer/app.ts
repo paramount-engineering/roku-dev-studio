@@ -2627,7 +2627,7 @@ function showTabHoverTooltip(tab: HTMLElement) {
     html +=
       `<div class="tab-hover-tooltip-row">` +
       `<span class="status-dot" aria-hidden="true"></span>` +
-      `<span class="tab-hover-tooltip-ip">${escapeHtml(ip)}</span></div>`;
+      `<span class="tab-hover-tooltip-ip device-ip">${escapeHtml(ip)}</span></div>`;
   }
   if (modelStr) {
     html += `<div class="tab-hover-tooltip-model">${escapeHtml(modelStr)}</div>`;
