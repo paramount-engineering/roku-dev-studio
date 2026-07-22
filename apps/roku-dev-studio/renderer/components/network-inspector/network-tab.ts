@@ -2588,14 +2588,18 @@ export function setupNetworkTab(
   findClearBtn?.addEventListener('click', () => findModal?.clear(), listenerOpts);
   findPrevBtn?.addEventListener('click', () => findModal?.prev(), listenerOpts);
   findNextBtn?.addEventListener('click', () => findModal?.next(), listenerOpts);
-  // ⌘/Ctrl+F opens the Find modal — unless an in-body find bar already handled it (it calls
-  // preventDefault when focused + visible), so searching the focused body stays contextual.
+  // ⌘/Ctrl+F opens the Find modal — but ONLY when the Network inner tab is the active section.
+  // The listener is on `panel` (the whole device panel) so without this guard it would steal
+  // the shortcut from the Console, Log Viewer, and every other inner tab that has its own find
+  // bar. An in-body find bar that already handled the event calls preventDefault, so that path
+  // is still respected via the defaultPrevented check below.
   panel.addEventListener(
     'keydown',
     (e) => {
       const ke = e as KeyboardEvent;
       if (!((ke.metaKey || ke.ctrlKey) && (ke.key === 'f' || ke.key === 'F'))) return;
       if (ke.defaultPrevented) return;
+      if (!tabContent?.classList.contains('active')) return;
       ke.preventDefault();
       findModal?.open();
     },
