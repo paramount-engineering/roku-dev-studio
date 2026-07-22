@@ -22,15 +22,15 @@
     "prepare": "node -e \"if (process.env.CI) process.exit(0); require('child_process').execSync('npm run build:bundle', { stdio: 'inherit' })\"",
     "clean:dist": "tsx scripts/cleanup-old-builds.ts",
     "build": "npm run build:bundle && npm run clean:dist && electron-builder",
-    "build:mac": "npm run build:bundle && npm run clean:dist && electron-builder --mac",
-    "build:mac:intel": "npm run build:bundle && npm run clean:dist && electron-builder --mac dmg:x64 zip:x64",
+    "build:mac": "npm run build:bundle && npm run clean:dist && tsx scripts/build/electron-builder-mac.ts",
+    "build:mac:intel": "npm run build:bundle && npm run clean:dist && tsx scripts/build/electron-builder-mac.ts dmg:x64 zip:x64",
     "build:win": "npm run build:bundle && npm run clean:dist && electron-builder --win",
     "build:win:diagnostic": "tsx scripts/build-diagnostic.ts win",
     "build:mac:diagnostic": "tsx scripts/build-diagnostic.ts mac",
     "build:linux:diagnostic": "tsx scripts/build-diagnostic.ts linux",
     "build:all:diagnostic": "tsx scripts/build-diagnostic.ts all",
     "build:linux": "npm run build:bundle && npm run clean:dist && electron-builder --linux",
-    "build:all": "npm run build:bundle && npm run clean:dist && concurrently --names mac,linux,win --prefix-colors cyan,green,magenta \"electron-builder --mac -c.npmRebuild=false\" \"electron-builder --linux -c.npmRebuild=false\" \"electron-builder --win -c.npmRebuild=false\""
+    "build:all": "npm run build:bundle && npm run clean:dist && concurrently --names mac,linux,win --prefix-colors cyan,green,magenta \"tsx scripts/build/electron-builder-mac.ts -c.npmRebuild=false\" \"electron-builder --linux -c.npmRebuild=false\" \"electron-builder --win -c.npmRebuild=false\""
   },
   "author": {
     "name": "Hareendra Donapati",
