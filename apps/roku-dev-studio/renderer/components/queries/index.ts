@@ -95,6 +95,10 @@ export function setupQueries(panel: DevicePanelRoot, api: QueriesDeviceApi): voi
   // Manage the Copy/Save/Clear icon buttons here (not via OutputArea's copyButton) so all three
   // toggle together and keep the `.btn` inline-flex centering for their icons.
   const outputArea = new OutputArea(queryOutput, null, (hasContent) => {
+    // Any new content resets the device-identity blur marker; runQuery re-adds it
+    // only for a Device Info result (which dumps serial/MAC/IP). This keeps a prior
+    // Device Info blur from bleeding onto the next query / POST / telnet output.
+    queryOutput.classList.remove('query-output--sensitive');
     findBar?.setVisible(hasContent);
     if (hasContent) findBar?.refresh();
     const display = hasContent ? 'inline-flex' : 'none';

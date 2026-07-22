@@ -332,6 +332,15 @@ contextBridge.exposeInMainWorld("roku", {
   loadNetworkSession: () => ipcRenderer.invoke(IPC.NetSessionViewerLoad),
   copyToClipboard: (text) => ipcRenderer.invoke(IPC.ClipboardWrite, text),
   openExternal: (url) => ipcRenderer.invoke(IPC.ShellOpenExternal, url),
+  // Privacy Mode — this viewer reuses the live inspector's renderers (device IPs,
+  // client addresses), so it must blur them too. Read the current state at open and
+  // listen for live toggles broadcast from the main process.
+  getPrivacyMode: () => ipcRenderer.invoke(IPC.GetPrivacyMode),
+  onPrivacyModeChanged: (callback) => {
+    const handler = (_e, enabled) => callback(enabled);
+    ipcRenderer.on(IPC.PrivacyModeChanged, handler);
+    return () => ipcRenderer.removeListener(IPC.PrivacyModeChanged, handler);
+  },
   saveTextFile: (opts) => ipcRenderer.invoke(IPC.RokuSaveTextFile, opts),
   saveBinaryFile: (opts) => ipcRenderer.invoke(IPC.RokuSaveBinaryFile, opts)
 });

@@ -1,5 +1,5 @@
 import type { App, BrowserWindow, Clipboard, Dialog, IpcMainInvokeEvent, Rectangle } from 'electron';
-import { broadcastFiddlePrivacyMode } from '../fiddle-window';
+import { broadcastPrivacyModeToAllWindows } from '../privacy-broadcast';
 import { openExternalUrl } from '../open-external-url';
 import { IPC } from '../../shared/ipc/channels';
 import { mainLog, mainError } from '../log.js';
@@ -291,8 +291,9 @@ function setupSystemHandlers(
         }
       }
     }
-    notifyMainRenderer(IPC.PrivacyModeChanged, enabled);
-    broadcastFiddlePrivacyMode(enabled);
+    // Reach every window (main, Fiddle, Settings, Session Viewer, …), not just
+    // the main renderer — each masks off the same broadcast.
+    broadcastPrivacyModeToAllWindows(enabled);
     return { success: true, enabled: state.privacyModeEnabled };
   });
 

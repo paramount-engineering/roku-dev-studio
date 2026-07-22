@@ -12809,7 +12809,24 @@
     body.privacy-mode .location-server-url:hover {
       filter: blur(0);
     }
-    
+
+    /* The ECP "Device Info" query response dumps serial + WiFi/Ethernet MAC + IP +
+       device/advertising IDs into a shared structured tree with no per-field DOM to
+       target, so the WHOLE block is blurred (hover the response to reveal). Marked
+       per-query in queries/query-handlers.ts (only Device Info gets
+       `query-output--sensitive`). A heavier blur than the inline-value rule above —
+       5px reads as legible across a multi-line monospace dump. */
+    body.privacy-mode .query-output.query-output--sensitive {
+      filter: blur(12px);
+      transition: filter 0.2s ease;
+    }
+    body.privacy-mode .query-output.query-output--sensitive:hover {
+      filter: blur(0);
+    }
+    /* No `user-select: none` here (unlike the inline-value rules): this is a dev
+       query output the user needs to select/copy from — copy is a deliberate act,
+       and the block already reveals on hover. */
+
     /* Privacy indicator badge */
     .privacy-badge {
       position: fixed;

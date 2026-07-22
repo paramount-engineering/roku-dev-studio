@@ -6,6 +6,17 @@ import type { IpcRendererEvent } from 'electron';
 const { IPC } = require('./shared/ipc/channels');
 
 contextBridge.exposeInMainWorld('settingsApi', {
+  // Privacy Mode — mirrors the main/Fiddle bridge so the Settings window can blur
+  // IPs/serials (e.g. the Sideload Relay device table) in lockstep. Reads the
+  // current state at open; the main process fans `IPC.PrivacyModeChanged` to every
+  // open window so a menu / other-window toggle flows through live.
+  getPrivacyMode: () => ipcRenderer.invoke(IPC.GetPrivacyMode) as Promise<{ enabled: boolean }>,
+  onPrivacyModeChanged: (callback: (enabled: boolean) => void) => {
+    const handler = (_e: IpcRendererEvent, enabled: boolean) => callback(enabled);
+    ipcRenderer.on(IPC.PrivacyModeChanged, handler);
+    return () => ipcRenderer.removeListener(IPC.PrivacyModeChanged, handler);
+  },
+
   getState: () => ipcRenderer.invoke(IPC.SettingsWindowGetState),
   save: (payload: unknown) => ipcRenderer.invoke(IPC.SettingsWindowSave, payload),
   pickFolder: () => ipcRenderer.invoke(IPC.SettingsWindowPickFolder),

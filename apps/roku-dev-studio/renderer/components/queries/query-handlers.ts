@@ -16,11 +16,20 @@ export function setupQueryButtons(
       removePluginSection.style.display = 'none';
     }
 
+    // Device Info dumps serial + WiFi/Ethernet MAC + IP + device/advertising IDs.
+    // The shared structured tree has no per-field DOM to blur, so the whole block
+    // is marked privacy-sensitive and blurred by CSS under Privacy Mode (hover to
+    // reveal). Other queries (apps, nodes, …) carry no device identity.
+    const isDeviceInfo = /\/query\/device-info\b/.test(endpoint);
+
     try {
       const result = await api.query(endpoint);
 
       if (result.success && result.data) {
         outputArea.displayStructured(result.data);
+        // Set AFTER displayStructured — its onContentChange reset (queries/index.ts)
+        // clears the marker on every render, so re-add it here for Device Info.
+        if (isDeviceInfo) outputArea.container?.classList.add('query-output--sensitive');
       } else {
         const err = result.error || 'Unknown error';
         const errorContent = `Error: ${err}`;
