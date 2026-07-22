@@ -74,6 +74,11 @@ export type ConsoleFindBarHandle = {
    *  append/remove hooks below — re-runs the active query from scratch. Cheap
    *  when there is no active query. */
   refresh: () => void;
+  /** The model's entries were WIPED (Clear Console / connect reset). Drops the
+   *  now-stale cache and re-runs the active query against the fresh buffer, so the
+   *  find count keeps auto-updating as new matching lines stream in (without this,
+   *  a cleared-then-refilled console leaves the count dead until the query is retyped). */
+  onLinesCleared: () => void;
   /** New entries were appended to the model. The cache is updated incrementally:
    *  the active query gets its tail scanned and painted; inactive cached queries
    *  keep their prior `scannedUpTo` and are extended lazily on next use. */
@@ -996,6 +1001,16 @@ export function attachConsoleFindBar(opts: AttachConsoleFindBarOpts): ConsoleFin
     executeFindAction();
   };
 
+  const onLinesCleared = (): void => {
+    // The model's entries were wiped (Clear Console / connect reset). Every cached entry's `scannedUpTo`
+    // + `hits` now point at gone lines, so drop the whole cache. Crucially, re-run the active query
+    // against the fresh (empty) buffer so a live `currentEntry` is re-established (0 hits for now) — else
+    // `onLinesAppended` bails on `!currentEntry` and the find count never repopulates as new matching
+    // lines stream in (the query is still in the box, but its scan is dead until retyped).
+    resetFindState();
+    if (findInputEl.value.trim()) executeFindAction();
+  };
+
   const onLinesAppended = (): void => {
     // Inactive cached entries are *not* extended here — they keep their current
     // `scannedUpTo` and pick up the new tail lazily on the next time the user
@@ -1130,6 +1145,7 @@ export function attachConsoleFindBar(opts: AttachConsoleFindBarOpts): ConsoleFin
   return {
     resetFindState,
     refresh,
+    onLinesCleared,
     onLinesAppended,
     onLinesRemoved,
     bindLineHighlights,

@@ -29,6 +29,7 @@ import { consoleDisplayText } from '../renderer/modules/console-log/console-disp
 import {
   recognizeBrsIssue,
   computeConsoleFindings,
+  createCrashScanner,
   type ConsoleFindings
 } from '../shared/console/brightscript-error-catalog';
 
@@ -451,14 +452,23 @@ export async function scanFileFindings(
   // `index` carries the 0-based file line number so the Console Monitor can jump straight to an
   // occurrence in the Log Viewer (see `ConsoleFindingLine.indices`).
   const issueLines: { text: string; index: number }[] = [];
+  // Crashes are multi-line Micro Debugger dumps, so a per-line issue filter can't see them — feed EVERY
+  // line through the streaming crash scanner (bounded: it only buffers the current candidate block).
+  const crashScanner = createCrashScanner();
   let scannedLines = 0;
   const onLine = (raw: string, lineNo: number): void => {
     // Match the *display* text (ANSI-stripped, trailing \r absorbed) — the same 1:1 contract the find
     // scan and the renderer's line rendering use, so recognition sees exactly what's on screen.
     const text = consoleDisplayText(raw.endsWith('\r') ? raw.slice(0, -1) : raw);
     scannedLines++;
+    crashScanner.push(text, lineNo);
     if (recognizeBrsIssue(text)) issueLines.push({ text, index: lineNo });
   };
   const { aborted } = await streamFileLines(index, onLine, shouldAbort);
-  return { findings: computeConsoleFindings(issueLines), scannedLines, truncated: aborted };
+  // `computeConsoleFindings` drops any issueLine that a crash block already consumed (by file-line index).
+  return {
+    findings: computeConsoleFindings(issueLines, crashScanner.finish()),
+    scannedLines,
+    truncated: aborted
+  };
 }

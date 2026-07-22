@@ -19,7 +19,8 @@ import { escapeHtml } from '../utils/dom.js';
 import { attachBackdropClickToClose } from '../utils/modal-backdrop-click.js';
 import type {
   ConsoleFindings,
-  ConsoleFinding
+  ConsoleFinding,
+  BrsCrash
 } from '@shared/console/brightscript-error-catalog.js';
 
 export interface ConsoleAnalyticsMeta {
@@ -73,6 +74,7 @@ function ensureConsoleAnalyticsStyles(): void {
     .telnet-an-title h3 { margin: 0; font-size: 14px; font-weight: 700; color: var(--text-primary); }
     .telnet-an-sub { margin: 2px 0 0; font-size: 11.5px; color: var(--text-secondary); }
     .telnet-an-sub-note { color: var(--text-muted); }
+    .telnet-an-sub-crash { color: #fca5a5; font-weight: 700; }
     .telnet-an-close { border: none; background: transparent; color: var(--text-secondary); font-size: 20px; line-height: 1; cursor: pointer; padding: 0 4px; flex: 0 0 auto; }
     .telnet-an-close:hover { color: var(--text-primary); }
     .telnet-an-body { flex: 1 1 auto; min-height: 0; padding: 14px 16px; overflow-y: auto; }
@@ -99,10 +101,26 @@ function ensureConsoleAnalyticsStyles(): void {
     .telnet-an-copy { flex: 0 0 auto; border: none; background: transparent; color: var(--text-muted); cursor: pointer; padding: 3px 5px; border-radius: 5px; display: inline-flex; align-items: center; opacity: 0.7; transition: opacity 0.1s ease; }
     .telnet-an-copy:hover { color: var(--text-primary); background: var(--bg-deep); opacity: 1; }
     .telnet-an-copy.is-copied { color: var(--accent-green, #4ade80); opacity: 1; }
+    .telnet-an-jump { flex: 0 0 auto; border: none; background: transparent; color: var(--accent-purple); cursor: pointer; padding: 2px 6px; border-radius: 5px; font-size: 14px; line-height: 1; opacity: 0.8; }
+    .telnet-an-jump:hover { background: var(--bg-deep); opacity: 1; }
     .telnet-an-sev { flex: 0 0 auto; margin-left: auto; font-size: 9.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; padding: 2px 8px; border-radius: 999px; }
     .telnet-an-sev.is-error { background: rgba(239, 68, 68, 0.16); color: #fca5a5; }
     .telnet-an-sev.is-warning { background: rgba(251, 191, 36, 0.16); color: var(--accent-amber, #fbbf24); }
     .telnet-an-sev.is-info { background: rgba(59, 130, 246, 0.16); color: #93c5fd; }
+    .telnet-an-sev.is-crash { background: rgba(239, 68, 68, 0.28); color: #fecaca; }
+    /* Crash cards read as more severe than a plain error: a solid red left rail. */
+    .telnet-an-issue.telnet-an-crash { border-left: 3px solid var(--accent-red, #ef4444); }
+    .telnet-an-crash-exit { display: inline-block; margin-left: 6px; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: #fecaca; background: rgba(239, 68, 68, 0.2); border-radius: 4px; padding: 1px 5px; vertical-align: middle; }
+    .telnet-an-crash-site { font-family: var(--font-mono, ui-monospace, monospace); color: var(--text-secondary); }
+    .telnet-an-crash-code { color: var(--text-muted); }
+    /* Backtrace: a compact monospace stack, innermost frame first. */
+    .telnet-an-bt { list-style: none; margin: 0; padding: 0; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-deep); overflow: hidden; }
+    .telnet-an-bt-frame { display: flex; align-items: baseline; gap: 8px; padding: 6px 10px; border-bottom: 1px solid var(--border); }
+    .telnet-an-bt-frame:last-child { border-bottom: none; }
+    .telnet-an-bt-depth { flex: 0 0 auto; min-width: 22px; font-size: 10px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--text-muted); }
+    .telnet-an-bt-func { flex: 1 1 auto; min-width: 0; font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 11px; line-height: 1.5; color: var(--text-secondary); word-break: break-word; }
+    .telnet-an-bt-loc { flex: 0 0 auto; align-self: baseline; font-size: 10px; color: var(--text-muted); font-family: var(--font-mono, ui-monospace, monospace); white-space: nowrap; }
+    .telnet-an-crash-note { margin: 0; font-size: 12px; color: var(--text-secondary); }
     /* Top padding gives the body breathing room below the header divider when expanded. */
     .telnet-an-issue-body { padding: 15px 14px 16px; }
     .telnet-an-issue-kind { margin: 0 0 12px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); }
@@ -166,7 +184,12 @@ function subtitleHtml(
   span: { first: string | null; last: string | null },
   meta: ConsoleAnalyticsMeta
 ): string {
-  const summary = `${num(f.totalIssues)} issue${f.totalIssues === 1 ? '' : 's'} across ${num(scanned)} line${scanned === 1 ? '' : 's'}`;
+  const crashTotal = f.crashes.reduce((n, c) => n + c.count, 0);
+  const crashPart =
+    crashTotal > 0
+      ? `<span class="telnet-an-sub-crash">${num(crashTotal)} crash${crashTotal === 1 ? '' : 'es'}</span> · `
+      : '';
+  const summary = `${crashPart}${num(f.totalIssues)} issue${f.totalIssues === 1 ? '' : 's'} across ${num(scanned)} line${scanned === 1 ? '' : 's'}`;
   const spill =
     meta.totalCount > meta.bufferedCount
       ? ` <span class="telnet-an-sub-note">(of ${num(meta.totalCount)} captured — older lines spilled to disk aren't scanned)</span>`
@@ -247,8 +270,77 @@ function issuesList(f: ConsoleFindings, navigable: boolean): string {
     .join('');
 }
 
+/** Stable DOM key for a crash card (open-state preservation across live refreshes). */
+function crashDomKey(c: BrsCrash): string {
+  return `${c.message}@@${c.file ?? ''}:${c.line ?? ''}`;
+}
+
+/** The backtrace stack for one crash — innermost (crash-site) frame first. */
+function backtraceHtml(c: BrsCrash): string {
+  if (c.backtrace.length === 0) {
+    return `<p class="telnet-an-crash-note">The channel exited from a BrightScript crash; no backtrace was captured in this console output.</p>`;
+  }
+  const frames = c.backtrace
+    .map((fr) => {
+      const base = fr.file ? (fr.file.split('/').pop() ?? fr.file) : '';
+      const loc = base
+        ? `<span class="telnet-an-bt-loc">${escapeHtml(base)}${fr.line !== undefined ? '(' + num(fr.line) + ')' : ''}</span>`
+        : '';
+      return (
+        `<li class="telnet-an-bt-frame">` +
+        `<span class="telnet-an-bt-depth">#${num(fr.depth)}</span>` +
+        `<code class="telnet-an-bt-func">${escapeHtml(fr.func)}</code>${loc}</li>`
+      );
+    })
+    .join('');
+  return `<ol class="telnet-an-bt">${frames}</ol>`;
+}
+
+/** Crash cards — the message is the header, the backtrace the body. `navigable` adds a jump-to-crash
+ *  button (crashes carry the console positions they occupied in `indices`). */
+function crashesList(crashes: BrsCrash[], navigable: boolean): string {
+  return crashes
+    .map((c) => {
+      const site = c.file
+        ? `<span class="telnet-an-crash-site">${escapeHtml(c.file.split('/').pop() ?? c.file)}${c.line !== undefined ? '(' + num(c.line) + ')' : ''}</span>`
+        : '';
+      const code = c.code ? ` · <span class="telnet-an-crash-code">runtime error ${escapeHtml(c.code)}</span>` : '';
+      const exit = c.exited
+        ? `<span class="telnet-an-crash-exit" title="The channel process exited">exited${c.app ? ' · ' + escapeHtml(c.app) : ''}</span>`
+        : '';
+      const jump =
+        navigable && c.indices.length > 0
+          ? `<button type="button" class="telnet-an-jump" data-nav-index="${c.indices[0]}" title="Go to this crash in the log" aria-label="Go to this crash in the log">→</button>`
+          : '';
+      const kind = site || code ? `Crash · ${site}${code}` : 'Crash';
+      return (
+        `<details class="telnet-an-issue telnet-an-crash" data-crash-id="${escapeHtml(crashDomKey(c))}">` +
+        `<summary>` +
+        `<span class="telnet-an-issue-badge">${num(c.count)}</span>` +
+        `<span class="telnet-an-issue-title" title="${escapeHtml(c.message)}">${escapeHtml(c.message)}${exit}</span>` +
+        `<button type="button" class="telnet-an-copy" data-copy="${escapeHtml(c.raw)}" title="Copy crash + backtrace" aria-label="Copy crash and backtrace"><span class="icon icon-xs"><svg><use href="#icon-copy"/></svg></span></button>` +
+        jump +
+        `<span class="telnet-an-sev is-crash">crash</span>` +
+        `</summary>` +
+        `<div class="telnet-an-issue-body">` +
+        `<p class="telnet-an-issue-kind">${kind}</p>` +
+        `<div class="telnet-an-occ-head">Backtrace</div>` +
+        backtraceHtml(c) +
+        `</div>` +
+        `</details>`
+      );
+    })
+    .join('');
+}
+
 function bodyHtml(f: ConsoleFindings, navigable: boolean): string {
+  // Crashes lead — they're the most severe thing in the buffer.
+  const crashes =
+    f.crashes.length > 0
+      ? `<section class="telnet-an-section"><h4>Crashes</h4>${crashesList(f.crashes, navigable)}</section>`
+      : '';
   return (
+    crashes +
     `<section class="telnet-an-section">` +
     `<div class="telnet-an-cats">${categoryChips(f)}</div>` +
     `</section>` +
@@ -292,10 +384,10 @@ export function openConsoleAnalyticsModal(
 
   const render = (): void => {
     const { findings: f, scannedLines, timeSpan, meta } = getSnapshot();
-    // Preserve which issues are expanded + each log table's scroll offset across the re-render.
+    // Preserve which issues/crashes are expanded + each log table's scroll offset across the re-render.
     const openIds = new Set<string>();
     bodyEl.querySelectorAll<HTMLElement>('details.telnet-an-issue[open]').forEach((d) => {
-      const id = d.getAttribute('data-issue-id');
+      const id = d.getAttribute('data-issue-id') ?? d.getAttribute('data-crash-id');
       if (id) openIds.add(id);
     });
     const scrolls = new Map<string, number>();
@@ -308,7 +400,7 @@ export function openConsoleAnalyticsModal(
     bodyEl.innerHTML = bodyHtml(f, !!onNavigate);
 
     bodyEl.querySelectorAll<HTMLElement>('details.telnet-an-issue').forEach((d) => {
-      const id = d.getAttribute('data-issue-id');
+      const id = d.getAttribute('data-issue-id') ?? d.getAttribute('data-crash-id');
       if (id && openIds.has(id)) (d as HTMLDetailsElement).open = true;
     });
     bodyEl.querySelectorAll<HTMLElement>('.telnet-an-logs').forEach((el) => {
@@ -349,22 +441,24 @@ export function openConsoleAnalyticsModal(
       flashCopied(copyBtn);
       return;
     }
-    // Occurrence row — jump to that line in the console/log.
-    const navRow = (e.target as Element)?.closest?.('.telnet-an-log.is-navigable');
-    if (navRow instanceof HTMLElement) {
-      navigateFromRow(navRow);
+    // A navigable element — an occurrence row or a crash's jump button — jumps to that line and closes.
+    const navEl = (e.target as Element)?.closest?.('[data-nav-index]');
+    if (navEl instanceof HTMLElement) {
+      e.preventDefault();
+      e.stopPropagation();
+      navigateFromRow(navEl);
       return;
     }
     if (!(e.target as Element)?.closest?.('summary')) return;
     if (Math.abs(e.clientX - downX) + Math.abs(e.clientY - downY) > 4) e.preventDefault();
   });
-  // Keyboard activation for the focusable occurrence rows (role="button").
+  // Keyboard activation for focusable navigable elements (occurrence rows / crash jump buttons).
   bodyEl.addEventListener('keydown', (e) => {
     if (e.key !== 'Enter' && e.key !== ' ') return;
-    const navRow = (e.target as Element)?.closest?.('.telnet-an-log.is-navigable');
-    if (navRow instanceof HTMLElement) {
+    const navEl = (e.target as Element)?.closest?.('[data-nav-index]');
+    if (navEl instanceof HTMLElement) {
       e.preventDefault();
-      navigateFromRow(navRow);
+      navigateFromRow(navEl);
     }
   });
 
