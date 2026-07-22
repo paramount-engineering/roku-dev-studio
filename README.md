@@ -8,6 +8,7 @@
 ![Version](https://img.shields.io/github/package-json/v/paramount-engineering/roku-dev-studio?filename=apps%2Froku-dev-studio%2Fpackage.json&label=version&color=purple)
 ![Electron](https://img.shields.io/github/package-json/dependency-version/paramount-engineering/roku-dev-studio/dev/electron?filename=apps%2Froku-dev-studio%2Fpackage.json&color=green)
 ![License](https://img.shields.io/badge/license-MIT-lightgrey)
+[![roku-dev-studio MCP server](https://glama.ai/mcp/servers/paramount-engineering/roku-dev-studio/badges/score.svg)](https://glama.ai/mcp/servers/paramount-engineering/roku-dev-studio)
 
 A comprehensive cross-platform desktop application for controlling and developing on Roku devices over your local network or via remote server using the External Control Protocol (ECP).
 
