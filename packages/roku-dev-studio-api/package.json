@@ -22,10 +22,19 @@
   },
   "keywords": [
     "roku",
+    "roku-developer-tools",
     "ecp",
+    "brightscript",
     "ssdp",
     "discovery",
-    "sideload"
+    "sideload",
+    "rale",
+    "scenegraph",
+    "roku-automation",
+    "roku-cli",
+    "roku-remote",
+    "tv-automation",
+    "streaming-device"
   ],
   "scripts": {
     "build": "node build.mjs && tsc --emitDeclarationOnly",

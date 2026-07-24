@@ -1,0 +1,31 @@
+cff-version: 1.2.0
+message: "If you use Roku Dev Studio in your research or project, please cite it as below."
+title: "Roku Dev Studio"
+abstract: >
+  A cross-platform desktop application and CLI toolkit for Roku development.
+  Provides ECP remote control, BrightScript sideloading, RALE/App Connector,
+  Network Inspector, Action Scripts automation, an MCP server for AI agents
+  (Cursor, Claude Desktop, VS Code), and a remote relay server for
+  internet-bridged device access.
+authors:
+  - family-names: Donapati
+    given-names: Hareendra
+    alias: hdonapati
+license: MIT
+repository-code: "https://github.com/paramount-engineering/roku-dev-studio"
+url: "https://github.com/paramount-engineering/roku-dev-studio"
+keywords:
+  - roku
+  - brightscript
+  - ecp
+  - developer-tools
+  - electron
+  - mcp
+  - model-context-protocol
+  - sideload
+  - rale
+  - scenegraph
+  - tv-development
+  - automation
+  - cli
+  - typescript
