@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import type {
   HotspotClientDevice,
+  MockResponse,
   NetworkHttpMessage,
   NetworkInspectorCaInfo,
   NetworkInspectorListener,
@@ -10,7 +11,11 @@ import type {
   ParsedNetworkEvent,
   DeviceTrafficRules,
   NetworkTrafficRules,
-  MitmPortConflict
+  MitmPortConflict,
+  ReplayHttpInput,
+  ReplayRequestOptions,
+  ReplayResult,
+  TrafficDecision
 } from './types';
 import { detectPortHolder, isAddressInUseError, type PortHolder } from './port-conflict';
 import {
@@ -44,12 +49,19 @@ export type {
   TrafficDecision,
   MitmPortConflict,
   NetworkInspectorDeviceJoinedPayload,
-  NetworkInspectorDeviceLeftPayload
+  NetworkInspectorDeviceLeftPayload,
+  ReplayHttpInput,
+  ReplayRequestOptions,
+  ReplayResult
 } from './types';
 
 // Re-exported for the app's Electron factory (initNetworkInspectorFromSettings), which lives in the
 // app layer because it wires the Electron IPC adapter.
 export { initCaStore } from './ca-store';
+// Host-originated Replay (Replay / Edit & Resend). Re-exported from the package root so consumers
+// (app main, remote server) import it without reaching into the ./mitm-proxy subpath. The replay
+// TYPES are re-exported with the other contract types in the block above.
+export { performReplay } from './mitm-proxy';
 // Public capture-readiness API (used by the app's Settings window + status surfaces, and the
 // remote server). Re-exported here so consumers import from the package root, not deep paths.
 export {
@@ -86,8 +98,17 @@ export { installCaptureAccessLinux } from './capture-access-linux';
 // Per-platform capture worker abstraction (one provider per OS behind a common contract).
 export { getCapturePlatform } from './platform';
 export type { CapturePlatform, PlatformCaptureReadiness } from './platform/types';
-import { RokuMitmProxy } from './mitm-proxy';
+import { RokuMitmProxy, performReplay, type MitmTransaction } from './mitm-proxy';
 import { mitmTransactionToEvent } from './mitm-events';
+import {
+  opsFor,
+  applyRequestUrl,
+  applyHeaderOps,
+  applyBodyReplace,
+  statusOverride,
+  hasUrlRewrite,
+  hasBodyReplace
+} from './rewrite';
 import { NetworkDetailStore } from './detail-store';
 import {
   createContentMatchers,
@@ -167,7 +188,13 @@ function summarizeEvent(ev: ParsedNetworkEvent, detailAvailable: boolean): Parse
     httpRequest: summarizeHttpMessage(ev.httpRequest),
     httpResponse: summarizeHttpMessage(ev.httpResponse),
     mitm: ev.mitm,
+    // Keep the replay flag on the list summary so a replayed row stays first-class (labeled/filterable)
+    // even before its full detail is (re)loaded from disk.
+    ...(ev.replay ? { replay: true } : {}),
     durationMs: ev.durationMs,
+    // Per-phase timing rides the summary too, so the Overview waterfall renders before the on-disk
+    // detail loads (the detail-store put persists the full event, so a later detail load keeps it).
+    timing: ev.timing,
     // Only worth fetching detail when there's an HTTP message with headers/body on disk; DNS/TLS
     // events carry nothing extra, so the renderer renders them from the summary directly.
     detailAvailable: detailAvailable && (!!ev.httpRequest || !!ev.httpResponse)
@@ -264,6 +291,44 @@ const CAPTURE_SUPPRESS_COOLDOWN_MS = 30_000;
 const MITM_PORT_CONFLICT_DISABLE_MS = 30_000;
 const STATUS_BROADCAST_DEBOUNCE_MS = 150;
 
+/**
+ * Apply a decision's REQUEST rewrite ops to a replay input, returning a mutated copy. Pure: URL/header
+ * ops reuse the shared rewrite helpers; a body-replace applies only to a textual body (a captured
+ * base64 blob is left unchanged). Header-only rewrites skip URL re-serialization.
+ */
+function applyRequestRewriteToInput(input: ReplayHttpInput, decision: TrafficDecision): ReplayHttpInput {
+  const reqOps = opsFor(decision.rewrite, 'request');
+  if (!reqOps.length) return input;
+  const url = hasUrlRewrite(reqOps) ? applyRequestUrl(reqOps, input.url) : input.url;
+  const headers = applyHeaderOps(reqOps, { ...(input.headers || {}) });
+  let body = input.body;
+  let bodyEncoding = input.bodyEncoding;
+  if (hasBodyReplace(reqOps) && typeof body === 'string' && body && bodyEncoding !== 'base64') {
+    body = applyBodyReplace(reqOps, body);
+    bodyEncoding = 'text';
+  }
+  return { method: input.method, url, headers, body, bodyEncoding };
+}
+
+/**
+ * Apply a decision's RESPONSE rewrite ops (status / header / body-replace) to a replay result.
+ * `performReplay` already decoded the body, so a text body-replace works directly (no zlib needed);
+ * a base64 (binary) body is left unchanged.
+ */
+function applyResponseRewriteToResult(result: ReplayResult, decision: TrafficDecision): ReplayResult {
+  const resOps = opsFor(decision.rewrite, 'response');
+  if (!resOps.length) return result;
+  const response: NetworkHttpMessage = { ...result.response };
+  const st = statusOverride(resOps);
+  if (st !== undefined) response.statusCode = st;
+  response.headers = applyHeaderOps(resOps, { ...(response.headers || {}) });
+  if (hasBodyReplace(resOps) && typeof response.body === 'string' && response.body && response.bodyEncoding !== 'base64') {
+    response.body = applyBodyReplace(resOps, response.body);
+    response.bodyEncoding = 'text';
+  }
+  return { ...result, response };
+}
+
 export class NetworkInspectorService {
   private enabled = false;
   private mitmEnabled = false;
@@ -346,6 +411,10 @@ export class NetworkInspectorService {
   private trackedDeviceIps = new Set<string>();
   // On-disk store for full headers/bodies; memory keeps only lightweight summaries.
   private detailStore: NetworkDetailStore | null = null;
+  // Session-scoped user notes keyed by event id. Deliberately kept in this in-memory side map (NOT
+  // written into the append-only detail-store .ndjson — a note edit would otherwise re-serialize the
+  // whole record). Surfaced on both the list summary and the on-disk detail; not restart-persistent.
+  private readonly eventNotes = new Map<string, string>();
   private userDataPath: string | undefined;
   // Incremental Find cache: memoized per-event match result for the CURRENT term signature. A captured
   // event is immutable once its detail is available, so re-searching every event on each live refresh
@@ -450,7 +519,12 @@ export class NetworkInspectorService {
     const ip = typeof deviceIp === 'string' ? deviceIp.trim() : '';
     if (!ip) return;
     const hasRules =
-      !!rules && (rules.blockAll || (rules.hosts && rules.hosts.length > 0) || !!rules.throttle);
+      !!rules &&
+      (rules.blockAll ||
+        (rules.hosts && rules.hosts.length > 0) ||
+        !!rules.throttle ||
+        !!rules.noCaching ||
+        !!rules.blockCookies);
     if (hasRules) this.trafficRules.set(ip, rules as DeviceTrafficRules);
     else this.trafficRules.delete(ip);
     this.broadcastStatus();
@@ -465,6 +539,155 @@ export class NetworkInspectorService {
       }
     }
     this.broadcastStatus();
+  }
+
+  /**
+   * Replay (re-issue) an HTTP(S) request FROM THE RDS HOST and inject the result as a first-class
+   * event row. `input` carries method/url/headers/body; `deviceIp` attributes the synthetic event to
+   * a watched device's list; `applyTrafficRules` runs it through that device's block/rewrite rules
+   * (throttle is a host-origin no-op and is ignored); `timeoutMs` bounds the wait. The resulting
+   * transaction is converted via the same `mitmTransactionToEvent` path (marked `replay: true`) and
+   * enqueued — so it persists to the detail store, pushes over the capture-events channel, and is
+   * searchable/exportable/savable with no new rendering. Returns the full event so the renderer can
+   * select it immediately. Never throws: a bad URL / network error surfaces as `{ success: false }`.
+   */
+  async replayRequest(
+    payload: { input: ReplayHttpInput } & ReplayRequestOptions
+  ): Promise<{ success: boolean; event?: ParsedNetworkEvent; error?: string }> {
+    const input = payload?.input;
+    if (!input || typeof input.url !== 'string' || !input.url) {
+      return { success: false, error: 'invalid url' };
+    }
+    let parsed: URL;
+    try {
+      parsed = new URL(input.url);
+    } catch {
+      return { success: false, error: `Invalid URL: ${input.url}` };
+    }
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return { success: false, error: `Unsupported protocol: ${parsed.protocol}` };
+    }
+
+    const deviceIp = typeof payload.deviceIp === 'string' ? payload.deviceIp : '';
+    const timeoutMs = payload.timeoutMs;
+    const startedAtISO = new Date().toISOString();
+    const path = `${parsed.pathname}${parsed.search}`;
+    const destPort = parsed.port ? Number(parsed.port) : parsed.protocol === 'https:' ? 443 : 80;
+
+    let result: ReplayResult;
+    try {
+      result =
+        payload.applyTrafficRules && deviceIp
+          ? await this.replayWithTrafficRules(input, deviceIp, parsed.hostname, path, destPort, timeoutMs)
+          : await performReplay(input, { timeoutMs });
+    } catch (err) {
+      return { success: false, error: err instanceof Error ? err.message : String(err) };
+    }
+
+    const tx: MitmTransaction = {
+      transactionId: `replay-${Date.now()}-${Math.random().toString(16).slice(2, 10)}`,
+      deviceIp,
+      timestamp: startedAtISO,
+      hostname: result.hostname || parsed.hostname,
+      destPort: result.destPort || destPort,
+      request: result.request,
+      response: result.response,
+      durationMs: result.durationMs,
+      replay: true
+    };
+    const ev = mitmTransactionToEvent(tx, this.maxBodyRetainedBytes);
+    this.enqueueEvents([ev]);
+    return { success: true, event: ev };
+  }
+
+  /**
+   * Replay with this device's active traffic rules applied. Block / reset / mock short-circuit into a
+   * synthetic response (no upstream call); otherwise request rewrite ops mutate the outgoing input and
+   * response rewrite ops mutate `performReplay`'s (already-decoded) result — reusing the pure rewrite
+   * helpers with no body-codec duplication. Throttle is a host-origin no-op and is deliberately ignored.
+   */
+  private async replayWithTrafficRules(
+    input: ReplayHttpInput,
+    deviceIp: string,
+    hostname: string,
+    path: string,
+    destPort: number,
+    timeoutMs: number | undefined
+  ): Promise<ReplayResult> {
+    const decision = resolveTrafficDecision(this.trafficRules.get(deviceIp), hostname, path);
+    const reqSnapshot: NetworkHttpMessage = {
+      method: (input.method || 'GET').toUpperCase(),
+      url: input.url,
+      headers: { ...(input.headers || {}) },
+      ...(input.body ? { body: input.body, bodyEncoding: input.bodyEncoding || 'text' } : {})
+    };
+    const synthetic = (statusCode: number, statusText: string, body: string): ReplayResult => ({
+      ok: false,
+      request: reqSnapshot,
+      response: { statusCode, statusText, body },
+      durationMs: 0,
+      hostname,
+      destPort
+    });
+
+    if (decision.block) return synthetic(403, 'Blocked by RDS', 'Blocked by Roku Dev Studio traffic rules');
+    if (decision.resetConnection) {
+      return synthetic(0, 'Connection reset (RDS fault)', 'Connection reset by Roku Dev Studio traffic rule');
+    }
+    if (decision.respond) return this.mockReplayResult(decision.respond, reqSnapshot, hostname, destPort);
+
+    // Non-terminal: apply request rewrite ops to the outgoing input, then response ops to the result.
+    const mutatedInput = applyRequestRewriteToInput(input, decision);
+    const result = await performReplay(mutatedInput, { timeoutMs });
+    return applyResponseRewriteToResult(result, decision);
+  }
+
+  /**
+   * Build a synthetic {@link ReplayResult} for a mock ("respond") rule when replaying with rules.
+   * Inline body is served as-is; a Map Local `filePath` is read from disk (missing/unreadable → 502).
+   */
+  private async mockReplayResult(
+    mock: MockResponse,
+    request: NetworkHttpMessage,
+    hostname: string,
+    destPort: number
+  ): Promise<ReplayResult> {
+    const headers: Record<string, string> = {};
+    for (const [k, v] of Object.entries(mock.headers || {})) headers[k.toLowerCase()] = v;
+    if (mock.contentType) headers['content-type'] = mock.contentType;
+    let bodyBuf: Buffer;
+    const filePath = (mock.filePath || '').trim();
+    if (filePath) {
+      try {
+        bodyBuf = await fs.promises.readFile(filePath);
+        if (!headers['content-type']) headers['content-type'] = 'application/octet-stream';
+      } catch (err) {
+        const msg = `Map Local: ${err instanceof Error ? err.message : String(err)}`;
+        return {
+          ok: false,
+          request,
+          response: { statusCode: 502, statusText: 'Map Local Failed', body: msg },
+          durationMs: 0,
+          hostname,
+          destPort,
+          error: msg
+        };
+      }
+    } else {
+      bodyBuf = Buffer.from(mock.body || '', 'utf8');
+    }
+    const ct = (headers['content-type'] || '').toLowerCase();
+    const textual =
+      !ct || ct.startsWith('text/') || /(json|xml|javascript|ecmascript|graphql|csv|x-www-form-urlencoded|svg)/.test(ct);
+    const response: NetworkHttpMessage = {
+      statusCode: mock.statusCode,
+      statusText: mock.statusText || 'Mocked',
+      headers,
+      ...(bodyBuf.length
+        ? { body: textual ? bodyBuf.toString('utf8') : bodyBuf.toString('base64'), bodyEncoding: textual ? 'text' : 'base64' }
+        : {})
+    };
+    return { ok: true, request, response, durationMs: 0, hostname, destPort };
   }
 
   getMitmProxyHostPort(): string {
@@ -483,6 +706,7 @@ export class NetworkInspectorService {
       commonName: info.commonName,
       fingerprintSha256: info.fingerprintSha256,
       createdAt: info.createdAt,
+      expiresAt: info.expiresAt,
       proxyHostPort
     };
   }
@@ -717,7 +941,33 @@ export class NetworkInspectorService {
   /** Fetch the full event (headers + bodies) for the focused request from the on-disk store. */
   async getEventDetail(id: string): Promise<ParsedNetworkEvent | null> {
     if (!id || !this.detailStore) return null;
-    return this.detailStore.get(id);
+    const ev = await this.detailStore.get(id);
+    if (!ev) return ev;
+    const n = this.eventNotes.get(id);
+    // Attach via a shallow copy rather than mutating in place: `detailStore.get` can hand back the
+    // still-buffered (not-yet-flushed) event by reference, and mutating it would risk the note being
+    // serialized into the append-only .ndjson on the next drain (the note is deliberately kept out of
+    // that file) and could leave a stale note behind after a clear. The copy is cheap — body strings
+    // are shared by reference, not duplicated.
+    return n ? { ...ev, note: n } : ev;
+  }
+
+  /**
+   * Attach/replace/clear the session-scoped user note for an event. Trimmed empty removes the note.
+   * The note is stored only in the in-memory side map and mirrored onto the buffered summary object
+   * (so a fresh initial full fetch carries it); the renderer is authoritative for the live UI, so
+   * this does NOT bump `mutationSeq` or flush a push.
+   */
+  setEventNote(id: string, note: string): void {
+    if (!id) return;
+    const trimmed = (note ?? '').trim();
+    if (!trimmed) this.eventNotes.delete(id);
+    else this.eventNotes.set(id, trimmed);
+    const summary = this.eventBuffer.find((e) => e.id === id);
+    if (summary) {
+      if (trimmed) summary.note = trimmed;
+      else delete summary.note;
+    }
   }
 
   /**
@@ -796,6 +1046,7 @@ export class NetworkInspectorService {
       this.eventBuffer = [];
       this.pendingEvents = [];
       this.eventSeq.clear();
+      this.eventNotes.clear();
       this.detailStore?.clear();
     } else {
       const queries = deviceIps.filter((ip) => typeof ip === 'string' && ip.trim());
@@ -805,6 +1056,7 @@ export class NetworkInspectorService {
         if (matches(e)) {
           this.detailStore?.remove(e.id);
           this.eventSeq.delete(e.id);
+          this.eventNotes.delete(e.id);
         }
       }
       this.eventBuffer = this.eventBuffer.filter((e) => !matches(e));
@@ -969,6 +1221,7 @@ export class NetworkInspectorService {
     // Drop captured detail and delete the temp cache file when capture stops / inspector disables.
     this.eventBuffer = [];
     this.eventSeq.clear();
+    this.eventNotes.clear();
     this.rawPacketsByDevice.clear();
     this.findCache.clear();
     this.findCacheSig = '';
@@ -1431,6 +1684,8 @@ export class NetworkInspectorService {
     const store = this.ensureDetailStore();
     const stored = store ? store.put(full) : false;
     const summary = summarizeEvent(full, stored);
+    const n = this.eventNotes.get(full.id);
+    if (n) summary.note = n;
     if (full.mitm) {
       const idx = this.eventBuffer.findIndex((e) => e.id === summary.id);
       if (idx >= 0) {
@@ -1455,6 +1710,7 @@ export class NetworkInspectorService {
       this.detailStore?.remove(e.id);
       this.eventSeq.delete(e.id);
       this.findCache.delete(e.id);
+      this.eventNotes.delete(e.id);
     }
   }
 

@@ -4,7 +4,7 @@
  * on-disk detail store and are fetched before export); a lightweight summary still yields a usable
  * URL/method-only result.
  */
-import type { NetworkHttpMessage, ParsedNetworkEvent } from '@shared/network-inspector/types';
+import type { NetworkHttpMessage, ParsedNetworkEvent, ReplayHttpInput } from '@shared/network-inspector/types';
 
 /** Can this event be meaningfully exported (only full HTTP transactions carry a request)? */
 export function isExportableEvent(ev: ParsedNetworkEvent | null | undefined): boolean {
@@ -24,8 +24,11 @@ function headerValue(msg: NetworkHttpMessage | undefined, name: string): string 
  * Resolve the absolute request URL. The captured `url` is often a path only (the device sends the
  * authority in the `Host` header), so fall back to `Host`/`hostname` + scheme inferred from
  * MITM/destination port.
+ *
+ * Exported so the "Copy URL" detail-pane action can reuse the exact same full-URL resolution as
+ * the cURL export (keeping the two byte-consistent) instead of re-deriving it.
  */
-function absoluteUrl(ev: ParsedNetworkEvent): string {
+export function absoluteUrl(ev: ParsedNetworkEvent): string {
   const raw = ev.httpRequest?.url || '/';
   if (/^https?:\/\//i.test(raw)) return raw;
   const host = headerValue(ev.httpRequest, 'host') || ev.hostname || ev.destIp || '';
@@ -33,6 +36,44 @@ function absoluteUrl(ev: ParsedNetworkEvent): string {
   const scheme = ev.mitm || ev.destPort === 443 ? 'https' : 'http';
   const path = raw.startsWith('/') ? raw : `/${raw}`;
   return `${scheme}://${host}${path}`;
+}
+
+/**
+ * Build the replay input (method / absolute URL / headers / body) for a captured transaction —
+ * shared by one-click Replay and the Compose (Edit & Resend) prefill. Reuses {@link absoluteUrl} so a
+ * path-only captured URL becomes absolute; `bodyEncoding` is preserved so a binary body round-trips
+ * unchanged.
+ */
+/**
+ * Compact "METHOD host/path" label identifying a request — used as a modal subtitle (e.g. the Note
+ * modal) instead of the device IP. Query string is dropped for brevity; falls back to hostname/SNI
+ * for non-HTTP rows. Truncated to fit a header line.
+ */
+export function eventRequestLabel(ev: ParsedNetworkEvent): string {
+  const method = ev.httpRequest?.method ? `${ev.httpRequest.method} ` : '';
+  let target = ev.hostname || ev.sni || ev.destIp || '';
+  const full = absoluteUrl(ev);
+  if (full) {
+    try {
+      const u = new URL(full);
+      target = `${u.host}${u.pathname}`;
+    } catch {
+      target = full;
+    }
+  }
+  const label = `${method}${target}`.trim();
+  return label.length > 90 ? `${label.slice(0, 89)}…` : label;
+}
+
+export function buildReplayInputFromEvent(ev: ParsedNetworkEvent): ReplayHttpInput {
+  const req = ev.httpRequest;
+  return {
+    method: (req?.method || 'GET').toUpperCase(),
+    url: absoluteUrl(ev),
+    headers: { ...(req?.headers || {}) },
+    body: req?.body,
+    bodyEncoding: req?.bodyEncoding
+  };
 }
 
 function shellSingleQuote(value: string): string {
@@ -83,12 +124,45 @@ function harQueryString(url: string): Array<{ name: string; value: string }> {
 }
 
 /** Build one HAR 1.2 entry object for a single transaction (shared by single- and multi-entry export). */
+/**
+ * Map our RDS→origin phase marks (`ev.timing`) onto a HAR 1.2 `timings` object (dns/connect/ssl/
+ * send/wait/receive); missing phases are -1 (HAR's "n/a"). When there are no phase marks we put the
+ * round-trip total in `wait` (the entry-level `time` also carries it) so the block stays valid. The
+ * importer (main/network-session-parse.ts) inverts this, rebuilding `ev.timing` only when a
+ * connection phase (dns/connect/ssl) is present — so this fallback never fabricates a waterfall.
+ */
+function harTimings(ev: ParsedNetworkEvent): Record<string, number> {
+  const t = ev.timing;
+  const n = (v: number | undefined): number => (typeof v === 'number' && v >= 0 ? v : -1);
+  if (t) {
+    return {
+      blocked: -1,
+      dns: n(t.dnsMs),
+      connect: n(t.connectMs),
+      ssl: n(t.tlsMs),
+      send: n(t.sendMs),
+      wait: n(t.waitMs),
+      receive: n(t.receiveMs)
+    };
+  }
+  return {
+    send: 0,
+    wait: typeof ev.durationMs === 'number' && ev.durationMs >= 0 ? ev.durationMs : -1,
+    receive: 0
+  };
+}
+
 function buildHarEntry(ev: ParsedNetworkEvent): Record<string, unknown> {
   const req = ev.httpRequest;
   const res = ev.httpResponse;
   const url = absoluteUrl(ev);
   const reqContentType = headerValue(req, 'content-type') || req?.contentType || '';
   const resContentType = headerValue(res, 'content-type') || res?.contentType || '';
+  // Fold both the device annotation and the user note into the single entry-level comment (HAR 1.2
+  // allows one `comment` per entry). This is machine/interop text, not UI, so it isn't i18n'd.
+  const commentParts: string[] = [];
+  if (ev.deviceIp) commentParts.push(`device ${ev.deviceIp}`);
+  if (ev.note) commentParts.push(`note: ${ev.note}`);
 
   const postData =
     req?.body != null && req.body !== ''
@@ -130,12 +204,9 @@ function buildHarEntry(ev: ParsedNetworkEvent): Record<string, unknown> {
       bodySize: res?.bodyBytes ?? (res?.body ? res.body.length : 0)
     },
     cache: {},
-    timings: {
-      send: 0,
-      wait: typeof ev.durationMs === 'number' && ev.durationMs >= 0 ? ev.durationMs : -1,
-      receive: 0
-    },
-    ...(ev.deviceIp ? { serverIPAddress: ev.destIp, comment: `device ${ev.deviceIp}` } : {})
+    timings: harTimings(ev),
+    ...(ev.deviceIp ? { serverIPAddress: ev.destIp } : {}),
+    ...(commentParts.length ? { comment: commentParts.join(' · ') } : {})
   };
 }
 

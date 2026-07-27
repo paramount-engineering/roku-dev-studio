@@ -327,6 +327,8 @@ var init_channels = __esm({
       NetworkInspectorGetStatus: "network-inspector:get-status",
       NetworkInspectorGetEvents: "network-inspector:get-events",
       NetworkInspectorGetEventDetail: "network-inspector:get-event-detail",
+      /** Set/clear the session-scoped user note for a captured event (in-memory side map). */
+      NetworkInspectorSetEventNote: "network-inspector:set-event-note",
       /** "Find in content" — search URL/headers/bodies across a device's captured transactions. */
       NetworkInspectorFind: "network-inspector:find",
       NetworkInspectorClearEvents: "network-inspector:clear-events",
@@ -345,6 +347,19 @@ var init_channels = __esm({
       NetworkInspectorInstallBpfAccess: "network-inspector:install-bpf-access",
       NetworkInspectorGetTrafficRules: "network-inspector:get-traffic-rules",
       NetworkInspectorSetDeviceTrafficRules: "network-inspector:set-device-traffic-rules",
+      /**
+       * Replay / Edit & Resend — re-issue a captured HTTP transaction FROM THE RDS HOST (renderer →
+       * main, invoke). Request: `{ deviceIp: string; input: { method: string; url: string;
+       * headers?: Record<string,string>; body?: string; bodyEncoding?: 'text'|'base64' };
+       * applyTrafficRules?: boolean; timeoutMs?: number }`. Response: `{ success: true; event:
+       * ParsedNetworkEvent } | { success: false; error: string }`. The returned `event` carries
+       * `mitm: true` + `replay: true` and is ALSO pushed over NetworkInspectorCaptureEvents (the invoke
+       * return just lets the renderer select the new row immediately). One-click Replay bypasses active
+       * traffic rules; Compose opts in via `applyTrafficRules`.
+       */
+      NetworkInspectorReplayRequest: "network-inspector:replay-request",
+      /** Map Local — open a native file picker so a mock rule can serve a local file as its response body. */
+      NetworkInspectorPickMockFile: "network-inspector:pick-mock-file",
       /**
        * Sideload Relay — RDS impersonates a Roku dev server on `/plugin_install`,
        * accepts one build from the IDE, and fans it out (install → launch →
@@ -403,6 +418,11 @@ contextBridge.exposeInMainWorld("settingsApi", {
   closeWindow: () => ipcRenderer.send(IPC2.SettingsWindowClose),
   getNetworkInspectorStatus: () => ipcRenderer.invoke(IPC2.NetworkInspectorGetStatus),
   installBpfAccess: () => ipcRenderer.invoke(IPC2.NetworkInspectorInstallBpfAccess),
+  // Certificate Authority (read-only CA card in the Network Inspector tab). The handlers are
+  // registered globally on ipcMain, so invoke from the settings webContents reaches them.
+  networkInspectorGetCaInfo: () => ipcRenderer.invoke(IPC2.NetworkInspectorGetCaInfo),
+  networkInspectorExportCaPem: () => ipcRenderer.invoke(IPC2.NetworkInspectorExportCaPem),
+  networkInspectorExportCaCert: () => ipcRenderer.invoke(IPC2.NetworkInspectorExportCaCert),
   // Remote Network Inspector (per-location): probe capability + config, and apply config.
   remoteNetworkProbe: (serverUrl) => ipcRenderer.invoke(IPC2.SettingsWindowRemoteNetworkProbe, { serverUrl }),
   remoteNetworkSetConfig: (serverUrl, config) => ipcRenderer.invoke(IPC2.SettingsWindowRemoteNetworkSetConfig, { serverUrl, config }),

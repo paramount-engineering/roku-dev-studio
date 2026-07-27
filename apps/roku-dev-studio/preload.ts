@@ -534,6 +534,8 @@ contextBridge.exposeInMainWorld('roku', {
     ipcRenderer.invoke(IPC.NetworkInspectorGetEvents, { deviceIp, limit, sinceSeq }),
   networkInspectorGetEventDetail: (id: string) =>
     ipcRenderer.invoke(IPC.NetworkInspectorGetEventDetail, { id }),
+  networkInspectorSetEventNote: (payload: { id: string; note: string }) =>
+    ipcRenderer.invoke(IPC.NetworkInspectorSetEventNote, payload),
   networkInspectorFind: (deviceIp: string, options: unknown) =>
     ipcRenderer.invoke(IPC.NetworkInspectorFind, { deviceIp, options }),
   networkInspectorClearEvents: (deviceIps?: string[]) =>
@@ -551,6 +553,17 @@ contextBridge.exposeInMainWorld('roku', {
   openSettings: (section?: string) => ipcRenderer.send(IPC.SettingsOpen, { section }),
   networkInspectorSetDeviceTrafficRules: (deviceIp: string, rules: unknown) =>
     ipcRenderer.invoke(IPC.NetworkInspectorSetDeviceTrafficRules, { deviceIp, rules }),
+  /** Replay / Edit & Resend — re-issue a captured request from the host; result arrives as a new
+   *  'Replayed' row on the existing capture-events channel (the invoke return lets the renderer
+   *  select it immediately). */
+  networkInspectorReplayRequest: (payload: {
+    deviceIp: string;
+    input: unknown;
+    applyTrafficRules?: boolean;
+    timeoutMs?: number;
+  }) => ipcRenderer.invoke(IPC.NetworkInspectorReplayRequest, payload),
+  /** Map Local — open a native file picker for a mock rule's response-body source file. */
+  networkInspectorPickMockFile: () => ipcRenderer.invoke(IPC.NetworkInspectorPickMockFile),
   onNetworkInspectorStatus: (callback: (status: unknown) => void) => {
     const handler = (_event: IpcRendererEvent, status: unknown) => callback(status);
     ipcRenderer.on(IPC.NetworkInspectorStatus, handler);

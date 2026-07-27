@@ -1,6 +1,6 @@
 /**
  * Best-effort detection of *which* local process is holding a TCP port, used to turn an opaque
- * `EADDRINUSE` from the MITM proxy into an actionable warning ("Charles (PID 1234) is using port
+ * `EADDRINUSE` from the MITM proxy into an actionable warning ("another app (PID 1234) is using port
  * 8888 — close it or change the proxy port"). All probing is **asynchronous** (spawned OS tools,
  * short-timeout) so it never blocks the Electron main-process event loop — a synchronous `lsof`/`ps`
  * probe here used to freeze all IPC (including device connect) for seconds on every EADDRINUSE.

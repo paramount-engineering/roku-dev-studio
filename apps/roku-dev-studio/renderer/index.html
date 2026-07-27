@@ -8096,8 +8096,6 @@
       border-bottom: 1px solid var(--border);
     }
     .ni-setup-modal-header h3 { margin: 0; font-size: 15px; font-weight: 600; color: var(--text-primary); }
-    .ni-setup-modal-close { background: transparent; border: none; color: var(--text-secondary); font-size: 22px; line-height: 1; cursor: pointer; }
-    .ni-setup-modal-close:hover { color: var(--text-primary); }
     .ni-setup-modal-body { padding: 16px 18px; overflow-y: auto; }
     /* Guide typography — mirrors the Settings window's .help-blurb / .mcp-* classes so the same
        shared HTML renders identically in both places. */
@@ -8153,6 +8151,103 @@
     /* Traffic Rules needs a larger working area than the filter-help modal — per-host rules,
        mock-response editors, etc. Widen it. */
     .ni-rules-modal { width: min(880px, 94vw); }
+    /* Compose (Edit & Resend) modal — reuses the .ni-rules-* modal chrome (header/body/footer/field)
+       and adds a method+URL row, monospace textareas, the binary-body note and the apply-rules row. */
+    .ni-compose-modal { width: min(640px, 94vw); }
+    /* Pinned region between header and the scrolling body: intro note + Method/URL stay fixed while
+       only Query Parameters, Headers and Body scroll in .ni-rules-body below. */
+    .ni-compose-top { flex: 0 0 auto; padding: 16px 18px; display: flex; flex-direction: column; gap: 14px; border-bottom: 1px solid var(--border); }
+    .ni-compose-modal .ni-rules-body { padding-top: 14px; }
+    .ni-compose-textarea {
+      width: 100%;
+      box-sizing: border-box;
+      resize: vertical;
+      padding: 8px 10px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--bg-deep);
+      color: var(--text-primary);
+      font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+      font-size: 12px;
+      line-height: 1.5;
+    }
+    .ni-compose-textarea:focus { outline: none; border-color: rgba(139, 92, 246, 0.5); }
+    .ni-compose-textarea[readonly] { opacity: 0.6; cursor: not-allowed; }
+    .ni-compose-binary-note { margin: 6px 0 0; font-size: 11px; color: var(--text-muted); line-height: 1.4; }
+    .ni-compose-apply { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-secondary); cursor: pointer; margin-right: auto; }
+    /* In the compose footer, the Apply toggle owns the left (margin-right:auto); status sits with the buttons. */
+    .ni-compose-modal .ni-rules-status { margin-right: 0; }
+    .ni-compose-apply input { margin: 0; }
+    /* Notes modal — per-request note editor opened from the request-pane header's Notes button. Reuses
+       the .ni-rules-* modal chrome; a single prose textarea fills the body. */
+    .ni-note-modal { width: min(520px, 94vw); }
+    /* Note modal subtitle — the request being annotated (METHOD host/path), not the device IP. */
+    .ni-note-subtitle {
+      font-size: 12px;
+      color: var(--text-secondary);
+      font-family: 'JetBrains Mono', ui-monospace, Menlo, Monaco, monospace;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 100%;
+    }
+    .ni-note-textarea {
+      width: 100%;
+      box-sizing: border-box;
+      resize: vertical;
+      min-height: 160px;
+      padding: 8px 10px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--bg-deep);
+      color: var(--text-primary);
+      font: inherit;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+    .ni-note-textarea:focus { outline: none; border-color: rgba(139, 92, 246, 0.5); }
+    .ni-compose-send { display: inline-flex; align-items: center; gap: 6px; }
+    /* The shared .ni-rules-status is always red (error). Compose reuses it for a neutral "Sending…" /
+       success line too, so default it to muted and only go red when flagged. */
+    .ni-compose-status { color: var(--text-muted); }
+    .ni-compose-status.is-error { color: var(--accent-red); }
+    /* Compose: editable name/value tables (query params + headers) that replaced the old free-text
+       areas. Each table scrolls INSIDE a fixed-height box so a long list doesn't grow the modal.
+       overflow:hidden clips the fixed header bar's top corners to the table's border-radius. */
+    .ni-kv-table { border: 1px solid var(--border); border-radius: 6px; background: var(--bg-deep); overflow: hidden; }
+    /* Fixed header bar above the scroll. Its 8px horizontal padding matches the rows' padding so the
+       column labels line up over the row inputs; flex row mirrors the row layout. */
+    .ni-kv-head { display: flex; align-items: center; gap: 6px; padding: 6px 8px; background: rgba(255, 255, 255, 0.04); border-bottom: 1px solid var(--border); }
+    .ni-kv-head-name, .ni-kv-head-value, .ni-kv-head-method, .ni-kv-head-url { font-size: 11px; font-weight: 600; color: var(--text-secondary); box-sizing: border-box; padding-left: 9px; }
+    /* Elevated section title inside a kv-table header row (replaces external label + Name/Value column labels). */
+    .ni-kv-head-title { font-size: 12px; font-weight: 600; color: var(--text-primary); }
+    /* Master (select-all) checkbox at the START of the header row — 14px to sit above the rows' 14px
+       .ni-kv-enabled checkbox (both are the first element at the container's 8px left padding). */
+    .ni-kv-head-select { flex: 0 0 auto; width: 14px; height: 14px; margin: 0; cursor: pointer; }
+    /* Left spacer sized to the row's enable checkbox (the header's own 6px gap supplies the row gap)
+       so the Name/Value labels still sit over the row inputs, which the checkbox shifts right. */
+    .ni-kv-head-spacer { flex: 0 0 auto; width: 14px; }
+    /* Column widths mirror the row inputs below (.ni-kv-name / .ni-kv-value). */
+    .ni-kv-head-name { flex: 0 0 38%; min-width: 0; }
+    .ni-kv-head-value { flex: 1 1 auto; min-width: 0; }
+    /* Method/URL header labels sit over the fixed-width method select and the flexible URL input. */
+    .ni-kv-head-method { flex: 0 0 120px; }
+    .ni-kv-head-url { flex: 1 1 auto; min-width: 0; }
+    /* + Add lives in the header, right-aligned. */
+    .ni-kv-add { margin-left: auto; align-self: center; flex: 0 0 auto; }
+    .ni-kv-scroll { max-height: 176px; min-height: 38px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; padding: 8px; }
+    .ni-kv-row { display: flex; align-items: center; gap: 6px; }
+    /* Postman-style per-row include/exclude checkbox at the START of the row (replaced the × delete). */
+    .ni-kv-enabled { flex: 0 0 auto; width: 14px; height: 14px; margin: 0; cursor: pointer; }
+    .ni-kv-row .ni-kv-name { flex: 0 0 38%; min-width: 0; width: auto; }
+    .ni-kv-row .ni-kv-value { flex: 1 1 auto; min-width: 0; width: auto; }
+    /* Key input reads as secondary (muted fill + secondary text); the value input stays primary. */
+    .ni-kv-row .ni-kv-name { background: rgba(255, 255, 255, 0.03); color: var(--text-secondary); }
+    /* Method/URL edit row (no per-row checkbox, so its header needs no spacer). */
+    .ni-compose-method-url { flex-shrink: 0; }
+    .ni-compose-mu-row { display: flex; align-items: center; gap: 6px; padding: 8px; }
+    .ni-compose-mu-row .ni-compose-method { flex: 0 0 120px; width: auto; }
+    .ni-compose-mu-row .ni-compose-url { flex: 1 1 auto; min-width: 0; width: auto; }
     /* ── Network Inspector: Find modal ("Find in Traffic") ───────────────────────────── */
     /* NON-blocking + docked top-right: no dim backdrop and click-through so the session list (left)
        stays fully visible and interactive while Prev/Next jumps highlight + scroll rows behind. */
@@ -8164,8 +8259,6 @@
     .ni-find-modal { pointer-events: auto; margin: 12px 14px 0 0; background: var(--bg-secondary); border: 1px solid var(--border-hover); border-radius: 12px; width: min(540px, 92vw); display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 22px 64px rgba(0, 0, 0, 0.62); }
     .ni-find-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid var(--border); background: linear-gradient(180deg, rgba(139, 92, 246, 0.05), transparent); }
     .ni-find-title { margin: 0; font-size: 15px; font-weight: 600; color: var(--text-primary); }
-    .ni-find-close { background: transparent; border: none; color: var(--text-secondary); font-size: 20px; cursor: pointer; line-height: 1; }
-    .ni-find-close:hover { color: var(--text-primary); }
     .ni-find-body { padding: 14px 16px; display: flex; flex-direction: column; gap: 12px; }
     /* Each colored search entry is its OWN bordered card: a top row (color swatch, find-bar box,
        delete/trash, hit count) and a row of scope on/off chips beneath. */
@@ -8289,8 +8382,6 @@
     }
     .ni-filter-help-header { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; border-bottom: 1px solid var(--border); }
     .ni-filter-help-header h3 { margin: 0; font-size: 15px; font-weight: 600; }
-    .ni-filter-help-close { background: transparent; border: none; color: var(--text-secondary); font-size: 20px; cursor: pointer; line-height: 1; }
-    .ni-filter-help-close:hover { color: var(--text-primary); }
     .ni-filter-help-body { padding: 16px 18px; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; }
     .ni-filter-help-intro, .ni-filter-help-note { margin: 0; font-size: 12px; line-height: 1.55; color: var(--text-secondary); }
     .ni-filter-help-note { color: var(--text-muted); }
@@ -8312,8 +8403,6 @@
     .ni-rules-device-name { font-weight: 600; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .ni-rules-device-sep { color: var(--text-muted); }
     .ni-rules-device-ip { font-family: 'JetBrains Mono', ui-monospace, Menlo, Monaco, monospace; color: var(--text-secondary); white-space: nowrap; }
-    .ni-rules-close { background: transparent; border: none; color: var(--text-secondary); font-size: 20px; cursor: pointer; line-height: 1; flex: 0 0 auto; }
-    .ni-rules-close:hover { color: var(--text-primary); }
     .ni-rules-body { flex: 1 1 auto; min-height: 0; padding: 16px 18px; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; }
     .ni-rules-note { font-size: 12px; color: var(--text-muted); margin: 0; line-height: 1.5; }
     /* Card sections — mirror the app's grouped settings look */
@@ -8389,11 +8478,14 @@
     .ni-host-rule-scope { flex: 0 0 auto; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; padding: 2px 7px; border-radius: 999px; }
     .ni-host-rule-scope[data-scope="all"] { color: var(--accent-cyan); background: rgba(34, 211, 238, 0.12); border: 1px solid rgba(34, 211, 238, 0.3); }
     .ni-host-rule-scope[data-scope="path"] { color: var(--accent-amber); background: var(--accent-amber-dim); border: 1px solid rgba(245, 158, 11, 0.3); }
-    .ni-host-rule-controls { display: flex; align-items: center; gap: 10px; padding: 10px; }
+    .ni-host-rule-controls { display: flex; align-items: center; gap: 12px; padding: 10px; justify-content: space-between; }
+    /* Logical groups (actions · presets · bandwidth · latency) with vertical-bar separators between. */
+    .ni-rule-group { display: flex; align-items: center; gap: 10px; flex: 0 0 auto; }
+    .ni-rule-sep { flex: 0 0 auto; align-self: stretch; width: 1px; background: var(--border); margin: 2px 0; }
     .ni-host-rule-block, .ni-host-rule-flag { flex: 0 0 auto; }
     /* Bandwidth comes first and fills the gap after the checkboxes; latency is a fixed field next to
        it on the right (mirrors the device-level Bandwidth → Latency order). */
-    .ni-host-rule-controls > .ni-bw-combo { flex: 1 1 auto; width: auto; min-width: 140px; }
+    .ni-host-rule-controls > .ni-bw-combo { flex: 0 0 auto; width: 150px; min-width: 0; }
     .ni-host-latency-wrap { flex: 0 0 auto; width: 104px; }
     .ni-host-latency-wrap .ni-rules-latency { width: 100%; }
     /* Native number steppers are cramped inside unit-suffixed fields and render to the left of the
@@ -8428,8 +8520,15 @@
     .ni-host-rule-controls input[data-host-reset]:checked::after { background: var(--accent-amber); }
     .ni-host-rule-controls input[data-host-mock]:checked { border-color: var(--accent-purple); }
     .ni-host-rule-controls input[data-host-mock]:checked::after { background: var(--accent-purple); }
-    /* Throttle disabled when a terminal action (block/reset/mock) is active. */
+    /* Throttle + presets disabled when a terminal action (block/reset/mock) is active. */
     .ni-host-latency-wrap.is-disabled { opacity: 0.4; }
+    /* Rewrite section is a no-op under a terminal action (Block/Reset/Mock) — dimmed + controls disabled. */
+    .ni-host-rule-rewrite.is-disabled { opacity: 0.45; }
+    /* No Caching / Block Cookies presets: plain (square) checkboxes — non-terminal toggles that stack
+       with rewrites, kept visually distinct from the round Block/Reset/Mock dials. */
+    .ni-host-rule-preset.is-disabled { opacity: 0.4; cursor: not-allowed; }
+    .ni-host-rule-preset input[type="checkbox"] { flex: 0 0 auto; margin: 0; cursor: pointer; accent-color: var(--accent-purple); }
+    .ni-host-rule-preset.is-disabled input[type="checkbox"] { cursor: not-allowed; }
     .ni-host-rule-controls .ni-rules-select:disabled,
     .ni-host-rule-controls .ni-rules-latency:disabled { opacity: 0.4; cursor: not-allowed; }
     .ni-host-rule-remove { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; background: transparent; border: none; border-radius: 6px; color: var(--text-muted); cursor: pointer; line-height: 1; padding: 0; transition: background 0.12s ease, color 0.12s ease; }
@@ -8450,6 +8549,18 @@
     .ni-mock-num { width: 100%; box-sizing: border-box; background: var(--bg-deep); color: var(--text-primary); border: 1px solid var(--border-hover); border-radius: 6px; padding: 5px 8px; font: inherit; font-size: 12px; }
     .ni-rules-ct { width: 100%; box-sizing: border-box; background: var(--bg-deep); color: var(--text-primary); border: 1px solid var(--border-hover); border-radius: 6px; padding: 5px 8px; font: inherit; font-size: 12px; }
     .ni-rules-mock-body { width: 100%; box-sizing: border-box; min-height: 88px; max-height: 260px; overflow-y: auto; background: var(--bg-deep); color: var(--text-primary); border: 1px solid var(--border-hover); border-radius: 6px; padding: 6px 8px; font-family: ui-monospace, monospace; font-size: 12px; resize: vertical; }
+    .ni-rules-mock-body:disabled { opacity: 0.5; cursor: not-allowed; }
+    /* Map Local: serve a local file as the mock response body. */
+    .ni-mock-file-row { display: flex; align-items: flex-end; gap: 8px; }
+    .ni-mock-field-file { flex: 1 1 auto; min-width: 0; }
+    .ni-mock-file { width: 100%; box-sizing: border-box; background: var(--bg-deep); color: var(--text-primary); border: 1px solid var(--border-hover); border-radius: 6px; padding: 5px 8px; font: inherit; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .ni-mock-file-pick { flex: 0 0 auto; }
+    .ni-mock-file-clear { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; padding: 0; background: transparent; color: var(--text-muted); border: 1px solid var(--border-hover); border-radius: 6px; cursor: pointer; }
+    .ni-mock-file-clear:hover { color: var(--text-primary); }
+    .ni-mock-file-clear[hidden] { display: none; }
+    .ni-mock-file-hint { font-size: 11px; color: var(--text-muted); }
+    .ni-mock-file-serving { font-size: 11px; color: var(--text-muted); font-style: italic; }
+    .ni-mock-file-serving[hidden] { display: none; }
     /* ── Rewrite editor (per-host rule) ─────────────────────────────────────── */
     .ni-host-rule-rewrite { display: flex; flex-direction: column; gap: 8px; margin: 0 10px 10px; padding: 8px; border: 1px dashed var(--border-hover); border-radius: 6px; background: rgba(255,255,255,0.02); }
     .ni-rw-head { display: flex; align-items: center; gap: 8px; }
@@ -8468,6 +8579,11 @@
     .ni-rules-add-input { flex: 1; background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-hover); border-radius: 6px; padding: 6px 10px; font: inherit; font-size: 12px; }
     .ni-rules-footer { flex: 0 0 auto; display: flex; align-items: center; gap: 10px; justify-content: flex-end; padding: 12px 18px; border-top: 1px solid var(--border); }
     .ni-rules-status { margin-right: auto; font-size: 12px; color: var(--accent-red); }
+    /* Shared header-bar height: the session-list sidebar head and the two detail-pane tab heads
+       (.ni-contents-pane-head) all floor to this same min-height so the three columns' header bars
+       line up. The sidebar options stretch to fill it (align-items: stretch, no vertical padding);
+       the pane heads keep their content within it via a matching min-height + trimmed vertical
+       padding below. */
     .ni-sidebar-head {
       display: flex;
       align-items: stretch;
@@ -8607,7 +8723,7 @@
       color: var(--text-muted);
       font-size: 12px;
     }
-    .ni-charles-workspace {
+    .ni-detail-workspace {
       flex: 1;
       min-height: 0;
       display: flex;
@@ -8753,6 +8869,10 @@
       align-self: center;
       justify-self: center;
       font-size: 11px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 3px;
     }
     .ni-sidebar-host {
       grid-column: 3;
@@ -9008,6 +9128,22 @@
       padding: 1px 6px;
       border-radius: 8px;
     }
+    /* ── Focus hosts ──────────────────────────────────────────────────────────────────
+       Post-paint decorations (network-focus-decorations.ts). Focusing dims every non-focused
+       sequence row / host group; hover lifts the dim so a dimmed row stays clickable. Focused hosts
+       get bold + an auto-assigned per-host color (via the `--focus-color` custom property set by the
+       decorator; falls back to cyan). The primary signal is still the dimming of everything else.
+       Focus is driven entirely by the right-click context menu. Shared with the offline Session
+       Viewer via the CSS extracted from this <style> block. */
+    .ni-sidebar-row.ni-dimmed,
+    .ni-struct-host.ni-dimmed { opacity: 0.4; transition: opacity .12s ease; }
+    .ni-sidebar-row.ni-dimmed:hover,
+    .ni-struct-host.ni-dimmed:hover { opacity: 1; }
+    .ni-sidebar-row.ni-focused .ni-sidebar-host,
+    .ni-struct-host.ni-focused > .ni-struct-host-row .ni-struct-host-name {
+      font-weight: 700;
+      color: var(--focus-color, var(--accent-cyan));
+    }
     /* No container indent: leaves span the full sidebar width so a Find match bar can sit flush at
        the left edge (using what used to be empty indent gutter). The nesting indent moves onto the
        leaf's own left padding below, so request text stays indented under its host. */
@@ -9120,16 +9256,6 @@
     .ni-port-modal-icon.is-resolved { color: #6ee7b7; }
     .ni-port-modal-msg-ok { color: var(--text-primary); margin-bottom: 0; }
     .ni-port-modal-header h3 { margin: 0; font-size: 14px; font-weight: 700; flex: 1 1 auto; color: var(--text-primary); }
-    .ni-port-modal-close {
-      border: none;
-      background: transparent;
-      color: var(--text-secondary);
-      font-size: 20px;
-      line-height: 1;
-      cursor: pointer;
-      padding: 0 4px;
-    }
-    .ni-port-modal-close:hover { color: var(--text-primary); }
     .ni-port-modal-body { padding: 14px 16px; }
     .ni-port-modal-msg { margin: 0 0 12px; font-size: 12.5px; line-height: 1.5; color: var(--text-secondary); }
     .ni-port-modal-inline {
@@ -9227,15 +9353,15 @@
       grid-template-columns: 1fr;
       overflow: hidden;
     }
-    .ni-charles-workspace[data-detail-layout="columns"] .ni-contents-split {
+    .ni-detail-workspace[data-detail-layout="columns"] .ni-contents-split {
       grid-template-rows: 1fr;
       grid-template-columns: 1fr 1fr;
     }
-    .ni-charles-workspace[data-detail-layout="columns"] .ni-contents-pane {
+    .ni-detail-workspace[data-detail-layout="columns"] .ni-contents-pane {
       border-top: none;
       border-left: 1px solid var(--border);
     }
-    .ni-charles-workspace[data-detail-layout="columns"] .ni-contents-pane:first-child {
+    .ni-detail-workspace[data-detail-layout="columns"] .ni-contents-pane:first-child {
       border-left: none;
     }
     .ni-contents-pane {
@@ -9246,6 +9372,14 @@
       overflow: hidden;
     }
     .ni-contents-pane:first-child { border-top: none; }
+    /* Stacked (vertical) layout only: give the Response pane a clear divider + a little breathing room
+       above it so its header doesn't flow straight out of the Request pane's waterfall. The columns
+       (side-by-side) layout already separates the panes with a vertical border, so this is scoped to
+       the stacked layout and never applies there. */
+    .ni-detail-workspace[data-detail-layout="stacked"] .ni-contents-pane[data-ni-response-pane] {
+      border-top: 2px solid var(--border-hover);
+      margin-top: 6px;
+    }
     .ni-contents-scroll,
     [data-ni-request-body],
     [data-ni-response-body] {
@@ -9255,6 +9389,13 @@
       overscroll-behavior: contain;
       scroll-behavior: auto;
       background: #0a0a10;
+      /* Flex column so a tab can stack an inner scroll region above a fixed-height footer — the
+         request Overview pins its timing waterfall in a `.ni-overview-pinned` footer while the rows
+         above scroll. Tabs with no footer (Headers/Cookies/Body, and the whole Response pane) put a
+         single child here: a tall <pre>/table simply overflows and THIS element scrolls as before, so
+         nothing regresses. */
+      display: flex;
+      flex-direction: column;
     }
     .ni-contents-scroll .ni-code-block,
     [data-ni-request-body] .ni-code-block,
@@ -9275,11 +9416,15 @@
          with the sidebar open). Children below keep their own intrinsic size; the row reflows. */
       flex-wrap: wrap;
       flex-shrink: 0;
+      /* Shares the 40px header-bar height with .ni-sidebar-head so the three columns' heads line up.
+         Vertical padding is trimmed to 4px (from 6px) so the tab pill + padding stays within the
+         40px floor instead of overshooting it — otherwise these bars rendered ~4px taller than the
+         sidebar head. */
       min-height: 40px;
       box-sizing: border-box;
       border-bottom: 1px solid var(--border);
       background: var(--bg-tertiary);
-      padding: 6px 8px 6px 12px;
+      padding: 4px 8px 4px 12px;
       /* Positioning context for the centered "Body Truncated" badge. */
       position: relative;
     }
@@ -9334,7 +9479,7 @@
       background: rgba(250, 204, 21, 0.18);
     }
     .ni-format-info-btn[hidden] { display: none !important; }
-    .ni-charles-workspace[data-detail-layout="columns"] [data-ni-request-pane] > .ni-contents-pane-head {
+    .ni-detail-workspace[data-detail-layout="columns"] [data-ni-request-pane] > .ni-contents-pane-head {
       border-right: 1px solid var(--border);
     }
     .ni-contents-label {
@@ -9408,6 +9553,13 @@
       color: var(--accent-green);
       border-color: rgba(34, 197, 94, 0.5);
       background: rgba(34, 197, 94, 0.12);
+    }
+    /* Notes button when the selected request has a note → tinted the note purple (matches the row
+       marker); without a note it keeps the default .ni-pane-tool-btn styling. */
+    .ni-note-btn.has-note {
+      color: #a78bfa;
+      border-color: rgba(167, 139, 250, 0.5);
+      background: rgba(167, 139, 250, 0.14);
     }
     .ni-pane-tool-btn .icon { pointer-events: none; }
     /* Split "copy" control: a primary copy-body button + a caret that opens a menu for the
@@ -9484,6 +9636,12 @@
     .ni-copy-dropdown-item:hover .ni-copy-item-icon {
       color: var(--text-primary);
     }
+    /* Replay split-menu: reuses .ni-copy-menu / .ni-pane-tool-btn / .ni-copy-dropdown styling. The
+       whole menu is shown only for exportable rows — the `hidden` attribute needs !important to beat
+       the .ni-copy-menu display:inline-flex it also carries. */
+    .ni-replay-menu[hidden] {
+      display: none !important;
+    }
     .ni-pane-tab {
       border: none;
       background: transparent;
@@ -9559,6 +9717,47 @@
       padding: 8px 10px;
       border-top: 1px solid var(--border);
     }
+    .ni-row-note-marker {
+      display: inline-flex;
+      align-items: center;
+      color: #a78bfa;
+    }
+    /* Per-request pinned bottom FOOTER of the request Overview: the timing waterfall (when present)
+       stacked directly above the always-present Note. It sits OUTSIDE the scrolling table region as a
+       non-scrolling flow sibling inside the flex-column `.ni-contents-scroll`, so the vertical
+       scrollbar is confined to the rows ABOVE it and the footer stays fixed at the pane bottom. A
+       distinct elevated background (vs the darker #0a0a10 scrolling Overview) + top hairline + upward
+       depth shadow read it as a separate pinned strip. Omitted entirely when there is no timing data
+       (the per-request Note now lives in a header-opened modal, not inline here). */
+    .ni-overview-pinned {
+      flex: 0 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      padding: 14px 10px 10px;
+      background: var(--bg-tertiary);
+      border-top: 1px solid var(--border);
+      /* Depth: cast an upward shadow over the scrolling Overview so scrolled rows recede behind it. */
+      box-shadow: 0 -12px 22px -10px rgba(0, 0, 0, 0.7);
+    }
+    .ni-parsed-scroll {
+      padding-bottom: 8px;
+    }
+    .ni-kv-table thead th,
+    .ni-cookie-table thead th {
+      width: auto;
+      text-align: left;
+    }
+    .ni-kv-table td:first-child,
+    .ni-cookie-table td:first-child {
+      width: 180px;
+      white-space: nowrap;
+      color: var(--text-secondary);
+    }
+    .ni-cookie-attrs {
+      color: var(--text-muted);
+      font-size: 11px;
+    }
     .ni-overview-url-link {
       display: inline;
       margin: 0;
@@ -9582,6 +9781,67 @@
       outline-offset: 2px;
       border-radius: 2px;
     }
+    .ni-waterfall {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    /* Request-start line above the waterfall bar (UTC · local) — the combined timing model. */
+    .ni-wf-started {
+      font-size: 11px;
+      color: var(--text-secondary);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+    .ni-wf-started-label {
+      color: var(--text-muted);
+      font-weight: 600;
+      margin-right: 8px;
+      font-family: inherit;
+    }
+    .ni-waterfall-bar {
+      display: flex;
+      width: 100%;
+      height: 10px;
+      border-radius: 3px;
+      overflow: hidden;
+      background: rgba(255, 255, 255, 0.04);
+    }
+    .ni-wf-seg {
+      display: block;
+      height: 100%;
+      min-width: 1px;
+    }
+    .ni-waterfall-legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px 12px;
+      font-size: 11px;
+      color: var(--text-secondary);
+    }
+    .ni-wf-legend-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      white-space: nowrap;
+    }
+    /* Total (sum of phases) — swatch-less, emphasized to read as the summary of the breakdown. */
+    .ni-wf-total { font-weight: 600; color: var(--text-primary); }
+    .ni-wf-swatch {
+      display: inline-block;
+      width: 9px;
+      height: 9px;
+      border-radius: 2px;
+      flex: none;
+    }
+    .ni-wf-legend-ms {
+      color: var(--text-muted);
+    }
+    .ni-wf-dns { background: #34d399; }
+    .ni-wf-connect { background: #fbbf24; }
+    .ni-wf-tls { background: #a78bfa; }
+    .ni-wf-send { background: #22d3ee; }
+    .ni-wf-wait { background: #f472b6; }
+    .ni-wf-receive { background: #60a5fa; }
     .ni-pane-empty {
       padding: 16px;
       color: var(--text-muted);
@@ -15490,7 +15750,7 @@
               </div>
             </div>
             <div class="card-body">
-              <div class="ni-charles-workspace" data-ni-workspace data-detail-layout="columns">
+              <div class="ni-detail-workspace" data-ni-workspace data-detail-layout="columns">
                 <aside class="ni-sidebar" data-ni-session-pane data-view="sequence">
                   <div class="ni-sidebar-head">
                     <button type="button" class="ni-group-toggle" data-ni-toggle-all-groups tabindex="-1" aria-hidden="true" title="Collapse all groups" data-i18n-title="networkInspector.collapseAllGroups" aria-label="Collapse all groups" data-i18n-aria-label="networkInspector.collapseAllGroups">

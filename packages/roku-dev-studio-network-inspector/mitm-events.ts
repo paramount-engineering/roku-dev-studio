@@ -56,6 +56,8 @@ export function mitmTransactionToEvent(
     httpRequest: request,
     httpResponse: response,
     mitm: true,
-    durationMs: tx.durationMs
+    ...(tx.replay ? { replay: true } : {}),
+    durationMs: tx.durationMs,
+    timing: tx.timing
   };
 }

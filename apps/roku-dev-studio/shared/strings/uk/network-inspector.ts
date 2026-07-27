@@ -117,7 +117,6 @@ export const networkInspector = {
   secTls: 'TLS',
   secTiming: 'Час виконання',
   secSize: 'Розмір',
-  secRequestHeaders: 'Заголовки запиту',
   viewUrlTitle: 'Переглянути URL і параметри запиту',
   tagsMitmDecrypted: 'MITM · Розшифровано',
   protocolHttpsDecrypted: 'HTTPS (розшифровано через проксі MITM Roku Dev Studio)',
@@ -420,5 +419,89 @@ export const networkInspector = {
   setupBadgeTitlePrereq: (title: string): string => `${title} — натисніть для інструкцій з налаштування`,
   setupBadgeTitle: 'Налаштування захоплення через точку доступу — натисніть для інструкцій',
   // Header port badge.
-  portBadgeTitle: (title: string): string => `${title} — натисніть для деталей`
+  portBadgeTitle: (title: string): string => `${title} — натисніть для деталей`,
+
+  // ══ Network Inspector additions ═══════════════════════════════════════════════
+  // Copy URL action (network-detail-view.ts copy menu).
+  copyUrl: 'Копіювати URL',
+
+  // Traffic-rule presets — device-wide toggles (traffic-rules-modal.ts).
+  noCachingTitle: 'Без кешування',
+  noCachingDesc: 'Видаляти заголовки кешування та примусово встановлювати Cache-Control: no-store у відповідях.',
+  blockCookiesTitle: 'Блокувати Cookie',
+  blockCookiesDesc: 'Видаляти Cookie із запитів і Set-Cookie з відповідей.',
+
+  // Parsed detail viewers — Cookies tabs (network-detail.ts, network-parsed-tables.ts).
+  tabCookies: 'Cookie',
+  colName: 'Ім’я',
+  colValue: 'Значення',
+  colAttributes: 'Атрибути',
+  noResponseCookies: 'Ця відповідь не встановлює cookie.',
+
+  // Editable per-request note (network-detail.ts Overview + list marker).
+  secNote: 'Нотатка',
+  notePlaceholder: 'Додати нотатку…',
+  noteAriaLabel: 'Нотатка для цього запиту',
+  noteMarkerAria: 'Має нотатку',
+
+  // Map Local — file-backed mock response (traffic-rules-modal.ts + proxy).
+  mockFieldFile: 'Локальний файл',
+  mockChooseFile: 'Вибрати файл…',
+  mockFilePlaceholder: 'Файл не вибрано',
+  mockFileClearAria: 'Очистити зіставлений файл',
+  mockFileServingBody: 'Тіло відповіді надається із зіставленого файлу.',
+  mapLocalHint:
+    'Надавати локальний файл як тіло відповіді. Content-Type визначається за розширенням файлу, якщо не встановлено вище.',
+  mapLocalDialogTitle: 'Виберіть файл для надання',
+  mapLocalAllFilesFilter: 'Усі файли',
+
+  // Focus hosts (network-session-view.ts + sidebar toggles).
+  focusHost: (host: string): string => `Фокус на ${host}`,
+  unfocusHost: (host: string): string => `Прибрати фокус з ${host}`,
+  clearFocusedHosts: 'Очистити сфокусовані хости',
+
+  // Replay / Compose (network-detail-view.ts action + network-compose-modal.ts).
+  replay: 'Повторити',
+  replayTitle: 'Повторити цей запит з хоста',
+  replayAria: 'Повторити запит',
+  moreReplayOptions: 'Більше параметрів повтору',
+  replayNow: 'Повторити зараз',
+  composeItem: 'Редагувати та надіслати знову…',
+  composeTitle: 'Редагувати та надіслати знову',
+  composeNote: 'Повторно надіслати цей запит з хоста. Відредагуйте метод, URL, заголовки або тіло перед надсиланням.',
+  composeMethodLabel: 'Метод',
+  composeUrlLabel: 'URL',
+  composeParamsLabel: 'Параметри запиту',
+  composeAddRow: '+ Додати',
+  composeRowEnabledAria: 'Включити цей запис',
+  composeSelectAllAria: 'Перемкнути всі записи',
+  composeHeadersLabel: 'Заголовки',
+  composeBodyLabel: 'Тіло',
+  composeBodyPlaceholder: 'Тіло запиту',
+  composeBinaryBodyNote:
+    'Захоплене тіло запиту двійкове й надсилається без змін; його не можна редагувати тут.',
+  composeApplyRules: 'Застосувати активні правила трафіку',
+  composeApplyRulesTitle: 'Пропустити повтор через правила блокування, перезапису та обмеження цього пристрою',
+  composeSend: 'Надіслати',
+  composeSending: 'Надсилання…',
+  replayAddedToList: 'Відповідь додано до списку сеансів.',
+  replayFailed: (err: string): string => `Не вдалося повторити: ${err}`,
+  replayInvalidUrl: 'Введіть дійсний URL http:// або https://.',
+  replayUnavailable: 'Повтор недоступний у цій збірці.',
+  replayStarting: 'Повторення…',
+  tagsReplayed: 'Повторено',
+  replayedBadgeTitle: 'Цю відповідь отримано повторенням захопленого запиту з хоста',
+
+  // Timing waterfall (network-detail.ts Overview timing section).
+  ovDuration: 'Тривалість',
+  wfDns: 'DNS',
+  wfConnect: 'Підключення',
+  wfTls: 'TLS',
+  wfSend: 'Надсилання',
+  wfWait: 'Очікування (TTFB)',
+  wfReceive: 'Завантаження',
+  wfMs: (n: number): string => `${n} ms`,
+  wfSeconds: (s: number): string => `${s.toFixed(2)} с`,
+  wfSegmentTitle: (label: string, value: string): string => `${label}: ${value}`,
+  wfAria: 'Розподіл часу запиту'
 };

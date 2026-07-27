@@ -20,6 +20,7 @@ type RokuApi = {
     deviceIp: string,
     rules: DeviceTrafficRules | null
   ) => Promise<{ success?: boolean }>;
+  networkInspectorPickMockFile?: () => Promise<{ success?: boolean; filePath?: string; canceled?: boolean }>;
 };
 
 // Bandwidth presets (download cap in kbps; 0 = unlimited). A function (not a const)
@@ -90,7 +91,7 @@ function parseHostInput(raw: string): { host: string; path: string } | null {
 }
 
 // ── Rewrite editor ────────────────────────────────────────────────────────────────────────────
-// Charles-style per-rule rewrite ops (non-terminal: the request is still forwarded). Each op is a
+// Per-rule rewrite ops (non-terminal: the request is still forwarded). Each op is a
 // {target, type, match?, value?, regex?} row. The available types depend on the target, and which
 // of match/value/regex apply depends on the type (see rewriteFieldConfig).
 type RwType = RewriteOp['type'];
@@ -223,12 +224,15 @@ function hostRowHtml(rule: HostTrafficRule): string {
   const kbps = rule.throttle?.downKbps && rule.throttle.downKbps > 0 ? rule.throttle.downKbps : 0;
   const latency = rule.throttle?.latencyMs && rule.throttle.latencyMs > 0 ? rule.throttle.latencyMs : '';
   const resetChecked = rule.resetConnection ? ' checked' : '';
+  const noCachingChecked = rule.noCaching ? ' checked' : '';
+  const blockCookiesChecked = rule.blockCookies ? ' checked' : '';
   const mock = rule.respond;
   const mockOn = mock ? ' checked' : '';
   const mockStatus = mock?.statusCode ?? 200;
   const mockCt = escapeHtml(mock?.contentType || 'application/json');
   const mockDelay = mock?.delayMs && mock.delayMs > 0 ? mock.delayMs : '';
   const mockBody = escapeHtml(mock?.body || '');
+  const mockFile = escapeHtml(mock?.filePath || '');
   // `data-mock-open` reflects whether the canned-response editor starts expanded. The host + path
   // pair is the rule's identity (stored in data-host / data-path) so saving never re-parses the UI.
   return `<div class="ni-host-rule" data-host="${hostAttr}" data-path="${pathAttr}" data-mock-open="${mock ? '1' : '0'}">
@@ -239,10 +243,19 @@ function hostRowHtml(rule: HostTrafficRule): string {
       <button type="button" class="ni-host-rule-remove" data-host-remove title="${S.networkInspector.deleteRule}" aria-label="${S.networkInspector.deleteRule}"><span class="icon icon-xs"><svg><use href="#icon-trash"/></svg></span></button>
     </div>
     <div class="ni-host-rule-controls">
-      <label class="ni-host-rule-block"><input type="checkbox" data-host-block${blockChecked} /> ${S.networkInspector.block}</label>
-      <label class="ni-host-rule-flag" title="${S.networkInspector.resetTitle}"><input type="checkbox" data-host-reset${resetChecked} /> ${S.common.reset}</label>
-      <label class="ni-host-rule-flag" title="${S.networkInspector.mockTitle}"><input type="checkbox" data-host-mock${mockOn} /> ${S.networkInspector.mock}</label>
+      <div class="ni-rule-group">
+        <label class="ni-host-rule-block"><input type="checkbox" data-host-block${blockChecked} /> ${S.networkInspector.block}</label>
+        <label class="ni-host-rule-flag" title="${S.networkInspector.resetTitle}"><input type="checkbox" data-host-reset${resetChecked} /> ${S.common.reset}</label>
+        <label class="ni-host-rule-flag" title="${S.networkInspector.mockTitle}"><input type="checkbox" data-host-mock${mockOn} /> ${S.networkInspector.mock}</label>
+      </div>
+      <span class="ni-rule-sep" aria-hidden="true"></span>
+      <div class="ni-rule-group">
+        <label class="ni-host-rule-flag ni-host-rule-preset" title="${S.networkInspector.noCachingDesc}"><input type="checkbox" data-host-no-caching${noCachingChecked} /> ${S.networkInspector.noCachingTitle}</label>
+        <label class="ni-host-rule-flag ni-host-rule-preset" title="${S.networkInspector.blockCookiesDesc}"><input type="checkbox" data-host-block-cookies${blockCookiesChecked} /> ${S.networkInspector.blockCookiesTitle}</label>
+      </div>
+      <span class="ni-rule-sep" aria-hidden="true"></span>
       ${bwComboHtml(kbps, 'data-host-bw')}
+      <span class="ni-rule-sep" aria-hidden="true"></span>
       <div class="ni-rules-input-suffix ni-host-latency-wrap" title="${S.networkInspector.addedLatencyMsTitle}">
         <input type="number" class="ni-rules-latency" data-host-latency min="0" max="10000" step="10" placeholder="${S.networkInspector.latencyPlaceholder}" value="${latency}" />
         <span class="ni-rules-suffix-unit">ms</span>
@@ -266,6 +279,16 @@ function hostRowHtml(rule: HostTrafficRule): string {
           </div>
         </label>
       </div>
+      <div class="ni-mock-file-row">
+        <label class="ni-mock-field ni-mock-field-file">
+          <span class="ni-mock-field-label">${S.networkInspector.mockFieldFile}</span>
+          <input type="text" class="ni-mock-file" data-mock-file readonly placeholder="${S.networkInspector.mockFilePlaceholder}" value="${mockFile}" title="${mockFile}" />
+        </label>
+        <button type="button" class="btn btn-secondary btn-sm ni-mock-file-pick" data-mock-file-pick>${S.networkInspector.mockChooseFile}</button>
+        <button type="button" class="ni-mock-file-clear" data-mock-file-clear title="${S.networkInspector.mockFileClearAria}" aria-label="${S.networkInspector.mockFileClearAria}"><span class="icon icon-xs"><svg><use href="#icon-x"/></svg></span></button>
+      </div>
+      <div class="ni-mock-file-hint">${S.networkInspector.mapLocalHint}</div>
+      <div class="ni-mock-file-serving" data-mock-file-serving hidden>${S.networkInspector.mockFileServingBody}</div>
       <textarea class="ni-rules-mock-body" data-mock-body rows="3" placeholder="${S.networkInspector.mockBodyPlaceholder}">${mockBody}</textarea>
     </div>
     <div class="ni-host-rule-rewrite" data-host-rewrite>
@@ -288,10 +311,13 @@ function readMockResponse(row: Element): MockResponse | undefined {
   const delayRaw = (row.querySelector('[data-mock-delay]') as HTMLInputElement | null)?.value || '';
   const delayMs = parseInt(delayRaw, 10);
   const body = (row.querySelector('[data-mock-body]') as HTMLTextAreaElement | null)?.value ?? '';
+  const filePath = ((row.querySelector('[data-mock-file]') as HTMLInputElement | null)?.value || '').trim();
   const mock: MockResponse = { statusCode: Number.isFinite(statusCode) ? statusCode : 200 };
   if (contentType) mock.contentType = contentType;
   if (Number.isFinite(delayMs) && delayMs > 0) mock.delayMs = delayMs;
-  if (body) mock.body = body;
+  // Map Local: a mapped file takes precedence over the inline body (the proxy reads it per-request).
+  if (filePath) mock.filePath = filePath;
+  else if (body) mock.body = body;
   return mock;
 }
 
@@ -360,7 +386,7 @@ export async function openTrafficRulesModal(opts: {
             <span class="ni-rules-device-ip device-ip">${escapeHtml(opts.deviceIp)}</span>
           </div>
         </div>
-        <button type="button" class="modal-close ni-rules-close" title="${S.common.close}" aria-label="${S.common.close}">×</button>
+        <button type="button" class="modal-close ni-rules-close" title="${S.common.close}" aria-label="${S.common.close}"><span class="icon icon-sm"><svg><use href="#icon-x"/></svg></span></button>
       </div>
       <div class="ni-rules-body">
         <p class="ni-rules-note">${S.networkInspector.rulesNote}</p>
@@ -375,6 +401,20 @@ export async function openTrafficRulesModal(opts: {
               <span class="ni-rules-toggle-desc">${S.networkInspector.blockAllDesc}</span>
             </span>
             <input type="checkbox" class="ni-rules-switch" data-block-all${current.blockAll ? ' checked' : ''} />
+          </label>
+          <label class="ni-rules-toggle-row">
+            <span class="ni-rules-toggle-text">
+              <span class="ni-rules-toggle-title">${S.networkInspector.noCachingTitle}</span>
+              <span class="ni-rules-toggle-desc">${S.networkInspector.noCachingDesc}</span>
+            </span>
+            <input type="checkbox" class="ni-rules-switch" data-no-caching${current.noCaching ? ' checked' : ''} />
+          </label>
+          <label class="ni-rules-toggle-row">
+            <span class="ni-rules-toggle-text">
+              <span class="ni-rules-toggle-title">${S.networkInspector.blockCookiesTitle}</span>
+              <span class="ni-rules-toggle-desc">${S.networkInspector.blockCookiesDesc}</span>
+            </span>
+            <input type="checkbox" class="ni-rules-switch" data-block-cookies${current.blockCookies ? ' checked' : ''} />
           </label>
           <div class="ni-rules-field-grid" data-dev-throttle>
             <div class="ni-rules-field">
@@ -517,6 +557,39 @@ export async function openTrafficRulesModal(opts: {
     if (bw) bw.disabled = disable;
     if (lat) lat.disabled = disable;
     (row.querySelector('.ni-host-latency-wrap') as HTMLElement | null)?.classList.toggle('is-disabled', disable);
+    // The No Caching / Block Cookies presets expand into rewrite ops on the forward path only, so a
+    // terminal action (block/reset/mock) makes them a no-op — disable (but keep) them to reflect that,
+    // matching how the device-level presets disable under Block All.
+    const noCaching = row.querySelector('[data-host-no-caching]') as HTMLInputElement | null;
+    const blockCookies = row.querySelector('[data-host-block-cookies]') as HTMLInputElement | null;
+    if (noCaching) noCaching.disabled = disable;
+    if (blockCookies) blockCookies.disabled = disable;
+    row.querySelectorAll('.ni-host-rule-preset').forEach((el) => el.classList.toggle('is-disabled', disable));
+    // Rewrite ops apply on the forward path only, so a terminal action makes the whole Rewrite section
+    // a no-op — disable + dim its rows, regex toggles, and the "+ Add Rewrite" button (matching the hint).
+    const rewrite = row.querySelector('[data-host-rewrite]') as HTMLElement | null;
+    if (rewrite) {
+      rewrite.classList.toggle('is-disabled', disable);
+      rewrite
+        .querySelectorAll('input, select, button')
+        .forEach((el) => ((el as HTMLInputElement).disabled = disable));
+    }
+  };
+
+  // Map Local: reflect a mapped file in a rule's mock editor. When a file is set it takes precedence
+  // over the inline body — the textarea is disabled/dimmed, the "served from file" note shows, and the
+  // Clear button appears. The read-only path field doubles as its own (full-path) tooltip.
+  const syncMockFileState = (row: Element): void => {
+    const fileInput = row.querySelector('[data-mock-file]') as HTMLInputElement | null;
+    const filePath = (fileInput?.value || '').trim();
+    const hasFile = !!filePath;
+    if (fileInput) fileInput.title = filePath;
+    const clear = row.querySelector('[data-mock-file-clear]') as HTMLElement | null;
+    if (clear) clear.hidden = !hasFile;
+    const serving = row.querySelector('[data-mock-file-serving]') as HTMLElement | null;
+    if (serving) serving.hidden = !hasFile;
+    const body = row.querySelector('[data-mock-body]') as HTMLTextAreaElement | null;
+    if (body) body.disabled = hasFile;
   };
 
   const addHost = (): void => {
@@ -538,7 +611,7 @@ export async function openTrafficRulesModal(opts: {
     if (addInput) addInput.value = '';
     syncEmptyHint();
     const newRow = hostList.lastElementChild;
-    if (newRow) syncRowThrottle(newRow);
+    if (newRow) { syncRowThrottle(newRow); syncMockFileState(newRow); }
     syncHostThrottleBounds();
   };
 
@@ -613,6 +686,35 @@ export async function openTrafficRulesModal(opts: {
       if (row) startEditUrl(row as HTMLElement);
       return;
     }
+    const filePick = target.closest('[data-mock-file-pick]');
+    if (filePick) {
+      const row = filePick.closest('.ni-host-rule');
+      const fileInput = row?.querySelector('[data-mock-file]') as HTMLInputElement | null;
+      if (row && fileInput) {
+        void (async () => {
+          try {
+            const res = await api?.networkInspectorPickMockFile?.();
+            if (res?.success && res.filePath) {
+              fileInput.value = res.filePath;
+              syncMockFileState(row);
+            }
+          } catch {
+            /* picker failed / cancelled — leave the current mapping untouched */
+          }
+        })();
+      }
+      return;
+    }
+    const fileClear = target.closest('[data-mock-file-clear]');
+    if (fileClear) {
+      const row = fileClear.closest('.ni-host-rule');
+      const fileInput = row?.querySelector('[data-mock-file]') as HTMLInputElement | null;
+      if (row && fileInput) {
+        fileInput.value = '';
+        syncMockFileState(row);
+      }
+      return;
+    }
     const rwAdd = target.closest('[data-rw-add]');
     if (rwAdd) {
       const list = rwAdd.closest('.ni-host-rule-rewrite')?.querySelector('[data-rw-list]');
@@ -657,12 +759,16 @@ export async function openTrafficRulesModal(opts: {
 
   // Reflect the loaded rules' terminal actions on the throttle controls right away.
   hostList?.querySelectorAll('.ni-host-rule').forEach(syncRowThrottle);
+  // Reflect any loaded Map Local mapping (disable the body textarea, show the served-from-file note).
+  hostList?.querySelectorAll('.ni-host-rule').forEach(syncMockFileState);
   // Relabel/hide each loaded rewrite row's fields to match its type.
   hostList?.querySelectorAll('[data-rw-op]').forEach(syncRewriteRow);
 
   // "Block all proxied traffic" short-circuits everything — the device throttle and every per-host
   // rule become no-ops — so disable those controls (without clearing them) while it's on.
   const blockAllCb = overlay.querySelector('[data-block-all]') as HTMLInputElement | null;
+  const noCachingCb = overlay.querySelector('[data-no-caching]') as HTMLInputElement | null;
+  const blockCookiesCb = overlay.querySelector('[data-block-cookies]') as HTMLInputElement | null;
   const devBw = overlay.querySelector('[data-dev-bw]') as HTMLSelectElement | null;
   const devLat = overlay.querySelector('[data-dev-latency]') as HTMLInputElement | null;
   const devThrottle = overlay.querySelector('[data-dev-throttle]') as HTMLElement | null;
@@ -703,6 +809,12 @@ export async function openTrafficRulesModal(opts: {
     const blocked = blockAllCb?.checked === true;
     if (devBw) devBw.disabled = blocked;
     if (devLat) devLat.disabled = blocked;
+    // Block All short-circuits every request, so the presets can't take effect — disable (but keep
+    // the saved state of) their toggles while it's on, matching how the throttle controls behave.
+    if (noCachingCb) noCachingCb.disabled = blocked;
+    if (blockCookiesCb) blockCookiesCb.disabled = blocked;
+    noCachingCb?.closest('.ni-rules-toggle-row')?.classList.toggle('is-disabled', blocked);
+    blockCookiesCb?.closest('.ni-rules-toggle-row')?.classList.toggle('is-disabled', blocked);
     devThrottle?.classList.toggle('is-disabled', blocked);
     hostsSection?.classList.toggle('is-hosts-blocked', blocked);
     if (hostsBlockedNote) hostsBlockedNote.hidden = !blocked;
@@ -753,6 +865,8 @@ export async function openTrafficRulesModal(opts: {
   overlay.querySelector('[data-rules-save]')?.addEventListener('click', () => {
     void (async () => {
       const blockAll = (overlay.querySelector('[data-block-all]') as HTMLInputElement | null)?.checked === true;
+      const noCaching = (overlay.querySelector('[data-no-caching]') as HTMLInputElement | null)?.checked === true;
+      const blockCookies = (overlay.querySelector('[data-block-cookies]') as HTMLInputElement | null)?.checked === true;
       const devThrottle = readThrottle(
         overlay.querySelector('[data-dev-bw]') as HTMLInputElement | null,
         overlay.querySelector('[data-dev-latency]') as HTMLInputElement | null
@@ -763,6 +877,8 @@ export async function openTrafficRulesModal(opts: {
         if (!host) return;
         const block = (row.querySelector('[data-host-block]') as HTMLInputElement | null)?.checked === true;
         const reset = (row.querySelector('[data-host-reset]') as HTMLInputElement | null)?.checked === true;
+        const noCaching = (row.querySelector('[data-host-no-caching]') as HTMLInputElement | null)?.checked === true;
+        const blockCookies = (row.querySelector('[data-host-block-cookies]') as HTMLInputElement | null)?.checked === true;
         const throttle = readThrottle(
           row.querySelector('[data-host-bw]') as HTMLInputElement | null,
           row.querySelector('[data-host-latency]') as HTMLInputElement | null
@@ -770,13 +886,15 @@ export async function openTrafficRulesModal(opts: {
         const mock = readMockResponse(row);
         const rewrite = readRewriteOps(row);
         const pathContains = ((row as HTMLElement).dataset.path || '').trim();
-        // A host row with no effect at all is dropped.
-        if (!block && !reset && !throttle && !mock && rewrite.length === 0) return;
+        // A host row with no effect at all is dropped — a preset-only row still counts as an effect.
+        if (!block && !reset && !throttle && !mock && !noCaching && !blockCookies && rewrite.length === 0) return;
         const rule: HostTrafficRule = { host };
         if (pathContains) rule.pathContains = pathContains;
         if (block) rule.block = true;
         else if (reset) rule.resetConnection = true;
         else if (mock) rule.respond = mock;
+        if (noCaching) rule.noCaching = true;
+        if (blockCookies) rule.blockCookies = true;
         if (throttle) rule.throttle = throttle;
         if (rewrite.length) rule.rewrite = rewrite;
         hostRules.push(rule);
@@ -784,6 +902,8 @@ export async function openTrafficRulesModal(opts: {
 
       const rules: DeviceTrafficRules = {};
       if (blockAll) rules.blockAll = true;
+      if (noCaching) rules.noCaching = true;
+      if (blockCookies) rules.blockCookies = true;
       if (devThrottle) rules.throttle = devThrottle;
       if (hostRules.length > 0) rules.hosts = hostRules;
 
@@ -793,7 +913,7 @@ export async function openTrafficRulesModal(opts: {
         return;
       }
       try {
-        const hasAny = blockAll || !!devThrottle || hostRules.length > 0;
+        const hasAny = blockAll || noCaching || blockCookies || !!devThrottle || hostRules.length > 0;
         const res = await api.networkInspectorSetDeviceTrafficRules(opts.deviceIp, hasAny ? rules : null);
         if (res?.success) {
           close();

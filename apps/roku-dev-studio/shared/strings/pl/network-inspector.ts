@@ -118,7 +118,6 @@ export const networkInspector = {
   secTls: 'TLS',
   secTiming: 'Pomiary czasu',
   secSize: 'Rozmiar',
-  secRequestHeaders: 'Nagłówki żądania',
   viewUrlTitle: 'Wyświetl URL i parametry zapytania',
   tagsMitmDecrypted: 'MITM · Odszyfrowane',
   protocolHttpsDecrypted: 'HTTPS (odszyfrowane przez serwer proxy MITM Roku Dev Studio)',
@@ -419,5 +418,89 @@ export const networkInspector = {
   setupBadgeTitlePrereq: (title: string): string => `${title} — kliknij, aby uzyskać instrukcje konfiguracji`,
   setupBadgeTitle: 'Konfiguracja przechwytywania hotspotu — kliknij, aby uzyskać instrukcje',
   // Header port badge.
-  portBadgeTitle: (title: string): string => `${title} — kliknij, aby uzyskać szczegóły`
+  portBadgeTitle: (title: string): string => `${title} — kliknij, aby uzyskać szczegóły`,
+
+  // ══ Network Inspector additions ═══════════════════════════════════════════════
+  // Copy URL action (network-detail-view.ts copy menu).
+  copyUrl: 'Kopiuj URL',
+
+  // Traffic-rule presets — device-wide toggles (traffic-rules-modal.ts).
+  noCachingTitle: 'Bez buforowania',
+  noCachingDesc: 'Usuń nagłówki buforowania i wymuś Cache-Control: no-store w odpowiedziach.',
+  blockCookiesTitle: 'Blokuj pliki cookie',
+  blockCookiesDesc: 'Usuń Cookie z żądań i Set-Cookie z odpowiedzi.',
+
+  // Parsed detail viewers — Cookies tabs (network-detail.ts, network-parsed-tables.ts).
+  tabCookies: 'Cookies',
+  colName: 'Nazwa',
+  colValue: 'Wartość',
+  colAttributes: 'Atrybuty',
+  noResponseCookies: 'Ta odpowiedź nie ustawia plików cookie.',
+
+  // Editable per-request note (network-detail.ts Overview + list marker).
+  secNote: 'Notatka',
+  notePlaceholder: 'Dodaj notatkę…',
+  noteAriaLabel: 'Notatka do tego żądania',
+  noteMarkerAria: 'Ma notatkę',
+
+  // Map Local — file-backed mock response (traffic-rules-modal.ts + proxy).
+  mockFieldFile: 'Plik lokalny',
+  mockChooseFile: 'Wybierz plik…',
+  mockFilePlaceholder: 'Nie wybrano pliku',
+  mockFileClearAria: 'Wyczyść zmapowany plik',
+  mockFileServingBody: 'Treść odpowiedzi jest serwowana ze zmapowanego pliku.',
+  mapLocalHint:
+    'Serwuj plik lokalny jako treść odpowiedzi. Content-Type jest wywnioskowany z rozszerzenia pliku, chyba że ustawiono go powyżej.',
+  mapLocalDialogTitle: 'Wybierz plik do serwowania',
+  mapLocalAllFilesFilter: 'Wszystkie pliki',
+
+  // Focus hosts (network-session-view.ts + sidebar toggles).
+  focusHost: (host: string): string => `Wyróżnij ${host}`,
+  unfocusHost: (host: string): string => `Usuń wyróżnienie ${host}`,
+  clearFocusedHosts: 'Wyczyść wyróżnione hosty',
+
+  // Replay / Compose (network-detail-view.ts action + network-compose-modal.ts).
+  replay: 'Odtwórz',
+  replayTitle: 'Odtwórz to żądanie z hosta',
+  replayAria: 'Odtwórz żądanie',
+  moreReplayOptions: 'Więcej opcji odtwarzania',
+  replayNow: 'Odtwórz teraz',
+  composeItem: 'Edytuj i wyślij ponownie…',
+  composeTitle: 'Edytuj i wyślij ponownie',
+  composeNote: 'Wyślij to żądanie ponownie z hosta. Edytuj metodę, URL, nagłówki lub treść przed wysłaniem.',
+  composeMethodLabel: 'Metoda',
+  composeUrlLabel: 'URL',
+  composeParamsLabel: 'Parametry zapytania',
+  composeAddRow: '+ Dodaj',
+  composeRowEnabledAria: 'Uwzględnij ten wpis',
+  composeSelectAllAria: 'Przełącz wszystkie wpisy',
+  composeHeadersLabel: 'Nagłówki',
+  composeBodyLabel: 'Treść',
+  composeBodyPlaceholder: 'Treść żądania',
+  composeBinaryBodyNote:
+    'Przechwycona treść żądania jest binarna i zostanie wysłana bez zmian; nie można jej tutaj edytować.',
+  composeApplyRules: 'Zastosuj aktywne reguły ruchu',
+  composeApplyRulesTitle: 'Przepuść odtwarzane żądanie przez reguły blokowania, przepisywania i ograniczania tego urządzenia',
+  composeSend: 'Wyślij',
+  composeSending: 'Wysyłanie…',
+  replayAddedToList: 'Odpowiedź dodano do listy sesji.',
+  replayFailed: (err: string): string => `Odtwarzanie nie powiodło się: ${err}`,
+  replayInvalidUrl: 'Wpisz prawidłowy adres URL http:// lub https://.',
+  replayUnavailable: 'Odtwarzanie jest niedostępne w tej kompilacji.',
+  replayStarting: 'Odtwarzanie…',
+  tagsReplayed: 'Odtworzone',
+  replayedBadgeTitle: 'Ta odpowiedź powstała przez odtworzenie przechwyconego żądania z hosta',
+
+  // Timing waterfall (network-detail.ts Overview timing section).
+  ovDuration: 'Czas trwania',
+  wfDns: 'DNS',
+  wfConnect: 'Połączenie',
+  wfTls: 'TLS',
+  wfSend: 'Wysyłanie',
+  wfWait: 'Oczekiwanie (TTFB)',
+  wfReceive: 'Pobieranie',
+  wfMs: (n: number): string => `${n} ms`,
+  wfSeconds: (s: number): string => `${s.toFixed(2)} s`,
+  wfSegmentTitle: (label: string, value: string): string => `${label}: ${value}`,
+  wfAria: 'Rozkład czasów żądania'
 };

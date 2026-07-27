@@ -731,7 +731,7 @@ export function createNetworkFindModal(cb: FindModalCallbacks): FindModalHandle 
       <div class="ni-find-modal" role="dialog" aria-modal="true" aria-label="${S.networkInspector.findAriaLabel}">
         <div class="ni-find-header">
           <h3 class="ni-find-title">${S.networkInspector.findTitle}</h3>
-          <button type="button" class="ni-find-close" title="${S.networkInspector.closeEsc}" aria-label="${S.common.close}">×</button>
+          <button type="button" class="modal-close ni-find-close" title="${S.networkInspector.closeEsc}" aria-label="${S.common.close}"><span class="icon icon-sm"><svg><use href="#icon-x"/></svg></span></button>
         </div>
         <div class="ni-find-body">
           <div class="ni-find-terms" data-find-terms></div>

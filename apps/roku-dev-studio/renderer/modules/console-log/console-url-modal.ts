@@ -14,7 +14,7 @@ function tryDecode(s: string): string {
 
 export type UrlModalParamRow = { key: string; value: string };
 
-function parseQueryPair(part: string): UrlModalParamRow | null {
+export function parseQueryPair(part: string): UrlModalParamRow | null {
   const t = part.trim();
   if (!t) return null;
   const eq = t.indexOf('=');

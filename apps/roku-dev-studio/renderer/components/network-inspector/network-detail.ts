@@ -6,11 +6,12 @@ import {
   type EmbeddedPane
 } from './network-embedded-structured.js';
 import { MAX_STRUCTURED_BYTES, renderStructuredInto } from '../../modules/ui/structured-body.js';
+import { renderResponseCookiesPane } from './network-parsed-tables.js';
 import { S } from '@shared/strings/index.js';
 
 export type BodyFormatMode = 'auto' | 'json' | 'xml' | 'raw';
-export type RequestPaneTab = 'overview' | 'body';
-export type ResponsePaneTab = 'headers' | 'body';
+export type RequestPaneTab = 'overview' | 'headers' | 'body';
+export type ResponsePaneTab = 'headers' | 'cookies' | 'body';
 
 type ResolvedBodyFormat = 'json' | 'xml' | 'raw';
 
@@ -66,6 +67,38 @@ function formatBytes(bytes: number): string {
   if (bytes <= 0) return '—';
   if (bytes < 1024) return `${bytes} bytes`;
   return `${(bytes / 1024).toFixed(2)} KB (${bytes} bytes)`;
+}
+
+/** Format a millisecond duration for display: whole ms below 1 s, then seconds (2 dp) above. */
+function formatMs(ms: number): string {
+  const rounded = Math.round(ms);
+  if (rounded >= 1000) return S.networkInspector.wfSeconds(ms / 1000);
+  return S.networkInspector.wfMs(rounded);
+}
+
+/**
+ * Render an ISO capture timestamp as "UTC · local". Both come from Intl with the short time-zone
+ * name, so "UTC" / "PDT" / "GMT+5:30" label themselves (no catalog strings needed). The stored
+ * `ev.timestamp` is UTC (ISO `…Z`); we surface that explicitly and add the viewer's local time.
+ * Returns the raw string if it doesn't parse, or '—' when absent.
+ */
+function formatStartTimes(iso: string | undefined): string {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  const opts: Intl.DateTimeFormatOptions = {
+    year: 'numeric',
+    month: 'short',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+    timeZoneName: 'short'
+  };
+  const utc = d.toLocaleString(undefined, { ...opts, timeZone: 'UTC' });
+  const local = d.toLocaleString(undefined, opts);
+  return `${utc}  ·  ${local}`;
 }
 
 function formatHeaders(msg: NetworkHttpMessage | undefined): string {
@@ -343,6 +376,81 @@ function overviewSection(title: string): string {
   return `<tr class="ni-overview-section"><th colspan="2">${escapeHtml(title)}</th></tr>`;
 }
 
+/**
+ * The Overview timing waterfall: a proportional segmented bar (one color per measured RDS→origin
+ * phase) plus a wrapping legend of phase name + rounded ms. Rendered as a `.ni-waterfall` block that
+ * lives in the pinned bottom footer (see {@link overviewPinned}), NOT as a table row. Returns ''
+ * when `ev.timing` is absent (passive/encrypted capture, mock/block/reset emits) — the pinned footer
+ * is then omitted entirely (the per-request Note now lives in a header-opened modal, not inline). The
+ * phase list is assembled here — not a module-level const — so it always reads the current locale's
+ * strings instead of freezing them at module load.
+ */
+function renderTimingWaterfall(ev: ParsedNetworkEvent): string {
+  const t = ev.timing;
+  if (!t) return '';
+  const phases: Array<{ ms: number; label: string; cls: string }> = [];
+  const add = (ms: number | undefined, label: string, cls: string): void => {
+    if (typeof ms === 'number' && ms >= 0) phases.push({ ms, label, cls });
+  };
+  add(t.dnsMs, S.networkInspector.wfDns, 'ni-wf-dns');
+  add(t.connectMs, S.networkInspector.wfConnect, 'ni-wf-connect');
+  add(t.tlsMs, S.networkInspector.wfTls, 'ni-wf-tls');
+  add(t.sendMs, S.networkInspector.wfSend, 'ni-wf-send');
+  add(t.waitMs, S.networkInspector.wfWait, 'ni-wf-wait');
+  add(t.receiveMs, S.networkInspector.wfReceive, 'ni-wf-receive');
+  if (phases.length === 0) return '';
+  const total = phases.reduce((sum, p) => sum + p.ms, 0);
+  // Every phase is kept (min-width:1px in CSS keeps tiny segments visible). When the summed total
+  // rounds to 0 (all sub-ms), split segment widths evenly so the bar still renders.
+  const evenPct = 100 / phases.length;
+  const segs = phases
+    .map((p) => {
+      const width = total > 0 ? (p.ms / total) * 100 : evenPct;
+      const title = escapeHtml(S.networkInspector.wfSegmentTitle(p.label, formatMs(p.ms)));
+      return `<span class="ni-wf-seg ${p.cls}" style="width:${width.toFixed(4)}%" title="${title}"></span>`;
+    })
+    .join('');
+  const legend = phases
+    .map(
+      (p) =>
+        `<span class="ni-wf-legend-item"><span class="ni-wf-swatch ${p.cls}"></span>${escapeHtml(p.label)} <span class="ni-wf-legend-ms">${escapeHtml(formatMs(p.ms))}</span></span>`
+    )
+    .join('');
+  // Total shown = the SAME authoritative round-trip as the Overview "Duration" row (ev.durationMs), so
+  // the two never disagree. It can exceed the summed phases: durationMs spans the whole proxy handling
+  // window (request setup → response emit) whereas the phases cover only the RDS→origin socket
+  // (DNS → last byte); the remainder is proxy overhead + per-phase rounding. Segment WIDTHS stay
+  // proportional to the measured phases (`total`); only the displayed number uses durationMs. Falls
+  // back to the phase sum when durationMs is absent.
+  const totalMs = typeof ev.durationMs === 'number' ? ev.durationMs : total;
+  const totalItem = `<span class="ni-wf-legend-item ni-wf-total">${escapeHtml(S.networkInspector.ovTotal)} <span class="ni-wf-legend-ms">${escapeHtml(formatMs(totalMs))}</span></span>`;
+  // Combined timing model: the Request Start (UTC · local) sits above the bar so the pinned footer
+  // carries the whole story — start → phase breakdown → Total (= duration).
+  const started = ev.timestamp
+    ? `<div class="ni-wf-started"><span class="ni-wf-started-label">${escapeHtml(S.networkInspector.ovRequestStart)}</span>${escapeHtml(formatStartTimes(ev.timestamp))}</div>`
+    : '';
+  return `<div class="ni-waterfall">${started}<div class="ni-waterfall-bar" role="img" aria-label="${escapeHtml(S.networkInspector.wfAria)}">${segs}</div><div class="ni-waterfall-legend">${legend}${totalItem}</div></div>`;
+}
+
+// The request Overview's pinned bottom footer: just the timing waterfall. Rendered as a NON-scrolling
+// footer (`.ni-overview-pinned`, `flex: 0 0 auto`) that sits OUTSIDE the scrolling table region as a
+// flow sibling — see {@link overviewLayout} and the flex-column `.ni-contents-scroll` CSS in
+// index.html. When there is no timing data (`waterfall` is '' for non-proxied/encrypted rows) the
+// footer is omitted entirely. The per-request Note now lives in a header-opened modal (see
+// network-note-modal.ts), not inline here.
+function overviewPinned(waterfall: string): string {
+  return waterfall ? `<div class="ni-overview-pinned">${waterfall}</div>` : '';
+}
+
+// Compose a request Overview pane: a scrolling table region (`.ni-overview-scroll` — owns the vertical
+// scrollbar) followed by the pinned footer as a flow sibling. Their shared parent `.ni-contents-scroll`
+// is a flex column, so the inner scroller flexes to fill the space above the fixed-height footer and the
+// scrollbar is confined to the rows above it, while the footer stays put at the pane bottom. With no
+// timing data the footer is absent and the scrolling table simply fills the pane.
+function overviewLayout(rowsHtml: string, waterfall: string): string {
+  return `<div class="ni-overview-scroll"><table class="ni-overview-table">${rowsHtml}</table></div>${overviewPinned(waterfall)}`;
+}
+
 function buildHttpsRequestFallback(ev: ParsedNetworkEvent): string {
   const host = ev.sni || ev.hostname || ev.destIp || S.networkInspector.unknownHost;
   const port = ev.destPort === 443 ? '' : `:${ev.destPort ?? 443}`;
@@ -363,7 +471,8 @@ export function renderRequestOverview(ev: ParsedNetworkEvent, allEvents: ParsedN
       overviewRow(S.networkInspector.ovHost, ev.hostname || ev.sni || '—'),
       overviewRow(S.networkInspector.ovDestination, ev.destIp ? `${ev.destIp}:${ev.destPort ?? ''}` : '—')
     ];
-    return `<div class="ni-overview-scroll"><table class="ni-overview-table">${rows.join('')}</table></div>`;
+    // Non-HTTP rows have no timing, so there is no pinned footer.
+    return overviewLayout(rows.join(''), '');
   }
 
   const req = ev.httpRequest;
@@ -383,7 +492,10 @@ export function renderRequestOverview(ev: ParsedNetworkEvent, allEvents: ParsedN
     overviewRow(S.networkInspector.ovClientAddress, ev.deviceIp || '—', 'device-ip'),
     overviewRow(S.networkInspector.ovRemoteAddress, remoteAddress(ev))
   ];
-  if (ev.mitm) rows.push(overviewRow(S.networkInspector.ovTags, S.networkInspector.tagsMitmDecrypted));
+  // A replayed transaction is labeled "Replayed" (the request came from the host, not the device);
+  // otherwise a decrypted-HTTPS capture shows the MITM tag.
+  if (ev.replay) rows.push(overviewRow(S.networkInspector.ovTags, S.networkInspector.tagsReplayed));
+  else if (ev.mitm) rows.push(overviewRow(S.networkInspector.ovTags, S.networkInspector.tagsMitmDecrypted));
   const dns = relatedDns(allEvents, ev);
   if (dns.length > 0) {
     rows.push(
@@ -409,23 +521,30 @@ export function renderRequestOverview(ev: ParsedNetworkEvent, allEvents: ParsedN
     rows.push(overviewRow(S.networkInspector.ovNotes, S.networkInspector.notesHotspot));
   }
 
-  rows.push(overviewSection(S.networkInspector.secTiming));
-  rows.push(overviewRow(S.networkInspector.ovRequestStart, ev.timestamp || '—'));
+  // Timing: when phase marks exist, the full timing model (Request Start + phases + Total = duration)
+  // lives in the pinned waterfall footer, so the redundant section is omitted here. Without marks (no
+  // waterfall) keep Request Start (UTC + local) and Duration inline.
+  if (!ev.timing) {
+    rows.push(overviewSection(S.networkInspector.secTiming));
+    rows.push(overviewRow(S.networkInspector.ovRequestStart, formatStartTimes(ev.timestamp)));
+    rows.push(
+      overviewRow(
+        S.networkInspector.ovDuration,
+        typeof ev.durationMs === 'number' ? formatMs(ev.durationMs) : '—'
+      )
+    );
+  }
 
   rows.push(overviewSection(S.networkInspector.secSize));
   rows.push(overviewRow(S.networkInspector.request, formatBytes(reqSize)));
   rows.push(overviewRow(S.networkInspector.response, formatBytes(resSize)));
   rows.push(overviewRow(S.networkInspector.ovTotal, formatBytes(reqSize + resSize)));
 
-  const reqHeaders = req?.headers && Object.keys(req.headers).length > 0 ? req.headers : null;
-  if (reqHeaders) {
-    rows.push(overviewSection(S.networkInspector.secRequestHeaders));
-    for (const [k, v] of Object.entries(reqHeaders)) {
-      rows.push(overviewRow(k, v));
-    }
-  }
+  // Request headers now live in the dedicated request "Headers" tab, not inline in the Overview.
 
-  return `<div class="ni-overview-scroll"><table class="ni-overview-table">${rows.join('')}</table></div>`;
+  // The per-phase timing waterfall (empty when ev.timing is absent — graceful omit) sits in the
+  // pinned footer below the scrolling Overview table.
+  return overviewLayout(rows.join(''), renderTimingWaterfall(ev));
 }
 
 export function renderRequestPane(
@@ -434,9 +553,16 @@ export function renderRequestPane(
   bodyFormat: BodyFormatMode,
   allEvents: ParsedNetworkEvent[] = []
 ): string {
+  // The Headers tab is HTTP-message-driven; handling it ahead of the tls/dns branches means a
+  // non-HTTP row (which has no httpRequest) falls straight through to the headers table's empty
+  // state. Reuses the same headers-table renderer as the response pane.
+  if (tab === 'headers') return renderHeadersTable(ev.httpRequest);
   if (ev.type === 'tls-handshake' || (ev.type === 'tcp-connection' && ev.destPort === 443)) {
     if (tab === 'overview') {
-      return `<div class="ni-overview-scroll"><table class="ni-overview-table">${overviewRow(S.networkInspector.ovHost, ev.sni || ev.hostname || '—')}${overviewRow(S.networkInspector.ovType, S.networkInspector.typeHttpsTlsHandshake)}${overviewRow(S.networkInspector.ovDevice, ev.deviceIp, 'device-ip')}</table></div>`;
+      return overviewLayout(
+        `${overviewRow(S.networkInspector.ovHost, ev.sni || ev.hostname || '—')}${overviewRow(S.networkInspector.ovType, S.networkInspector.typeHttpsTlsHandshake)}${overviewRow(S.networkInspector.ovDevice, ev.deviceIp, 'device-ip')}`,
+        ''
+      );
     }
     return `<pre class="ni-code-block">${escapeHtml(buildHttpsRequestFallback(ev))}</pre>`;
   }
@@ -455,6 +581,9 @@ export function renderResponsePane(
   tab: ResponsePaneTab,
   bodyFormat: BodyFormatMode
 ): string {
+  // Handled ahead of the tls/dns branches (see renderRequestPane) so non-HTTP rows show the empty
+  // state rather than the encrypted/DNS fallbacks.
+  if (tab === 'cookies') return renderResponseCookiesPane(ev.httpResponse);
   if (ev.type === 'tls-handshake' || (ev.type === 'tcp-connection' && ev.destPort === 443)) {
     if (tab === 'headers') return `<div class="ni-pane-empty">${S.networkInspector.encryptedNoHeaders}</div>`;
     return `<pre class="ni-code-block">${escapeHtml(buildHttpsResponseFallback(ev))}</pre>`;

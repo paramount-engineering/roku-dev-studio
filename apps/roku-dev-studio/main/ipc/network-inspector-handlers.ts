@@ -8,7 +8,7 @@ import {
   initNetworkInspectorFromSettings,
   type NetworkInspectorBootConfig
 } from '../network-inspector/index';
-import type { NetworkTrafficRules } from '../../shared/network-inspector/types';
+import type { NetworkTrafficRules, ReplayHttpInput } from '../../shared/network-inspector/types';
 import {
   ALL_FIND_SCOPES,
   type NetworkFindRequest,
@@ -23,6 +23,9 @@ import {
 type DialogLike = Pick<Dialog, 'showSaveDialog' | 'showOpenDialog'>;
 
 const DEFAULT_MITM_PORT = 8888;
+
+/** Upper bound on a per-event note so a hostile/buggy renderer can't push unbounded strings. */
+const MAX_EVENT_NOTE_CHARS = 4000;
 
 /** Per-device block/throttle rules persisted under `networkInspectorTrafficRules` (keyed by IP). */
 function readTrafficRules(settings: Record<string, unknown>): NetworkTrafficRules | undefined {
@@ -97,13 +100,54 @@ function sanitizeFindOptions(raw: unknown): NetworkFindRequest | null {
   return { terms };
 }
 
+/** Upper bound on the replay socket wait (ms). Clamps a renderer-supplied timeout. */
+const MAX_REPLAY_TIMEOUT_MS = 60_000;
+/** Cap on replay request headers accepted from the renderer (guards a hostile/buggy payload). */
+const MAX_REPLAY_HEADER_COUNT = 200;
+
+/**
+ * Coerce a renderer-supplied replay input into a safe {@link ReplayHttpInput}, or null when the URL
+ * isn't a parseable absolute http(s) URL. Method defaults to GET (uppercased); headers keep only
+ * string→string pairs; body is a string; bodyEncoding is restricted to 'text' | 'base64'.
+ */
+function sanitizeReplayInput(raw: unknown): ReplayHttpInput | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const o = raw as Record<string, unknown>;
+  const url = typeof o.url === 'string' ? o.url.trim() : '';
+  if (!url) return null;
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null;
+  } catch {
+    return null;
+  }
+  const method = (typeof o.method === 'string' && o.method.trim() ? o.method.trim() : 'GET').toUpperCase();
+  const headers: Record<string, string> = {};
+  if (o.headers && typeof o.headers === 'object' && !Array.isArray(o.headers)) {
+    let n = 0;
+    for (const [k, v] of Object.entries(o.headers as Record<string, unknown>)) {
+      if (n >= MAX_REPLAY_HEADER_COUNT) break;
+      if (typeof k === 'string' && k && typeof v === 'string') {
+        headers[k] = v;
+        n++;
+      }
+    }
+  }
+  const bodyEncoding = o.bodyEncoding === 'base64' ? 'base64' : o.bodyEncoding === 'text' ? 'text' : undefined;
+  const input: ReplayHttpInput = { method, url };
+  if (Object.keys(headers).length) input.headers = headers;
+  if (typeof o.body === 'string') input.body = o.body;
+  if (bodyEncoding) input.bodyEncoding = bodyEncoding;
+  return input;
+}
+
 function setupNetworkInspectorHandlers(
   _mainWindow: BrowserWindow | undefined,
   safeSendToRenderer: SafeSendFn,
   dialog: DialogLike,
   userDataPath?: string
 ) {
-  const { ipcMain, app } = require('electron') as typeof import('electron');
+  const { ipcMain, app, BrowserWindow } = require('electron') as typeof import('electron');
   const dataPath = userDataPath || (app?.getPath ? app.getPath('userData') : undefined);
 
   function syncFromDisk(): void {
@@ -151,6 +195,18 @@ function setupNetworkInspectorHandlers(
       if (!id) return { success: false, error: 'id required' };
       const event = await getNetworkInspectorService(safeSendToRenderer).getEventDetail(id);
       return { success: true, event };
+    }
+  );
+
+  ipcMain.handle(
+    IPC.NetworkInspectorSetEventNote,
+    async (_event: IpcMainInvokeEvent, payload: { id?: string; note?: string }) => {
+      const id = typeof payload?.id === 'string' ? payload.id : '';
+      if (!id) return { success: false, error: 'id required' };
+      const note =
+        typeof payload?.note === 'string' ? payload.note.slice(0, MAX_EVENT_NOTE_CHARS) : '';
+      getNetworkInspectorService(safeSendToRenderer).setEventNote(id, note);
+      return { success: true };
     }
   );
 
@@ -224,8 +280,13 @@ function setupNetworkInspectorHandlers(
     return { success: true, caInfo: svc.getCaInfo(), status: svc.getStatus() };
   });
 
-  ipcMain.handle(IPC.NetworkInspectorExportCaPem, async () => {
-    const win = _mainWindow && !_mainWindow.isDestroyed() ? _mainWindow : undefined;
+  ipcMain.handle(IPC.NetworkInspectorExportCaPem, async (event: IpcMainInvokeEvent) => {
+    // Parent the save sheet to the invoking window (usually Settings) so on macOS it doesn't
+    // attach to the hidden-behind main window and look like a hang. Fall back to the main window.
+    const senderWin = BrowserWindow.fromWebContents(event.sender);
+    const win = (senderWin && !senderWin.isDestroyed())
+      ? senderWin
+      : (_mainWindow && !_mainWindow.isDestroyed() ? _mainWindow : undefined);
     const pemOpts = {
       title: S.networkInspector.exportDialogTitles.caPem,
       defaultPath: 'rds-network-inspector-ca.pem',
@@ -236,8 +297,11 @@ function setupNetworkInspectorHandlers(
     return getNetworkInspectorService(safeSendToRenderer).exportCaPem(result.filePath);
   });
 
-  ipcMain.handle(IPC.NetworkInspectorExportCaCert, async () => {
-    const win = _mainWindow && !_mainWindow.isDestroyed() ? _mainWindow : undefined;
+  ipcMain.handle(IPC.NetworkInspectorExportCaCert, async (event: IpcMainInvokeEvent) => {
+    const senderWin = BrowserWindow.fromWebContents(event.sender);
+    const win = (senderWin && !senderWin.isDestroyed())
+      ? senderWin
+      : (_mainWindow && !_mainWindow.isDestroyed() ? _mainWindow : undefined);
     const crtOpts = {
       title: S.networkInspector.exportDialogTitles.caCrt,
       defaultPath: 'rds-network-inspector-ca.crt',
@@ -279,6 +343,41 @@ function setupNetworkInspectorHandlers(
       return { success: true, rules };
     }
   );
+
+  ipcMain.handle(
+    IPC.NetworkInspectorReplayRequest,
+    async (
+      _event: IpcMainInvokeEvent,
+      payload: { deviceIp?: string; input?: unknown; applyTrafficRules?: boolean; timeoutMs?: number }
+    ) => {
+      const deviceIp = typeof payload?.deviceIp === 'string' ? payload.deviceIp.trim() : '';
+      const input = sanitizeReplayInput(payload?.input);
+      if (!input) return { success: false, error: 'invalid url' };
+      const applyTrafficRules = payload?.applyTrafficRules === true;
+      const timeoutMs =
+        typeof payload?.timeoutMs === 'number' && Number.isFinite(payload.timeoutMs)
+          ? Math.min(MAX_REPLAY_TIMEOUT_MS, Math.max(1000, Math.floor(payload.timeoutMs)))
+          : undefined;
+      return getNetworkInspectorService(safeSendToRenderer).replayRequest({
+        deviceIp,
+        input,
+        applyTrafficRules,
+        timeoutMs
+      });
+    }
+  );
+
+  ipcMain.handle(IPC.NetworkInspectorPickMockFile, async () => {
+    const win = _mainWindow && !_mainWindow.isDestroyed() ? _mainWindow : undefined;
+    const openOpts = {
+      title: S.networkInspector.mapLocalDialogTitle,
+      properties: ['openFile' as const],
+      filters: [{ name: S.networkInspector.mapLocalAllFilesFilter, extensions: ['*'] }]
+    };
+    const result = await (win ? dialog.showOpenDialog(win, openOpts) : dialog.showOpenDialog(openOpts));
+    if (result.canceled || result.filePaths.length === 0) return { success: false, canceled: true };
+    return { success: true, filePath: result.filePaths[0] };
+  });
 
   ipcMain.handle(
     IPC.NetworkInspectorApplySettings,

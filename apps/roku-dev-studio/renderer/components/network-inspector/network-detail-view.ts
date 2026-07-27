@@ -27,6 +27,7 @@ export const detailPaneHtml = (): string => `
           <div class="ni-contents-label">${S.networkInspector.request}</div>
           <div class="ni-pane-tabs" data-ni-pane-tabs="request">
             <button type="button" class="ni-pane-tab active" data-ni-req-tab="overview">${S.networkInspector.tabOverview}</button>
+            <button type="button" class="ni-pane-tab" data-ni-req-tab="headers">${S.networkInspector.tabHeaders}</button>
             <button type="button" class="ni-pane-tab" data-ni-req-tab="body">${S.networkInspector.tabBody}</button>
           </div>
           <div class="ni-copy-menu" data-ni-copy-menu>
@@ -40,6 +41,9 @@ export const detailPaneHtml = (): string => `
               <button type="button" class="ni-copy-dropdown-item" data-ni-copy-item="body" role="menuitem">
                 <span class="ni-copy-item-icon icon icon-xs"><svg><use href="#icon-copy"/></svg></span>${S.networkInspector.copyBody}
               </button>
+              <button type="button" class="ni-copy-dropdown-item" data-ni-copy-item="url" role="menuitem">
+                <span class="ni-copy-item-icon icon icon-xs"><svg><use href="#icon-link"/></svg></span>${S.networkInspector.copyUrl}
+              </button>
               <button type="button" class="ni-copy-dropdown-item" data-ni-copy-item="curl" role="menuitem">
                 <span class="ni-copy-item-icon icon icon-xs"><svg><use href="#icon-terminal"/></svg></span>${S.networkInspector.copyAsCurl}
               </button>
@@ -48,6 +52,25 @@ export const detailPaneHtml = (): string => `
               </button>
             </div>
           </div>
+          <div class="ni-copy-menu ni-replay-menu" data-ni-replay-menu hidden>
+            <button type="button" class="ni-pane-tool-btn ni-copy-main" data-ni-replay title="${S.networkInspector.replayTitle}" aria-label="${S.networkInspector.replayAria}">
+              <span class="icon icon-xs"><svg><use href="#icon-replay"/></svg></span>
+            </button>
+            <button type="button" class="ni-pane-tool-btn ni-copy-caret" data-ni-replay-menu-toggle title="${S.networkInspector.moreReplayOptions}" aria-haspopup="true" aria-expanded="false" aria-label="${S.networkInspector.moreReplayOptions}" hidden>
+              <span class="icon icon-xs"><svg><use href="#icon-chevron-down"/></svg></span>
+            </button>
+            <div class="ni-copy-dropdown ni-replay-dropdown" data-ni-replay-dropdown role="menu" hidden>
+              <button type="button" class="ni-copy-dropdown-item" data-ni-replay-item="replay" role="menuitem">
+                <span class="ni-copy-item-icon icon icon-xs"><svg><use href="#icon-replay"/></svg></span>${S.networkInspector.replayNow}
+              </button>
+              <button type="button" class="ni-copy-dropdown-item" data-ni-replay-item="compose" role="menuitem">
+                <span class="ni-copy-item-icon icon icon-xs"><svg><use href="#icon-edit-3"/></svg></span>${S.networkInspector.composeItem}
+              </button>
+            </div>
+          </div>
+          <button type="button" class="ni-pane-tool-btn ni-note-btn" data-ni-note-open title="${S.networkInspector.secNote}" aria-label="${S.networkInspector.secNote}">
+            <span class="icon icon-xs"><svg><use href="#icon-file-text"/></svg></span>
+          </button>
         </div>
         <span class="ni-pane-badges">
           <span class="ni-pane-badge ni-pane-badge--truncated" data-ni-req-truncated hidden title="${S.networkInspector.bodyTruncatedRequestTitle}">${S.networkInspector.bodyTruncated}</span>
@@ -78,6 +101,7 @@ export const detailPaneHtml = (): string => `
           <div class="ni-contents-label">${S.networkInspector.response}</div>
           <div class="ni-pane-tabs" data-ni-pane-tabs="response">
             <button type="button" class="ni-pane-tab active" data-ni-res-tab="headers">${S.networkInspector.tabHeaders}</button>
+            <button type="button" class="ni-pane-tab" data-ni-res-tab="cookies">${S.networkInspector.tabCookies}</button>
             <button type="button" class="ni-pane-tab" data-ni-res-tab="body">${S.networkInspector.tabBody}</button>
           </div>
           <button type="button" class="ni-pane-tool-btn" data-ni-copy="response" title="${S.networkInspector.copyResponseBody}" aria-label="${S.networkInspector.copyResponseBody}">
@@ -116,12 +140,21 @@ export type DetailInteractionHandlers = {
   onUrl: (anchor: HTMLElement, url: string) => void;
   onEmbedded: (anchor: HTMLElement, pane: 'request' | 'response', idx: number) => void;
   onCopyMenuToggle: () => void;
-  /** A dropdown item: `kind` is 'body' | 'curl' | 'har'. */
+  /** A dropdown item: `kind` is 'body' | 'url' | 'curl' | 'har'. */
   onCopyItem: (item: HTMLElement, kind: string) => void;
   onCopyBody: (btn: HTMLElement, which: 'request' | 'response') => void;
   onToggleWrap: (which: 'request' | 'response') => void;
   onSetRequestTab: (tab: RequestPaneTab) => void;
   onSetResponseTab: (tab: ResponsePaneTab) => void;
+  /** One-click Replay (primary button) — re-issue the selected request from the host, rules bypassed.
+   *  Optional: the offline Session Viewer supplies none, so its (hidden) replay menu is inert. */
+  onReplay?: () => void;
+  /** Open the Compose (Edit & Resend) modal for the selected request. */
+  onCompose?: () => void;
+  /** Toggle the replay split-menu dropdown (Replay Now / Edit & Resend…). */
+  onReplayMenuToggle?: () => void;
+  /** Open the per-request Note modal for the selected event (all event kinds — not export-gated). */
+  onNote?: () => void;
 };
 
 /**
@@ -169,6 +202,28 @@ export function wireDetailInteractions(
         h.onCopyBody(copyBtn, copyBtn.dataset.niCopy as 'request' | 'response');
         return;
       }
+      // Replay split-menu (optional — the offline Session Viewer wires none, so its hidden menu is inert).
+      const replayToggle = target?.closest('[data-ni-replay-menu-toggle]') as HTMLElement | null;
+      if (replayToggle) {
+        h.onReplayMenuToggle?.();
+        return;
+      }
+      const replayItem = target?.closest('[data-ni-replay-item]') as HTMLElement | null;
+      if (replayItem?.dataset.niReplayItem) {
+        if (replayItem.dataset.niReplayItem === 'compose') h.onCompose?.();
+        else h.onReplay?.();
+        return;
+      }
+      const replayBtn = target?.closest('[data-ni-replay]') as HTMLElement | null;
+      if (replayBtn) {
+        h.onReplay?.();
+        return;
+      }
+      const noteBtn = target?.closest('[data-ni-note-open]') as HTMLElement | null;
+      if (noteBtn) {
+        h.onNote?.();
+        return;
+      }
       const wrapBtn = target?.closest('[data-ni-wrap-toggle]') as HTMLElement | null;
       if (wrapBtn) {
         h.onToggleWrap(wrapBtn.dataset.niWrapToggle === 'response' ? 'response' : 'request');
@@ -177,13 +232,13 @@ export function wireDetailInteractions(
       const reqTabBtn = target?.closest('[data-ni-req-tab]') as HTMLElement | null;
       if (reqTabBtn?.dataset.niReqTab) {
         const tab = reqTabBtn.dataset.niReqTab as RequestPaneTab;
-        if (tab === 'overview' || tab === 'body') h.onSetRequestTab(tab);
+        if (tab === 'overview' || tab === 'headers' || tab === 'body') h.onSetRequestTab(tab);
         return;
       }
       const resTabBtn = target?.closest('[data-ni-res-tab]') as HTMLElement | null;
       if (resTabBtn?.dataset.niResTab) {
         const tab = resTabBtn.dataset.niResTab as ResponsePaneTab;
-        if (tab === 'headers' || tab === 'body') h.onSetResponseTab(tab);
+        if (tab === 'headers' || tab === 'cookies' || tab === 'body') h.onSetResponseTab(tab);
       }
     },
     opts

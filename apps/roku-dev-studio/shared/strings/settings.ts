@@ -73,6 +73,51 @@ export const settings = {
   bpfCancelled: 'Cancelled.',
   bpfSetupFailed: 'Setup failed.',
 
+  // Network Inspector — Hotspot Capture Setup guide body (per-platform paragraphs + steps).
+  // Injected as HTML, so these carry inline <strong>/<em>/<code>/<a> markup. Keep code literals
+  // (bridge100, /dev/bpf*, tcpdump, URLs) and product names (Wi-Fi, Npcap, Wireshark) as-is.
+  niSetupGuide: {
+    titlePrefix: 'Hotspot Capture Setup',
+    darwin: {
+      intro: `<strong>Optional — for hotspot capture only.</strong> Decrypting your sideloaded dev channel works on any network without this setup. These steps add hotspot capture of DNS/TLS SNI from <em>all</em> of a Roku's traffic via your Mac's Internet Sharing hotspot (<code class="mcp-inline-code">bridge100</code>). Local devices only.`,
+      enableSharing: `<strong>Enable Internet Sharing</strong> — RDS captures on <code class="mcp-inline-code">bridge100</code> once it's on:`,
+      sharingSteps: [
+        `Open <strong>System Settings → General → Sharing</strong>`,
+        `Turn on <strong>Internet Sharing</strong>, sharing <strong>to Wi-Fi</strong>`,
+        `Connect your Roku to the Mac's shared Wi-Fi network`
+      ],
+      captureHead: 'Packet Capture Access',
+      captureBody: `macOS creates <code class="mcp-inline-code">/dev/bpf*</code> as root-only. Run the one-time setup below to restore access across reboots (admin password required, like Wireshark's ChmodBPF). Or install <a href="https://www.wireshark.org/download.html" target="_blank" rel="noopener noreferrer" class="mcp-link">Wireshark</a> and run its ChmodBPF installer.`
+    },
+    win32: {
+      intro: `<strong>Optional — for hotspot capture only.</strong> Decrypting your sideloaded dev channel works on any network without this setup (the MITM proxy handles both same-Wi-Fi and hotspot). These steps add hotspot capture of DNS/TLS SNI from <em>all</em> of a Roku's traffic when it's connected through this PC's hotspot. Local devices only.`,
+      enableHotspot: `<strong>Enable a hotspot yourself (optional)</strong> — RDS doesn't toggle Windows networking; you control it:`,
+      hotspotSteps: [
+        `Open <strong>Settings → Network &amp; internet → Mobile hotspot</strong>`,
+        `Turn <strong>Mobile hotspot</strong> on (share over Wi-Fi)`,
+        `Connect your Roku to that hotspot — RDS auto-detects the virtual adapter`
+      ],
+      npcapHead: 'Hotspot Capture Access (Npcap)',
+      npcapBody: `Hotspot capture (DNS/TLS SNI from all of the Roku's traffic) needs the <a href="https://npcap.com/" target="_blank" rel="noopener noreferrer" class="mcp-link">Npcap</a> driver. This is optional — leave it out and MITM proxying still records your sideloaded dev channel.`,
+      npcapSteps: [
+        `Download and run the installer from <a href="https://npcap.com/" target="_blank" rel="noopener noreferrer" class="mcp-link">npcap.com</a>`,
+        `During setup, enable <strong>“Install Npcap in WinPcap API-compatible Mode”</strong>`,
+        `<strong>Restart Roku Dev Studio</strong> after installing so the bundled capture module loads`
+      ],
+      npcapNote: `Already have Npcap but capture still won't start? Reinstall Roku Dev Studio so its native capture module matches this build.`
+    },
+    linux: {
+      intro: `<strong>Optional — for hotspot capture only.</strong> Decrypting your sideloaded dev channel works on any network without this setup. These steps add hotspot capture of DNS/TLS SNI from <em>all</em> of a Roku's traffic by sharing this machine's connection. Local devices only.`,
+      shareConnection: `<strong>Share your connection</strong> so the Roku routes through this machine:`,
+      shareSteps: [
+        `Use NetworkManager → <strong>“Shared to other computers”</strong> on a Wi-Fi/Ethernet connection (gateway <code class="mcp-inline-code">10.42.0.1</code>), or run a hostapd hotspot`,
+        `Connect your Roku to that shared network — RDS auto-detects the gateway interface`
+      ],
+      captureHead: 'Packet Capture Access',
+      captureBody: `Linux captures via <code class="mcp-inline-code">tcpdump</code>, which needs raw-socket privileges. Run the one-time setup below (admin prompt) to grant the <code class="mcp-inline-code">cap_net_raw</code>/<code class="mcp-inline-code">cap_net_admin</code> capabilities — or manually: <code class="mcp-inline-code">sudo setcap cap_net_raw,cap_net_admin=eip $(which tcpdump)</code>.`
+    }
+  },
+
   // Network Inspector — place selector + Remote Locations
   placeLocal: 'Local (This Machine)',
   placeRemoteFallback: 'Remote',
@@ -197,15 +242,15 @@ export const settings = {
     "Inspect a device's network traffic. Decrypts your dev channel's HTTPS via the local proxy (any network); a hotspot also captures DNS/SNI. Stored locally only.",
   mitmProxyPort: 'MITM Proxy Port',
   mitmProxyPortDesc:
-    "Port the local decrypting proxy listens on. Route your sideloaded dev channel through it — works on any network (stock channels can't be intercepted).",
+    "Port the local decrypting proxy listens on. Route your sideloaded dev channel through it — stock channels can't be intercepted.",
   mitmProxyPortAria: 'MITM proxy port',
   packetLimit: 'Per-Device Packet Limit',
   packetLimitDesc:
-    'Max captured frames kept per device for the PCAP export. Higher = longer history, more memory. 100–100000.',
+    'Frames kept per device for the PCAP export. Higher = more history and memory.',
   packetLimitAria: 'Per-device packet limit',
   maxBodySize: 'Max Body Size (KB)',
   maxBodySizeDesc:
-    'How much of each request/response body is kept for viewing in the inspector. Larger = inspect big bodies (e.g. multi-MB JS) whole; over this, the body shows a "Body Truncated" badge. This never affects what the device receives. Applies to new traffic only — raising it won\'t restore bodies already captured and truncated. 64–16384 KB.',
+    'How much of each request/response body is kept for viewing. Over the limit, a "Body Truncated" badge shows (the device is unaffected). Applies to new traffic only.',
   maxBodySizeAria: 'Max retained body size in KB',
   hotspotCaptureSetup: 'Hotspot & Capture Setup',
   viewSetup: 'View Setup',
@@ -216,4 +261,26 @@ export const settings = {
   srIntro2: 'RDS accepts the sideload once, then installs it on every enabled target, launches the Dev App, and opens each console.',
   srIntro3: 'Sideloads from this machine proceed automatically.',
   srIntro4: 'A sideload from another LAN device needs the Dev Password and asks you to allow it.',
+
+  // ── Network Inspector — Certificate Authority (compact row + details modal) ──
+  caSectionTitle: 'Certificate Authority',
+  // Short description shown on the settings row; the full caSectionDesc lives in the modal.
+  caRowDesc: 'The local certificate authority the proxy uses to decrypt HTTPS.',
+  caViewCert: 'View Certificate',
+  caSectionDesc:
+    'The Network Inspector signs decrypted HTTPS with a local certificate authority. Trust or import it on the device so your dev channel accepts the proxy. The private key never leaves this machine.',
+  caSubject: 'Subject',
+  caFingerprint: 'SHA-256 Fingerprint',
+  caValidity: 'Validity',
+  caProxyAddress: 'Proxy Address',
+  caValidityRange: (from: string, to: string): string => `${from} – ${to}`,
+  caLoading: 'Loading certificate details…',
+  caUnavailable: 'Certificate details are unavailable.',
+  // Verb-only label; the file extension (.pem/.crt) is a non-translatable literal shown beside it.
+  caExportAction: 'Export',
+  exportCaPem: 'Export .pem',
+  exportCaCrt: 'Export .crt',
+  caExportedPem: 'CA exported as .pem.',
+  caExportedCrt: 'CA exported as .crt.',
+  caExportFailed: 'Export failed.',
 } as const;
