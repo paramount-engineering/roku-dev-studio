@@ -36,6 +36,11 @@ contextBridge.exposeInMainWorld('settingsApi', {
   closeWindow: () => ipcRenderer.send(IPC.SettingsWindowClose),
   getNetworkInspectorStatus: () => ipcRenderer.invoke(IPC.NetworkInspectorGetStatus),
   installBpfAccess: () => ipcRenderer.invoke(IPC.NetworkInspectorInstallBpfAccess),
+  // Certificate Authority (read-only CA card in the Network Inspector tab). The handlers are
+  // registered globally on ipcMain, so invoke from the settings webContents reaches them.
+  networkInspectorGetCaInfo: () => ipcRenderer.invoke(IPC.NetworkInspectorGetCaInfo),
+  networkInspectorExportCaPem: () => ipcRenderer.invoke(IPC.NetworkInspectorExportCaPem),
+  networkInspectorExportCaCert: () => ipcRenderer.invoke(IPC.NetworkInspectorExportCaCert),
   // Remote Network Inspector (per-location): probe capability + config, and apply config.
   remoteNetworkProbe: (serverUrl: string) =>
     ipcRenderer.invoke(IPC.SettingsWindowRemoteNetworkProbe, { serverUrl }),

@@ -19,6 +19,8 @@ contextBridge.exposeInMainWorld('roku', {
     }>,
   copyToClipboard: (text: string) => ipcRenderer.invoke(IPC.ClipboardWrite, text),
   openExternal: (url: string) => ipcRenderer.invoke(IPC.ShellOpenExternal, url),
+  // Native right-click menu (used by the Focus-hosts feature). Same channel as the live tab.
+  showContextMenu: (items: unknown) => ipcRenderer.invoke(IPC.ShowContextMenu, items),
   // Privacy Mode — this viewer reuses the live inspector's renderers (device IPs,
   // client addresses), so it must blur them too. Read the current state at open and
   // listen for live toggles broadcast from the main process.

@@ -564,6 +564,15 @@ ul.help-blurb li {
   flex: 0 0 auto;
   width: 120px;
 }
+.settings-num-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: stretch;
+}
+.settings-num-stack .bound-label {
+  text-align: left;
+}
 .settings-field-stack {
   display: flex;
   flex-direction: column;
@@ -588,6 +597,61 @@ ul.help-blurb li {
   gap: 10px;
   flex-wrap: wrap;
   padding-top: 12px;
+}
+/* Network Inspector — read-only Certificate Authority details (proper 2-column table). */
+.ni-ca-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 14px 0 2px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.ni-ca-table tr + tr th,
+.ni-ca-table tr + tr td {
+  border-top: 1px solid var(--border);
+}
+.ni-ca-table th.ni-ca-label {
+  text-align: left;
+  vertical-align: top;
+  white-space: nowrap;
+  width: 1%;
+  padding: 9px 14px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-weight: 600;
+  background: var(--bg-primary);
+  border-right: 1px solid var(--border);
+}
+.ni-ca-table td.ni-ca-value {
+  padding: 9px 14px;
+  font-size: 12px;
+  color: var(--text-primary);
+  word-break: break-word;
+}
+.ni-ca-mono {
+  font-family: 'JetBrains Mono', ui-monospace, Menlo, Monaco, monospace;
+  letter-spacing: -0.02em;
+}
+#niCaExportStatus.err {
+  color: var(--accent-red);
+}
+/* Stylized file extension inside the Export buttons (Export ".pem" / ".crt"). */
+.ni-ca-export {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.ni-ca-ext {
+  font-family: 'JetBrains Mono', ui-monospace, Menlo, Monaco, monospace;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--accent-purple);
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 1px 6px;
 }
 .settings-toggle-wrap {
   flex: 1 1 0;
@@ -988,6 +1052,23 @@ ul.help-blurb li {
 .ni-modal-body::-webkit-scrollbar-thumb { background: var(--bg-elevated); border-radius: 4px; border: 1px solid var(--border); }
 .ni-modal-body .help-blurb:last-child { margin-bottom: 0; }
 .ni-modal-body .settings-section-actions { padding-top: 4px; }
+.ni-modal-footer {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 12px 18px;
+  border-top: 1px solid var(--border);
+  background: var(--bg-tertiary);
+}
+.ni-modal-footer-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
 .ni-bpf-state {
   display: inline-flex;
   align-items: center;

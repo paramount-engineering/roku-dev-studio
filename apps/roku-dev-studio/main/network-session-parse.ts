@@ -9,7 +9,7 @@
  *     capture engine uses (`parseCaptureFrame`), so a hotspot capture yields DNS/TLS/TCP + plaintext
  *     HTTP. HTTPS stays encrypted (no keys in the file), exactly as it does live without MITM.
  */
-import type { ParsedNetworkEvent, NetworkHttpMessage } from '../shared/network-inspector/types';
+import type { ParsedNetworkEvent, NetworkHttpMessage, NetworkTimingPhases } from '../shared/network-inspector/types';
 import { S } from '../shared/strings/index';
 import {
   parseCaptureFrame,
@@ -75,13 +75,60 @@ type HarMessage = {
   content?: { text?: string; mimeType?: string; encoding?: string; size?: number };
   bodySize?: number;
 };
+type HarTimings = {
+  blocked?: number;
+  dns?: number;
+  connect?: number;
+  ssl?: number;
+  send?: number;
+  wait?: number;
+  receive?: number;
+};
 type HarEntry = {
   startedDateTime?: string;
   time?: number;
   request?: HarMessage;
   response?: HarMessage;
   serverIPAddress?: string;
+  timings?: HarTimings;
+  comment?: string;
 };
+
+/**
+ * Rebuild our per-phase `ev.timing` from a HAR entry's `timings` (inverse of `harTimings` in
+ * network-export.ts). Gated on a connection phase (dns/connect/ssl) being present: our own no-timing
+ * fallback emits only send/wait/receive, and a generic HAR without connection phases shouldn't
+ * fabricate a waterfall. Only phases with a real (>= 0) value are carried; -1/absent are dropped.
+ */
+function harTimingPhases(timings: HarTimings | undefined): NetworkTimingPhases | undefined {
+  if (!timings) return undefined;
+  const pos = (v: number | undefined): number | undefined =>
+    typeof v === 'number' && v >= 0 ? v : undefined;
+  const dns = pos(timings.dns);
+  const connect = pos(timings.connect);
+  const ssl = pos(timings.ssl);
+  if (dns === undefined && connect === undefined && ssl === undefined) return undefined;
+  const phases: NetworkTimingPhases = {};
+  if (dns !== undefined) phases.dnsMs = dns;
+  if (connect !== undefined) phases.connectMs = connect;
+  if (ssl !== undefined) phases.tlsMs = ssl;
+  const send = pos(timings.send);
+  const wait = pos(timings.wait);
+  const receive = pos(timings.receive);
+  if (send !== undefined) phases.sendMs = send;
+  if (wait !== undefined) phases.waitMs = wait;
+  if (receive !== undefined) phases.receiveMs = receive;
+  return Object.keys(phases).length > 0 ? phases : undefined;
+}
+
+/** Extract the user note from a HAR entry `comment` (our export writes `… · note: <text>`). */
+function noteFromComment(comment: string | undefined): string | undefined {
+  if (!comment) return undefined;
+  const idx = comment.indexOf('note: ');
+  if (idx < 0) return undefined;
+  const note = comment.slice(idx + 'note: '.length).trim();
+  return note || undefined;
+}
 
 function harHeadersToRecord(headers: HarNameValue[] | undefined): Record<string, string> {
   const out: Record<string, string> = {};
@@ -173,6 +220,8 @@ function parseHar(text: string): ParsedSession {
       // request/response as fully inspectable rather than "encrypted".
       mitm: isHttps,
       durationMs: typeof entry.time === 'number' && entry.time >= 0 ? Math.round(entry.time) : undefined,
+      timing: harTimingPhases(entry.timings),
+      note: noteFromComment(entry.comment),
       detailAvailable: true
     };
   });

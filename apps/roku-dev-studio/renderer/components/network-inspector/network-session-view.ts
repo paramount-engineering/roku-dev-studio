@@ -6,10 +6,18 @@ import {
 } from './network-sessions.js';
 import { S } from '@shared/strings/index.js';
 
-function sessionMetaHtml(s: NetworkSession): string {
+/** The "has a note" glyph (purple file-text icon). In sequence rows it's stacked under the SSL/lock
+ *  icon; structure leaves (which have no lock column) keep it appended to the meta row. */
+function noteMarkerHtml(s: NetworkSession): string {
+  return s.note
+    ? `<span class="ni-row-note-marker" title="${escapeHtml(s.note)}" aria-label="${escapeHtml(S.networkInspector.noteMarkerAria)}"><span class="icon icon-xs"><svg><use href="#icon-file-text"/></svg></span></span>`
+    : '';
+}
+
+function sessionMetaHtml(s: NetworkSession, includeNote = true): string {
   return `<span class="ni-row-meta">
     <span class="ni-row-ts">${escapeHtml(s.timestampLabel)}</span>
-    <span class="ni-row-dur">${escapeHtml(s.durationLabel)}</span>
+    <span class="ni-row-dur">${escapeHtml(s.durationLabel)}</span>${includeNote ? noteMarkerHtml(s) : ''}
   </span>`;
 }
 
@@ -31,19 +39,21 @@ function seqPillHtml(index: number, title: string): string {
 function sidebarRowHtml(s: NetworkSession, selectedEventId: string | null): string {
   const sel = s.eventId === selectedEventId ? ' ni-sidebar-row-selected' : '';
   const mitm = s.decrypted ? ' ni-sidebar-row-mitm' : '';
-  const ssl = s.decrypted
-    ? `<span class="ni-sidebar-ssl" title="${S.networkInspector.sslDecryptedTitle}">🔓</span>`
+  // Lock/SSL glyph with the "has a note" marker stacked beneath it in the same column (keeps the note
+  // out of the meta row, which was wrapping the duration). The SSL column is a vertical flex stack.
+  const lock = s.decrypted
+    ? `<span class="ni-sidebar-lock" title="${S.networkInspector.sslDecryptedTitle}">🔓</span>`
     : s.encrypted
-      ? `<span class="ni-sidebar-ssl" title="${S.networkInspector.sslEncryptedTitle}">🔒</span>`
-      : '<span class="ni-sidebar-ssl">—</span>';
+      ? `<span class="ni-sidebar-lock" title="${S.networkInspector.sslEncryptedTitle}">🔒</span>`
+      : '<span class="ni-sidebar-lock">—</span>';
   const path = s.path.length > 48 ? `${s.path.slice(0, 45)}…` : s.path;
-  return `<div class="ni-sidebar-row${sel}${mitm}" data-event-id="${escapeHtml(s.eventId)}">
+  return `<div class="ni-sidebar-row${sel}${mitm}" data-event-id="${escapeHtml(s.eventId)}" data-host="${escapeHtml(s.host.toLowerCase())}">
     <span class="ni-sidebar-seq">${seqPillHtml(s.index, S.networkInspector.sessionNumber(s.index))}</span>
-    ${ssl}
+    <span class="ni-sidebar-ssl">${lock}${noteMarkerHtml(s)}</span>
     <span class="ni-sidebar-host">${escapeHtml(s.host)}</span>
     <span class="ni-sidebar-path">${escapeHtml(s.method)} ${escapeHtml(path)}</span>
     <span class="ni-sidebar-status">${statusPillHtml(s)}</span>
-    ${sessionMetaHtml(s)}
+    ${sessionMetaHtml(s, false)}
   </div>`;
 }
 

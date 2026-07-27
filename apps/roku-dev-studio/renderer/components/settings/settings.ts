@@ -11,6 +11,7 @@ import {
   networkInspectorSetupGuideBodyHtml,
   networkInspectorHasCaptureSetupAction,
   type NiSetupPlatform,
+  type NiSetupGuideStrings,
 } from '@shared/network-inspector/setup-guide.js';
 import { initSideloadRelaySection } from './sideload-relay-section.js';
 import { attachBackdropClickToClose } from '../../modules/utils/modal-backdrop-click.js';
@@ -695,9 +696,13 @@ function updateNetworkInspectorStatusLine(state: any) {
   line.textContent = S.settings.niStatusEnabled(platformHint) + mitm;
 }
 
+// Last known capture-access state, so a locale-driven rebuild of the setup modal can re-assert
+// the action row's visibility without re-querying the main process.
+var lastBpfCaptureAvailable = false;
 function updateBpfCaptureUi(available: boolean) {
   if (HOST_PLATFORM !== 'darwin' && HOST_PLATFORM !== 'linux') return;
   var ok = available === true;
+  lastBpfCaptureAvailable = ok;
   var headerBadge = el('niSetupHeaderBadge');
   if (headerBadge) {
     headerBadge.hidden = false;
@@ -916,20 +921,45 @@ function refreshNiPortConflict() {
   renderNiPortConflict(rstatus && rstatus.mitmPortConflict ? rstatus.mitmPortConflict : null);
 }
 
+/**
+ * Populate the cyan Min/Max bound labels that bracket the three static NI number inputs,
+ * mirroring the Timing rows. Reads each input's min/max attributes and formats them via the
+ * shared S.settings.timingBoundMin/Max fns so the "Min:"/"Max:" prefix follows the active
+ * locale. Call after applyI18n (init) and on a locale change so the prefix stays translated.
+ */
+function populateNiBoundLabels() {
+  ['niMitmPort', 'niMaxRawPackets', 'niMaxBodyKb'].forEach(function (id) {
+    var inp = el(id);
+    if (!inp) return;
+    var st = inp.parentElement;
+    if (!st) return;
+    var mn = st.querySelector('[data-ni-bound-min]');
+    var mx = st.querySelector('[data-ni-bound-max]');
+    if (mn) mn.textContent = S.settings.timingBoundMin(inp.getAttribute('min') || '');
+    if (mx) mx.textContent = S.settings.timingBoundMax(inp.getAttribute('max') || '');
+  });
+}
+
 function applyNiPlace() {
   var place = currentNiPlace();
   var setupRow = el('niSetupRow');
   var maxRawRow = el('niMaxRawPackets');
+  var caRow = el('niCaRow');
   if (place === 'local') {
     setNiSectionUnsupported(false);
     setNiControlsDisabled(false);
     setNiPlaceHint('', false);
     if (setupRow) setupRow.hidden = false;
     if (maxRawRow) maxRawRow.disabled = false;
+    // The CA is this machine's local certificate authority — only meaningful for the local place.
+    if (caRow) caRow.hidden = false;
     applyLocalNiValues();
     refreshNiPortConflict();
     return;
   }
+  if (caRow) caRow.hidden = true;
+  // The CA modal is only meaningful for the local place — close it if switching to remote.
+  if (isNiCaOpen()) closeNiCa();
   if (setupRow) setupRow.hidden = true;
   if (maxRawRow) maxRawRow.disabled = true;
   setNiControlsDisabled(true);
@@ -1114,6 +1144,35 @@ function wireSaveButton(btnId: string, okMessage: () => string, statusId: string
   });
 }
 
+/**
+ * Fill the Hotspot Capture Setup modal's title + guide body from the active locale. The body is
+ * injected HTML (paragraphs/steps carry inline markup), so it lives outside applyI18n's reach —
+ * call this at init and again on every locale change to keep it translated.
+ */
+function populateNiSetupModal() {
+  var niSetupPlatform = HOST_PLATFORM as NiSetupPlatform;
+  // Fall back to the engine's English default if a locale hasn't translated the guide yet
+  // (undefined at runtime for an untranslated catalog) so the modal never renders empty.
+  var guide: NiSetupGuideStrings | undefined = S.settings.niSetupGuide;
+  var titleEl = document.getElementById('niSetupModalTitle');
+  if (titleEl) titleEl.textContent = networkInspectorSetupTitle(niSetupPlatform, guide && guide.titlePrefix);
+  var bodyEl = document.getElementById('niSetupModalBody');
+  if (bodyEl) {
+    var bodyHtml = networkInspectorSetupGuideBodyHtml(niSetupPlatform, guide);
+    if (networkInspectorHasCaptureSetupAction(niSetupPlatform)) {
+      bodyHtml +=
+        '<div class="settings-section-actions" id="niBpfActions">' +
+        '<button type="button" class="btn btn-secondary btn-sm" id="btnInstallBpfAccess">' + S.settings.niSetupPacketCapture + '</button>' +
+        '<span class="settings-row-desc" id="niBpfInstallStatus" aria-live="polite"></span>' +
+        '</div>';
+    }
+    bodyEl.innerHTML = bodyHtml;
+    wireBpfInstallButton();
+    // The action row's visibility tracks capture availability; re-assert it after a rebuild.
+    updateBpfCaptureUi(lastBpfCaptureAvailable);
+  }
+}
+
 function wireBpfInstallButton() {
   var btnInstallBpf = el('btnInstallBpfAccess') as HTMLButtonElement | null;
   if (btnInstallBpf && api.installBpfAccess) {
@@ -1141,6 +1200,105 @@ function wireBpfInstallButton() {
   }
 }
 
+// ── Network Inspector — Certificate Authority modal (read-only) ──
+// Populated on modal open (openNiCa → refreshCaInfo) so merely viewing Settings never
+// triggers getOrCreateCa()'s synchronous RSA keygen — only opening the CA modal does.
+var niCaExportStatusTimer: number | null = null;
+
+/** Format the CA validity as a "from – to" range using the window locale; date-only, no time. */
+function formatCaValidity(fromIso: string, toIso: string): string {
+  var opts = { year: 'numeric', month: 'short', day: 'numeric' } as any;
+  var from = '';
+  try { from = new Date(fromIso).toLocaleDateString(getLocale(), opts); } catch (_e) { from = fromIso || ''; }
+  if (!toIso) return from;
+  var to = '';
+  try { to = new Date(toIso).toLocaleDateString(getLocale(), opts); } catch (_e) { to = toIso; }
+  return S.settings.caValidityRange(from, to);
+}
+
+function refreshCaInfo() {
+  if (!api.networkInspectorGetCaInfo) return;
+  api.networkInspectorGetCaInfo().then(function (res: any) {
+    var ca = res && res.caInfo;
+    if (res && res.success && ca) {
+      if (el('niCaSubject')) el('niCaSubject').textContent = ca.commonName || '';
+      if (el('niCaFingerprint')) el('niCaFingerprint').textContent = ca.fingerprintSha256 || '';
+      if (el('niCaValidity')) el('niCaValidity').textContent = formatCaValidity(ca.createdAt, ca.expiresAt);
+      if (el('niCaProxy')) el('niCaProxy').textContent = ca.proxyHostPort || '';
+      if (el('niCaInfo')) el('niCaInfo').hidden = false;
+      if (el('niCaEmpty')) el('niCaEmpty').hidden = true;
+    } else {
+      if (el('niCaEmpty')) { el('niCaEmpty').textContent = S.settings.caUnavailable; el('niCaEmpty').hidden = false; }
+      if (el('niCaInfo')) el('niCaInfo').hidden = true;
+    }
+  }).catch(function () {
+    if (el('niCaEmpty')) { el('niCaEmpty').textContent = S.settings.caUnavailable; el('niCaEmpty').hidden = false; }
+    if (el('niCaInfo')) el('niCaInfo').hidden = true;
+  });
+}
+
+/** Local auto-clearing status next to the CA export buttons (mirrors showTransientNiStatus). */
+function setCaExportStatus(msg: string, isErr: boolean) {
+  var statusEl = el('niCaExportStatus');
+  if (!statusEl) return;
+  statusEl.textContent = msg || '';
+  statusEl.className = 'settings-row-desc' + (msg && isErr ? ' err' : '');
+  if (niCaExportStatusTimer != null) {
+    window.clearTimeout(niCaExportStatusTimer);
+    niCaExportStatusTimer = null;
+  }
+  if (!msg) return;
+  niCaExportStatusTimer = window.setTimeout(function () {
+    var s = el('niCaExportStatus');
+    if (s && (s.textContent || '') === msg) {
+      s.textContent = '';
+      s.className = 'settings-row-desc';
+    }
+    niCaExportStatusTimer = null;
+  }, 4500);
+}
+
+function wireCaExportButtons() {
+  var btnPem = el('btnExportCaPem') as HTMLButtonElement | null;
+  if (btnPem && api.networkInspectorExportCaPem) {
+    btnPem.addEventListener('click', function () {
+      btnPem!.disabled = true;
+      api.networkInspectorExportCaPem().then(function (res: any) {
+        btnPem!.disabled = false;
+        if (res && res.success) {
+          setCaExportStatus(S.settings.caExportedPem, false);
+        } else if (res && res.error === 'cancelled') {
+          /* silent — user dismissed the save dialog */
+        } else {
+          setCaExportStatus((res && res.error) || S.settings.caExportFailed, true);
+        }
+      }).catch(function (e: any) {
+        btnPem!.disabled = false;
+        setCaExportStatus(String(e && e.message ? e.message : e), true);
+      });
+    });
+  }
+  var btnCrt = el('btnExportCaCrt') as HTMLButtonElement | null;
+  if (btnCrt && api.networkInspectorExportCaCert) {
+    btnCrt.addEventListener('click', function () {
+      btnCrt!.disabled = true;
+      api.networkInspectorExportCaCert().then(function (res: any) {
+        btnCrt!.disabled = false;
+        if (res && res.success) {
+          setCaExportStatus(S.settings.caExportedCrt, false);
+        } else if (res && res.error === 'cancelled') {
+          /* silent — user dismissed the save dialog */
+        } else {
+          setCaExportStatus((res && res.error) || S.settings.caExportFailed, true);
+        }
+      }).catch(function (e: any) {
+        btnCrt!.disabled = false;
+        setCaExportStatus(String(e && e.message ? e.message : e), true);
+      });
+    });
+  }
+}
+
 // ---- Initialization ----
 
 api.getState().then(function (state: any) {
@@ -1156,23 +1314,9 @@ api.getState().then(function (state: any) {
   syncHeaderSectionLabel();
   populateLanguageOptions();
 
-  // Populate the NI setup modal from the platform
-  var niSetupPlatform = HOST_PLATFORM as NiSetupPlatform;
-  var titleEl = document.getElementById('niSetupModalTitle');
-  if (titleEl) titleEl.textContent = networkInspectorSetupTitle(niSetupPlatform);
-  var bodyEl = document.getElementById('niSetupModalBody');
-  if (bodyEl) {
-    var bodyHtml = networkInspectorSetupGuideBodyHtml(niSetupPlatform);
-    if (networkInspectorHasCaptureSetupAction(niSetupPlatform)) {
-      bodyHtml +=
-        '<div class="settings-section-actions" id="niBpfActions">' +
-        '<button type="button" class="btn btn-secondary btn-sm" id="btnInstallBpfAccess">' + S.settings.niSetupPacketCapture + '</button>' +
-        '<span class="settings-row-desc" id="niBpfInstallStatus" aria-live="polite"></span>' +
-        '</div>';
-    }
-    bodyEl.innerHTML = bodyHtml;
-    wireBpfInstallButton();
-  }
+  // Populate the NI setup modal from the platform (in the active locale). Re-run on locale
+  // change since the body is injected HTML that applyI18n's single-text-node pass can't touch.
+  populateNiSetupModal();
 
   setToggle('optDevMode', !!state.developerModeEnabled);
   setToggle('optPrivacy', !!state.privacyModeEnabled);
@@ -1202,6 +1346,7 @@ api.getState().then(function (state: any) {
         : NI_MAX_BODY_KB_DEFAULT
     );
   }
+  populateNiBoundLabels();
   updateNetworkInspectorStatusLine(state);
   updateBpfCaptureUi(state.captureToolAvailable === true || state.bpfCaptureAvailable === true);
   niSavedLocations = Array.isArray(state.remoteLocations) ? state.remoteLocations : [];
@@ -1294,6 +1439,8 @@ if (api && typeof api.onLocaleChanged === 'function') {
     syncHeaderSectionLabel();
     populateLanguageOptions();
     setLanguageSelect(pref);
+    populateNiBoundLabels();
+    populateNiSetupModal();
   });
 }
 var btnResetGeneral = el('btnResetGeneral');
@@ -1398,10 +1545,41 @@ function closeNiSetup() {
 }
 var btnOpenNiSetup = el('btnOpenNiSetup');
 if (btnOpenNiSetup) btnOpenNiSetup.addEventListener('click', openNiSetup);
+wireCaExportButtons();
 var niSetupClose = el('niSetupModalClose');
 if (niSetupClose) niSetupClose.addEventListener('click', closeNiSetup);
 if (niSetupModal instanceof HTMLElement) {
   attachBackdropClickToClose(niSetupModal, closeNiSetup);
+}
+
+var niCaModal = el('niCaModal');
+var niCaLastFocus: Element | null = null;
+function isNiCaOpen() {
+  return !!(niCaModal && !niCaModal.hidden);
+}
+function openNiCa() {
+  if (!niCaModal) return;
+  niCaLastFocus = document.activeElement;
+  niCaModal.hidden = false;
+  var closeBtn = el('niCaModalClose');
+  if (closeBtn) closeBtn.focus();
+  // Fetch on open — this is the lazy trigger for getOrCreateCa()'s RSA keygen.
+  refreshCaInfo();
+}
+function closeNiCa() {
+  if (!niCaModal) return;
+  niCaModal.hidden = true;
+  if (niCaLastFocus && typeof (niCaLastFocus as HTMLElement).focus === 'function') {
+    (niCaLastFocus as HTMLElement).focus();
+  }
+  niCaLastFocus = null;
+}
+var btnOpenNiCa = el('btnOpenNiCa');
+if (btnOpenNiCa) btnOpenNiCa.addEventListener('click', openNiCa);
+var niCaClose = el('niCaModalClose');
+if (niCaClose) niCaClose.addEventListener('click', closeNiCa);
+if (niCaModal instanceof HTMLElement) {
+  attachBackdropClickToClose(niCaModal, closeNiCa);
 }
 
 wireSaveButton('btnSaveGeneral', () => S.settings.generalSaved, 'saveStatusGeneral', function () {
@@ -1475,6 +1653,10 @@ document.addEventListener('keydown', function (e: KeyboardEvent) {
   if (e.key !== 'Escape') return;
   if (isNiSetupOpen()) {
     closeNiSetup();
+    return;
+  }
+  if (isNiCaOpen()) {
+    closeNiCa();
     return;
   }
   requestCloseSettingsWindow();

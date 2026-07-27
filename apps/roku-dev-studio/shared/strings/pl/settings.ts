@@ -74,6 +74,47 @@ export const settings = {
   bpfCancelled: 'Anulowano.',
   bpfSetupFailed: 'Konfiguracja nie powiodła się.',
 
+  niSetupGuide: {
+    titlePrefix: `Konfiguracja przechwytywania hotspotu`,
+    darwin: {
+      intro: `<strong>Opcjonalne — tylko dla przechwytywania hotspotu.</strong> Odszyfrowywanie Twojego kanału dev wgranego przez sideload działa w każdej sieci bez tej konfiguracji. Te kroki dodają przechwytywanie hotspotu dla DNS/TLS SNI z <em>całego</em> ruchu urządzenia Roku przez hotspot Udostępniania internetu na Twoim Macu (<code class="mcp-inline-code">bridge100</code>). Tylko urządzenia lokalne.`,
+      enableSharing: `<strong>Włącz Udostępnianie internetu</strong> — RDS przechwytuje na <code class="mcp-inline-code">bridge100</code>, gdy tylko jest ono włączone:`,
+      sharingSteps: [
+        `Otwórz <strong>Ustawienia systemowe → Ogólne → Udostępnianie</strong>`,
+        `Włącz <strong>Udostępnianie internetu</strong>, udostępniając <strong>przez Wi-Fi</strong>`,
+        `Podłącz Roku do udostępnionej sieci Wi-Fi Maca`
+      ],
+      captureHead: `Dostęp do przechwytywania pakietów`,
+      captureBody: `macOS tworzy <code class="mcp-inline-code">/dev/bpf*</code> z dostępem tylko dla użytkownika root. Uruchom poniższą jednorazową konfigurację, aby przywrócić dostęp utrzymujący się po ponownych uruchomieniach (wymagane hasło administratora, tak jak w przypadku ChmodBPF z Wireshark). Możesz też zainstalować <a href="https://www.wireshark.org/download.html" target="_blank" rel="noopener noreferrer" class="mcp-link">Wireshark</a> i uruchomić jego instalator ChmodBPF.`
+    },
+    win32: {
+      intro: `<strong>Opcjonalne — tylko dla przechwytywania hotspotu.</strong> Odszyfrowywanie Twojego kanału dev wgranego przez sideload działa w każdej sieci bez tej konfiguracji (serwer proxy MITM obsługuje zarówno tę samą sieć Wi-Fi, jak i hotspot). Te kroki dodają przechwytywanie hotspotu dla DNS/TLS SNI z <em>całego</em> ruchu urządzenia Roku, gdy jest ono połączone przez hotspot tego komputera. Tylko urządzenia lokalne.`,
+      enableHotspot: `<strong>Włącz hotspot samodzielnie (opcjonalnie)</strong> — RDS nie przełącza ustawień sieciowych Windows; to Ty masz nad tym kontrolę:`,
+      hotspotSteps: [
+        `Otwórz <strong>Ustawienia → Sieć i Internet → Hotspot mobilny</strong>`,
+        `Włącz <strong>Hotspot mobilny</strong> (udostępnianie przez Wi-Fi)`,
+        `Podłącz Roku do tego hotspotu — RDS automatycznie wykrywa wirtualną kartę sieciową`
+      ],
+      npcapHead: `Dostęp do przechwytywania hotspotu (Npcap)`,
+      npcapBody: `Przechwytywanie hotspotu (DNS/TLS SNI z całego ruchu urządzenia Roku) wymaga sterownika <a href="https://npcap.com/" target="_blank" rel="noopener noreferrer" class="mcp-link">Npcap</a>. Jest to opcjonalne — pomiń to, a serwer proxy MITM nadal będzie rejestrować Twój kanał dev wgrany przez sideload.`,
+      npcapSteps: [
+        `Pobierz i uruchom instalator ze strony <a href="https://npcap.com/" target="_blank" rel="noopener noreferrer" class="mcp-link">npcap.com</a>`,
+        `Podczas instalacji zaznacz <strong>“Install Npcap in WinPcap API-compatible Mode”</strong>`,
+        `<strong>Uruchom ponownie Roku Dev Studio</strong> po instalacji, aby załadował się dołączony moduł przechwytywania`
+      ],
+      npcapNote: `Masz już Npcap, ale przechwytywanie nadal się nie uruchamia? Zainstaluj ponownie Roku Dev Studio, aby jego natywny moduł przechwytywania pasował do tej wersji.`
+    },
+    linux: {
+      intro: `<strong>Opcjonalne — tylko dla przechwytywania hotspotu.</strong> Odszyfrowywanie Twojego kanału dev wgranego przez sideload działa w każdej sieci bez tej konfiguracji. Te kroki dodają przechwytywanie hotspotu dla DNS/TLS SNI z <em>całego</em> ruchu urządzenia Roku poprzez udostępnienie połączenia tego komputera. Tylko urządzenia lokalne.`,
+      shareConnection: `<strong>Udostępnij swoje połączenie</strong>, aby ruch Roku był kierowany przez ten komputer:`,
+      shareSteps: [
+        `Użyj NetworkManager → <strong>“Udostępnione innym komputerom”</strong> na połączeniu Wi-Fi/Ethernet (brama <code class="mcp-inline-code">10.42.0.1</code>) lub uruchom hotspot hostapd`,
+        `Podłącz Roku do tej udostępnionej sieci — RDS automatycznie wykrywa interfejs bramy`
+      ],
+      captureHead: `Dostęp do przechwytywania pakietów`,
+      captureBody: `Linux przechwytuje za pomocą <code class="mcp-inline-code">tcpdump</code>, który wymaga uprawnień do surowych gniazd. Uruchom poniższą jednorazową konfigurację (monit administratora), aby przyznać uprawnienia <code class="mcp-inline-code">cap_net_raw</code>/<code class="mcp-inline-code">cap_net_admin</code> — lub ręcznie: <code class="mcp-inline-code">sudo setcap cap_net_raw,cap_net_admin=eip $(which tcpdump)</code>.`
+    }
+  },
   // Network Inspector — place selector + Remote Locations
   placeLocal: 'Lokalnie (ten komputer)',
   placeRemoteFallback: 'Zdalnie',
@@ -198,15 +239,15 @@ export const settings = {
     'Analizuj ruch sieciowy urządzenia. Odszyfrowuje ruch HTTPS Twojego kanału deweloperskiego przez lokalny serwer proxy (dowolna sieć); hotspot przechwytuje także DNS/SNI. Przechowywane tylko lokalnie.',
   mitmProxyPort: 'Port serwera proxy MITM',
   mitmProxyPortDesc:
-    'Port, na którym nasłuchuje lokalny serwer proxy odszyfrowujący. Kieruj przez niego swój wgrany kanał deweloperski — działa w dowolnej sieci (kanałów fabrycznych nie można przechwycić).',
+    'Port, na którym nasłuchuje lokalny serwer proxy odszyfrowujący. Kieruj przez niego swój wgrany kanał deweloperski — kanałów fabrycznych nie można przechwycić.',
   mitmProxyPortAria: 'Port serwera proxy MITM',
   packetLimit: 'Limit pakietów na urządzenie',
   packetLimitDesc:
-    'Maksymalna liczba przechwyconych ramek zachowywanych na urządzenie na potrzeby eksportu PCAP. Więcej = dłuższa historia, więcej pamięci. 100–100000.',
+    'Ramki zachowywane na urządzenie na potrzeby eksportu PCAP. Więcej = więcej historii i pamięci.',
   packetLimitAria: 'Limit pakietów na urządzenie',
   maxBodySize: 'Maksymalny rozmiar treści (KB)',
   maxBodySizeDesc:
-    'Ile z treści każdego żądania/odpowiedzi jest zachowywane do wyświetlenia w inspektorze. Więcej = analizuj duże treści (np. wielomegabajtowy JS) w całości; powyżej tej wartości treść pokazuje plakietkę „Treść skrócona”. Nigdy nie wpływa to na to, co odbiera urządzenie. Dotyczy tylko nowego ruchu — zwiększenie tej wartości nie przywróci treści już przechwyconych i skróconych. 64–16384 KB.',
+    'Ile z treści każdego żądania/odpowiedzi jest zachowywane do wyświetlenia. Powyżej limitu pokazuje się plakietka „Treść skrócona” (nie wpływa to na urządzenie). Dotyczy tylko nowego ruchu.',
   maxBodySizeAria: 'Maksymalny zachowywany rozmiar treści w KB',
   hotspotCaptureSetup: 'Konfiguracja hotspotu i przechwytywania',
   viewSetup: 'Pokaż konfigurację',
@@ -217,4 +258,24 @@ export const settings = {
   srIntro2: 'RDS akceptuje wgranie raz, a następnie instaluje je na każdym włączonym urządzeniu docelowym, uruchamia Dev App i otwiera każdą konsolę.',
   srIntro3: 'Wgrania z tego komputera przebiegają automatycznie.',
   srIntro4: 'Wgranie z innego urządzenia w sieci LAN wymaga hasła deweloperskiego i prosi o zezwolenie.',
+
+  // ── Network Inspector — Certificate Authority card (surface the CA) ──
+  caSectionTitle: 'Urząd certyfikacji',
+  caRowDesc: 'Lokalny urząd certyfikacji, którego serwer proxy używa do odszyfrowywania ruchu HTTPS.',
+  caViewCert: 'Pokaż certyfikat',
+  caSectionDesc:
+    'Inspektor sieci podpisuje odszyfrowany ruch HTTPS lokalnym urzędem certyfikacji. Zaufaj mu lub zaimportuj go na urządzeniu, aby Twój kanał deweloperski akceptował serwer proxy. Klucz prywatny nigdy nie opuszcza tego komputera.',
+  caSubject: 'Podmiot',
+  caFingerprint: 'Odcisk SHA-256',
+  caValidity: 'Ważność',
+  caProxyAddress: 'Adres serwera proxy',
+  caValidityRange: (from: string, to: string): string => `${from} – ${to}`,
+  caLoading: 'Ładowanie szczegółów certyfikatu…',
+  caUnavailable: 'Szczegóły certyfikatu są niedostępne.',
+  caExportAction: 'Eksportuj',
+  exportCaPem: 'Eksportuj .pem',
+  exportCaCrt: 'Eksportuj .crt',
+  caExportedPem: 'Wyeksportowano CA jako .pem.',
+  caExportedCrt: 'Wyeksportowano CA jako .crt.',
+  caExportFailed: 'Eksport nie powiódł się.',
 };

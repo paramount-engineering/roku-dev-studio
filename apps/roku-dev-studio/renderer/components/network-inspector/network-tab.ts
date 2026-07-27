@@ -29,11 +29,16 @@ import { filterWidthKey, filterHistoryKey } from '../../modules/ui/search-storag
 import { detailPaneHtml, wireDetailInteractions, syncBodyWrap as syncBodyWrapShared } from './network-detail-view.js';
 import { wireNetworkFilterControls } from './network-filter-help.js';
 import { openTrafficRulesModal } from './traffic-rules-modal.js';
+import { openComposeModal } from './network-compose-modal.js';
+import { openNoteModal } from './network-note-modal.js';
 import {
+  absoluteUrl,
   buildCurlCommand,
   buildHarArchive,
   buildHarArchiveAll,
   buildNetworkSessionFile,
+  buildReplayInputFromEvent,
+  eventRequestLabel,
   isExportableEvent,
   NETWORK_SESSION_FILE_EXT
 } from './network-export.js';
@@ -69,6 +74,7 @@ import {
   visibleFindOrder as visibleFindOrderShared,
   type FindTermInfo
 } from './network-find-decorations.js';
+import { applyFocusDecorations } from './network-focus-decorations.js';
 import { attachFoldToggle, MAX_STRUCTURED_BYTES } from '../../modules/ui/structured-body.js';
 import { attachSelectAll } from '../../modules/ui/select-all.js';
 import { S } from '@shared/strings/index.js';
@@ -142,6 +148,8 @@ type NetworkTabState = {
   requestBodyFormat: BodyFormatMode;
   responseBodyFormat: BodyFormatMode;
   collapsedHosts: Set<string>;
+  /** Lowercased hostnames marked "focused" — a per-tab triage lens (local-only, never persisted). */
+  focusedHosts: Set<string>;
   detailLayout: 'stacked' | 'columns';
   decryptedOnly: boolean;
   capturing: boolean;
@@ -178,7 +186,7 @@ function openLargeBodyInfoModal(kb: number): void {
     <div class="ni-filter-help-modal" role="dialog" aria-modal="true" aria-label="${S.networkInspector.shownAsRawText}">
       <div class="ni-filter-help-header">
         <h3>${S.networkInspector.shownAsRawText}</h3>
-        <button type="button" class="modal-close ni-large-body-close" title="${S.common.close}" aria-label="${S.common.close}">×</button>
+        <button type="button" class="modal-close ni-large-body-close" title="${S.common.close}" aria-label="${S.common.close}"><span class="icon icon-sm"><svg><use href="#icon-x"/></svg></span></button>
       </div>
       <div class="ni-filter-help-body">
         <p class="ni-filter-help-intro">${S.networkInspector.largeBodyIntro(escapeHtml(sizeLabel), escapeHtml(limitKb))}</p>
@@ -277,6 +285,7 @@ export function setupNetworkTab(
     requestBodyFormat: 'auto',
     responseBodyFormat: 'auto',
     collapsedHosts: new Set(),
+    focusedHosts: new Set(),
     detailLayout: 'columns',
     decryptedOnly: true,
     capturing: true,
@@ -362,6 +371,9 @@ export function setupNetworkTab(
   const copyMenuEl = panel.querySelector('[data-ni-copy-menu]') as HTMLElement | null;
   const copyCaretEl = panel.querySelector('[data-ni-copy-menu-toggle]') as HTMLElement | null;
   const copyDropdownEl = panel.querySelector('[data-ni-copy-dropdown]') as HTMLElement | null;
+  const replayMenuEl = panel.querySelector('[data-ni-replay-menu]') as HTMLElement | null;
+  const replayCaretEl = panel.querySelector('[data-ni-replay-menu-toggle]') as HTMLElement | null;
+  const replayDropdownEl = panel.querySelector('[data-ni-replay-dropdown]') as HTMLElement | null;
   const scrollBottomFab = panel.querySelector('[data-ni-scroll-bottom]') as HTMLButtonElement | null;
   const requestBodyEl = panel.querySelector('[data-ni-request-body]');
   const responseBodyEl = panel.querySelector('[data-ni-response-body]');
@@ -692,6 +704,7 @@ export function setupNetworkTab(
         .map((el) => (el as HTMLElement).dataset.eventId)
         .filter((id): id is string => !!id);
     }
+    // Non-focused rows only dim (never hide), so every filtered session stays arrow-navigable.
     return filteredSessions().map((s) => s.eventId);
   }
 
@@ -1020,6 +1033,9 @@ export function setupNetworkTab(
     detailPane.classList.remove('is-empty');
     const loaded = selectedDetail?.id === summary.id;
     const ev = detailRenderEvent() ?? summary;
+    // Tint the header Notes button when the selected event carries a note (distinct from the default
+    // tool-button styling); plain otherwise.
+    detailPane.querySelector('[data-ni-note-open]')?.classList.toggle('has-note', !!ev.note?.trim());
     // Drive the header "Body Truncated" badges (toggled in `syncPaneChrome`). The summary carries
     // `bodyTruncated` even before the full detail loads, so this is correct on first paint too.
     reqBodyTruncated = !!ev.httpRequest?.bodyTruncated;
@@ -1031,6 +1047,12 @@ export function setupNetworkTab(
     if (copyCaretEl) copyCaretEl.hidden = !canExportSelected;
     if (copyMenuEl) copyMenuEl.classList.toggle('has-caret', canExportSelected);
     if (!canExportSelected) closeCopyDropdown();
+    // Replay split-menu: only meaningful for exportable http-transaction rows (same gate as the
+    // copy caret). Hidden entirely otherwise; the caret reveals the Replay Now / Edit & Resend menu.
+    if (replayMenuEl) replayMenuEl.hidden = !canExportSelected;
+    if (replayCaretEl) replayCaretEl.hidden = !canExportSelected;
+    if (replayMenuEl) replayMenuEl.classList.toggle('has-caret', canExportSelected);
+    if (!canExportSelected) closeReplayDropdown();
     // Headers/body live on disk; only the loaded detail has them. Until it arrives, show a
     // loading state for panes that need it (Overview renders fully from the summary).
     const needsDetail =
@@ -1051,7 +1073,9 @@ export function setupNetworkTab(
       return;
     }
     if (which !== 'response' && requestBodyEl instanceof HTMLElement) {
-      if (state.requestTab === 'body' && needsDetail) {
+      // Overview fills progressively from the summary; Headers/Body both need the on-disk
+      // detail (headers/body), so gate them behind the same loading placeholder until it arrives.
+      if (state.requestTab !== 'overview' && needsDetail) {
         requestBodyEl.innerHTML = detailLoadingHtml();
       } else {
         const allEvents = state.requestTab === 'overview' ? state.events : [];
@@ -1211,6 +1235,30 @@ export function setupNetworkTab(
     }
   }
 
+  // Surgically insert/update/remove the note glyph on a single row's `.ni-row-meta`, without a list
+  // rebuild (no scroll disturbance) — driven by the Overview note editor's optimistic write.
+  function updateRowNoteMarker(id: string, note: string | undefined): void {
+    if (!(sessionListEl instanceof HTMLElement)) return;
+    const rows = sessionListEl.querySelectorAll(`[data-event-id="${CSS.escape(id)}"]`);
+    rows.forEach((row) => {
+      // Sequence rows stack the marker in the SSL/lock column; structure leaves (no lock column) keep
+      // it in the meta row. Update wherever this row type holds it.
+      const host = row.querySelector('.ni-sidebar-ssl') || row.querySelector('.ni-row-meta');
+      if (!host) return;
+      const existing = host.querySelector('.ni-row-note-marker');
+      if (note) {
+        if (existing) existing.setAttribute('title', note);
+        else
+          host.insertAdjacentHTML(
+            'beforeend',
+            `<span class="ni-row-note-marker" title="${escapeHtml(note)}" aria-label="${escapeHtml(S.networkInspector.noteMarkerAria)}"><span class="icon icon-xs"><svg><use href="#icon-file-text"/></svg></span></span>`
+          );
+      } else if (existing) {
+        existing.remove();
+      }
+    });
+  }
+
   function renderSessionList(options?: { scrollToSelection?: boolean; followTail?: boolean; force?: boolean }): void {
     if (!(sessionListEl instanceof HTMLElement)) return;
     // A pending trim invalidates the incremental patch path (front rows removed) → force a rebuild.
@@ -1336,6 +1384,12 @@ export function setupNetworkTab(
       // only when the events or filter actually changed — not on every repaint (e.g. scroll) — so a
       // live capture doesn't spam the search IPC.
       applyFindDecorations();
+      // Re-stamp focus dim classes too, so incremental patched paints (which append fresh rows)
+      // inherit the current focus state. Skipped in Group-by-Host view — grouped rows never dim; the
+      // focusedHosts set is preserved and its decorations restored when switching back to sequence.
+      if (state.viewMode !== 'structure' && sessionListEl instanceof HTMLElement) {
+        applyFocusDecorations({ listEl: sessionListEl, focusedHosts: state.focusedHosts });
+      }
       // Keep Find live: whenever the events or filter change, re-run the active search so requests
       // that arrive AFTER the search still get matched + highlighted — even with the modal closed.
       if (findModal?.isActive()) {
@@ -1552,6 +1606,25 @@ export function setupNetworkTab(
     }
   }
 
+  /** Copy the selected transaction's absolute request URL. Loads full detail first so path-only
+   *  captures still resolve their `Host` header — the exact URL the cURL export uses. */
+  async function copySelectedUrl(btn: HTMLElement): Promise<void> {
+    if (!window.roku?.copyToClipboard) return;
+    const summary = selectedEvent();
+    if (!isExportableEvent(summary) || !summary) return;
+    await ensureDetailLoaded(summary);
+    const ev = selectedDetail?.id === summary.id ? selectedDetail.event : summary;
+    const url = absoluteUrl(ev);
+    if (!url) return;
+    try {
+      await window.roku.copyToClipboard(url);
+      btn.classList.add('is-copied');
+      window.setTimeout(() => btn.classList.remove('is-copied'), 1400);
+    } catch {
+      /* ignore */
+    }
+  }
+
   function closeCopyDropdown(): void {
     if (copyDropdownEl && !copyDropdownEl.hidden) copyDropdownEl.hidden = true;
     copyCaretEl?.setAttribute('aria-expanded', 'false');
@@ -1562,6 +1635,64 @@ export function setupNetworkTab(
     const willOpen = copyDropdownEl.hidden;
     copyDropdownEl.hidden = !willOpen;
     copyCaretEl.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+  }
+
+  function closeReplayDropdown(): void {
+    if (replayDropdownEl && !replayDropdownEl.hidden) replayDropdownEl.hidden = true;
+    replayCaretEl?.setAttribute('aria-expanded', 'false');
+  }
+
+  function toggleReplayDropdown(): void {
+    if (!replayDropdownEl || !replayCaretEl || replayCaretEl.hidden) return;
+    const willOpen = replayDropdownEl.hidden;
+    replayDropdownEl.hidden = !willOpen;
+    replayCaretEl.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+  }
+
+  /** One-click Replay: re-issue the selected request from the host (active traffic rules bypassed),
+   *  then select the new "Replayed" row the live capture-events push renders. */
+  async function replaySelected(): Promise<void> {
+    const api = window.roku;
+    const summary = selectedEvent();
+    if (!isExportableEvent(summary) || !summary) return;
+    closeReplayDropdown();
+    if (!api?.networkInspectorReplayRequest) {
+      showToast(S.networkInspector.replayUnavailable, 'error');
+      return;
+    }
+    // Pull full headers/body from the on-disk detail store so the replay is byte-faithful.
+    await ensureDetailLoaded(summary);
+    const ev = selectedDetail?.id === summary.id ? selectedDetail.event : summary;
+    const input = buildReplayInputFromEvent(ev);
+    // Attribute the replayed row to the SELECTED event's device (falling back to the primary watched
+    // IP) so the new "Replayed" row lands in the same device's list as the original.
+    const deviceIp = summary.deviceIp || watchDeviceIps()[0] || '';
+    showToast(S.networkInspector.replayStarting, 'info');
+    try {
+      const res = await api.networkInspectorReplayRequest({ deviceIp, input });
+      if (res?.success && res.event?.id) {
+        selectEventById(res.event.id);
+        showToast(S.networkInspector.replayAddedToList, 'success');
+      } else {
+        showToast(S.networkInspector.replayFailed(res?.error || ''), 'error');
+      }
+    } catch (err) {
+      showToast(S.networkInspector.replayFailed(err instanceof Error ? err.message : String(err)), 'error');
+    }
+  }
+
+  /** Open the Compose (Edit & Resend) modal for the selected request. The modal injects the resulting
+   *  row and calls back to select it (the live capture-events push renders the row/detail). */
+  function openCompose(): void {
+    const summary = selectedEvent();
+    if (!isExportableEvent(summary) || !summary) return;
+    closeReplayDropdown();
+    const deviceIp = summary.deviceIp || watchDeviceIps()[0] || '';
+    void (async () => {
+      await ensureDetailLoaded(summary);
+      const ev = selectedDetail?.id === summary.id ? selectedDetail.event : summary;
+      await openComposeModal({ event: ev, deviceIp, onSent: (id) => selectEventById(id) });
+    })();
   }
 
   function closeDownloadDropdown(): void {
@@ -1609,6 +1740,9 @@ export function setupNetworkTab(
           const res = await getDetail(summary.id);
           const full = (res?.event ?? null) as ParsedNetworkEvent | null;
           out[i] = full || summary;
+          // Belt-and-suspenders: overlay the local note so an export never misses it even if the
+          // disk detail hasn't picked it up (main attaches it too, but the round-trip may lag).
+          if (summary.note && out[i] && !out[i].note) out[i].note = summary.note;
         } catch {
           out[i] = summary;
         }
@@ -1800,6 +1934,9 @@ export function setupNetworkTab(
           // The event changed on disk too; allow its detail to be (re)fetched.
           detailUnavailableIds.delete(ev.id);
         }
+        // Don't let a not-yet-synced poll summary (which omits the note) wipe a local note the user
+        // just typed; the renderer is authoritative until the setEventNote round-trip lands.
+        if (ev.note === undefined && existing.note !== undefined) ev.note = existing.note;
         // Update in place: the same object stays at its position in `state.events` and in
         // `eventIndex`, so there's no O(n) `indexOf`/array write per updated event. `ev` is a fresh
         // full summary with the same shape, so the shallow merge fully refreshes it.
@@ -2197,6 +2334,61 @@ export function setupNetworkTab(
     }
   }, listenerOpts);
 
+  // Right-click a host row (sequence) or a group header/leaf (Group-by-Host) → native Focus/Unfocus
+  // menu (+ Clear when any host is focused). Focus is a per-tab dim lens; see onFocusChanged.
+  function resolveHostFromNode(node: HTMLElement | null): string | null {
+    const group = node?.closest('.ni-struct-host') as HTMLElement | null;
+    if (group?.dataset.structHost) return group.dataset.structHost;
+    const row = node?.closest('.ni-sidebar-row[data-host]') as HTMLElement | null;
+    return row?.dataset.host ?? null;
+  }
+
+  async function showHostFocusMenu(host: string): Promise<void> {
+    const api = window.roku;
+    if (!api?.showContextMenu) return;
+    const isFocused = state.focusedHosts.has(host);
+    const items: Array<Record<string, unknown>> = [
+      {
+        label: isFocused ? S.networkInspector.unfocusHost(host) : S.networkInspector.focusHost(host),
+        action: 'ni-focus-toggle'
+      }
+    ];
+    if (state.focusedHosts.size > 0) {
+      items.push({ type: 'separator' }, { label: S.networkInspector.clearFocusedHosts, action: 'ni-focus-clear' });
+    }
+    let res: { action?: string } | null = null;
+    try {
+      res = (await api.showContextMenu(items)) as { action?: string } | null;
+    } catch {
+      return;
+    }
+    if (!res) return;
+    if (res.action === 'ni-focus-toggle') {
+      if (state.focusedHosts.has(host)) state.focusedHosts.delete(host);
+      else state.focusedHosts.add(host);
+    } else if (res.action === 'ni-focus-clear') {
+      state.focusedHosts.clear();
+    }
+    onFocusChanged();
+  }
+
+  /** Apply a focus change: re-stamp the dim/emphasis decorations for the current focused-host set. */
+  function onFocusChanged(): void {
+    if (sessionListEl instanceof HTMLElement) {
+      applyFocusDecorations({ listEl: sessionListEl, focusedHosts: state.focusedHosts });
+    }
+  }
+
+  sessionListEl?.addEventListener('contextmenu', (e) => {
+    // Focus is disabled in Group-by-Host view; its items are the only ones this menu would hold, so
+    // show no menu at all while grouped.
+    if (state.viewMode === 'structure') return;
+    const host = resolveHostFromNode(e.target as HTMLElement | null);
+    if (!host) return;
+    e.preventDefault();
+    void showHostFocusMenu(host);
+  }, listenerOpts);
+
   // Enter/Space activates a focused embedded JSON/XML highlight (it's role="button").
   detailPane?.addEventListener('keydown', (e) => {
     const ke = e as KeyboardEvent;
@@ -2226,6 +2418,7 @@ export function setupNetworkTab(
         onCopyMenuToggle: () => toggleCopyDropdown(),
         onCopyItem: (item, kind) => {
           if (kind === 'curl' || kind === 'har') void exportSelectedAs(item, kind);
+          else if (kind === 'url') void copySelectedUrl(item);
           else void copyPaneContent(item, 'request');
           closeCopyDropdown();
         },
@@ -2244,10 +2437,40 @@ export function setupNetworkTab(
           if (state.responseTab === tab) return;
           state.responseTab = tab;
           renderDetail('response');
-        }
+        },
+        onReplay: () => void replaySelected(),
+        onCompose: () => openCompose(),
+        onReplayMenuToggle: () => toggleReplayDropdown(),
+        onNote: () => openNote()
       },
       listenerOpts
     );
+  }
+
+  // Per-request Note modal (opened from the request-pane header's Notes button — available for ALL
+  // event kinds, not just exportable ones). Edits are optimistic: the local write + surgical row
+  // marker update immediately, while the modal's debounced `onSave` mirrors the note into the main
+  // service via IPC (the same persistence path the old inline editor used). The detailSignature
+  // repaint-skip means an idle poll won't rewrite the detail while the modal is open.
+  function openNote(): void {
+    const summary = selectedEvent();
+    if (!summary) return;
+    const id = summary.id;
+    const current = (selectedDetail?.id === id ? selectedDetail.event.note : summary.note) ?? '';
+    openNoteModal({
+      id,
+      note: current,
+      subtitle: eventRequestLabel(summary),
+      onSave: (savedId, value) => {
+        const note = value.trim() ? value : undefined;
+        const ev = eventIndex.get(savedId);
+        if (ev) ev.note = note;
+        if (selectedDetail?.id === savedId) selectedDetail.event.note = note;
+        updateRowNoteMarker(savedId, note);
+        detailPane?.querySelector('[data-ni-note-open]')?.classList.toggle('has-note', !!note);
+        window.roku?.networkInspectorSetEventNote?.({ id: savedId, note: value });
+      }
+    });
   }
 
   // Right-click on a media preview (image/video/audio) → native menu to copy the actual picture
@@ -2269,23 +2492,27 @@ export function setupNetworkTab(
     listenerAc.signal.addEventListener('abort', attachFoldToggle(detailPane));
   }
 
-  // Dismiss the copy dropdown on an outside click or Escape so it behaves like a normal menu.
+  // Dismiss the copy + replay dropdowns on an outside click or Escape so they behave like normal menus.
   document.addEventListener(
     'click',
     (e) => {
-      if (!copyMenuEl || copyDropdownEl?.hidden) return;
       const t = e.target as Node | null;
-      if (t && copyMenuEl.contains(t)) return;
-      closeCopyDropdown();
+      if (copyMenuEl && !copyDropdownEl?.hidden && !(t && copyMenuEl.contains(t))) closeCopyDropdown();
+      if (replayMenuEl && !replayDropdownEl?.hidden && !(t && replayMenuEl.contains(t))) closeReplayDropdown();
     },
     { signal: listenerAc.signal }
   );
   document.addEventListener(
     'keydown',
     (e) => {
-      if (e.key === 'Escape' && copyDropdownEl && !copyDropdownEl.hidden) {
+      if (e.key !== 'Escape') return;
+      if (copyDropdownEl && !copyDropdownEl.hidden) {
         closeCopyDropdown();
         if (copyCaretEl instanceof HTMLElement) copyCaretEl.focus();
+      }
+      if (replayDropdownEl && !replayDropdownEl.hidden) {
+        closeReplayDropdown();
+        if (replayCaretEl instanceof HTMLElement) replayCaretEl.focus();
       }
     },
     { signal: listenerAc.signal }
@@ -2337,6 +2564,8 @@ export function setupNetworkTab(
     lastDetailSignature = '';
     lastStructureHosts = [];
     dirtyEventIds.clear();
+    // Wiping events also resets the focus lens (its hosts no longer exist in the list).
+    state.focusedHosts.clear();
   }
 
   clearBtn?.addEventListener('click', () => {
@@ -2393,7 +2622,10 @@ export function setupNetworkTab(
     }
     // Prefer the live panel header name (kept in sync with discovery) over the value
     // captured at setup, falling back to model/serial when the device is unnamed.
-    const panelName = panel.querySelector('.panel-device-name-text')?.textContent?.trim() || '';
+    const panelNameRaw = panel.querySelector('.panel-device-name-text')?.textContent?.trim() || '';
+    // The panel shows the i18n placeholder ("Device Name") when the device is unnamed — don't pass
+    // that through as if it were a real name; fall back to the model/serial captured in state.
+    const panelName = panelNameRaw && panelNameRaw !== S.app.deviceNamePlaceholder ? panelNameRaw : '';
     const deviceName = panelName || state.deviceName || '';
     void openTrafficRulesModal({
       deviceIp,

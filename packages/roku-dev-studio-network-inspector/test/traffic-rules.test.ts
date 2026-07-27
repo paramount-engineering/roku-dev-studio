@@ -13,7 +13,7 @@ import { describe, it } from 'node:test';
 import * as assert from 'node:assert/strict';
 
 import { hostRuleMatches, resolveTrafficDecision } from '../types';
-import type { DeviceTrafficRules } from '../types';
+import type { DeviceTrafficRules, RewriteOp } from '../types';
 
 describe('hostRuleMatches', () => {
   it('matches exactly and by domain suffix when there is no wildcard', () => {
@@ -115,5 +115,167 @@ describe('resolveTrafficDecision — precedence', () => {
   it('does not apply a rule whose host does not match', () => {
     const d = resolveTrafficDecision({ hosts: [{ host: 'other.com', block: true }] }, 'x.com', '/');
     assert.equal(d.block, false);
+  });
+});
+
+describe('resolveTrafficDecision — device presets', () => {
+  const has = (
+    ops: RewriteOp[] | undefined,
+    target: 'request' | 'response',
+    type: RewriteOp['type'],
+    match: string,
+    value?: string
+  ): boolean =>
+    !!ops?.some(
+      (o) =>
+        o.target === target &&
+        o.type === type &&
+        o.match === match &&
+        (value === undefined || o.value === value)
+    );
+
+  it('noCaching strips request cache headers and forces no-store on responses', () => {
+    const d = resolveTrafficDecision({ noCaching: true }, 'x.com', '/');
+    assert.equal(d.block, false);
+    assert.ok(has(d.rewrite, 'request', 'remove-header', 'cache-control'));
+    assert.ok(has(d.rewrite, 'request', 'remove-header', 'if-none-match'));
+    assert.ok(has(d.rewrite, 'request', 'remove-header', 'if-modified-since'));
+    assert.ok(has(d.rewrite, 'response', 'set-header', 'cache-control', 'no-store'));
+    assert.ok(has(d.rewrite, 'response', 'remove-header', 'expires'));
+    assert.ok(has(d.rewrite, 'response', 'remove-header', 'etag'));
+    assert.ok(has(d.rewrite, 'response', 'remove-header', 'last-modified'));
+  });
+
+  it('blockCookies strips request cookie and response set-cookie', () => {
+    const d = resolveTrafficDecision({ blockCookies: true }, 'x.com', '/');
+    assert.equal(d.block, false);
+    assert.ok(has(d.rewrite, 'request', 'remove-header', 'cookie'));
+    assert.ok(has(d.rewrite, 'response', 'remove-header', 'set-cookie'));
+  });
+
+  it('seeds preset ops before per-host rewrite ops', () => {
+    const d = resolveTrafficDecision(
+      {
+        noCaching: true,
+        hosts: [{ host: 'x.com', rewrite: [{ target: 'request', type: 'set-header', match: 'x-test', value: '1' }] }]
+      },
+      'x.com',
+      '/'
+    );
+    assert.ok(d.rewrite && d.rewrite.length > 1);
+    // The preset op comes first; the host op is last.
+    assert.equal(d.rewrite?.[0].match, 'cache-control');
+    const last = d.rewrite?.[d.rewrite.length - 1];
+    assert.equal(last?.match, 'x-test');
+    assert.equal(last?.value, '1');
+  });
+
+  it('blockAll wins over presets and returns no rewrite', () => {
+    const d = resolveTrafficDecision({ blockAll: true, noCaching: true, blockCookies: true }, 'x.com', '/');
+    assert.equal(d.block, true);
+    assert.equal(d.rewrite, undefined);
+  });
+
+  it('omits the rewrite key when both preset flags are off', () => {
+    const d = resolveTrafficDecision({ noCaching: false, blockCookies: false }, 'x.com', '/');
+    assert.equal(d.block, false);
+    assert.equal(d.rewrite, undefined);
+  });
+});
+
+describe('resolveTrafficDecision — per-host presets', () => {
+  const has = (
+    ops: RewriteOp[] | undefined,
+    target: 'request' | 'response',
+    type: RewriteOp['type'],
+    match: string,
+    value?: string
+  ): boolean =>
+    !!ops?.some(
+      (o) =>
+        o.target === target &&
+        o.type === type &&
+        o.match === match &&
+        (value === undefined || o.value === value)
+    );
+
+  it('expands a forwarding host rule\'s No Caching / Block Cookies into rewrite ops', () => {
+    const d = resolveTrafficDecision(
+      { hosts: [{ host: 'x.com', noCaching: true, blockCookies: true }] },
+      'x.com',
+      '/'
+    );
+    assert.equal(d.block, false);
+    assert.ok(has(d.rewrite, 'request', 'remove-header', 'cache-control'));
+    assert.ok(has(d.rewrite, 'response', 'set-header', 'cache-control', 'no-store'));
+    assert.ok(has(d.rewrite, 'request', 'remove-header', 'cookie'));
+    assert.ok(has(d.rewrite, 'response', 'remove-header', 'set-cookie'));
+  });
+
+  it('applies host presets only to the matching host', () => {
+    const rules: DeviceTrafficRules = { hosts: [{ host: 'x.com', noCaching: true }] };
+    assert.equal(resolveTrafficDecision(rules, 'other.com', '/').rewrite, undefined);
+    assert.ok((resolveTrafficDecision(rules, 'x.com', '/').rewrite || []).length > 0);
+  });
+
+  it('seeds host preset ops before the host\'s explicit rewrite ops', () => {
+    const d = resolveTrafficDecision(
+      {
+        hosts: [
+          {
+            host: 'x.com',
+            noCaching: true,
+            rewrite: [{ target: 'request', type: 'set-header', match: 'x-test', value: '1' }]
+          }
+        ]
+      },
+      'x.com',
+      '/'
+    );
+    assert.ok(d.rewrite && d.rewrite.length > 1);
+    // The host preset op comes first; the explicit host op is last (so it can override the preset).
+    assert.equal(d.rewrite?.[0].match, 'cache-control');
+    const last = d.rewrite?.[d.rewrite.length - 1];
+    assert.equal(last?.match, 'x-test');
+    assert.equal(last?.value, '1');
+  });
+
+  it('stacks device presets ahead of host presets (device first, host after)', () => {
+    const d = resolveTrafficDecision(
+      { blockCookies: true, hosts: [{ host: 'x.com', noCaching: true }] },
+      'x.com',
+      '/'
+    );
+    // Device-wide Block Cookies is seeded before any host rule...
+    assert.equal(d.rewrite?.[0].match, 'cookie');
+    // ...then the matching host's No Caching ops are appended.
+    assert.ok(has(d.rewrite, 'response', 'set-header', 'cache-control', 'no-store'));
+  });
+
+  it('does not expand host presets when the rule blocks (terminal action wins)', () => {
+    const d = resolveTrafficDecision(
+      { hosts: [{ host: 'x.com', block: true, noCaching: true, blockCookies: true }] },
+      'x.com',
+      '/'
+    );
+    assert.equal(d.block, true);
+    assert.equal(d.rewrite, undefined);
+  });
+
+  it('does not expand host presets when the rule mocks or resets', () => {
+    const mock = resolveTrafficDecision(
+      { hosts: [{ host: 'x.com', respond: { statusCode: 503 }, noCaching: true }] },
+      'x.com',
+      '/'
+    );
+    assert.equal(mock.respond?.statusCode, 503);
+    assert.equal(mock.rewrite, undefined);
+    const reset = resolveTrafficDecision(
+      { hosts: [{ host: 'x.com', resetConnection: true, blockCookies: true }] },
+      'x.com',
+      '/'
+    );
+    assert.equal(reset.resetConnection, true);
+    assert.equal(reset.rewrite, undefined);
   });
 });

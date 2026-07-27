@@ -74,6 +74,47 @@ export const settings = {
   bpfCancelled: 'Anulat.',
   bpfSetupFailed: 'Configurarea a eșuat.',
 
+  niSetupGuide: {
+    titlePrefix: `Configurare captură hotspot`,
+    darwin: {
+      intro: `<strong>Opțional — doar pentru captura prin hotspot.</strong> Decriptarea canalului dumneavoastră de dezvoltare încărcat local funcționează pe orice rețea fără această configurare. Acești pași adaugă captura DNS/TLS SNI prin hotspot din <em>tot</em> traficul unui Roku, folosind hotspotul Internet Sharing al Mac-ului dumneavoastră (<code class="mcp-inline-code">bridge100</code>). Doar dispozitive locale.`,
+      enableSharing: `<strong>Activați Internet Sharing</strong> — RDS captează pe <code class="mcp-inline-code">bridge100</code> imediat ce este activat:`,
+      sharingSteps: [
+        `Deschideți <strong>System Settings → General → Sharing</strong>`,
+        `Activați <strong>Internet Sharing</strong>, partajând <strong>către Wi-Fi</strong>`,
+        `Conectați dispozitivul Roku la rețeaua Wi-Fi partajată de Mac`
+      ],
+      captureHead: `Acces la captura de pachete`,
+      captureBody: `macOS creează <code class="mcp-inline-code">/dev/bpf*</code> accesibil doar pentru root. Rulați configurarea unică de mai jos pentru a restabili accesul după fiecare repornire (necesită parola de administrator, la fel ca ChmodBPF din Wireshark). Sau instalați <a href="https://www.wireshark.org/download.html" target="_blank" rel="noopener noreferrer" class="mcp-link">Wireshark</a> și rulați programul său de instalare ChmodBPF.`
+    },
+    win32: {
+      intro: `<strong>Opțional — doar pentru captura prin hotspot.</strong> Decriptarea canalului dumneavoastră de dezvoltare încărcat local funcționează pe orice rețea fără această configurare (proxy-ul MITM gestionează atât aceeași rețea Wi-Fi, cât și hotspotul). Acești pași adaugă captura DNS/TLS SNI prin hotspot din <em>tot</em> traficul unui Roku, atunci când acesta este conectat prin hotspotul acestui PC. Doar dispozitive locale.`,
+      enableHotspot: `<strong>Activați singur un hotspot (opțional)</strong> — RDS nu comută rețeaua din Windows; o controlați dumneavoastră:`,
+      hotspotSteps: [
+        `Deschideți <strong>Setări → Rețea &amp; internet → Hotspot mobil</strong>`,
+        `Activați <strong>Hotspot mobil</strong> (partajați prin Wi-Fi)`,
+        `Conectați dispozitivul Roku la acel hotspot — RDS detectează automat adaptorul virtual`
+      ],
+      npcapHead: `Acces la captura prin hotspot (Npcap)`,
+      npcapBody: `Captura prin hotspot (DNS/TLS SNI din tot traficul Roku-ului) necesită driverul <a href="https://npcap.com/" target="_blank" rel="noopener noreferrer" class="mcp-link">Npcap</a>. Acest lucru este opțional — chiar dacă îl omiteți, proxy-ul MITM tot înregistrează canalul dumneavoastră de dezvoltare încărcat local.`,
+      npcapSteps: [
+        `Descărcați și rulați programul de instalare de la <a href="https://npcap.com/" target="_blank" rel="noopener noreferrer" class="mcp-link">npcap.com</a>`,
+        `În timpul instalării, activați <strong>“Install Npcap in WinPcap API-compatible Mode”</strong>`,
+        `<strong>Reporniți Roku Dev Studio</strong> după instalare, pentru ca modulul de captură inclus să se încarce`
+      ],
+      npcapNote: `Aveți deja Npcap, dar captura tot nu pornește? Reinstalați Roku Dev Studio pentru ca modulul său nativ de captură să corespundă acestei versiuni.`
+    },
+    linux: {
+      intro: `<strong>Opțional — doar pentru captura prin hotspot.</strong> Decriptarea canalului dumneavoastră de dezvoltare încărcat local funcționează pe orice rețea fără această configurare. Acești pași adaugă captura DNS/TLS SNI prin hotspot din <em>tot</em> traficul unui Roku, partajând conexiunea acestui computer. Doar dispozitive locale.`,
+      shareConnection: `<strong>Partajați conexiunea</strong> astfel încât Roku-ul să fie direcționat prin acest computer:`,
+      shareSteps: [
+        `Folosiți NetworkManager → <strong>“Partajat cu alte computere”</strong> pentru o conexiune Wi-Fi/Ethernet (gateway <code class="mcp-inline-code">10.42.0.1</code>) sau rulați un hotspot hostapd`,
+        `Conectați dispozitivul Roku la acea rețea partajată — RDS detectează automat interfața gateway-ului`
+      ],
+      captureHead: `Acces la captura de pachete`,
+      captureBody: `Linux captează prin <code class="mcp-inline-code">tcpdump</code>, care necesită privilegii de raw-socket. Rulați configurarea unică de mai jos (solicitare a administratorului) pentru a acorda capabilitățile <code class="mcp-inline-code">cap_net_raw</code>/<code class="mcp-inline-code">cap_net_admin</code> — sau manual: <code class="mcp-inline-code">sudo setcap cap_net_raw,cap_net_admin=eip $(which tcpdump)</code>.`
+    }
+  },
   // Network Inspector — place selector + Remote Locations
   placeLocal: 'Local (acest computer)',
   placeRemoteFallback: 'La distanță',
@@ -198,15 +239,15 @@ export const settings = {
     'Inspectează traficul de rețea al unui dispozitiv. Decriptează traficul HTTPS al canalului dumneavoastră de dezvoltare prin proxy-ul local (orice rețea); un hotspot captează și DNS/SNI. Stocat doar local.',
   mitmProxyPort: 'Port proxy MITM',
   mitmProxyPortDesc:
-    'Portul pe care ascultă proxy-ul local de decriptare. Direcționați prin el canalul de dezvoltare încărcat local — funcționează în orice rețea (canalele standard nu pot fi interceptate).',
+    'Portul pe care ascultă proxy-ul local de decriptare. Direcționați prin el canalul de dezvoltare încărcat local — canalele standard nu pot fi interceptate.',
   mitmProxyPortAria: 'Port proxy MITM',
   packetLimit: 'Limită de pachete per dispozitiv',
   packetLimitDesc:
-    'Numărul maxim de cadre capturate păstrate per dispozitiv pentru exportul PCAP. Mai mare = istoric mai lung, mai multă memorie. 100–100000.',
+    'Cadre păstrate per dispozitiv pentru exportul PCAP. Mai mare = mai mult istoric și memorie.',
   packetLimitAria: 'Limită de pachete per dispozitiv',
   maxBodySize: 'Dimensiune maximă a corpului (KB)',
   maxBodySizeDesc:
-    'Cât de mult din corpul fiecărei cereri/răspuns este păstrat pentru vizualizare în inspector. Mai mare = inspectați integral corpuri mari (de ex. JS de mai mulți MB); peste această valoare, corpul afișează o insignă „Corp trunchiat”. Acest lucru nu afectează niciodată ceea ce primește dispozitivul. Se aplică doar traficului nou — mărirea nu va restaura corpurile deja capturate și trunchiate. 64–16384 KB.',
+    'Cât de mult din corpul fiecărei cereri/răspuns este păstrat pentru vizualizare. Peste limită, se afișează o insignă „Corp trunchiat” (dispozitivul nu este afectat). Se aplică doar traficului nou.',
   maxBodySizeAria: 'Dimensiune maximă a corpului păstrat în KB',
   hotspotCaptureSetup: 'Configurare hotspot și captură',
   viewSetup: 'Vezi configurarea',
@@ -217,4 +258,24 @@ export const settings = {
   srIntro2: 'RDS acceptă încărcarea o singură dată, apoi o instalează pe fiecare țintă activată, lansează Dev App și deschide fiecare consolă.',
   srIntro3: 'Încărcările de pe acest computer se desfășoară automat.',
   srIntro4: 'O încărcare de pe alt dispozitiv din rețeaua LAN necesită parola de dezvoltator și vă solicită să o permiteți.',
+
+  // ── Network Inspector — Certificate Authority card (surface the CA) ──
+  caSectionTitle: 'Autoritate de certificare',
+  caRowDesc: 'Autoritatea de certificare locală pe care proxy-ul o folosește pentru a decripta traficul HTTPS.',
+  caViewCert: 'Vezi certificatul',
+  caSectionDesc:
+    'Inspector de rețea semnează traficul HTTPS decriptat cu o autoritate de certificare locală. Acordați-i încredere sau importați-o pe dispozitiv, astfel încât canalul dvs. de dezvoltare să accepte proxy-ul. Cheia privată nu părăsește niciodată acest computer.',
+  caSubject: 'Subiect',
+  caFingerprint: 'Amprentă SHA-256',
+  caValidity: 'Valabilitate',
+  caProxyAddress: 'Adresă proxy',
+  caValidityRange: (from: string, to: string): string => `${from} – ${to}`,
+  caLoading: 'Se încarcă detaliile certificatului…',
+  caUnavailable: 'Detaliile certificatului nu sunt disponibile.',
+  caExportAction: 'Exportă',
+  exportCaPem: 'Exportă .pem',
+  exportCaCrt: 'Exportă .crt',
+  caExportedPem: 'CA exportat ca .pem.',
+  caExportedCrt: 'CA exportat ca .crt.',
+  caExportFailed: 'Exportul a eșuat.',
 };

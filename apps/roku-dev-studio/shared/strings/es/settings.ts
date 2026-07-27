@@ -74,6 +74,47 @@ export const settings = {
   bpfCancelled: 'Cancelado.',
   bpfSetupFailed: 'La configuración falló.',
 
+  niSetupGuide: {
+    titlePrefix: `Configuración de captura por hotspot`,
+    darwin: {
+      intro: `<strong>Opcional — solo para la captura por hotspot.</strong> El descifrado de su canal de desarrollador cargado con sideload funciona en cualquier red sin esta configuración. Estos pasos añaden la captura por hotspot de DNS/TLS SNI de <em>todo</em> el tráfico de un Roku a través del hotspot de Compartir Internet de su Mac (<code class="mcp-inline-code">bridge100</code>). Solo dispositivos locales.`,
+      enableSharing: `<strong>Active Compartir Internet</strong> — RDS captura en <code class="mcp-inline-code">bridge100</code> en cuanto esté activado:`,
+      sharingSteps: [
+        `Abra <strong>Ajustes del Sistema → General → Compartir</strong>`,
+        `Active <strong>Compartir Internet</strong>, compartiendo <strong>por Wi-Fi</strong>`,
+        `Conecte su Roku a la red Wi-Fi compartida del Mac`
+      ],
+      captureHead: `Acceso a la captura de paquetes`,
+      captureBody: `macOS crea <code class="mcp-inline-code">/dev/bpf*</code> con acceso solo para root. Ejecute la configuración única que aparece a continuación para restaurar el acceso tras cada reinicio (se requiere la contraseña de administrador, como el ChmodBPF de Wireshark). O instale <a href="https://www.wireshark.org/download.html" target="_blank" rel="noopener noreferrer" class="mcp-link">Wireshark</a> y ejecute su instalador de ChmodBPF.`
+    },
+    win32: {
+      intro: `<strong>Opcional — solo para la captura por hotspot.</strong> El descifrado de su canal de desarrollador cargado con sideload funciona en cualquier red sin esta configuración (el proxy MITM gestiona tanto la misma red Wi-Fi como el hotspot). Estos pasos añaden la captura por hotspot de DNS/TLS SNI de <em>todo</em> el tráfico de un Roku cuando está conectado a través del hotspot de este PC. Solo dispositivos locales.`,
+      enableHotspot: `<strong>Active un hotspot usted mismo (opcional)</strong> — RDS no activa ni desactiva la red de Windows; usted la controla:`,
+      hotspotSteps: [
+        `Abra <strong>Configuración → Red &amp; Internet → Zona con cobertura inalámbrica móvil</strong>`,
+        `Active la <strong>Zona con cobertura inalámbrica móvil</strong> (compartir por Wi-Fi)`,
+        `Conecte su Roku a ese hotspot — RDS detecta automáticamente el adaptador virtual`
+      ],
+      npcapHead: `Acceso a la captura por hotspot (Npcap)`,
+      npcapBody: `La captura por hotspot (DNS/TLS SNI de todo el tráfico del Roku) necesita el controlador <a href="https://npcap.com/" target="_blank" rel="noopener noreferrer" class="mcp-link">Npcap</a>. Esto es opcional — omítalo y el proxy MITM seguirá registrando su canal de desarrollador cargado con sideload.`,
+      npcapSteps: [
+        `Descargue y ejecute el instalador desde <a href="https://npcap.com/" target="_blank" rel="noopener noreferrer" class="mcp-link">npcap.com</a>`,
+        `Durante la instalación, active <strong>“Install Npcap in WinPcap API-compatible Mode”</strong>`,
+        `<strong>Reinicie Roku Dev Studio</strong> después de instalarlo para que se cargue el módulo de captura incluido`
+      ],
+      npcapNote: `¿Ya tiene Npcap pero la captura sigue sin iniciarse? Reinstale Roku Dev Studio para que su módulo de captura nativo coincida con esta compilación.`
+    },
+    linux: {
+      intro: `<strong>Opcional — solo para la captura por hotspot.</strong> El descifrado de su canal de desarrollador cargado con sideload funciona en cualquier red sin esta configuración. Estos pasos añaden la captura por hotspot de DNS/TLS SNI de <em>todo</em> el tráfico de un Roku compartiendo la conexión de esta máquina. Solo dispositivos locales.`,
+      shareConnection: `<strong>Comparta su conexión</strong> para que el Roku enrute el tráfico a través de esta máquina:`,
+      shareSteps: [
+        `Use NetworkManager → <strong>“Compartida con otros equipos”</strong> en una conexión Wi-Fi/Ethernet (puerta de enlace <code class="mcp-inline-code">10.42.0.1</code>), o ejecute un hotspot con hostapd`,
+        `Conecte su Roku a esa red compartida — RDS detecta automáticamente la interfaz de la puerta de enlace`
+      ],
+      captureHead: `Acceso a la captura de paquetes`,
+      captureBody: `Linux captura mediante <code class="mcp-inline-code">tcpdump</code>, que necesita privilegios de socket de bajo nivel. Ejecute la configuración única que aparece a continuación (solicita permisos de administrador) para otorgar las capacidades <code class="mcp-inline-code">cap_net_raw</code>/<code class="mcp-inline-code">cap_net_admin</code> — o manualmente: <code class="mcp-inline-code">sudo setcap cap_net_raw,cap_net_admin=eip $(which tcpdump)</code>.`
+    }
+  },
   // Network Inspector — place selector + Remote Locations
   placeLocal: 'Local (esta máquina)',
   placeRemoteFallback: 'Remoto',
@@ -194,15 +235,15 @@ export const settings = {
     'Inspeccione el tráfico de red de un dispositivo. Descifra el HTTPS de su canal de desarrollador mediante el proxy local (cualquier red); un hotspot también captura DNS/SNI. Se almacena solo localmente.',
   mitmProxyPort: 'Puerto del proxy MITM',
   mitmProxyPortDesc:
-    'Puerto en el que escucha el proxy local de descifrado. Enrute su canal de desarrollador cargado con sideload a través de él — funciona en cualquier red (los canales de fábrica no se pueden interceptar).',
+    'Puerto en el que escucha el proxy local de descifrado. Enrute su canal de desarrollador cargado con sideload a través de él — los canales de fábrica no se pueden interceptar.',
   mitmProxyPortAria: 'Puerto del proxy MITM',
   packetLimit: 'Límite de paquetes por dispositivo',
   packetLimitDesc:
-    'Máximo de tramas capturadas que se conservan por dispositivo para la exportación PCAP. Mayor = historial más largo, más memoria. 100–100000.',
+    'Tramas conservadas por dispositivo para la exportación PCAP. Mayor = más historial y memoria.',
   packetLimitAria: 'Límite de paquetes por dispositivo',
   maxBodySize: 'Tamaño máximo del cuerpo (KB)',
   maxBodySizeDesc:
-    'Cuánto del cuerpo de cada solicitud/respuesta se conserva para verlo en el inspector. Mayor = inspeccione cuerpos grandes (p. ej. JS de varios MB) completos; por encima de esto, el cuerpo muestra una insignia "Body Truncated". Esto nunca afecta lo que recibe el dispositivo. Se aplica solo al tráfico nuevo — aumentarlo no restaurará los cuerpos que ya se capturaron y truncaron. 64–16384 KB.',
+    'Cuánto del cuerpo de cada solicitud/respuesta se conserva para verlo. Por encima del límite, se muestra una insignia "Body Truncated" (el dispositivo no se ve afectado). Se aplica solo al tráfico nuevo.',
   maxBodySizeAria: 'Tamaño máximo del cuerpo conservado en KB',
   hotspotCaptureSetup: 'Configuración de hotspot y captura',
   viewSetup: 'Ver configuración',
@@ -213,4 +254,24 @@ export const settings = {
   srIntro2: 'RDS acepta el sideload una vez, luego lo instala en cada destino habilitado, inicia la Dev App y abre cada consola.',
   srIntro3: 'Los sideloads desde esta máquina proceden automáticamente.',
   srIntro4: 'Un sideload desde otro dispositivo de la LAN necesita la contraseña de dev y le pide que lo permita.',
+
+  // ── Network Inspector — Certificate Authority card (surface the CA) ──
+  caSectionTitle: 'Autoridad de certificación',
+  caRowDesc: 'La autoridad de certificación local que el proxy usa para descifrar HTTPS.',
+  caViewCert: 'Ver certificado',
+  caSectionDesc:
+    'Inspector de red firma el HTTPS descifrado con una autoridad de certificación local. Confíe en ella o impórtela en el dispositivo para que su canal de desarrollador acepte el proxy. La clave privada nunca sale de esta máquina.',
+  caSubject: 'Sujeto',
+  caFingerprint: 'Huella SHA-256',
+  caValidity: 'Validez',
+  caProxyAddress: 'Dirección del proxy',
+  caValidityRange: (from: string, to: string): string => `${from} – ${to}`,
+  caLoading: 'Cargando los detalles del certificado…',
+  caUnavailable: 'Los detalles del certificado no están disponibles.',
+  caExportAction: 'Exportar',
+  exportCaPem: 'Exportar .pem',
+  exportCaCrt: 'Exportar .crt',
+  caExportedPem: 'CA exportada como .pem.',
+  caExportedCrt: 'CA exportada como .crt.',
+  caExportFailed: 'La exportación falló.',
 };

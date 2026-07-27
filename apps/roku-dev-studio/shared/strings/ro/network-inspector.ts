@@ -119,7 +119,6 @@ export const networkInspector = {
   secTls: 'TLS',
   secTiming: 'Cronometrare',
   secSize: 'Dimensiune',
-  secRequestHeaders: 'Antetele cererii',
   viewUrlTitle: 'Vizualizează URL-ul și parametrii de interogare',
   tagsMitmDecrypted: 'MITM · decriptat',
   protocolHttpsDecrypted: 'HTTPS (decriptat prin proxy-ul MITM Roku Dev Studio)',
@@ -391,5 +390,89 @@ export const networkInspector = {
   setupBadgeTitlePrereq: (title: string): string => `${title} — faceți clic pentru instrucțiunile de configurare`,
   setupBadgeTitle: 'Configurare captură hotspot — faceți clic pentru instrucțiuni',
   // Header port badge.
-  portBadgeTitle: (title: string): string => `${title} — faceți clic pentru detalii`
+  portBadgeTitle: (title: string): string => `${title} — faceți clic pentru detalii`,
+
+  // ══ Network Inspector additions ═══════════════════════════════════════════════
+  // Copy URL action (network-detail-view.ts copy menu).
+  copyUrl: 'Copiază URL-ul',
+
+  // Traffic-rule presets — device-wide toggles (traffic-rules-modal.ts).
+  noCachingTitle: 'Fără cache',
+  noCachingDesc: 'Elimină antetele de cache și forțează Cache-Control: no-store în răspunsuri.',
+  blockCookiesTitle: 'Blochează cookie-urile',
+  blockCookiesDesc: 'Elimină Cookie din cereri și Set-Cookie din răspunsuri.',
+
+  // Parsed detail viewers — Cookies tabs (network-detail.ts, network-parsed-tables.ts).
+  tabCookies: 'Cookie-uri',
+  colName: 'Nume',
+  colValue: 'Valoare',
+  colAttributes: 'Atribute',
+  noResponseCookies: 'Niciun cookie setat de acest răspuns.',
+
+  // Editable per-request note (network-detail.ts Overview + list marker).
+  secNote: 'Notă',
+  notePlaceholder: 'Adăugați o notă…',
+  noteAriaLabel: 'Notă pentru această cerere',
+  noteMarkerAria: 'Are o notă',
+
+  // Map Local — file-backed mock response (traffic-rules-modal.ts + proxy).
+  mockFieldFile: 'Fișier local',
+  mockChooseFile: 'Alegeți fișierul…',
+  mockFilePlaceholder: 'Niciun fișier ales',
+  mockFileClearAria: 'Șterge fișierul mapat',
+  mockFileServingBody: 'Corpul răspunsului este servit din fișierul mapat.',
+  mapLocalHint:
+    'Servește un fișier local drept corpul răspunsului. Content-Type este dedus din extensia fișierului dacă nu este setat mai sus.',
+  mapLocalDialogTitle: 'Alegeți un fișier de servit',
+  mapLocalAllFilesFilter: 'Toate fișierele',
+
+  // Focus hosts (network-session-view.ts + sidebar toggles).
+  focusHost: (host: string): string => `Focalizează ${host}`,
+  unfocusHost: (host: string): string => `Anulează focalizarea ${host}`,
+  clearFocusedHosts: 'Șterge hosturile focalizate',
+
+  // Replay / Compose (network-detail-view.ts action + network-compose-modal.ts).
+  replay: 'Reia',
+  replayTitle: 'Reia această cerere de la host',
+  replayAria: 'Reia cererea',
+  moreReplayOptions: 'Mai multe opțiuni de reluare',
+  replayNow: 'Reia acum',
+  composeItem: 'Editează și retrimite…',
+  composeTitle: 'Editează și retrimite',
+  composeNote: 'Reemite această cerere de la host. Editați metoda, URL-ul, antetele sau corpul înainte de trimitere.',
+  composeMethodLabel: 'Metodă',
+  composeUrlLabel: 'URL',
+  composeParamsLabel: 'Parametri de interogare',
+  composeAddRow: '+ Adaugă',
+  composeRowEnabledAria: 'Include această intrare',
+  composeSelectAllAria: 'Comută toate intrările',
+  composeHeadersLabel: 'Antete',
+  composeBodyLabel: 'Corp',
+  composeBodyPlaceholder: 'Corpul cererii',
+  composeBinaryBodyNote:
+    'Corpul capturat al cererii este binar și este trimis neschimbat; nu poate fi editat aici.',
+  composeApplyRules: 'Aplică regulile de trafic active',
+  composeApplyRulesTitle: 'Rulează reluarea prin regulile de blocare, rescriere și limitare ale acestui dispozitiv',
+  composeSend: 'Trimite',
+  composeSending: 'Se trimite…',
+  replayAddedToList: 'Răspuns adăugat la lista de sesiuni.',
+  replayFailed: (err: string): string => `Reluarea a eșuat: ${err}`,
+  replayInvalidUrl: 'Introduceți un URL http:// sau https:// valid.',
+  replayUnavailable: 'Reluarea nu este disponibilă în această versiune.',
+  replayStarting: 'Se reia…',
+  tagsReplayed: 'Reluat',
+  replayedBadgeTitle: 'Acest răspuns a fost produs prin reluarea unei cereri capturate de la host',
+
+  // Timing waterfall (network-detail.ts Overview timing section).
+  ovDuration: 'Durată',
+  wfDns: 'DNS',
+  wfConnect: 'Conectare',
+  wfTls: 'TLS',
+  wfSend: 'Trimitere',
+  wfWait: 'Așteptare (TTFB)',
+  wfReceive: 'Descărcare',
+  wfMs: (n: number): string => `${n} ms`,
+  wfSeconds: (s: number): string => `${s.toFixed(2)} s`,
+  wfSegmentTitle: (label: string, value: string): string => `${label}: ${value}`,
+  wfAria: 'Defalcarea cronometrării cererii'
 };

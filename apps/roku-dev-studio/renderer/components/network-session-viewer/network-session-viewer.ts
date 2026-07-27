@@ -24,12 +24,13 @@ import {
   type RequestPaneTab,
   type ResponsePaneTab
 } from '../network-inspector/network-detail.js';
-import { buildCurlCommand, buildHarArchive, isExportableEvent } from '../network-inspector/network-export.js';
+import { buildCurlCommand, buildHarArchive, isExportableEvent, absoluteUrl, eventRequestLabel } from '../network-inspector/network-export.js';
 import {
   detailPaneHtml,
   wireDetailInteractions,
   syncBodyWrap as syncBodyWrapShared
 } from '../network-inspector/network-detail-view.js';
+import { openNoteModal } from '../network-inspector/network-note-modal.js';
 import { paneBodyText as paneBodyTextShared, flashCopied } from '../network-inspector/network-copy.js';
 import { wireNetworkFilterControls } from '../network-inspector/network-filter-help.js';
 import { attachFoldToggle } from '../../modules/ui/structured-body.js';
@@ -57,6 +58,7 @@ import {
   visibleFindOrder as visibleFindOrderShared,
   type FindTermInfo
 } from '../network-inspector/network-find-decorations.js';
+import { applyFocusDecorations } from '../network-inspector/network-focus-decorations.js';
 import { S, applyI18n } from '@shared/strings/index.js';
 import { initLocaleForWindow } from '../../modules/utils/locale-live.js';
 
@@ -72,6 +74,7 @@ type RokuApi = {
   }>;
   copyToClipboard: (text: string) => Promise<unknown>;
   openExternal: (url: string) => Promise<unknown>;
+  showContextMenu?: (items: unknown) => Promise<{ action?: string } | null>;
   getPrivacyMode?: () => Promise<{ enabled: boolean }>;
   onPrivacyModeChanged?: (cb: (enabled: boolean) => void) => () => void;
 };
@@ -107,6 +110,7 @@ const state = {
   requestBodyWrap: true,
   responseBodyWrap: true,
   collapsedHosts: new Set<string>(),
+  focusedHosts: new Set<string>(),
   detailLayout: 'columns' as 'columns' | 'stacked',
   lastStructureHosts: [] as string[]
 };
@@ -194,6 +198,53 @@ function renderList(): void {
   syncGroupToggleButton();
   // Matching rows are rebuilt by the innerHTML above, so re-badge them from the current match set.
   applyFindDecorations();
+  // Re-stamp focus dim classes (rows were just rebuilt), shared with the live tab. Skipped in
+  // Group-by-Host view — grouped rows never dim; focusedHosts is preserved and restored on return to sequence.
+  if (state.viewMode !== 'structure' && sessionListEl instanceof HTMLElement) {
+    applyFocusDecorations({ listEl: sessionListEl, focusedHosts: state.focusedHosts });
+  }
+}
+
+/** Right-click a host row/group → native Focus/Unfocus menu (+ Clear). Resolve the host under the
+ *  cursor, then toggle it and re-render (renderList re-stamps the decorations). */
+function resolveHostFromNode(node: HTMLElement | null): string | null {
+  const group = node?.closest('.ni-struct-host') as HTMLElement | null;
+  if (group?.dataset.structHost) return group.dataset.structHost;
+  const row = node?.closest('.ni-sidebar-row[data-host]') as HTMLElement | null;
+  return row?.dataset.host ?? null;
+}
+
+async function showHostFocusMenu(host: string): Promise<void> {
+  if (!api?.showContextMenu) return;
+  const isFocused = state.focusedHosts.has(host);
+  const items: Array<Record<string, unknown>> = [
+    {
+      label: isFocused ? S.networkInspector.unfocusHost(host) : S.networkInspector.focusHost(host),
+      action: 'ni-focus-toggle'
+    }
+  ];
+  if (state.focusedHosts.size > 0) {
+    items.push({ type: 'separator' }, { label: S.networkInspector.clearFocusedHosts, action: 'ni-focus-clear' });
+  }
+  let res: { action?: string } | null = null;
+  try {
+    res = await api.showContextMenu(items);
+  } catch {
+    return;
+  }
+  if (!res) return;
+  if (res.action === 'ni-focus-toggle') {
+    if (state.focusedHosts.has(host)) state.focusedHosts.delete(host);
+    else state.focusedHosts.add(host);
+  } else if (res.action === 'ni-focus-clear') {
+    state.focusedHosts.clear();
+  }
+  onFocusChanged();
+}
+
+/** Repaint the list so renderList re-stamps the dim/emphasis decorations for the focused-host set. */
+function onFocusChanged(): void {
+  renderList();
 }
 
 /** Badge matching rows + flag collapsed host groups that hold a match — delegates to the shared
@@ -270,6 +321,8 @@ function renderDetail(): void {
     return;
   }
   detailPane.classList.remove('is-empty');
+  // Tint the header Notes button when the selected event carries a note; plain otherwise.
+  detailPane.querySelector('[data-ni-note-open]')?.classList.toggle('has-note', !!ev.note?.trim());
   if (requestBodyEl instanceof HTMLElement) {
     requestBodyEl.innerHTML = renderRequestPane(ev, state.requestTab, state.requestBodyFormat, store.all);
     upgradeStructuredBodies(requestBodyEl);
@@ -464,6 +517,17 @@ function wireEvents(): void {
     if (row?.dataset.eventId) selectEvent(row.dataset.eventId);
   });
 
+  // Right-click a host row / group header → Focus/Unfocus menu (mirrors the live Network tab).
+  sessionListEl?.addEventListener('contextmenu', (e) => {
+    // Focus is disabled in Group-by-Host view; its items are the only ones this menu would hold, so
+    // show no menu at all while grouped.
+    if (state.viewMode === 'structure') return;
+    const host = resolveHostFromNode(e.target as HTMLElement | null);
+    if (!host) return;
+    e.preventDefault();
+    void showHostFocusMenu(host);
+  });
+
   // Detail pane: tabs, format, wrap, copy/export, URL links — via the shared dispatcher.
   if (detailPane instanceof HTMLElement) {
     wireDetailInteractions(detailPane, {
@@ -483,6 +547,7 @@ function wireEvents(): void {
         const ev = selectedEvent();
         if (kind === 'curl' && ev && isExportableEvent(ev)) void copyText(buildCurlCommand(ev), item);
         else if (kind === 'har' && ev && isExportableEvent(ev)) void copyText(buildHarArchive(ev), item);
+        else if (kind === 'url' && ev && isExportableEvent(ev)) void copyText(absoluteUrl(ev), item);
         else void copyText(paneBodyText('request'), item);
         closeCopyDropdown();
       },
@@ -501,6 +566,24 @@ function wireEvents(): void {
         state.responseTab = tab;
         setActiveTab('res', tab);
         renderDetail();
+      },
+      // Per-request Note modal (header Notes button, all event kinds). Ephemeral: the note is held in
+      // memory on the event and flows into per-request Copy-as-HAR; no IPC / disk write-back. A
+      // list-only repaint refreshes the row marker.
+      onNote: () => {
+        const ev = selectedEvent();
+        if (!ev) return;
+        openNoteModal({
+          id: ev.id,
+          note: ev.note ?? '',
+          subtitle: eventRequestLabel(ev),
+          onSave: (_id, value) => {
+            ev.note = value.trim() ? value : undefined;
+            store.markDirty();
+            renderList();
+            detailPane?.querySelector('[data-ni-note-open]')?.classList.toggle('has-note', !!ev.note);
+          }
+        });
       }
     });
   }
