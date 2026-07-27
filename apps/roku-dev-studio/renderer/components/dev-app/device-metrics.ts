@@ -35,6 +35,7 @@ import {
 } from './device-metrics-performance-step.js';
 import { pollDevAppForegroundAfterLaunch } from './dev-app-foreground-sync.js';
 import { rendererWarn } from '../../modules/utils/logger.js';
+import { registerPanelRetranslate } from '../../modules/ui/retranslate-registry.js';
 import { S } from '@shared/strings/index.js';
 
 /** When active-app has no id, still query sideloaded dev package (often zero if another app is foreground). */
@@ -1685,7 +1686,21 @@ export function setupRemoteTabMetrics(
     rebuildMetricRings();
     renderCharts(wrap);
     reschedule();
-    void applyPersistedQuadPreference();
+    // Re-apply the CURRENT on-screen quad state, NOT the persisted preference. A settings save
+    // (e.g. changing the app language, which routes through the General "Save" button and fires
+    // AppSettingsUpdated) must not silently turn off a Device Performance quad the user toggled on
+    // ad hoc — `applyPersistedQuadPreference()` would reset the toggle to the persisted default
+    // (off, unless "remember quad per device" is enabled) and hide the live charts mid-session.
+    applyPerformanceUiState();
+  });
+
+  // Live locale switch: repaint the charts so the SVG axis labels ("now", y-ticks) and the header
+  // performance strip pick up the new language immediately. Pure draws — they never touch the poll
+  // timer, so relabeling can't stop the charts. (The axis is memoized behind a signature that now
+  // includes the locale, so this repaint actually rebuilds the labels.)
+  registerPanelRetranslate(panel, () => {
+    renderCharts(wrap);
+    syncDevicePanelPerfStrip();
   });
 
   panel.addEventListener(

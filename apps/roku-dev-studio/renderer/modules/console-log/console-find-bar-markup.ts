@@ -38,13 +38,18 @@ export function buildConsoleFindBarElement(opts: ConsoleFindBarMarkupOptions = {
   const alt = opts.altShortcutHints ?? false;
   const bar = document.createElement('div');
   bar.className = 'telnet-find-bar';
+  // Static labels carry data-i18n* so a live locale switch's applyI18n(document) pass retranslates
+  // this once-built bar in place (it's shared by the telnet Console panel + the Log Viewer window;
+  // both run applyI18n) WITHOUT re-rendering — so an in-progress search keeps its input + matches.
+  // The three option-button tooltips are parametrized (`(alt)`) so they can't ride data-i18n and stay
+  // as rendered; they're symbol buttons (Aa/ab/.*) whose visible glyphs need no translation anyway.
   bar.innerHTML =
-    `<select class="telnet-mode-select" aria-label="${S.consoleLog.modeSelectAria}">` +
-      `<option value="find">${S.consoleLog.modeFind}</option>` +
-      `<option value="filter">${S.consoleLog.modeFilter}</option>` +
+    `<select class="telnet-mode-select" aria-label="${S.consoleLog.modeSelectAria}" data-i18n-aria-label="consoleLog.modeSelectAria">` +
+      `<option value="find" data-i18n="consoleLog.modeFind">${S.consoleLog.modeFind}</option>` +
+      `<option value="filter" data-i18n="consoleLog.modeFilter">${S.consoleLog.modeFilter}</option>` +
     `</select>` +
     `<div class="telnet-find-input-wrapper">` +
-      `<input type="text" class="telnet-find-input" placeholder="${S.consoleLog.queryPlaceholder}" spellcheck="false" aria-label="${S.consoleLog.queryAria}">` +
+      `<input type="text" class="telnet-find-input" placeholder="${S.consoleLog.queryPlaceholder}" data-i18n-placeholder="consoleLog.queryPlaceholder" spellcheck="false" aria-label="${S.consoleLog.queryAria}" data-i18n-aria-label="consoleLog.queryAria">` +
       `<div class="telnet-find-options">` +
         `<button type="button" class="telnet-option-btn" data-option="case" title="${S.consoleLog.optMatchCaseTitle(alt)}" aria-label="${S.consoleLog.optMatchCaseTitle(false)}">Aa</button>` +
         `<button type="button" class="telnet-option-btn" data-option="word" title="${S.consoleLog.optWholeWordTitle(alt)}" aria-label="${S.consoleLog.optWholeWordTitle(false)}">ab</button>` +
@@ -52,8 +57,8 @@ export function buildConsoleFindBarElement(opts: ConsoleFindBarMarkupOptions = {
       `</div>` +
     `</div>` +
     `<span class="telnet-find-count" aria-live="polite"></span>` +
-    `<button type="button" class="btn btn-icon telnet-find-prev" title="${S.consoleLog.prevTitle}" aria-label="${S.consoleLog.prevAria}">${iconSpan('icon-chevron-up')}</button>` +
-    `<button type="button" class="btn btn-icon telnet-find-next" title="${S.consoleLog.nextTitle}" aria-label="${S.consoleLog.nextAria}">${iconSpan('icon-chevron-down')}</button>` +
-    `<button type="button" class="btn btn-icon telnet-find-clear" title="${S.common.clear}" aria-label="${S.consoleLog.clearAria}">${iconSpan('icon-x')}</button>`;
+    `<button type="button" class="btn btn-icon telnet-find-prev" title="${S.consoleLog.prevTitle}" data-i18n-title="consoleLog.prevTitle" aria-label="${S.consoleLog.prevAria}" data-i18n-aria-label="consoleLog.prevAria">${iconSpan('icon-chevron-up')}</button>` +
+    `<button type="button" class="btn btn-icon telnet-find-next" title="${S.consoleLog.nextTitle}" data-i18n-title="consoleLog.nextTitle" aria-label="${S.consoleLog.nextAria}" data-i18n-aria-label="consoleLog.nextAria">${iconSpan('icon-chevron-down')}</button>` +
+    `<button type="button" class="btn btn-icon telnet-find-clear" title="${S.common.clear}" data-i18n-title="common.clear" aria-label="${S.consoleLog.clearAria}" data-i18n-aria-label="consoleLog.clearAria">${iconSpan('icon-x')}</button>`;
   return bar;
 }

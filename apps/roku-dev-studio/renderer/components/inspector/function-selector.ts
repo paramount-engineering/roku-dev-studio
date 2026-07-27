@@ -27,6 +27,16 @@ export function setupFunctionSelector(
 
   let availableFunctions: ExternalControlFunctionMeta[] = [...initialFunctions];
 
+  // Set dynamic hint content (function counts / a function's description) and DROP the data-i18n
+  // binding this element carries in the template. Otherwise a live locale switch's applyI18n pass
+  // would revert this live text back to the generic "Select a function…" placeholder. The
+  // disconnected path re-adds the attribute so the placeholder still retranslates.
+  const setDynamicFuncParamHint = (html: string): void => {
+    if (!funcParamHint) return;
+    setSafeHTML(funcParamHint, html);
+    funcParamHint.removeAttribute('data-i18n');
+  };
+
   function renderRaleOptgroup() {
     let html = '';
     for (const [valueKey, def] of Object.entries(RALE_BUILTIN_COMMANDS)) {
@@ -38,20 +48,28 @@ export function setupFunctionSelector(
   // Render available functions in dropdown (App Connector + RALE optgroups)
   function renderFunctionsList(isConnected = false) {
     if (!isConnected) {
-      setSafeHTML(funcSelect, `<option value="">${S.inspector.connectToLoadFunctions}</option>`);
+      // data-i18n so applyI18n(document) retranslates the placeholder on a live locale switch (it's
+      // regenerated with the correct locale when functions load / the tab reconnects).
+      setSafeHTML(
+        funcSelect,
+        `<option value="" data-i18n="inspector.connectToLoadFunctions">${S.inspector.connectToLoadFunctions}</option>`
+      );
       funcNameInput.value = '';
       if (funcParamHint) {
         setSafeHTML(funcParamHint, S.inspector.selectFunctionForParamDetails);
+        // Restore the data-i18n binding (a prior connected state may have removed it — see below) so
+        // applyI18n retranslates this disconnected hint.
+        funcParamHint.setAttribute('data-i18n', 'app.selectFunctionParamHint');
       }
       renderParamInputsFn([]);
       return;
     }
 
-    let html = `<option value="">${S.inspector.selectAFunction}</option>`;
+    let html = `<option value="" data-i18n="inspector.selectAFunction">${S.inspector.selectAFunction}</option>`;
     html += `<optgroup label="${S.inspector.appConnectorFunctions}">`;
     if (availableFunctions.length === 0) {
       html +=
-        `<option value="" disabled>${S.inspector.noFunctionsImplement}</option>`;
+        `<option value="" disabled data-i18n="inspector.noFunctionsImplement">${S.inspector.noFunctionsImplement}</option>`;
     } else {
       availableFunctions.forEach((func, index) => {
         const funcName =
@@ -70,8 +88,7 @@ export function setupFunctionSelector(
     if (funcParamHint) {
       const appCount = availableFunctions.length;
       const raleCount = Object.keys(RALE_BUILTIN_COMMANDS).length;
-      setSafeHTML(
-        funcParamHint,
+      setDynamicFuncParamHint(
         `<span style="color: var(--accent-green);">${S.inspector.functionCounts(appCount, raleCount)}</span>`
       );
     }
@@ -88,8 +105,7 @@ export function setupFunctionSelector(
       if (funcParamHint) {
         const appCount = availableFunctions.length;
         const raleCount = Object.keys(RALE_BUILTIN_COMMANDS).length;
-        setSafeHTML(
-          funcParamHint,
+        setDynamicFuncParamHint(
           `<span style="color: var(--accent-green);">${S.inspector.functionCounts(appCount, raleCount)}</span>`
         );
       }
@@ -102,12 +118,9 @@ export function setupFunctionSelector(
         return;
       }
       funcNameInput.value = funcName;
-      if (funcParamHint) {
-        setSafeHTML(
-          funcParamHint,
-          `<div style="color: var(--text-secondary);">${escapeHtml(builtin.description)}</div>`
-        );
-      }
+      setDynamicFuncParamHint(
+        `<div style="color: var(--text-secondary);">${escapeHtml(builtin.description)}</div>`
+      );
       renderParamInputsFn(builtin.params || [], { builtin, selectionKey: funcName });
       return;
     }
@@ -130,9 +143,7 @@ export function setupFunctionSelector(
         hintHtml += `<span style="color: var(--accent-green);">${S.inspector.readyToExecute}</span>`;
       }
 
-      if (funcParamHint) {
-        setSafeHTML(funcParamHint, hintHtml);
-      }
+      setDynamicFuncParamHint(hintHtml);
 
       if (paramCount > 0 && Array.isArray(funcParams) && funcParams.length > 0) {
         renderParamInputsFn(funcParams);

@@ -210,7 +210,7 @@ export const networkInspector = {
   rewriteTargetAria: 'Cel przepisywania',
   rewriteTypeAria: 'Typ przepisywania',
   regexTreatTitle: 'Traktuj pole „Znajdź” jako wyrażenie regularne',
-  regexLabel: 'regex',
+  regexLabel: 'Regex',
   removeRewrite: 'Usuń przepisywanie',
   rewriteTitle: 'Przepisywanie',
   rewriteHint: 'Stosowane podczas przekazywania (nie z Blokuj / Resetuj / Symuluj)',

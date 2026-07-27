@@ -13,14 +13,17 @@ import {
   getPresetsForMediaType,
   type DeeplinkPreset
 } from './deeplink-presets.js';
+import { registerRetranslate } from '../ui/retranslate-registry.js';
 import { S } from '@shared/strings/index.js';
 
 export type MediaTypeEntry = { value: string; label: string };
 
 const SETTINGS_KEY = 'deeplink-custom-media-types';
 
-// A function (not a const) so the localized built-in labels read from the active
-// locale each time, rather than freezing whatever was active at import.
+// A function (not a const) so it reads the catalog fresh each call (never freezes a locale).
+// The built-in labels are intentionally kept in English in every locale (they name Roku ECP
+// content types, paired with the 'movie'/'series'/… protocol values) — see the catalog note in
+// shared/strings/deeplink.ts. Only `mediaTypePlaceholder` is localized.
 const defaultMediaTypes = (): MediaTypeEntry[] => [
   { value: 'movie', label: S.deeplink.mediaTypeMovie },
   { value: 'series', label: S.deeplink.mediaTypeSeries },
@@ -485,4 +488,11 @@ export async function initDeeplinkMediaTypes(): Promise<void> {
 
   setupModalOnce();
   refreshAllMediaTypeSelects();
+
+  // Live locale switch: `populateMediaTypeSelect` rebuilds each `<select>` imperatively (no data-i18n),
+  // so applyI18n can't reach it. Re-populate on switch so the placeholder (`mediaTypePlaceholder`,
+  // read from S.* live) retranslates. The built-in item labels (Movie/Series/Episode/Live) are kept
+  // in English in every locale — they name ECP content types — and user-added custom types keep their
+  // own labels; only the placeholder changes. The current selection is preserved.
+  registerRetranslate(refreshAllMediaTypeSelects);
 }

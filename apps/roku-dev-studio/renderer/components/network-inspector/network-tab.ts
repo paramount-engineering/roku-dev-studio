@@ -77,6 +77,7 @@ import {
 import { applyFocusDecorations } from './network-focus-decorations.js';
 import { attachFoldToggle, MAX_STRUCTURED_BYTES } from '../../modules/ui/structured-body.js';
 import { attachSelectAll } from '../../modules/ui/select-all.js';
+import { registerPanelRetranslate } from '../../modules/ui/retranslate-registry.js';
 import { S } from '@shared/strings/index.js';
 
 // Caps resident DOM rows so an extreme session count can't bloat the list. The event
@@ -2848,6 +2849,16 @@ export function setupNetworkTab(
   syncBodyWrap();
   syncFilterClear();
   void syncRecordingToMain();
+
+  // Live locale switch: the session list (empty-state text + row chrome) and the sidebar-option
+  // tooltips are rendered imperatively from S.*, so applyI18n(document) can't reach them. Repaint
+  // from current state — both are pure functions of the captured events + toggle state, so this
+  // preserves the selection and doesn't disturb capture. The detail-pane static labels carry
+  // data-i18n and are covered by applyI18n. (Stored on the panel; dropped when the tab closes.)
+  registerPanelRetranslate(panel, () => {
+    render(true);
+    syncSidebarOptions();
+  });
 
   return {
     destroy() {

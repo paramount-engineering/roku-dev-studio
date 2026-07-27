@@ -30,6 +30,7 @@ import { applyRaleArgsToBuilderParams } from './builder-step-helpers.js';
 import { createRenderStepFields } from './builder-render-step-fields.js';
 import { collectActionStepHelpContext, openActionStepHelpModal } from './action-step-help-modal.js';
 import { createBuilderStepForm } from './builder-step-form.js';
+import { registerPanelRetranslate } from '../../modules/ui/retranslate-registry.js';
 import { S } from '@shared/strings/index.js';
 
 const STEP_TYPES = Object.keys(STEP_SCHEMA);
@@ -745,6 +746,20 @@ export function setupBuilder(panel, api, context) {
   renderStepsList();
   updateOutputPreview();
   updateUndoRedoButtons();
+
+  // Live locale switch: the steps list (TYPE/DETAILS column headers, the "Add step" placeholder row,
+  // branch badges, empty state) is built imperatively from S.* with no data-i18n, so applyI18n can't
+  // reach it — repaint it from the current `steps` state (pure re-render, preserves the tree). The
+  // form heading + add button DO carry data-i18n, so applyI18n(document) already handled them for
+  // Add mode; while editing a step it reverts them to the Add-mode placeholder, so restore the
+  // Update-mode labels here.
+  registerPanelRetranslate(panel, () => {
+    renderStepsList();
+    if (selectedStepIndex != null && builderFormHeading && builderAddStepBtn) {
+      builderFormHeading.textContent = S.actionScripts.updateStepHeading(selectedStepIndex + 1);
+      builderAddStepBtn.textContent = S.actionScripts.updateActionBtn;
+    }
+  });
 
   return {
     setRaleFunctions(functions) {

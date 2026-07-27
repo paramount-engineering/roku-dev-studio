@@ -25,7 +25,7 @@ import {
 } from './modules/index.js';
 import { errMessage } from '@shared/platform/err-util.js';
 import { S, applyI18n, setLocale, effectiveLocale } from '@shared/strings/index.js';
-import { runRetranslate } from './modules/ui/retranslate-registry.js';
+import { runRetranslate, runPanelRetranslate } from './modules/ui/retranslate-registry.js';
 import { devLog } from './modules/utils/dev-log.js';
 import { rendererWarn, rendererError } from './modules/utils/logger.js';
 import { initDeeplinkMediaTypes } from './modules/deeplink/deeplink-media-types.js';
@@ -138,6 +138,11 @@ function initLocaleLiveSwitch(afterApply?: () => void) {
     // Re-render imperatively-built surfaces that registered themselves (e.g. the open
     // Action Scripts step-help modal). data-i18n HTML is already handled by applyI18n above.
     runRetranslate();
+    // Re-render every open device tab panel's imperative surfaces (Network Inspector session
+    // list, Action Scripts steps, App Connector placeholders, Dev App auth badge, performance
+    // charts). Runs AFTER applyI18n(document) so a re-render from current state also repairs any
+    // dynamic content applyI18n reverted to a data-i18n placeholder.
+    runPanelRetranslate();
   });
 }
 
@@ -274,8 +279,7 @@ function reconcileConnectedDeviceIp(
 
   const panel = document.getElementById(connection.tabId);
   if (panel) {
-    const ipEl = panel.querySelector('.device-ip');
-    if (ipEl) ipEl.textContent = newIp;
+    setDeviceHeaderText(panel.querySelector('.device-ip'), newIp);
   }
 
   const ctrl = networkTabControllers.get(connection.tabId);
@@ -2127,8 +2131,8 @@ function addDiscoveredDevice(device) {
         const nameText = panel.querySelector('.panel-device-name-text');
         const ipEl = panel.querySelector('.device-ip');
         const iconEl = panel.querySelector('.device-panel-icon');
-        if (nameText) nameText.textContent = device.deviceName || device.modelName || S.app.unknownRoku;
-        if (ipEl) ipEl.textContent = device.ip;
+        setDeviceHeaderText(nameText, device.deviceName || device.modelName || S.app.unknownRoku);
+        setDeviceHeaderText(ipEl, device.ip);
         if (iconEl) {
           setDevicePanelIcon(iconEl, device, { isRemote: false });
         }
@@ -2190,6 +2194,20 @@ function updateScanButton(scanning) {
 // ============================================
 // Device List Rendering
 // ============================================
+
+/**
+ * Write live device data into a device-panel header element and drop its `data-i18n` placeholder
+ * binding. The header's name/IP spans ship with `data-i18n="app.deviceNamePlaceholder"` /
+ * `="common.loading"` so they read "Device Name" / "Loading…" before the device resolves; once we
+ * fill in the real name/IP the attribute must go, or a later `applyI18n(document)` retranslate pass
+ * (fired on a live locale switch) would revert the element back to the placeholder — the "stuck on
+ * Loading…" bug.
+ */
+function setDeviceHeaderText(el: Element | null, text: string): void {
+  if (!(el instanceof HTMLElement)) return;
+  el.textContent = text;
+  el.removeAttribute('data-i18n');
+}
 
 function renderDeviceList() {
   const devices = Array.from(state.devices.values());
@@ -3683,13 +3701,15 @@ function createDevicePanel(device, tabId, isRemote = false, serverUrl = null, lo
           ' ' +
           escapeHtml(device.deviceName || device.modelName || S.app.unknownRoku)
       );
+      // Holds live device data now — see setDeviceHeaderText.
+      nameText.removeAttribute('data-i18n');
     }
     if (ipEl) {
-      ipEl.textContent = S.app.atLocation(device.ip, location?.name || S.app.remote);
+      setDeviceHeaderText(ipEl, S.app.atLocation(device.ip, location?.name || S.app.remote));
     }
   } else {
-    if (nameText) nameText.textContent = device.deviceName || device.modelName || S.app.unknownRoku;
-    if (ipEl) ipEl.textContent = device.ip;
+    setDeviceHeaderText(nameText, device.deviceName || device.modelName || S.app.unknownRoku);
+    setDeviceHeaderText(ipEl, device.ip);
   }
   
   if (iconEl) {

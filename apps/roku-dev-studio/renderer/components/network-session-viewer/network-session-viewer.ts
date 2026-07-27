@@ -703,8 +703,13 @@ async function main(): Promise<void> {
   bindPrivacyMode();
   // Localize the static session-viewer.html shell (toolbar, tab labels, tooltips).
   applyI18n(document);
-  // Apply the active locale on open + retranslate live on change.
-  void initLocaleForWindow(window.roku as unknown as Parameters<typeof initLocaleForWindow>[0]);
+  // Apply the active locale on open + retranslate live on change. The session list and detail body
+  // are rendered imperatively from S.*, so re-render them (from the store, selection preserved) after
+  // applyI18n handles the static shell + the data-i18n detail-pane labels.
+  void initLocaleForWindow(window.roku as unknown as Parameters<typeof initLocaleForWindow>[0], () => {
+    renderList();
+    renderDetail();
+  });
   wireEvents();
   setupFind();
   setupBodyFind();

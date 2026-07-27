@@ -16,6 +16,7 @@ import { attachFoldToggle, structuredBodyText, structuredFileExtension } from '.
 import { attachSelectAll } from '../../modules/ui/select-all.js';
 import { icon, setSafeHTML, DEFAULT_RALE_PORT } from '../../modules/utils/index.js';
 import { errMessage } from '@shared/platform/err-util.js';
+import { registerPanelRetranslate } from '../../modules/ui/retranslate-registry.js';
 import { S } from '@shared/strings/index.js';
 import { rendererError } from '../../modules/utils/logger.js';
 import { setupNodeUpdatePanel } from './node-update-panel.js';
@@ -90,10 +91,16 @@ export function setupInspector(panel: DevicePanelRoot, _device: InspectorDevice,
   // Localize the empty-state placeholder. The text is rendered by the
   // `.rale-response-output:empty::before` CSS pseudo-element (which can't carry a
   // data-i18n attribute), so feed it the catalog string via a CSS custom property.
-  responseOutput.style.setProperty(
-    '--rale-empty-placeholder',
-    JSON.stringify(S.app.responseWillAppearHere)
-  );
+  const applyResponsePlaceholder = (): void => {
+    responseOutput.style.setProperty(
+      '--rale-empty-placeholder',
+      JSON.stringify(S.app.responseWillAppearHere)
+    );
+  };
+  applyResponsePlaceholder();
+  // A CSS custom property is out of applyI18n's reach, so re-feed it on a live locale switch. Safe
+  // to run anytime — the pseudo-element only shows while the response box is empty.
+  registerPanelRetranslate(panel, applyResponsePlaceholder);
 
   const copyBtnEl = copyBtn instanceof HTMLElement ? copyBtn : null;
   const saveBtnEl = saveBtn instanceof HTMLElement ? saveBtn : null;

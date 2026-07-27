@@ -211,7 +211,7 @@ export const networkInspector = {
   rewriteTargetAria: 'Țintă rescriere',
   rewriteTypeAria: 'Tip rescriere',
   regexTreatTitle: 'Tratează Găsește ca expresie regulată',
-  regexLabel: 'regex',
+  regexLabel: 'Regex',
   removeRewrite: 'Elimină rescrierea',
   rewriteTitle: 'Rescriere',
   rewriteHint: 'Se aplică la redirecționare (nu cu Blochează / Resetează / Simulează)',
