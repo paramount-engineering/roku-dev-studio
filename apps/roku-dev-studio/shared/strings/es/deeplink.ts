@@ -29,12 +29,13 @@ export const deeplink = {
   enterPresetName: 'Ingrese un nombre para este Deep-Link guardado.',
   appIdRequired: 'El App ID es obligatorio.',
 
-  // Built-in media-type display labels (deeplink-media-types.ts).
-  // Paired in code with their protocol values ('movie', 'series', …) which stay put.
-  mediaTypeMovie: 'Película',
-  mediaTypeSeries: 'Serie',
-  mediaTypeEpisode: 'Episodio',
-  mediaTypeLive: 'En vivo',
+  // Built-in media-type display labels (deeplink-media-types.ts). Kept in English in every locale —
+  // they name Roku ECP content types (paired with the protocol values 'movie'/'series'/… which also
+  // stay put); only the placeholder below is localized. Same policy as the Roku query presets.
+  mediaTypeMovie: 'Movie',
+  mediaTypeSeries: 'Series',
+  mediaTypeEpisode: 'Episode',
+  mediaTypeLive: 'Live',
 
   // Media-types manager (deeplink-media-types.ts)
   mediaTypePlaceholder: '-- Seleccione --',

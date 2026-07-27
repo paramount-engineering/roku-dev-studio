@@ -1042,8 +1042,13 @@ async function main(): Promise<void> {
   bindPrivacyMode(ctx);
   // Localize the static fiddle.html shell (toolbar labels, tooltips, placeholder).
   applyI18n(document);
-  // Apply the active locale on open + retranslate live on change.
-  void initLocaleForWindow((window as unknown as { fiddle?: unknown }).fiddle as Parameters<typeof initLocaleForWindow>[0]);
+  // Apply the active locale on open + retranslate live on change. The device `<select>` is rebuilt
+  // imperatively (its "Select a device" / "No devices" placeholder has no data-i18n), so re-render it
+  // after applyI18n — device names stay as-is and the current selection is preserved.
+  void initLocaleForWindow(
+    (window as unknown as { fiddle?: unknown }).fiddle as Parameters<typeof initLocaleForWindow>[0],
+    () => renderDeviceOptions(ctx, ctx.devices, true)
+  );
   scheduleLint(ctx);
 
   // Wait for initial device snapshot from main.

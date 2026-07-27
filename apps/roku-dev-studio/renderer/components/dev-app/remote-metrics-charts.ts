@@ -3,7 +3,7 @@
  * Styled for dark UI; structure inspired by Roku Resource Monitor (legend + gridded plot).
  */
 
-import { S } from '@shared/strings/index.js';
+import { S, getLocale } from '@shared/strings/index.js';
 
 const NS = 'http://www.w3.org/2000/svg';
 
@@ -508,7 +508,7 @@ function lerpSeriesValue(
 
 function formatHoverAge(ageMs: number): string {
   if (!Number.isFinite(ageMs) || ageMs < 0) return '—';
-  if (ageMs < 750) return 'now';
+  if (ageMs < 750) return S.devApp.chartAxisNow;
   return `${formatMmSs(ageMs / 1000)} ago`;
 }
 
@@ -903,8 +903,10 @@ export function drawTimeseriesChart(
   };
 
   // Rebuild grid + axis labels only when the axis / window changed (they're otherwise identical
-  // frame to frame — the bulk of the old per-tick allocation).
-  const axisSig = `${yMin}|${yMax}|${tickCount}|${historyMs}`;
+  // frame to frame — the bulk of the old per-tick allocation). The active locale is part of the
+  // signature so a live language switch rebuilds the axis text (the "now" tick) — otherwise a chart
+  // whose numeric bounds never move (e.g. the fixed 0–100% CPU chart) would keep the old language.
+  const axisSig = `${getLocale()}|${yMin}|${yMax}|${tickCount}|${historyMs}`;
   if (st.axisSig !== axisSig) {
     st.axisSig = axisSig;
     clearNode(gridG);

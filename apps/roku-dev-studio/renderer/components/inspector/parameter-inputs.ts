@@ -169,8 +169,11 @@ export function renderParamInputs(
   delete paramsContainer.dataset.registryUi;
 
   if (!params || params.length === 0) {
+    // data-i18n (with the state-appropriate key) so applyI18n(document) retranslates this empty-state
+    // on a live locale switch. It's regenerated whenever the selection changes, so the key always
+    // matches what's shown.
     setSafeHTML(paramsContainer, `
-      <div class="rale-params-empty">
+      <div class="rale-params-empty" data-i18n="${funcSelect?.value ? 'inspector.noParamsRequired' : 'inspector.selectFunctionForParams'}">
         ${funcSelect?.value ? S.inspector.noParamsRequired : S.inspector.selectFunctionForParams}
       </div>
     `);

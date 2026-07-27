@@ -3,6 +3,7 @@
 import { icon, setSafeHTML, escapeHtml } from '../../modules/utils/index.js';
 import { getStoredPassword, savePassword, removePassword } from '../../modules/utils/storage.js';
 import type { DevAppApi, DevicePanelRoot, PasswordAuthElements } from './dev-app-types.js';
+import { registerPanelRetranslate } from '../../modules/ui/retranslate-registry.js';
 import { S } from '@shared/strings/index.js';
 
 /**
@@ -177,6 +178,11 @@ export function setupPasswordAuth(
     }
   });
   
+  // Live locale switch: the auth badge is icon-only in the template (no data-i18n) and its
+  // "Authenticated" / "Not authenticated" label is set imperatively, so applyI18n can't reach it.
+  // Re-render from the current auth state (a transient error detail, if any, is dropped on relabel).
+  registerPanelRetranslate(panel, () => setAuthenticatedState(isAuthenticated));
+
   return {
     isAuthenticated: () => isAuthenticated,
     verifyPassword,

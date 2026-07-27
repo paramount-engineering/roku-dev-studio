@@ -209,7 +209,7 @@ export const networkInspector = {
   rewriteTargetAria: 'Ціль перезапису',
   rewriteTypeAria: 'Тип перезапису',
   regexTreatTitle: 'Вважати «Знайти» регулярним виразом',
-  regexLabel: 'regex',
+  regexLabel: 'Regex',
   removeRewrite: 'Вилучити перезапис',
   rewriteTitle: 'Перезапис',
   rewriteHint: 'Застосовується під час пересилання (не з Блокувати / Скинути / Імітувати)',

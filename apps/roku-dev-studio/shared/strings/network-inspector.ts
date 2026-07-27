@@ -206,7 +206,7 @@ export const networkInspector = {
   rewriteTargetAria: 'Rewrite target',
   rewriteTypeAria: 'Rewrite type',
   regexTreatTitle: 'Treat Find as a Regular Expression',
-  regexLabel: 'regex',
+  regexLabel: 'Regex',
   removeRewrite: 'Remove rewrite',
   rewriteTitle: 'Rewrite',
   rewriteHint: 'Applied when forwarding (not with Block / Reset / Mock)',

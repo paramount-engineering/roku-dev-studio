@@ -208,7 +208,7 @@ export const networkInspector = {
   rewriteTargetAria: 'Destino de reescritura',
   rewriteTypeAria: 'Tipo de reescritura',
   regexTreatTitle: 'Tratar Buscar como expresión regular',
-  regexLabel: 'regex',
+  regexLabel: 'Regex',
   removeRewrite: 'Quitar reescritura',
   rewriteTitle: 'Reescritura',
   rewriteHint: 'Se aplica al reenviar (no con Bloquear / Restablecer / Simular)',

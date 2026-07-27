@@ -19,6 +19,7 @@ import { attachSelectAll } from '../../modules/ui/select-all.js';
 import { getActionScriptDefaultSaveFolder } from '../../modules/utils/app-user-settings.js';
 import { renderExecutorSteps } from './actions-list-view.js';
 import { flattenStepsPreorder, stepPathToDisplayId } from './action-script-tree.js';
+import { registerPanelRetranslate } from '../../modules/ui/retranslate-registry.js';
 import { S } from '@shared/strings/index.js';
 
 /** Parsed script object kept after successful validation (executor UI + run). */
@@ -1230,4 +1231,16 @@ export function setupExecutor(panel, api, context) {
   updateRunButtonState();
   updateResultsButtons();
   updateRunStopUI();
+
+  // Live locale switch: the executor's steps list (empty state + read-only step rows) is rendered
+  // imperatively from S.* with no data-i18n, so repaint it from current state. Skip mid-run so live
+  // run-progress highlights aren't wiped; the labels refresh on the next render regardless.
+  registerPanelRetranslate(panel, () => {
+    if (isRunning) return;
+    if (lastValidScript && Array.isArray(lastValidScript.steps) && lastValidScript.steps.length > 0) {
+      renderExecutorStepsList(lastValidScript);
+    } else {
+      showExecutorStepsEmptyState();
+    }
+  });
 }

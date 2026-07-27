@@ -7,6 +7,7 @@ import {
   closeModalWithOriginMotion,
   openModalOverlayActiveFromOpener
 } from '../utils/modal-origin-motion.js';
+import { registerRetranslate } from '../ui/retranslate-registry.js';
 import { S } from '@shared/strings/index.js';
 
 export type DeeplinkPreset = {
@@ -345,4 +346,9 @@ export async function initDeeplinkPresets(): Promise<void> {
 
   setupSaveModalOnce();
   refreshSavedPresetDropdowns();
+
+  // Live locale switch: the saved-preset `<select>`s are rebuilt imperatively (no data-i18n), so
+  // re-populate on switch to retranslate the placeholder (`savedPresetPlaceholder`). Saved preset
+  // names are user data and stay as-is; the current selection is preserved.
+  registerRetranslate(refreshSavedPresetDropdowns);
 }

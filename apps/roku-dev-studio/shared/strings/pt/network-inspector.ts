@@ -206,7 +206,7 @@ export const networkInspector = {
   rewriteTargetAria: 'Alvo da reescrita',
   rewriteTypeAria: 'Tipo de reescrita',
   regexTreatTitle: 'Tratar Localizar como expressão regular',
-  regexLabel: 'regex',
+  regexLabel: 'Regex',
   removeRewrite: 'Remover reescrita',
   rewriteTitle: 'Reescrita',
   rewriteHint: 'Aplicado ao encaminhar (não com Bloquear / Redefinir / Simular)',
