@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' blob:; worker-src 'self' blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: http: https:;">
-  <title>Roku Dev Studio</title>
+  <title data-i18n="about.appName">Roku Dev Studio</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
@@ -5431,7 +5431,9 @@
     }
     
     .rale-response-output:empty::before {
-      content: 'Response will appear here...';
+      /* Localized empty-state: inspector setup sets --rale-empty-placeholder from
+         S.app.responseWillAppearHere; the inline string is the English fallback. */
+      content: var(--rale-empty-placeholder, 'Response will appear here...');
       color: var(--text-muted);
       font-style: italic;
     }
@@ -13424,7 +13426,7 @@
       </button>
     </div>
     <div class="titlebar-center">
-      <span class="titlebar-text">Roku Dev Studio</span>
+      <span class="titlebar-text" data-i18n="about.appName">Roku Dev Studio</span>
     </div>
     <div class="titlebar-trailing">
       <button
@@ -13836,7 +13838,7 @@
             <div class="location-devices" id="localDevicesList">
               <div class="location-empty" id="localEmptyState">
                 <div class="empty-icon"><span class="icon icon-2xl icon-muted"><svg><use href="#icon-tv"/></svg></span></div>
-                <p>No devices found.<br>Click <strong>Scan</strong> to discover Roku devices.</p>
+                <p data-i18n-html="app.noDevicesFoundHtml">No devices found.<br>Click <strong>Scan</strong> to discover Roku devices.</p>
               </div>
             </div>
             <div class="manual-connect">
@@ -14220,7 +14222,7 @@
             
             <!-- Hero Section (text-only) -->
             <div class="welcome-hero">
-              <h1 class="welcome-title">Roku Dev Studio</h1>
+              <h1 class="welcome-title" data-i18n="about.appName">Roku Dev Studio</h1>
               <p class="welcome-subtitle" data-i18n="app.welcomeSubtitle">Discover Roku devices locally or via remote relays, sideload and deep-link channels, debug live BrightScript with a streaming Telnet console, automate end-to-end test flows, and bring AI agents into your dev loop over MCP.</p>
             </div>
 
@@ -14362,11 +14364,11 @@
           <div class="device-panel-icon"><span class="icon icon-xl icon-accent"><svg><use href="#icon-tv"/></svg></span></div>
           <div class="device-panel-info">
             <h2 class="panel-device-name">
-              <span class="panel-device-name-text">Device Name</span>
+              <span class="panel-device-name-text" data-i18n="app.deviceNamePlaceholder">Device Name</span>
             </h2>
             <div class="panel-device-ip-row">
-              <span class="status-dot" title="Connected" aria-label="Connected"></span>
-              <span class="device-ip">Loading...</span>
+              <span class="status-dot" title="Connected" data-i18n-title="common.connected" aria-label="Connected" data-i18n-aria-label="common.connected"></span>
+              <span class="device-ip" data-i18n="common.loading">Loading...</span>
             </div>
           </div>
         </div>
@@ -14409,7 +14411,7 @@
               </span>
             </span>
             <!-- Compact placeholder text; the full message lives in the button's `title` tooltip (set in device-metrics.ts). -->
-            <span class="device-panel-perf-paused" data-perf-strip-paused hidden>Paused — launch Dev App to resume</span>
+            <span class="device-panel-perf-paused" data-perf-strip-paused hidden data-i18n="app.perfStripPausedPlaceholder">Paused — launch Dev App to resume</span>
           </button>
         </div>
           <div class="device-panel-paused-nav" data-device-panel-paused-nav hidden>
@@ -14436,7 +14438,7 @@
             <span class="ecp-mode-warning-icon"><span class="icon icon-sm"><svg><use href="#icon-info"/></svg></span></span>
             <div class="ecp-mode-warning-text">
               <span class="ecp-mode-warning-title" data-i18n="app.ecpNotEnabledTitle">Control by Mobile Apps Not Enabled</span>
-              <span class="ecp-mode-warning-desc">Remote control (keypress, apps, etc.) requires "Control by Mobile Apps" → Network Access to be set to <strong>Enabled</strong> on your Roku device.</span>
+              <span class="ecp-mode-warning-desc" data-i18n-html="app.ecpRemoteWarningDescHtml">Remote control (keypress, apps, etc.) requires "Control by Mobile Apps" → Network Access to be set to <strong>Enabled</strong> on your Roku device.</span>
               <button type="button" class="ecp-mode-warning-btn" data-i18n="app.howToEnable">
                 <span class="icon icon-xs"><svg><use href="#icon-help"/></svg></span>
                 How to Enable
@@ -14738,7 +14740,7 @@
             <span class="ecp-mode-warning-icon"><span class="icon icon-sm"><svg><use href="#icon-info"/></svg></span></span>
             <div class="ecp-mode-warning-text">
               <span class="ecp-mode-warning-title" data-i18n="app.ecpNotEnabledTitle">Control by Mobile Apps Not Enabled</span>
-              <span class="ecp-mode-warning-desc">The Quick Remote and keypress features require "Control by Mobile Apps" → Network Access to be <strong>Enabled</strong> on your Roku device.</span>
+              <span class="ecp-mode-warning-desc" data-i18n-html="app.ecpDevAppWarningDescHtml">The Quick Remote and keypress features require "Control by Mobile Apps" → Network Access to be <strong>Enabled</strong> on your Roku device.</span>
               <button type="button" class="ecp-mode-warning-btn" data-i18n="app.howToEnable">
                 <span class="icon icon-xs"><svg><use href="#icon-help"/></svg></span>
                 How to Enable
@@ -14781,7 +14783,7 @@
               </div>
               <div class="card-body" style="padding: 10px 12px;">
                 <div class="sideloaded-app-info" style="margin-bottom: 6px;">
-                  <div class="sideloaded-app-details" style="font-size: 10px;">No channel sideloaded</div>
+                  <div class="sideloaded-app-details" style="font-size: 10px;" data-i18n="app.noChannelSideloaded">No channel sideloaded</div>
                   <div class="delete-sideload-status" style="font-size: 9px;"></div>
                 </div>
                 <div class="devapp-install-section" style="border-top: 1px solid var(--border); padding-top: 8px;">
@@ -14866,7 +14868,7 @@
               </div>
               <div class="card-body">
                 <div class="screenshot-container">
-                  <img class="screenshot-image" alt="Roku Screenshot" style="display: none;">
+                  <img class="screenshot-image" alt="Roku Screenshot" data-i18n-alt="app.screenshotAlt" style="display: none;">
                   <div class="screenshot-placeholder">
                     <div style="opacity: 0.3;"><span class="icon icon-3xl"><svg><use href="#icon-image"/></svg></span></div>
                     <p style="margin: 8px 0 0; font-size: 11px; color: var(--text-muted);" data-i18n="app.clickCapture">Click Capture</p>
@@ -14985,7 +14987,7 @@
                 <div class="query-dev-cell">
                   <div class="query-section-label" data-i18n="app.qsCustom">Custom</div>
                   <div class="custom-query-row">
-                    <input type="text" class="custom-query-input" placeholder="/query/...">
+                    <input type="text" class="custom-query-input" placeholder="e.g. /query/device-info" data-i18n-placeholder="app.customQueryPlaceholder">
                     <button class="btn btn-primary run-custom-query-btn" data-i18n="app.run">Run</button>
                   </div>
                 </div>
@@ -15069,7 +15071,7 @@
                 <span class="telnet-port-badge" data-i18n="app.telnetPortBadge">Port 8085</span>
                 <span class="telnet-status disconnected">
                   <span class="telnet-status-dot"></span>
-                  <span class="telnet-status-text">Disconnected</span>
+                  <span class="telnet-status-text" data-i18n="common.disconnected">Disconnected</span>
                 </span>
                 <div class="telnet-split-control telnet-connect-split">
                   <button type="button" class="btn btn-primary telnet-connect-btn telnet-split-main" title="Connect and Pull Relay Buffer" data-i18n-title="app.connectPullRelayTitle">
@@ -15095,7 +15097,7 @@
                   <div class="telnet-placeholder">
                     <span class="icon icon-lg"><svg><use href="#icon-terminal"/></svg></span>
                     <p data-i18n="app.telnetPlaceholder">Connect to view BrightScript Debug Output</p>
-                    <p class="telnet-hint">Requires Developer Mode enabled on the Roku device.<br>Only one Telnet connection to a Roku device can be active at a time.</p>
+                    <p class="telnet-hint"><span data-i18n="telnet.placeholderHintDevMode">Requires Developer Mode enabled on the Roku device.</span><br><span data-i18n="telnet.placeholderHintSingleConn">Only one telnet connection to a Roku device can be active at a time.</span></p>
                   </div>
                 </div>
                 <button type="button" class="telnet-scroll-to-bottom" hidden title="Jump to Latest Logs" data-i18n-title="app.jumpToLatestLogs" aria-label="Jump to Latest Logs" data-i18n-aria-label="app.jumpToLatestLogs">
@@ -15132,7 +15134,7 @@
                 <div class="card-header">
                   <span class="card-icon"><span class="icon icon-sm"><svg><use href="#icon-plug"/></svg></span></span>
                   <span class="card-title" data-i18n="app.connection">Connection</span>
-                  <span class="rale-connection-status disconnected"><span class="icon icon-xs icon-muted"><svg><use href="#icon-circle"/></svg></span> Disconnected</span>
+                  <span class="rale-connection-status disconnected" data-i18n="common.disconnected"><span class="icon icon-xs icon-muted"><svg><use href="#icon-circle"/></svg></span> Disconnected</span>
                 </div>
                 <div class="card-body">
                   <div class="rale-connect-fields">
@@ -15236,7 +15238,7 @@
                 <button type="button" class="modal-close rale-update-node-modal-close" aria-label="Close" data-i18n-aria-label="common.close"><span class="icon icon-sm"><svg><use href="#icon-x"/></svg></span></button>
               </div>
               <div class="modal-body">
-                <p style="font-size: 12px; color: var(--text-secondary); margin: 0 0 16px; line-height: 1.45;">
+                <p style="font-size: 12px; color: var(--text-secondary); margin: 0 0 16px; line-height: 1.45;" data-i18n-html="app.updateNodeModalIntroHtml">
                   Uses the <strong>path</strong> from your last successful Get Node by ID. Actions: <code>removeField</code>, <code>setField</code> (add / update).
                 </p>
                 <div class="rale-node-update-feedback" role="status" aria-live="polite" aria-atomic="true" hidden></div>
@@ -15330,7 +15332,7 @@
                     <div class="action-scripts-builder-add-section">
                       <div class="action-scripts-builder-add-form" hidden>
                         <div class="action-scripts-builder-add-form-header">
-                          <h4 class="action-scripts-builder-form-heading" aria-live="polite">Add Step</h4>
+                          <h4 class="action-scripts-builder-form-heading" aria-live="polite" data-i18n="actionScripts.addStep">Add Step</h4>
                           <div class="action-scripts-builder-add-form-header-actions">
                             <button type="button" class="btn btn-icon btn-secondary action-scripts-builder-step-help-btn" title="Help for This Action Type" data-i18n-title="app.helpForActionType" aria-label="Help for This Action Type" data-i18n-aria-label="app.helpForActionType"><span class="icon icon-sm"><svg><use href="#icon-info"/></svg></span></button>
                             <button type="button" class="btn btn-icon btn-secondary action-scripts-builder-add-form-dismiss" title="Close" data-i18n-title="common.close" aria-label="Close Add Step" data-i18n-aria-label="app.closeAddStep"><svg width="14" height="14" aria-hidden="true"><use href="#icon-x"/></svg></button>
@@ -15365,7 +15367,7 @@
                     <button type="button" class="btn btn-secondary action-script-executor-upload" data-i18n="app.uploadJson">Upload JSON</button>
                     <span class="executor-input-hint" data-i18n="app.orPasteBelow">Or paste below</span>
                   </div>
-                  <p class="executor-builder-nudge">Use the <strong>Builder</strong> tab to add and edit steps with guided fields. Use this area to validate, import, or run JSON.</p>
+                  <p class="executor-builder-nudge" data-i18n-html="app.executorBuilderNudgeHtml">Use the <strong>Builder</strong> tab to add and edit steps with guided fields. Use this area to validate, import, or run JSON.</p>
                   <textarea class="action-script-executor-textarea" placeholder='{"version":"1","steps":[{"type":"keypress","key":"Home"}]}' rows="6"></textarea>
                   <div class="executor-validate-row">
                     <button type="button" class="btn btn-primary action-script-executor-validate" data-i18n="app.validate">Validate</button>
@@ -15376,7 +15378,7 @@
                   <label class="executor-password-prompt-label" data-i18n="app.devPasswordRequired">Developer password required by some actions (screenshot, sideload):</label>
                   <div class="executor-password-prompt-row">
                     <input type="password" class="executor-password-prompt-input" placeholder="Enter Developer Password" data-i18n-placeholder="app.enterDevPassword">
-                    <span class="executor-password-prompt-hint">Enter it here and run again, or add <code>"devPassword": "..."</code> to your script JSON.</span>
+                    <span class="executor-password-prompt-hint" data-i18n-html="app.executorPasswordPromptHintHtml">Enter it here and run again, or add <code>"devPassword": "..."</code> to your script JSON.</span>
                   </div>
                 </div>
                 <div class="executor-split-view">
@@ -15476,10 +15478,10 @@
                 <span class="ni-session-count" data-ni-session-count title="Captured Sessions" data-i18n-title="app.niSessionCountTitle">0</span>
               </div>
               <div class="card-header-actions ni-header-controls ni-btn-group" role="group" aria-label="Network Inspector Controls" data-i18n-aria-label="app.niControls">
-                <button type="button" class="btn btn-secondary btn-sm ni-icon-btn ni-capture-toggle is-capturing" data-ni-capture-toggle title="Stop Capturing" aria-label="Stop Capturing">
+                <button type="button" class="btn btn-secondary btn-sm ni-icon-btn ni-capture-toggle is-capturing" data-ni-capture-toggle title="Stop Capturing" data-i18n-title="networkInspector.stopCapturing" aria-label="Stop Capturing" data-i18n-aria-label="networkInspector.stopCapturing">
                   <span class="icon icon-sm"><svg><use href="#icon-pause"/></svg></span>
                 </button>
-                <button type="button" class="btn btn-secondary btn-sm ni-icon-btn" data-ni-layout-toggle title="Stack Request and Response Vertically" aria-label="Toggle Detail Layout" data-i18n-aria-label="app.niToggleDetailLayout" aria-pressed="true">
+                <button type="button" class="btn btn-secondary btn-sm ni-icon-btn" data-ni-layout-toggle title="Stack Request and Response Vertically" data-i18n-title="networkSessionViewer.layoutToggleTitle" aria-label="Toggle Detail Layout" data-i18n-aria-label="app.niToggleDetailLayout" aria-pressed="true">
                   <span class="icon icon-sm"><svg><use href="#icon-layout-rows"/></svg></span>
                 </button>
                 <button type="button" class="btn btn-secondary btn-sm ni-icon-btn" data-ni-configure title="Configure Traffic Rules" data-i18n-title="app.niConfigureTitle" aria-label="Configure Traffic Rules" data-i18n-aria-label="app.niConfigureTitle">
@@ -15491,7 +15493,7 @@
               <div class="ni-charles-workspace" data-ni-workspace data-detail-layout="columns">
                 <aside class="ni-sidebar" data-ni-session-pane data-view="sequence">
                   <div class="ni-sidebar-head">
-                    <button type="button" class="ni-group-toggle" data-ni-toggle-all-groups tabindex="-1" aria-hidden="true" title="Collapse all groups" aria-label="Collapse all groups">
+                    <button type="button" class="ni-group-toggle" data-ni-toggle-all-groups tabindex="-1" aria-hidden="true" title="Collapse all groups" data-i18n-title="networkInspector.collapseAllGroups" aria-label="Collapse all groups" data-i18n-aria-label="networkInspector.collapseAllGroups">
                       <span class="ni-struct-chevron" aria-hidden="true">▼</span>
                     </button>
                     <div class="ni-sidebar-options">

@@ -258,7 +258,7 @@ async function ensureMinChartExportWidth(dataUrl: string, minWidth: number): Pro
       canvas.height = targetH;
       const ctx = canvas.getContext('2d');
       if (!ctx) {
-        reject(new Error('Canvas unavailable'));
+        reject(new Error(S.devApp.canvasUnavailable));
         return;
       }
       ctx.imageSmoothingEnabled = true;
@@ -266,7 +266,7 @@ async function ensureMinChartExportWidth(dataUrl: string, minWidth: number): Pro
       ctx.drawImage(img, 0, 0, targetW, targetH);
       resolve(canvas.toDataURL('image/png'));
     };
-    img.onerror = () => reject(new Error('Could not decode capture for export scaling'));
+    img.onerror = () => reject(new Error(S.devApp.couldNotDecodeCaptureForScaling));
     img.src = dataUrl;
   });
 }
@@ -274,9 +274,9 @@ async function ensureMinChartExportWidth(dataUrl: string, minWidth: number): Pro
 /** Rasterize a quad `section` to PNG (off-DOM clone). */
 async function captureQuadCardDomPng(getWrap: () => HTMLElement | null, selector: string): Promise<string> {
   const root = getWrap();
-  if (!root) throw new Error('Remote metrics root not found.');
+  if (!root) throw new Error(S.devApp.remoteMetricsRootNotFound);
   const el = root.querySelector(selector);
-  if (!(el instanceof HTMLElement)) throw new Error(`Performance card not found: ${selector}`);
+  if (!(el instanceof HTMLElement)) throw new Error(S.devApp.performanceCardNotFound(selector));
 
   const scrollSnaps = collectScrollSnaps(el);
   try {
@@ -289,9 +289,7 @@ async function captureQuadCardDomPng(getWrap: () => HTMLElement | null, selector
       box = el.getBoundingClientRect();
     }
     if (box.width < 4 || box.height < 4) {
-      throw new Error(
-        'Performance card has no visible bounds. Enable “Show Device Performance” (quad layout) on the Remote Section.'
-      );
+      throw new Error(S.devApp.performanceCardNoVisibleBounds);
     }
     const dpr =
       typeof window.devicePixelRatio === 'number' && window.devicePixelRatio > 0
@@ -311,7 +309,7 @@ async function captureQuadCardDomPng(getWrap: () => HTMLElement | null, selector
       }
     });
     if (typeof dataUrl !== 'string' || !dataUrl.startsWith('data:image')) {
-      throw new Error('Chart rasterize failed (empty or invalid data URL).');
+      throw new Error(S.devApp.chartRasterizeFailed);
     }
     return dataUrl;
   } finally {

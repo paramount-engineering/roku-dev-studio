@@ -16,6 +16,7 @@ import {
 } from '@shared/ipc/debug-telnet-connection-id.js';
 import { rendererWarn, rendererError } from '../../modules/utils/logger.js';
 import { S, applyI18n } from '@shared/strings/index.js';
+import { initLocaleForWindow } from '../../modules/utils/locale-live.js';
 
 export {};
 
@@ -118,14 +119,9 @@ interface FiddleBridge {
  * instead of trying to blur it visually. */
 const PRIVACY_IP_MASK = '•••.•••.•••.•••';
 
-const DEFAULT_SNIPPET = [
-  "' `userFiddle` is the entry point Fiddle runs after the channel is on-screen.",
-  "' Put your snippet here — you can also define helper subs/functions below and call them from userFiddle. Do NOT define a sub named `init` — that identifier is reserved by the Fiddle scene.",
-  'Sub userFiddle()',
-  '    print "Hello from Roku Dev Studio Fiddle"',
-  'End Sub',
-  ''
-].join('\n');
+// A function (not a const) so the default snippet's translatable comments read
+// from the ACTIVE locale rather than freezing whatever was active at import.
+const defaultSnippet = () => S.fiddle.defaultSnippet;
 
 // NB: unanchored. The Roku 8085 stream routinely concatenates a user print
 // with the trailing beacon log on one physical line (e.g.
@@ -769,12 +765,12 @@ async function handleRun(ctx: FiddleCtx): Promise<void> {
  */
 function handleResetCode(ctx: FiddleCtx): void {
   const current = ctx.model.getValue();
-  const isAlreadyDefault = current === DEFAULT_SNIPPET || current.trim() === '';
+  const isAlreadyDefault = current === defaultSnippet() || current.trim() === '';
   if (!isAlreadyDefault) {
     const ok = window.confirm(S.fiddle.resetConfirm);
     if (!ok) return;
   }
-  ctx.model.setValue(DEFAULT_SNIPPET);
+  ctx.model.setValue(defaultSnippet());
   ctx.editor.setPosition({ lineNumber: 2, column: 5 });
   ctx.editor.focus();
   clearTerminal(ctx);
@@ -1004,7 +1000,7 @@ async function main(): Promise<void> {
   registerBrightScriptLanguage(monaco);
 
   const editor = monaco.editor.create(qs('fiddleEditor'), {
-    value: DEFAULT_SNIPPET,
+    value: defaultSnippet(),
     language: 'brightscript',
     theme: 'vs-dark',
     automaticLayout: true,
@@ -1046,6 +1042,8 @@ async function main(): Promise<void> {
   bindPrivacyMode(ctx);
   // Localize the static fiddle.html shell (toolbar labels, tooltips, placeholder).
   applyI18n(document);
+  // Apply the active locale on open + retranslate live on change.
+  void initLocaleForWindow((window as unknown as { fiddle?: unknown }).fiddle as Parameters<typeof initLocaleForWindow>[0]);
   scheduleLint(ctx);
 
   // Wait for initial device snapshot from main.

@@ -1,4 +1,5 @@
 import { IPC } from './shared/ipc/channels';
+import type { IpcRendererEvent } from 'electron';
 import type { ConsoleFindOptions } from './renderer/modules/console-log/console-find-helpers';
 import type { ConsoleFindings } from './shared/console/brightscript-error-catalog';
 
@@ -60,5 +61,12 @@ contextBridge.exposeInMainWorld('roku', {
       error?: string;
     }>,
   copyToClipboard: (text: string) => ipcRenderer.invoke(IPC.ClipboardWrite, text),
-  openExternal: (url: string) => ipcRenderer.invoke(IPC.ShellOpenExternal, url)
+  openExternal: (url: string) => ipcRenderer.invoke(IPC.ShellOpenExternal, url),
+  // Live locale: apply the current preference on open + retranslate on change.
+  getLocale: () => ipcRenderer.invoke(IPC.GetLocale) as Promise<string>,
+  onLocaleChanged: (callback: (pref: string) => void) => {
+    const handler = (_e: IpcRendererEvent, pref: string) => callback(pref);
+    ipcRenderer.on(IPC.LocaleChanged, handler);
+    return () => ipcRenderer.removeListener(IPC.LocaleChanged, handler);
+  }
 });

@@ -23,6 +23,9 @@ export const IPC = {
   SettingsWindowPickFolder: 'settings-window:pick-folder',
   /** Renderer requests destroying the Settings BrowserWindow after close animation. */
   SettingsWindowClose: 'settings-window:close',
+  /** Settings renderer signals its initial getState() population is done, so main can show the
+   *  window fully-rendered instead of on ready-to-show (avoids a toggle/section-populate flash). */
+  SettingsWindowReady: 'settings-window:ready',
   /** Settings window asks main to open a detected MCP client's config file in the default editor (falls back to revealing in folder). */
   SettingsWindowOpenMcpConfig: 'settings-window:open-mcp-config',
   /** Settings window probes a remote location's Network Inspector capability + current config. */
@@ -235,6 +238,15 @@ export const IPC = {
   GetPrivacyMode: 'get-privacy-mode',
   SetPrivacyMode: 'set-privacy-mode',
   PrivacyModeChanged: 'privacy-mode-changed',
+  /** Renderer → main: current persisted language preference ('system' | locale code), so a
+   *  window opened while a non-default locale is active can apply it on load. */
+  GetLocale: 'get-locale',
+  /** Renderer → main: persist a language preference ('system' | locale code), rebuild the
+   *  menu, and fan the change out to every window. */
+  SetLocale: 'set-locale',
+  /** Main → all renderers: the language preference changed; each window re-resolves and
+   *  retranslates in place (no reload). Payload is the preference string. */
+  LocaleChanged: 'locale-changed',
   DebugLoggingChanged: 'debug-logging-changed',
   /** Win/Linux title-bar hamburger → main-process menu actions. */
   AppMenuAction: 'app-menu:action',

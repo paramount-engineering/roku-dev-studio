@@ -102,8 +102,23 @@ export function makeApplyI18n(resolve: (key: string) => string | undefined) {
       if (!replaced) node.appendChild(node.ownerDocument.createTextNode(value));
     }
 
+    // Rich HTML content — replace the element's innerHTML with a resolved catalog string
+    // that itself contains markup (<strong>/<code>/<a>/<ul>…). This is the mechanism for
+    // multi-element prose blocks that the single-text-node `data-i18n` path can't rebuild.
+    // The catalog is trusted, first-party app content (never user input), so assigning
+    // innerHTML here is safe. A key that doesn't resolve is skipped (inline HTML fallback kept).
+    const htmlNodes = scope.querySelectorAll('[data-i18n-html]');
+    for (let i = 0; i < htmlNodes.length; i++) {
+      const key = htmlNodes[i].getAttribute('data-i18n-html');
+      if (!key) continue;
+      const value = resolve(key);
+      if (value === undefined) continue;
+      (htmlNodes[i] as unknown as { innerHTML: string }).innerHTML = value;
+    }
+
     eachAttr('data-i18n-placeholder', (el, v) => el.setAttribute('placeholder', v));
     eachAttr('data-i18n-title', (el, v) => el.setAttribute('title', v));
     eachAttr('data-i18n-aria-label', (el, v) => el.setAttribute('aria-label', v));
+    eachAttr('data-i18n-alt', (el, v) => el.setAttribute('alt', v));
   };
 }

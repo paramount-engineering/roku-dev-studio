@@ -24,7 +24,8 @@ import {
   QUERY_ENDPOINTS
 } from './modules/index.js';
 import { errMessage } from '@shared/platform/err-util.js';
-import { S, applyI18n } from '@shared/strings/index.js';
+import { S, applyI18n, setLocale, effectiveLocale } from '@shared/strings/index.js';
+import { runRetranslate } from './modules/ui/retranslate-registry.js';
 import { devLog } from './modules/utils/dev-log.js';
 import { rendererWarn, rendererError } from './modules/utils/logger.js';
 import { initDeeplinkMediaTypes } from './modules/deeplink/deeplink-media-types.js';
@@ -119,6 +120,24 @@ async function initPrivacyMode() {
   // Listen for changes from the File menu
   window.roku.onPrivacyModeChanged((enabled) => {
     applyPrivacyMode(enabled);
+  });
+}
+
+// Live language switch: main broadcasts the new preference; re-resolve against this
+// window's OS locale, repoint the catalog, and retranslate the static shell in place.
+// Imperative/dynamic surfaces re-read S as they next re-render (no reload, no lost state).
+function initLocaleLiveSwitch(afterApply?: () => void) {
+  if (!window.roku || typeof window.roku.onLocaleChanged !== 'function') return;
+  window.roku.onLocaleChanged((pref: string) => {
+    setLocale(effectiveLocale(pref, navigator.language || ''));
+    applyI18n(document);
+    // Re-render imperative surfaces (e.g. sidebar device cards built from `S.*`, which
+    // applyI18n can't reach). Supplied by the call site so it can reference render fns
+    // scoped to the main try-block; leaves device tab panels (scrollback, input) untouched.
+    if (afterApply) { try { afterApply(); } catch { /* best-effort */ } }
+    // Re-render imperatively-built surfaces that registered themselves (e.g. the open
+    // Action Scripts step-help modal). data-i18n HTML is already handled by applyI18n above.
+    runRetranslate();
   });
 }
 
@@ -5199,12 +5218,30 @@ function setupSidebarTitlebarToggle(): void {
 }
 
 async function init() {
+  // Apply the locale the main process resolved and passed in the loadFile query
+  // (?locale=…) SYNCHRONOUSLY here — before the first applyI18n(document) below and
+  // before any modal fragment is injected — so the very first paint is already in the
+  // chosen language. Without this the shell paints in English (the inline data-i18n
+  // fallback) and loadPersistedAppSettings()'s async setLocale (further down) re-renders
+  // it, which is the visible English→locale flash + jank on startup. That async apply
+  // stays as the source of truth / fallback; this just wins the first frame.
+  try {
+    const initialLocale = new URLSearchParams(window.location.search).get('locale');
+    if (initialLocale) setLocale(initialLocale);
+  } catch {
+    /* no query locale — loadPersistedAppSettings() will still apply it async */
+  }
   setupFramelessTitlebar();
   const { ensureGlobalModalsMounted } = await import('./components/modals/mount-global-modals.js');
   await ensureGlobalModalsMounted();
   // Localize the static index.html shell + the just-injected modal fragments in one
   // pass (elements carry data-i18n* attributes; inline English is the fallback).
   applyI18n(document);
+  // The local device-count badge is parametrized (S.app.deviceCount), so it can't carry
+  // a data-i18n attribute; seed its initial "0 devices" label from the catalog. Later
+  // renderDeviceList() calls keep it in sync as devices connect/disconnect.
+  const initialDeviceCount = document.getElementById('localDeviceCount');
+  if (initialDeviceCount) initialDeviceCount.textContent = S.app.deviceCount(0);
   await initDeeplinkMediaTypes();
   await initDeeplinkPresets();
   setupKeyboardRemoteHelpModal();
@@ -5212,7 +5249,8 @@ async function init() {
   // Developer-mode logging self-initializes in the shared dev-log module on import.
   // Initialize privacy mode
   initPrivacyMode();
-  
+  initLocaleLiveSwitch(() => renderDeviceList());
+
   devLog('Initializing Roku Dev Studio...');
   
   // Initialize DOM elements
@@ -5264,6 +5302,10 @@ async function init() {
   await hydrateSecretCache();
 
   await loadPersistedAppSettings();
+  // loadPersistedAppSettings() applies the persisted locale (setLocale) — the earlier
+  // applyI18n(document) ran before that, so re-drive the static shell now that the
+  // active locale is settled (a no-op when the resolved locale is English).
+  applyI18n(document);
   resetPostStartupSidebarSessionState();
 
   setupSidebarTitlebarToggle();

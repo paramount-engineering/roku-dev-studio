@@ -3,7 +3,7 @@
  * (`network-tab.ts`) and the standalone Session Viewer (`network-session-viewer.ts`).
  *
  * It single-sources two things that were previously copy-pasted between the two windows:
- *   - {@link DETAIL_PANE_HTML}: the request/response two-pane markup (identical in both).
+ *   - {@link detailPaneHtml}: the request/response two-pane markup (identical in both).
  *   - {@link wireDetailInteractions}: the delegated click dispatch (tabs, wrap, copy, cURL/HAR,
  *     URL modal, embedded JSON/XML modal, copy-menu toggle).
  *
@@ -15,8 +15,10 @@ import type { RequestPaneTab, ResponsePaneTab } from './network-detail.js';
 import { S } from '@shared/strings/index.js';
 
 /** The `.ni-inspector-pane` request/response markup. Inject into a host element, then query the
- *  `[data-ni-*]` hooks from it. Kept byte-for-byte in sync with the CSS contracts in index.html. */
-export const DETAIL_PANE_HTML = `
+ *  `[data-ni-*]` hooks from it. Kept byte-for-byte in sync with the CSS contracts in index.html.
+ *  A FUNCTION (not a const) so the embedded `S.networkInspector.*` labels read from the ACTIVE
+ *  locale each time the pane is (re)injected — a const would freeze the startup locale. */
+export const detailPaneHtml = (): string => `
   <div class="ni-inspector-empty">${S.networkInspector.emptyDetail}</div>
   <div class="ni-contents-split">
     <div class="ni-contents-pane" data-ni-request-pane>

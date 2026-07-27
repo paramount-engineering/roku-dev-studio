@@ -17,23 +17,26 @@ interface FeatureDetail {
 }
 
 /**
- * Extended copy keyed by the tile's title text. The modal header still uses the
- * tile's live title + short description from the DOM (so edits there flow
- * through); this only supplies the longer explanation + capability bullets.
+ * Map each welcome tile to its feature-detail key via the tile's title
+ * `data-i18n` attribute — a STABLE identifier that does not change when the
+ * locale switches (unlike the visible title text). The detail itself is resolved
+ * LIVE from `S.modals.features[key]` at open time (see `openFeatureModal`), never
+ * captured here at import — capturing would freeze the startup locale AND a
+ * localized-title lookup would miss entirely.
  */
-const FEATURE_DETAILS: Record<string, FeatureDetail> = {
-  'Device Discovery': S.modals.features.deviceDiscovery,
-  'Apps & Deep Linking': S.modals.features.appsDeepLinking,
-  'Dev App': S.modals.features.devApp,
-  'App Connector': S.modals.features.appConnector,
-  Fiddle: S.modals.features.fiddle,
-  'MCP Server': S.modals.features.mcpServer,
-  'Device Remote': S.modals.features.deviceRemote,
-  Query: S.modals.features.query,
-  Console: S.modals.features.console,
-  'Action Scripts': S.modals.features.actionScripts,
-  'Network Inspector': S.modals.features.networkInspector,
-  'Remote Locations': S.modals.features.remoteLocations
+const FEATURE_KEY_BY_TITLE_I18N: Record<string, keyof typeof S.modals.features> = {
+  'app.featureDeviceDiscovery': 'deviceDiscovery',
+  'app.featureAppsDeepLinking': 'appsDeepLinking',
+  'app.tabDevApp': 'devApp',
+  'app.tabAppConnector': 'appConnector',
+  'app.featureFiddle': 'fiddle',
+  'app.featureMcpServer': 'mcpServer',
+  'app.featureDeviceRemote': 'deviceRemote',
+  'app.tabQuery': 'query',
+  'app.tabConsole': 'console',
+  'app.tabActionScripts': 'actionScripts',
+  'app.networkInspector': 'networkInspector',
+  'app.featureRemoteLocations': 'remoteLocations'
 };
 
 const OVERLAY_CLASS = 'welcome-detail-overlay';
@@ -129,11 +132,14 @@ function buildModalMarkup(iconWrapHTML: string, title: string, desc: string, det
 }
 
 function openFeatureModal(tile: HTMLElement): void {
-  const title = (tile.querySelector('.feature-title')?.textContent || '').trim();
+  const titleEl = tile.querySelector('.feature-title');
+  const title = (titleEl?.textContent || '').trim();
   const desc = (tile.querySelector('.feature-desc')?.textContent || '').trim();
   const iconWrap = tile.querySelector('.feature-icon-wrapper');
   const iconWrapHTML = iconWrap ? iconWrap.outerHTML : '';
-  const detail = FEATURE_DETAILS[title];
+  // Resolve LIVE from the active-locale catalog via the title's stable data-i18n key.
+  const featureKey = FEATURE_KEY_BY_TITLE_I18N[titleEl?.getAttribute('data-i18n') || ''];
+  const detail = featureKey ? S.modals.features[featureKey] : undefined;
 
   const overlay = document.createElement('div');
   overlay.className = OVERLAY_CLASS;

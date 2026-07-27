@@ -22,12 +22,16 @@ const {
   broadcastFiddleTerminalData
 } = require('./main/fiddle-window');
 const { broadcastPrivacyModeToAllWindows } = require('./main/privacy-broadcast');
+const { S, setLocale, getLocale, effectiveLocale } = require('@shared/strings/index.js');
+const { broadcastLocaleToAllWindows } = require('./main/locale-broadcast');
 const { registerBsFiddleIpc } = require('./main/ipc/bs-fiddle-handlers');
 const { showAboutDialog, registerAboutIpc } = require('./main/about-dialog');
 const { setupAutoUpdater } = require('./main/auto-updater');
 // Handle for triggering the update-check flow from the "Check for Updates" menu
 // item (set once setupAutoUpdater runs at app-ready; the menu click reads it lazily).
 let updaterControls: import('./main/auto-updater').AutoUpdaterControls | null = null;
+/** Rebuilds the native application menu in the current locale; set when createWindow runs. */
+let rebuildAppMenu: (() => void) | null = null;
 const { showSettingsDialog } = require('./main/settings-dialog');
 const { registerSettingsWindowIpc } = require('./main/settings-window-ipc');
 const { initSettings, loadSettings, saveSettings, registerSettingsIpc } = require('./main/settings');
@@ -229,11 +233,14 @@ function loadMainRenderer(win: import('electron').BrowserWindow) {
     });
     return;
   }
+  // Pass the resolved effective locale so the renderer applies it before its first
+  // paint (see app.ts init) — avoids the English → locale re-render flash on startup.
+  const localeQuery = { query: { locale: getLocale() } };
   if (solidDist && fs.existsSync(builtPath)) {
-    win.loadFile(builtPath);
+    win.loadFile(builtPath, localeQuery);
     return;
   }
-  win.loadFile(htmlRendererPath);
+  win.loadFile(htmlRendererPath, localeQuery);
 }
 
 type AppWindowState = {
@@ -313,19 +320,20 @@ function createWindow(appState: AppWindowState) {
 
   loadMainRenderer(win);
 
-  // Create application menu
-  const template = [
+  // Create application menu (rebuildable so a locale switch re-labels it live).
+  const applyApplicationMenu = () => {
+    const template = [
     // macOS app menu (first menu is always the app name on Mac)
     ...(isMac ? [{
       label: app.name,
       submenu: [
         {
-          label: 'About Roku Dev Studio',
+          label: S.menu.about,
           click: () => showAboutDialog(win)
         },
         { type: 'separator' },
         {
-          label: 'Settings',
+          label: S.menu.settings,
           accelerator: 'CmdOrCtrl+,',
           click: () => showSettingsDialog(win)
         },
@@ -341,10 +349,10 @@ function createWindow(appState: AppWindowState) {
     }] : []),
     // File menu
     {
-      label: 'File',
+      label: S.menu.file,
       submenu: [
         {
-          label: 'Developer Mode',
+          label: S.menu.developerMode,
           type: 'checkbox',
           checked: developerModeEnabled,
           accelerator: 'CmdOrCtrl+Shift+D',
@@ -357,7 +365,7 @@ function createWindow(appState: AppWindowState) {
           }
         },
         {
-          label: 'Privacy Mode',
+          label: S.menu.privacyMode,
           type: 'checkbox',
           checked: privacyModeEnabled,
           accelerator: 'CmdOrCtrl+Shift+P',
@@ -375,7 +383,7 @@ function createWindow(appState: AppWindowState) {
           }
         },
         {
-          label: 'Debug Logging',
+          label: S.menu.debugLogging,
           type: 'checkbox',
           checked: debugLoggingEnabled,
           accelerator: 'CmdOrCtrl+Shift+L',
@@ -403,7 +411,7 @@ function createWindow(appState: AppWindowState) {
         ...(isDiagnosticBuild()
           ? [
               {
-                label: 'Open Diagnostic Logs Folder',
+                label: S.menu.openDiagnosticLogsFolder,
                 click: () => {
                   void shell.openPath(app.getPath('userData'));
                 }
@@ -412,18 +420,18 @@ function createWindow(appState: AppWindowState) {
           : []),
         { type: 'separator' },
         {
-          label: 'Open Log File',
+          label: S.menu.openLogFile,
           accelerator: 'CmdOrCtrl+Shift+O',
           click: async () => {
             const res = await dialog.showOpenDialog(win, {
-              title: 'Open log file',
+              title: S.menu.openLogFileDialogTitle,
               properties: ['openFile'],
               filters: [
                 {
-                  name: 'Log & text',
+                  name: S.menu.filterLogAndText,
                   extensions: ['log', 'txt', 'text', 'out', 'err', 'trace', 'rtf']
                 },
-                { name: 'All files', extensions: ['*'] }
+                { name: S.menu.filterAllFiles, extensions: ['*'] }
               ]
             });
             if (res.canceled || !res.filePaths?.length) return;
@@ -431,19 +439,19 @@ function createWindow(appState: AppWindowState) {
           }
         },
         {
-          label: 'Open Network Session',
+          label: S.menu.openNetworkSession,
           accelerator: 'CmdOrCtrl+Shift+N',
           click: async () => {
             const res = await dialog.showOpenDialog(win, {
-              title: 'Open network session',
+              title: S.menu.openNetworkSessionDialogTitle,
               properties: ['openFile'],
               filters: [
                 {
-                  name: 'Network session',
+                  name: S.menu.filterNetworkSession,
                   // `.rds-network-inspector.json` bundles match the `json` filter.
                   extensions: ['json', 'har', 'pcap', 'pcapng']
                 },
-                { name: 'All files', extensions: ['*'] }
+                { name: S.menu.filterAllFiles, extensions: ['*'] }
               ]
             });
             if (res.canceled || !res.filePaths?.length) return;
@@ -451,7 +459,7 @@ function createWindow(appState: AppWindowState) {
           }
         },
         {
-          label: 'Open Fiddle',
+          label: S.menu.openFiddle,
           accelerator: 'CmdOrCtrl+Shift+B',
           click: () => {
             // Ask the renderer for the current device snapshot, then open a fresh Fiddle window.
@@ -469,7 +477,7 @@ function createWindow(appState: AppWindowState) {
           ? []
           : [
               {
-                label: 'Settings',
+                label: S.menu.settings,
                 accelerator: 'CmdOrCtrl+,',
                 click: () => showSettingsDialog(win)
               }
@@ -479,13 +487,13 @@ function createWindow(appState: AppWindowState) {
           // Available on all platforms (per request). Runs the same check flow as
           // the automatic startup check: emitting `checking` clears any update
           // banner currently shown, then the fresh result re-drives the notification.
-          label: 'Check for Updates',
+          label: S.menu.checkForUpdates,
           click: () => {
             void updaterControls?.checkForUpdates({ userInitiated: true });
           }
         },
         {
-          label: 'Clear Cache and Reload',
+          label: S.menu.clearCacheAndReload,
           click: () => clearCacheAndReload(appState)
         },
         { type: 'separator' },
@@ -493,7 +501,7 @@ function createWindow(appState: AppWindowState) {
       ]
     },
     {
-      label: 'Edit',
+      label: S.menu.edit,
       submenu: [
         { role: 'undo' },
         { role: 'redo' },
@@ -505,7 +513,7 @@ function createWindow(appState: AppWindowState) {
       ]
     },
     {
-      label: 'View',
+      label: S.menu.view,
       submenu: [
         { role: 'reload' },
         { role: 'toggleDevTools' },
@@ -521,13 +529,13 @@ function createWindow(appState: AppWindowState) {
         // Fall back to the main window if no window has focus (very
         // edge-casey, but keeps the menu functional).
         {
-          label: 'Actual Size',
+          label: S.menu.actualSize,
           accelerator: 'CmdOrCtrl+0',
           click: (_mi: import('electron').MenuItem, focused?: import('electron').BrowserWindow) =>
             resetZoom(focused || win)
         },
         {
-          label: 'Zoom In',
+          label: S.menu.zoomIn,
           accelerator: 'CmdOrCtrl+Plus',
           click: (_mi: import('electron').MenuItem, focused?: import('electron').BrowserWindow) =>
             zoomIn(focused || win)
@@ -537,7 +545,7 @@ function createWindow(appState: AppWindowState) {
           // built-in `zoomIn` role registers both `CmdOrCtrl+Plus` and
           // `CmdOrCtrl+=`; we mirror that so the unshifted top-row "="
           // works too.
-          label: 'Zoom In (=)',
+          label: S.menu.zoomInAlt,
           accelerator: 'CmdOrCtrl+=',
           visible: false,
           acceleratorWorksWhenHidden: true,
@@ -545,7 +553,7 @@ function createWindow(appState: AppWindowState) {
             zoomIn(focused || win)
         },
         {
-          label: 'Zoom Out',
+          label: S.menu.zoomOut,
           accelerator: 'CmdOrCtrl+-',
           click: (_mi: import('electron').MenuItem, focused?: import('electron').BrowserWindow) =>
             zoomOut(focused || win)
@@ -555,7 +563,7 @@ function createWindow(appState: AppWindowState) {
       ]
     },
     {
-      label: 'Window',
+      label: S.menu.window,
       submenu: [
         { role: 'minimize' },
         { role: 'zoom' },
@@ -569,10 +577,10 @@ function createWindow(appState: AppWindowState) {
       ? []
       : [
           {
-            label: 'Help',
+            label: S.menu.help,
             submenu: [
               {
-                label: 'About Roku Dev Studio',
+                label: S.menu.about,
                 click: () => showAboutDialog(win)
               }
             ]
@@ -580,8 +588,11 @@ function createWindow(appState: AppWindowState) {
         ])
   ];
 
-  const menu = Menu.buildFromTemplate(template);
-  Menu.setApplicationMenu(menu);
+    const menu = Menu.buildFromTemplate(template);
+    Menu.setApplicationMenu(menu);
+  };
+  rebuildAppMenu = applyApplicationMenu;
+  applyApplicationMenu();
 }
 
 /**
@@ -659,6 +670,14 @@ app.whenReady().then(() => {
   registerStripAuxWindowMenus(app);
   initSettings(app);
   const earlySettings = loadSettings();
+  // Resolve the persisted language preference against the OS locale so the native menu
+  // (built in createWindow below) renders in the chosen locale from first paint.
+  setLocale(
+    effectiveLocale(
+      typeof earlySettings['language'] === 'string' ? earlySettings['language'] : 'system',
+      app.getLocale()
+    )
+  );
   const rememberPasswordsInKeychain = earlySettings.rememberPasswordsInKeychain === true;
   secretStore.init(app, { enabled: rememberPasswordsInKeychain });
   registerAboutIpc(ipcMain, clipboard, shell);
@@ -670,6 +689,27 @@ app.whenReady().then(() => {
   registerSecretsIpc(ipcMain);
   registerFiddleIpc(ipcMain, () => (mainWindow && !mainWindow.isDestroyed() ? mainWindow.webContents : null));
   registerBsFiddleIpc(ipcMain);
+
+  // Current language preference, so a window opened while a non-default locale is active can
+  // resolve + apply it on load (each renderer has its own catalog instance).
+  ipcMain.handle(IPC.GetLocale, () => {
+    const settings = loadSettings();
+    const pref = settings['language'];
+    return typeof pref === 'string' && pref.trim() ? pref.trim() : 'system';
+  });
+
+  // Language switch from the Settings dropdown: persist the preference, re-label the native
+  // menu in the new locale, and fan the change out so every window retranslates in place.
+  ipcMain.handle(IPC.SetLocale, (_event: import('electron').IpcMainInvokeEvent, code: unknown) => {
+    const pref = typeof code === 'string' && code.trim() ? code.trim() : 'system';
+    const settings = loadSettings();
+    settings['language'] = pref;
+    saveSettings(settings);
+    setLocale(effectiveLocale(pref, app.getLocale()));
+    rebuildAppMenu?.();
+    broadcastLocaleToAllWindows(pref);
+    return { success: true, pref };
+  });
 
   // Main renderer (e.g. the Network Inspector port-conflict modal) asks to open Settings, optionally
   // navigated straight to a section.

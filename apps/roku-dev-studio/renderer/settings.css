@@ -445,6 +445,26 @@ ul.help-blurb li {
   background-position: right 10px center;
 }
 .ni-place-select:focus { outline: none; border-color: var(--accent-purple); }
+/* Generic dropdown for Settings rows (e.g. General → Language); mirrors .ni-place-select. */
+.settings-select {
+  flex: 0 0 auto;
+  width: auto;
+  min-width: 180px;
+  max-width: 320px;
+  appearance: none;
+  background: var(--bg-deep);
+  color: var(--text-primary);
+  border: 1px solid var(--border-hover);
+  border-radius: 8px;
+  padding: 8px 32px 8px 12px;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+}
+.settings-select:focus { outline: none; border-color: var(--accent-purple); }
 .ni-place-hint { padding-top: 0; margin-bottom: 12px; color: var(--accent-purple); }
 .ni-port-conflict-warn {
   display: flex;

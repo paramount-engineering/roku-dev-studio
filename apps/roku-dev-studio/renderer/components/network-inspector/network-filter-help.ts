@@ -9,8 +9,9 @@ import { attachBackdropClickToClose } from '../../modules/utils/modal-backdrop-c
 import { attachSearchHistory } from '../../modules/ui/search-history.js';
 import { S } from '@shared/strings/index.js';
 
-/** Supported filter fields, shown in the help modal with clickable examples. */
-export const FILTER_HELP_FIELDS: Array<{ field: string; desc: string; examples: string[] }> = [
+/** Supported filter fields, shown in the help modal with clickable examples. A function
+ *  (not a const) so the `desc` labels read from the active locale each time the modal opens. */
+export const filterHelpFields = (): Array<{ field: string; desc: string; examples: string[] }> => [
   { field: 'host:', desc: S.networkInspector.filterDescHost, examples: ['host:roku.com', 'host:googlevideo'] },
   { field: 'method:', desc: S.networkInspector.filterDescMethod, examples: ['method:POST', 'method:GET'] },
   { field: 'status:', desc: S.networkInspector.filterDescStatus, examples: ['status:404', 'status:4xx', 'status:5xx'] },
@@ -93,7 +94,7 @@ export function openFilterHelpModal(onPick: (term: string) => void): void {
   const overlay = document.createElement('div');
   // `.modal-overlay` is display:none until `.active` is added (shared backdrop + centering).
   overlay.className = 'modal-overlay ni-filter-help-overlay active';
-  const rows = FILTER_HELP_FIELDS.map((f) => {
+  const rows = filterHelpFields().map((f) => {
     const chips = f.examples
       .map(
         (ex) =>

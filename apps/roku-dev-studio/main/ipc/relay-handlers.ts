@@ -9,6 +9,7 @@
 
 import type { BrowserWindow, IpcMainInvokeEvent } from 'electron';
 import { IPC } from '../../shared/ipc/channels';
+import { S } from '../../shared/strings/index';
 import type { SafeSendFn } from '../../shared/ipc/payloads';
 import type { RelayBootConfig, RelayTarget, RelayDeviceCandidate } from '../../shared/sideload-relay/types';
 import { loadSettings, saveSettings } from '../settings';
@@ -225,7 +226,7 @@ function setupRelayHandlers(_mainWindow: BrowserWindow | undefined, safeSendToRe
         settings['sideloadRelayTargets'] = readTargets({ sideloadRelayTargets: payload.targets });
       }
       if (!saveSettings(settings)) {
-        return { success: false, error: 'Could not write settings file.' };
+        return { success: false, error: S.sideloadRelay.errCouldNotWriteSettings };
       }
 
       // Only the Relay Dev Password (IDE→RDS auth) is relay-owned; per-device
@@ -292,7 +293,7 @@ function setupRelayHandlers(_mainWindow: BrowserWindow | undefined, safeSendToRe
     ) => {
       const ip = typeof payload?.ip === 'string' ? payload.ip.trim() : '';
       const password = typeof payload?.password === 'string' ? payload.password : '';
-      if (!ip || !password) return { success: false, error: 'Device IP and password are required.' };
+      if (!ip || !password) return { success: false, error: S.sideloadRelay.errDeviceIpPasswordRequired };
       try {
         let ok = false;
         let err = '';
@@ -305,7 +306,7 @@ function setupRelayHandlers(_mainWindow: BrowserWindow | undefined, safeSendToRe
           ok = !!res?.success;
           err = res?.error || '';
         }
-        if (!ok) return { success: false, error: err || 'Incorrect developer password.' };
+        if (!ok) return { success: false, error: err || S.sideloadRelay.errIncorrectPassword };
         // Save it as the ONE canonical device credential (same serial key the Dev
         // App / sideloading / Action Scripts use) and push it to the open window so
         // its cache reflects it live. No relay-specific per-device store.
@@ -315,7 +316,7 @@ function setupRelayHandlers(_mainWindow: BrowserWindow | undefined, safeSendToRe
         safeSendToRenderer(IPC.SecretsPasswordUpdated, { serial: key, password });
         return { success: true };
       } catch (e) {
-        return { success: false, error: (e as Error)?.message || 'Validation failed.' };
+        return { success: false, error: (e as Error)?.message || S.sideloadRelay.errValidationFailed };
       }
     }
   );
@@ -326,7 +327,7 @@ function setupRelayHandlers(_mainWindow: BrowserWindow | undefined, safeSendToRe
       const password = secretStore.getAllPasswords()[RELAY_PASSWORD_KEY] || '';
       return { success: true, password };
     } catch (e) {
-      return { success: false, error: (e as Error)?.message || 'Could not read the saved password.' };
+      return { success: false, error: (e as Error)?.message || S.sideloadRelay.errCouldNotReadPassword };
     }
   });
 

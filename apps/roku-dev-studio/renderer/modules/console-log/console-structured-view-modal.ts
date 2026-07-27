@@ -119,7 +119,7 @@ export function clickedStructuredTargetIndex(
 // JSON/XML-specific markup, the Copy button, and the fold-twisty delegate.
 const structuredModal = createSingletonConsoleModal({
   overlayId: OVERLAY_ID,
-  innerHTML: `
+  innerHTML: () => `
     <div class="modal telnet-structured-view-modal" role="dialog" aria-modal="true" aria-labelledby="telnetStructuredViewerTitle">
       <div class="modal-header">
         <span class="modal-title" id="telnetStructuredViewerTitle">${S.consoleLog.titlePrefix}</span>

@@ -8,6 +8,7 @@
 export const settings = {
   // Bootstrap / fatal
   apiUnavailable: 'Settings API unavailable.',
+  loadFailedMessage: 'Failed to open Settings. Please try again.',
 
   // General section
   noFolderSet: 'No folder set',
@@ -27,6 +28,19 @@ export const settings = {
     `Storage status: ${status}${backend ? ` (${backend})` : ''}.`,
 
   // MCP Server section
+  // Client row labels (product/brand names — same across locales, but sourced here so the
+  // catalog is the single place UI text lives). Keys match main's McpClientId union.
+  mcpClientLabels: {
+    chatgpt: 'ChatGPT Desktop',
+    claude: 'Claude Desktop',
+    cursor: 'Cursor',
+    vscode: 'Visual Studio Code',
+    'vscode-insiders': 'VS Code Insiders',
+    vscodium: 'VSCodium',
+    windsurf: 'Windsurf',
+  },
+  // MCP panel help blurb — contains <a>/<code>, rendered via data-i18n-html.
+  mcpServerBlurbHtml: `Expose Roku Dev Studio to AI agents via the <a href="https://modelcontextprotocol.io" target="_blank" rel="noopener noreferrer" class="mcp-link">Model Context Protocol</a>. Toggle a client to add or remove its <code class="mcp-inline-code">roku-dev-studio</code> MCP server entry; other entries are left untouched.`,
   mcpNoClients: 'No supported MCP clients detected on this system.',
   mcpInstalled: 'Installed',
   mcpNotDetected: 'Not Detected',
@@ -48,6 +62,8 @@ export const settings = {
   // Network Inspector — capture setup (BPF)
   captureAccessEnabled: 'Capture Access Enabled',
   setupNeeded: 'Setup Needed',
+  // Static default for the setup modal <h2>; JS replaces it with a platform-suffixed title.
+  hotspotCaptureSetupModalTitle: 'Hotspot Capture Setup',
   niSetupRowDescOk: 'Optional — only for hotspot DNS/SNI capture. Proxying needs no setup.',
   niSetupRowDescNeeds: 'Hotspot capture needs setup — open to enable it. (Proxying still works.)',
   niSetupPacketCapture: 'Setup Packet Capture',
@@ -78,6 +94,21 @@ export const settings = {
   niSavedRemote: 'Saved to Remote Location.',
   niRemoteSaveFailed: 'Remote Save Failed',
 
+  // Timing & Network row labels (title + hint per timing key), localized here so the
+  // Settings UI renders them in the active language. Numeric min/max bounds still come
+  // from the main process via `timingMeta`.
+  timingLabels: {
+    DEFAULT_RALE_PORT: { title: 'RALE / App Connector Port', hint: 'TCP Port(Default 49200).' },
+    SCREENSHOT_DEBOUNCE_DELAY: { title: 'Screenshot Debounce(ms)', hint: 'Delay after key press before auto-screenshot.' },
+    SCREENSHOT_AFTER_LAUNCH_DELAY: { title: 'Screenshot After Launch(ms)', hint: 'Wait after Dev App launch before screenshot.' },
+    TELNET_TIMEOUT: { title: 'Telnet Connect Timeout(ms)', hint: 'Debug Console / System Telnet.' },
+    CONNECTION_CHECK_INTERVAL: { title: 'Device Active Check(ms)', hint: 'How often connected devices are polled: device info, ECP state, and whether the Dev App channel is in the foreground.' },
+    DEVICE_METRICS_SAMPLE_INTERVAL_MS: { title: 'Sampling Rate(ms)', hint: 'Chanperf + object-count poll cadence. Lower = fresher data, more ECP traffic; needs Developer Mode and Control by Mobile Apps.' },
+    DEVICE_METRICS_CHART_HISTORY_MS: { title: 'Chart History Time(minutes)', hint: 'How far back the CPU and System Memory charts plot' },
+    TOAST_DISPLAY_DURATION: { title: 'Toast Duration(s)', hint: 'Success/Error toast visibility.' },
+    STATUS_MESSAGE_DURATION: { title: 'Status Message Duration(s)', hint: 'Header Status Line Visibility.' },
+  },
+
   // Timing bounds + validation
   timingValueFallback: 'Value',
   timingBoundMin: (value: string | number): string => `Min: ${value}`,
@@ -98,9 +129,13 @@ export const settings = {
   timingSaved: 'Timing & Network Settings saved.',
   mcpSaved: 'MCP Server Settings saved.',
   saveFailed: 'Save Failed',
+  saveWriteFailedError: 'Could not write settings file.',
+  mcpConfigUpdateWarning: (summary: string): string =>
+    `MCP client config update had errors: ${summary}`,
 
   // ── Static settings.html shell ──────────────────────────────────────────
   // Header + nav
+  windowTitle: 'Settings — Roku Dev Studio',
   heading: 'Settings',
   navAria: 'Settings sections',
   tabGeneral: 'General',
@@ -114,6 +149,10 @@ export const settings = {
   resetToDefaults: 'Reset to Defaults',
 
   // General section — toggle labels, descriptions, and (screen-reader) aria labels
+  language: 'Language',
+  languageDesc: 'Display language for the app interface.',
+  languageAria: 'Display language',
+  languageSystemDefault: (name: string): string => `System Default (${name})`,
   developerMode: 'Developer Mode',
   developerModeDesc: 'Extra logging in the main window (same as File → Developer Mode).',
   developerModeAria: 'Developer mode',
@@ -144,8 +183,11 @@ export const settings = {
   chooseFolder: 'Choose Folder…',
 
   // Device Performance section
+  devicePerfIntroHtml: `Applies while <strong>Show Device Performance</strong> is on, the Roku has Developer Mode, and the Dev App is in the foreground. When <strong>Remember 'Show Device Performance'</strong> is on below, the Remote Section restores the quad layout per device.`,
   rememberDevicePerf: "Remember 'Show Device Performance'",
   rememberDevicePerfAria: 'Remember Device Performance show or hide per device',
+  // Row description — contains <strong>, rendered via data-i18n-html.
+  rememberDevicePerfDescHtml: `Restore whether <strong>Show Device Performance</strong> was on for each device. Turn off to always start with just the Remote Section until you enable it again.`,
 
   // Network Inspector section — place selector + field labels
   location: 'Location',
@@ -168,7 +210,9 @@ export const settings = {
   hotspotCaptureSetup: 'Hotspot & Capture Setup',
   viewSetup: 'View Setup',
 
-  // Sideload Relay section — intro bullets (text-only bullets only; the first bullet has inline markup)
+  // Sideload Relay section — intro bullets. The first bullet has inline markup (<span>/<code>,
+  // whose #srRelayUrlWrap/#srRelayUrl are populated at runtime) so it's rendered via data-i18n-html.
+  srIntro1Html: `Point your sideload tool (VS Code with the BrightScript extension, Eclipse, or the roku-deploy CLI)<span id="srRelayUrlWrap" hidden> — or a browser at <code id="srRelayUrl">http://…/</code></span> — here instead of a single Roku.`,
   srIntro2: 'RDS accepts the sideload once, then installs it on every enabled target, launches the Dev App, and opens each console.',
   srIntro3: 'Sideloads from this machine proceed automatically.',
   srIntro4: 'A sideload from another LAN device needs the Dev Password and asks you to allow it.',

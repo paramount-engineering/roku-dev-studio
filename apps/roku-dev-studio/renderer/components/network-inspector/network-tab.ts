@@ -26,7 +26,7 @@ import { openConsoleStructuredViewer } from '../../modules/console-log/console-s
 import { getEmbeddedStructuredPayload } from './network-embedded-structured.js';
 import { makeCenteredSearchResizable } from '../../modules/ui/header-search-resize.js';
 import { filterWidthKey, filterHistoryKey } from '../../modules/ui/search-storage-keys.js';
-import { DETAIL_PANE_HTML, wireDetailInteractions, syncBodyWrap as syncBodyWrapShared } from './network-detail-view.js';
+import { detailPaneHtml, wireDetailInteractions, syncBodyWrap as syncBodyWrapShared } from './network-detail-view.js';
 import { wireNetworkFilterControls } from './network-filter-help.js';
 import { openTrafficRulesModal } from './traffic-rules-modal.js';
 import {
@@ -358,7 +358,7 @@ export function setupNetworkTab(
   // The detail pane's request/response markup is single-sourced in `network-detail-view.ts` and
   // injected here, before the per-pane element queries below read from it. (Shared with the
   // standalone Session Viewer so the two never drift.)
-  if (detailPane instanceof HTMLElement) detailPane.innerHTML = DETAIL_PANE_HTML;
+  if (detailPane instanceof HTMLElement) detailPane.innerHTML = detailPaneHtml();
   const copyMenuEl = panel.querySelector('[data-ni-copy-menu]') as HTMLElement | null;
   const copyCaretEl = panel.querySelector('[data-ni-copy-menu-toggle]') as HTMLElement | null;
   const copyDropdownEl = panel.querySelector('[data-ni-copy-dropdown]') as HTMLElement | null;

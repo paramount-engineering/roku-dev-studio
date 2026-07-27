@@ -129,12 +129,12 @@ export function setupScreenshots(
     canvas.width = img.naturalWidth;
     canvas.height = img.naturalHeight;
     const ctx = canvas.getContext('2d');
-    if (!ctx) throw new Error('Could not get canvas context');
+    if (!ctx) throw new Error(S.devApp.couldNotGetCanvasContext);
     ctx.drawImage(img, 0, 0);
     const blob = await new Promise<Blob | null>((resolve) => {
       canvas.toBlob((b) => resolve(b), 'image/png');
     });
-    if (!blob) throw new Error('Could not encode screenshot');
+    if (!blob) throw new Error(S.devApp.couldNotEncodeScreenshot);
     await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
   }
 

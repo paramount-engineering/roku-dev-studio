@@ -10,6 +10,7 @@ import type {
 } from '../../shared/ipc/payloads';
 import { IPC } from '../../shared/ipc/channels';
 import { mainError } from '../log.js';
+import { S } from '../../shared/strings/index';
 
 const fs = require('fs');
 const path = require('path');
@@ -54,7 +55,7 @@ function inspectPackageFile(resolved: string): ResolvedSideloadFile {
   }
   const ext = path.extname(resolved).slice(1).toLowerCase();
   if (!SIDELOAD_PACKAGE_EXTENSIONS.has(ext)) {
-    return { success: false, error: 'Select a .zip or .pkg Roku channel package' };
+    return { success: false, error: S.devApp.sideloadWrongTypeError };
   }
   const stats = fs.statSync(resolved);
   if (!stats.isFile()) {
@@ -116,9 +117,9 @@ function setupDevAppHandlers(mainWindow: BrowserWindow | undefined, dialog: Dial
   // Select sideload file
   ipcMain.handle(IPC.RokuSelectSideloadFile, async () => {
     const result = await dialog.showOpenDialog(mainWindow!, {
-      title: 'Select Roku Channel Package',
+      title: S.devApp.selectRokuChannelPackageTitle,
       filters: [
-        { name: 'Roku Channel Package', extensions: ['zip', 'pkg'] }
+        { name: S.devApp.rokuChannelPackageFilter, extensions: ['zip', 'pkg'] }
       ],
       properties: ['openFile']
     });
@@ -168,10 +169,10 @@ function setupDevAppHandlers(mainWindow: BrowserWindow | undefined, dialog: Dial
   // Save screenshot to file
   ipcMain.handle(IPC.RokuSaveScreenshot, async (_event: IpcMainInvokeEvent, { tempFile, dataUrl }: SaveScreenshotPayload) => {
     const result = await dialog.showSaveDialog(mainWindow!, {
-      title: 'Save Screenshot',
+      title: S.devApp.saveScreenshotDialogTitle,
       defaultPath: `roku-screenshot-${Date.now()}.jpg`,
       filters: [
-        { name: 'Images', extensions: ['jpg', 'jpeg', 'png'] }
+        { name: S.devApp.imagesFilter, extensions: ['jpg', 'jpeg', 'png'] }
       ]
     });
     
@@ -224,10 +225,10 @@ function setupDevAppHandlers(mainWindow: BrowserWindow | undefined, dialog: Dial
       await fs.promises.writeFile(tempFile, result.imageBuffer);
     } catch (err: unknown) {
       mainError('Screenshot: failed to write temp file', errMsg(err));
-      return { success: false, error: `Failed to save screenshot: ${errMsg(err)}` };
+      return { success: false, error: S.devApp.failedToSaveScreenshot(errMsg(err)) };
     }
     const dataUrl = `data:image/jpeg;base64,${result.imageBuffer.toString('base64')}`;
-    return { success: true, url: dataUrl, tempFile, message: 'Screenshot captured!' };
+    return { success: true, url: dataUrl, tempFile, message: S.devApp.screenshotCapturedToast };
   });
 }
 

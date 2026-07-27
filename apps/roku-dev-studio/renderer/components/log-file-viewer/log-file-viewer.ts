@@ -11,6 +11,7 @@ import { makeCenteredSearchResizable } from '../../modules/ui/header-search-resi
 import { searchWidthKey } from '../../modules/ui/search-storage-keys.js';
 import { inMemorySessionStore } from '../../modules/ui/in-memory-storage.js';
 import { S, applyI18n } from '@shared/strings/index.js';
+import { initLocaleForWindow } from '../../modules/utils/locale-live.js';
 
 /**
  * Local typed view of `window.roku` for this renderer window. Declared as a
@@ -70,6 +71,8 @@ const rokuApi = window.roku as unknown as LogViewerRokuApi;
 async function main() {
   // Localize the static log-file-viewer.html shell.
   applyI18n(document);
+  // Apply the active locale on open + retranslate live on change.
+  void initLocaleForWindow(window.roku as unknown as Parameters<typeof initLocaleForWindow>[0]);
   const statusEl = document.getElementById('logViewerStatus');
   const titleEl = document.getElementById('logViewerTitle');
   const outputEl = document.getElementById('logViewerOutput');

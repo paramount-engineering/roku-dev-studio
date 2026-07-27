@@ -11,6 +11,7 @@
 
 import type { IpcMain, IpcMainInvokeEvent, WebContents } from 'electron';
 import { IPC } from '../../shared/ipc/channels';
+import { S } from '../../shared/strings/index';
 import {
   getFiddleStateByWindow,
   broadcastFiddleTerminalCleared,
@@ -159,8 +160,7 @@ function lintCode(code: string): LintOut {
         const initStart = colIdx + 1; // after the single space after kw → points at `init`
         diags.push({
           severity: 'error',
-          message:
-            'The name `init` is reserved by the Fiddle scene. Rename this sub to `userFiddle` — Fiddle will call `userFiddle()` automatically once the scene is on screen.',
+          message: S.fiddle.lintReservedInit,
           line: lineIdx + 1,
           column: initStart + 1,
           endLine: lineIdx + 1,
@@ -202,18 +202,14 @@ function isTransientRemoteUploadError(errorMessage: string | undefined): boolean
 /** Rewrite a raw curl/relay error into something a human can act on. */
 function humanizeRemoteUploadError(raw: string | undefined): string {
   const msg = (raw || '').trim();
-  if (!msg) return 'Unknown error from the remote relay server.';
+  if (!msg) return S.fiddle.errRemoteUnknown;
   if (isTransientRemoteUploadError(msg)) {
-    return (
-      'Network blip between the relay server and the Roku (broken pipe). ' +
-      'This usually resolves on retry — if it keeps happening, check that the relay ' +
-      'host can reach the device over the LAN and that the Roku is not busy.'
-    );
+    return S.fiddle.errRemoteNetworkBlip;
   }
   // Surface the tail of the curl output (the part after the last "curl:" token
   // is usually the most actionable bit).
   const curlTail = msg.match(/curl[^A-Za-z0-9]+\(\d+\)[^\n]*/);
-  if (curlTail) return `Remote relay curl error: ${curlTail[0]}`;
+  if (curlTail) return S.fiddle.errRemoteCurl(curlTail[0]);
   return msg.length > 240 ? msg.slice(0, 240) + '…' : msg;
 }
 
@@ -419,7 +415,7 @@ async function verifyAndDeleteFiddle(
   device: Pick<FiddleDeviceSnapshotEntry, 'ip' | 'isRemote' | 'serverUrl' | 'password'>
 ): Promise<{ success: boolean; error?: string; skipped?: boolean; authFailed?: boolean }> {
   if (!device.password) {
-    return { success: false, error: 'No developer password available for this device.' };
+    return { success: false, error: S.fiddle.errNoPasswordAvailable };
   }
   const isOurs = await isFiddleInstalled(device.ip, device.serverUrl || null);
   if (!isOurs) {
@@ -482,13 +478,13 @@ export function registerBsFiddleIpc(ipcMain: IpcMain): void {
   ipcMain.handle(IPC.FiddleRun, async (event: IpcMainInvokeEvent, payload: { deviceId: string; code: string; password?: string }) => {
     const senderWin = BrowserWindow.fromWebContents(event.sender);
     if (!senderWin || senderWin.isDestroyed()) {
-      return { success: false, error: 'Fiddle window is no longer available.' };
+      return { success: false, error: S.fiddle.errWindowUnavailable };
     }
     const state = getFiddleStateByWindow(senderWin.id);
     if (!state) return { success: false, error: 'Fiddle state missing.' };
 
     const device = resolveDevice(String(payload?.deviceId || ''), state);
-    if (!device) return { success: false, error: 'Selected device is no longer connected.' };
+    if (!device) return { success: false, error: S.fiddle.errDeviceDisconnected };
 
     // Prefer the password the user just typed into the Fiddle modal (if any),
     // otherwise fall back to the snapshot's persisted password (sourced from
@@ -504,7 +500,7 @@ export function registerBsFiddleIpc(ipcMain: IpcMain): void {
     if (!password) {
       return {
         success: false,
-        error: 'No developer password provided.',
+        error: S.fiddle.errNoPasswordProvided,
         needsPassword: true
       };
     }
@@ -528,7 +524,7 @@ export function registerBsFiddleIpc(ipcMain: IpcMain): void {
       });
       zipPath = built.zipPath;
     } catch (err) {
-      return { success: false, error: `Failed to package snippet: ${errMsg(err)}`, runId };
+      return { success: false, error: S.fiddle.errPackageFailed(errMsg(err)), runId };
     }
 
     // Make sure a telnet stream is live for this device BEFORE sideloading.
@@ -550,7 +546,7 @@ export function registerBsFiddleIpc(ipcMain: IpcMain): void {
       if (!device.serverUrl) {
         return {
           success: false,
-          error: 'Remote device is missing its relay server URL — cannot stream telnet logs.',
+          error: S.fiddle.errRemoteMissingServerUrl,
           runId
         };
       }
@@ -610,7 +606,7 @@ export function registerBsFiddleIpc(ipcMain: IpcMain): void {
 
     const runResult = {
       success: !!sideloadRes?.success,
-      error: sideloadRes?.success ? undefined : sideloadRes?.error || 'Sideload failed',
+      error: sideloadRes?.success ? undefined : sideloadRes?.error || S.fiddle.errSideloadFailed,
       authFailed: sideloadRes?.success ? false : !!sideloadRes?.authFailed,
       runId,
       deviceId: device.id
@@ -672,11 +668,11 @@ export function registerBsFiddleIpc(ipcMain: IpcMain): void {
   ipcMain.handle(IPC.FiddleStop, async (event: IpcMainInvokeEvent, payload: { deviceId: string; password?: string }) => {
     const senderWin = BrowserWindow.fromWebContents(event.sender);
     if (!senderWin || senderWin.isDestroyed()) {
-      return { success: false, error: 'Fiddle window is no longer available.' };
+      return { success: false, error: S.fiddle.errWindowUnavailable };
     }
     const state = getFiddleStateByWindow(senderWin.id);
     const device = state ? resolveDevice(String(payload?.deviceId || ''), state) : null;
-    if (!device) return { success: false, error: 'Device not found.' };
+    if (!device) return { success: false, error: S.fiddle.errDeviceNotFound };
 
     const modalPassword = (typeof payload?.password === 'string' && payload.password.length > 0)
       ? payload.password
@@ -684,7 +680,7 @@ export function registerBsFiddleIpc(ipcMain: IpcMain): void {
     const password = modalPassword || device.password || '';
     const usedStoredPassword = !modalPassword && !!device.password;
     if (!password) {
-      return { success: false, error: 'No developer password available for this device.', needsPassword: true };
+      return { success: false, error: S.fiddle.errNoPasswordAvailable, needsPassword: true };
     }
 
     const result = await verifyAndDeleteFiddle({
@@ -707,8 +703,7 @@ export function registerBsFiddleIpc(ipcMain: IpcMain): void {
     if (result.skipped) {
       return {
         success: false,
-        error:
-          'The dev channel currently installed is not a Fiddle channel — left it alone so your own app isn\'t removed.'
+        error: S.fiddle.errNotFiddleChannel
       };
     }
     return { ...result, authFailed: !!result.authFailed };

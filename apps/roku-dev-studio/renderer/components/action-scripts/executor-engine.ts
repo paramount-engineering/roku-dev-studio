@@ -70,7 +70,7 @@ async function runRaleNodeFieldWait(
   const condition = step.condition || {};
   const pathNorm = normalizePathArg(condition.path);
   if (!pathNorm.ok) {
-    return { success: false, error: pathNorm.error || 'Invalid path' };
+    return { success: false, error: pathNorm.error || S.actionScripts.errInvalidPath };
   }
   const id = String(condition.id != null ? condition.id : '').trim();
   const field = String(condition.field != null ? condition.field : '').trim();
@@ -83,7 +83,7 @@ async function runRaleNodeFieldWait(
 
   if (typeof raleCommand !== 'function') {
     onWaiting && onWaiting(false);
-    return { success: false, error: 'App Connector not available for RALE Node wait' };
+    return { success: false, error: S.actionScripts.errNoAppConnectorRaleWait };
   }
 
   devLog('[rale-node-wait] start', {
@@ -102,7 +102,7 @@ async function runRaleNodeFieldWait(
   while (Date.now() - start < timeoutMs) {
     if (typeof shouldStop === 'function' && shouldStop()) {
       onWaiting && onWaiting(false);
-      return { success: false, error: 'Stopped', stopped: true };
+      return { success: false, error: S.actionScripts.errStopped, stopped: true };
     }
     // The connector's command() auto-reconnects on "Not connected", so a
     // mid-wait app restart (which kills the TrackerTask socket) is handled
@@ -121,32 +121,32 @@ async function runRaleNodeFieldWait(
       if (got.ready) {
         if (evaluateNodeFieldWaitPredicate(got.actualStr, valueStr, operator, caseInsensitive)) {
           const elapsed = Math.round((Date.now() - start) / 1000);
-          onLog && onLog(`Polling... (${elapsed}s) — field "${field}" — condition met`);
+          onLog && onLog(S.actionScripts.logPollingFieldMet(elapsed, field));
           onWaiting && onWaiting(false);
           devLog('[rale-node-wait] condition met', { pollCount, field, actualStr: got.actualStr, operator, valueStr });
           return { success: true };
         }
         logValue = got.actualStr
           ? JSON.stringify(got.actualStr.slice(0, 40)) + (got.actualStr.length > 40 ? '…' : '')
-          : '(empty)';
+          : S.actionScripts.pollValueEmpty;
       } else {
         logValue = `(${got.reason})`;
       }
     } else if (isRaleNotConnectedResult(res)) {
-      logValue = '(reconnecting...)';
+      logValue = S.actionScripts.pollValueReconnecting;
     } else {
-      logValue = '(no response)';
+      logValue = S.actionScripts.pollValueNoResponse;
     }
     const elapsed = Math.round((Date.now() - start) / 1000);
-    onLog && onLog(`Polling... (${elapsed}s) — field "${field}": ${logValue}`);
+    onLog && onLog(S.actionScripts.logPollingField(elapsed, field, logValue));
     onWaiting && onWaiting(true);
     const completed = await sleepWithStop(pollIntervalMs, shouldStop);
     onWaiting && onWaiting(false);
-    if (!completed) return { success: false, error: 'Stopped', stopped: true };
+    if (!completed) return { success: false, error: S.actionScripts.errStopped, stopped: true };
   }
   onWaiting && onWaiting(false);
   devLog('[rale-node-wait] timeout', { pollCount, field, operator, valueStr, timeoutMs });
-  return { success: false, error: 'Wait timeout' };
+  return { success: false, error: S.actionScripts.errWaitTimeout };
 }
 
 /**
@@ -205,11 +205,11 @@ async function runWaitStep(
 ) {
   if (step.delayMs != null && step.delayMs >= 0) {
     const ms = Math.max(0, Number(step.delayMs));
-    onLog && onLog(`Waiting ${ms} ms...`);
+    onLog && onLog(S.actionScripts.logWaitingMs(ms));
     onWaiting && onWaiting(true);
     const completed = await sleepWithStop(ms, shouldStop);
     onWaiting && onWaiting(false);
-    if (!completed) return { success: false, error: 'Stopped', stopped: true };
+    if (!completed) return { success: false, error: S.actionScripts.errStopped, stopped: true };
     return { success: true };
   }
 
@@ -233,7 +233,7 @@ async function runWaitStep(
   while (Date.now() - start < timeoutMs) {
     if (typeof shouldStop === 'function' && shouldStop()) {
       onWaiting && onWaiting(false);
-      return { success: false, error: 'Stopped', stopped: true };
+      return { success: false, error: S.actionScripts.errStopped, stopped: true };
     }
     const res = await api.query(endpoint);
     let pollStatus = '';
@@ -245,35 +245,35 @@ async function runWaitStep(
         const row = data as { state?: unknown };
         if (source === 'media-player' && expectedState !== '' && row.state != null && String(row.state).toLowerCase() === expectedState) {
           const elapsed = Math.round((Date.now() - start) / 1000);
-          const finalStatus = row.state != null && row.state !== '' ? `state: ${row.state}` : 'state: (none)';
-          onLog && onLog(`Polling... (${elapsed}s) — ${finalStatus} — condition met`);
+          const finalStatus = row.state != null && row.state !== '' ? S.actionScripts.pollStateValue(row.state) : S.actionScripts.pollStateNone;
+          onLog && onLog(S.actionScripts.logPollingStatusMet(elapsed, finalStatus));
           return { success: true };
         }
         if (evaluateWaitCheck(check, data)) {
           const elapsed = Math.round((Date.now() - start) / 1000);
-          const finalStatus = row.state != null && row.state !== '' ? `state: ${row.state}` : 'state: (none)';
-          onLog && onLog(`Polling... (${elapsed}s) — ${finalStatus} — condition met`);
+          const finalStatus = row.state != null && row.state !== '' ? S.actionScripts.pollStateValue(row.state) : S.actionScripts.pollStateNone;
+          onLog && onLog(S.actionScripts.logPollingStatusMet(elapsed, finalStatus));
           return { success: true };
         }
         pollStatus = row.state != null && row.state !== ''
-          ? `state: ${row.state}`
-          : 'state: (none)';
+          ? S.actionScripts.pollStateValue(row.state)
+          : S.actionScripts.pollStateNone;
       } else {
-        pollStatus = 'Invalid media-player response';
+        pollStatus = S.actionScripts.pollInvalidMediaPlayer;
       }
     } else {
-      pollStatus = res && res.error ? `Query failed: ${res.error}` : 'No Response';
+      pollStatus = res && res.error ? S.actionScripts.pollQueryFailed(res.error) : S.actionScripts.pollNoResponse;
     }
     const elapsed = Math.round((Date.now() - start) / 1000);
-    onLog && onLog(`Polling... (${elapsed}s) — ${pollStatus}`);
+    onLog && onLog(S.actionScripts.logPollingStatus(elapsed, pollStatus));
     onWaiting && onWaiting(true);
     const completed = await sleepWithStop(pollIntervalMs, shouldStop);
     onWaiting && onWaiting(false);
-    if (!completed) return { success: false, error: 'Stopped', stopped: true };
+    if (!completed) return { success: false, error: S.actionScripts.errStopped, stopped: true };
   }
 
   onWaiting && onWaiting(false);
-  return { success: false, error: 'Wait timeout' };
+  return { success: false, error: S.actionScripts.errWaitTimeout };
 }
 
 /**
@@ -284,24 +284,24 @@ async function runWaitStep(
 export function formatWaitStepListDetails(step) {
   if (!step || step.type !== 'wait') return '';
   if (step.delayMs != null && Number(step.delayMs) >= 0) {
-    return `Fixed Delay ${step.delayMs} ms`;
+    return S.actionScripts.waitDetailFixedDelay(step.delayMs);
   }
   const c = step.condition || {};
   const src = c.source || 'media-player';
   const timeoutMs = step.timeoutMs != null ? Number(step.timeoutMs) : 300000;
   const pollMs = step.pollIntervalMs != null ? Number(step.pollIntervalMs) : 2000;
-  const timing = ` · max ${Math.round(timeoutMs / 1000)}s · poll ${pollMs}ms`;
+  const timing = S.actionScripts.waitDetailTiming(Math.round(timeoutMs / 1000), pollMs);
   if (src === 'media-player') {
     const st = resolveMediaPlayerWaitExpectedState(c);
-    if (st) return `Media player · until state "${st}"${timing}`;
+    if (st) return `${S.actionScripts.waitDetailMediaPlayerState(st)}${timing}`;
     const chk = c.check && typeof c.check === 'string' ? c.check : "state == 'stop'";
-    return `Media player · until ${chk}${timing}`;
+    return `${S.actionScripts.waitDetailMediaPlayerCheck(chk)}${timing}`;
   }
   if (src === 'rale-node-field') {
     const line = formatRaleNodeFieldWaitDetails(c);
-    return line ? `RALE Node Field · ${line}${timing}` : `RALE Node Field · (incomplete)${timing}`;
+    return line ? `${S.actionScripts.waitDetailRale(line)}${timing}` : `${S.actionScripts.waitDetailRaleIncomplete}${timing}`;
   }
-  return `Wait · source ${src}${timing}`;
+  return `${S.actionScripts.waitDetailGenericSource(src)}${timing}`;
 }
 
 /**
@@ -318,7 +318,7 @@ async function runTelnetSystemScriptStep(api, telnetCommand, onLog, shouldStop) 
     typeof api.telnetSystemSend !== 'function' ||
     typeof api.telnetSystemDisconnect !== 'function'
   ) {
-    return { success: false, error: 'Telnet system commands are not available in this context' };
+    return { success: false, error: S.actionScripts.errTelnetNotAvailable };
   }
   const tApi = {
     ip: api.ip,
@@ -328,14 +328,14 @@ async function runTelnetSystemScriptStep(api, telnetCommand, onLog, shouldStop) 
     telnetSystemConnect: api.telnetSystemConnect.bind(api),
     telnetSystemSend: api.telnetSystemSend.bind(api)
   };
-  onLog && onLog('Connecting to Telnet (port 8080)...');
+  onLog && onLog(S.actionScripts.logConnectingTelnet);
   const session = await runTelnetSystemCommandSession(tApi, telnetCommand, {
     onStatus: (m) => onLog && onLog(m),
     shouldStop
   });
   if (!session.ok) {
     if (session.stopped) {
-      return { success: false, error: 'Stopped', stopped: true };
+      return { success: false, error: S.actionScripts.errStopped, stopped: true };
     }
     return { success: false, error: session.error };
   }
@@ -356,13 +356,13 @@ export function formatIfStepListDetails(step) {
   const src = c.source || 'media-player';
   if (src === 'media-player') {
     const st = c.state != null ? String(c.state).trim() : '';
-    if (st) return `Media player · state "${st}"`;
+    if (st) return S.actionScripts.ifDetailMediaPlayerState(st);
     const chk = c.check && typeof c.check === 'string' ? c.check : "state == 'stop'";
-    return `Media player · ${chk}`;
+    return S.actionScripts.ifDetailMediaPlayerCheck(chk);
   }
   if (src === 'rale-node-field') {
     const line = formatRaleNodeFieldWaitDetails(c);
-    return line ? `RALE Node Field · ${line}` : 'RALE Node Field · …';
+    return line ? S.actionScripts.ifDetailRale(line) : S.actionScripts.ifDetailRaleEmpty;
   }
   if (src === 'variables') {
     const p = c.variablePath != null ? String(c.variablePath).trim() : '';
@@ -374,7 +374,7 @@ export function formatIfStepListDetails(step) {
     } else if (p) {
       tail = ` · ${op}`;
     }
-    return p ? `Variable · $${p}${tail}` : 'Variable · …';
+    return p ? `${S.actionScripts.ifDetailVariable(p)}${tail}` : S.actionScripts.ifDetailVariableEmpty;
   }
   if (src === 'active-app') {
     const attr = c.attribute != null ? String(c.attribute).trim() : '';
@@ -386,7 +386,7 @@ export function formatIfStepListDetails(step) {
     } else if (attr) {
       tail = ` · ${op}`;
     }
-    return attr ? `Active App · ${attr}${tail}` : 'Active App · …';
+    return attr ? `${S.actionScripts.ifDetailActiveApp(attr)}${tail}` : S.actionScripts.ifDetailActiveAppEmpty;
   }
   return `if · ${src}`;
 }
@@ -398,35 +398,35 @@ export function stepDescription(step, index) {
   if (!step || !step.type) return '?';
   switch (step.type) {
     case 'query':
-      return `Query ${queryEndpointLabel(step.endpoint)}`;
+      return S.actionScripts.descQuery(queryEndpointLabel(step.endpoint));
     case 'systemTelnet':
       return `Telnet ${step.telnetCommand || '?'}`;
     case 'post':
       return `POST ${step.endpoint || '?'}`;
     case 'keypress':
-      return `Keypress ${step.key || '?'}`;
+      return S.actionScripts.descKeypress(step.key || '?');
     case 'inputText':
-      return `Send text "${(step.text || '').slice(0, 30)}${(step.text && step.text.length > 30) ? '…' : ''}"`;
+      return S.actionScripts.descSendText(`${(step.text || '').slice(0, 30)}${(step.text && step.text.length > 30) ? '…' : ''}`);
     case 'launch':
-      return `Launch app ${step.appId || '?'}`;
+      return S.actionScripts.descLaunchApp(step.appId || '?');
     case 'sideload':
-      return `Sideload ${step.filePath ? step.filePath.split(/[/\\]/).pop() : '?'}`;
+      return S.actionScripts.descSideload(step.filePath ? step.filePath.split(/[/\\]/).pop() : '?');
     case 'deleteSideload':
-      return 'Delete sideload';
+      return S.actionScripts.descDeleteSideload;
     case 'appFunction': {
       const o = getAssignToVarName(step);
-      return `App Function ${step.functionName || '?'}` + (o ? ` → $${o}` : '');
+      return S.actionScripts.descAppFunction(step.functionName || '?') + (o ? ` → $${o}` : '');
     }
     case 'raleCommand': {
       const o = getAssignToVarName(step);
       return `RALE ${step.command || '?'}` + (o ? ` → $${o}` : '');
     }
     case 'screenshot':
-      if (step.label) return `Screenshot (${step.label})`;
+      if (step.label) return S.actionScripts.descScreenshotLabel(step.label);
       if (step.waitAfterTriggerMs != null && Number(step.waitAfterTriggerMs) >= 0) {
-        return `Screenshot (wait after: ${step.waitAfterTriggerMs}ms)`;
+        return S.actionScripts.descScreenshotWaitAfter(step.waitAfterTriggerMs);
       }
-      return 'Screenshot';
+      return S.actionScripts.descScreenshot;
     case 'devicePerformance': {
       const chart = step.chart != null ? String(step.chart) : '';
       const chartLab =
@@ -440,16 +440,16 @@ export function stepDescription(step, index) {
                 ? S.actionScripts.chartAboveAll
                 : chart || '?';
       return step.label
-        ? `Device Performance (${step.label}) — ${chartLab}`
-        : `Device Performance — ${chartLab}`;
+        ? S.actionScripts.descDevicePerformanceLabel(step.label, chartLab)
+        : S.actionScripts.descDevicePerformance(chartLab);
     }
     case 'wait': {
       const w = formatWaitStepListDetails(step);
-      return w ? `Wait · ${w}` : 'Wait';
+      return w ? S.actionScripts.descWaitWithDetails(w) : S.actionScripts.descWait;
     }
     case 'if': {
       const line = formatIfStepListDetails(step);
-      return line ? `If · ${line}` : 'If (…)';
+      return line ? S.actionScripts.descIfWithDetails(line) : S.actionScripts.descIf;
     }
     default:
       return step.type;
@@ -548,7 +548,7 @@ export async function runScript(script, context, callbacks) {
       const entryPos = fi;
       const entry = flatList[entryPos];
       if (!entry) {
-        onError && onError(fi, new Error('Internal error: step preorder mismatch'));
+        onError && onError(fi, new Error(S.actionScripts.errStepPreorderMismatch));
         return false;
       }
       const myIdx = entry.index;
@@ -621,7 +621,7 @@ export async function runScript(script, context, callbacks) {
           if (telnetCmd) {
             onLog &&
               onLog(
-                `Device Query "${ep}" uses dev Telnet "${telnetCmd}" (same as the Query tab).`
+                S.actionScripts.logQueryUsesDevTelnet(ep, telnetCmd)
               );
             result = await runTelnetSystemScriptStep(api, telnetCmd, onLog, shouldStop);
           } else {
@@ -629,7 +629,7 @@ export async function runScript(script, context, callbacks) {
           }
           if (result && result.success && result.data != null) {
             const len = typeof result.data === 'string' ? result.data.length : JSON.stringify(result.data).length;
-            stepSummary = `→ ${len} chars`;
+            stepSummary = S.actionScripts.stepSummaryChars(len);
           }
           break;
         }
@@ -637,38 +637,38 @@ export async function runScript(script, context, callbacks) {
           result = await runTelnetSystemScriptStep(api, String(step.telnetCommand || '').trim(), onLog, shouldStop);
           if (result && result.success && result.data != null) {
             const len = typeof result.data === 'string' ? result.data.length : JSON.stringify(result.data).length;
-            stepSummary = `→ ${len} chars`;
+            stepSummary = S.actionScripts.stepSummaryChars(len);
           }
           break;
         case 'post':
           result = await api.post(step.endpoint);
-          if (result && result.success) stepSummary = '→ OK';
+          if (result && result.success) stepSummary = S.actionScripts.stepSummaryOk;
           break;
         case 'keypress':
           result = await api.keypress(step.key);
-          if (result && result.success) stepSummary = `→ sent ${step.key}`;
+          if (result && result.success) stepSummary = S.actionScripts.stepSummarySentKey(step.key);
           break;
         case 'inputText':
           result = await api.inputText(step.text);
-          if (result && result.success) stepSummary = '→ sent';
+          if (result && result.success) stepSummary = S.actionScripts.stepSummarySent;
           break;
         case 'launch':
           result = await api.launch(step.appId, step.params || '');
-          if (result && result.success) stepSummary = `→ launched ${step.appId}`;
+          if (result && result.success) stepSummary = S.actionScripts.stepSummaryLaunched(step.appId);
           break;
         case 'sideload':
           result = await api.sideload(step.filePath, resolvePassword(step));
-          if (result && result.success) stepSummary = '→ sideload complete';
+          if (result && result.success) stepSummary = S.actionScripts.stepSummarySideloadComplete;
           break;
         case 'deleteSideload':
           result = await api.deleteSideload(resolvePassword(step));
-          if (result && result.success) stepSummary = '→ deleted';
+          if (result && result.success) stepSummary = S.actionScripts.stepSummaryDeleted;
           break;
         case 'appFunction': {
-          const skipReason = 'App Connector not available';
+          const skipReason = S.actionScripts.skipReasonNoAppConnector;
           if (!engineRaleCommand) {
             result = { success: true, skipped: true, skippedReason: skipReason };
-            stepSummary = `→ skipped (${skipReason})`;
+            stepSummary = S.actionScripts.stepSummarySkipped(skipReason);
             break;
           }
           // Normalize named-object functionParams to a positional array using
@@ -724,7 +724,7 @@ export async function runScript(script, context, callbacks) {
           });
           if (!result || isRaleNotConnectedResult(result)) {
             result = { success: true, skipped: true, skippedReason: skipReason };
-            stepSummary = `→ skipped (${skipReason})`;
+            stepSummary = S.actionScripts.stepSummarySkipped(skipReason);
           }
           if (result && result.success && result.data != null) {
             stepSummary = `→ ${typeof result.data === 'string' ? result.data.slice(0, 60) : JSON.stringify(result.data).slice(0, 60)}${(typeof result.data === 'string' ? result.data.length : JSON.stringify(result.data).length) > 60 ? '…' : ''}`;
@@ -732,21 +732,21 @@ export async function runScript(script, context, callbacks) {
           break;
         }
         case 'raleCommand': {
-          const skipReason = 'App Connector not available';
+          const skipReason = S.actionScripts.skipReasonNoAppConnector;
           const vr = validateAndNormalizeRaleCommandArgs(step.command, step.args);
           if (!vr.ok) {
-            result = { success: false, error: vr.error || 'Invalid RALE command' };
+            result = { success: false, error: vr.error || S.actionScripts.errInvalidRaleCommand };
             break;
           }
           if (!engineRaleCommand) {
             result = { success: true, skipped: true, skippedReason: skipReason };
-            stepSummary = `→ skipped (${skipReason})`;
+            stepSummary = S.actionScripts.stepSummarySkipped(skipReason);
             break;
           }
           result = await engineRaleCommand(step.command, vr.args);
           if (!result || isRaleNotConnectedResult(result)) {
             result = { success: true, skipped: true, skippedReason: skipReason };
-            stepSummary = `→ skipped (${skipReason})`;
+            stepSummary = S.actionScripts.stepSummarySkipped(skipReason);
             break;
           }
           if (result && result.success && result.data != null) {
@@ -759,7 +759,7 @@ export async function runScript(script, context, callbacks) {
             ? Number(step.waitBeforeMs)
             : 100;
           if (waitMs > 0) {
-            onLog && onLog(`Waiting ${waitMs} ms before capture...`);
+            onLog && onLog(S.actionScripts.logWaitingBeforeCapture(waitMs));
             await new Promise(r => setTimeout(r, waitMs));
           }
           const password = resolvePassword(step);
@@ -774,7 +774,7 @@ export async function runScript(script, context, callbacks) {
               // that we'd report if query error and dev-backgrounded were collapsed.
               result = {
                 success: false,
-                error: `Could not verify Dev App status before screenshot: ${activeAppRes.error || 'Active App query failed'}`
+                error: S.actionScripts.errCouldNotVerifyDevApp(activeAppRes.error || 'Active App query failed')
               };
             } else if (!devAppActive) {
               result = {
@@ -793,15 +793,15 @@ export async function runScript(script, context, callbacks) {
               const filename = `action-${myIdx + 1}_${label}.png`;
               const saveResult = await (window.roku && window.roku.actionScriptWriteFile
                 ? window.roku.actionScriptWriteFile(runFolder, filename, result.url)
-                : Promise.resolve({ success: false, error: 'Save not available' }));
+                : Promise.resolve({ success: false, error: S.actionScripts.errSaveNotAvailable }));
               if (!saveResult.success) {
                 result = { ...result, saveError: saveResult.error };
-                stepSummary = `→ save failed: ${saveResult.error || 'unknown'}`;
+                stepSummary = S.actionScripts.stepSummarySaveFailed(saveResult.error || 'unknown');
               } else {
-                stepSummary = `→ saved as ${filename}`;
+                stepSummary = S.actionScripts.stepSummarySavedAs(filename);
               }
             } else if (result && result.success) {
-              stepSummary = '→ captured (no save folder)';
+              stepSummary = S.actionScripts.stepSummaryCapturedNoFolder;
             }
           }
           break;
@@ -823,16 +823,16 @@ export async function runScript(script, context, callbacks) {
           }
           result = await captureDevicePerformance(chart, { shouldStop, onWaiting });
           if (result && result.success && result.partial && onLog) {
-            onLog('Some performance sections were unavailable; partial snapshot.');
+            onLog(S.actionScripts.logPartialPerformance);
           }
           if (result && result.success) {
             const n = Array.isArray(result.pngDataUrls) ? result.pngDataUrls.length : 0;
-            stepSummary = n ? `→ ${n} chart image(s)` : '→ captured';
+            stepSummary = n ? S.actionScripts.stepSummaryChartImages(n) : S.actionScripts.stepSummaryCaptured;
           }
           break;
         }
         default:
-          result = { success: false, error: `Unknown action type: ${step.type}` };
+          result = { success: false, error: S.actionScripts.errUnknownActionType(step.type) };
         }
 
         const outName = rawStep ? getAssignToVarName(rawStep) : '';

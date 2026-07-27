@@ -10,6 +10,7 @@
 
 import { showToast } from '../../modules/utils/ui.js';
 import { attachBackdropClickToClose } from '../../modules/utils/modal-backdrop-click.js';
+import { registerRetranslate } from '../../modules/ui/retranslate-registry.js';
 import { S } from '@shared/strings/index.js';
 
 interface UpdaterStatus {
@@ -833,12 +834,16 @@ function renderBanner(status: UpdaterStatus): void {
   }
 }
 
+/** Last updater status the banner rendered from, so a live locale switch can re-render it. */
+let lastStatus: UpdaterStatus | null = null;
+
 export function mountUpdateNotification(): void {
   const updater = (window as any).rdsUpdater;
   if (!updater) return;
 
   // Wire live updates
   updater.onStatus((status: UpdaterStatus) => {
+    lastStatus = status;
     // A user-initiated "Check for Updates" that found nothing surfaces a brief,
     // auto-dismissing confirmation toast (the automatic startup check stays silent).
     if (status?.type === 'not-available' && status.notifyNoUpdate) {
@@ -849,8 +854,19 @@ export function mountUpdateNotification(): void {
 
   // Recover status if the window reloaded and missed earlier broadcasts
   updater.getStatus().then((status: UpdaterStatus) => {
+    lastStatus = status;
     if (status && status.type !== 'idle' && status.type !== 'checking' && status.type !== 'not-available') {
       renderBanner(status);
     }
   }).catch(() => undefined);
+
+  // The banner + release-notes modal are IMPERATIVE surfaces built from S.modals.* (no
+  // data-i18n attributes), so applyI18n(document) can't retranslate them on a live language
+  // switch — they only re-render when a NEW updater status arrives. Register with the central
+  // retranslate registry (fired by initLocaleLiveSwitch → runRetranslate) so they flip with the
+  // app. Guard on being on-screen so we never resurrect a dismissed banner.
+  registerRetranslate(() => {
+    if (lastStatus && document.getElementById(BANNER_ID)) renderBanner(lastStatus);
+    if (document.getElementById(RELEASE_NOTES_MODAL_ID)) showReleaseNotesModal();
+  });
 }

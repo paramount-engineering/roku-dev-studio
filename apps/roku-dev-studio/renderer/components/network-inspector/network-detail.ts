@@ -274,7 +274,7 @@ function renderHeadersTable(msg: NetworkHttpMessage | undefined): string {
         : '';
   const rows: string[] = [];
   if (statusLine) {
-    rows.push(`<tr><th>Status-Line</th><td>${escapeHtml(statusLine)}</td></tr>`);
+    rows.push(`<tr><th>${S.networkInspector.statusLine}</th><td>${escapeHtml(statusLine)}</td></tr>`);
   }
   for (const [k, v] of Object.entries(msg.headers)) {
     rows.push(`<tr><th>${escapeHtml(k)}</th><td>${escapeHtml(v)}</td></tr>`);

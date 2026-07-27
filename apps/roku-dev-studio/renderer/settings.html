@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Settings — Roku Dev Studio</title>
+  <title data-i18n="settings.windowTitle">Settings — Roku Dev Studio</title>
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self';">
   <link rel="stylesheet" href="settings.css">
 </head>
@@ -13,7 +13,7 @@
     <h1>
       <span data-i18n="settings.heading">Settings</span>
       <span class="settings-header-delim" aria-hidden="true">›</span>
-      <span id="settingsHeaderSection" class="settings-header-section">General</span>
+      <span id="settingsHeaderSection" class="settings-header-section" data-i18n="settings.tabGeneral">General</span>
     </h1>
     <button type="button" class="modal-close" id="btnHeaderClose" title="Close" aria-label="Close" data-i18n-title="common.close" data-i18n-aria-label="common.close">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -36,6 +36,13 @@
         <div class="settings-panel-fill">
           <div class="settings-panel-scroll">
             <div class="settings-section">
+              <div class="settings-row-input">
+                <div class="settings-row-text">
+                  <strong data-i18n="settings.language">Language</strong>
+                  <span class="settings-row-desc" data-i18n="settings.languageDesc">Display language for the app interface.</span>
+                </div>
+                <select id="optLanguage" class="settings-select" aria-label="Display language" data-i18n-aria-label="settings.languageAria"></select>
+              </div>
               <div class="settings-row-toggle">
                 <div class="settings-row-text">
                   <strong data-i18n="settings.developerMode">Developer Mode</strong>
@@ -124,7 +131,7 @@
               <p class="help-blurb" data-i18n="settings.actionScriptsBlurb">Default folder for screenshots and logs when a script needs saves. You can still pick another folder per run.</p>
               <div class="folder-action-row">
                 <div class="folder-integrated">
-                  <div id="folderDisplay" class="folder-integrated-path empty">No folder set</div>
+                  <div id="folderDisplay" class="folder-integrated-path empty" data-i18n="settings.noFolderSet">No folder set</div>
                   <button type="button" class="folder-integrated-btn" id="btnBrowseFolder" data-i18n="settings.chooseFolder">Choose Folder…</button>
                 </div>
               </div>
@@ -140,12 +147,12 @@
       <div class="settings-panel" data-section="device-performance" id="panel-device-performance" role="tabpanel" aria-labelledby="nav-device-performance" aria-hidden="true">
         <div class="settings-panel-fill">
           <div class="settings-panel-scroll">
-            <p class="help-blurb">Applies while <strong>Show Device Performance</strong> is on, the Roku has Developer Mode, and the Dev App is in the foreground. When <strong>Remember 'Show Device Performance'</strong> is on below, the Remote Section restores the quad layout per device.</p>
+            <p class="help-blurb" data-i18n-html="settings.devicePerfIntroHtml">Applies while <strong>Show Device Performance</strong> is on, the Roku has Developer Mode, and the Dev App is in the foreground. When <strong>Remember 'Show Device Performance'</strong> is on below, the Remote Section restores the quad layout per device.</p>
             <div class="settings-section device-perf-unified-list">
               <div class="settings-row-toggle">
                 <div class="settings-row-text">
                   <strong data-i18n="settings.rememberDevicePerf">Remember 'Show Device Performance'</strong>
-                  <span class="settings-row-desc">Restore whether <strong>Show Device Performance</strong> was on for each device. Turn off to always start with just the Remote Section until you enable it again.</span>
+                  <span class="settings-row-desc" data-i18n-html="settings.rememberDevicePerfDescHtml">Restore whether <strong>Show Device Performance</strong> was on for each device. Turn off to always start with just the Remote Section until you enable it again.</span>
                 </div>
                 <label class="settings-toggle-wrap" for="optDevicePerfRememberQuad">
                   <input type="checkbox" id="optDevicePerfRememberQuad" class="settings-toggle-input" role="switch" aria-label="Remember Device Performance show or hide per device" aria-checked="false" data-i18n-aria-label="settings.rememberDevicePerfAria" />
@@ -179,7 +186,7 @@
       <div class="settings-panel" data-section="mcp-server" id="panel-mcp-server" role="tabpanel" aria-labelledby="nav-mcp-server" aria-hidden="true">
         <div class="settings-panel-fill">
           <div class="settings-panel-scroll">
-            <p class="help-blurb">Expose Roku Dev Studio to AI agents via the <a href="https://modelcontextprotocol.io" target="_blank" rel="noopener noreferrer" class="mcp-link">Model Context Protocol</a>. Toggle a client to add or remove its <code class="mcp-inline-code">roku-dev-studio</code> MCP server entry; other entries are left untouched.</p>
+            <p class="help-blurb" data-i18n-html="settings.mcpServerBlurbHtml">Expose Roku Dev Studio to AI agents via the <a href="https://modelcontextprotocol.io" target="_blank" rel="noopener noreferrer" class="mcp-link">Model Context Protocol</a>. Toggle a client to add or remove its <code class="mcp-inline-code">roku-dev-studio</code> MCP server entry; other entries are left untouched.</p>
             <div class="settings-section">
               <div id="mcpClientsList" class="mcp-clients-list" aria-live="polite"></div>
             </div>
@@ -202,7 +209,7 @@
             <div class="ni-port-conflict-warn" id="niPortConflictWarn" role="alert" hidden>
               <span class="ni-port-conflict-warn-icon" aria-hidden="true">!</span>
               <div class="ni-port-conflict-warn-body">
-                  <strong id="niPortConflictTitle">Proxy Port Unavailable</strong>
+                  <strong id="niPortConflictTitle" data-i18n="settings.niPortConflictTitle">Proxy Port Unavailable</strong>
                 <span class="ni-port-conflict-warn-msg" id="niPortConflictMsg"></span>
                 <ul class="ni-port-conflict-steps" id="niPortConflictSteps"></ul>
               </div>
@@ -241,8 +248,8 @@
               </div>
               <div class="settings-row-input" id="niSetupRow">
                 <div class="settings-row-text">
-                  <strong data-i18n="settings.hotspotCaptureSetup">Hotspot &amp; Capture Setup <span class="ni-attention-badge" id="niSetupBadge" hidden>Setup Needed</span></strong>
-                  <span class="settings-row-desc" id="niSetupRowDesc">Optional — only for hotspot DNS/SNI capture. Proxying needs no setup.</span>
+                  <strong data-i18n="settings.hotspotCaptureSetup">Hotspot &amp; Capture Setup <span class="ni-attention-badge" id="niSetupBadge" hidden data-i18n="settings.setupNeeded">Setup Needed</span></strong>
+                  <span class="settings-row-desc" id="niSetupRowDesc" data-i18n="settings.niSetupRowDescOk">Optional — only for hotspot DNS/SNI capture. Proxying needs no setup.</span>
                 </div>
                 <button type="button" class="btn btn-secondary btn-sm" id="btnOpenNiSetup" data-i18n="settings.viewSetup">View Setup</button>
               </div>
@@ -259,7 +266,7 @@
         <div class="settings-panel-fill">
           <div class="settings-panel-scroll">
             <ul class="help-blurb sr-intro">
-              <li>Point your sideload tool (VS Code with the BrightScript extension, Eclipse, or the roku-deploy CLI)<span id="srRelayUrlWrap" hidden> — or a browser at <code id="srRelayUrl">http://…/</code></span> — here instead of a single Roku.</li>
+              <li data-i18n-html="settings.srIntro1Html">Point your sideload tool (VS Code with the BrightScript extension, Eclipse, or the roku-deploy CLI)<span id="srRelayUrlWrap" hidden> — or a browser at <code id="srRelayUrl">http://…/</code></span> — here instead of a single Roku.</li>
               <li data-i18n="settings.srIntro2">RDS accepts the sideload once, then installs it on every enabled target, launches the Dev App, and opens each console.</li>
               <li data-i18n="settings.srIntro3">Sideloads from this machine proceed automatically.</li>
               <li data-i18n="settings.srIntro4">A sideload from another LAN device needs the Dev Password and asks you to allow it.</li>
@@ -280,7 +287,7 @@
     <div class="ni-modal" role="dialog" aria-modal="true" aria-labelledby="niSetupModalTitle">
       <div class="ni-modal-header">
         <div class="ni-modal-title-wrap">
-          <h2 id="niSetupModalTitle">Hotspot Capture Setup</h2>
+          <h2 id="niSetupModalTitle" data-i18n="settings.hotspotCaptureSetupModalTitle">Hotspot Capture Setup</h2>
           <span class="ni-setup-header-badge" id="niSetupHeaderBadge" data-state="unknown" hidden></span>
         </div>
         <button type="button" class="modal-close" id="niSetupModalClose" title="Close" aria-label="Close" data-i18n-title="common.close" data-i18n-aria-label="common.close">

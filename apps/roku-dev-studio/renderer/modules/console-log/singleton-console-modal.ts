@@ -49,8 +49,12 @@ export type SingletonConsoleModalOpts = {
    * root element matching `.modal` with `role="dialog"` and `aria-modal="true"`,
    * including a labelled title (`aria-labelledby` referencing an in-overlay id).
    * The focus trap and `aria-modal` semantics depend on this contract.
+   *
+   * Pass a FUNCTION (not a plain string) when the markup embeds localized `S.*`
+   * text, so it is resolved from the active locale when the overlay is built
+   * (first open) rather than frozen at module-import time.
    */
-  innerHTML: string;
+  innerHTML: string | (() => string);
   /**
    * Selector for the close (×) button inside the dialog surface. Wired to
    * the same `close()` path the backdrop and Esc use.
@@ -125,7 +129,7 @@ export function createSingletonConsoleModal(opts: SingletonConsoleModalOpts): Si
     el.id = overlayId;
     el.className = 'modal-overlay';
     el.setAttribute('aria-hidden', 'true');
-    el.innerHTML = innerHTML;
+    el.innerHTML = typeof innerHTML === 'function' ? innerHTML() : innerHTML;
     document.body.appendChild(el);
     overlay = el;
 

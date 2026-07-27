@@ -376,6 +376,7 @@ WiFi MAC: ${d.wifiMac || 'N/A'}`,
   queryRegistry: 'Registry',
   queryObjectCounts: 'Object Counts',
   run: 'Run',
+  customQueryPlaceholder: 'e.g. /query/device-info',
   results: 'Results',
   removePluginPlaceholder: 'App ID (e.g., 987654_cf9a)',
   removePlugin: 'Remove Plugin',
@@ -520,5 +521,39 @@ WiFi MAC: ${d.wifiMac || 'N/A'}`,
   clearCacheAndReload: 'Clear Cache and Reload',
   zoom: 'Zoom',
   aboutRokuDevStudio: 'About Roku Dev Studio',
-  quitRokuDevStudio: 'Quit Roku Dev Studio'
+  quitRokuDevStudio: 'Quit Roku Dev Studio',
+
+  // ───────────────────────────────────────────────────────────────────────
+  // index.html localization pass — cloned-template defaults, empty-states,
+  // attribute-only strings, and multi-element prose (data-i18n-html) blocks
+  // that the earlier migration left inline.
+  // ───────────────────────────────────────────────────────────────────────
+
+  // Sidebar — local devices empty state (prose with <br>/<strong>)
+  noDevicesFoundHtml: 'No devices found.<br>Click <strong>Scan</strong> to discover Roku devices.',
+
+  // Device panel header (cloned-template defaults, replaced by JS at runtime)
+  deviceNamePlaceholder: 'Device Name',
+  perfStripPausedPlaceholder: 'Paused — launch Dev App to resume',
+
+  // ECP / Control by Mobile Apps warning descriptions (prose with <strong>)
+  ecpRemoteWarningDescHtml:
+    'Remote control (keypress, apps, etc.) requires "Control by Mobile Apps" → Network Access to be set to <strong>Enabled</strong> on your Roku device.',
+  ecpDevAppWarningDescHtml:
+    'The Quick Remote and keypress features require "Control by Mobile Apps" → Network Access to be <strong>Enabled</strong> on your Roku device.',
+
+  // Dev App tab — sideloaded-app default + screenshot image alt text
+  noChannelSideloaded: 'No channel sideloaded',
+  screenshotAlt: 'Roku Screenshot',
+
+  // App Connector — Update Node modal intro (prose with <strong>/<code>) + response empty-state
+  updateNodeModalIntroHtml:
+    'Uses the <strong>path</strong> from your last successful Get Node by ID. Actions: <code>removeField</code>, <code>setField</code> (add / update).',
+  responseWillAppearHere: 'Response will appear here...',
+
+  // Action Scripts — Executor nudge + password-prompt hint (prose with <strong>/<code>)
+  executorBuilderNudgeHtml:
+    'Use the <strong>Builder</strong> tab to add and edit steps with guided fields. Use this area to validate, import, or run JSON.',
+  executorPasswordPromptHintHtml:
+    'Enter it here and run again, or add <code>"devPassword": "..."</code> to your script JSON.'
 } as const;

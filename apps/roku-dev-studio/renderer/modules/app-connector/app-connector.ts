@@ -19,6 +19,7 @@
 import { DEFAULT_RALE_PORT } from '../utils/constants.js';
 import { isRaleNotConnectedResult } from '../utils/rale-result-guards.js';
 import { normalizeRaleFunctions } from '../utils/rale-functions.js';
+import { S } from '@shared/strings/index.js';
 
 export type AppConnectorStatus =
   | 'idle'
@@ -292,39 +293,39 @@ export function createAppConnector(
     const logVerbosity = options.logVerbosity ?? getLogVerbosity();
     const onStatus = options.onStatus;
 
-    setState({ status: 'connecting', lastError: null, message: 'Connecting...' });
+    setState({ status: 'connecting', lastError: null, message: S.inspector.connectingBtn });
 
     if (options.checkDevApp) {
-      onStatus?.('Checking if Dev App is active...');
+      onStatus?.(S.inspector.checkingDevApp);
       try {
         const res = await api.query('/query/active-app');
         if (!res || !res.success || typeof res.data !== 'string') {
-          const err = 'Could not verify Dev App status.';
+          const err = S.inspector.couldNotVerifyDevApp;
           setState({ status: 'disconnected', lastError: err, message: err });
           return { ok: false, error: err, devAppQueryFailed: true };
         }
         if (!res.data.includes('id="dev"')) {
-          const err = 'Dev App is not running on the Roku device.';
+          const err = S.inspector.devAppNotRunning;
           setState({ status: 'disconnected', lastError: err, message: err });
           return { ok: false, error: err, devAppNotActive: true };
         }
       } catch (e) {
-        const err = errMsg(e) || 'Could not verify Dev App status.';
+        const err = errMsg(e) || S.inspector.couldNotVerifyDevApp;
         setState({ status: 'disconnected', lastError: err, message: err });
         return { ok: false, error: err, devAppQueryFailed: true };
       }
     }
 
-    onStatus?.(`Waking up TrackerTask on port ${port}...`);
+    onStatus?.(S.inspector.wakingUpTrackerTask(port));
     try {
       const wake = await api.raleWake(port);
       if (wake && wake.success === false) {
-        const err = wake.error || 'Failed to wake TrackerTask';
+        const err = wake.error || S.inspector.failedToWakeTrackerTask;
         setState({ status: 'disconnected', lastError: err, message: err });
         return { ok: false, error: err };
       }
     } catch (e) {
-      const err = errMsg(e) || 'Failed to wake TrackerTask';
+      const err = errMsg(e) || S.inspector.failedToWakeTrackerTask;
       setState({ status: 'disconnected', lastError: err, message: err });
       return { ok: false, error: err };
     }
@@ -344,7 +345,7 @@ export function createAppConnector(
     const CONNECT_TIMEOUT_MS = 4500;
     const CONNECT_MAX_ATTEMPTS = 12;
 
-    onStatus?.('Connecting to socket...');
+    onStatus?.(S.inspector.connectingToSocket);
     let cid: string | null = null;
     let lastError: string | null = null;
     {
@@ -361,25 +362,25 @@ export function createAppConnector(
             lastError = null;
             break;
           }
-          lastError = (res && res.error) || 'Failed to connect';
+          lastError = (res && res.error) || S.inspector.failedToConnect;
         } catch (e) {
-          lastError = errMsg(e) || 'Failed to connect';
+          lastError = errMsg(e) || S.inspector.failedToConnect;
         }
         if (Date.now() - started >= CONNECT_TIMEOUT_MS) break;
-        if (attempt > 1) onStatus?.(`Connecting to socket (retry ${attempt})...`);
+        if (attempt > 1) onStatus?.(S.inspector.connectingToSocketRetry(attempt));
         backoff += CONNECT_BACKOFF_STEP_MS;
       }
     }
 
     if (!cid) {
-      const err = lastError || 'Failed to connect';
+      const err = lastError || S.inspector.failedToConnect;
       setState({ status: 'disconnected', lastError: err, message: err });
       return { ok: false, error: err };
     }
 
     // TrackerTask closes the socket if no `init` command arrives within 3s.
     // Run it eagerly so downstream callers don't have to race that timer.
-    onStatus?.('Initializing...');
+    onStatus?.(S.inspector.initializing);
     let initData: unknown;
     try {
       const res = (await api.raleCommand(cid, 'init', { logVerbosity })) as {
@@ -399,7 +400,7 @@ export function createAppConnector(
       status: 'connected',
       connectionId: cid,
       lastError: null,
-      message: 'Connected'
+      message: S.common.connected
     });
     return { ok: true, connectionId: cid, initData };
   }
@@ -433,7 +434,7 @@ export function createAppConnector(
       status: 'disconnected',
       connectionId: null,
       lastError: null,
-      message: 'Disconnected'
+      message: S.common.disconnected
     });
   }
 
@@ -452,7 +453,7 @@ export function createAppConnector(
       setState({
         status: 'disconnected',
         connectionId: null,
-        message: 'Connection lost'
+        message: S.inspector.connectionLost
       });
     }
     return false;
@@ -496,7 +497,7 @@ export function createAppConnector(
     let cid = state.connectionId;
     if (!cid) {
       cid = await ensureConnected();
-      if (!cid) return { success: false, error: 'Not connected' };
+      if (!cid) return { success: false, error: S.inspector.notConnected };
     }
 
     let result = (await api.raleCommand(cid, cmd, args ?? {})) as AppConnectorCommandResult<T>;
@@ -506,7 +507,7 @@ export function createAppConnector(
     }
 
     // Cached id was stale (socket closed between steps). Reconnect and retry once.
-    setState({ status: 'reconnecting', message: 'Reconnecting...' });
+    setState({ status: 'reconnecting', message: S.inspector.reconnecting });
     if (state.connectionId === cid) {
       setState({ connectionId: null });
     }

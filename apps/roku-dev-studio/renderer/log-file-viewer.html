@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Logs</title>
+  <title data-i18n="logFileViewer.windowTitle">Logs</title>
   <link rel="stylesheet" href="log-file-viewer.css" />
 </head>
 <body class="log-file-viewer-page">
@@ -39,7 +39,7 @@
   </svg>
   <header id="logViewerHeader" class="log-viewer-header">
     <div class="log-viewer-header-primary">
-      <h1 id="logViewerTitle" class="log-viewer-title">Log file</h1>
+      <h1 id="logViewerTitle" class="log-viewer-title" data-i18n="logFileViewer.defaultTitle">Log file</h1>
       <p id="logViewerStatus" class="log-viewer-status"></p>
     </div>
     <!-- The `.telnet-find-bar` is injected at runtime from the shared `buildConsoleFindBarElement`

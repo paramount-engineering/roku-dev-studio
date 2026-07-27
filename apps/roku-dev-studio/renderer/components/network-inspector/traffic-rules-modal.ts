@@ -22,9 +22,10 @@ type RokuApi = {
   ) => Promise<{ success?: boolean }>;
 };
 
-// Bandwidth presets (download cap in kbps; 0 = unlimited).
-const BW_OPTIONS: Array<{ label: string; kbps: number }> = [
-  { label: 'Unlimited', kbps: 0 },
+// Bandwidth presets (download cap in kbps; 0 = unlimited). A function (not a const)
+// so the localized "Unlimited" label reads from the active locale on each open.
+const bwOptions = (): Array<{ label: string; kbps: number }> => [
+  { label: S.networkInspector.bandwidthUnlimited, kbps: 0 },
   { label: '8 Mbps', kbps: 8000 },
   { label: '4 Mbps', kbps: 4000 },
   { label: '2 Mbps', kbps: 2000 },
@@ -36,7 +37,7 @@ const BW_OPTIONS: Array<{ label: string; kbps: number }> = [
 
 /** Human-readable label for a kbps cap (0 = Unlimited). Whole Mbps render as "N Mbps". */
 function kbpsToLabel(kbps: number): string {
-  if (!kbps || kbps <= 0) return 'Unlimited';
+  if (!kbps || kbps <= 0) return S.networkInspector.bandwidthUnlimited;
   if (kbps % 1000 === 0) return `${kbps / 1000} Mbps`;
   return `${kbps} kbps`;
 }
@@ -64,7 +65,7 @@ function parseBandwidth(text: string): number {
 function bwComboHtml(selectedKbps: number, attr: string): string {
   const label = escapeHtml(kbpsToLabel(selectedKbps));
   return `<span class="ni-bw-combo">
-    <input type="text" class="ni-rules-select ni-rules-bw" value="${label}" placeholder="Unlimited" autocomplete="off" spellcheck="false" title="${S.networkInspector.bwCustomTitle}" ${attr} />
+    <input type="text" class="ni-rules-select ni-rules-bw" value="${label}" placeholder="${S.networkInspector.bandwidthUnlimited}" autocomplete="off" spellcheck="false" title="${S.networkInspector.bwCustomTitle}" ${attr} />
     <button type="button" class="ni-bw-caret" data-bw-caret tabindex="-1" aria-label="${S.networkInspector.bwPresetsAria}"><span class="icon icon-xs"><svg><use href="#icon-chevron-down"/></svg></span></button>
   </span>`;
 }
@@ -93,7 +94,8 @@ function parseHostInput(raw: string): { host: string; path: string } | null {
 // {target, type, match?, value?, regex?} row. The available types depend on the target, and which
 // of match/value/regex apply depends on the type (see rewriteFieldConfig).
 type RwType = RewriteOp['type'];
-const REWRITE_TYPES: Record<'request' | 'response', { value: RwType; label: string }[]> = {
+// A function (not a const) so the localized option labels read from the active locale on each render.
+const rewriteTypes = (): Record<'request' | 'response', { value: RwType; label: string }[]> => ({
   request: [
     { value: 'set-host', label: S.networkInspector.rwRedirectHost },
     { value: 'set-path', label: S.networkInspector.rwSetPath },
@@ -109,7 +111,7 @@ const REWRITE_TYPES: Record<'request' | 'response', { value: RwType; label: stri
     { value: 'remove-header', label: S.networkInspector.rwRemoveHeader },
     { value: 'body-replace', label: S.networkInspector.rwBodyReplace }
   ]
-};
+});
 
 /** Which fields a given op type uses, and their placeholder labels. */
 function rewriteFieldConfig(type: string): { match?: string; value?: string; regex?: boolean } {
@@ -127,7 +129,7 @@ function rewriteFieldConfig(type: string): { match?: string; value?: string; reg
 }
 
 function rwTypeOptions(target: 'request' | 'response', selected: string): string {
-  return REWRITE_TYPES[target]
+  return rewriteTypes()[target]
     .map((t) => `<option value="${t.value}"${t.value === selected ? ' selected' : ''}>${escapeHtml(t.label)}</option>`)
     .join('');
 }
@@ -135,7 +137,7 @@ function rwTypeOptions(target: 'request' | 'response', selected: string): string
 /** One rewrite-op row. Fields are shown/relabeled after render + on target/type change by syncRewriteRow. */
 function rewriteOpHtml(op?: RewriteOp): string {
   const target: 'request' | 'response' = op?.target === 'response' ? 'response' : 'request';
-  const type = op?.type || REWRITE_TYPES[target][0]!.value;
+  const type = op?.type || rewriteTypes()[target][0]!.value;
   const match = escapeHtml(op?.match || '');
   const value = escapeHtml(op?.value || '');
   const regexOn = op?.regex ? ' checked' : '';
@@ -419,7 +421,7 @@ export async function openTrafficRulesModal(opts: {
   bwMenu.className = 'ni-bw-menu';
   bwMenu.hidden = true;
   bwMenu.setAttribute('role', 'listbox');
-  bwMenu.innerHTML = BW_OPTIONS.map(
+  bwMenu.innerHTML = bwOptions().map(
     (o) => `<button type="button" class="ni-bw-opt" data-bw-opt="${escapeHtml(o.label)}">${escapeHtml(o.label)}</button>`
   ).join('');
   overlay.appendChild(bwMenu);
@@ -638,7 +640,7 @@ export async function openTrafficRulesModal(opts: {
     if (t.matches('[data-rw-target]')) {
       const targetVal = (t as HTMLSelectElement).value === 'response' ? 'response' : 'request';
       const typeSel = row.querySelector('[data-rw-type]') as HTMLSelectElement | null;
-      if (typeSel) typeSel.innerHTML = rwTypeOptions(targetVal, REWRITE_TYPES[targetVal][0]!.value);
+      if (typeSel) typeSel.innerHTML = rwTypeOptions(targetVal, rewriteTypes()[targetVal][0]!.value);
       syncRewriteRow(row);
     } else if (t.matches('[data-rw-type]')) {
       syncRewriteRow(row);
@@ -682,7 +684,7 @@ export async function openTrafficRulesModal(opts: {
       const lat = row.querySelector('[data-host-latency]') as HTMLInputElement | null;
       if (lat) {
         lat.min = devLatency > 0 ? String(devLatency) : '0';
-        lat.placeholder = devLatency > 0 ? String(devLatency) : 'Latency';
+        lat.placeholder = devLatency > 0 ? String(devLatency) : S.networkInspector.latencyPlaceholder;
       }
     });
     if (hostsThrottleNote) {

@@ -151,7 +151,7 @@ function populateUrlModalBody(overlay: HTMLElement, url: string): void {
 // markup and the per-open populate logic.
 const urlModal = createSingletonConsoleModal({
   overlayId: OVERLAY_ID,
-  innerHTML: `
+  innerHTML: () => `
     <div class="modal telnet-url-view-modal" role="dialog" aria-modal="true" aria-labelledby="telnetUrlViewerTitle">
       <div class="modal-header">
         <span class="modal-title" id="telnetUrlViewerTitle">${S.consoleLog.titlePrefix}</span>

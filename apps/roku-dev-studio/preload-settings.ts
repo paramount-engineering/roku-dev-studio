@@ -17,6 +17,18 @@ contextBridge.exposeInMainWorld('settingsApi', {
     return () => ipcRenderer.removeListener(IPC.PrivacyModeChanged, handler);
   },
 
+  // Language — apply live on dropdown change: main persists, re-labels the native menu,
+  // and fans `IPC.LocaleChanged` to every window (including this one) to retranslate.
+  setLanguage: (code: string) => ipcRenderer.invoke(IPC.SetLocale, code),
+  onLocaleChanged: (callback: (pref: string) => void) => {
+    const handler = (_e: IpcRendererEvent, pref: string) => callback(pref);
+    ipcRenderer.on(IPC.LocaleChanged, handler);
+    return () => ipcRenderer.removeListener(IPC.LocaleChanged, handler);
+  },
+
+  // Signal main that the initial getState() population is complete, so it can reveal the
+  // window fully-rendered (no toggle/section-populate flash). Main also has a fallback timer.
+  notifyReady: () => ipcRenderer.send(IPC.SettingsWindowReady),
   getState: () => ipcRenderer.invoke(IPC.SettingsWindowGetState),
   save: (payload: unknown) => ipcRenderer.invoke(IPC.SettingsWindowSave, payload),
   pickFolder: () => ipcRenderer.invoke(IPC.SettingsWindowPickFolder),

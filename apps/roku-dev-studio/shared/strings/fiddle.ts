@@ -74,4 +74,44 @@ export const fiddle = {
   passwordModalHintMuted:
     'This password is used only for this session. To save it for future use, verify Developer Mode in the main window.',
   passwordSubmitBtn: 'Save & Run',
+
+  /**
+   * Monaco editor's initial value + the target of "Reset to default Snippet".
+   * The two leading `'` comment lines are user-facing guidance; the BrightScript
+   * keywords/identifiers (`Sub`, `End Sub`, `print`, `userFiddle`, `init`) and the
+   * example `print` output are code tokens kept verbatim. Composed via the same
+   * newline join as the source so the editor value is byte-for-byte identical.
+   */
+  defaultSnippet: [
+    "' `userFiddle` is the entry point Fiddle runs after the channel is on-screen.",
+    "' Put your snippet here — you can also define helper subs/functions below and call them from userFiddle. Do NOT define a sub named `init` — that identifier is reserved by the Fiddle scene.",
+    'Sub userFiddle()',
+    '    print "Hello from Roku Dev Studio Fiddle"',
+    'End Sub',
+    ''
+  ].join('\n'),
+
+  // ── Main-process diagnostics + run/stop errors (main/ipc/bs-fiddle-handlers.ts) ──
+  // Surfaced in the Fiddle UI (Monaco markers or the status line). Code literals
+  // (`init`, `userFiddle`) are kept verbatim.
+  lintReservedInit:
+    'The name `init` is reserved by the Fiddle scene. Rename this sub to `userFiddle` — Fiddle will call `userFiddle()` automatically once the scene is on screen.',
+  errWindowUnavailable: 'Fiddle window is no longer available.',
+  errDeviceDisconnected: 'Selected device is no longer connected.',
+  errNoPasswordProvided: 'No developer password provided.',
+  errNoPasswordAvailable: 'No developer password available for this device.',
+  errPackageFailed: (detail: string): string => `Failed to package snippet: ${detail}`,
+  errRemoteMissingServerUrl: 'Remote device is missing its relay server URL — cannot stream telnet logs.',
+  errSideloadFailed: 'Sideload failed',
+  errDeviceNotFound: 'Device not found.',
+  errNotFiddleChannel:
+    "The dev channel currently installed is not a Fiddle channel — left it alone so your own app isn't removed.",
+
+  // humanizeRemoteUploadError prose (remote relay upload failures)
+  errRemoteUnknown: 'Unknown error from the remote relay server.',
+  errRemoteNetworkBlip:
+    'Network blip between the relay server and the Roku (broken pipe). ' +
+    'This usually resolves on retry — if it keeps happening, check that the relay ' +
+    'host can reach the device over the LAN and that the Roku is not busy.',
+  errRemoteCurl: (detail: string): string => `Remote relay curl error: ${detail}`,
 } as const;

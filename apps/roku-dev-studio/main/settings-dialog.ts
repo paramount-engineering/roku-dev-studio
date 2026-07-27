@@ -2,11 +2,13 @@
  * Settings modal window — loadFile pattern; all HTML/CSS/JS are compiled bundled renderer entries.
  */
 
-import type { BrowserWindow, Event } from 'electron';
+import type { BrowserWindow, Event, IpcMainEvent } from 'electron';
 import { mainError } from './log.js';
+import { S, getLocale } from '../shared/strings/index';
+import { IPC } from '../shared/ipc/channels';
 
 const path = require('path');
-const { BrowserWindow: BrowserWindowConstructor, dialog } = require('electron');
+const { BrowserWindow: BrowserWindowConstructor, dialog, ipcMain } = require('electron');
 
 /** The currently-open Settings window, so a second open request focuses/navigates it instead of
  *  stacking another modal. */
@@ -56,15 +58,32 @@ function showSettingsDialog(mainWindow: BrowserWindow, initialSection?: string) 
     titleBarStyle: 'default',
     frame: true,
     show: false,
-    title: 'Settings'
+    title: S.settings.heading
   });
 
   settingsWindowRef = settingsWindow as BrowserWindow & { __rdsDestroying?: boolean };
-  settingsWindow.once('ready-to-show', () => {
+
+  // Reveal the window only once the renderer signals its initial getState() population is
+  // done (`SettingsWindowReady`). Showing on `ready-to-show` alone reveals the static shell
+  // and then visibly flashes as getState() flips the toggles and builds the dynamic sections.
+  // A fallback timer guarantees the window still appears if the renderer errors before it
+  // signals (or the signal is throttled).
+  let shown = false;
+  const revealSettings = () => {
+    if (shown || settingsWindow.isDestroyed()) return;
+    shown = true;
     settingsWindow.show();
+  };
+  const onSettingsReady = (e: IpcMainEvent) => {
+    if (!settingsWindow.isDestroyed() && e.sender === settingsWindow.webContents) revealSettings();
+  };
+  ipcMain.once(IPC.SettingsWindowReady, onSettingsReady);
+  settingsWindow.once('ready-to-show', () => {
+    setTimeout(revealSettings, 1500);
   });
 
   settingsWindow.on('closed', () => {
+    ipcMain.removeListener(IPC.SettingsWindowReady, onSettingsReady);
     if (settingsWindowRef === settingsWindow) settingsWindowRef = null;
   });
 
@@ -81,11 +100,14 @@ function showSettingsDialog(mainWindow: BrowserWindow, initialSection?: string) 
   });
 
   try {
-    const query = initialSection ? { query: { section: initialSection } } : undefined;
-    settingsWindow.loadFile(path.join(__dirname, 'renderer', 'settings.html'), query);
+    // Pass the resolved effective locale so the renderer can apply it before its
+    // first paint (avoids the English → locale re-render flash on open).
+    const q: Record<string, string> = { locale: getLocale() };
+    if (initialSection) q.section = initialSection;
+    settingsWindow.loadFile(path.join(__dirname, 'renderer', 'settings.html'), { query: q });
   } catch (error) {
     mainError('Error loading Settings dialog:', error);
-    dialog.showErrorBox('Error', 'Failed to open Settings. Please try again.');
+    dialog.showErrorBox(S.common.error, S.settings.loadFailedMessage);
   }
 }
 

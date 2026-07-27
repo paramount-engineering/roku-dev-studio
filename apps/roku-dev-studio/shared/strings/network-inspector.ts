@@ -49,7 +49,24 @@ export const networkInspector = {
   expandAllGroups: 'Expand all groups',
   collapseAllGroups: 'Collapse all groups',
 
+  // ── Session-list derived tokens (network-sessions.ts) ───────────────────────────────
+  // Duration column value while a transaction is still open (distinct from statusPending
+  // below — has a trailing ellipsis and is the duration cell, not the status pill).
+  durationPending: 'Pending…',
+  // Status-pill tokens for the session list. Kept SEPARATE from the overview statusPending:
+  // statusClass()/the status filter compare against session.status, so these must stay
+  // byte-identical to the values eventToSession() assigns.
+  listStatusPending: 'Pending',
+  listStatusQuery: 'Query',
+  listStatusOk: 'OK',
+  listStatusOpen: 'Open',
+  // DNS structure-tree leaf / sidebar path labels.
+  dnsQueryLabel: 'DNS Query',
+  dnsResponseLabel: 'DNS Response',
+
   // ── Detail renderers (network-detail.ts) ────────────────────────────────────────────
+  // Synthetic first-row header of the response Headers table (HTTP/RFC start-line term).
+  statusLine: 'Status-Line',
   noHeaders: '(no headers)',
   noRequestBody: '(no request body)',
   noResponseBody: '(no response body)',
@@ -216,6 +233,10 @@ export const networkInspector = {
   httpStatusCodeTitle: 'HTTP Status Code',
   delayTitle: 'Delay Before Responding (ms)',
   mockBodyPlaceholder: 'Response Body (e.g. {&quot;error&quot;:&quot;forced&quot;})',
+  // Bandwidth preset/label/placeholder for the "no cap" option (kbps 0). The other presets
+  // ('8 Mbps', '512 kbps', …) are units and stay verbatim in BW_OPTIONS. NOTE: parseBandwidth()
+  // still matches the lowercased literal 'unlimited', so keep this word round-trippable.
+  bandwidthUnlimited: 'Unlimited',
   bwCustomTitle: 'Pick a preset or type a custom limit (e.g. 3 Mbps or 1500 kbps)',
   bwPresetsAria: 'Show bandwidth presets',
   throttleCapSpeed: (limit: string): string => `speed is capped to the Device Limit (${limit})`,
@@ -318,6 +339,15 @@ export const networkInspector = {
   noHttpToExport: 'No HTTP transactions to export as HAR.',
   exportHarDialog: 'Export Sessions as HAR',
   exportSessionDialog: 'Export Network Session',
+  // Native save-dialog titles + filter names (main/ipc/network-inspector-handlers.ts).
+  exportDialogTitles: {
+    savePcap: 'Save Packet Capture',
+    pcapFilter: 'Wireshark PCAP',
+    caPem: 'Export RDS CA certificate (PEM)',
+    pemFilter: 'PEM certificate',
+    caCrt: 'Export RDS CA certificate (CRT)',
+    certFilter: 'Certificate'
+  },
   exportedRequests: (n: number, path: string): string =>
     `Exported ${n} request${n === 1 ? '' : 's'} to ${path}.`,
   failedExportSession: 'Failed to export session.',

@@ -11,6 +11,8 @@
  * removes the entry. Other servers in the same config are left untouched.
  */
 
+import { S } from '../shared/strings/index';
+
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
@@ -39,15 +41,7 @@ export const MCP_CLIENT_IDS: readonly McpClientId[] = [
   'windsurf'
 ] as const;
 
-export const MCP_CLIENT_LABELS: Record<McpClientId, string> = {
-  chatgpt: 'ChatGPT Desktop',
-  claude: 'Claude Desktop',
-  cursor: 'Cursor',
-  vscode: 'Visual Studio Code',
-  'vscode-insiders': 'VS Code Insiders',
-  vscodium: 'VSCodium',
-  windsurf: 'Windsurf'
-};
+export const MCP_CLIENT_LABELS: Record<McpClientId, string> = S.settings.mcpClientLabels;
 
 /**
  * VS Code-family clients all share the same MCP schema (`servers` key, per-entry

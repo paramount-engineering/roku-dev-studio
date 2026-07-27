@@ -468,5 +468,105 @@ export const actionScripts = {
           <strong>Current key:</strong> ${nice} (<code>${key}</code>) — sent as a standard ECP
           keypress when the step runs.
         </p>
-      `
+      `,
+
+  // ── Builder: additional field placeholders / option fallbacks ──
+  placeholderQueryEndpoint: '/query/… or telnet:plugins / telnet:free',
+  placeholderVariablePathExample: 'myVar or data.items.0.id',
+  optionUnknownFunction: 'unknown',
+
+  // ── Executor: step descriptions (stepDescription; result-card header + list rows) ──
+  descQuery: (endpoint: string): string => `Query ${endpoint}`,
+  descKeypress: (key: string): string => `Keypress ${key}`,
+  descSendText: (text: string): string => `Send text "${text}"`,
+  descLaunchApp: (appId: string): string => `Launch app ${appId}`,
+  descSideload: (filename: string): string => `Sideload ${filename}`,
+  descDeleteSideload: 'Delete sideload',
+  descAppFunction: (fn: string): string => `App Function ${fn}`,
+  descScreenshot: 'Screenshot',
+  descScreenshotLabel: (label: string): string => `Screenshot (${label})`,
+  descScreenshotWaitAfter: (ms: number): string => `Screenshot (wait after: ${ms}ms)`,
+  descDevicePerformance: (chart: string): string => `Device Performance — ${chart}`,
+  descDevicePerformanceLabel: (label: string, chart: string): string =>
+    `Device Performance (${label}) — ${chart}`,
+  descWait: 'Wait',
+  descWaitWithDetails: (details: string): string => `Wait · ${details}`,
+  descIf: 'If (…)',
+  descIfWithDetails: (details: string): string => `If · ${details}`,
+
+  // ── Executor: wait-step Details column (formatWaitStepListDetails) ──
+  waitDetailFixedDelay: (delayMs: number): string => `Fixed Delay ${delayMs} ms`,
+  waitDetailTiming: (maxSec: number, pollMs: number): string =>
+    ` · max ${maxSec}s · poll ${pollMs}ms`,
+  waitDetailMediaPlayerState: (state: string): string => `Media player · until state "${state}"`,
+  waitDetailMediaPlayerCheck: (check: string): string => `Media player · until ${check}`,
+  waitDetailRale: (line: string): string => `RALE Node Field · ${line}`,
+  waitDetailRaleIncomplete: 'RALE Node Field · (incomplete)',
+  waitDetailGenericSource: (src: string): string => `Wait · source ${src}`,
+
+  // ── Executor: if-step Details column (formatIfStepListDetails) ──
+  ifDetailMediaPlayerState: (state: string): string => `Media player · state "${state}"`,
+  ifDetailMediaPlayerCheck: (check: string): string => `Media player · ${check}`,
+  ifDetailRale: (line: string): string => `RALE Node Field · ${line}`,
+  ifDetailRaleEmpty: 'RALE Node Field · …',
+  ifDetailVariable: (path: string): string => `Variable · $${path}`,
+  ifDetailVariableEmpty: 'Variable · …',
+  ifDetailActiveApp: (attr: string): string => `Active App · ${attr}`,
+  ifDetailActiveAppEmpty: 'Active App · …',
+
+  // ── Executor: results-panel progress log lines (onLog) ──
+  logWaitingMs: (ms: number): string => `Waiting ${ms} ms...`,
+  logWaitingBeforeCapture: (ms: number): string => `Waiting ${ms} ms before capture...`,
+  logPollingFieldMet: (elapsed: number, field: string): string =>
+    `Polling... (${elapsed}s) — field "${field}" — condition met`,
+  logPollingField: (elapsed: number, field: string, value: string): string =>
+    `Polling... (${elapsed}s) — field "${field}": ${value}`,
+  logPollingStatusMet: (elapsed: number, status: string): string =>
+    `Polling... (${elapsed}s) — ${status} — condition met`,
+  logPollingStatus: (elapsed: number, status: string): string =>
+    `Polling... (${elapsed}s) — ${status}`,
+  pollValueEmpty: '(empty)',
+  pollValueReconnecting: '(reconnecting...)',
+  pollValueNoResponse: '(no response)',
+  pollStateValue: (state: unknown): string => `state: ${state}`,
+  pollStateNone: 'state: (none)',
+  pollInvalidMediaPlayer: 'Invalid media-player response',
+  pollQueryFailed: (err: string): string => `Query failed: ${err}`,
+  pollNoResponse: 'No Response',
+  logConnectingTelnet: 'Connecting to Telnet (port 8080)...',
+  logQueryUsesDevTelnet: (ep: string, cmd: string): string =>
+    `Device Query "${ep}" uses dev Telnet "${cmd}" (same as the Query tab).`,
+  logPartialPerformance: 'Some performance sections were unavailable; partial snapshot.',
+
+  // ── Executor: step result summaries (onLog) ──
+  stepSummaryChars: (n: number): string => `→ ${n} chars`,
+  stepSummaryOk: '→ OK',
+  stepSummarySentKey: (key: string): string => `→ sent ${key}`,
+  stepSummarySent: '→ sent',
+  stepSummaryLaunched: (appId: string): string => `→ launched ${appId}`,
+  stepSummarySideloadComplete: '→ sideload complete',
+  stepSummaryDeleted: '→ deleted',
+  stepSummarySaveFailed: (err: string): string => `→ save failed: ${err}`,
+  stepSummarySavedAs: (filename: string): string => `→ saved as ${filename}`,
+  stepSummaryCapturedNoFolder: '→ captured (no save folder)',
+  stepSummaryChartImages: (n: number): string => `→ ${n} chart image(s)`,
+  stepSummaryCaptured: '→ captured',
+  stepSummarySkipped: (reason: string): string => `→ skipped (${reason})`,
+
+  // ── Executor: step errors / skip reasons (result.error / skippedReason) ──
+  errWaitTimeout: 'Wait timeout',
+  errStopped: 'Stopped',
+  skipReasonNoAppConnector: 'App Connector not available',
+  errNoAppConnectorRaleWait: 'App Connector not available for RALE Node wait',
+  errUnknownActionType: (type: string): string => `Unknown action type: ${type}`,
+  errInvalidRaleCommand: 'Invalid RALE command',
+  errTelnetNotAvailable: 'Telnet system commands are not available in this context',
+  errSaveNotAvailable: 'Save not available',
+  errCouldNotVerifyDevApp: (err: string): string =>
+    `Could not verify Dev App status before screenshot: ${err}`,
+  errInvalidPath: 'Invalid path',
+  errStepPreorderMismatch: 'Internal error: step preorder mismatch',
+
+  // ── Settings: Action Script default-folder picker (main process) ──
+  pickDefaultFolderTitle: 'Default folder for Action Script output'
 } as const;

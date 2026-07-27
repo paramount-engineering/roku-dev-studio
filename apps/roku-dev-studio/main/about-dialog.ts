@@ -8,6 +8,7 @@ import { IPC } from '../shared/ipc/channels';
 import { openExternalUrl } from './open-external-url';
 import { isMacOS, platformLabel } from 'roku-dev-studio-platform';
 import { mainError } from './log.js';
+import { S } from '../shared/strings/index';
 
 const path = require('path');
 const os = require('os');
@@ -95,7 +96,7 @@ function showAboutDialog(mainWindow: BrowserWindow) {
     aboutWindow.loadFile(path.join(__dirname, 'renderer', 'about.html'));
   } catch (error) {
     mainError('Error loading About dialog:', error);
-    dialog.showErrorBox('Error', 'Failed to load About dialog. Please try again.');
+    dialog.showErrorBox(S.common.error, S.about.loadFailedMessage);
   }
 }
 

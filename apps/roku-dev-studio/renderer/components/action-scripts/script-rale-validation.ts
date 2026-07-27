@@ -8,9 +8,9 @@
 import { getAppConnector } from '../../modules/app-connector/index.js';
 import { S } from '@shared/strings/index.js';
 
-export const ACTION_SCRIPT_DEV_APP_ERROR = S.actionScripts.errDevAppRequired;
-
-export const ACTION_SCRIPT_RALE_CONNECTION_ERROR = S.actionScripts.errRaleConnection;
+// Read these S.* leaves inline at each return site (below) rather than caching in
+// module-scope consts — a const would freeze the startup locale and never update
+// on a live language switch.
 
 /**
  * When the script needs RALE: require Dev App, live connection, return normalized app functions list.
@@ -37,14 +37,14 @@ export async function ensureRaleFunctionsWhenScriptNeedsRale(panel, api, getCach
         activeAppRes.success &&
         activeAppRes.data &&
         String(activeAppRes.data).includes('id="dev"');
-      if (!devAppActive) return { ok: false, error: ACTION_SCRIPT_DEV_APP_ERROR };
+      if (!devAppActive) return { ok: false, error: S.actionScripts.errDevAppRequired };
     } catch {
-      return { ok: false, error: ACTION_SCRIPT_DEV_APP_ERROR };
+      return { ok: false, error: S.actionScripts.errDevAppRequired };
     }
   }
 
   const connectionId = await connector.ensureConnected({ verify: true });
-  if (!connectionId) return { ok: false, error: ACTION_SCRIPT_RALE_CONNECTION_ERROR };
+  if (!connectionId) return { ok: false, error: S.actionScripts.errRaleConnection };
 
   const cached = getCachedRaleFunctions && getCachedRaleFunctions();
   if (cached && Array.isArray(cached) && cached.length) {

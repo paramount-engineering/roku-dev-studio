@@ -26,4 +26,22 @@ export const logFileViewer = {
   monitorBtn: 'Monitor',
   monitorBtnTitle: 'Console Monitor — scan this file for recognized BrightScript issues',
   copyBtnTitle: 'Copy filtered log content to clipboard',
+
+  // Window/document title (main-process BrowserWindow + static <title>)
+  /** Base document/window title before a file name is known. */
+  windowTitle: 'Logs',
+  /** OS window title once a file name is known (main-process BrowserWindow). */
+  windowTitleWithFile: (fileName: string): string => `Logs — ${fileName}`,
+  /** `#logViewerTitle` <h1> default before JS sets it to the opened file's name. */
+  defaultTitle: 'Log file',
+
+  // Open-file error dialog (main process)
+  openErrorTitle: 'Open Log File',
+
+  // IPC.LogViewerPrepare guard errors (shown in the viewer). `maxGb` stays a
+  // bare number to match the original interpolation.
+  fileTooLargeError: (currentGb: number, maxGb: number): string =>
+    `File is too large (${currentGb} GB). Maximum is ${maxGb} GB.`,
+  tooManyLinesError: (maxLines: string): string =>
+    `File has too many lines (over ${maxLines}). Try splitting it.`,
 } as const;

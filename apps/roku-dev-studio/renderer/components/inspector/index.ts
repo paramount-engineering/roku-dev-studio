@@ -87,6 +87,14 @@ export function setupInspector(panel: DevicePanelRoot, _device: InspectorDevice,
   const paramsContainer = paramsContainerQ;
   const clearBtn = clearQ;
 
+  // Localize the empty-state placeholder. The text is rendered by the
+  // `.rale-response-output:empty::before` CSS pseudo-element (which can't carry a
+  // data-i18n attribute), so feed it the catalog string via a CSS custom property.
+  responseOutput.style.setProperty(
+    '--rale-empty-placeholder',
+    JSON.stringify(S.app.responseWillAppearHere)
+  );
+
   const copyBtnEl = copyBtn instanceof HTMLElement ? copyBtn : null;
   const saveBtnEl = saveBtn instanceof HTMLElement ? saveBtn : null;
 

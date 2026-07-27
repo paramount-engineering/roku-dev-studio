@@ -14,7 +14,7 @@ import {
 } from '@shared/network-inspector/setup-guide.js';
 import { initSideloadRelaySection } from './sideload-relay-section.js';
 import { attachBackdropClickToClose } from '../../modules/utils/modal-backdrop-click.js';
-import { S, applyI18n } from '@shared/strings/index.js';
+import { S, applyI18n, availableLocales, getLocale, matchLocale, localeLabel, setLocale, effectiveLocale, SYSTEM_LOCALE } from '@shared/strings/index.js';
 
 const api = (window as any).settingsApi;
 if (!api) {
@@ -23,6 +23,14 @@ if (!api) {
 }
 
 const INITIAL_SECTION = new URLSearchParams(window.location.search).get('section') || '';
+
+// The main process passes the already-resolved effective locale in the query so we
+// can apply it SYNCHRONOUSLY here — before the first `applyI18n(document)` below —
+// which is before first paint. Without this the shell paints in English and the
+// async getState() apply (further down) re-renders it in the real locale, a visible
+// flash on open. getState() still re-applies later (idempotent, no visible change).
+const INITIAL_LOCALE = new URLSearchParams(window.location.search).get('locale') || '';
+if (INITIAL_LOCALE) setLocale(INITIAL_LOCALE);
 
 /**
  * Toggle the `privacy-mode` body class so this window's masking CSS (see
@@ -116,6 +124,14 @@ function selectSection(targetId: string) {
   if (targetId === 'network-inspector' && typeof refreshNiPortConflict === 'function') {
     refreshNiPortConflict();
   }
+}
+
+// Restore the breadcrumb's active-section label after an applyI18n(document) pass, which
+// re-localizes the nav labels and resets the [data-i18n] breadcrumb default ('General').
+function syncHeaderSectionLabel() {
+  var activeNav = document.querySelector('.settings-nav-item.active');
+  var headerSection = document.getElementById('settingsHeaderSection');
+  if (activeNav && headerSection) headerSection.textContent = (activeNav.textContent || '').trim();
 }
 
 document.querySelectorAll('.settings-nav-item').forEach(function (btn) {
@@ -396,6 +412,10 @@ function buildTimingRowsForKeys(containerId: string, keys: string[], state: any)
   compileDefaults = state.compileDefaults || {};
   keys.forEach(function (key) {
     var m = meta[key] || { title: key, hint: '', min: 0, max: 0 };
+    // Prefer localized labels from the catalog; fall back to the main-process meta.
+    var lbl = (S.settings.timingLabels as Record<string, { title: string; hint: string }>)[key] || {};
+    var title = lbl.title || m.title || key;
+    var hint = lbl.hint || m.hint || '';
     var row = document.createElement('div');
     row.className = 'timing-row';
     var val = values[key] != null ? values[key] : compileDefaults[key];
@@ -403,8 +423,8 @@ function buildTimingRowsForKeys(containerId: string, keys: string[], state: any)
       var valMin = chartHistoryMsToDisplayMinutes(val);
       row.innerHTML =
         '<div class="row-label">' +
-        '<strong>' + escapeHtml(m.title) + '</strong>' +
-        '<span class="hint-line">' + escapeHtml(m.hint) + '</span>' +
+        '<strong>' + escapeHtml(title) + '</strong>' +
+        '<span class="hint-line">' + escapeHtml(hint) + '</span>' +
         '</div>' +
         '<div class="timing-field">' +
         '<div class="timing-field-stack">' +
@@ -418,8 +438,8 @@ function buildTimingRowsForKeys(containerId: string, keys: string[], state: any)
       var valSec = toastStatusMsToDisplaySec(val);
       row.innerHTML =
         '<div class="row-label">' +
-        '<strong>' + escapeHtml(m.title) + '</strong>' +
-        '<span class="hint-line">' + escapeHtml(m.hint) + '</span>' +
+        '<strong>' + escapeHtml(title) + '</strong>' +
+        '<span class="hint-line">' + escapeHtml(hint) + '</span>' +
         '</div>' +
         '<div class="timing-field">' +
         '<div class="timing-field-stack">' +
@@ -432,8 +452,8 @@ function buildTimingRowsForKeys(containerId: string, keys: string[], state: any)
     } else {
       row.innerHTML =
         '<div class="row-label">' +
-        '<strong>' + escapeHtml(m.title) + '</strong>' +
-        '<span class="hint-line">' + escapeHtml(m.hint) + '</span>' +
+        '<strong>' + escapeHtml(title) + '</strong>' +
+        '<span class="hint-line">' + escapeHtml(hint) + '</span>' +
         '</div>' +
         '<div class="timing-field">' +
         '<div class="timing-field-stack">' +
@@ -935,8 +955,80 @@ function applyNiPlace() {
   });
 }
 
+/** Raw OS locale for this window (e.g. "en-US"); empty if unavailable. */
+function systemLocaleRaw(): string {
+  return (typeof navigator !== 'undefined' && navigator.language) ? navigator.language : '';
+}
+
+/**
+ * Human-readable name of the OS language for the "System Default (…)" label. Uses our own
+ * endonym when we ship that language, else Intl.DisplayNames, else the primary subtag.
+ */
+function systemLocaleName(raw: string): string {
+  var matched = matchLocale(raw);
+  if (matched) return localeLabel(matched);
+  var primary = (raw || 'en').split(/[-_]/)[0];
+  try {
+    var DisplayNames = (Intl as unknown as { DisplayNames?: any }).DisplayNames;
+    if (DisplayNames) {
+      var name = new DisplayNames([getLocale()], { type: 'language' }).of(primary);
+      if (name) return String(name);
+    }
+  } catch (_e) { /* fall through to the raw subtag */ }
+  return primary;
+}
+
+/**
+ * Fill the Language dropdown: "System Default (<OS language>)" first, a disabled separator,
+ * then each shipping locale. System Default follows the OS; the explicit codes pin a locale.
+ */
+function populateLanguageOptions() {
+  var sel = el('optLanguage') as HTMLSelectElement | null;
+  if (!sel) return;
+  sel.innerHTML = '';
+
+  var sysOpt = document.createElement('option');
+  sysOpt.value = SYSTEM_LOCALE;
+  sysOpt.textContent = S.settings.languageSystemDefault(systemLocaleName(systemLocaleRaw()));
+  sel.appendChild(sysOpt);
+
+  var sep = document.createElement('option');
+  sep.disabled = true;
+  sep.value = '';
+  sep.textContent = '──────────';
+  sel.appendChild(sep);
+
+  // Explicit locales sorted alphabetically by their display label (endonym); System
+  // Default + separator stay pinned on top. Latin labels sort before Cyrillic, so
+  // Українська lands last.
+  availableLocales
+    .slice()
+    .sort(function (a, b) { return a.label.localeCompare(b.label); })
+    .forEach(function (loc) {
+      var opt = document.createElement('option');
+      opt.value = loc.code;
+      opt.textContent = loc.label;
+      sel!.appendChild(opt);
+    });
+}
+
+/** Current dropdown selection, falling back to System Default. */
+function currentLanguage(): string {
+  var sel = el('optLanguage') as HTMLSelectElement | null;
+  return sel && sel.value ? sel.value : SYSTEM_LOCALE;
+}
+
+/** Select `code` (System Default or a known locale); otherwise fall back to System Default. */
+function setLanguageSelect(code: string) {
+  var sel = el('optLanguage') as HTMLSelectElement | null;
+  if (!sel) return;
+  var known = code === SYSTEM_LOCALE || availableLocales.some(function (l) { return l.code === code; });
+  sel.value = known ? code : SYSTEM_LOCALE;
+}
+
 function buildPayload() {
   return {
+    language: currentLanguage(),
     developerModeEnabled: boolFromToggle('optDevMode'),
     privacyModeEnabled: boolFromToggle('optPrivacy'),
     debugLoggingEnabled: boolFromToggle('optDebugLog'),
@@ -982,7 +1074,10 @@ function panelKeyForStatusId(statusId: string) {
   return null;
 }
 
-function wireSaveButton(btnId: string, okMessage: string, statusId: string) {
+// `okMessage` is a getter (not a plain string) so the confirmation reads from the
+// ACTIVE locale at save time. Passing S.settings.*Saved by value here would freeze
+// it to the locale active when wireSaveButton was called at module load.
+function wireSaveButton(btnId: string, okMessage: () => string, statusId: string, afterSave?: () => void) {
   var btn = el(btnId) as HTMLButtonElement | null;
   if (!btn) return;
   btn.addEventListener('click', function () {
@@ -996,7 +1091,7 @@ function wireSaveButton(btnId: string, okMessage: string, statusId: string) {
         if (res.warning) {
           setSectionStatus(statusId, String(res.warning), true);
         } else {
-          setSectionStatus(statusId, okMessage, false);
+          setSectionStatus(statusId, okMessage(), false);
         }
         if (Array.isArray(res.mcpResults) && statusId === 'saveStatusMcpServer') {
           res.mcpResults.forEach(function (r: any) {
@@ -1006,6 +1101,7 @@ function wireSaveButton(btnId: string, okMessage: string, statusId: string) {
           });
           renderMcpClients();
         }
+        if (afterSave) { try { afterSave(); } catch (_e) { /* ignore */ } }
       } else {
         setSectionStatus(statusId, (res && res.error) || S.settings.saveFailed, true);
       }
@@ -1050,6 +1146,16 @@ function wireBpfInstallButton() {
 api.getState().then(function (state: any) {
   HOST_PLATFORM = String(state.hostPlatform || '');
 
+  // Apply the saved language to THIS window's catalog BEFORE building any content, then
+  // retranslate the static shell. The Settings window doesn't run loadPersistedAppSettings,
+  // so without this it renders English even when the dropdown shows the saved language
+  // (and looked like the choice "reverted" on reopen).
+  var langPref = typeof state.language === 'string' ? state.language : SYSTEM_LOCALE;
+  setLocale(effectiveLocale(langPref, (typeof navigator !== 'undefined' && navigator.language) || ''));
+  applyI18n(document);
+  syncHeaderSectionLabel();
+  populateLanguageOptions();
+
   // Populate the NI setup modal from the platform
   var niSetupPlatform = HOST_PLATFORM as NiSetupPlatform;
   var titleEl = document.getElementById('niSetupModalTitle');
@@ -1076,6 +1182,7 @@ api.getState().then(function (state: any) {
   setToggle('optAutoConnectLast', state.autoConnectLastDeviceEnabled === true);
   setToggle('optRememberSidebarToggle', state.rememberSidebarToggle === true);
   setToggle('optRememberPasswordsInKeychain', state.rememberPasswordsInKeychain === true);
+  setLanguageSelect(langPref);
   keychainSnap = state.secretStoreStatus || null;
   updateKeychainStatusHint(state.rememberPasswordsInKeychain === true, keychainSnap);
   setToggle('optDevicePerfRememberQuad', state.devicePerformanceRememberQuadPerDevice === true);
@@ -1122,8 +1229,13 @@ api.getState().then(function (state: any) {
   renderMcpClients();
   buildTimingRows(state);
   validateAllTimingPanels();
+  // All toggles/sections are now populated in the DOM — tell main it can reveal the window
+  // (it was created hidden). Showing only now avoids the toggle-flip / section-populate flash
+  // of showing the static shell first. Main has a fallback timer if this never arrives.
+  if (typeof api.notifyReady === 'function') api.notifyReady();
 }).catch(function (e: any) {
   setSectionStatus('saveStatusGeneral', String(e && e.message ? e.message : e), true);
+  if (typeof api.notifyReady === 'function') api.notifyReady();
 });
 
 el('btnBrowseFolder').addEventListener('click', function () {
@@ -1170,12 +1282,27 @@ var GENERAL_TOGGLE_DEFAULTS: Record<string, boolean> = {
   optRememberSidebarToggle: false,
   optRememberPasswordsInKeychain: false
 };
+populateLanguageOptions();
+setLanguageSelect(SYSTEM_LOCALE);
+// Language is applied only when the user clicks Save (see the General save button wiring
+// below) — NOT live on dropdown change. The picked value stays in the <select> until Save.
+// Retranslate this window in place when the locale changes (on Save, or from elsewhere).
+if (api && typeof api.onLocaleChanged === 'function') {
+  api.onLocaleChanged(function (pref: string) {
+    setLocale(effectiveLocale(pref, (typeof navigator !== 'undefined' && navigator.language) || ''));
+    applyI18n(document);
+    syncHeaderSectionLabel();
+    populateLanguageOptions();
+    setLanguageSelect(pref);
+  });
+}
 var btnResetGeneral = el('btnResetGeneral');
 if (btnResetGeneral) {
   btnResetGeneral.addEventListener('click', function () {
     Object.keys(GENERAL_TOGGLE_DEFAULTS).forEach(function (id) {
       setToggle(id, GENERAL_TOGGLE_DEFAULTS[id]);
     });
+    setLanguageSelect(SYSTEM_LOCALE);
     applyDefaultsForKeys(GENERAL_TIMING_KEYS);
     validateTimingPanel('General');
   });
@@ -1277,11 +1404,15 @@ if (niSetupModal instanceof HTMLElement) {
   attachBackdropClickToClose(niSetupModal, closeNiSetup);
 }
 
-wireSaveButton('btnSaveGeneral', S.settings.generalSaved, 'saveStatusGeneral');
-wireSaveButton('btnSaveActionScripts', S.settings.actionScriptsSaved, 'saveStatusActionScripts');
-wireSaveButton('btnSaveDevicePerf', S.settings.devicePerfSaved, 'saveStatusDevicePerf');
-wireSaveButton('btnSaveTiming', S.settings.timingSaved, 'saveStatusTiming');
-wireSaveButton('btnSaveMcpServer', S.settings.mcpSaved, 'saveStatusMcpServer');
+wireSaveButton('btnSaveGeneral', () => S.settings.generalSaved, 'saveStatusGeneral', function () {
+  // Apply the picked language on Save (persist + rebuild native menu + broadcast to all
+  // windows). Gated here so choosing in the dropdown alone does not change the app language.
+  if (api && typeof api.setLanguage === 'function') api.setLanguage(currentLanguage());
+});
+wireSaveButton('btnSaveActionScripts', () => S.settings.actionScriptsSaved, 'saveStatusActionScripts');
+wireSaveButton('btnSaveDevicePerf', () => S.settings.devicePerfSaved, 'saveStatusDevicePerf');
+wireSaveButton('btnSaveTiming', () => S.settings.timingSaved, 'saveStatusTiming');
+wireSaveButton('btnSaveMcpServer', () => S.settings.mcpSaved, 'saveStatusMcpServer');
 
 (function wireNetworkInspectorSave() {
   var btn = el('btnSaveNetworkInspector') as HTMLButtonElement | null;

@@ -108,7 +108,11 @@ const RENDERER_READABLE_KEYS = new Set<string>([
   'autoConnectLastDeviceEnabled',
   'rememberSidebarToggle',
   'rememberPasswordsInKeychain',
-  'networkInspectorEnabled'
+  'networkInspectorEnabled',
+  // Persisted UI locale ('system' | code). The main window reads this at startup
+  // (loadPersistedAppSettings → setLocale) so it renders in the saved language; without
+  // this the get is refused and the window falls back to System/English until a manual switch.
+  'language'
 ]);
 
 function isValidSettingsKey(key: unknown): key is string {

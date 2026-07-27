@@ -32,4 +32,8 @@ export const common = {
   disconnected: 'Disconnected',
   refresh: 'Refresh',
   search: 'Search',
+
+  // Shared error copy
+  error: 'Error',
+  couldNotOpenFile: 'Could not open the selected file.',
 } as const;
