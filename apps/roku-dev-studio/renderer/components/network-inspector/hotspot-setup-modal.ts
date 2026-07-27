@@ -8,7 +8,8 @@ import {
   networkInspectorSetupTitle,
   networkInspectorSetupGuideBodyHtml,
   networkInspectorHasCaptureSetupAction,
-  type NiSetupPlatform
+  type NiSetupPlatform,
+  type NiSetupGuideStrings
 } from '@shared/network-inspector/setup-guide.js';
 import { escapeHtml } from '../../modules/utils/dom.js';
 import { attachBackdropClickToClose } from '../../modules/utils/modal-backdrop-click.js';
@@ -21,8 +22,10 @@ export function openHotspotCaptureSetupModal(opts: {
   /** Optional one-click capture-access grant (macOS BPF / Linux setcap). Omitted on Windows. */
   onRunSetup?: () => Promise<SetupCaptureResult>;
 }): void {
-  const title = networkInspectorSetupTitle(opts.platform);
-  const body = networkInspectorSetupGuideBodyHtml(opts.platform);
+  // Undefined for a locale that hasn't translated the guide yet; the builders fall back to English.
+  const guide: NiSetupGuideStrings | undefined = S.settings.niSetupGuide;
+  const title = networkInspectorSetupTitle(opts.platform, guide && guide.titlePrefix);
+  const body = networkInspectorSetupGuideBodyHtml(opts.platform, guide);
   const hasAction = networkInspectorHasCaptureSetupAction(opts.platform) && typeof opts.onRunSetup === 'function';
 
   const overlay = document.createElement('div');
@@ -32,7 +35,7 @@ export function openHotspotCaptureSetupModal(opts: {
     <div class="ni-setup-modal" role="dialog" aria-modal="true" aria-label="${escapeHtml(title)}">
       <div class="ni-setup-modal-header">
         <h3>${escapeHtml(title)}</h3>
-        <button type="button" class="ni-setup-modal-close" title="${S.common.close}" aria-label="${S.common.close}">×</button>
+        <button type="button" class="modal-close ni-setup-modal-close" title="${S.common.close}" aria-label="${S.common.close}"><span class="icon icon-sm"><svg><use href="#icon-x"/></svg></span></button>
       </div>
       <div class="ni-setup-modal-body ni-setup-guide">
 ${body}

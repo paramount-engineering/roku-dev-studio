@@ -155,7 +155,7 @@ export function showPortConflictModal(conflict: PortConflictInfo, opts?: { force
       <div class="ni-port-modal-header">
         <span class="ni-port-modal-icon" aria-hidden="true"><span class="icon icon-sm"><svg><use href="#icon-warning"/></svg></span></span>
         <h3>${escapeHtml(conflict.title)}</h3>
-        <button type="button" class="ni-port-modal-close" title="${S.common.close}" aria-label="${S.common.close}">×</button>
+        <button type="button" class="modal-close ni-port-modal-close" title="${S.common.close}" aria-label="${S.common.close}"><span class="icon icon-sm"><svg><use href="#icon-x"/></svg></span></button>
       </div>
       <div class="ni-port-modal-body" data-ni-port-modal-body>${bodyHtml(conflict)}</div>
       <div class="ni-port-modal-footer">

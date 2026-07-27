@@ -13,7 +13,7 @@
     body { display: flex; flex-direction: column; overflow: hidden; }
     .nsv-root { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
     .nsv-root .network-inspector-card { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; border: none; border-radius: 0; margin: 0; }
-    .nsv-root .ni-charles-workspace { flex: 1 1 auto; min-height: 0; }
+    .nsv-root .ni-detail-workspace { flex: 1 1 auto; min-height: 0; }
     .nsv-notice { padding: 6px 12px; font-size: 12px; color: var(--text-secondary, #aaa); }
     /* Single header row: the filter is an IN-FLOW, drag-resizable field — NOT the live tab's absolutely
        centered slot, which wraps to a second row when the title/side groups leave no centered room.
@@ -96,6 +96,13 @@
       <symbol id="icon-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <path d="M18 6 6 18"/><path d="m6 6 12 12"/>
       </symbol>
+      <symbol id="icon-file-text" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+        <polyline points="14 2 14 8 20 8"/>
+        <line x1="16" x2="8" y1="13" y2="13"/>
+        <line x1="16" x2="8" y1="17" y2="17"/>
+        <line x1="10" x2="8" y1="9" y2="9"/>
+      </symbol>
     </defs>
   </svg>
 
@@ -145,7 +152,7 @@
 
         <div class="nsv-notice" data-nsv-notice hidden></div>
 
-        <div class="ni-charles-workspace" data-ni-workspace data-detail-layout="columns">
+        <div class="ni-detail-workspace" data-ni-workspace data-detail-layout="columns">
           <aside class="ni-sidebar" data-ni-session-pane data-view="sequence">
             <div class="ni-sidebar-head">
               <button type="button" class="ni-group-toggle" data-ni-toggle-all-groups tabindex="-1" aria-hidden="true" title="Collapse all groups" aria-label="Collapse all groups" data-i18n-title="networkSessionViewer.collapseGroups" data-i18n-aria-label="networkSessionViewer.collapseGroups">

@@ -22,6 +22,8 @@ export type NetworkSession = {
   durationLabel: string;
   encrypted: boolean;
   decrypted: boolean;
+  /** Optional session-scoped user note; drives the row note marker. */
+  note?: string;
   event: ParsedNetworkEvent;
 };
 
@@ -273,7 +275,11 @@ export function buildSessions(events: ParsedNetworkEvent[], options?: SessionBui
     if (e.destPort === 443 && tlsDests.has(destKey(e))) return false;
     return true;
   });
-  return filtered.map((ev, i) => eventToSession(ev, options?.seqById?.get(ev.id) ?? i + 1));
+  return filtered.map((ev, i) => {
+    const s = eventToSession(ev, options?.seqById?.get(ev.id) ?? i + 1);
+    if (ev.note) s.note = ev.note;
+    return s;
+  });
 }
 
 

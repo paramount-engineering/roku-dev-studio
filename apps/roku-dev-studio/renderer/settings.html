@@ -228,23 +228,35 @@
               <div class="settings-row-input">
                 <div class="settings-row-text">
                   <strong data-i18n="settings.mitmProxyPort">MITM Proxy Port</strong>
-                  <span class="settings-row-desc" data-i18n="settings.mitmProxyPortDesc">Port the local decrypting proxy listens on. Route your sideloaded dev channel through it — works on any network (stock channels can't be intercepted).</span>
+                  <span class="settings-row-desc" data-i18n="settings.mitmProxyPortDesc">Port the local decrypting proxy listens on. Route your sideloaded dev channel through it — stock channels can't be intercepted.</span>
                 </div>
-                <input type="number" id="niMitmPort" class="settings-text-input" min="1" max="65535" value="8888" aria-label="MITM proxy port" data-i18n-aria-label="settings.mitmProxyPortAria" />
+                <div class="settings-num-stack">
+                  <span class="bound-label" data-ni-bound-min></span>
+                  <input type="number" id="niMitmPort" class="settings-text-input" min="1" max="65535" value="8888" aria-label="MITM proxy port" data-i18n-aria-label="settings.mitmProxyPortAria" />
+                  <span class="bound-label" data-ni-bound-max></span>
+                </div>
               </div>
               <div class="settings-row-input">
                 <div class="settings-row-text">
                   <strong data-i18n="settings.packetLimit">Per-Device Packet Limit</strong>
-                  <span class="settings-row-desc" data-i18n="settings.packetLimitDesc">Max captured frames kept per device for the PCAP export. Higher = longer history, more memory. 100–100000.</span>
+                  <span class="settings-row-desc" data-i18n="settings.packetLimitDesc">Frames kept per device for the PCAP export. Higher = more history and memory.</span>
                 </div>
-                <input type="number" id="niMaxRawPackets" class="settings-text-input" min="100" max="100000" step="100" value="5000" aria-label="Per-device packet limit" data-i18n-aria-label="settings.packetLimitAria" />
+                <div class="settings-num-stack">
+                  <span class="bound-label" data-ni-bound-min></span>
+                  <input type="number" id="niMaxRawPackets" class="settings-text-input" min="100" max="100000" step="100" value="5000" aria-label="Per-device packet limit" data-i18n-aria-label="settings.packetLimitAria" />
+                  <span class="bound-label" data-ni-bound-max></span>
+                </div>
               </div>
               <div class="settings-row-input">
                 <div class="settings-row-text">
                   <strong data-i18n="settings.maxBodySize">Max Body Size (KB)</strong>
-                  <span class="settings-row-desc" data-i18n="settings.maxBodySizeDesc">How much of each request/response body is kept for viewing in the inspector. Larger = inspect big bodies (e.g. multi-MB JS) whole; over this, the body shows a "Body Truncated" badge. This never affects what the device receives. Applies to new traffic only — raising it won't restore bodies already captured and truncated. 64–16384 KB.</span>
+                  <span class="settings-row-desc" data-i18n="settings.maxBodySizeDesc">How much of each request/response body is kept for viewing. Over the limit, a "Body Truncated" badge shows (the device is unaffected). Applies to new traffic only.</span>
                 </div>
-                <input type="number" id="niMaxBodyKb" class="settings-text-input" min="64" max="16384" step="64" value="4096" aria-label="Max retained body size in KB" data-i18n-aria-label="settings.maxBodySizeAria" />
+                <div class="settings-num-stack">
+                  <span class="bound-label" data-ni-bound-min></span>
+                  <input type="number" id="niMaxBodyKb" class="settings-text-input" min="64" max="16384" step="64" value="4096" aria-label="Max retained body size in KB" data-i18n-aria-label="settings.maxBodySizeAria" />
+                  <span class="bound-label" data-ni-bound-max></span>
+                </div>
               </div>
               <div class="settings-row-input" id="niSetupRow">
                 <div class="settings-row-text">
@@ -252,6 +264,13 @@
                   <span class="settings-row-desc" id="niSetupRowDesc" data-i18n="settings.niSetupRowDescOk">Optional — only for hotspot DNS/SNI capture. Proxying needs no setup.</span>
                 </div>
                 <button type="button" class="btn btn-secondary btn-sm" id="btnOpenNiSetup" data-i18n="settings.viewSetup">View Setup</button>
+              </div>
+              <div class="settings-row-input" id="niCaRow">
+                <div class="settings-row-text">
+                  <strong data-i18n="settings.caSectionTitle">Certificate Authority</strong>
+                  <span class="settings-row-desc" data-i18n="settings.caRowDesc">The local certificate authority the proxy uses to decrypt HTTPS.</span>
+                </div>
+                <button type="button" class="btn btn-secondary btn-sm" id="btnOpenNiCa" data-i18n="settings.caViewCert">View Certificate</button>
               </div>
             </div>
           </div>
@@ -297,6 +316,51 @@
         </button>
       </div>
       <div class="ni-modal-body" id="niSetupModalBody"></div>
+    </div>
+  </div>
+  <div class="ni-modal-overlay" id="niCaModal" hidden>
+    <div class="ni-modal" role="dialog" aria-modal="true" aria-labelledby="niCaModalTitle">
+      <div class="ni-modal-header">
+        <div class="ni-modal-title-wrap">
+          <h2 id="niCaModalTitle" data-i18n="settings.caSectionTitle">Certificate Authority</h2>
+        </div>
+        <button type="button" class="modal-close" id="niCaModalClose" title="Close" aria-label="Close" data-i18n-title="common.close" data-i18n-aria-label="common.close">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </div>
+      <div class="ni-modal-body">
+        <p class="settings-row-desc" data-i18n="settings.caSectionDesc">The Network Inspector signs decrypted HTTPS with a local certificate authority. Trust or import it on the device so your dev channel accepts the proxy. The private key never leaves this machine.</p>
+        <table class="ni-ca-table" id="niCaInfo" hidden>
+          <tbody>
+            <tr>
+              <th scope="row" class="ni-ca-label" data-i18n="settings.caSubject">Subject</th>
+              <td class="ni-ca-value" id="niCaSubject"></td>
+            </tr>
+            <tr>
+              <th scope="row" class="ni-ca-label" data-i18n="settings.caFingerprint">SHA-256 Fingerprint</th>
+              <td class="ni-ca-value ni-ca-mono" id="niCaFingerprint"></td>
+            </tr>
+            <tr>
+              <th scope="row" class="ni-ca-label" data-i18n="settings.caValidity">Validity</th>
+              <td class="ni-ca-value" id="niCaValidity"></td>
+            </tr>
+            <tr>
+              <th scope="row" class="ni-ca-label" data-i18n="settings.caProxyAddress">Proxy Address</th>
+              <td class="ni-ca-value info-value" id="niCaProxy" data-privacy="mask"></td>
+            </tr>
+          </tbody>
+        </table>
+        <span class="settings-row-desc" id="niCaEmpty" data-i18n="settings.caLoading">Loading certificate details…</span>
+      </div>
+      <div class="ni-modal-footer">
+        <span class="settings-row-desc" id="niCaExportStatus" aria-live="polite"></span>
+        <div class="ni-modal-footer-actions">
+          <button type="button" class="btn btn-secondary btn-sm ni-ca-export" id="btnExportCaPem" title="Export .pem" aria-label="Export .pem" data-i18n-title="settings.exportCaPem" data-i18n-aria-label="settings.exportCaPem"><span data-i18n="settings.caExportAction">Export</span><span class="ni-ca-ext">.pem</span></button>
+          <button type="button" class="btn btn-secondary btn-sm ni-ca-export" id="btnExportCaCrt" title="Export .crt" aria-label="Export .crt" data-i18n-title="settings.exportCaCrt" data-i18n-aria-label="settings.exportCaCrt"><span data-i18n="settings.caExportAction">Export</span><span class="ni-ca-ext">.crt</span></button>
+        </div>
+      </div>
     </div>
   </div>
   <script type="module" src="./dist/components/settings/settings.js"></script>

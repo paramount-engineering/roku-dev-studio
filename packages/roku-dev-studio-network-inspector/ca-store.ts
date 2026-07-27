@@ -164,13 +164,23 @@ export function getCaInfo(): {
   commonName: string;
   fingerprintSha256: string;
   createdAt: string;
+  expiresAt: string;
   pemPath: string;
 } {
   const ca = getOrCreateCa();
+  // Read the expiry authoritatively from the cert's notAfter so it's correct on both the
+  // generate path and the load-from-disk path (meta.json only stores createdAt).
+  let expiresAt = '';
+  try {
+    expiresAt = forge.pki.certificateFromPem(ca.certPem).validity.notAfter.toISOString();
+  } catch {
+    /* ignore — a malformed cert leaves the range showing just the created date */
+  }
   return {
     commonName: ca.commonName,
     fingerprintSha256: ca.fingerprintSha256,
     createdAt: ca.createdAt,
+    expiresAt,
     pemPath: getCaPemPath()
   };
 }

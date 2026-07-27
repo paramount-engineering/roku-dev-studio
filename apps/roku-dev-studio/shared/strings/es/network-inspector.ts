@@ -116,7 +116,6 @@ export const networkInspector = {
   secTls: 'TLS',
   secTiming: 'Tiempos',
   secSize: 'Tamaño',
-  secRequestHeaders: 'Encabezados de la solicitud',
   viewUrlTitle: 'Ver URL y parámetros de consulta',
   tagsMitmDecrypted: 'MITM · Descifrado',
   protocolHttpsDecrypted: 'HTTPS (descifrado mediante el proxy MITM de Roku Dev Studio)',
@@ -372,5 +371,89 @@ export const networkInspector = {
   setupBadgeTitlePrereq: (title: string): string => `${title} — haga clic para ver las instrucciones de configuración`,
   setupBadgeTitle: 'Configuración de captura por hotspot — haga clic para ver las instrucciones',
   // Header port badge.
-  portBadgeTitle: (title: string): string => `${title} — haga clic para ver los detalles`
+  portBadgeTitle: (title: string): string => `${title} — haga clic para ver los detalles`,
+
+  // ══ Network Inspector additions ═══════════════════════════════════════════════
+  // Copy URL action (network-detail-view.ts copy menu).
+  copyUrl: 'Copiar URL',
+
+  // Traffic-rule presets — device-wide toggles (traffic-rules-modal.ts).
+  noCachingTitle: 'Sin caché',
+  noCachingDesc: 'Elimina los encabezados de caché y fuerza Cache-Control: no-store en las respuestas.',
+  blockCookiesTitle: 'Bloquear cookies',
+  blockCookiesDesc: 'Elimina Cookie de las solicitudes y Set-Cookie de las respuestas.',
+
+  // Parsed detail viewers — Cookies tabs (network-detail.ts, network-parsed-tables.ts).
+  tabCookies: 'Cookies',
+  colName: 'Nombre',
+  colValue: 'Valor',
+  colAttributes: 'Atributos',
+  noResponseCookies: 'Esta respuesta no estableció cookies.',
+
+  // Editable per-request note (network-detail.ts Overview + list marker).
+  secNote: 'Nota',
+  notePlaceholder: 'Agregar una nota…',
+  noteAriaLabel: 'Nota para esta solicitud',
+  noteMarkerAria: 'Tiene una nota',
+
+  // Map Local — file-backed mock response (traffic-rules-modal.ts + proxy).
+  mockFieldFile: 'Archivo local',
+  mockChooseFile: 'Elegir archivo…',
+  mockFilePlaceholder: 'No se eligió ningún archivo',
+  mockFileClearAria: 'Borrar el archivo asignado',
+  mockFileServingBody: 'El cuerpo de respuesta se sirve desde el archivo asignado.',
+  mapLocalHint:
+    'Sirve un archivo local como el cuerpo de respuesta. El Content-Type se infiere de la extensión del archivo a menos que se establezca arriba.',
+  mapLocalDialogTitle: 'Elegir un archivo para servir',
+  mapLocalAllFilesFilter: 'Todos los archivos',
+
+  // Focus hosts (network-session-view.ts + sidebar toggles).
+  focusHost: (host: string): string => `Enfocar ${host}`,
+  unfocusHost: (host: string): string => `Desenfocar ${host}`,
+  clearFocusedHosts: 'Borrar los hosts enfocados',
+
+  // Replay / Compose (network-detail-view.ts action + network-compose-modal.ts).
+  replay: 'Repetir',
+  replayTitle: 'Repetir esta solicitud desde el host',
+  replayAria: 'Repetir solicitud',
+  moreReplayOptions: 'Más opciones de repetición',
+  replayNow: 'Repetir ahora',
+  composeItem: 'Editar y reenviar…',
+  composeTitle: 'Editar y reenviar',
+  composeNote: 'Vuelva a emitir esta solicitud desde el host. Edite el método, la URL, los encabezados o el cuerpo antes de enviar.',
+  composeMethodLabel: 'Método',
+  composeUrlLabel: 'URL',
+  composeParamsLabel: 'Parámetros de consulta',
+  composeAddRow: '+ Agregar',
+  composeRowEnabledAria: 'Incluir esta entrada',
+  composeSelectAllAria: 'Alternar todas las entradas',
+  composeHeadersLabel: 'Encabezados',
+  composeBodyLabel: 'Cuerpo',
+  composeBodyPlaceholder: 'Cuerpo de solicitud',
+  composeBinaryBodyNote:
+    'El cuerpo de solicitud capturado es binario y se envía sin cambios; no se puede editar aquí.',
+  composeApplyRules: 'Aplicar las reglas de tráfico activas',
+  composeApplyRulesTitle: 'Ejecutar la repetición a través de las reglas de bloqueo, reescritura y limitación de este dispositivo',
+  composeSend: 'Enviar',
+  composeSending: 'Enviando…',
+  replayAddedToList: 'Respuesta agregada a la lista de sesiones.',
+  replayFailed: (err: string): string => `La repetición falló: ${err}`,
+  replayInvalidUrl: 'Ingrese una URL http:// o https:// válida.',
+  replayUnavailable: 'La repetición no está disponible en esta compilación.',
+  replayStarting: 'Repitiendo…',
+  tagsReplayed: 'Repetida',
+  replayedBadgeTitle: 'Esta respuesta se produjo al repetir una solicitud capturada desde el host',
+
+  // Timing waterfall (network-detail.ts Overview timing section).
+  ovDuration: 'Duración',
+  wfDns: 'DNS',
+  wfConnect: 'Conexión',
+  wfTls: 'TLS',
+  wfSend: 'Envío',
+  wfWait: 'Espera (TTFB)',
+  wfReceive: 'Descarga',
+  wfMs: (n: number): string => `${n} ms`,
+  wfSeconds: (s: number): string => `${s.toFixed(2)} s`,
+  wfSegmentTitle: (label: string, value: string): string => `${label}: ${value}`,
+  wfAria: 'Desglose de tiempos de la solicitud'
 };

@@ -114,7 +114,6 @@ export const networkInspector = {
   secTls: 'TLS',
   secTiming: 'Timing',
   secSize: 'Size',
-  secRequestHeaders: 'Request Headers',
   viewUrlTitle: 'View URL and Query Parameters',
   tagsMitmDecrypted: 'MITM · Decrypted',
   protocolHttpsDecrypted: 'HTTPS (decrypted via Roku Dev Studio MITM proxy)',
@@ -370,5 +369,90 @@ export const networkInspector = {
   setupBadgeTitlePrereq: (title: string): string => `${title} — click for setup instructions`,
   setupBadgeTitle: 'Hotspot Capture Setup — click for instructions',
   // Header port badge.
-  portBadgeTitle: (title: string): string => `${title} — click for details`
+  portBadgeTitle: (title: string): string => `${title} — click for details`,
+
+  // ══ Network Inspector additions ═══════════════════════════════════════════════
+  // Copy URL action (network-detail-view.ts copy menu).
+  copyUrl: 'Copy URL',
+
+  // Traffic-rule presets — device-wide toggles (traffic-rules-modal.ts).
+  noCachingTitle: 'No Caching',
+  noCachingDesc: 'Strip caching headers and force Cache-Control: no-store on responses.',
+  blockCookiesTitle: 'Block Cookies',
+  blockCookiesDesc: 'Strip Cookie from requests and Set-Cookie from responses.',
+
+  // Parsed detail viewer — response Cookies tab (network-detail.ts, network-parsed-tables.ts).
+  tabCookies: 'Cookies',
+  colName: 'Name',
+  colValue: 'Value',
+  colAttributes: 'Attributes',
+  noResponseCookies: 'No cookies set by this response.',
+
+  // Editable per-request note (network-detail.ts Overview + list marker).
+  secNote: 'Note',
+  notePlaceholder: 'Add a note…',
+  noteAriaLabel: 'Note for this request',
+  noteMarkerAria: 'Has a note',
+
+  // Map Local — file-backed mock response (traffic-rules-modal.ts + proxy).
+  mockFieldFile: 'Local File',
+  mockChooseFile: 'Choose File…',
+  mockFilePlaceholder: 'No file chosen',
+  mockFileClearAria: 'Clear mapped file',
+  mockFileServingBody: 'Response body is served from the mapped file.',
+  mapLocalHint:
+    'Serve a local file as the response body. Content-Type is inferred from the file extension unless set above.',
+  mapLocalDialogTitle: 'Choose a File to Serve',
+  mapLocalAllFilesFilter: 'All Files',
+
+  // Focus hosts (network-session-view.ts + right-click context menu).
+  focusHost: (host: string): string => `Focus ${host}`,
+  unfocusHost: (host: string): string => `Unfocus ${host}`,
+  clearFocusedHosts: 'Clear Focused Hosts',
+
+  // Replay / Compose (network-detail-view.ts action + network-compose-modal.ts).
+  replay: 'Replay',
+  replayTitle: 'Replay this request from the host',
+  replayAria: 'Replay request',
+  moreReplayOptions: 'More replay options',
+  replayNow: 'Replay Now',
+  composeItem: 'Edit & Resend…',
+  composeTitle: 'Edit & Resend',
+  composeNote: 'Re-issue this request from the host. Edit the method, URL, headers, or body before sending.',
+  composeMethodLabel: 'Method',
+  composeUrlLabel: 'URL',
+  // Editable query-params / headers tables (name/value rows) in the Compose modal.
+  composeParamsLabel: 'Query Parameters',
+  composeAddRow: '+ Add',
+  composeRowEnabledAria: 'Include this entry',
+  composeSelectAllAria: 'Toggle all entries',
+  composeHeadersLabel: 'Headers',
+  composeBodyLabel: 'Body',
+  composeBodyPlaceholder: 'Request body',
+  composeBinaryBodyNote:
+    "The captured request body is binary and is sent unchanged; it can't be edited here.",
+  composeApplyRules: 'Apply active traffic rules',
+  composeApplyRulesTitle: "Run the replay through this device's block, rewrite, and throttle rules",
+  composeSend: 'Send',
+  composeSending: 'Sending…',
+  replayAddedToList: 'Response added to the session list.',
+  replayFailed: (err: string): string => `Replay failed: ${err}`,
+  replayInvalidUrl: 'Enter a valid http:// or https:// URL.',
+  replayUnavailable: 'Replay is not available in this build.',
+  replayStarting: 'Replaying…',
+  tagsReplayed: 'Replayed',
+  replayedBadgeTitle: 'This response was produced by replaying a captured request from the host',
+
+  // Timing waterfall (network-detail.ts Overview timing section).
+  ovDuration: 'Duration',
+  wfDns: 'DNS',
+  wfConnect: 'Connect',
+  wfTls: 'TLS',
+  wfSend: 'Send',
+  wfWait: 'Wait (TTFB)',
+  wfReceive: 'Download',
+  wfMs: (n: number): string => `${n} ms`,
+  wfSeconds: (s: number): string => `${s.toFixed(2)} s`,
+  wfSegmentTitle: (label: string, value: string): string => `${label}: ${value}`,
+  wfAria: 'Request timing breakdown'
 } as const;

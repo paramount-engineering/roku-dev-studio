@@ -54,7 +54,7 @@ export type MitmPortConflict = {
   port: number;
   /** PID of the process currently holding the port, when it could be resolved. */
   pid?: number;
-  /** Short process/command name holding the port (e.g. `node`, `Charles`), when resolved. */
+  /** Short process/command name holding the port (e.g. `node`, `nginx`), when resolved. */
   processName?: string;
   /** Fuller command line / image path of the holding process, when resolved. */
   command?: string;
@@ -97,6 +97,30 @@ export type NetworkHttpMessage = {
   bodyBytes?: number;
 };
 
+/**
+ * Per-phase timing breakdown for the RDS→upstream (origin) leg of a proxied HTTP transaction, used
+ * to render the Overview → Timing waterfall. Every field is optional milliseconds and measured on
+ * the outbound socket the proxy opens to the origin — never the device↔RDS local TLS handshake
+ * (a localhost proxying artifact). A phase is omitted (undefined) whenever it couldn't be measured:
+ * TLS for plain-HTTP upstreams, DNS/Connect/TLS when Node reuses a keep-alive socket, the whole
+ * object for passive/encrypted capture and one-shot mock/block/reset emits. Backward-compatible:
+ * old captures/sessions without this field load fine and simply render no waterfall.
+ */
+export type NetworkTimingPhases = {
+  /** DNS resolution: socket assigned → address resolved (`lookup`). */
+  dnsMs?: number;
+  /** TCP connect: DNS resolved → socket connected (`connect`). */
+  connectMs?: number;
+  /** TLS handshake: connected → `secureConnect` (HTTPS upstreams only). */
+  tlsMs?: number;
+  /** Send: connection ready → request fully written (`finish`). */
+  sendMs?: number;
+  /** Wait / TTFB: request sent → response headers received. */
+  waitMs?: number;
+  /** Download: first response body byte → last body byte. */
+  receiveMs?: number;
+};
+
 export type ParsedNetworkEvent = {
   id: string;
   type: ParsedNetworkEventType;
@@ -113,14 +137,35 @@ export type ParsedNetworkEvent = {
   httpResponse?: NetworkHttpMessage;
   /** True when captured via local MITM proxy (decrypted HTTPS). */
   mitm?: boolean;
+  /**
+   * True when this transaction was produced by *replaying* a captured request from the RDS host
+   * (Replay / Edit & Resend) rather than intercepted from the device. The request no longer
+   * originates from the Roku, so responses gated on device identity/IP may differ — the "Replayed"
+   * tag/badge exists to prevent confusion in the list.
+   */
+  replay?: boolean;
   /** Round-trip time in milliseconds when known (MITM HTTP). */
   durationMs?: number;
+  /**
+   * Optional per-phase timing breakdown (DNS/Connect/TLS/Send/Wait/Download) for the RDS→origin leg,
+   * used to draw the Overview → Timing waterfall. Present only for proxied HTTP transactions where
+   * the phases could be measured; absent for passive capture, keep-alive-reused sockets (partial),
+   * and mock/block/reset emits. See {@link NetworkTimingPhases}.
+   */
+  timing?: NetworkTimingPhases;
   /**
    * True on a list *summary* when the full headers/body for this event are retrievable from the
    * on-disk detail store via `NetworkInspectorGetEventDetail`. False/undefined means the detail
    * was never stored or has been evicted, so the detail panes have nothing more to load.
    */
   detailAvailable?: boolean;
+  /**
+   * Optional session-scoped user annotation for this event. Surfaced on both the list summary and
+   * the on-disk detail (via an in-memory side map in the service), and serialized into the
+   * `.rds-network-inspector.json` bundle and the per-entry HAR comment. Not persisted across
+   * restarts (the capture cache is cleared on quit).
+   */
+  note?: string;
 };
 
 export type HotspotClientDevice = {
@@ -237,6 +282,11 @@ export type TrafficThrottle = {
  * Canned response the proxy returns instead of forwarding upstream (request mocking). Lets QA
  * exercise error/edge paths without touching the real backend. `body` is text; `contentType`
  * is merged into headers; `delayMs` stalls before responding (simulate slow endpoints).
+ *
+ * `filePath` (Map Local) takes precedence over `body`: when set, the proxy reads that file from
+ * disk at serve time (read-per-request, so live edits are picked up) and serves its bytes as the
+ * response body. Content-Type is inferred from the file extension when `contentType`/a headers
+ * `content-type` is not set. A missing/unreadable file yields an HTTP 502 "Map Local Failed".
  */
 export type MockResponse = {
   statusCode: number;
@@ -244,11 +294,12 @@ export type MockResponse = {
   contentType?: string;
   headers?: Record<string, string>;
   body?: string;
+  filePath?: string;
   delayMs?: number;
 };
 
 /**
- * A single Charles-style rewrite operation. Non-terminal: the request is still forwarded upstream
+ * A single rewrite operation. Non-terminal: the request is still forwarded upstream
  * (and its real response returned), with the named mutation applied. `target` says whether the op
  * mutates the outgoing request or the incoming response.
  *
@@ -288,6 +339,18 @@ export type HostTrafficRule = {
   respond?: MockResponse;
   /** Fault injection: drop the connection (simulate a network failure / RST). */
   resetConnection?: boolean;
+  /**
+   * "No Caching" preset scoped to THIS host — like {@link DeviceTrafficRules.noCaching} but only for
+   * requests this rule matches. Expanded into rewrite ops at apply time (see {@link presetRewriteOps})
+   * on the forward path only (never under block/reset/mock), seeded BEFORE this rule's explicit
+   * `rewrite` so an explicit op can still override a preset one.
+   */
+  noCaching?: boolean;
+  /**
+   * "Block Cookies" preset scoped to THIS host (strips request `cookie` / response `set-cookie`).
+   * Expanded at apply time like {@link noCaching}, on the forward path, before the explicit `rewrite`.
+   */
+  blockCookies?: boolean;
   /** Rewrite ops applied to the forwarded request and/or its response (non-terminal). */
   rewrite?: RewriteOp[];
 };
@@ -296,11 +359,65 @@ export type HostTrafficRule = {
 export type DeviceTrafficRules = {
   /** Block all of this device's proxied requests (returns 403 at the proxy). */
   blockAll?: boolean;
+  /**
+   * "No Caching" preset. Expanded into concrete request/response rewrite ops at apply time (see
+   * {@link devicePresetRewriteOps}) rather than stored as ops, so the exact header set can evolve
+   * without migrating saved rules. Applies to every proxied request for this device.
+   */
+  noCaching?: boolean;
+  /**
+   * "Block Cookies" preset. Like {@link noCaching}, expanded into rewrite ops at apply time
+   * (strips request `cookie` and response `set-cookie`). Applies to every proxied request.
+   */
+  blockCookies?: boolean;
   /** Device-wide throttle applied to every proxied response for this device. */
   throttle?: TrafficThrottle;
   /** Per-host overrides (block or throttle specific hosts). */
   hosts?: HostTrafficRule[];
 };
+
+/**
+ * Expand the "No Caching" / "Block Cookies" preset booleans into the concrete {@link RewriteOp}s the
+ * proxy applies. Shared core for BOTH the device-wide presets (via {@link devicePresetRewriteOps}) and
+ * the per-host presets ({@link HostTrafficRule.noCaching} / {@link HostTrafficRule.blockCookies}), so
+ * the exact header set stays defined in one place. Returns `[]` when neither flag is set. Header-only
+ * ops (no URL/body mutation), so the proxy can skip URL re-serialization for them (see `hasUrlRewrite`).
+ *
+ *  - No Caching → strip request `cache-control` / `if-none-match` / `if-modified-since`; set response
+ *    `cache-control: no-store` and strip response `expires` / `etag` / `last-modified`.
+ *  - Block Cookies → strip request `cookie` and response `set-cookie`.
+ */
+export function presetRewriteOps(noCaching?: boolean, blockCookies?: boolean): RewriteOp[] {
+  const ops: RewriteOp[] = [];
+  if (noCaching) {
+    ops.push(
+      { target: 'request', type: 'remove-header', match: 'cache-control' },
+      { target: 'request', type: 'remove-header', match: 'if-none-match' },
+      { target: 'request', type: 'remove-header', match: 'if-modified-since' },
+      { target: 'response', type: 'set-header', match: 'cache-control', value: 'no-store' },
+      { target: 'response', type: 'remove-header', match: 'expires' },
+      { target: 'response', type: 'remove-header', match: 'etag' },
+      { target: 'response', type: 'remove-header', match: 'last-modified' }
+    );
+  }
+  if (blockCookies) {
+    ops.push(
+      { target: 'request', type: 'remove-header', match: 'cookie' },
+      { target: 'response', type: 'remove-header', match: 'set-cookie' }
+    );
+  }
+  return ops;
+}
+
+/**
+ * Expand the device-wide preset booleans ({@link DeviceTrafficRules.noCaching} /
+ * {@link DeviceTrafficRules.blockCookies}) into rewrite ops — a thin wrapper over
+ * {@link presetRewriteOps}. Returns `[]` when `rules` is undefined or neither flag is set.
+ */
+export function devicePresetRewriteOps(rules: DeviceTrafficRules | undefined): RewriteOp[] {
+  if (!rules) return [];
+  return presetRewriteOps(rules.noCaching, rules.blockCookies);
+}
 
 /** All device traffic rules, keyed by device IP. */
 export type NetworkTrafficRules = Record<string, DeviceTrafficRules>;
@@ -315,6 +432,46 @@ export type TrafficDecision = {
   resetConnection?: boolean;
   /** Rewrite ops (from all matching host rules, in order) to apply while forwarding. */
   rewrite?: RewriteOp[];
+};
+
+/**
+ * A request to replay (re-issue) from the RDS host: method + absolute URL + optional headers/body.
+ * `bodyEncoding` mirrors {@link NetworkHttpMessage.body} — 'text' is a charset-decoded string sent
+ * as-is; 'base64' preserves the raw bytes of a binary body so it round-trips unchanged.
+ */
+export type ReplayHttpInput = {
+  method: string;
+  url: string;
+  headers?: Record<string, string>;
+  body?: string;
+  bodyEncoding?: 'text' | 'base64';
+};
+
+/**
+ * Options for a host-originated replay. `deviceIp` attributes the resulting synthetic event to a
+ * watched device's list; `applyTrafficRules` runs the replay through that device's block/rewrite
+ * rules (throttle is a no-op for a host request and is always ignored); `timeoutMs` bounds the wait.
+ */
+export type ReplayRequestOptions = {
+  deviceIp?: string;
+  applyTrafficRules?: boolean;
+  timeoutMs?: number;
+};
+
+/**
+ * Result of {@link performReplay}: the request/response snapshots (same shape the proxy records for a
+ * captured transaction), the round-trip duration, and the resolved target host/port. `ok` is false on
+ * a network error/timeout/invalid URL — `response` then carries a synthetic 4xx/5xx and `error` the
+ * message. Bodies are already decoded for display (text or base64), bounded by the same caps as capture.
+ */
+export type ReplayResult = {
+  ok: boolean;
+  request: NetworkHttpMessage;
+  response: NetworkHttpMessage;
+  durationMs: number;
+  hostname: string;
+  destPort: number;
+  error?: string;
 };
 
 /** True throttle (some positive limit/latency), so callers can skip pacing when it's a no-op. */
@@ -397,8 +554,10 @@ function combineThrottle(
  * Resolve the effective decision for a request. Device-level block wins outright; otherwise the
  * matching host rules apply in order. A terminal action (block / mock response / reset) on a
  * matching rule short-circuits; a matching host throttle is combined with the device throttle so
- * the host stays capped to the device speed and floored to the device latency. `path` is the
- * request path/URL, used by per-host `pathContains` matching.
+ * the host stays capped to the device speed and floored to the device latency. A forwarding host
+ * rule's own No Caching / Block Cookies presets expand into rewrite ops (seeded before its explicit
+ * rewrites) and stack on top of the device-wide presets. `path` is the request path/URL, used by
+ * per-host `pathContains` matching.
  */
 export function resolveTrafficDecision(
   rules: DeviceTrafficRules | undefined,
@@ -408,7 +567,9 @@ export function resolveTrafficDecision(
   if (!rules) return { block: false };
   if (rules.blockAll) return { block: true };
   let throttle = throttleIsActive(rules.throttle) ? rules.throttle : undefined;
-  const rewrite: RewriteOp[] = [];
+  // Seed with the device-wide preset ops so they apply to every proxied request (all hosts) and
+  // precede any per-host rewrite ops (device intent is the baseline; a host rule can override it).
+  const rewrite: RewriteOp[] = [...devicePresetRewriteOps(rules)];
   if (Array.isArray(rules.hosts)) {
     for (const hr of rules.hosts) {
       if (!hostRuleApplies(hr, hostname, path)) continue;
@@ -416,6 +577,12 @@ export function resolveTrafficDecision(
       if (hr.block) return { block: true };
       if (hr.resetConnection) return { block: false, resetConnection: true };
       if (hr.respond) return { block: false, respond: hr.respond };
+      // Forwarding path: expand this host's own presets FIRST, then its explicit rewrite ops — so an
+      // explicit host op can still override a preset one. Gated exactly like the explicit host
+      // rewrites below (never reached under block/reset/mock, which return above). Device-wide preset
+      // ops were already seeded ahead of every host rule.
+      const hostPresetOps = presetRewriteOps(hr.noCaching, hr.blockCookies);
+      if (hostPresetOps.length) rewrite.push(...hostPresetOps);
       if (Array.isArray(hr.rewrite) && hr.rewrite.length) rewrite.push(...hr.rewrite);
       if (hr.throttle && throttleIsActive(hr.throttle)) throttle = combineThrottle(rules.throttle, hr.throttle);
     }
@@ -434,5 +601,6 @@ export type NetworkInspectorCaInfo = {
   commonName: string;
   fingerprintSha256: string;
   createdAt: string;
+  expiresAt: string;
   proxyHostPort: string;
 };

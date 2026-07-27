@@ -1,5 +1,5 @@
 /**
- * Pure helpers that apply Charles-style {@link RewriteOp}s. Kept transport-free (no Node http/zlib)
+ * Pure helpers that apply {@link RewriteOp}s. Kept transport-free (no Node http/zlib)
  * so they unit-test in isolation; the MITM proxy handles the surrounding I/O (reading the body,
  * gzip/br decode, and re-serializing the wire response) and calls these for the actual mutation.
  *
@@ -17,6 +17,22 @@ export function opsFor(ops: RewriteOp[] | undefined, target: 'request' | 'respon
 /** True if any op in `ops` rewrites the body (so the caller knows to decode + re-encode it). */
 export function hasBodyReplace(ops: RewriteOp[]): boolean {
   return ops.some((o) => o.type === 'body-replace' && !!o.match);
+}
+
+/**
+ * True if any op in `ops` mutates the request URL (`set-host` / `set-path` / `set-query` /
+ * `remove-query`). Lets the proxy skip URL re-serialization for header-only rewrites (e.g. the
+ * device presets, which only add/remove headers) so those don't route every request through
+ * `new URL().toString()` normalization.
+ */
+export function hasUrlRewrite(ops: RewriteOp[]): boolean {
+  return ops.some(
+    (o) =>
+      o.type === 'set-host' ||
+      o.type === 'set-path' ||
+      o.type === 'set-query' ||
+      o.type === 'remove-query'
+  );
 }
 
 /**

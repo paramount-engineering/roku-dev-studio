@@ -110,7 +110,7 @@ export function openFilterHelpModal(onPick: (term: string) => void): void {
     <div class="ni-filter-help-modal" role="dialog" aria-modal="true" aria-label="${S.networkInspector.filterHelpAria}">
       <div class="ni-filter-help-header">
         <h3>${S.networkInspector.filterHelpHeading}</h3>
-        <button type="button" class="modal-close ni-filter-help-close" title="${S.common.close}" aria-label="${S.common.close}">×</button>
+        <button type="button" class="modal-close ni-filter-help-close" title="${S.common.close}" aria-label="${S.common.close}"><span class="icon icon-sm"><svg><use href="#icon-x"/></svg></span></button>
       </div>
       <div class="ni-filter-help-body">
         <p class="ni-filter-help-intro">${S.networkInspector.filterHelpIntro}</p>

@@ -1,4 +1,5 @@
 import * as crypto from 'crypto';
+import * as fs from 'fs';
 import * as http from 'http';
 import * as https from 'https';
 import * as net from 'net';
@@ -6,9 +7,18 @@ import * as tls from 'tls';
 import * as zlib from 'zlib';
 import { createLeafCert, type CaMaterial } from './ca-store';
 import { parseRokuProxyTarget, normalizeProxyHostPort } from './roku-proxy-url';
-import type { MockResponse, NetworkHttpMessage, RewriteOp, TrafficDecision, TrafficThrottle } from './types';
+import type {
+  MockResponse,
+  NetworkHttpMessage,
+  NetworkTimingPhases,
+  ReplayHttpInput,
+  ReplayResult,
+  RewriteOp,
+  TrafficDecision,
+  TrafficThrottle
+} from './types';
 import { throttleIsActive } from './types';
-import { opsFor, applyRequestUrl, applyHeaderOps, statusOverride, applyBodyReplace, hasBodyReplace } from './rewrite';
+import { opsFor, applyRequestUrl, applyHeaderOps, statusOverride, applyBodyReplace, hasBodyReplace, hasUrlRewrite } from './rewrite';
 
 /**
  * Write `body` to a sink at a throttled rate. `downKbps` paces output in ~50ms chunks to approximate
@@ -77,6 +87,10 @@ export type MitmTransaction = {
   request: NetworkHttpMessage;
   response: NetworkHttpMessage;
   durationMs?: number;
+  /** True when produced by a host-originated Replay (see {@link performReplay}) rather than intercepted. */
+  replay?: boolean;
+  /** Per-phase RDS→origin timing breakdown for the waterfall (present only when measurable). */
+  timing?: NetworkTimingPhases;
 };
 
 export type MitmProxyOptions = {
@@ -192,6 +206,49 @@ function mockHeaders(mock: MockResponse): Record<string, string> {
   for (const [k, v] of Object.entries(mock.headers || {})) out[k.toLowerCase()] = v;
   if (mock.contentType) out['content-type'] = mock.contentType;
   return out;
+}
+
+/** Extension → MIME map for Map Local; used to infer a Content-Type when the mock leaves it blank. */
+const EXT_CONTENT_TYPES: Record<string, string> = {
+  '.json': 'application/json',
+  '.html': 'text/html; charset=utf-8',
+  '.htm': 'text/html; charset=utf-8',
+  '.xml': 'application/xml',
+  '.js': 'text/javascript',
+  '.mjs': 'text/javascript',
+  '.css': 'text/css',
+  '.txt': 'text/plain; charset=utf-8',
+  '.csv': 'text/csv',
+  '.svg': 'image/svg+xml',
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.gif': 'image/gif',
+  '.webp': 'image/webp',
+  '.ico': 'image/x-icon',
+  '.mp4': 'video/mp4',
+  '.m4v': 'video/mp4',
+  '.mov': 'video/quicktime',
+  '.ts': 'video/mp2t',
+  '.m3u8': 'application/vnd.apple.mpegurl',
+  '.mpd': 'application/dash+xml',
+  '.mp3': 'audio/mpeg',
+  '.aac': 'audio/aac',
+  '.wav': 'audio/wav',
+  '.woff': 'font/woff',
+  '.woff2': 'font/woff2',
+  '.ttf': 'font/ttf',
+  '.otf': 'font/otf',
+  '.pdf': 'application/pdf',
+  '.wasm': 'application/wasm',
+  '.bin': 'application/octet-stream'
+};
+
+/** Infer a Content-Type from a file's extension (Map Local), defaulting to application/octet-stream. */
+function inferContentType(filePath: string): string {
+  const dot = filePath.lastIndexOf('.');
+  const ext = dot >= 0 ? filePath.slice(dot).toLowerCase() : '';
+  return EXT_CONTENT_TYPES[ext] || 'application/octet-stream';
 }
 
 function newTransactionId(): string {
@@ -468,6 +525,91 @@ function isValidSniHostname(name: string | undefined | null): name is string {
   );
 }
 
+/**
+ * Wall-clock timestamps stamped as the RDS→upstream request progresses, later reduced to per-phase
+ * durations by {@link computePhases}. All are `number | undefined`; an event that never fires (e.g. a
+ * reused keep-alive socket emits no `lookup`/`connect`/`secureConnect`) simply leaves its mark unset,
+ * so the corresponding phase is omitted rather than shown as a misleading 0 ms.
+ */
+type UpstreamMarks = {
+  socketAt?: number;
+  lookupAt?: number;
+  connectAt?: number;
+  secureConnectAt?: number;
+  sentAt?: number;
+  headersAt?: number;
+  firstByteAt?: number;
+  lastByteAt?: number;
+};
+
+/**
+ * Attach best-effort socket/request listeners to the outbound upstream request to stamp connection
+ * and response milestones into `m`. Failure-safe: only fresh sockets (`connecting !== false`) get the
+ * DNS/connect/TLS listeners, so a keep-alive-reused socket (already connected, no such events) never
+ * yields phantom phases; any milestone that doesn't fire is simply left unmeasured. Never throws and
+ * never alters forwarding — it only observes. The second `res.on('data')` listener is safe because
+ * the response body reader already puts the stream in flowing mode.
+ */
+function instrumentUpstream(req: http.ClientRequest, m: UpstreamMarks): void {
+  const now = (): number => Date.now();
+  req.once('socket', (s: net.Socket) => {
+    m.socketAt = now();
+    // A fresh socket is still connecting; a reused keep-alive socket is already connected and will
+    // emit none of these — guard so we don't wait on events that never come.
+    if ((s as unknown as { connecting?: boolean }).connecting !== false) {
+      s.once('lookup', () => {
+        m.lookupAt = now();
+      });
+      s.once('connect', () => {
+        m.connectAt = now();
+      });
+      s.once('secureConnect', () => {
+        m.secureConnectAt = now();
+      });
+    }
+  });
+  req.once('finish', () => {
+    m.sentAt = now();
+  });
+  req.once('response', (res: http.IncomingMessage) => {
+    m.headersAt = now();
+    res.on('data', () => {
+      if (m.firstByteAt == null) m.firstByteAt = now();
+    });
+    res.once('end', () => {
+      m.lastByteAt = now();
+    });
+    res.once('close', () => {
+      if (m.lastByteAt == null) m.lastByteAt = now();
+    });
+  });
+}
+
+/**
+ * Reduce raw {@link UpstreamMarks} to per-phase millisecond durations. Each phase is only emitted
+ * when both endpoints were stamped, so unmeasured phases (plain-HTTP → no TLS; keep-alive reuse →
+ * no DNS/Connect/TLS; HEAD → no Download) are omitted rather than reported as 0. Returns `undefined`
+ * when nothing could be measured, so the caller leaves `timing` off the transaction entirely.
+ */
+function computePhases(m: UpstreamMarks): NetworkTimingPhases | undefined {
+  const clamp = (a?: number, b?: number): number | undefined =>
+    a != null && b != null ? Math.max(0, b - a) : undefined;
+  const p: NetworkTimingPhases = {};
+  const dns = clamp(m.socketAt, m.lookupAt);
+  if (dns != null) p.dnsMs = dns;
+  const con = clamp(m.lookupAt ?? m.socketAt, m.connectAt);
+  if (con != null) p.connectMs = con;
+  const tls = clamp(m.connectAt, m.secureConnectAt);
+  if (tls != null) p.tlsMs = tls;
+  const snd = clamp(m.secureConnectAt ?? m.connectAt ?? m.socketAt, m.sentAt);
+  if (snd != null) p.sendMs = snd;
+  const wt = clamp(m.sentAt, m.headersAt);
+  if (wt != null) p.waitMs = wt;
+  const rcv = clamp(m.firstByteAt ?? m.headersAt, m.lastByteAt ?? m.firstByteAt ?? m.headersAt);
+  if (rcv != null) p.receiveMs = rcv;
+  return Object.keys(p).length ? p : undefined;
+}
+
 export class RokuMitmProxy {
   private server: http.Server | null = null;
   private readonly leafCache = new Map<string, { certPem: string; keyPem: string }>();
@@ -544,6 +686,27 @@ export class RokuMitmProxy {
     return remote;
   }
 
+  /**
+   * The proxy's own `host:port` as this client reached it, for the "Proxy URL" hint. Prefers the
+   * address the device actually addressed (Host header), then the local end of the socket, then the
+   * configured hotspot gateway. `gatewayIp` is only set in hotspot mode, so on same-Wi-Fi it's empty
+   * — without these fallbacks the hint collapsed to `:PORT` with no host. Returns '' if none resolve.
+   */
+  private proxySelfHostPort(req: http.IncomingMessage): string {
+    const withPort = (hostOrIp: string): string => {
+      const h = hostOrIp.trim();
+      if (!h) return '';
+      return /:\d+$/.test(h) ? h : `${h}:${this.opts.port}`;
+    };
+    const fromHost = normalizeProxyHostPort(req.headers.host || '');
+    if (fromHost && !fromHost.startsWith(':')) return withPort(fromHost);
+    const localRaw = req.socket.localAddress || '';
+    const localIp = localRaw.startsWith('::ffff:') ? localRaw.slice(7) : localRaw;
+    if (localIp) return withPort(localIp);
+    if (this.opts.gatewayIp) return `${this.opts.gatewayIp}:${this.opts.port}`;
+    return '';
+  }
+
   private emitTransaction(
     transactionId: string,
     deviceIp: string,
@@ -551,7 +714,8 @@ export class RokuMitmProxy {
     destPort: number | undefined,
     request: NetworkHttpMessage,
     response: NetworkHttpMessage,
-    startedAtMs?: number
+    startedAtMs?: number,
+    timing?: NetworkTimingPhases
   ): void {
     // The genuine "Pending → terminal" HTTP path passes `startedAtMs` on both emits, so duration is
     // computed directly from it. One-shot emits (reset/blocked/mock/error/TLS-fail) omit it and have
@@ -569,7 +733,8 @@ export class RokuMitmProxy {
       destPort,
       request,
       response,
-      durationMs
+      durationMs,
+      timing
     });
   }
 
@@ -629,13 +794,12 @@ export class RokuMitmProxy {
     }
 
     if (req.method === 'GET' || req.method === 'HEAD') {
-      const proxyHint = normalizeProxyHostPort(this.opts.gatewayIp ? `${this.opts.gatewayIp}:${this.opts.port}` : `:${this.opts.port}`);
+      const proxyHint = this.proxySelfHostPort(req);
       this.respondPlain(
         res,
         200,
         'Roku Dev Studio MITM proxy.\n' +
-          `Proxy URL: http://${proxyHint || 'GATEWAY_IP:PORT'}/;https://original-host/path\n` +
-          'Set proxyHostPort to host:port only (e.g. 192.168.2.1:8888) — do not include http://.\n'
+          `Proxy URL: http://${proxyHint || 'GATEWAY_IP:PORT'}/;https://original-host/path`
       );
       return;
     }
@@ -664,15 +828,41 @@ export class RokuMitmProxy {
       : { block: false };
   }
 
+  /**
+   * Resolve a mock's response body + headers, reading a Map Local `filePath` from disk when set
+   * (read-per-request, so live edits are served). Content-Type is inferred from the file extension
+   * only when the mock leaves it blank. Never throws: a missing/unreadable file is surfaced as
+   * `error` (the caller serves/records an HTTP 502 "Map Local Failed" instead).
+   */
+  private async resolveMockBody(
+    mock: MockResponse
+  ): Promise<{ bodyBuf: Buffer; headers: Record<string, string>; error?: string }> {
+    const headers = mockHeaders(mock);
+    const filePath = (mock.filePath || '').trim();
+    if (!filePath) return { bodyBuf: Buffer.from(mock.body || '', 'utf8'), headers };
+    try {
+      const bodyBuf = await fs.promises.readFile(filePath);
+      if (!headers['content-type']) headers['content-type'] = inferContentType(filePath);
+      return { bodyBuf, headers };
+    } catch (err) {
+      return { bodyBuf: Buffer.alloc(0), headers, error: err instanceof Error ? err.message : String(err) };
+    }
+  }
+
   /** Write a canned mock response to a plain HTTP client response (request mocking). */
   private respondMockHttp(
     res: http.ServerResponse,
     method: string,
     mock: MockResponse,
-    throttle: TrafficThrottle | undefined
+    throttle: TrafficThrottle | undefined,
+    resolved: { bodyBuf: Buffer; headers: Record<string, string>; error?: string }
   ): void {
-    const headers = mockHeaders(mock);
-    const bodyBuf = Buffer.from(mock.body || '', 'utf8');
+    if (resolved.error) {
+      this.respondPlain(res, 502, `Map Local: ${resolved.error}`);
+      return;
+    }
+    const headers = resolved.headers;
+    const bodyBuf = resolved.bodyBuf;
     const send = (): void => {
       if (res.headersSent) {
         try { res.end(); } catch { /* ignore */ }
@@ -692,9 +882,15 @@ export class RokuMitmProxy {
   }
 
   /** Build the response snapshot recorded for a mock (so the Inspector shows the canned response). */
-  private mockResponseSnapshot(mock: MockResponse): NetworkHttpMessage {
-    const headers = mockHeaders(mock);
-    const bodyBuf = Buffer.from(mock.body || '', 'utf8');
+  private mockResponseSnapshot(
+    mock: MockResponse,
+    resolved: { bodyBuf: Buffer; headers: Record<string, string>; error?: string }
+  ): NetworkHttpMessage {
+    if (resolved.error) {
+      return { statusCode: 502, statusText: 'Map Local Failed', body: `Map Local: ${resolved.error}` };
+    }
+    const headers = resolved.headers;
+    const bodyBuf = resolved.bodyBuf;
     return {
       statusCode: mock.statusCode,
       statusText: mock.statusText || 'Mocked',
@@ -743,15 +939,16 @@ export class RokuMitmProxy {
       return;
     }
     if (decision.respond) {
+      const resolved = await this.resolveMockBody(decision.respond);
       this.emitTransaction(
         newTransactionId(),
         deviceIp,
         target.hostname,
         decisionPort,
         requestSnapshotFromIncoming(req, target.originalUrl),
-        this.mockResponseSnapshot(decision.respond)
+        this.mockResponseSnapshot(decision.respond, resolved)
       );
-      this.respondMockHttp(res, method, decision.respond, decision.throttle);
+      this.respondMockHttp(res, method, decision.respond, decision.throttle, resolved);
       return;
     }
 
@@ -779,15 +976,19 @@ export class RokuMitmProxy {
     let effPort = target.port ?? (target.scheme === 'https' ? 443 : 80);
     let effPath = target.path;
     if (reqOps.length) {
-      effUrl = applyRequestUrl(reqOps, target.originalUrl);
-      try {
-        const eu = new URL(effUrl);
-        effHost = eu.hostname;
-        effScheme = eu.protocol === 'https:' ? 'https' : 'http';
-        effPort = eu.port ? Number(eu.port) : effScheme === 'https' ? 443 : 80;
-        effPath = `${eu.pathname}${eu.search}`;
-      } catch {
-        /* unparseable rewrite result — keep the original target parts */
+      // Only re-serialize the URL when an op actually mutates it. Header-only rewrites (e.g. the
+      // device presets) leave the target untouched, so skip the new URL().toString() normalization.
+      if (hasUrlRewrite(reqOps)) {
+        effUrl = applyRequestUrl(reqOps, target.originalUrl);
+        try {
+          const eu = new URL(effUrl);
+          effHost = eu.hostname;
+          effScheme = eu.protocol === 'https:' ? 'https' : 'http';
+          effPort = eu.port ? Number(eu.port) : effScheme === 'https' ? 443 : 80;
+          effPath = `${eu.pathname}${eu.search}`;
+        } catch {
+          /* unparseable rewrite result — keep the original target parts */
+        }
       }
       outboundHeaders = applyHeaderOps(reqOps, outboundHeaders);
       if (hasBodyReplace(reqOps) && reqBody.length && isTextualContentType(contentTypeOf(reqHeaders))) {
@@ -818,6 +1019,10 @@ export class RokuMitmProxy {
 
     const mod = effScheme === 'https' ? https : http;
 
+    // Per-phase timing marks for the RDS→origin leg, stamped by instrumentUpstream() below and
+    // reduced to durations for the Overview waterfall on the terminal emit.
+    const marks: UpstreamMarks = {};
+
     // Guarantee exactly one outcome per transaction. Without this guard a late socket
     // 'error'/'timeout' after a successful response would re-emit and flip a completed
     // request's status, and a stall could leave it "Pending" forever.
@@ -830,7 +1035,7 @@ export class RokuMitmProxy {
         clearTimeout(hardTimer);
         hardTimer = null;
       }
-      this.emitTransaction(transactionId, deviceIp, effHost, port, requestSnapshot, responseSnapshot, startedAtMs);
+      this.emitTransaction(transactionId, deviceIp, effHost, port, requestSnapshot, responseSnapshot, startedAtMs, computePhases(marks));
       if (res.headersSent) {
         try {
           res.end();
@@ -915,6 +1120,10 @@ export class RokuMitmProxy {
           resolve();
         }
       );
+
+      // Attach timing listeners in the same tick as the request so the first-byte 'data' handler is
+      // registered before the body starts flowing. Never alters forwarding (observe-only).
+      instrumentUpstream(upstream, marks);
 
       // Absolute backstop independent of socket-level events: always resolves the pending
       // transaction even if neither 'response', 'error', nor 'timeout' ever fires.
@@ -1195,24 +1404,34 @@ export class RokuMitmProxy {
     }
     if (tlsDecision.respond) {
       const mock = tlsDecision.respond;
-      this.emitTransaction(newTransactionId(), deviceIp, hostname, port, requestSnapshot, this.mockResponseSnapshot(mock));
-      const headers = mockHeaders(mock);
-      const bodyBuf = Buffer.from(mock.body || '', 'utf8');
-      const headerLines = Object.entries(headers).map(([k, v]) => `${k}: ${v}`).join('\r\n');
-      const payload = Buffer.concat([
-        Buffer.from(
-          `HTTP/1.1 ${mock.statusCode} ${mock.statusText || 'Mocked'}\r\n` +
-            `content-length: ${bodyBuf.length}\r\nconnection: close\r\n${headerLines}${headerLines ? '\r\n' : ''}\r\n`,
-          'utf8'
-        ),
-        bodyBuf
-      ]);
-      const send = (): void => {
-        try { socket.write(payload); } catch { /* ignore */ }
-        try { socket.end(); } catch { /* ignore */ }
-      };
-      if (mock.delayMs && mock.delayMs > 0) setTimeout(send, mock.delayMs);
-      else send();
+      // Read the Map Local file (if any) before writing the raw response. The function is
+      // synchronous, so we resolve the body in a microtask and serialize the response inside it.
+      void this.resolveMockBody(mock)
+        .then((resolved) => {
+          this.emitTransaction(newTransactionId(), deviceIp, hostname, port, requestSnapshot, this.mockResponseSnapshot(mock, resolved));
+          if (resolved.error) {
+            writeStatusAndClose(502, 'Map Local Failed', `Map Local: ${resolved.error}`);
+            return;
+          }
+          const headers = resolved.headers;
+          const bodyBuf = resolved.bodyBuf;
+          const headerLines = Object.entries(headers).map(([k, v]) => `${k}: ${v}`).join('\r\n');
+          const payload = Buffer.concat([
+            Buffer.from(
+              `HTTP/1.1 ${mock.statusCode} ${mock.statusText || 'Mocked'}\r\n` +
+                `content-length: ${bodyBuf.length}\r\nconnection: close\r\n${headerLines}${headerLines ? '\r\n' : ''}\r\n`,
+              'utf8'
+            ),
+            bodyBuf
+          ]);
+          const send = (): void => {
+            try { socket.write(payload); } catch { /* ignore */ }
+            try { socket.end(); } catch { /* ignore */ }
+          };
+          if (mock.delayMs && mock.delayMs > 0) setTimeout(send, mock.delayMs);
+          else send();
+        })
+        .catch(() => { try { socket.destroy(); } catch { /* ignore */ } });
       return;
     }
 
@@ -1222,7 +1441,9 @@ export class RokuMitmProxy {
     let effHdrs = hdrs;
     let effBody = reqBodyBuf;
     if (reqOps.length) {
-      effUrl = applyRequestUrl(reqOps, fullUrl);
+      // Skip URL re-serialization for header-only rewrites (e.g. device presets); only recompute
+      // when an op actually mutates the URL.
+      if (hasUrlRewrite(reqOps)) effUrl = applyRequestUrl(reqOps, fullUrl);
       effHdrs = applyHeaderOps(reqOps, hdrs);
       if (hasBodyReplace(reqOps) && effBody.length && isTextualContentType(contentTypeOf(hdrs))) {
         const { buffer: decoded } = decodeContentEncoding(effBody, hdrs);
@@ -1289,6 +1510,11 @@ export class RokuMitmProxy {
       writeStatusAndClose(statusCode, statusText, msg);
     };
 
+    // Per-phase RDS→origin timing marks for the waterfall, plus a start time so tunneled MITM gets a
+    // real Duration total (the tunneled path previously emitted no `startedAtMs`, so it had none).
+    const marks: UpstreamMarks = {};
+    const startedAt = Date.now();
+
     const upstream = https.request(
       {
         hostname: parsedUrl.hostname,
@@ -1334,7 +1560,7 @@ export class RokuMitmProxy {
             headers: resHeaders,
             ...encodeBody(resBody, resHeaders, resTruncated)
           };
-          this.emitTransaction(newTransactionId(), deviceIp, hostname, port, requestSnapshot, responseSnapshot);
+          this.emitTransaction(newTransactionId(), deviceIp, hostname, port, requestSnapshot, responseSnapshot, startedAt, computePhases(marks));
 
           const statusLine = `HTTP/1.1 ${effStatus} ${upstreamRes.statusMessage}\r\n`;
           const headerLines = serializeResponseHeaderLines(upstreamRes.headers, resOps, bodyReplaced, resBody.length);
@@ -1359,6 +1585,9 @@ export class RokuMitmProxy {
       }
     );
 
+    // Attach timing listeners in the same tick as the request (observe-only; never alters forwarding).
+    instrumentUpstream(upstream, marks);
+
     hardTimer = setTimeout(() => {
       try { upstream.destroy(); } catch { /* ignore */ }
       failTunnel(504, 'Gateway Timeout', 'Upstream did not respond in time');
@@ -1378,4 +1607,193 @@ export class RokuMitmProxy {
     if (effBody.length) upstream.write(effBody);
     upstream.end();
   }
+}
+
+/** Coerce a loose header object into a lowercased-value-safe `Record<string,string>` (drops nullish). */
+function replayHeaderRecord(raw: Record<string, string> | undefined): Record<string, string> {
+  const out: Record<string, string> = {};
+  if (!raw) return out;
+  for (const [k, v] of Object.entries(raw)) {
+    if (typeof k === 'string' && k && typeof v === 'string') out[k] = v;
+  }
+  return out;
+}
+
+/** Encode a *text* replay body to bytes using the request's declared charset, falling back to utf8. */
+function encodeReplayTextBody(body: string, headers: Record<string, string>): Buffer {
+  const ct = headers['content-type'] || headers['Content-Type'] || '';
+  const m = /charset=([^;\s]+)/i.exec(ct);
+  const charset = m?.[1]?.replace(/['"]/g, '') || 'utf8';
+  try {
+    return Buffer.from(body, charset as BufferEncoding);
+  } catch {
+    return Buffer.from(body, 'utf8');
+  }
+}
+
+/**
+ * Re-issue an HTTP(S) request FROM THE RDS HOST (Replay / Edit & Resend) and return request+response
+ * snapshots in the same shape the proxy records for a captured transaction. Standalone: it never
+ * touches client sockets or the proxy server — it opens its own outbound connection via Node
+ * http/https and reuses this module's private encode/decode/read helpers (stripHopByHop,
+ * normalizeHeaders, readResponseBody, decodeContentEncoding via encodeBody) so nothing is duplicated
+ * from forwardRokuRequest. Never rejects: a bad URL / network error / timeout resolves with `ok:false`
+ * and a synthetic 4xx/5xx response, mirroring the forward path's 502/504 error shape.
+ */
+export async function performReplay(
+  input: ReplayHttpInput,
+  opts?: { timeoutMs?: number }
+): Promise<ReplayResult> {
+  const startedAt = Date.now();
+  const method = (input.method || 'GET').trim().toUpperCase() || 'GET';
+  const reqHeaders = replayHeaderRecord(input.headers);
+
+  // Decode the body to bytes: base64 preserves binary unchanged; text encodes via the charset.
+  let reqBody: Buffer = Buffer.alloc(0);
+  if (typeof input.body === 'string' && input.body.length) {
+    if (input.bodyEncoding === 'base64') {
+      try {
+        reqBody = Buffer.from(input.body, 'base64');
+      } catch {
+        reqBody = Buffer.alloc(0);
+      }
+    } else {
+      reqBody = encodeReplayTextBody(input.body, reqHeaders);
+    }
+  }
+
+  // Snapshot of what we're sending (re-encoded for display via the shared encodeBody helper).
+  const requestSnapshot: NetworkHttpMessage = {
+    method,
+    url: input.url,
+    headers: reqHeaders,
+    ...encodeBody(reqBody, reqHeaders, false)
+  };
+
+  let parsed: URL;
+  try {
+    parsed = new URL(input.url);
+  } catch {
+    const msg = `Invalid URL: ${input.url}`;
+    return {
+      ok: false,
+      request: requestSnapshot,
+      response: { statusCode: 400, statusText: 'Bad Request', body: msg },
+      durationMs: Date.now() - startedAt,
+      hostname: '',
+      destPort: 0,
+      error: msg
+    };
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    const msg = `Unsupported protocol: ${parsed.protocol}`;
+    return {
+      ok: false,
+      request: requestSnapshot,
+      response: { statusCode: 400, statusText: 'Bad Request', body: msg },
+      durationMs: Date.now() - startedAt,
+      hostname: parsed.hostname,
+      destPort: 0,
+      error: msg
+    };
+  }
+
+  const isHttps = parsed.protocol === 'https:';
+  const mod = isHttps ? https : http;
+  const hostname = parsed.hostname;
+  const destPort = parsed.port ? Number(parsed.port) : isHttps ? 443 : 80;
+
+  // Node forbids setting Host/Content-Length via arbitrary headers on some paths and hop-by-hop
+  // headers must not be forwarded — strip them and set Host + Content-Length ourselves.
+  const outboundHeaders = stripHopByHop(reqHeaders);
+  outboundHeaders.host = parsed.host;
+  if (reqBody.length) outboundHeaders['content-length'] = String(reqBody.length);
+
+  const requested = typeof opts?.timeoutMs === 'number' && Number.isFinite(opts.timeoutMs) ? opts.timeoutMs : REQUEST_TIMEOUT_MS;
+  const timeoutMs = Math.min(HARD_TIMEOUT_MS, Math.max(1000, requested));
+
+  return await new Promise<ReplayResult>((resolve) => {
+    let settled = false;
+    let hardTimer: ReturnType<typeof setTimeout> | null = null;
+    const done = (result: ReplayResult): void => {
+      if (settled) return;
+      settled = true;
+      if (hardTimer) {
+        clearTimeout(hardTimer);
+        hardTimer = null;
+      }
+      resolve(result);
+    };
+    const fail = (statusCode: number, statusText: string, msg: string): void => {
+      done({
+        ok: false,
+        request: requestSnapshot,
+        response: { statusCode, statusText, body: msg },
+        durationMs: Date.now() - startedAt,
+        hostname,
+        destPort,
+        error: msg
+      });
+    };
+
+    const upstream = mod.request(
+      {
+        hostname,
+        port: destPort,
+        path: `${parsed.pathname}${parsed.search}`,
+        method,
+        headers: outboundHeaders,
+        timeout: timeoutMs,
+        servername: isHttps ? hostname : undefined
+      },
+      async (res) => {
+        try {
+          const resHeaders = normalizeHeaders(res.headers);
+          const read =
+            method === 'HEAD'
+              ? { buffer: Buffer.alloc(0), truncated: false }
+              : await readResponseBody(res);
+          const responseSnapshot: NetworkHttpMessage = {
+            statusCode: res.statusCode ?? 502,
+            statusText: res.statusMessage,
+            headers: resHeaders,
+            ...encodeBody(read.buffer, resHeaders, read.truncated)
+          };
+          done({
+            ok: true,
+            request: requestSnapshot,
+            response: responseSnapshot,
+            durationMs: Date.now() - startedAt,
+            hostname,
+            destPort
+          });
+        } catch (err) {
+          fail(502, 'Bad Gateway', err instanceof Error ? err.message : String(err));
+        }
+      }
+    );
+
+    // Absolute backstop independent of socket events (mirrors forwardRokuRequest).
+    hardTimer = setTimeout(() => {
+      try {
+        upstream.destroy();
+      } catch {
+        /* ignore */
+      }
+      fail(504, 'Gateway Timeout', 'Upstream did not respond in time');
+    }, HARD_TIMEOUT_MS);
+
+    upstream.on('timeout', () => {
+      try {
+        upstream.destroy();
+      } catch {
+        /* ignore */
+      }
+      fail(504, 'Gateway Timeout', 'Upstream request timed out');
+    });
+    upstream.on('error', (err) => fail(502, 'Bad Gateway', err.message));
+
+    if (reqBody.length) upstream.write(reqBody);
+    upstream.end();
+  });
 }

@@ -103,7 +103,9 @@ function setupSystemHandlers(
         menuItems as import('electron').MenuItemConstructorOptions[]
       );
       menu.popup({
-        window: mainWindow ?? undefined,
+        // Anchor to the window that actually invoked (e.g. the standalone Session Viewer), falling
+        // back to the main window. The popup still opens at the cursor regardless.
+        window: mainWinFromEvent(_event.sender),
         callback: () => resolve(null)
       });
     });
