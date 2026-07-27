@@ -246,6 +246,18 @@ function issuesList(f: ConsoleFindings, navigable: boolean): string {
       const docs = finding.docsUrl
         ? ` <a class="telnet-an-issue-docs" href="${escapeHtml(finding.docsUrl)}" target="_blank" rel="noreferrer">${S.consoleLog.docsLink}</a>`
         : '';
+      // Prefer the localizable catalog copy (keyed by the entry id / category value); fall back to the
+      // finding's own English text for any id/category not present in the catalog.
+      const loc = (S.consoleLog.errors as Record<
+        string,
+        { title: string; meaning: string; cause: string; fix: string }
+      >)[finding.id];
+      const title = loc?.title ?? finding.title;
+      const meaning = loc?.meaning ?? finding.meaning;
+      const cause = loc?.cause ?? finding.cause;
+      const fix = loc?.fix ?? finding.fix;
+      const category =
+        (S.consoleLog.errorCategories as Record<string, string>)[finding.category] ?? finding.category;
       return (
         `<details class="telnet-an-issue" data-issue-id="${escapeHtml(finding.id)}">` +
         `<summary>` +
@@ -256,11 +268,11 @@ function issuesList(f: ConsoleFindings, navigable: boolean): string {
         `<span class="telnet-an-sev is-${finding.severity}">${escapeHtml(finding.severity)}</span>` +
         `</summary>` +
         `<div class="telnet-an-issue-body">` +
-        `<p class="telnet-an-issue-kind">${escapeHtml(finding.category)} · ${escapeHtml(finding.title)}</p>` +
+        `<p class="telnet-an-issue-kind">${escapeHtml(category)} · ${escapeHtml(title)}</p>` +
         `<dl class="telnet-an-meta">` +
-        `<dt>${S.consoleLog.labelWhat}</dt><dd>${escapeHtml(finding.meaning)}</dd>` +
-        `<dt>${S.consoleLog.labelCause}</dt><dd>${escapeHtml(finding.cause)}</dd>` +
-        `<dt>${S.consoleLog.labelFix}</dt><dd>${escapeHtml(finding.fix)}${docs}</dd>` +
+        `<dt>${S.consoleLog.labelWhat}</dt><dd>${escapeHtml(meaning)}</dd>` +
+        `<dt>${S.consoleLog.labelCause}</dt><dd>${escapeHtml(cause)}</dd>` +
+        `<dt>${S.consoleLog.labelFix}</dt><dd>${escapeHtml(fix)}${docs}</dd>` +
         `</dl>` +
         `<div class="telnet-an-occ-head">${S.consoleLog.occurrences(finding.lines.length)}</div>` +
         issueLogTable(finding, navigable) +

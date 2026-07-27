@@ -37,7 +37,7 @@ const htmlFiles = [
     .map((f) => path.join('renderer/components/modals/fragments', f)),
 ];
 
-const attrRe = /data-i18n(?:-placeholder|-title|-aria-label)?="([^"]+)"/g;
+const attrRe = /data-i18n(?:-placeholder|-title|-aria-label|-html|-alt)?="([^"]+)"/g;
 let total = 0;
 const missing: string[] = [];
 for (const rel of htmlFiles) {

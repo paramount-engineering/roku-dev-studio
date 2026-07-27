@@ -34,12 +34,16 @@ type ChipKey = 'url' | 'request' | 'response' | 'headers';
 
 const CHIP_ORDER: ChipKey[] = ['url', 'request', 'response', 'headers'];
 
-const CHIP_LABELS: Record<ChipKey, { label: string; short: string; title: string }> = {
-  url: { label: S.networkInspector.chipUrl, short: 'URL', title: S.networkInspector.chipUrlTitle },
-  request: { label: S.networkInspector.chipRequest, short: 'Req', title: S.networkInspector.chipRequestTitle },
-  response: { label: S.networkInspector.chipResponse, short: 'Resp', title: S.networkInspector.chipResponseTitle },
-  headers: { label: S.networkInspector.chipHeaders, short: 'Hdr', title: S.networkInspector.chipHeadersTitle }
-};
+// Computed on each call (NOT a module-level const) so the labels reflect the ACTIVE locale.
+// A const here would capture `S.*` at import time and freeze the chips to English.
+function chipLabels(): Record<ChipKey, { label: string; short: string; title: string }> {
+  return {
+    url: { label: S.networkInspector.chipUrl, short: 'URL', title: S.networkInspector.chipUrlTitle },
+    request: { label: S.networkInspector.chipRequest, short: 'Req', title: S.networkInspector.chipRequestTitle },
+    response: { label: S.networkInspector.chipResponse, short: 'Resp', title: S.networkInspector.chipResponseTitle },
+    headers: { label: S.networkInspector.chipHeaders, short: 'Hdr', title: S.networkInspector.chipHeadersTitle }
+  };
+}
 
 const CHIP_SCOPES: Record<ChipKey, NetworkFindScope[]> = {
   url: ['url'],
@@ -544,9 +548,10 @@ export function createNetworkFindModal(cb: FindModalCallbacks): FindModalHandle 
     const row = document.createElement('div');
     row.className = 'ni-find-term';
     row.dataset.termId = term.id;
+    const labels = chipLabels();
     const chips = CHIP_ORDER.map(
       (key) =>
-        `<button type="button" class="ni-find-chip${term.scopes.has(key) ? ' is-on' : ''}" data-term-scope="${key}" title="${CHIP_LABELS[key].title}" aria-pressed="${term.scopes.has(key)}">${CHIP_LABELS[key].label}</button>`
+        `<button type="button" class="ni-find-chip${term.scopes.has(key) ? ' is-on' : ''}" data-term-scope="${key}" title="${labels[key].title}" aria-pressed="${term.scopes.has(key)}">${labels[key].label}</button>`
     ).join('');
     row.innerHTML = `
       <div class="ni-find-term-top">

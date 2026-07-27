@@ -25,6 +25,13 @@ export const about = {
   apiUnavailable: 'About API unavailable.',
   failedToLoad: (err: string): string => `Failed to load: ${err}`,
 
+  // Window document title + logo image alt text
+  windowTitle: 'About Roku Dev Studio',
+  logoAlt: 'Roku Dev Studio',
+
+  // Main-process dialog.showErrorBox when the About window fails to load
+  loadFailedMessage: 'Failed to load About dialog. Please try again.',
+
   // Static about.html shell — app name header, version field labels, credit line.
   // (The version *values* beside these labels are filled by JS; only the labels are localized.)
   appName: 'Roku Dev Studio',

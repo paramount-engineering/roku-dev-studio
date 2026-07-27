@@ -1,4 +1,5 @@
 import { S, applyI18n } from '@shared/strings/index.js';
+import { initLocaleForWindow } from '../../modules/utils/locale-live.js';
 
 type AboutInfo = {
   appVersion: string;
@@ -49,6 +50,8 @@ function copyVersionInfo(info: AboutInfo): void {
 
 // Localize the static about.html shell (field labels, buttons).
 applyI18n(document);
+// Apply the active locale on open + retranslate live on change.
+void initLocaleForWindow(api as unknown as Parameters<typeof initLocaleForWindow>[0]);
 
 if (!api?.getInfo) {
   document.body.innerHTML = '<p style="color:#e0e0e0;padding:16px">' + S.about.apiUnavailable + '</p>';
@@ -57,6 +60,7 @@ if (!api?.getInfo) {
     const logo = document.getElementById('appLogo') as HTMLImageElement | null;
     if (logo) {
       logo.src = info.iconUrl;
+      logo.alt = S.about.logoAlt;
       logo.onerror = () => { logo.style.display = 'none'; };
     }
 

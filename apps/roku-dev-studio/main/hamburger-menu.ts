@@ -5,6 +5,7 @@
 
 import { app, BrowserWindow, type Dialog, type IpcMain } from 'electron';
 import { IPC } from '../shared/ipc/channels';
+import { S } from '../shared/strings/index';
 
 export type AppMenuAction =
   | 'open-log-file-picker'
@@ -49,14 +50,14 @@ export function registerHamburgerMenuIpc(ipcMain: IpcMain, deps: HamburgerMenuDe
       }
       case 'open-log-file-picker': {
         const res = await deps.dialog.showOpenDialog(win, {
-          title: 'Open Log File',
+          title: S.menu.openLogFileDialogTitle,
           properties: ['openFile'],
           filters: [
             {
-              name: 'Log & Text',
+              name: S.menu.filterLogAndText,
               extensions: ['log', 'txt', 'text', 'out', 'err', 'trace', 'rtf']
             },
-            { name: 'All Files', extensions: ['*'] }
+            { name: S.menu.filterAllFiles, extensions: ['*'] }
           ]
         });
         if (res.canceled || !res.filePaths?.length) {

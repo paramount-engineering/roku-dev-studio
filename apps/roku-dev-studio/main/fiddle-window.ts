@@ -5,6 +5,7 @@
 
 import type { BrowserWindow as ElectronBrowserWindow, IpcMain, WebContents } from 'electron';
 import { IPC } from '../shared/ipc/channels';
+import { S } from '../shared/strings/index';
 import {
   disconnectDebugTelnetIfUnheld,
   releaseAllDebugTelnetHoldersForFiddleWindow
@@ -139,7 +140,7 @@ export function openFiddleWindow(
     height: 760,
     minWidth: 820,
     minHeight: 520,
-    title: 'BrightScript Fiddle',
+    title: S.fiddle.heading,
     backgroundColor: '#0a0a12',
     show: false,
     webPreferences: {

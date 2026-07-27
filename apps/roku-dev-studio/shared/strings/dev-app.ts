@@ -23,6 +23,8 @@ export const devApp = {
   copiedToClipboard: '✓ Copied to clipboard',
   savedTo: (filePath: string): string => `✓ Saved to: ${filePath}`,
   failedToCopy: (detail: string): string => `Failed to copy: ${detail}`,
+  couldNotGetCanvasContext: 'Could not get canvas context',
+  couldNotEncodeScreenshot: 'Could not encode screenshot',
 
   // ── Sideloaded app card (sideloaded-app.ts) ───────────────────────────────
   versionLabel: 'Version:',
@@ -45,6 +47,7 @@ export const devApp = {
   // ── Channel performance parse messages (remote-metrics-charts.ts) ─────────
   channelPerfUnavailable: (err: string): string => `Channel Performance unavailable: ${err}`,
   channelPerfUnavailableFailed: 'Channel Performance unavailable (status failed).',
+  chartAxisNow: 'now',
 
   // ── Device Performance Action Script capture (device-metrics-performance-step.ts) ──
   captionCpuGraph: 'CPU Usage (Graph)',
@@ -55,6 +58,12 @@ export const devApp = {
   invalidChartType: 'Invalid Device Performance chart type.',
   developerModeRequired: 'Developer Mode must be enabled on this device to capture performance metrics.',
   remoteMetricsRootNotFound: 'Remote metrics root not found for this device tab.',
+  performanceCardNotFound: (selector: string): string => `Performance card not found: ${selector}`,
+  performanceCardNoVisibleBounds:
+    'Performance card has no visible bounds. Enable “Show Device Performance” (quad layout) on the Remote Section.',
+  chartRasterizeFailed: 'Chart rasterize failed (empty or invalid data URL).',
+  canvasUnavailable: 'Canvas unavailable',
+  couldNotDecodeCaptureForScaling: 'Could not decode capture for export scaling',
   devicePerfHidden:
     'Device Performance cards are hidden. On the Remote Section, turn on “Show Device Performance” (quad layout), then run this step again.',
   couldNotShowDevicePerf:
@@ -140,4 +149,13 @@ export const devApp = {
     'Bring the Dev App to the foreground on the device to enable Device Performance.',
   showDevicePerfAutoOnToast:
     'Show Device Performance was turned on so an Action Script could capture charts.',
+
+  // ── Native dialogs + IPC results (main: dev-app-handlers.ts) ──────────────
+  selectRokuChannelPackageTitle: 'Select Roku Channel Package',
+  rokuChannelPackageFilter: 'Roku Channel Package',
+  saveScreenshotDialogTitle: 'Save Screenshot',
+  imagesFilter: 'Images',
+  screenshotCapturedToast: 'Screenshot captured!',
+  sideloadWrongTypeError: 'Select a .zip or .pkg Roku channel package',
+  failedToSaveScreenshot: (detail: string): string => `Failed to save screenshot: ${detail}`,
 } as const;

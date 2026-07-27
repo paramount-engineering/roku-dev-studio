@@ -4,6 +4,7 @@
 
 import type { Dialog, IpcMain, IpcMainInvokeEvent, Menu } from 'electron';
 import { IPC } from '../shared/ipc/channels';
+import { S } from '../shared/strings/index';
 import { loadSettings, saveSettings } from './settings';
 import {
   applyMcpClients,
@@ -50,34 +51,9 @@ const BOUNDS: Record<TimingKey, { min: number; max: number }> = {
   STATUS_MESSAGE_DURATION: { min: 2000, max: 10_000 }
 };
 
-const TIMING_LABELS: Record<TimingKey, { title: string; hint: string }> = {
-  DEFAULT_RALE_PORT: { title: 'RALE / App Connector Port', hint: 'TCP Port (Default 49200).' },
-  SCREENSHOT_DEBOUNCE_DELAY: {
-    title: 'Screenshot Debounce (ms)',
-    hint: 'Delay after key press before auto-screenshot.'
-  },
-  SCREENSHOT_AFTER_LAUNCH_DELAY: {
-    title: 'Screenshot After Launch (ms)',
-    hint: 'Wait after Dev App launch before screenshot.'
-  },
-  TELNET_TIMEOUT: { title: 'Telnet Connect Timeout (ms)', hint: 'Debug Console / System Telnet.' },
-  CONNECTION_CHECK_INTERVAL: {
-    title: 'Device Active Check (ms)',
-    hint:
-      'How often connected devices are polled: device info, ECP state, and whether the Dev App channel is in the foreground.'
-  },
-  DEVICE_METRICS_SAMPLE_INTERVAL_MS: {
-    title: 'Sampling Rate (ms)',
-    hint:
-      'Chanperf + object-count poll cadence. Lower = fresher data, more ECP traffic; needs Developer Mode and Control by Mobile Apps.'
-  },
-  DEVICE_METRICS_CHART_HISTORY_MS: {
-    title: 'Chart History Time (minutes)',
-    hint: 'How far back the CPU and System Memory charts plot'
-  },
-  TOAST_DISPLAY_DURATION: { title: 'Toast Duration (s)', hint: 'Success/error toast visibility.' },
-  STATUS_MESSAGE_DURATION: { title: 'Status Message Duration (s)', hint: 'Header Status Line Visibility.' }
-};
+/** Row labels (title + hint per timing key) come from the shared catalog so the Settings UI
+ *  renders them in the active language; numeric bounds stay here (see BOUNDS). */
+const TIMING_LABELS = S.settings.timingLabels;
 
 function clampInt(n: number, min: number, max: number): number {
   if (!Number.isFinite(n)) return min;
@@ -118,6 +94,8 @@ export function getCompileDefaults(): Record<TimingKey, number> {
 }
 
 export type SettingsWindowSavePayload = {
+  /** Language preference: a locale code (e.g. 'en') or 'system' to follow the OS. Default 'system'. */
+  language: string;
   developerModeEnabled: boolean;
   privacyModeEnabled: boolean;
   debugLoggingEnabled: boolean;
@@ -386,6 +364,9 @@ function registerSettingsWindowIpc(
     const keyboardRemoteShortcutsEnabled = typeof kbRaw === 'boolean' ? kbRaw : false;
     const autoConnRaw = settings['autoConnectLastDeviceEnabled'];
     const autoConnectLastDeviceEnabled = typeof autoConnRaw === 'boolean' ? autoConnRaw : false;
+    const languageRaw = settings['language'];
+    // Default 'system' (follow OS); resolved to a concrete locale per-window at render.
+    const language = typeof languageRaw === 'string' && languageRaw.trim() ? languageRaw.trim() : 'system';
     const rememberSidebarRaw = settings['rememberSidebarToggle'];
     const rememberSidebarToggle = typeof rememberSidebarRaw === 'boolean' ? rememberSidebarRaw : false;
     const rememberPasswordsInKeychainRaw = settings['rememberPasswordsInKeychain'];
@@ -439,6 +420,7 @@ function registerSettingsWindowIpc(
       devicePerformanceRememberQuadPerDevice,
       keyboardRemoteShortcutsEnabled,
       autoConnectLastDeviceEnabled,
+      language,
       rememberSidebarToggle,
       rememberPasswordsInKeychain,
       networkInspectorEnabled,
@@ -477,7 +459,7 @@ function registerSettingsWindowIpc(
     const parent = BrowserWindow.fromWebContents(event.sender);
     try {
       const result = await dialog.showOpenDialog(parent ?? undefined, {
-        title: 'Default folder for Action Script output',
+        title: S.actionScripts.pickDefaultFolderTitle,
         properties: ['openDirectory']
       });
       if (result.canceled || !result.filePaths || result.filePaths.length === 0) {
@@ -507,6 +489,8 @@ function registerSettingsWindowIpc(
         settings['devicePerformanceRememberQuadPerDevice'] = !!payload.devicePerformanceRememberQuadPerDevice;
         settings['keyboardRemoteShortcutsEnabled'] = !!payload.keyboardRemoteShortcutsEnabled;
         settings['autoConnectLastDeviceEnabled'] = !!payload.autoConnectLastDeviceEnabled;
+        settings['language'] =
+          typeof payload.language === 'string' && payload.language.trim() ? payload.language.trim() : 'system';
         settings['rememberSidebarToggle'] = !!payload.rememberSidebarToggle;
         settings['rememberPasswordsInKeychain'] = !!payload.rememberPasswordsInKeychain;
         settings['networkInspectorEnabled'] = !!payload.networkInspectorEnabled;
@@ -545,7 +529,7 @@ function registerSettingsWindowIpc(
         settings['mcpEnabledClients'] = mcpStored;
 
         if (!saveSettings(settings)) {
-          return { success: false, error: 'Could not write settings file.' };
+          return { success: false, error: S.settings.saveWriteFailedError };
         }
 
         const mcpErrors = mcpResults.filter((r) => r.error);
@@ -595,7 +579,7 @@ function registerSettingsWindowIpc(
           return {
             success: true,
             mcpResults,
-            warning: `MCP client config update had errors: ${summary}`
+            warning: S.settings.mcpConfigUpdateWarning(summary)
           };
         }
         return { success: true, mcpResults };

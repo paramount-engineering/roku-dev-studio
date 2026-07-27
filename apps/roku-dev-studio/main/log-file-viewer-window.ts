@@ -14,6 +14,7 @@
 
 import type { BrowserWindow as ElectronBrowserWindow, IpcMain, IpcMainInvokeEvent } from 'electron';
 import { IPC } from '../shared/ipc/channels';
+import { S } from '../shared/strings/index';
 import { setupZoomGuards } from './window-zoom';
 import { mainError } from './log.js';
 import {
@@ -96,7 +97,10 @@ export function registerLogViewerIpc(ipcMain: IpcMain): void {
       if (stat.size > LOG_VIEWER_MAX_BYTES) {
         return {
           success: false,
-          error: `File is too large (${Math.round(stat.size / (1024 * 1024 * 1024))} GB). Maximum is ${LOG_VIEWER_MAX_BYTES / (1024 * 1024 * 1024)} GB.`
+          error: S.logFileViewer.fileTooLargeError(
+            Math.round(stat.size / (1024 * 1024 * 1024)),
+            LOG_VIEWER_MAX_BYTES / (1024 * 1024 * 1024)
+          )
         };
       }
 
@@ -106,7 +110,7 @@ export function registerLogViewerIpc(ipcMain: IpcMain): void {
         if (e instanceof Error && e.message === 'too-many-lines') {
           return {
             success: false,
-            error: `File has too many lines (over ${LOG_VIEWER_MAX_LINES.toLocaleString()}). Try splitting it.`
+            error: S.logFileViewer.tooManyLinesError(LOG_VIEWER_MAX_LINES.toLocaleString())
           };
         }
         return { success: false, error: e instanceof Error ? e.message : String(e) };
@@ -241,8 +245,8 @@ export function openLogFileViewerWindow(parent: ElectronBrowserWindow | undefine
   if (!fs.existsSync(resolved) || !fs.statSync(resolved).isFile()) {
     const boxOpts = {
       type: 'error' as const,
-      title: 'Open Log File',
-      message: 'Could not open the selected file.'
+      title: S.logFileViewer.openErrorTitle,
+      message: S.common.couldNotOpenFile
     };
     if (parent && !parent.isDestroyed()) {
       void dialog.showMessageBox(parent, boxOpts);
@@ -263,7 +267,7 @@ export function openLogFileViewerWindow(parent: ElectronBrowserWindow | undefine
     height: 720,
     minWidth: 560,
     minHeight: 400,
-    title: `Logs — ${path.basename(resolved)}`,
+    title: S.logFileViewer.windowTitleWithFile(path.basename(resolved)),
     backgroundColor: '#0a0a12',
     show: false,
     webPreferences: {

@@ -29,14 +29,14 @@
         <div class="help-content" id="helpContent">
         <div class="help-section" id="help-section-device-discovery">
           <h3 data-i18n="modals.helpModal.deviceDiscoveryHeading"><span class="icon icon-sm icon-accent"><svg><use href="#icon-radar"/></svg></span> Device Discovery</h3>
-          <p>Click <strong>Scan</strong> to automatically discover Roku devices on your network. Devices with Developer Mode enabled will show a green "Dev" badge.</p>
+          <p data-i18n-html="modals.helpModal.deviceDiscoveryScanHtml">Click <strong>Scan</strong> to automatically discover Roku devices on your network. Devices with Developer Mode enabled will show a green "Dev" badge.</p>
           <p data-i18n="modals.helpModal.deviceDiscoveryManual">You can also manually connect by entering an IP address in the "Manual Connect" section at the bottom of the sidebar.</p>
-          <p><strong>Scan finds nothing?</strong> SSDP multicast (UDP port 1900) may be blocked by VPN, corporate Wi‑Fi, or firewall rules — try Manual Connect with the device IP. The PC and Roku must be on the same reachable network.</p>
+          <p data-i18n-html="modals.helpModal.deviceDiscoveryNoScanHtml"><strong>Scan finds nothing?</strong> SSDP multicast (UDP port 1900) may be blocked by VPN, corporate Wi‑Fi, or firewall rules — try Manual Connect with the device IP. The PC and Roku must be on the same reachable network.</p>
         </div>
         
         <div class="help-section" id="help-section-remote-control">
           <h3 data-i18n="modals.helpModal.remoteControlHeading"><span class="icon icon-sm icon-green"><svg><use href="#icon-gamepad"/></svg></span> Remote Control</h3>
-          <p>Use the virtual remote to control your Roku. Optional keyboard shortcuts are available when you turn on <strong>Settings → General → Roku Remote - Use Keyboard </strong> (off by default). They apply on the <strong>Remote</strong> tab (solo or device-performance quad layout) or the <strong>Dev App</strong> tab, only for the device tab you have open — not in other sections, text fields, or modals.</p>
+          <p data-i18n-html="modals.helpModal.remoteControlIntroHtml">Use the virtual remote to control your Roku. Optional keyboard shortcuts are available when you turn on <strong>Settings → General → Roku Remote - Use Keyboard </strong> (off by default). They apply on the <strong>Remote</strong> tab (solo or device-performance quad layout) or the <strong>Dev App</strong> tab, only for the device tab you have open — not in other sections, text fields, or modals.</p>
           <table class="help-shortcuts">
             <tbody>
               <tr>
@@ -65,14 +65,14 @@
               </tr>
             </tbody>
           </table>
-          <p>On the <strong>Remote</strong> or <strong>Dev App</strong> tab, press <span class="help-kbd">Tab</span> from the remote controls (not from the section tabs or another text field) to jump to the <strong>Send Text</strong> field. <span class="help-kbd">Enter</span> sends from that field.</p>
-          <p>Media controls (Rewind, Play/Pause, Forward) and volume buttons are also available on the virtual remote. Use <strong>Send Text</strong> at the bottom to type text directly into the device's active text field.</p>
+          <p data-i18n-html="modals.helpModal.remoteControlTabHtml">On the <strong>Remote</strong> or <strong>Dev App</strong> tab, press <span class="help-kbd">Tab</span> from the remote controls (not from the section tabs or another text field) to jump to the <strong>Send Text</strong> field. <span class="help-kbd">Enter</span> sends from that field.</p>
+          <p data-i18n-html="modals.helpModal.remoteControlMediaHtml">Media controls (Rewind, Play/Pause, Forward) and volume buttons are also available on the virtual remote. Use <strong>Send Text</strong> at the bottom to type text directly into the device's active text field.</p>
         </div>
         
         <div class="help-section" id="help-section-apps">
           <h3 data-i18n="modals.helpModal.appsHeading"><span class="icon icon-sm icon-indigo"><svg><use href="#icon-grid"/></svg></span> Apps</h3>
           <p data-i18n="modals.helpModal.appsBody">View all installed apps on your Roku device. Click any app to launch it. Use the search to filter apps by name.</p>
-          <ul>
+          <ul data-i18n-html="modals.helpModal.appsListHtml">
             <li><strong>Custom Launch</strong> - Launch any app by ID, including TV inputs (HDMI 1-4)</li>
             <li><strong>Deep Link</strong> - Launch apps with specific content using deep linking (App ID, Content ID, Media Type)</li>
             <li><strong>Raw List of Apps</strong> - View the raw XML list of all installed apps</li>
@@ -82,7 +82,7 @@
         <div class="help-section" id="help-section-query">
           <h3 data-i18n="modals.helpModal.queryHeading"><span class="icon icon-sm icon-pink"><svg><use href="#icon-database"/></svg></span> Query</h3>
           <p data-i18n="modals.helpModal.queryIntro">Query device information using Roku's ECP endpoints:</p>
-          <ul>
+          <ul data-i18n-html="modals.helpModal.queryListHtml">
             <li><strong>Device Queries</strong> - Presets for common queries like Device Info, Apps, Active App, Media Player, and more</li>
             <li><strong>Developer Queries</strong> - Advanced queries for dev-enabled devices (SG Nodes, Plugins, Frame Rate, Channel Perf, App State, Registry)</li>
             <li><strong>Custom Query</strong> - Enter any custom ECP endpoint</li>
@@ -93,7 +93,7 @@
         <div class="help-section" id="help-section-dev-app">
           <h3 data-i18n="modals.helpModal.devAppHeading"><span class="icon icon-sm icon-amber"><svg><use href="#icon-zap"/></svg></span> Dev App</h3>
           <p data-i18n="modals.helpModal.devAppIntro">For Developer Mode enabled devices:</p>
-          <ul>
+          <ul data-i18n-html="modals.helpModal.devAppListHtml">
             <li><strong>Auth</strong> - Enter and validate your Roku Developer password. Enable "Remember" to persist it across sessions</li>
             <li><strong>Sideload</strong> - Install .zip or .pkg channel packages</li>
             <li><strong>Remote</strong> - View the device's web installer page for additional dev options</li>
@@ -106,7 +106,7 @@
         <div class="help-section" id="help-section-console">
           <h3 data-i18n="modals.helpModal.consoleHeading"><span class="icon icon-sm icon-red"><svg><use href="#icon-terminal"/></svg></span> Console</h3>
           <p data-i18n="modals.helpModal.consoleIntro">Connect to the BrightScript debug console via Telnet (port 8085):</p>
-          <ul>
+          <ul data-i18n-html="modals.helpModal.consoleListHtml">
             <li><strong>Connect / Disconnect</strong> - Establish or close the telnet connection</li>
             <li><strong>Find / Filter</strong> - Search through logs with options for case-sensitive, whole-word, and regex matching</li>
             <li><strong>Auto-scroll</strong> - Automatically scroll to the latest output</li>
@@ -119,21 +119,21 @@
         <div class="help-section" id="help-section-app-connector">
           <h3 data-i18n="modals.helpModal.appConnectorHeading"><span class="icon icon-sm icon-teal"><svg><use href="#icon-plug"/></svg></span> App Connector</h3>
           <p data-i18n="modals.helpModal.appConnectorIntro">Connect to Roku apps that implement the TrackerTask component for two-way communication:</p>
-          <ul>
+          <ul data-i18n-html="modals.helpModal.appConnectorListHtml">
             <li><strong>Connect</strong> - Establishes a socket connection to your running Dev App (default port <code>49200</code>)</li>
             <li><strong>Execute Function</strong> - Call custom functions exposed by your scene's <code>GetExternalControlFunctions</code></li>
             <li><strong>Response</strong> - View return values and debug output</li>
             <li><strong>Update Node</strong> - After running <em>Get Node by ID</em>, the response panel offers a node-update modal where you can <code>selectNode</code>, <code>setField</code>, or <code>removeField</code> on the matched node</li>
             <li><strong>RALE built-ins</strong> - The function dropdown also lists built-in RALE commands: <em>Get Node by ID</em>, <em>Get Node by SubType</em>, and a registry editor (<em>Get All Sections</em>, <em>Add/Update Section</em>, <em>Remove Section</em>, <em>Set / Edit / Remove Section Key</em>, <em>Clear All Sections</em>)</li>
           </ul>
-          <p>Your Roku app must have TrackerTask integrated. Click <strong>Integration Guide</strong> in the App Connector tab for the BrightScript snippets and supported parameter types. Use <strong>Save TrackerTask.xml</strong> from the same modal to drop a ready-to-ship copy into your channel.</p>
+          <p data-i18n-html="modals.helpModal.appConnectorFooterHtml">Your Roku app must have TrackerTask integrated. Click <strong>Integration Guide</strong> in the App Connector tab for the BrightScript snippets and supported parameter types. Use <strong>Save TrackerTask.xml</strong> from the same modal to drop a ready-to-ship copy into your channel.</p>
         </div>
         
         <div class="help-section" id="help-section-action-scripts">
           <h3 data-i18n="modals.helpModal.actionScriptsHeading"><span class="icon icon-sm icon-blue"><svg><use href="#icon-code"/></svg></span> Action Scripts</h3>
           <p data-i18n="modals.helpModal.actionScriptsIntro">Automate sequences of device actions using JSON-based scripts. Two views are available:</p>
-          <p><strong>Builder</strong> - Visually create action scripts action by action:</p>
-          <ul>
+          <p data-i18n-html="modals.helpModal.actionScriptsBuilderHtml"><strong>Builder</strong> - Visually create action scripts action by action:</p>
+          <ul data-i18n-html="modals.helpModal.actionScriptsBuilderListHtml">
             <li><strong>Action Types</strong> - Keypress, Send Text, Launch App, Device Query, POST, Sideload, Delete Sideload, Screenshot, App Function, RALE Command, Device Performance capture, Wait, If</li>
             <li><strong>Variables (script v2)</strong> - Use a <em>Set Variable</em> step or <code>assignToVar</code> on Device Query / App Function / RALE Command to remember values, then reference them as <code>${name}</code> in later step fields (text, params, deep-link content, etc.)</li>
             <li><strong>If / Else if / Else (script v2)</strong> - Branch on conditions sourced from <code>media-player</code> state, the active app, a RALE node field, or a stored variable; nest <em>If</em> steps for multi-step branches</li>
@@ -147,8 +147,8 @@
             <li><strong>JSON Preview</strong> - Live preview of the generated script. Copy or save the script to a file</li>
             <li><strong>Copy to Executor</strong> - Send the built script directly to the Executor for running</li>
           </ul>
-          <p><strong>Executor</strong> - Import, validate, and run action scripts:</p>
-          <ul>
+          <p data-i18n-html="modals.helpModal.actionScriptsExecutorHtml"><strong>Executor</strong> - Import, validate, and run action scripts:</p>
+          <ul data-i18n-html="modals.helpModal.actionScriptsExecutorListHtml">
             <li><strong>Import</strong> - Upload a JSON script file or paste script JSON, then validate</li>
             <li><strong>Run / Pause / Stop</strong> - Control execution with play, pause, and stop actions</li>
             <li><strong>Skip / Unskip</strong> - Toggle individual actions to skip during execution</li>
@@ -157,15 +157,15 @@
             <li><strong>Copy / Save Results</strong> - Copy results to clipboard or save as PDF (PDF embeds screenshots and chart cards)</li>
             <li><strong>Connect to Console</strong> - Optionally auto-connect to the debug console during runs</li>
           </ul>
-          <p><strong>Developer Password</strong> - Actions like Screenshot, Sideload, and Delete Sideload require a developer password. The password is resolved in order: action-level <code>"password"</code> → script-level <code>"devPassword"</code> → password from the Dev App Auth section. If none is found, you'll be prompted during validation.</p>
-          <p><strong>Save Folder</strong> - The default save folder lives under <strong>Settings → Action Scripts → Default folder</strong>. Per run you can pick another folder. Artifacts (screenshots, performance chart PNGs, exported PDFs) land in a timestamped subfolder, created only when something is actually produced.</p>
-          <p><strong>AI Agents</strong> - Action Scripts you build in the Builder can also be authored by AI agents through the MCP server (see the <em>AI Agents (MCP)</em> section below); the agent's script always lands in the Builder for human review before running.</p>
+          <p data-i18n-html="modals.helpModal.actionScriptsDevPasswordHtml"><strong>Developer Password</strong> - Actions like Screenshot, Sideload, and Delete Sideload require a developer password. The password is resolved in order: action-level <code>"password"</code> → script-level <code>"devPassword"</code> → password from the Dev App Auth section. If none is found, you'll be prompted during validation.</p>
+          <p data-i18n-html="modals.helpModal.actionScriptsSaveFolderHtml"><strong>Save Folder</strong> - The default save folder lives under <strong>Settings → Action Scripts → Default folder</strong>. Per run you can pick another folder. Artifacts (screenshots, performance chart PNGs, exported PDFs) land in a timestamped subfolder, created only when something is actually produced.</p>
+          <p data-i18n-html="modals.helpModal.actionScriptsAiAgentsHtml"><strong>AI Agents</strong> - Action Scripts you build in the Builder can also be authored by AI agents through the MCP server (see the <em>AI Agents (MCP)</em> section below); the agent's script always lands in the Builder for human review before running.</p>
         </div>
 
         <div class="help-section" id="help-section-device-performance">
           <h3 data-i18n="modals.helpModal.devicePerformanceHeading"><span class="icon icon-sm icon-accent"><svg><use href="#icon-cpu"/></svg></span> Device Performance (Remote Section)</h3>
-          <p>Toggle <strong>Show Device Performance</strong> on the Remote Section to expand a quad with live charts:</p>
-          <ul>
+          <p data-i18n-html="modals.helpModal.devicePerformanceIntroHtml">Toggle <strong>Show Device Performance</strong> on the Remote Section to expand a quad with live charts:</p>
+          <ul data-i18n-html="modals.helpModal.devicePerformanceListHtml">
             <li><strong>CPU usage</strong>, <strong>system memory</strong>, and <strong>BrightScript object</strong> charts (count or memory view where available)</li>
             <li>Charts reflect the running app — for representative readings, the device should have <strong>Developer Mode</strong> on and your <strong>sideloaded Dev channel</strong> in the foreground</li>
             <li><strong>Settings → Device Performance</strong> tunes chart sample interval and history window; turn on <strong>Remember 'Show Device Performance'</strong> to restore the quad layout per device between sessions</li>
@@ -175,20 +175,20 @@
 
         <div class="help-section" id="help-section-network-inspector">
           <h3 data-i18n="modals.helpModal.networkInspectorHeading"><span class="icon icon-sm icon-cyan"><svg><use href="#icon-network"/></svg></span> Network Inspector</h3>
-          <p>Inspect the HTTP(S) traffic your Dev channel makes. Roku Dev Studio runs a local <strong>MITM proxy</strong> that decrypts dev-channel HTTPS routed through it, so you can see full request/response headers and bodies.</p>
-          <p><strong>Getting started</strong></p>
-          <ul>
+          <p data-i18n-html="modals.helpModal.networkInspectorIntroHtml">Inspect the HTTP(S) traffic your Dev channel makes. Roku Dev Studio runs a local <strong>MITM proxy</strong> that decrypts dev-channel HTTPS routed through it, so you can see full request/response headers and bodies.</p>
+          <p data-i18n-html="modals.helpModal.networkInspectorGettingStartedHtml"><strong>Getting started</strong></p>
+          <ul data-i18n-html="modals.helpModal.networkInspectorGettingStartedListHtml">
             <li>Enable the <strong>MITM proxy</strong> in <strong>Settings → Network Inspector</strong>, then have your dev channel route its requests through the proxy address shown — use <code>host:port</code> (e.g. <code>192.168.1.50:8888</code>). How the channel applies that proxy is up to your app's networking code.</li>
             <li>Optional <strong>Hotspot Capture</strong> records SNI/DNS metadata for all of the device's traffic; it needs OS packet-capture access (macOS BPF, Windows Npcap). Settings → Network Inspector walks through the per-platform setup.</li>
           </ul>
-          <p><strong>Toolbar</strong> (top-right of the panel): <strong>Start/Stop Capture</strong>, <strong>Panes Layout</strong> (stack vs. side-by-side request/response), and <strong>Configure Traffic Rules</strong>.</p>
-          <ul>
+          <p data-i18n-html="modals.helpModal.networkInspectorToolbarHtml"><strong>Toolbar</strong> (top-right of the panel): <strong>Start/Stop Capture</strong>, <strong>Panes Layout</strong> (stack vs. side-by-side request/response), and <strong>Configure Traffic Rules</strong>.</p>
+          <ul data-i18n-html="modals.helpModal.networkInspectorToolbarListHtml">
             <li><strong>Session list</strong> - Filter with <code>host:</code>, <code>method:</code>, <code>status:</code>, <code>type:</code>, <code>kind:</code>, <code>path:</code> (separate terms with commas for OR); group by host; toggle <em>Proxied</em> to hide hotspot-only metadata. Jump-to-error and scroll-to-latest shortcuts appear when relevant.</li>
             <li><strong>Inspect</strong> - View request / response overview, headers, and bodies (JSON / XML / raw). <strong>Copy</strong> a body, or export the transaction as <strong>cURL</strong> or <strong>HAR</strong>.</li>
             <li><strong>Save .pcap</strong> - Export the device's captured packets; <strong>Clear</strong> empties the session list.</li>
           </ul>
-          <p><strong>Traffic Rules</strong> (the gear in the toolbar) shape this device's proxied traffic; changes take effect immediately:</p>
-          <ul>
+          <p data-i18n-html="modals.helpModal.networkInspectorTrafficRulesHtml"><strong>Traffic Rules</strong> (the gear in the toolbar) shape this device's proxied traffic; changes take effect immediately:</p>
+          <ul data-i18n-html="modals.helpModal.networkInspectorTrafficRulesListHtml">
             <li><strong>Block all proxied traffic</strong> - Reject every proxied request. This wins over per-host rules and the device throttle.</li>
             <li><strong>Device throttle</strong> - Cap bandwidth and/or add latency for every proxied request. Pick a preset or type a custom value (e.g. <code>3 Mbps</code>, <code>1500 kbps</code>).</li>
             <li><strong>Per-host rules</strong> - Add a <strong>hostname</strong> to target every request to that host, or a <strong>host + path</strong> (e.g. <code>api.example.com/v1/play</code>) to target only that path. Each rule can <em>Block</em>, <em>Reset</em> the connection (simulate a network failure), <em>Mock</em> a canned response (status / Content-Type / delay / body), and/or throttle.</li>
@@ -202,8 +202,8 @@
 
         <div class="help-section" id="help-section-ai-agents">
           <h3 data-i18n="modals.helpModal.aiAgentsHeading"><span class="icon icon-sm icon-orange"><svg><use href="#icon-bot"/></svg></span> AI Agents (MCP)</h3>
-          <p>Roku Dev Studio ships an <strong>MCP (Model Context Protocol)</strong> server so AI agents in Cursor, Claude Desktop, or VS Code can drive a real device through this app:</p>
-          <ul>
+          <p data-i18n-html="modals.helpModal.aiAgentsIntroHtml">Roku Dev Studio ships an <strong>MCP (Model Context Protocol)</strong> server so AI agents in Cursor, Claude Desktop, or VS Code can drive a real device through this app:</p>
+          <ul data-i18n-html="modals.helpModal.aiAgentsListHtml">
             <li><strong>Settings → MCP Server</strong> - Toggle a client to add or remove its <code>roku-dev-studio</code> MCP entry; other entries in that client's MCP config are left untouched</li>
             <li><strong>Two surfaces</strong> - Direct device ops for one-shot actions (<code>keypress</code>, <code>launch_app</code>, <code>screenshot</code>, <code>app_function</code>, <code>rale_command</code>, telnet …) and <strong>Action Scripts</strong> for multi-step / conditional flows that drop into the Builder for review</li>
             <li><strong>Toasts</strong> - Destructive agent actions (launch, sideload, delete sideload, screenshot, destructive RALE commands) show a non-blocking toast in the app so you always see what the agent did</li>
@@ -214,8 +214,8 @@
 
         <div class="help-section" id="help-section-fiddle">
           <h3 data-i18n="modals.helpModal.fiddleHeading"><span class="icon icon-sm icon-pink"><svg><use href="#icon-edit-3"/></svg></span> BrightScript Fiddle</h3>
-          <p>Open via <strong>File → Open Fiddle</strong> (<span class="help-kbd">Ctrl</span>/<span class="help-kbd">Cmd</span>+<span class="help-kbd">Shift</span>+<span class="help-kbd">B</span>) or the <em>Open Fiddle</em> button on the Query tab.</p>
-          <ul>
+          <p data-i18n-html="modals.helpModal.fiddleIntroHtml">Open via <strong>File → Open Fiddle</strong> (<span class="help-kbd">Ctrl</span>/<span class="help-kbd">Cmd</span>+<span class="help-kbd">Shift</span>+<span class="help-kbd">B</span>) or the <em>Open Fiddle</em> button on the Query tab.</p>
+          <ul data-i18n-html="modals.helpModal.fiddleListHtml">
             <li><strong>Editor</strong> - Monaco editor with BrightScript highlighting and live <em>BrighterScript</em> linting; the Run button is disabled while errors are present</li>
             <li><strong>Run</strong> - Wraps your snippet into a minimal SceneGraph channel, sideloads it on the selected device, and streams the BrightScript debug console (8085) into the Fiddle window's terminal</li>
             <li><strong>Stop / window close</strong> - Removes the Fiddle channel from the device automatically</li>
@@ -225,18 +225,18 @@
 
         <div class="help-section" id="help-section-log-viewer">
           <h3 data-i18n="modals.helpModal.logViewerHeading"><span class="icon icon-sm icon-green"><svg><use href="#icon-file-text"/></svg></span> Log File Viewer</h3>
-          <p><strong>File → Open Log File</strong> (<span class="help-kbd">Ctrl</span>/<span class="help-kbd">Cmd</span>+<span class="help-kbd">Shift</span>+<span class="help-kbd">O</span>) opens a saved console / log file in a dedicated window with the same find / structured-log / URL-detection chrome as the live Console tab. Handy for reviewing logs from a previous session or a teammate.</p>
+          <p data-i18n-html="modals.helpModal.logViewerBodyHtml"><strong>File → Open Log File</strong> (<span class="help-kbd">Ctrl</span>/<span class="help-kbd">Cmd</span>+<span class="help-kbd">Shift</span>+<span class="help-kbd">O</span>) opens a saved console / log file in a dedicated window with the same find / structured-log / URL-detection chrome as the live Console tab. Handy for reviewing logs from a previous session or a teammate.</p>
         </div>
 
         <div class="help-section" id="help-section-secret-screens">
           <h3 data-i18n="modals.helpModal.secretScreensHeading"><span class="icon icon-sm icon-indigo"><svg><use href="#icon-key"/></svg></span> Secret Screens</h3>
-          <p>The <em>Secret Screens</em> link (Remote Section and the Query tab footer) opens a modal listing the standard Roku key sequences for hidden settings — <strong>Developer Settings</strong>, <strong>Secret Screen 1/2/3</strong>, <strong>Wi-Fi Info</strong>, <strong>Channel Info</strong>, <strong>Reboot</strong>, etc. Click a sequence to send the keypresses to the connected device.</p>
+          <p data-i18n-html="modals.helpModal.secretScreensBodyHtml">The <em>Secret Screens</em> link (Remote Section and the Query tab footer) opens a modal listing the standard Roku key sequences for hidden settings — <strong>Developer Settings</strong>, <strong>Secret Screen 1/2/3</strong>, <strong>Wi-Fi Info</strong>, <strong>Channel Info</strong>, <strong>Reboot</strong>, etc. Click a sequence to send the keypresses to the connected device.</p>
         </div>
 
         <div class="help-section" id="help-section-settings">
           <h3 data-i18n="modals.helpModal.settingsHeading"><span class="icon icon-sm icon-red"><svg><use href="#icon-settings"/></svg></span> Settings</h3>
-          <p>Open with <span class="help-kbd">Ctrl</span>/<span class="help-kbd">Cmd</span>+<span class="help-kbd">,</span> or <em>Roku Dev Studio → Settings</em> (macOS) / <em>File → Settings</em> (Windows / Linux). Five sections:</p>
-          <ul>
+          <p data-i18n-html="modals.helpModal.settingsIntroHtml">Open with <span class="help-kbd">Ctrl</span>/<span class="help-kbd">Cmd</span>+<span class="help-kbd">,</span> or <em>Roku Dev Studio → Settings</em> (macOS) / <em>File → Settings</em> (Windows / Linux). Five sections:</p>
+          <ul data-i18n-html="modals.helpModal.settingsListHtml">
             <li><strong>General</strong> - Developer Mode, Privacy Mode (mask IPs / serials), Debug Logging to file, Roku Remote - Use Keyboard, Auto Connect to Devices, Auto Hide Sidebar, Encrypt Saved Passwords (status line shows whether the OS keychain is really encrypting — on some Linux setups it is not)</li>
             <li><strong>Action Scripts</strong> - Default folder for run artifacts (screenshots, exported PDFs)</li>
             <li><strong>Device Performance</strong> - Chart sample interval, chart history window, Remember 'Show Device Performance' per device</li>
@@ -248,40 +248,40 @@
         <div class="help-section" id="help-section-remote-locations">
           <h3 data-i18n="modals.helpModal.remoteLocationsHeading"><span class="icon icon-sm icon-cyan"><svg><use href="#icon-globe"/></svg></span> Remote Locations</h3>
           <p data-i18n="modals.helpModal.remoteLocationsIntro">Control Roku devices at Remote Locations via a Relay Server:</p>
-          <ul>
+          <ul data-i18n-html="modals.helpModal.remoteLocationsListHtml">
             <li><strong>Setup</strong> - Run the Roku Relay Server on a Mac Mini at the remote location</li>
             <li><strong>Add Location</strong> - Click "Add" in the Remote Locations section to configure a connection</li>
             <li><strong>Server Address</strong> - Enter the IP Address or Hostname of the relay server</li>
             <li><strong>Default Port</strong> - The relay server runs on port <code>4951</code> by default</li>
           </ul>
-          <p>The relay server can be found in the <code>remote-server</code> folder. See the README for setup instructions (macOS LaunchAgent, Linux systemd, Windows Task Scheduler).</p>
-          <p><strong>Sideload or screenshot fails via relay but ECP works?</strong> Update the relay host to the same <code>roku-dev-studio-api</code> version as this app. Check <code>GET /health</code> on the relay (<code>apiVersion</code> field) and ensure port <code>4951</code> is reachable through firewalls.</p>
+          <p data-i18n-html="modals.helpModal.remoteLocationsServerHtml">The relay server can be found in the <code>remote-server</code> folder. See the README for setup instructions (macOS LaunchAgent, Linux systemd, Windows Task Scheduler).</p>
+          <p data-i18n-html="modals.helpModal.remoteLocationsTroubleshootHtml"><strong>Sideload or screenshot fails via relay but ECP works?</strong> Update the relay host to the same <code>roku-dev-studio-api</code> version as this app. Check <code>GET /health</code> on the relay (<code>apiVersion</code> field) and ensure port <code>4951</code> is reachable through firewalls.</p>
         </div>
         
         <div class="help-section" id="help-section-sideload-relay">
           <h3 data-i18n="modals.helpModal.sideloadRelayHeading"><span class="icon icon-sm icon-green"><svg><use href="#icon-send"/></svg></span> Sideload Relay</h3>
-          <p>Sideload one build to <strong>many devices at once</strong>. When the relay is on, Roku Dev Studio advertises itself as a Roku on your network: point your IDE (VS Code BrightScript / roku-deploy / Eclipse) or a browser at this machine, upload once, and RDS fans the build out — <em>install → launch → console</em> — to every targeted device, local or at a remote location.</p>
-          <p><strong>Enable it</strong> in <strong>Settings → Sideload Relay</strong> (off by default). Two prerequisites gate the toggle:</p>
-          <ul>
+          <p data-i18n-html="modals.helpModal.sideloadRelayIntroHtml">Sideload one build to <strong>many devices at once</strong>. When the relay is on, Roku Dev Studio advertises itself as a Roku on your network: point your IDE (VS Code BrightScript / roku-deploy / Eclipse) or a browser at this machine, upload once, and RDS fans the build out — <em>install → launch → console</em> — to every targeted device, local or at a remote location.</p>
+          <p data-i18n-html="modals.helpModal.sideloadRelayEnableHtml"><strong>Enable it</strong> in <strong>Settings → Sideload Relay</strong> (off by default). Two prerequisites gate the toggle:</p>
+          <ul data-i18n-html="modals.helpModal.sideloadRelayEnableListHtml">
             <li><strong>Relay Dev Password</strong> - The password your IDE authenticates to RDS with (user <code>rokudev</code>), exactly like a real Roku's developer password. This is separate from each target device's own dev password.</li>
             <li><strong>Setup Devices</strong> - Open the device-setup modal and enable at least one reachable, Developer Mode-enabled device. It lists local and remote (relay-location) devices; enable the ones that should receive every build. Devices without a saved dev password show <strong>🔒 Set Password</strong> to validate one inline. Previously-targeted devices that go offline stay listed (disabled) and rejoin automatically when reachable again.</li>
           </ul>
-          <p><strong>Point your IDE at RDS.</strong> With the relay enabled, RDS is discoverable over SSDP as <em>"Roku Dev Studio Relay"</em>, or you can set your build host to this machine's IP directly. On <em>Sideload</em> / <em>Debug: Launch</em>, the IDE uploads to RDS on port <code>80</code> and RDS handles the fan-out. A themed upload web page is also served at the relay address (<code>http://&lt;this-machine&gt;/</code>) for drag-and-drop <code>.zip</code> sideloads from a browser.</p>
-          <p><strong>Auto-connect.</strong> When a build lands successfully on a target, RDS opens that device as a connected tab and attaches its debug console automatically, so you see per-device output without extra clicks. Live fan-out progress also streams as a status console on telnet port <code>8085</code>.</p>
-          <p><strong>Source approval.</strong> A sideload originating from this machine proceeds automatically. A sideload from a different machine holds the upload and shows an allow/deny prompt on the RDS host (auto-denies after 30s); browser uploads from a remote machine additionally require logging in with the Relay Dev Password.</p>
-          <p>Requires the targeted devices to have Developer Mode enabled. See <strong>Remote Locations</strong> above for targeting devices at another site through a relay server.</p>
+          <p data-i18n-html="modals.helpModal.sideloadRelayPointHtml"><strong>Point your IDE at RDS.</strong> With the relay enabled, RDS is discoverable over SSDP as <em>"Roku Dev Studio Relay"</em>, or you can set your build host to this machine's IP directly. On <em>Sideload</em> / <em>Debug: Launch</em>, the IDE uploads to RDS on port <code>80</code> and RDS handles the fan-out. A themed upload web page is also served at the relay address (<code>http://&lt;this-machine&gt;/</code>) for drag-and-drop <code>.zip</code> sideloads from a browser.</p>
+          <p data-i18n-html="modals.helpModal.sideloadRelayAutoConnectHtml"><strong>Auto-connect.</strong> When a build lands successfully on a target, RDS opens that device as a connected tab and attaches its debug console automatically, so you see per-device output without extra clicks. Live fan-out progress also streams as a status console on telnet port <code>8085</code>.</p>
+          <p data-i18n-html="modals.helpModal.sideloadRelaySourceApprovalHtml"><strong>Source approval.</strong> A sideload originating from this machine proceeds automatically. A sideload from a different machine holds the upload and shows an allow/deny prompt on the RDS host (auto-denies after 30s); browser uploads from a remote machine additionally require logging in with the Relay Dev Password.</p>
+          <p data-i18n-html="modals.helpModal.sideloadRelayFooterHtml">Requires the targeted devices to have Developer Mode enabled. See <strong>Remote Locations</strong> above for targeting devices at another site through a relay server.</p>
         </div>
 
         <div class="help-section" id="help-section-tips">
           <h3 data-i18n="modals.helpModal.tipsHeading"><span class="icon icon-sm icon-amber"><svg><use href="#icon-info"/></svg></span> Tips</h3>
           <ul>
-            <li>Enable Developer Mode on your Roku: Go to Home, press <span class="help-kbd">Home</span> 3x, <span class="help-kbd">↑</span> 2x, <span class="help-kbd">→</span> <span class="help-kbd">←</span> <span class="help-kbd">→</span> <span class="help-kbd">←</span> <span class="help-kbd">→</span></li>
+            <li data-i18n-html="modals.helpModal.tipDeveloperModeHtml">Enable Developer Mode on your Roku: Go to Home, press <span class="help-kbd">Home</span> 3x, <span class="help-kbd">↑</span> 2x, <span class="help-kbd">→</span> <span class="help-kbd">←</span> <span class="help-kbd">→</span> <span class="help-kbd">←</span> <span class="help-kbd">→</span></li>
             <li data-i18n="modals.helpModal.tipMultipleDevices">Multiple devices can be connected simultaneously - each gets its own tab</li>
             <li data-i18n="modals.helpModal.tipClickCard">Click a connected device card to switch to its tab</li>
             <li data-i18n="modals.helpModal.tipRightClick">Right-click device cards to copy device info</li>
             <li data-i18n="modals.helpModal.tipRemoteLocations">Remote locations allow you to control devices without physical access</li>
-            <li><strong>macOS:</strong> closing the main window quits the app (telnet and MCP sessions are torn down). Use <em>Roku Dev Studio → Quit</em> or <span class="help-kbd">Cmd</span>+<span class="help-kbd">Q</span> — the app does not stay in the dock with no windows.</li>
-            <li><strong>Windows / Linux:</strong> use the title-bar menu (☰) for Settings, Privacy Mode, and About; window min/max/close buttons are on the right edge of the title bar.</li>
+            <li data-i18n-html="modals.helpModal.tipMacosHtml"><strong>macOS:</strong> closing the main window quits the app (telnet and MCP sessions are torn down). Use <em>Roku Dev Studio → Quit</em> or <span class="help-kbd">Cmd</span>+<span class="help-kbd">Q</span> — the app does not stay in the dock with no windows.</li>
+            <li data-i18n-html="modals.helpModal.tipWindowsLinuxHtml"><strong>Windows / Linux:</strong> use the title-bar menu (☰) for Settings, Privacy Mode, and About; window min/max/close buttons are on the right edge of the title bar.</li>
           </ul>
         </div>
         </div>

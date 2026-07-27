@@ -1,4 +1,5 @@
 import type { BrowserWindow, Dialog, IpcMainInvokeEvent } from 'electron';
+import { S } from '../../shared/strings/index';
 import { IPC } from '../../shared/ipc/channels';
 import type { SafeSendFn } from '../../shared/ipc/payloads';
 import { loadSettings, saveSettings } from '../settings';
@@ -206,9 +207,9 @@ function setupNetworkInspectorHandlers(
       const primaryIp = deviceIps?.find((ip) => !ip.endsWith('.1'));
       const namePart = primaryIp ? primaryIp.replace(/\./g, '-') : 'hotspot';
       const pcapOpts = {
-        title: 'Save Packet Capture',
+        title: S.networkInspector.exportDialogTitles.savePcap,
         defaultPath: `network-inspector-${namePart}-${Date.now()}.pcap`,
-        filters: [{ name: 'Wireshark PCAP', extensions: ['pcap'] }]
+        filters: [{ name: S.networkInspector.exportDialogTitles.pcapFilter, extensions: ['pcap'] }]
       };
       const result = await (win ? dialog.showSaveDialog(win, pcapOpts) : dialog.showSaveDialog(pcapOpts));
       if (result.canceled || !result.filePath) {
@@ -226,9 +227,9 @@ function setupNetworkInspectorHandlers(
   ipcMain.handle(IPC.NetworkInspectorExportCaPem, async () => {
     const win = _mainWindow && !_mainWindow.isDestroyed() ? _mainWindow : undefined;
     const pemOpts = {
-      title: 'Export RDS CA certificate (PEM)',
+      title: S.networkInspector.exportDialogTitles.caPem,
       defaultPath: 'rds-network-inspector-ca.pem',
-      filters: [{ name: 'PEM certificate', extensions: ['pem'] }]
+      filters: [{ name: S.networkInspector.exportDialogTitles.pemFilter, extensions: ['pem'] }]
     };
     const result = await (win ? dialog.showSaveDialog(win, pemOpts) : dialog.showSaveDialog(pemOpts));
     if (result.canceled || !result.filePath) return { success: false, error: 'cancelled' };
@@ -238,9 +239,9 @@ function setupNetworkInspectorHandlers(
   ipcMain.handle(IPC.NetworkInspectorExportCaCert, async () => {
     const win = _mainWindow && !_mainWindow.isDestroyed() ? _mainWindow : undefined;
     const crtOpts = {
-      title: 'Export RDS CA certificate (CRT)',
+      title: S.networkInspector.exportDialogTitles.caCrt,
       defaultPath: 'rds-network-inspector-ca.crt',
-      filters: [{ name: 'Certificate', extensions: ['crt', 'cer'] }]
+      filters: [{ name: S.networkInspector.exportDialogTitles.certFilter, extensions: ['crt', 'cer'] }]
     };
     const result = await (win ? dialog.showSaveDialog(win, crtOpts) : dialog.showSaveDialog(crtOpts));
     if (result.canceled || !result.filePath) return { success: false, error: 'cancelled' };

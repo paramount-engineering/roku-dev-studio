@@ -87,4 +87,20 @@ export const sideloadRelay = {
 
   // Saved-password placeholder hint
   savedPasswordPlaceholder: '•••••••• (saved)',
+
+  // ── Native allow/deny prompt on the host (main/sideload-relay/index.ts) ──
+  authorizeTitle: 'Sideload Relay',
+  authorizeAllow: 'Allow',
+  authorizeDeny: 'Deny',
+  authorizeMessage: (who: string): string => `Allow a sideload from ${who}?`,
+  authorizeDetail:
+    'Another device on your network is trying to install a build through Roku Dev Studio. ' +
+    'Allow only if you recognize this device.',
+
+  // ── Relay dev-password validate / reveal + settings-save errors (main/ipc/relay-handlers.ts) ──
+  errDeviceIpPasswordRequired: 'Device IP and password are required.',
+  errIncorrectPassword: 'Incorrect developer password.',
+  errValidationFailed: 'Validation failed.',
+  errCouldNotReadPassword: 'Could not read the saved password.',
+  errCouldNotWriteSettings: 'Could not write settings file.',
 } as const;

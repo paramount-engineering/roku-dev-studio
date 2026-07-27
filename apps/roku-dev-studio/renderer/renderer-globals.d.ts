@@ -16,6 +16,7 @@ declare global {
     toggleIntegrationGuide?: () => void;
     /** Settings modal (separate window); only present in that window's preload. */
     settingsApi?: {
+      notifyReady?: () => void;
       getState: () => Promise<unknown>;
       save: (payload: unknown) => Promise<{ success?: boolean; error?: string }>;
       pickFolder: () => Promise<{ success?: boolean; canceled?: boolean; folderPath?: string; error?: string }>;

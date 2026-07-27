@@ -75,7 +75,7 @@ export function setupRaleConnection(
           statusDisplay.setError(S.common.disconnected);
         }
         if (state.status === 'disconnected' && state.message === 'Connection closed by device') {
-          displayResponseFn({ status: 'Connection closed by device' });
+          displayResponseFn({ status: S.inspector.connectionClosedByDevice });
         }
         // After we've reflected the disconnect, drop the flag — a subsequent
         // borrow won't re-flip the UI, and a subsequent user-initiated

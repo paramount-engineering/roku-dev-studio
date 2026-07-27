@@ -505,6 +505,13 @@ contextBridge.exposeInMainWorld('roku', {
     return () => ipcRenderer.removeListener(IPC.PrivacyModeChanged, handler);
   },
 
+  // Listen for language changes so the window can retranslate in place (no reload).
+  onLocaleChanged: (callback: (pref: string) => void) => {
+    const handler = (_event: IpcRendererEvent, pref: string) => callback(pref);
+    ipcRenderer.on(IPC.LocaleChanged, handler);
+    return () => ipcRenderer.removeListener(IPC.LocaleChanged, handler);
+  },
+
   // Listen for debug logging changes from File menu
   onDebugLoggingChanged: (callback: (enabled: boolean) => void) => {
     const handler = (_event: IpcRendererEvent, enabled: boolean) => callback(enabled);

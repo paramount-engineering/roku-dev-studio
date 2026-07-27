@@ -1,4 +1,5 @@
 import type { ParsedNetworkEvent } from '@shared/network-inspector/types';
+import { S } from '@shared/strings/index.js';
 
 export type SessionKind = 'https' | 'http' | 'dns' | 'tcp';
 
@@ -76,7 +77,7 @@ function formatTimestamp(ts: string | undefined): string {
 
 function formatDuration(ev: ParsedNetworkEvent): string {
   const pending = ev.type === 'http-transaction' && ev.httpResponse?.statusCode === 0;
-  if (pending) return 'Pending…';
+  if (pending) return S.networkInspector.durationPending;
   if (typeof ev.durationMs === 'number' && ev.durationMs >= 0) {
     if (ev.durationMs < 1000) return `${ev.durationMs} ms`;
     return `${(ev.durationMs / 1000).toFixed(2)} s`;
@@ -126,7 +127,11 @@ function eventToSession(ev: ParsedNetworkEvent, index: number): NetworkSession {
     }
     const code = ev.httpResponse?.statusCode;
     const status =
-      code === 0 ? 'Pending' : code != null ? String(code) : ev.httpResponse?.statusText || '—';
+      code === 0
+        ? S.networkInspector.listStatusPending
+        : code != null
+          ? String(code)
+          : ev.httpResponse?.statusText || '—';
     return {
       id: `sess-${ev.id}`,
       eventId: ev.id,
@@ -156,9 +161,9 @@ function eventToSession(ev: ParsedNetworkEvent, index: number): NetworkSession {
       index,
       kind: 'dns',
       host,
-      path: 'DNS Query',
+      path: S.networkInspector.dnsQueryLabel,
       method: 'DNS',
-      status: 'Query',
+      status: S.networkInspector.listStatusQuery,
       contentType: '',
       sizeBytes: 0,
       sizeLabel: '—',
@@ -178,9 +183,9 @@ function eventToSession(ev: ParsedNetworkEvent, index: number): NetworkSession {
       index,
       kind: 'dns',
       host,
-      path: 'DNS Response',
+      path: S.networkInspector.dnsResponseLabel,
       method: 'DNS',
-      status: 'OK',
+      status: S.networkInspector.listStatusOk,
       contentType: '',
       sizeBytes: 0,
       sizeLabel: '—',
@@ -225,7 +230,7 @@ function eventToSession(ev: ParsedNetworkEvent, index: number): NetworkSession {
     host,
     path: `:${port}`,
     method: isHttps ? 'HTTPS' : 'TCP',
-    status: isHttps ? 'SSL' : 'Open',
+    status: isHttps ? 'SSL' : S.networkInspector.listStatusOpen,
     contentType: '',
     sizeBytes: 0,
     sizeLabel: '—',

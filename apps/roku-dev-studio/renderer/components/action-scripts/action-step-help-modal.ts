@@ -18,6 +18,11 @@ import {
   closeModalWithOriginMotion
 } from '../../modules/utils/modal-origin-motion.js';
 import { attachBackdropClickToClose } from '../../modules/utils/modal-backdrop-click.js';
+import { registerRetranslate } from '../../modules/ui/retranslate-registry.js';
+
+// A single active registration: the OPEN step-help modal re-renders itself in the current
+// locale on a live language change (its content is read-only, so a full rebuild is state-safe).
+let unregisterHelpRetranslate: (() => void) | null = null;
 import { S } from '@shared/strings/index.js';
 
 export type ActionStepHelpContext = {
@@ -161,8 +166,13 @@ export function collectActionStepHelpContext(
   return { actionType: type, variantKey: type, subtitle: '' };
 }
 
-/** Exact variant → body HTML (modal body only). */
-const VARIANT_HELP_BODIES: Record<string, string> = {
+/**
+ * Exact variant → body HTML (modal body only). Built as a FUNCTION (not a
+ * module-level const) so each call reads `S.*` from the ACTIVE locale — a
+ * captured const would freeze the startup locale and never update on a live
+ * language switch.
+ */
+const variantHelpBodies = (): Record<string, string> => ({
   'query:custom': S.actionScripts.helpBodyQueryCustom,
   'query:telnet:plugins': S.actionScripts.helpBodyQueryTelnetPlugins,
   'query:telnet:free': S.actionScripts.helpBodyQueryTelnetFree,
@@ -180,10 +190,13 @@ const VARIANT_HELP_BODIES: Record<string, string> = {
   'systemTelnet:__none__': S.actionScripts.helpBodySystemTelnetNone,
   'systemTelnet:plugins': S.actionScripts.helpBodySystemTelnetPlugins,
   'systemTelnet:free': S.actionScripts.helpBodySystemTelnetFree
-};
+});
 
-/** Fallback body per top-level action type (when no variant match). */
-const ACTION_FALLBACK_BODIES: Record<string, string> = {
+/**
+ * Fallback body per top-level action type (when no variant match). A FUNCTION
+ * for the same live-locale reason as `variantHelpBodies` above.
+ */
+const actionFallbackBodies = (): Record<string, string> => ({
   query: S.actionScripts.helpFallbackQuery,
   post: S.actionScripts.helpFallbackPost,
   keypress: S.actionScripts.helpFallbackKeypress,
@@ -198,7 +211,7 @@ const ACTION_FALLBACK_BODIES: Record<string, string> = {
   wait: S.actionScripts.helpFallbackWait,
   if: S.actionScripts.helpFallbackIf,
   systemTelnet: S.actionScripts.helpFallbackSystemTelnet
-};
+});
 
 function queryPresetBody(endpoint: string, label: string): string {
   return S.actionScripts.helpQueryPresetBody(escapeHtml(label), escapeHtml(endpoint));
@@ -229,9 +242,11 @@ function resolveBodyHtml(
   getAppFunctions?: GetAppFunctions
 ): string {
   const { actionType, variantKey } = ctx;
+  const variantBodies = variantHelpBodies();
+  const fallbackBodies = actionFallbackBodies();
 
-  if (VARIANT_HELP_BODIES[variantKey]) {
-    return VARIANT_HELP_BODIES[variantKey];
+  if (variantBodies[variantKey]) {
+    return variantBodies[variantKey];
   }
 
   if (actionType === 'query' && variantKey.startsWith('query:')) {
@@ -263,7 +278,7 @@ function resolveBodyHtml(
         ? S.actionScripts.helpAppFunctionDescription(escapeHtml(desc))
         : '';
       return `
-        ${ACTION_FALLBACK_BODIES.appFunction}
+        ${fallbackBodies.appFunction}
         ${S.actionScripts.helpSelectedFunction(escapeHtml(fn))}
         ${descBlock}
         ${S.actionScripts.helpAppFunctionArgs}
@@ -276,14 +291,14 @@ function resolveBodyHtml(
     if (key && key !== '__none__') {
       const nice = keypressLabelForValue(key);
       return `
-        ${ACTION_FALLBACK_BODIES.keypress}
+        ${fallbackBodies.keypress}
         ${S.actionScripts.helpCurrentKey(escapeHtml(nice), escapeHtml(key))}
       `;
     }
   }
 
-  if (ACTION_FALLBACK_BODIES[actionType]) {
-    return ACTION_FALLBACK_BODIES[actionType];
+  if (fallbackBodies[actionType]) {
+    return fallbackBodies[actionType];
   }
 
   const meta = getSchema(actionType);
@@ -324,6 +339,8 @@ export function openActionStepHelpModal(
   const titleText = modalTitle(ctx);
   const bodyHtml = resolveBodyHtml(ctx, getAppFunctions);
 
+  // Clear any prior registration before tearing down the previous overlay and building a new one.
+  if (unregisterHelpRetranslate) { unregisterHelpRetranslate(); unregisterHelpRetranslate = null; }
   document.querySelectorAll('.action-scripts-step-help-overlay').forEach((el) => el.remove());
 
   const overlay = document.createElement('div');
@@ -333,6 +350,7 @@ export function openActionStepHelpModal(
   overlay.setAttribute('aria-labelledby', 'action-scripts-step-help-title');
 
   const close = () => {
+    if (unregisterHelpRetranslate) { unregisterHelpRetranslate(); unregisterHelpRetranslate = null; }
     closeModalWithOriginMotion(overlay, () => {
       document.removeEventListener('keydown', onKeyDown);
       overlay.remove();
@@ -377,4 +395,11 @@ export function openActionStepHelpModal(
   // Backdrop click-to-close, mousedown-gated so a text selection inside the
   // dialog body that ends on the backdrop doesn't dismiss the modal.
   attachBackdropClickToClose(overlay, close);
+
+  // While open, re-render in the active locale on a live language switch. Re-invoking with the
+  // same args rebuilds the (read-only) content fresh; the guard at the top clears this prior
+  // registration so there's only ever one live handler.
+  unregisterHelpRetranslate = registerRetranslate(() => {
+    openActionStepHelpModal(actionType, fieldsRoot, opener, getAppFunctions);
+  });
 }

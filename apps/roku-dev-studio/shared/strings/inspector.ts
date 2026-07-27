@@ -16,6 +16,8 @@ export const inspector = {
 
   // Connection flow (Connect/Disconnect, status line, Dev App preflight)
   connectingBtn: 'Connecting...',
+  connectionLost: 'Connection lost',
+  reconnecting: 'Reconnecting...',
   connectingStatus: '🟡 Connecting...',
   reconnectingStatus: '🟡 Reconnecting...',
   connectedBang: 'Connected!',
@@ -31,6 +33,12 @@ export const inspector = {
   devAppNotActive: 'Dev App Not Active',
   wakingUpTrackerTask: (port: number): string => `Waking up TrackerTask on port ${port}...`,
   failedToConnect: 'Failed to connect',
+  failedToWakeTrackerTask: 'Failed to wake TrackerTask',
+  connectingToSocket: 'Connecting to socket...',
+  connectingToSocketRetry: (attempt: number): string =>
+    `Connecting to socket (retry ${attempt})...`,
+  initializing: 'Initializing...',
+  connectionClosedByDevice: 'Connection closed by device',
 
   // Response card (index.ts)
   findInResponse: 'Find in Response',
@@ -46,6 +54,7 @@ export const inspector = {
   raleFunctions: 'RALE Functions',
   noFunctionsImplement: 'No functions — implement GetExternalControlFunctions',
   readyToExecute: 'Ready to execute',
+  unknownFunctionName: 'unknown',
   functionCounts: (appCount: number, raleCount: number): string =>
     `${appCount} App Function(s), ${raleCount} RALE command(s)`,
 
@@ -70,6 +79,7 @@ export const inspector = {
   // Update Node modal (node-update-panel.ts)
   noNodeContext: 'No node context — run Get Node by ID first.',
   fieldNameRequired: 'Field name is required.',
+  selectNodeFailed: 'selectNode failed',
   selectingNode: 'Selecting node…',
   removingField: 'Removing field…',
   addingField: 'Adding field…',

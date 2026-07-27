@@ -11,6 +11,7 @@
  */
 import type { BrowserWindow as ElectronBrowserWindow, IpcMain, IpcMainInvokeEvent } from 'electron';
 import { IPC } from '../shared/ipc/channels';
+import { S } from '../shared/strings/index';
 import { setupZoomGuards } from './window-zoom';
 import { mainError } from './log.js';
 import { parseSessionBuffer } from './network-session-parse';
@@ -75,8 +76,8 @@ export function openNetworkSessionViewerWindow(
   if (!fs.existsSync(resolved) || !fs.statSync(resolved).isFile()) {
     const boxOpts = {
       type: 'error' as const,
-      title: 'Open Network Session',
-      message: 'Could not open the selected file.'
+      title: S.networkSessionViewer.openErrorTitle,
+      message: S.common.couldNotOpenFile
     };
     if (parent && !parent.isDestroyed()) {
       void dialog.showMessageBox(parent, boxOpts);
@@ -94,7 +95,7 @@ export function openNetworkSessionViewerWindow(
     height: 760,
     minWidth: 640,
     minHeight: 420,
-    title: `Network Session — ${path.basename(resolved)}`,
+    title: S.networkSessionViewer.windowTitleWithFile(path.basename(resolved)),
     backgroundColor: '#0a0a12',
     show: false,
     webPreferences: {

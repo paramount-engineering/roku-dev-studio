@@ -302,7 +302,7 @@ export function parseObjectCountsBreakdown(xml: string): ObjectCountsBreakdown {
   const tryPair = (name: string, countStr: string) => {
     const c = parseInt(countStr, 10);
     if (!Number.isFinite(c) || c < 0) return;
-    const label = name.trim().slice(0, 48) || 'unknown';
+    const label = name.trim().slice(0, 48) || S.devApp.unknown;
     pairs.push({ label, count: c });
   };
 
@@ -310,7 +310,7 @@ export function parseObjectCountsBreakdown(xml: string): ObjectCountsBreakdown {
   const addBytes = (name: string, bytesStr: string) => {
     const b = parseInt(bytesStr, 10);
     if (!Number.isFinite(b) || b < 0) return;
-    const label = name.trim().slice(0, 48) || 'unknown';
+    const label = name.trim().slice(0, 48) || S.devApp.unknown;
     bytesByLabel.set(label, (bytesByLabel.get(label) ?? 0) + b);
   };
 
@@ -946,7 +946,7 @@ export function drawTimeseriesChart(
         'font-size': '8',
         'text-anchor': isRightmost ? 'end' : 'middle'
       });
-      t.textContent = agoMs < 750 ? 'now' : formatMmSs(agoMs / 1000);
+      t.textContent = agoMs < 750 ? S.devApp.chartAxisNow : formatMmSs(agoMs / 1000);
       labelG.appendChild(t);
     }
   }

@@ -55,6 +55,9 @@ var init_channels = __esm({
       SettingsWindowPickFolder: "settings-window:pick-folder",
       /** Renderer requests destroying the Settings BrowserWindow after close animation. */
       SettingsWindowClose: "settings-window:close",
+      /** Settings renderer signals its initial getState() population is done, so main can show the
+       *  window fully-rendered instead of on ready-to-show (avoids a toggle/section-populate flash). */
+      SettingsWindowReady: "settings-window:ready",
       /** Settings window asks main to open a detected MCP client's config file in the default editor (falls back to revealing in folder). */
       SettingsWindowOpenMcpConfig: "settings-window:open-mcp-config",
       /** Settings window probes a remote location's Network Inspector capability + current config. */
@@ -267,6 +270,15 @@ var init_channels = __esm({
       GetPrivacyMode: "get-privacy-mode",
       SetPrivacyMode: "set-privacy-mode",
       PrivacyModeChanged: "privacy-mode-changed",
+      /** Renderer → main: current persisted language preference ('system' | locale code), so a
+       *  window opened while a non-default locale is active can apply it on load. */
+      GetLocale: "get-locale",
+      /** Renderer → main: persist a language preference ('system' | locale code), rebuild the
+       *  menu, and fan the change out to every window. */
+      SetLocale: "set-locale",
+      /** Main → all renderers: the language preference changed; each window re-resolves and
+       *  retranslates in place (no reload). Payload is the preference string. */
+      LocaleChanged: "locale-changed",
       DebugLoggingChanged: "debug-logging-changed",
       /** Win/Linux title-bar hamburger → main-process menu actions. */
       AppMenuAction: "app-menu:action",
@@ -373,6 +385,17 @@ contextBridge.exposeInMainWorld("settingsApi", {
     ipcRenderer.on(IPC2.PrivacyModeChanged, handler);
     return () => ipcRenderer.removeListener(IPC2.PrivacyModeChanged, handler);
   },
+  // Language — apply live on dropdown change: main persists, re-labels the native menu,
+  // and fans `IPC.LocaleChanged` to every window (including this one) to retranslate.
+  setLanguage: (code) => ipcRenderer.invoke(IPC2.SetLocale, code),
+  onLocaleChanged: (callback) => {
+    const handler = (_e, pref) => callback(pref);
+    ipcRenderer.on(IPC2.LocaleChanged, handler);
+    return () => ipcRenderer.removeListener(IPC2.LocaleChanged, handler);
+  },
+  // Signal main that the initial getState() population is complete, so it can reveal the
+  // window fully-rendered (no toggle/section-populate flash). Main also has a fallback timer.
+  notifyReady: () => ipcRenderer.send(IPC2.SettingsWindowReady),
   getState: () => ipcRenderer.invoke(IPC2.SettingsWindowGetState),
   save: (payload) => ipcRenderer.invoke(IPC2.SettingsWindowSave, payload),
   pickFolder: () => ipcRenderer.invoke(IPC2.SettingsWindowPickFolder),

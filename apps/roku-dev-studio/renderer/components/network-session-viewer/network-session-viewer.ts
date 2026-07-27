@@ -26,7 +26,7 @@ import {
 } from '../network-inspector/network-detail.js';
 import { buildCurlCommand, buildHarArchive, isExportableEvent } from '../network-inspector/network-export.js';
 import {
-  DETAIL_PANE_HTML,
+  detailPaneHtml,
   wireDetailInteractions,
   syncBodyWrap as syncBodyWrapShared
 } from '../network-inspector/network-detail-view.js';
@@ -58,6 +58,7 @@ import {
   type FindTermInfo
 } from '../network-inspector/network-find-decorations.js';
 import { S, applyI18n } from '@shared/strings/index.js';
+import { initLocaleForWindow } from '../../modules/utils/locale-live.js';
 
 type RokuApi = {
   loadNetworkSession: () => Promise<{
@@ -134,7 +135,7 @@ const paneFind = createPaneFindStore({
 // Inject the shared detail-pane markup before the per-pane queries below read from it, so this
 // window and the live inspector render from one source (network-detail-view.ts).
 const detailPaneHost = $('[data-ni-detail]');
-if (detailPaneHost) detailPaneHost.innerHTML = DETAIL_PANE_HTML;
+if (detailPaneHost) detailPaneHost.innerHTML = detailPaneHtml();
 
 const filterInput = $<HTMLInputElement>('[data-ni-filter]');
 const filterClearBtn = $<HTMLElement>('[data-ni-filter-clear]');
@@ -619,6 +620,8 @@ async function main(): Promise<void> {
   bindPrivacyMode();
   // Localize the static session-viewer.html shell (toolbar, tab labels, tooltips).
   applyI18n(document);
+  // Apply the active locale on open + retranslate live on change.
+  void initLocaleForWindow(window.roku as unknown as Parameters<typeof initLocaleForWindow>[0]);
   wireEvents();
   setupFind();
   setupBodyFind();

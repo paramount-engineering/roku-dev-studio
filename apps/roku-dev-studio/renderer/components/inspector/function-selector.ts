@@ -54,7 +54,8 @@ export function setupFunctionSelector(
         `<option value="" disabled>${S.inspector.noFunctionsImplement}</option>`;
     } else {
       availableFunctions.forEach((func, index) => {
-        const funcName = (func && func.name) || (typeof func === 'string' ? func : 'unknown');
+        const funcName =
+          (func && func.name) || (typeof func === 'string' ? func : S.inspector.unknownFunctionName);
         html += `<option value="${escapeHtml(funcName)}" data-source="app" data-func-index="${index}">${escapeHtml(funcName)}</option>`;
       });
     }
@@ -71,7 +72,7 @@ export function setupFunctionSelector(
       const raleCount = Object.keys(RALE_BUILTIN_COMMANDS).length;
       setSafeHTML(
         funcParamHint,
-        `<span style="color: var(--accent-green);">${appCount} App Function(s), ${raleCount} RALE command(s)</span>`
+        `<span style="color: var(--accent-green);">${S.inspector.functionCounts(appCount, raleCount)}</span>`
       );
     }
   }

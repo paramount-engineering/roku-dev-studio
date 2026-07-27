@@ -28,6 +28,13 @@ contextBridge.exposeInMainWorld('roku', {
     ipcRenderer.on(IPC.PrivacyModeChanged, handler);
     return () => ipcRenderer.removeListener(IPC.PrivacyModeChanged, handler);
   },
+  // Live locale: apply the current preference on open + retranslate on change.
+  getLocale: () => ipcRenderer.invoke(IPC.GetLocale) as Promise<string>,
+  onLocaleChanged: (callback: (pref: string) => void) => {
+    const handler = (_e: IpcRendererEvent, pref: string) => callback(pref);
+    ipcRenderer.on(IPC.LocaleChanged, handler);
+    return () => ipcRenderer.removeListener(IPC.LocaleChanged, handler);
+  },
   saveTextFile: (opts: { content: string; defaultName?: string; dialogTitle?: string }) =>
     ipcRenderer.invoke(IPC.RokuSaveTextFile, opts),
   saveBinaryFile: (opts: { base64: string; defaultName?: string; dialogTitle?: string }) =>

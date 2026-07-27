@@ -19,7 +19,9 @@ export type MediaTypeEntry = { value: string; label: string };
 
 const SETTINGS_KEY = 'deeplink-custom-media-types';
 
-const DEFAULT_MEDIA_TYPES: MediaTypeEntry[] = [
+// A function (not a const) so the localized built-in labels read from the active
+// locale each time, rather than freezing whatever was active at import.
+const defaultMediaTypes = (): MediaTypeEntry[] => [
   { value: 'movie', label: S.deeplink.mediaTypeMovie },
   { value: 'series', label: S.deeplink.mediaTypeSeries },
   { value: 'episode', label: S.deeplink.mediaTypeEpisode },
@@ -48,7 +50,7 @@ function slugifyLabel(label: string): string {
 }
 
 function getAllMediaTypes(): MediaTypeEntry[] {
-  return [...DEFAULT_MEDIA_TYPES, ...customTypes];
+  return [...defaultMediaTypes(), ...customTypes];
 }
 
 function validateEntry(entry: MediaTypeEntry, excludeIndex?: number): string | null {
@@ -62,7 +64,7 @@ function validateEntry(entry: MediaTypeEntry, excludeIndex?: number): string | n
     return S.deeplink.valueFormat;
   }
 
-  for (const builtIn of DEFAULT_MEDIA_TYPES) {
+  for (const builtIn of defaultMediaTypes()) {
     if (normalizeValue(builtIn.value) === value) {
       return S.deeplink.builtInConflict(builtIn.label);
     }

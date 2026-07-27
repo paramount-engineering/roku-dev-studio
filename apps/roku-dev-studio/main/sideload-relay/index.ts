@@ -8,6 +8,7 @@ import { createRelayIpcListener } from './electron-ipc-listener';
 import type { RemoteFanoutOps } from './fanout';
 import type { RelayBootConfig } from '../../shared/sideload-relay/types';
 import { sideloadFileToRemote, ensureRemoteTelnetConnected } from '../ipc/remote-handlers';
+import { S } from '../../shared/strings/index';
 
 const { mainLog } = require('../log');
 
@@ -47,15 +48,13 @@ async function authorizeRemoteSideload(info: { ip: string }): Promise<boolean> {
   const promptP = dialog
     .showMessageBox({
       type: 'warning',
-      buttons: ['Allow', 'Deny'],
+      buttons: [S.sideloadRelay.authorizeAllow, S.sideloadRelay.authorizeDeny],
       defaultId: 1,
       cancelId: 1,
       noLink: true,
-      title: 'Sideload Relay',
-      message: `Allow a sideload from ${who}?`,
-      detail:
-        'Another device on your network is trying to install a build through Roku Dev Studio. ' +
-        'Allow only if you recognize this device.'
+      title: S.sideloadRelay.authorizeTitle,
+      message: S.sideloadRelay.authorizeMessage(who),
+      detail: S.sideloadRelay.authorizeDetail
     })
     .then((r) => r.response === 0)
     .catch(() => false);

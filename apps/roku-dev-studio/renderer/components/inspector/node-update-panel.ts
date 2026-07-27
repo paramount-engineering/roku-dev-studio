@@ -478,7 +478,7 @@ export function setupNodeUpdatePanel(panel: DevicePanelRoot, options: NodeUpdate
             ? rawErr
             : rawErr != null
               ? String(rawErr)
-              : 'selectNode failed';
+              : S.inspector.selectNodeFailed;
         showModalFeedback(msg, 'error');
         displayResponseFn({ command: 'selectNode', error: msg }, true);
         return;

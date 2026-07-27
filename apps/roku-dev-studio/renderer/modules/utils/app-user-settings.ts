@@ -9,6 +9,10 @@ import {
   type RdsTimingOverrides
 } from './constants.js';
 import { rendererError } from './logger.js';
+import { setLocale, effectiveLocale, SYSTEM_LOCALE } from '@shared/strings/index.js';
+
+/** Persisted language preference: a locale code (e.g. 'en') or 'system'. Default 'system'. */
+export const SETTINGS_KEY_LANGUAGE = 'language';
 
 /** Persisted object: keys match `RdsTimingOverrideKey` in constants.ts */
 export const SETTINGS_KEY_RDS_TIMING_OVERRIDES = 'rds-timing-overrides';
@@ -129,6 +133,19 @@ export async function setActionScriptDefaultSaveFolder(path: string | null): Pro
 export async function loadPersistedAppSettings(): Promise<void> {
   if (!window.roku?.getSetting) return;
   try {
+    // Apply the persisted UI locale to the shared catalog before the app renders, so
+    // `S.*` reads and `applyI18n` resolve against the chosen language. The preference may
+    // be a locale code or 'system' (default) — resolve it against the OS locale. (Each
+    // process has its own catalog instance, so every window applies this independently.)
+    // Only 'en' ships today, so this resolves to English until a second catalog is added.
+    const languageRes = await window.roku.getSetting(SETTINGS_KEY_LANGUAGE);
+    const pref =
+      languageRes && languageRes.success && typeof languageRes.value === 'string' && languageRes.value.trim()
+        ? languageRes.value.trim()
+        : SYSTEM_LOCALE;
+    const osLocale = typeof navigator !== 'undefined' && navigator.language ? navigator.language : '';
+    setLocale(effectiveLocale(pref, osLocale));
+
     /**
      * Read timing from disk *before* resetting live constants. Previously we called
      * `resetRdsTimingToCompileDefaults()` then awaited getSetting — during the await,

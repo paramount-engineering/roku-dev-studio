@@ -144,12 +144,19 @@ export function getStepDetails(step: Record<string, unknown> | null | undefined)
 
 export { stepDescription };
 
-const DRAG_HANDLE_HTML = `<span class="steps-list-drag-handle" title="${S.actionScripts.dragToReorder}"><svg width="12" height="12"><use href="#icon-grip-vertical"/></svg></span>`;
+// A function (not a const) so the localized tooltip reflects the active locale on
+// re-render rather than freezing whatever was active at import.
+const dragHandleHtml = (): string =>
+  `<span class="steps-list-drag-handle" title="${S.actionScripts.dragToReorder}"><svg width="12" height="12"><use href="#icon-grip-vertical"/></svg></span>`;
 
-/** Shared header row for both Builder and Executor (same columns, same look). */
-const STEPS_LIST_HEADER_HTML = `
+/**
+ * Shared header row for both Builder and Executor (same columns, same look).
+ * A function (not a const) so the localized column labels read from the active
+ * locale on each render instead of freezing whatever was active at import.
+ */
+const stepsListHeaderHtml = (): string => `
   <div class="steps-list-row steps-list-header">
-    ${DRAG_HANDLE_HTML}
+    ${dragHandleHtml()}
     <span class="steps-list-tree-header" aria-hidden="true"></span>
     <span class="steps-list-num">#</span>
     <span class="steps-list-type">${S.actionScripts.columnType}</span>
@@ -379,7 +386,7 @@ function renderStepRow(
     const typeCell = `<span class="steps-list-type">${branchBadgeHtml(branch)}<span class="steps-list-type-text">${typeHtml}</span></span>`;
     return `
       <div class="steps-list-row steps-list-builder-row${selectedClass}" data-index="${index}" role="button" tabindex="0" aria-pressed="${ariaPressed}" aria-label="${escapeAttr(ariaLabel)}">
-        ${DRAG_HANDLE_HTML}
+        ${dragHandleHtml()}
         ${treeGutter}
         <span class="steps-list-num">${num}</span>
         ${typeCell}
@@ -408,7 +415,7 @@ function renderStepRow(
   const typeCell = `<span class="steps-list-type">${branchBadgeHtml(branch)}<span class="steps-list-type-text">${typeHtml}</span></span>`;
 
   return `<div class="steps-list-row steps-list-executor-row ${stateClass}${validationErrClass}" data-step-index="${index}" data-index="${index}">
-      ${DRAG_HANDLE_HTML}
+      ${dragHandleHtml()}
       ${treeGutter}
       <span class="steps-list-num">${num}</span>
       ${typeCell}
@@ -575,7 +582,7 @@ export function renderBuilderSteps(
       treeGutter: gutter
     });
   });
-  setSafeHTML(container, STEPS_LIST_HEADER_HTML + parts.join(''));
+  setSafeHTML(container, stepsListHeaderHtml() + parts.join(''));
 
   if (typeof onSelectStep === 'function') {
     container.querySelectorAll('.steps-list-builder-row').forEach((rowEl) => {
@@ -712,7 +719,7 @@ export function renderExecutorSteps(
       treeGutter: renderIfStripeGutterHtml(steps, e.path)
     })
   );
-  setSafeHTML(container, STEPS_LIST_HEADER_HTML + rows.join(''));
+  setSafeHTML(container, stepsListHeaderHtml() + rows.join(''));
 
   if (!readOnlyList) {
     container.querySelectorAll('.steps-list-btn-skip').forEach((btnEl) => {

@@ -78,7 +78,7 @@ export function createRenderStepFields(ctx) {
         </div>
         <div class="builder-field-group builder-query-custom-row" style="display: none;">
           <label>${S.actionScripts.labelEndpoint}</label>
-          <input type="text" class="builder-field-endpoint" placeholder="/query/… or telnet:plugins / telnet:free">
+          <input type="text" class="builder-field-endpoint" placeholder="${S.actionScripts.placeholderQueryEndpoint}">
         </div>
       `
       );
@@ -213,7 +213,7 @@ export function createRenderStepFields(ctx) {
       const opts = raleFunctions.length
         ? raleFunctions
             .map((f) => {
-              const name = (f && f.name) || 'unknown';
+              const name = (f && f.name) || S.actionScripts.optionUnknownFunction;
               return `<option value="${escapeAttr(name)}">${escapeHtml(name)}</option>`;
             })
             .join('')
@@ -599,7 +599,7 @@ export function createRenderStepFields(ctx) {
         <div class="builder-if-vars-panel builder-if-panel" style="display:none">
           <div class="builder-field-group">
             <label>${S.actionScripts.labelVariablePath}</label>
-            <input type="text" class="builder-field-if-variablePath action-scripts-select" placeholder="myVar or data.items.0.id">
+            <input type="text" class="builder-field-if-variablePath action-scripts-select" placeholder="${S.actionScripts.placeholderVariablePathExample}">
           </div>
           <div class="builder-if-compare-row builder-if-vars-compare-row">
             <div class="builder-field-group">

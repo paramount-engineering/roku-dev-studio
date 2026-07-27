@@ -10,6 +10,7 @@
  *     HTTP. HTTPS stays encrypted (no keys in the file), exactly as it does live without MITM.
  */
 import type { ParsedNetworkEvent, NetworkHttpMessage } from '../shared/network-inspector/types';
+import { S } from '../shared/strings/index';
 import {
   parseCaptureFrame,
   extractFrameIps,
@@ -48,7 +49,7 @@ function parseBundle(text: string): ParsedSession {
   const data = JSON.parse(text) as unknown;
   const obj = data as { events?: unknown; deviceIps?: unknown };
   if (!obj || !Array.isArray(obj.events)) {
-    throw new Error('Not a Roku Dev Studio network session file (missing "events" array).');
+    throw new Error(S.networkSessionViewer.errNotSessionFile);
   }
   // Keep only object entries — a crafted/corrupt file could carry primitives in the
   // array (e.g. `{"events":[1,2,3]}`), which the renderer would later deref (e.deviceIp…).
@@ -150,7 +151,7 @@ function parseHar(text: string): ParsedSession {
   const data = JSON.parse(text) as { log?: { entries?: HarEntry[] } };
   const entries = data?.log?.entries;
   if (!Array.isArray(entries)) {
-    throw new Error('Not a valid HAR file (missing log.entries).');
+    throw new Error(S.networkSessionViewer.errNotHar);
   }
   const events: ParsedNetworkEvent[] = entries.map((entry, i) => {
     const httpRequest = harRequestMessage(entry.request);
@@ -195,7 +196,7 @@ const LINKTYPE_ETHERNET = 1;
  * global header for endianness + link type, then walks each record (16-byte header + frame bytes).
  */
 function parsePcap(buf: Buffer): ParsedSession {
-  if (buf.length < 24) throw new Error('File is too small to be a pcap.');
+  if (buf.length < 24) throw new Error(S.networkSessionViewer.errPcapTooSmall);
   const magic = buf.readUInt32LE(0);
   let little: boolean;
   let nano: boolean;
@@ -206,16 +207,16 @@ function parsePcap(buf: Buffer): ParsedSession {
   else {
     // pcapng starts with the Section Header Block type 0x0A0D0D0A — call that out specifically.
     if (buf.readUInt32BE(0) === 0x0a0d0d0a) {
-      throw new Error('This is a pcapng file. Re-export as classic pcap (Wireshark: “pcap”) to view it here.');
+      throw new Error(S.networkSessionViewer.errPcapng);
     }
-    throw new Error('Not a recognized pcap file (bad magic number).');
+    throw new Error(S.networkSessionViewer.errPcapBadMagic);
   }
   const u32 = (o: number): number => (little ? buf.readUInt32LE(o) : buf.readUInt32BE(o));
   const linkType = u32(20);
 
   const notice =
     linkType !== LINKTYPE_ETHERNET
-      ? `Unsupported pcap link-layer type ${linkType} — only Ethernet (1) frames can be decoded.`
+      ? S.networkSessionViewer.errPcapLinkType(linkType)
       : undefined;
   if (linkType !== LINKTYPE_ETHERNET) {
     return { format: 'pcap', events: [], deviceIps: [], notice };
@@ -271,7 +272,7 @@ function parsePcap(buf: Buffer): ParsedSession {
 export function parseSessionBuffer(filePath: string, buf: Buffer): ParsedSession {
   const format = detectFormat(filePath);
   if (!format) {
-    throw new Error('Unsupported file type. Open a .rds-network-inspector.json, .har, or .pcap file.');
+    throw new Error(S.networkSessionViewer.errUnsupportedType);
   }
   if (format === 'pcap') return parsePcap(buf);
   const text = buf.toString('utf-8');

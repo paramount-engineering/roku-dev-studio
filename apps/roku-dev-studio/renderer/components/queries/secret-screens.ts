@@ -24,7 +24,9 @@ function repeatKeys(key: string, n: number): string[] {
   return Array.from({ length: n }, () => key);
 }
 
-const SECRET_SCREENS_ORDERED: SecretScreenDef[] = [
+// A function (not a const) so the localized `title`s read from the active locale each
+// time the modal renders, rather than freezing whatever was active at import.
+const secretScreensOrdered = (): SecretScreenDef[] => [
   {
     id: 'developerSettings',
     title: S.queries.developerSettings,
@@ -179,10 +181,11 @@ function pulseSegmentKey(segEl: HTMLElement) {
 function renderSecretScreensList(mountEl: HTMLElement) {
   mountEl.replaceChildren();
 
-  const maxSegs = Math.max(...SECRET_SCREENS_ORDERED.map((d) => d.segments.length));
+  const screens = secretScreensOrdered();
+  const maxSegs = Math.max(...screens.map((d) => d.segments.length));
   mountEl.style.setProperty('--seg-max', String(maxSegs));
 
-  for (const def of SECRET_SCREENS_ORDERED) {
+  for (const def of screens) {
     const card = document.createElement('div');
     card.className = 'secret-screen-card';
     card.dataset.secretSequence = def.id;
@@ -223,7 +226,7 @@ function renderSecretScreensList(mountEl: HTMLElement) {
 }
 
 function getSecretDef(sequenceId: string): SecretScreenDef | undefined {
-  return SECRET_SCREENS_ORDERED.find((d) => d.id === sequenceId);
+  return secretScreensOrdered().find((d) => d.id === sequenceId);
 }
 
 let sequenceInFlight = false;
