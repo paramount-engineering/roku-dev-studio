@@ -5471,6 +5471,85 @@ async function init() {
     return out;
   }
 
+  // "Apply to Device" (from the View & Manage Action Scripts window): show a device picker, then
+  // connect/activate the chosen device, switch to its Action Scripts section, and load the script.
+  function buildApplyDeviceOptions(): Array<{ id: string; label: string }> {
+    const out: Array<{ id: string; label: string }> = [];
+    const seen = new Set<string>();
+    const PRIVACY_IP_MASK = '•••.•••.•••.•••';
+    const push = (device: { ip?: string; deviceName?: string; friendlyModelName?: string; modelName?: string; serialNumber?: string }, isRemote: boolean): void => {
+      if (!device || !device.ip) return;
+      const id = getDeviceId(device);
+      if (!id || seen.has(id)) return;
+      seen.add(id);
+      const name = device.deviceName || device.friendlyModelName || device.modelName || 'Roku';
+      const ip = privacyModeEnabled ? PRIVACY_IP_MASK : device.ip;
+      out.push({ id, label: `${isRemote ? '☁ ' : ''}${name} (${ip})` });
+    };
+    for (const device of state.devices.values()) push(device, false);
+    for (const location of state.remoteLocations.values()) {
+      if (!location || !location.devices) continue;
+      for (const device of location.devices.values()) push(device, true);
+    }
+    return out;
+  }
+
+  function applyScriptToDevice(id: string, json: string): void {
+    let tabId: string | null = null;
+    for (const device of state.devices.values()) {
+      if (getDeviceId(device) === id) {
+        connectDevice(device);
+        tabId = `tab-${device.ip.replace(/\./g, '-')}`;
+        break;
+      }
+    }
+    if (!tabId) {
+      for (const [locationId, location] of state.remoteLocations) {
+        if (!location || !location.devices) continue;
+        for (const device of location.devices.values()) {
+          if (getDeviceId(device) === id) {
+            connectRemoteDevice(device, locationId);
+            tabId = `tab-remote-${locationId}-${device.ip.replace(/\./g, '-')}`;
+            break;
+          }
+        }
+        if (tabId) break;
+      }
+    }
+    if (!tabId) return;
+    const panel = document.getElementById(tabId);
+    if (!(panel instanceof HTMLElement)) return;
+    // connectDevice/connectRemoteDevice already activated the tab; switch its inner section to
+    // Action Scripts, then hand the JSON to that panel's per-panel load-into-builder listener.
+    (panel.querySelector('.inner-tab[data-inner-tab="actionscripts"]') as HTMLElement | null)?.click();
+    panel.dispatchEvent(new CustomEvent('action-script-load-into-builder', { detail: { json } }));
+  }
+
+  // The "View and Manage Action Scripts" window shows its own device picker but owns no device state:
+  // serve its list requests here (optionally running a fresh scan first), and reply over the relay.
+  if (typeof window.roku.onRequestApplyDeviceOptions === 'function') {
+    window.roku.onRequestApplyDeviceOptions(async ({ reqId, rescan }) => {
+      if (rescan && !state.isScanning) {
+        try {
+          await runFullUserScan();
+        } catch (err) {
+          rendererError('[ApplyToDevice] rescan failed:', err);
+        }
+      }
+      try {
+        window.roku.provideApplyDeviceOptions({ reqId, options: buildApplyDeviceOptions() });
+      } catch {
+        /* ignore */
+      }
+    });
+  }
+  // The picker (over in the viewer window) chose a device — connect/activate it here and load the script.
+  if (typeof window.roku.onApplyActionScriptOnMain === 'function') {
+    window.roku.onApplyActionScriptOnMain(({ deviceId, json }) => {
+      if (typeof deviceId === 'string' && typeof json === 'string') applyScriptToDevice(deviceId, json);
+    });
+  }
+
   if (typeof window.roku.onOpenFiddleRequested === 'function') {
     window.roku.onOpenFiddleRequested(() => {
       // Opening Fiddle from the File menu should always default the dropdown

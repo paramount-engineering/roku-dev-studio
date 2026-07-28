@@ -219,6 +219,32 @@ contextBridge.exposeInMainWorld('roku', {
   },
   // Action Script Builder: save script dialog and write
   actionScriptShowSaveScriptDialog: () => ipcRenderer.invoke(IPC.RokuActionScriptShowSaveScriptDialog),
+  // App-managed Action Scripts library (userData/action-scripts): list index, read one, upsert-by-id
+  actionScriptsList: () => ipcRenderer.invoke(IPC.RokuActionScriptsList),
+  actionScriptsRead: (id: string) => ipcRenderer.invoke(IPC.RokuActionScriptsRead, id),
+  actionScriptsSave: (payload: { id: string; name: string; script: unknown }) =>
+    ipcRenderer.invoke(IPC.RokuActionScriptsSave, payload),
+  actionScriptsDelete: (id: string) => ipcRenderer.invoke(IPC.RokuActionScriptsDelete, id),
+  // Viewer window: fetch / rescan the main window's discovered devices to populate its OWN picker,
+  // then apply the script to the chosen device (which brings the main window forward + loads it there).
+  getApplyDeviceOptions: () => ipcRenderer.invoke(IPC.RokuActionScriptGetDeviceOptions),
+  rescanApplyDeviceOptions: () => ipcRenderer.invoke(IPC.RokuActionScriptRescanDeviceOptions),
+  applyActionScriptToDevice: (deviceId: string, json: string) =>
+    ipcRenderer.invoke(IPC.RokuActionScriptApplyToDevice, { deviceId, json }),
+  // Main window renderer (owns device state): serve the viewer's device-option requests over the
+  // relay, and perform the connect + load when a device is chosen.
+  onRequestApplyDeviceOptions: (callback: (payload: { reqId: number; rescan: boolean }) => void) => {
+    const handler = (_event: IpcRendererEvent, payload: { reqId: number; rescan: boolean }) => callback(payload);
+    ipcRenderer.on(IPC.ActionScriptRequestDeviceOptions, handler);
+    return () => ipcRenderer.removeListener(IPC.ActionScriptRequestDeviceOptions, handler);
+  },
+  provideApplyDeviceOptions: (payload: { reqId: number; options: Array<{ id: string; label: string }> }) =>
+    ipcRenderer.send(IPC.ActionScriptProvideDeviceOptions, payload),
+  onApplyActionScriptOnMain: (callback: (payload: { deviceId: string; json: string }) => void) => {
+    const handler = (_event: IpcRendererEvent, payload: { deviceId: string; json: string }) => callback(payload);
+    ipcRenderer.on(IPC.ActionScriptApplyToDeviceOnMain, handler);
+    return () => ipcRenderer.removeListener(IPC.ActionScriptApplyToDeviceOnMain, handler);
+  },
   // Check file exists (for sideload step validation)
   actionScriptCheckFileExists: (filePath: string) => ipcRenderer.invoke(IPC.RokuActionScriptCheckFileExists, { filePath }),
   // Read file as base64 (for PDF screenshot embedding)

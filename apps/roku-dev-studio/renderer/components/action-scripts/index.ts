@@ -70,6 +70,9 @@ export function setupActionScripts(panel: DevicePanelRoot, device, api) {
     builderCopyJsonBtn: container.querySelector('.action-scripts-builder-copy-json'),
     builderCopyToExecutorBtn: container.querySelector('.action-scripts-builder-copy-to-executor'),
     builderSaveScriptBtn: container.querySelector('.action-scripts-builder-save-script'),
+    builderSaveCaretBtn: container.querySelector('.action-scripts-builder-save-caret'),
+    builderSaveDropdown: container.querySelector('.action-scripts-save-dropdown'),
+    builderSaveToDirectoryBtn: container.querySelector('.action-scripts-builder-save-to-directory'),
     builderOutputPreview: container.querySelector('.action-scripts-builder-output-preview'),
     builderUndoBtn: container.querySelector('.builder-undo-btn'),
     builderRedoBtn: container.querySelector('.builder-redo-btn'),
@@ -138,6 +141,16 @@ export function setupActionScripts(panel: DevicePanelRoot, device, api) {
     }
   });
   builderApiRef.current = builderApi ?? null;
+
+  // A cross-window "Load into main Builder" request (dispatched by app.ts on the active panel when
+  // the "View and Manage Action Scripts" window asks) opens the Import modal here, targeting THIS
+  // panel's Builder — same validated path as a normal import-to-builder.
+  (panel as unknown as HTMLElement).addEventListener('action-script-load-into-builder', (e: Event) => {
+    const json = (e as CustomEvent<{ json?: unknown }>).detail?.json;
+    if (typeof json !== 'string') return;
+    if (builderTab) builderTab.click();
+    openImportModal(json, null, { target: 'builder' });
+  });
 
   setupExecutor(panel, api, {
     elements: executorElements,

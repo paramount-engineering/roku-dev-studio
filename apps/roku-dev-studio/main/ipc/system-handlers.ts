@@ -403,6 +403,101 @@ function setupSystemHandlers(
     }
   });
 
+  // --- App-managed Action Scripts library ------------------------------------------------
+  // Scripts saved in-app by name live as one file per script under userData, with a small
+  // index of names — so app-settings.json stays lean and large scripts load on demand.
+  //   <userData>/action-scripts/index.json           [{ id, name, savedAt }]
+  //   <userData>/action-scripts/scripts/<id>.json     { version, steps }
+  const actionScriptsDir = app ? path.join(app.getPath('userData'), 'action-scripts') : null;
+  const actionScriptsIndexFile = actionScriptsDir ? path.join(actionScriptsDir, 'index.json') : null;
+  const actionScriptsScriptsDir = actionScriptsDir ? path.join(actionScriptsDir, 'scripts') : null;
+  // Ids are renderer-generated (`as-<ts>-<rand>`); allow only filename-safe chars (no traversal).
+  const isSafeScriptId = (id: unknown): id is string =>
+    typeof id === 'string' && /^[A-Za-z0-9_-]{1,120}$/.test(id);
+
+  type SavedScriptMeta = { id: string; name: string; savedAt: number };
+  async function readActionScriptsIndex(): Promise<SavedScriptMeta[]> {
+    if (!actionScriptsIndexFile) return [];
+    try {
+      const parsed = JSON.parse(await fs.promises.readFile(actionScriptsIndexFile, 'utf8'));
+      if (!Array.isArray(parsed)) return [];
+      return parsed
+        .filter((e: unknown): e is SavedScriptMeta =>
+          !!e && typeof e === 'object' && isSafeScriptId((e as SavedScriptMeta).id) && typeof (e as SavedScriptMeta).name === 'string')
+        .map((e: SavedScriptMeta) => ({ id: e.id, name: e.name, savedAt: typeof e.savedAt === 'number' ? e.savedAt : 0 }));
+    } catch {
+      return []; // missing / unreadable → treat as empty
+    }
+  }
+  async function writeActionScriptsIndex(list: SavedScriptMeta[]): Promise<void> {
+    if (!actionScriptsDir || !actionScriptsIndexFile) throw new Error('userData unavailable');
+    await fs.promises.mkdir(actionScriptsDir, { recursive: true });
+    await fs.promises.writeFile(actionScriptsIndexFile, JSON.stringify(list, null, 2), 'utf8');
+  }
+
+  ipcMain.handle(IPC.RokuActionScriptsList, async () => {
+    try {
+      return { success: true, scripts: await readActionScriptsIndex() };
+    } catch (err) {
+      return { success: false, error: errMsg(err), scripts: [] };
+    }
+  });
+
+  ipcMain.handle(IPC.RokuActionScriptsRead, async (_event: IpcMainInvokeEvent, id: unknown) => {
+    try {
+      if (!isSafeScriptId(id) || !actionScriptsScriptsDir) return { success: false, error: 'Invalid id' };
+      const raw = await fs.promises.readFile(path.join(actionScriptsScriptsDir, `${id}.json`), 'utf8');
+      return { success: true, script: JSON.parse(raw) };
+    } catch (err) {
+      return { success: false, error: errMsg(err) };
+    }
+  });
+
+  ipcMain.handle(IPC.RokuActionScriptsSave, async (
+    _event: IpcMainInvokeEvent,
+    payload: { id?: unknown; name?: unknown; script?: unknown }
+  ) => {
+    try {
+      const { id, name, script } = payload || {};
+      if (!isSafeScriptId(id) || typeof name !== 'string' || !name.trim() || !script || typeof script !== 'object') {
+        return { success: false, error: 'id, name, and script are required' };
+      }
+      if (!actionScriptsScriptsDir) return { success: false, error: 'userData unavailable' };
+      await fs.promises.mkdir(actionScriptsScriptsDir, { recursive: true });
+      await fs.promises.writeFile(path.join(actionScriptsScriptsDir, `${id}.json`), JSON.stringify(script, null, 2), 'utf8');
+      const savedAt = Date.now();
+      const index = await readActionScriptsIndex();
+      const existing = index.find((e) => e.id === id);
+      if (existing) {
+        existing.name = name.trim();
+        existing.savedAt = savedAt;
+      } else {
+        index.push({ id, name: name.trim(), savedAt });
+      }
+      index.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+      await writeActionScriptsIndex(index);
+      return { success: true, savedAt, scripts: index };
+    } catch (err) {
+      return { success: false, error: errMsg(err) };
+    }
+  });
+
+  ipcMain.handle(IPC.RokuActionScriptsDelete, async (_event: IpcMainInvokeEvent, id: unknown) => {
+    try {
+      if (!isSafeScriptId(id) || !actionScriptsScriptsDir) return { success: false, error: 'Invalid id' };
+      try {
+        await fs.promises.unlink(path.join(actionScriptsScriptsDir, `${id}.json`));
+      } catch {
+        /* file already gone — still drop it from the index */
+      }
+      const index = (await readActionScriptsIndex()).filter((e) => e.id !== id);
+      await writeActionScriptsIndex(index);
+      return { success: true, scripts: index };
+    } catch (err) {
+      return { success: false, error: errMsg(err) };
+    }
+  });
+
   // Read file as base64 (for PDF image embedding from file:// paths). Path must be under allowed bases.
   ipcMain.handle(IPC.RokuCaptureViewRect, async (event: IpcMainInvokeEvent, payload: CaptureViewRectPayload) => {
     try {

@@ -31,12 +31,36 @@ import { createRenderStepFields } from './builder-render-step-fields.js';
 import { collectActionStepHelpContext, openActionStepHelpModal } from './action-step-help-modal.js';
 import { createBuilderStepForm } from './builder-step-form.js';
 import { registerPanelRetranslate } from '../../modules/ui/retranslate-registry.js';
+import { ensureSavedScriptsLoaded, listSavedScripts, saveScriptToApp } from './saved-scripts-store.js';
+import { promptSaveScriptName } from './save-script-modal.js';
 import { S } from '@shared/strings/index.js';
 
 const STEP_TYPES = Object.keys(STEP_SCHEMA);
 
 function errMsg(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
+}
+
+/** Bind (once, document-wide) outside-click + Escape dismissal for the Save split-button menu. */
+function ensureSaveMenuDismissBound(): void {
+  if (document.body.dataset.actionScriptsSaveMenuDismissBound === '1') return;
+  document.body.dataset.actionScriptsSaveMenuDismissBound = '1';
+
+  const closeOpenSaveMenus = (keepInside: Element | null): void => {
+    document.querySelectorAll<HTMLElement>('.action-scripts-save-dropdown:not([hidden])').forEach((dropdown) => {
+      const split = dropdown.closest('.action-scripts-save-split');
+      if (keepInside && split && split.contains(keepInside)) return;
+      dropdown.hidden = true;
+      split?.querySelector('.action-scripts-builder-save-caret')?.setAttribute('aria-expanded', 'false');
+    });
+  };
+
+  document.addEventListener('click', (e) => {
+    closeOpenSaveMenus(e.target instanceof Element ? e.target : null);
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeOpenSaveMenus(null);
+  });
 }
 
 export function setupBuilder(panel, api, context) {
@@ -54,12 +78,24 @@ export function setupBuilder(panel, api, context) {
     builderCopyJsonBtn,
     builderCopyToExecutorBtn,
     builderSaveScriptBtn,
+    builderSaveCaretBtn,
+    builderSaveDropdown,
+    builderSaveToDirectoryBtn,
     builderOutputPreview,
     builderUndoBtn,
     builderRedoBtn,
     builderClearBtn
   } = context.elements;
   const onCopyToExecutor = context.onCopyToExecutor;
+  // Optional hooks used by the standalone "View and Manage Action Scripts" window (undefined for
+  // the device-tab builder): pre-fill the Save prompt with the open script's name (so Save
+  // overwrites it) and notify after a successful in-app save so the window can refresh its list.
+  const getSaveDefaultName = context.getSaveDefaultName;
+  const onScriptSaved = context.onScriptSaved;
+  // Optional hook: notified with the current step count whenever it changes, so a host (the
+  // standalone viewer) can gate its own step-dependent actions (e.g. Apply to Device) in lockstep
+  // with the builder's own Copy/Save buttons.
+  const onStepsChanged = context.onStepsChanged;
 
   if (!builderStepsList || !builderAddStepBtn) return;
 
@@ -482,6 +518,7 @@ export function setupBuilder(panel, api, context) {
     if (builderCopyToExecutorBtn) builderCopyToExecutorBtn.disabled = flatLen < 1;
     if (builderCopyJsonBtn) builderCopyJsonBtn.disabled = flatLen < 1;
     if (builderSaveScriptBtn) builderSaveScriptBtn.disabled = flatLen < 1;
+    if (builderSaveCaretBtn) builderSaveCaretBtn.disabled = flatLen < 1;
     updateUndoRedoButtons();
     updateAddPlacementHint();
     syncAddFormVisibility();
@@ -497,6 +534,8 @@ export function setupBuilder(panel, api, context) {
     if (builderCopyToExecutorBtn) builderCopyToExecutorBtn.disabled = n < 1;
     if (builderCopyJsonBtn) builderCopyJsonBtn.disabled = n < 1;
     if (builderSaveScriptBtn) builderSaveScriptBtn.disabled = n < 1;
+    if (builderSaveCaretBtn) builderSaveCaretBtn.disabled = n < 1;
+    if (typeof onStepsChanged === 'function') onStepsChanged(n);
     return json;
   }
 
@@ -622,17 +661,62 @@ export function setupBuilder(panel, api, context) {
     });
   }
 
+  const showSaved = (): void => {
+    builderSaveScriptBtn.textContent = S.actionScripts.savedFeedback;
+    setTimeout(() => { builderSaveScriptBtn.textContent = S.actionScripts.saveActionScriptBtn; }, 2000);
+  };
+
+  // Default Save → store in the app by name (prompt + overwrite confirm; persisted via saved-scripts-store).
   builderSaveScriptBtn.addEventListener('click', async () => {
-    if (!window.roku || !window.roku.actionScriptShowSaveScriptDialog) return;
-    const res = await window.roku.actionScriptShowSaveScriptDialog();
-    if (res.canceled || !res.filePath) return;
-    const json = updateOutputPreview();
-    const writeRes = await window.roku.actionScriptWriteFile({ filePath: res.filePath, content: json, encoding: 'utf8' });
-    if (writeRes.success) {
-      builderSaveScriptBtn.textContent = S.actionScripts.savedFeedback;
-      setTimeout(() => { builderSaveScriptBtn.textContent = S.actionScripts.saveActionScriptBtn; }, 2000);
+    await ensureSavedScriptsLoaded();
+    const name = await promptSaveScriptName({
+      defaultName: typeof getSaveDefaultName === 'function' ? getSaveDefaultName() : undefined,
+      savedNames: listSavedScripts().map((s) => s.name)
+    });
+    if (!name) return;
+    let script: { version?: string; steps: unknown[] };
+    try {
+      script = JSON.parse(updateOutputPreview()) as { version?: string; steps: unknown[] };
+    } catch {
+      showToast(S.actionScripts.toastSaveFailed, 'error');
+      return;
+    }
+    try {
+      await saveScriptToApp(name, script);
+      showSaved();
+      if (typeof onScriptSaved === 'function') onScriptSaved(name);
+    } catch {
+      showToast(S.actionScripts.toastSaveFailed, 'error');
     }
   });
+
+  // Caret → "Save to Directory…" menu (the original native save-dialog + write-file flow).
+  if (builderSaveCaretBtn && builderSaveDropdown) {
+    ensureSaveMenuDismissBound();
+    const closeSaveDropdown = (): void => {
+      builderSaveDropdown.hidden = true;
+      builderSaveCaretBtn.setAttribute('aria-expanded', 'false');
+    };
+    builderSaveCaretBtn.addEventListener('mousedown', (e) => e.stopPropagation());
+    builderSaveCaretBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const willOpen = builderSaveDropdown.hidden;
+      builderSaveDropdown.hidden = !willOpen;
+      builderSaveCaretBtn.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+    });
+    if (builderSaveToDirectoryBtn) {
+      builderSaveToDirectoryBtn.addEventListener('click', async () => {
+        closeSaveDropdown();
+        if (!window.roku || !window.roku.actionScriptShowSaveScriptDialog) return;
+        const res = await window.roku.actionScriptShowSaveScriptDialog();
+        if (res.canceled || !res.filePath) return;
+        const json = updateOutputPreview();
+        const writeRes = await window.roku.actionScriptWriteFile({ filePath: res.filePath, content: json, encoding: 'utf8' });
+        if (writeRes.success) showSaved();
+      });
+    }
+  }
 
   /* Undo / Redo / Clear All */
   if (builderUndoBtn) {

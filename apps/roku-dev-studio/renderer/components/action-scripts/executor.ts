@@ -14,7 +14,13 @@ import {
 } from './script-rale-validation.js';
 import { escapeHtml, setSafeHTML } from '../../modules/utils/index.js';
 import { rendererError } from '../../modules/utils/logger.js';
-import { prettyJson, prettyXmlLenient } from '../../modules/ui/structured-body.js';
+import {
+  prettyJson,
+  prettyXmlLenient,
+  renderStructuredInto,
+  attachFoldToggle,
+  structuredBodyText
+} from '../../modules/ui/structured-body.js';
 import { attachSelectAll } from '../../modules/ui/select-all.js';
 import { getActionScriptDefaultSaveFolder } from '../../modules/utils/app-user-settings.js';
 import { renderExecutorSteps } from './actions-list-view.js';
@@ -75,6 +81,8 @@ export function setupExecutor(panel, api, context) {
 
   // Cmd/Ctrl+A selects all the executor results text (when the results pane is focused).
   if (executorResults instanceof HTMLElement) attachSelectAll(executorResults);
+  // One delegated handler for the collapsible JSON/XML trees in result cards (survives re-renders).
+  if (executorResults instanceof HTMLElement) attachFoldToggle(executorResults);
 
   let chosenSaveFolder: string | null = null;
   let lastValidScript: ExecutorScript | null = null;
@@ -472,7 +480,17 @@ export function setupExecutor(panel, api, context) {
       if (outputContent) {
         const out = document.createElement('div');
         out.className = 'executor-result-output';
-        out.textContent = outputContent;
+        // `outputContent` is already pretty-printed by formatStructuredOutput, so colorize it as a
+        // collapsible JSON/XML tree (same renderer as App Connector / Query responses). Detect the
+        // kind by leading char rather than re-parsing — step output can be partial/non-well-formed
+        // XML that the strict detector would reject. Plain text (telnet tables, errors) stays as-is.
+        const t = outputContent.trim();
+        const kind = t.startsWith('{') || t.startsWith('[') ? 'json' : t.startsWith('<') ? 'xml' : 'text';
+        if (kind === 'text') {
+          out.textContent = outputContent;
+        } else {
+          renderStructuredInto(out, outputContent, { kind, preformatted: true });
+        }
         currentResultCardBody.appendChild(out);
       }
     }
@@ -1103,7 +1121,9 @@ export function setupExecutor(panel, api, context) {
             const resolved = await resolveScreenshotImageData(node);
             if (resolved && resolved.dataUrl) bodyItems.push({ type: 'image', dataUrl: resolved.dataUrl });
           } else if (node.classList && node.classList.contains('executor-result-output')) {
-            bodyItems.push({ type: 'output', text: node.textContent || '' });
+            // Read the clean pretty source, not textContent — a colorized tree's fold summaries carry
+            // hidden "…" + mirror chars; structuredBodyText prefers `data-formatted`, else falls back.
+            bodyItems.push({ type: 'output', text: structuredBodyText(node as HTMLElement) });
           } else if (node.classList && node.classList.contains('executor-performance-h4')) {
             bodyItems.push({ type: 'caption', text: node.textContent || '' });
           } else if (node.classList && node.classList.contains('executor-performance-html-wrap')) {
@@ -1141,7 +1161,8 @@ export function setupExecutor(panel, api, context) {
         lines.forEach(line => parts.push(lineIndent + line.textContent));
         const output = body.querySelector('.executor-result-output');
         if (output) {
-          const oText = output.textContent || '';
+          // Clean pretty source (see note in the PDF builder) rather than the tree's textContent.
+          const oText = structuredBodyText(output as HTMLElement);
           const oIndent = blockIndent + '  ';
           oText.split('\n').forEach((ln) => parts.push(oIndent + ln));
         }

@@ -5013,6 +5013,43 @@
       background: var(--bg-secondary);
       color: var(--text-primary);
     }
+
+    .rale-func-select-row {
+      display: flex;
+      align-items: stretch;
+      gap: 0;
+      width: 100%;
+    }
+
+    /* Info button merged into the left edge of the dropdown (segmented-control look) —
+       shares the select's background + border so it reads as part of the same control. */
+    .rale-func-select-row .rale-func-info-btn {
+      width: 38px;
+      min-width: 38px;
+      height: auto;
+      padding: 0;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      background: var(--bg-tertiary);
+      color: var(--text-secondary);
+      border: 1px solid var(--border);
+      border-right: none;
+      border-radius: 8px 0 0 8px;
+    }
+    .rale-func-select-row .rale-func-info-btn:not(:disabled):hover {
+      background: var(--bg-hover);
+      color: var(--text-primary);
+    }
+    .rale-func-select-row .rale-func-info-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    /* Dropdown squares off its left corners where the info button attaches. */
+    .rale-func-select-row .rale-func-select {
+      border-radius: 0 8px 8px 0;
+    }
     
     /* Execute row layout — 30% Function / 70% Parameters */
     .execute-row {
@@ -5036,22 +5073,15 @@
       color: var(--text-muted);
       margin: 0;
     }
-    /* Left column: Execute sits under the dropdown, pinned to bottom of row (row height = Parameters column) */
+    /* Left column: keep Execute directly under the dropdown (top-aligned) so it doesn't float to
+       the bottom of a tall Parameters column — that made the button's position jump per function. */
     .execute-row .rale-function-column {
-      align-self: stretch;
+      align-self: start;
     }
     .execute-row .rale-function-column .execute-actions {
-      margin-top: auto;
-      padding-top: 4px;
+      padding-top: 10px;
       width: 100%;
       justify-content: center;
-    }
-    .inspector-execute .func-param-hint {
-      margin-top: 0;
-      font-size: 11px;
-      line-height: 1.45;
-      color: var(--text-muted);
-      min-height: 0;
     }
     .inspector-execute .rale-params-container > .rale-params-empty {
       color: var(--text-muted);
@@ -10184,6 +10214,35 @@
     .action-scripts-card-header-left { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; justify-content: flex-start; }
     .action-scripts-card-header-right { display: flex; align-items: center; justify-content: flex-end; flex: 1; min-width: 0; }
     .action-scripts-builder-header-actions { flex-shrink: 0; display: flex; gap: 8px; align-items: center; }
+    /* Save split-button: primary click saves in-app by name; caret opens the "Save to Directory" menu. */
+    .action-scripts-save-split { position: relative; display: inline-flex; vertical-align: middle; }
+    .action-scripts-save-split-buttons { display: inline-flex; align-items: stretch; }
+    .action-scripts-save-split .action-scripts-builder-save-script {
+      border-top-right-radius: 0; border-bottom-right-radius: 0; border-right: none;
+    }
+    .action-scripts-save-split .action-scripts-builder-save-caret {
+      border-top-left-radius: 0; border-bottom-left-radius: 0; border-left: 1px solid var(--border);
+      padding-left: 7px; padding-right: 7px; min-width: 30px; justify-content: center;
+    }
+    /* Keep the dropdown above the (overflow:hidden) card body that sits below the header. */
+    .action-scripts-card-header:has(.action-scripts-save-split) { position: relative; z-index: 3; overflow: visible; }
+    .action-scripts-save-dropdown {
+      position: absolute; top: calc(100% + 4px); right: 0; z-index: 200;
+      min-width: 100%; width: max-content; padding: 4px;
+      display: flex; flex-direction: column; gap: 2px;
+      background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 6px;
+      box-shadow: 0 10px 28px rgba(0, 0, 0, 0.42); box-sizing: border-box;
+    }
+    .action-scripts-save-dropdown[hidden] { display: none !important; }
+    .action-scripts-save-dropdown-item {
+      display: inline-flex; align-items: center; gap: 8px; width: 100%; margin: 0;
+      padding: 6px 12px; border: none; border-radius: 4px; background: transparent;
+      color: var(--text-primary); font-family: inherit; font-size: 12px; line-height: 1.2;
+      text-align: left; white-space: nowrap; cursor: pointer; transition: background 0.15s ease; box-sizing: border-box;
+    }
+    .action-scripts-save-dropdown-item:hover,
+    .action-scripts-save-dropdown-item:focus-visible { background: var(--bg-hover); outline: none; }
+    .action-scripts-save-dropdown-item .icon { color: var(--text-secondary); pointer-events: none; }
     .action-scripts-card.action-scripts-executor-active .action-scripts-builder-header-actions { display: none; }
     .action-scripts-executor-header-actions { flex-shrink: 0; gap: 8px; align-items: center; }
     .action-scripts-card:not(.action-scripts-executor-active) .action-scripts-executor-header-actions { display: none; }
@@ -12282,10 +12341,58 @@
       flex: 1;
     }
 
+    /* Save Action Script modal (programmatic; save-script-modal.ts) */
+    .action-scripts-save-modal { width: min(460px, 92vw); max-width: 460px; }
+    .action-scripts-save-modal .modal-body { display: flex; flex-direction: column; gap: 18px; }
+    .action-scripts-save-field { display: flex; flex-direction: column; gap: 6px; }
+    .action-scripts-save-modal-label { font-size: 12px; font-weight: 600; color: var(--text-secondary); }
+    .action-scripts-save-modal-input {
+      width: 100%; box-sizing: border-box; padding: 10px 12px; border-radius: 8px;
+      border: 1px solid var(--border); background: var(--bg-tertiary); color: var(--text-primary);
+      font-family: inherit; font-size: 13px;
+    }
+    .action-scripts-save-modal-input:focus { outline: none; border-color: var(--accent-purple); }
+    .action-scripts-save-modal-input::placeholder { color: var(--text-muted); opacity: 0.7; }
+    .action-scripts-save-modal-warning { margin: 0; font-size: 12px; line-height: 1.4; color: var(--accent-amber, #f59e0b); }
+    .action-scripts-save-modal-warning[hidden] { display: none; }
+    .action-scripts-save-saved { display: flex; flex-direction: column; gap: 6px; }
+    .action-scripts-save-saved-label { font-size: 12px; font-weight: 600; color: var(--text-secondary); }
+    .action-scripts-save-modal-list {
+      max-height: 180px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px;
+      padding: 4px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-primary);
+    }
+    .action-scripts-save-modal-list-item {
+      display: block; width: 100%; text-align: left; padding: 8px 10px; border: none; border-radius: 6px;
+      background: transparent; color: var(--text-primary); font-family: inherit; font-size: 13px; cursor: pointer;
+      transition: background 0.15s ease; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .action-scripts-save-modal-list-item:hover,
+    .action-scripts-save-modal-list-item:focus-visible { background: var(--bg-hover); outline: none; }
+    .action-scripts-save-modal-list-item.is-current { color: var(--accent-purple); background: var(--bg-hover); }
+    .action-scripts-save-modal-empty { padding: 20px 10px; text-align: center; font-size: 12px; color: var(--text-muted); }
+    .action-scripts-save-modal-footer { display: flex; justify-content: flex-end; gap: 8px; padding: 16px 24px; border-top: 1px solid var(--border); }
+
+    /* Apply-to-Device picker modal (apply-to-device-modal.ts) */
+    .apply-to-device-modal { width: min(460px, 92vw); max-width: 460px; }
+    .apply-to-device-row { display: flex; align-items: center; gap: 10px; }
+    .apply-to-device-select {
+      flex: 1 1 auto; min-width: 0; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border);
+      background: var(--bg-tertiary); color: var(--text-primary); font-family: inherit; font-size: 13px; cursor: pointer;
+    }
+    .apply-to-device-select:focus { outline: none; border-color: var(--accent-purple); }
+    .apply-to-device-footer { display: flex; justify-content: flex-end; gap: 8px; padding: 16px 24px; border-top: 1px solid var(--border); }
+
     /* Import Action Script modal */
     .action-scripts-import-modal .action-scripts-import-modal-box { max-width: 720px; width: 90vw; max-height: 85vh; display: flex; flex-direction: column; }
     .action-scripts-import-modal .action-scripts-import-modal-box .modal-body { overflow: auto; flex: 1; min-height: 0; }
     .action-scripts-import-upload-row { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+    .action-scripts-import-saved-row { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+    .action-scripts-import-saved-select {
+      flex: 1; min-width: 0; padding: 8px 10px; border-radius: 6px; border: 1px solid var(--border);
+      background: var(--bg-primary); color: var(--text-primary); font-family: inherit; font-size: 12px; cursor: pointer;
+    }
+    .action-scripts-import-saved-select:focus { outline: none; border-color: var(--accent-purple); }
+    .action-scripts-import-saved-select:disabled { opacity: 0.6; cursor: not-allowed; }
     .action-scripts-import-label { font-size: 12px; font-weight: 600; color: var(--text-primary); margin: 0; }
     .action-scripts-import-paste-group { margin-bottom: 20px; }
     .action-scripts-import-paste-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
@@ -15442,11 +15549,13 @@
                   <div class="execute-row">
                     <div class="rale-custom-cmd rale-function-column">
                       <label data-i18n="app.functionLabel">Function</label>
-                      <select class="rale-func-select" disabled>
-                        <option value="" data-i18n="app.connectToLoadFunctions">-- Connect to load functions --</option>
-                      </select>
-                      <div class="func-param-hint" data-i18n="inspector.selectFunctionForParamDetails">
-                        Select a function to see parameter details
+                      <div class="rale-func-select-row">
+                        <button type="button" class="btn btn-secondary btn-icon rale-func-info-btn" title="Function Details" data-i18n-title="inspector.functionDetailsTitle" aria-label="Show function details" data-i18n-aria-label="inspector.openFunctionDetails" disabled>
+                          <span class="icon icon-xs"><svg><use href="#icon-info"/></svg></span>
+                        </button>
+                        <select class="rale-func-select" disabled>
+                          <option value="" data-i18n="app.connectToLoadFunctions">-- Connect to load functions --</option>
+                        </select>
                       </div>
                       <div class="execute-actions">
                         <button class="btn btn-primary rale-execute-btn" disabled data-i18n="app.execute"><span class="icon icon-xs"><svg><use href="#icon-play"/></svg></span> Execute</button>
@@ -15563,7 +15672,17 @@
                 <div class="card-header-actions action-scripts-builder-header-actions">
                   <button type="button" class="btn btn-secondary action-scripts-builder-copy-to-executor" disabled title="Add at least one action to enable" data-i18n-title="app.addActionToEnable" data-i18n="app.copyToExecutor">Copy to Executor</button>
                   <button type="button" class="btn btn-secondary action-scripts-builder-copy-json" disabled title="Add at least one action to enable" data-i18n-title="app.addActionToEnable" data-i18n="app.copyActionScript">Copy Action Script</button>
-                  <button type="button" class="btn btn-secondary action-scripts-builder-save-script" disabled title="Add at least one action to enable" data-i18n-title="app.addActionToEnable" data-i18n="app.saveActionScript">Save Action Script</button>
+                  <div class="action-scripts-save-split">
+                    <div class="action-scripts-save-split-buttons">
+                      <button type="button" class="btn btn-secondary action-scripts-builder-save-script" disabled title="Add at least one action to enable" data-i18n-title="app.addActionToEnable" data-i18n="app.saveActionScript">Save Action Script</button>
+                      <button type="button" class="btn btn-secondary action-scripts-builder-save-caret" disabled aria-haspopup="menu" aria-expanded="false" title="More Save Options" data-i18n-title="app.moreSaveOptions" aria-label="More Save Options" data-i18n-aria-label="app.moreSaveOptions">
+                        <span class="icon icon-xs"><svg><use href="#icon-chevron-down"/></svg></span>
+                      </button>
+                    </div>
+                    <div class="action-scripts-save-dropdown" role="menu" hidden>
+                      <button type="button" class="action-scripts-save-dropdown-item action-scripts-builder-save-to-directory" role="menuitem" data-i18n="app.saveToDirectory"><span class="icon icon-xs"><svg><use href="#icon-folder"/></svg></span> Save to Directory…</button>
+                    </div>
+                  </div>
                 </div>
                 <div class="card-header-actions action-scripts-executor-header-actions">
                   <label class="executor-header-checkbox-label action-scripts-connect-console-label" data-i18n="app.connectToConsole">

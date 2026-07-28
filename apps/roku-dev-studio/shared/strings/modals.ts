@@ -193,9 +193,12 @@ export const modals = {
     title: 'Import Action Script',
     uploadJsonLabel: 'Upload JSON',
     chooseFileBtn: 'Choose File',
+    savedScriptLabel: 'Saved Action Scripts',
+    savedSelectPlaceholder: 'Select a saved Action Script',
+    savedSelectEmpty: 'No saved Action Scripts',
     pasteJsonLabel: 'Paste or Edit JSON',
     outputFolderLabel: 'Output Folder',
-    noFolderSelected: 'No folder selected',
+    noFolderSelected: 'No Folder selected',
     chooseFolderBtn: 'Choose Folder',
     outputWarning:
       'If no folder is selected, artifacts (e.g. screenshots) will not be saved when you run the script.',
