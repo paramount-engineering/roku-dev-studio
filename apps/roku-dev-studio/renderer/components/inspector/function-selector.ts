@@ -1,6 +1,6 @@
 // Function selector and management
 
-import { escapeHtml, setSafeHTML, setDynamicHTML, clearDynamic } from '../../modules/utils/index.js';
+import { escapeHtml, setSafeHTML } from '../../modules/utils/index.js';
 import { RALE_BUILTIN_COMMANDS } from './rale-builtins.js';
 import { S } from '@shared/strings/index.js';
 import type {
@@ -20,19 +20,53 @@ export function setupFunctionSelector(
 ) {
   const {
     funcSelect,
+    funcInfoBtn = null,
     funcNameInput,
-    funcParamHint,
     availableFunctions: initialFunctions = []
   } = elements;
 
   let availableFunctions: ExternalControlFunctionMeta[] = [...initialFunctions];
+  let selectedFunctionInfo = '';
 
-  // Set dynamic hint content (function counts / a function's description). `setDynamicHTML` marks the
-  // element JS-managed so a live locale switch's applyI18n pass won't revert this live text back to
-  // the generic "Select a function…" placeholder. The disconnected path calls `clearDynamic` to hand
-  // the element (with its original data-i18n key untouched) back to applyI18n so the placeholder
-  // retranslates again.
-  const setDynamicFuncParamHint = (html: string): void => setDynamicHTML(funcParamHint, html);
+  function setFunctionInfoButtonState(enabled: boolean): void {
+    if (!funcInfoBtn) return;
+    funcInfoBtn.disabled = !enabled;
+    funcInfoBtn.setAttribute('aria-disabled', enabled ? 'false' : 'true');
+  }
+
+  function openFunctionInfoModal(text: string): void {
+    const body = text.trim() || S.inspector.noFunctionDetails;
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay active inspector-func-info-overlay';
+    setSafeHTML(
+      overlay,
+      `<div class="modal inspector-func-info-modal" role="dialog" aria-modal="true" aria-label="${escapeHtml(S.inspector.functionDetailsTitle)}">
+         <div class="modal-header">
+           <h2>${escapeHtml(S.inspector.functionDetailsTitle)}</h2>
+           <button type="button" class="modal-close inspector-func-info-close" title="${escapeHtml(S.common.close)}" aria-label="${escapeHtml(S.common.close)}">&times;</button>
+         </div>
+         <div class="modal-body">
+           <p class="inspector-func-info-text">${escapeHtml(body)}</p>
+         </div>
+       </div>`
+    );
+
+    const close = (): void => {
+      document.removeEventListener('keydown', onKey);
+      overlay.remove();
+    };
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') close();
+    };
+    document.addEventListener('keydown', onKey);
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) close();
+    });
+    overlay.querySelectorAll('.inspector-func-info-close').forEach((el) => {
+      el.addEventListener('click', close);
+    });
+    document.body.appendChild(overlay);
+  }
 
   function renderRaleOptgroup() {
     let html = '';
@@ -52,13 +86,9 @@ export function setupFunctionSelector(
         `<option value="" data-i18n="inspector.connectToLoadFunctions">${S.inspector.connectToLoadFunctions}</option>`
       );
       funcNameInput.value = '';
-      if (funcParamHint) {
-        setSafeHTML(funcParamHint, S.inspector.selectFunctionForParamDetails);
-        // Clear the JS-managed marker (a prior connected state may have set it) so applyI18n
-        // retranslates this disconnected hint via the element's data-i18n key on the next switch.
-        clearDynamic(funcParamHint);
-      }
       renderParamInputsFn([]);
+      selectedFunctionInfo = '';
+      setFunctionInfoButtonState(false);
       return;
     }
 
@@ -82,13 +112,8 @@ export function setupFunctionSelector(
     setSafeHTML(funcSelect, html);
     funcNameInput.value = '';
     renderParamInputsFn([]);
-    if (funcParamHint) {
-      const appCount = availableFunctions.length;
-      const raleCount = Object.keys(RALE_BUILTIN_COMMANDS).length;
-      setDynamicFuncParamHint(
-        `<span style="color: var(--accent-green);">${S.inspector.functionCounts(appCount, raleCount)}</span>`
-      );
-    }
+    selectedFunctionInfo = '';
+    setFunctionInfoButtonState(false);
   }
 
   // Handle function selection from dropdown
@@ -99,13 +124,8 @@ export function setupFunctionSelector(
     if (!funcName) {
       funcNameInput.value = '';
       renderParamInputsFn([]);
-      if (funcParamHint) {
-        const appCount = availableFunctions.length;
-        const raleCount = Object.keys(RALE_BUILTIN_COMMANDS).length;
-        setDynamicFuncParamHint(
-          `<span style="color: var(--accent-green);">${S.inspector.functionCounts(appCount, raleCount)}</span>`
-        );
-      }
+      selectedFunctionInfo = '';
+      setFunctionInfoButtonState(false);
       return;
     }
 
@@ -115,9 +135,8 @@ export function setupFunctionSelector(
         return;
       }
       funcNameInput.value = funcName;
-      setDynamicFuncParamHint(
-        `<div style="color: var(--text-secondary);">${escapeHtml(builtin.description)}</div>`
-      );
+      selectedFunctionInfo = builtin.description || S.inspector.noFunctionDetails;
+      setFunctionInfoButtonState(true);
       renderParamInputsFn(builtin.params || [], { builtin, selectionKey: funcName });
       return;
     }
@@ -133,14 +152,8 @@ export function setupFunctionSelector(
       const paramCount = func.paramCount || (Array.isArray(funcParams) ? funcParams.length : 0);
       const funcDesc = func.description || '';
 
-      let hintHtml = '';
-      if (funcDesc) {
-        hintHtml += `<div style="color: var(--text-secondary);">${escapeHtml(funcDesc)}</div>`;
-      } else {
-        hintHtml += `<span style="color: var(--accent-green);">${S.inspector.readyToExecute}</span>`;
-      }
-
-      setDynamicFuncParamHint(hintHtml);
+      selectedFunctionInfo = funcDesc || S.inspector.readyToExecute;
+      setFunctionInfoButtonState(true);
 
       if (paramCount > 0 && Array.isArray(funcParams) && funcParams.length > 0) {
         renderParamInputsFn(funcParams);
@@ -153,6 +166,11 @@ export function setupFunctionSelector(
         renderParamInputsFn([]);
       }
     }
+  });
+
+  funcInfoBtn?.addEventListener('click', () => {
+    if (!funcSelect.value) return;
+    openFunctionInfoModal(selectedFunctionInfo);
   });
 
   return {
