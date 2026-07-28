@@ -49,6 +49,13 @@ type RokuOpDescriptor = {
   description: string;
   runIn: 'main' | 'renderer';
   destructive: boolean;
+  /**
+   * True only for genuine reads. Distinct from `!destructive`: a mutating-but-
+   * non-destructive op (keypress, launch_app, input_text) is
+   * `readOnly: false, destructive: false`. Drives `readOnlyHint` /
+   * `idempotentHint` — do NOT fall back to `!destructive` here.
+   */
+  readOnly: boolean;
   inputSchema: ToolInputSchema;
   /**
    * Each op declares the JSON-Schema shape of its 2xx response body.
@@ -249,10 +256,17 @@ function agentFacingSchema(schema: ToolInputSchema): ToolInputSchema {
  * `POST /tool` so the renderer's per-device handler receives the call.
  */
 function opToMcpTool(op: RokuOpDescriptor): Tool {
+  // `readOnlyHint` derives from the op's explicit `readOnly` axis, NOT from
+  // `!destructive`. A mutating-but-non-destructive op (keypress, launch_app,
+  // input_text, deep_link) is `readOnly: false, destructive: false` — deriving
+  // the hint from `!destructive` would mislabel it read-only and contradict its
+  // description. Per MCP semantics `destructiveHint`/`idempotentHint` are only
+  // meaningful when `readOnlyHint` is false; reads are inherently idempotent,
+  // and for writes we don't claim idempotency here (safe under-claim).
   const annotations: ToolAnnotations = {
-    readOnlyHint: !op.destructive,
+    readOnlyHint: op.readOnly,
     destructiveHint: op.destructive,
-    idempotentHint: !op.destructive,
+    idempotentHint: op.readOnly,
     openWorldHint: true
   };
   return {
@@ -646,7 +660,7 @@ const BESPOKE_TOOLS: Tool[] = [
     name: 'list_action_types',
     title: 'List Action Types',
     description:
-      'Return every supported Action Script step `type` (with label, description, required / optional fields). For the full authoring contract call `get_capability_bundle` once or read resource `roku-dev-studio://action-script-contract.md`.',
+      'Return every supported Action Script step `type` (with label, description, required / optional fields). Read-only. Start here when authoring a script, then call get_action_schema for one type\'s exact fields, and validate_script before send_script_to_builder. For the full authoring contract in one call use get_capability_bundle or read resource `roku-dev-studio://action-script-contract.md`.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
     annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
     handler: async () => listActionTypes()
@@ -655,7 +669,7 @@ const BESPOKE_TOOLS: Tool[] = [
     name: 'get_action_schema',
     title: 'Get Action Schema',
     description:
-      'Return the schema for one Action step type. Required argument `type` — must be one of the values from `list_action_types` (also enumerated in inputSchema).',
+      'Return the authoring schema (label, description, required and optional fields) for ONE Action Script step `type`. Read-only. Call this after list_action_types (which enumerates every type) when you are about to author or fix a specific step and need its exact field names before running validate_script. Required argument `type` — one of the values from list_action_types (also enumerated in this tool\'s inputSchema). For the whole authoring contract at once, prefer get_capability_bundle.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -712,7 +726,8 @@ const BESPOKE_TOOLS: Tool[] = [
   {
     name: 'get_selected_device',
     title: 'Get Selected Device',
-    description: 'Device the user is currently focused on in Dev Studio.',
+    description:
+      'Return the single device tab the user currently has focused in Dev Studio (`ip`, `serial`, `modelName`, `friendlyDeviceName`, …), or an empty/`null` result when no tab is focused. Read-only. Call this to resolve the implicit target before a device op when the user says "this device" / "the current one" and gave no IP. For the full inventory (all connected / discovered / remembered devices) use list_devices instead; to change the focus use connect_device.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
     annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
     handler: async () => getSelectedDevice()
@@ -721,7 +736,7 @@ const BESPOKE_TOOLS: Tool[] = [
     name: 'list_devices',
     title: 'List All Known Devices',
     description:
-      'Every device Dev Studio knows about (connected, discovered, remembered, remote). Entries: `ip`, `serial`, `modelName`, `friendlyDeviceName`, `softwareVersion`, `source`, `isConnected`, `isFocused`.',
+      'Return every device Dev Studio already knows about — connected, discovered, remembered, or remote — without running a network scan. Read-only. Each entry: `ip`, `serial`, `modelName`, `friendlyDeviceName`, `softwareVersion`, `source`, `isConnected`, `isFocused`. Use this as the first step to resolve a `device` argument (IP or serial) for other tools. Related tools: get_selected_device returns only the one focused device; scan_devices actively probes the network for NEW devices not yet known; connect_device opens/focuses a tab for one of these entries.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
     annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
     handler: async () => listDevices()
@@ -730,13 +745,13 @@ const BESPOKE_TOOLS: Tool[] = [
     name: 'connect_device',
     title: 'Connect to a Device',
     description:
-      'Open or focus a Dev Studio tab. Required `device`: Roku IP or serial. Idempotent if already connected.',
+      'Open (or focus, if already open) a Dev Studio device tab for the given Roku, making it the active target for renderer-routed tools (rale_command, telnet_*, app_function, get_telnet_log). Required `device`: Roku IP or serial from list_devices / scan_devices. Idempotent — a no-op if that device is already connected and focused. Not needed for main-direct ECP ops (keypress, launch_app, ecp_query, …), which accept a `device` argument directly; use test_connection to verify reachability without opening a tab.',
     inputSchema: {
       type: 'object',
       properties: {
         device: {
           type: 'string',
-          description: 'Required non-empty string: LAN IP or device serial exactly as shown by list_devices.'
+          description: 'Required non-empty string: LAN IP (e.g. "192.168.1.75") or device serial exactly as shown by list_devices / scan_devices.'
         }
       },
       required: ['device'],
@@ -767,7 +782,7 @@ const BESPOKE_TOOLS: Tool[] = [
     name: 'rale_get_node_by_id',
     title: 'RALE: Get Node by ID',
     description:
-      'Read-only `getNodeById` via App Connector. Required `id`. Optional `path` (array; default `[]`), `device`.',
+      'Read-only convenience wrapper over rale_command `getNodeById`: fetch one SceneGraph node (its fields / children) by its `id` from the running Dev App via the App Connector. Requires a connected App Connector session (auto-connects if needed). Use this — not the general rale_command — for the common "inspect one node" case; drop to rale_command only for other RALE built-ins (registry, focus, other queries). Required `id` (the node\'s `id` field as authored in XML/BrightScript). Optional `path` (array of child indices/ids to disambiguate when the id is not globally unique; omit or `[]` for a global lookup) and `device` (IP or serial; omit for the focused tab).',
     inputSchema: {
       type: 'object',
       properties: {

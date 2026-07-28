@@ -17,7 +17,7 @@ import { listPrompts, getPrompt } from './prompts.js';
 import SERVER_INSTRUCTIONS from './prose/server-instructions.md';
 
 /** Bump when the server's tool surface changes in a way agents care about. */
-const SERVER_VERSION = '0.2.0';
+const SERVER_VERSION = '0.3.0';
 const SERVER_NAME = 'roku-dev-studio';
 
 /** Negotiate against this protocol version. Mirrors the MCP "latest" stable. */
