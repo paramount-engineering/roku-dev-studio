@@ -14,7 +14,7 @@ import { makeCenteredSearchResizable } from '../../modules/ui/header-search-resi
 import { searchWidthKey } from '../../modules/ui/search-storage-keys.js';
 import { attachFoldToggle, structuredBodyText, structuredFileExtension } from '../../modules/ui/structured-body.js';
 import { attachSelectAll } from '../../modules/ui/select-all.js';
-import { icon, setSafeHTML, DEFAULT_RALE_PORT } from '../../modules/utils/index.js';
+import { icon, setSafeHTML, animateHeight, DEFAULT_RALE_PORT } from '../../modules/utils/index.js';
 import { errMessage } from '@shared/platform/err-util.js';
 import { registerPanelRetranslate } from '../../modules/ui/retranslate-registry.js';
 import { S } from '@shared/strings/index.js';
@@ -50,13 +50,13 @@ export function setupInspector(panel: DevicePanelRoot, _device: InspectorDevice,
   const connectionStatusQ = panel.querySelector('.rale-connection-status');
   const refreshFuncsQ = panel.querySelector('.rale-refresh-funcs-btn');
   const funcSelectQ = panel.querySelector('.rale-func-select');
+  const funcInfoBtnQ = panel.querySelector('.rale-func-info-btn');
   const funcNameInputQ = panel.querySelector('.rale-func-name-input');
   const executeQ = panel.querySelector('.rale-execute-btn');
   const responseOutputQ = panel.querySelector('.rale-response-output');
   const copyBtn = panel.querySelector('.rale-copy-btn');
   const saveBtn = panel.querySelector('.rale-save-btn');
   const clearQ = panel.querySelector('.rale-clear-btn');
-  const funcParamHint = panel.querySelector('.func-param-hint');
   const paramsContainerQ = panel.querySelector('.rale-params-container');
 
   if (
@@ -279,10 +279,15 @@ export function setupInspector(panel: DevicePanelRoot, _device: InspectorDevice,
   });
 
   const renderParamInputsFn = (params: unknown[], opts: Record<string, unknown> = {}) => {
-    renderParamInputs(paramsContainer, params, funcSelect, {
-      getConnectionId: () => connection.getConnectionId(),
-      sendCommand,
-      ...opts
+    // Ease the Parameters area's height between functions so the card resizes smoothly instead of
+    // snapping. Scoped here (not inside renderParamInputs) so the Action Scripts builder, which
+    // shares renderParamInputs, is unaffected.
+    animateHeight(paramsContainer, () => {
+      renderParamInputs(paramsContainer, params, funcSelect, {
+        getConnectionId: () => connection.getConnectionId(),
+        sendCommand,
+        ...opts
+      });
     });
   };
 
@@ -290,8 +295,8 @@ export function setupInspector(panel: DevicePanelRoot, _device: InspectorDevice,
     panel,
     {
       funcSelect,
-      funcNameInput,
-      funcParamHint: funcParamHint instanceof HTMLElement ? funcParamHint : null
+      funcInfoBtn: funcInfoBtnQ instanceof HTMLButtonElement ? funcInfoBtnQ : null,
+      funcNameInput
     },
     renderParamInputsFn
   );

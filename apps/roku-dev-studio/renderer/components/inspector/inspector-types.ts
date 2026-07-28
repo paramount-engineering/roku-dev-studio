@@ -60,8 +60,8 @@ export interface ExternalControlFunctionMeta {
 
 export interface FunctionSelectorElements {
   funcSelect: HTMLSelectElement;
+  funcInfoBtn?: HTMLButtonElement | null;
   funcNameInput: HTMLInputElement;
-  funcParamHint: HTMLElement | null;
   availableFunctions?: ExternalControlFunctionMeta[];
 }
 
