@@ -392,6 +392,26 @@ export function formatIfStepListDetails(step) {
 }
 
 /**
+ * Short human identifier for a node-lookup RALE command, pulled from its args: the node `id`
+ * (getNodeById), `subtype`, or `name` (getNodeByName). Empty when the command carries none (e.g.
+ * registry commands). Appended after the command name in the steps list + the Executor result header
+ * so a script full of `getNodeById`s is distinguishable at a glance.
+ */
+export function raleCommandIdentifier(step) {
+  const args =
+    step && typeof step.args === 'object' && step.args !== null && !Array.isArray(step.args)
+      ? (step.args as Record<string, unknown>)
+      : null;
+  if (!args) return '';
+  for (const key of ['id', 'subtype', 'name']) {
+    const v = args[key];
+    if (typeof v === 'string' && v.trim() !== '') return v.trim();
+    if (typeof v === 'number' && Number.isFinite(v)) return String(v);
+  }
+  return '';
+}
+
+/**
  * Human-readable description of a step (for UI labels).
  */
 export function stepDescription(step, index) {
@@ -419,7 +439,8 @@ export function stepDescription(step, index) {
     }
     case 'raleCommand': {
       const o = getAssignToVarName(step);
-      return `RALE ${step.command || '?'}` + (o ? ` → $${o}` : '');
+      const ident = raleCommandIdentifier(step);
+      return `RALE ${step.command || '?'}${ident ? ` · ${ident}` : ''}` + (o ? ` → $${o}` : '');
     }
     case 'screenshot':
       if (step.label) return S.actionScripts.descScreenshotLabel(step.label);

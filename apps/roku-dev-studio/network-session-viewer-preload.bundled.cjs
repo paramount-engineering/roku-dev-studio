@@ -162,6 +162,20 @@ var IPC = {
   RokuActionScriptWriteFile: "roku:action-script-write-file",
   RokuActionScriptShowSaveScriptDialog: "roku:action-script-show-save-script-dialog",
   RokuActionScriptCheckFileExists: "roku:action-script-check-file-exists",
+  // App-managed Action Scripts library (userData/action-scripts/index.json + scripts/<id>.json)
+  RokuActionScriptsList: "roku:action-scripts-list",
+  RokuActionScriptsRead: "roku:action-scripts-read",
+  RokuActionScriptsSave: "roku:action-scripts-save",
+  RokuActionScriptsDelete: "roku:action-scripts-delete",
+  // "View and Manage Action Scripts" window shows its OWN device picker. The main window's renderer
+  // owns device state, so the viewer fetches/rescans the device list through a request/reply relay
+  // via the main process, then applies the script to the chosen device on the main window.
+  RokuActionScriptGetDeviceOptions: "roku:action-script-get-device-options",
+  RokuActionScriptRescanDeviceOptions: "roku:action-script-rescan-device-options",
+  ActionScriptRequestDeviceOptions: "action-script:request-device-options",
+  ActionScriptProvideDeviceOptions: "action-script:provide-device-options",
+  RokuActionScriptApplyToDevice: "roku:action-script-apply-to-device",
+  ActionScriptApplyToDeviceOnMain: "action-script:apply-to-device-on-main",
   RokuReadFileAsBase64: "roku:read-file-as-base64",
   /** Crop a region of the invoking `WebContents` (CSS / DIP rect) to PNG (Device Performance quad cards). */
   RokuCaptureViewRect: "roku:capture-view-rect",

@@ -50,6 +50,7 @@ const htmlFiles = [
   'renderer/index.html',
   'renderer/settings.html',
   'renderer/fiddle.html',
+  'renderer/action-scripts-viewer.html',
   'renderer/network-session-viewer.html',
   'renderer/about.html',
   'renderer/log-file-viewer.html',

@@ -21,6 +21,7 @@ const {
   openFiddleWindow,
   broadcastFiddleTerminalData
 } = require('./main/fiddle-window');
+const { openActionScriptsViewerWindow } = require('./main/action-scripts-viewer-window');
 const { broadcastPrivacyModeToAllWindows } = require('./main/privacy-broadcast');
 const { S, setLocale, getLocale, effectiveLocale } = require('@shared/strings/index.js');
 const { broadcastLocaleToAllWindows } = require('./main/locale-broadcast');
@@ -470,6 +471,13 @@ function createWindow(appState: AppWindowState) {
             }
           }
         },
+        {
+          label: S.menu.openActionScriptsViewer,
+          accelerator: 'CmdOrCtrl+Shift+A',
+          click: () => {
+            openActionScriptsViewerWindow(mainWindow);
+          }
+        },
         // On macOS, Settings lives in the app menu (Roku Dev Studio → Settings); listing
         // it here too would duplicate it. Keep the File-menu entry on Windows / Linux where
         // there is no app menu.
@@ -736,6 +744,56 @@ app.whenReady().then(() => {
     const devices = Array.isArray(payload?.devices) ? payload!.devices : [];
     const initialId = payload?.initialDeviceId ?? null;
     openFiddleWindow(parent || undefined, devices, initialId);
+  });
+
+  // "View and Manage Action Scripts" window shows its OWN device picker but owns no device state.
+  // Relay its list request to the main window's renderer (which does), optionally running a scan,
+  // and pass the reply back. Correlate concurrent requests by an incrementing id.
+  let actionScriptDeviceOptReqSeq = 0;
+  function requestApplyDeviceOptionsFromMain(rescan: boolean): Promise<Array<{ id: string; label: string }>> {
+    return new Promise((resolve) => {
+      if (
+        !mainWindow || mainWindow.isDestroyed() ||
+        !mainWindow.webContents || mainWindow.webContents.isDestroyed()
+      ) {
+        resolve([]);
+        return;
+      }
+      const reqId = ++actionScriptDeviceOptReqSeq;
+      const onReply = (_e: import('electron').IpcMainEvent, payload: unknown): void => {
+        const p = payload as { reqId?: number; options?: Array<{ id: string; label: string }> } | undefined;
+        if (!p || p.reqId !== reqId) return;
+        clearTimeout(timer);
+        ipcMain.removeListener(IPC.ActionScriptProvideDeviceOptions, onReply);
+        resolve(Array.isArray(p.options) ? p.options : []);
+      };
+      // A rescan runs a full network + relay scan, so allow generous headroom before giving up.
+      const timer = setTimeout(() => {
+        ipcMain.removeListener(IPC.ActionScriptProvideDeviceOptions, onReply);
+        resolve([]);
+      }, 30000);
+      ipcMain.on(IPC.ActionScriptProvideDeviceOptions, onReply);
+      mainWindow.webContents.send(IPC.ActionScriptRequestDeviceOptions, { reqId, rescan });
+    });
+  }
+  ipcMain.handle(IPC.RokuActionScriptGetDeviceOptions, () => requestApplyDeviceOptionsFromMain(false));
+  ipcMain.handle(IPC.RokuActionScriptRescanDeviceOptions, () => requestApplyDeviceOptionsFromMain(true));
+
+  // The viewer's picker chose a device: bring the main window forward and have its renderer connect /
+  // activate that device, switch to Action Scripts, and load the script into the device's Builder.
+  ipcMain.handle(IPC.RokuActionScriptApplyToDevice, (_event: import('electron').IpcMainInvokeEvent, payload: unknown) => {
+    const p = payload as { deviceId?: unknown; json?: unknown } | undefined;
+    if (
+      mainWindow && !mainWindow.isDestroyed() &&
+      mainWindow.webContents && !mainWindow.webContents.isDestroyed() &&
+      p && typeof p.deviceId === 'string' && typeof p.json === 'string'
+    ) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.focus();
+      mainWindow.webContents.send(IPC.ActionScriptApplyToDeviceOnMain, { deviceId: p.deviceId, json: p.json });
+      return { success: true };
+    }
+    return { success: false };
   });
 
   // Title-bar zoom indicator (`-` / `+` buttons in the renderer): route the

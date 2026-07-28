@@ -15,6 +15,7 @@ export const menu = {
   openLogFile: 'Відкрити файл журналу',
   openNetworkSession: 'Відкрити мережеву сесію',
   openFiddle: 'Відкрити Fiddle',
+  openActionScriptsViewer: 'Перегляд і керування Action Scripts',
   checkForUpdates: 'Перевірити оновлення',
   clearCacheAndReload: 'Очистити кеш і перезавантажити',
   // Edit / View / Window / Help

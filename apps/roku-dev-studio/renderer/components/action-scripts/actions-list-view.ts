@@ -5,6 +5,7 @@
 
 import {
   stepDescription,
+  raleCommandIdentifier,
   formatWaitStepListDetails,
   formatIfStepListDetails
 } from './executor-engine.js';
@@ -126,6 +127,12 @@ export function getStepDetails(step: Record<string, unknown> | null | undefined)
               ? S.actionScripts.chartAboveAll
               : chart || '—';
     return step.label ? `${lab} · ${step.label}` : lab;
+  }
+  if (step.type === 'raleCommand') {
+    // Show the node lookup's identifier (id / subtype / name) after the command, e.g. "getNodeById · adNode".
+    const cmd = step.command ? String(step.command) : step.type;
+    const ident = raleCommandIdentifier(step);
+    return `${ident ? `${cmd} · ${ident}` : cmd}${outVar}`;
   }
   const condObj =
     step.condition && typeof step.condition === 'object'

@@ -17,6 +17,7 @@ import {
   playModalOpenMotion,
   closeModalWithOriginMotion
 } from '../../modules/utils/modal-origin-motion.js';
+import { ensureSavedScriptsLoaded, listSavedScripts, loadSavedScript } from './saved-scripts-store.js';
 import { S } from '@shared/strings/index.js';
 
 const MODAL_ID = 'actionScriptsImportModal';
@@ -106,6 +107,9 @@ export function setupImportModal(container, device, api, context) {
     '.action-scripts-import-file-input'
   ) as HTMLInputElement | null;
   const importUploadBtn = modalRoot.querySelector('.action-scripts-import-upload-btn');
+  const importSavedSelect = modalRoot.querySelector(
+    '.action-scripts-import-saved-select'
+  ) as HTMLSelectElement | null;
   const importTextarea = modalRoot.querySelector(
     '.action-scripts-import-textarea'
   ) as HTMLTextAreaElement | null;
@@ -270,6 +274,29 @@ export function setupImportModal(container, device, api, context) {
   const importModalTitleEl = modalRoot.querySelector('.action-scripts-import-modal-title') as HTMLElement | null;
   const defaultImportTitle = importModalTitleEl?.textContent?.trim() || S.actionScripts.importModalTitle;
 
+  /** (Re)fill the "Saved Scripts" picker from the in-app library. Runs on each open so newly-saved
+   *  scripts appear. Disabled + "No saved scripts" placeholder when the library is empty. */
+  async function populateImportSavedSelect(): Promise<void> {
+    if (!importSavedSelect) return;
+    await ensureSavedScriptsLoaded();
+    const scripts = listSavedScripts();
+    importSavedSelect.innerHTML = '';
+    const placeholder = document.createElement('option');
+    placeholder.value = '';
+    placeholder.textContent = scripts.length
+      ? S.modals.actionScriptsImport.savedSelectPlaceholder
+      : S.modals.actionScriptsImport.savedSelectEmpty;
+    importSavedSelect.appendChild(placeholder);
+    for (const s of scripts) {
+      const opt = document.createElement('option');
+      opt.value = s.id;
+      opt.textContent = s.name;
+      importSavedSelect.appendChild(opt);
+    }
+    importSavedSelect.disabled = scripts.length === 0;
+    importSavedSelect.value = '';
+  }
+
   function openImportModal(
     prefillJson,
     opener?: HTMLElement | null,
@@ -342,6 +369,7 @@ export function setupImportModal(container, device, api, context) {
       if (importDevPasswordInput) importDevPasswordInput.value = '';
       if (importRememberPasswordCheckbox) importRememberPasswordCheckbox.checked = false;
     }
+    void populateImportSavedSelect();
     prepareModalOpenOrigin(modalRoot, opener ?? null);
     modalRoot.classList.add('active');
     if (modalRoot.setAttribute) modalRoot.setAttribute('aria-hidden', 'false');
@@ -614,6 +642,26 @@ export function setupImportModal(container, device, api, context) {
         };
         reader.onerror = () => setImportError(S.actionScripts.errFailedToReadFile);
         reader.readAsText(file);
+      });
+    }
+    if (importSavedSelect && importTextarea) {
+      // Selecting a saved script drops its JSON into the textarea (same path as file upload), then
+      // resets the picker so it reads as a loader rather than a persistent selection.
+      importSavedSelect.addEventListener('change', async () => {
+        const id = importSavedSelect.value;
+        importSavedSelect.value = '';
+        if (!id) return;
+        const script = await loadSavedScript(id);
+        if (!script) {
+          setImportError(S.actionScripts.errFailedToReadFile);
+          return;
+        }
+        const json = JSON.stringify(script, null, 2);
+        const { formatted, error } = formatScriptJson(json);
+        importTextarea.value = formatted;
+        setImportError(error || '');
+        updateDevPasswordVisibility(formatted || json);
+        importTextarea.focus();
       });
     }
     if (importTextarea) {

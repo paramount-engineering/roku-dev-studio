@@ -47,8 +47,8 @@ export function setSafeHTML(element: HTMLElement | null | undefined, html: strin
  * with {@link I18N_DYNAMIC_ATTR}, which the applyI18n content passes skip. Use them instead of a
  * bare `textContent =` / `setSafeHTML` whenever the element started as a `data-i18n` placeholder.
  * `setDynamicText` sets text; `setDynamicHTML` sets (already-safe) markup. The `data-i18n` key is
- * left intact, so {@link clearDynamic} can hand the element back to `applyI18n` unchanged if it
- * ever toggles from live data back to a translatable placeholder.
+ * left intact, so removing {@link I18N_DYNAMIC_ATTR} later would hand the element back to `applyI18n`
+ * unchanged if it ever needs to toggle from live data back to a translatable placeholder.
  */
 export function setDynamicText(element: Element | null | undefined, text: string): void {
   if (!(element instanceof HTMLElement)) return;
@@ -62,16 +62,64 @@ export function setDynamicHTML(element: Element | null | undefined, html: string
   element.setAttribute(I18N_DYNAMIC_ATTR, '');
 }
 
+/** In-flight height tweens, keyed by element, so a re-render can cancel + restart cleanly. */
+const heightTweens = new WeakMap<HTMLElement, () => void>();
+
 /**
- * Reverse {@link setDynamicText}/{@link setDynamicHTML}: clear the dynamic marker so a later
- * `applyI18n(document)` pass retranslates the element from its (untouched) `data-i18n` key again.
- * Call this when an element goes from JS-managed live content back to a translatable placeholder;
- * set the placeholder text yourself for the immediate paint (the next applyI18n pass will keep it
- * in sync on subsequent locale switches).
+ * Run `mutate` (which changes `el`'s contents) and smoothly tween `el`'s height between its
+ * before/after values instead of letting it snap. The mutation ALWAYS runs; the tween is skipped
+ * (height snaps, as before) when the height is unchanged, the element is hidden/detached, or the
+ * user prefers reduced motion. Re-entrant: a fresh call cancels any in-flight tween on the same
+ * element and animates from its current (mid-tween) height. Uses explicit px heights, so it needs
+ * no `interpolate-size` support.
  */
-export function clearDynamic(element: Element | null | undefined): void {
-  if (!(element instanceof HTMLElement)) return;
-  element.removeAttribute(I18N_DYNAMIC_ATTR);
+export function animateHeight(
+  el: Element | null | undefined,
+  mutate: () => void,
+  durationMs = 200
+): void {
+  if (!(el instanceof HTMLElement)) {
+    mutate();
+    return;
+  }
+  const startH = el.getBoundingClientRect().height; // current height (may be mid-tween)
+  heightTweens.get(el)?.(); // cancel any in-flight tween on this element
+
+  // Clean slate so the mutation + target measurement see the natural layout.
+  el.style.transition = '';
+  el.style.height = '';
+  el.style.overflow = '';
+
+  mutate();
+
+  const reduceMotion =
+    typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (reduceMotion || startH === 0 || !el.isConnected) return;
+
+  const endH = el.getBoundingClientRect().height;
+  if (Math.abs(endH - startH) < 0.5) return;
+
+  el.style.height = `${startH}px`;
+  el.style.overflow = 'hidden';
+  void el.offsetHeight; // commit the start height before transitioning
+  el.style.transition = `height ${durationMs}ms cubic-bezier(0.4, 0, 0.2, 1)`;
+  el.style.height = `${endH}px`;
+
+  let timer = 0;
+  const cleanup = (): void => {
+    if (timer) clearTimeout(timer);
+    el.style.transition = '';
+    el.style.height = '';
+    el.style.overflow = '';
+    el.removeEventListener('transitionend', onEnd);
+    heightTweens.delete(el);
+  };
+  const onEnd = (e: TransitionEvent): void => {
+    if (e.target === el && e.propertyName === 'height') cleanup();
+  };
+  el.addEventListener('transitionend', onEnd);
+  timer = window.setTimeout(cleanup, durationMs + 60);
+  heightTweens.set(el, cleanup);
 }
 
 /**

@@ -49,6 +49,9 @@ export function extractIndexStyleToCss(rendererRoot: string, rendererDist: strin
   const header = '/* AUTO-GENERATED from renderer/index.html <style> by transpile-renderer.ts. Do not edit. */\n';
   fs.mkdirSync(rendererDist, { recursive: true });
   fs.writeFileSync(path.join(rendererDist, 'network-session-viewer.css'), header + match[1], 'utf-8');
+  // The "View and Manage Action Scripts" window embeds the real Action Scripts builder, so it needs
+  // the same full inline stylesheet (theme vars + all `.action-scripts-builder-*`/step/save rules).
+  fs.writeFileSync(path.join(rendererDist, 'action-scripts-viewer.css'), header + match[1], 'utf-8');
 }
 
 /**
