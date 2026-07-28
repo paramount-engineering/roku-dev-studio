@@ -21,6 +21,18 @@
 export type StringCatalog = { [k: string]: unknown };
 
 /**
+ * Opt-out marker attribute. Set at runtime by the renderer's `setDynamic*` helpers on an
+ * element whose text/HTML content JS has taken over from its `data-i18n` placeholder.
+ * {@link makeApplyI18n} skips the CONTENT bindings (`data-i18n` / `data-i18n-html`) of any
+ * element carrying it, so a live locale-switch retranslate pass won't revert live data back
+ * to the element's placeholder. The element's `data-i18n` key is left intact, so clearing the
+ * marker hands the element back to `applyI18n` untouched (used when it toggles from live data
+ * back to a translatable placeholder). Attribute bindings (`-title`/`-placeholder`/`-aria-label`/
+ * `-alt`) are NOT skipped — the `setDynamic*` helpers only ever write content, never attributes.
+ */
+export const I18N_DYNAMIC_ATTR = 'data-i18n-dynamic';
+
+/**
  * Resolve a dotted key ("common.save") against a catalog. Returns `undefined` when
  * the key is missing or resolves to a non-string (e.g. a parametrized function entry,
  * which is TS-only). Never throws.
@@ -53,6 +65,9 @@ type QueryRoot = { querySelectorAll(selectors: string): ArrayLike<El> };
  * `data-i18n` text, element children (icons/SVGs) are preserved: a text-only element
  * gets its `textContent` set; a mixed icon+label element has only its first significant
  * text node replaced, keeping the surrounding whitespace so icon spacing survives.
+ *
+ * Elements carrying {@link I18N_DYNAMIC_ATTR} are skipped by the two CONTENT passes below,
+ * so JS-populated live data (device IP, computed hints) survives a retranslate.
  */
 export function makeApplyI18n(resolve: (key: string) => string | undefined) {
   return function applyI18n(root?: QueryRoot): void {
@@ -70,8 +85,9 @@ export function makeApplyI18n(resolve: (key: string) => string | undefined) {
       }
     };
 
-    // Text content — preserve child elements (icons) + whitespace on mixed content.
-    const textNodes = scope.querySelectorAll('[data-i18n]');
+    // Text content — preserve child elements (icons) + whitespace on mixed content. Skip
+    // elements JS has taken over (I18N_DYNAMIC_ATTR) so their live data isn't reverted.
+    const textNodes = scope.querySelectorAll(`[data-i18n]:not([${I18N_DYNAMIC_ATTR}])`);
     for (let i = 0; i < textNodes.length; i++) {
       const key = textNodes[i].getAttribute('data-i18n');
       if (!key) continue;
@@ -107,7 +123,7 @@ export function makeApplyI18n(resolve: (key: string) => string | undefined) {
     // multi-element prose blocks that the single-text-node `data-i18n` path can't rebuild.
     // The catalog is trusted, first-party app content (never user input), so assigning
     // innerHTML here is safe. A key that doesn't resolve is skipped (inline HTML fallback kept).
-    const htmlNodes = scope.querySelectorAll('[data-i18n-html]');
+    const htmlNodes = scope.querySelectorAll(`[data-i18n-html]:not([${I18N_DYNAMIC_ATTR}])`);
     for (let i = 0; i < htmlNodes.length; i++) {
       const key = htmlNodes[i].getAttribute('data-i18n-html');
       if (!key) continue;
