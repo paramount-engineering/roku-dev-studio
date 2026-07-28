@@ -7,6 +7,8 @@ import {
   decodeHtmlEntities,
   icon,
   setSafeHTML,
+  setDynamicText,
+  setDynamicHTML,
   getStoredPassword,
   setCachedPassword,
   removePassword,
@@ -24,8 +26,8 @@ import {
   QUERY_ENDPOINTS
 } from './modules/index.js';
 import { errMessage } from '@shared/platform/err-util.js';
-import { S, applyI18n, setLocale, effectiveLocale } from '@shared/strings/index.js';
-import { runRetranslate, runPanelRetranslate } from './modules/ui/retranslate-registry.js';
+import { S, applyI18n, setLocale } from '@shared/strings/index.js';
+import { applyLocalePreference } from './modules/utils/locale-live.js';
 import { devLog } from './modules/utils/dev-log.js';
 import { rendererWarn, rendererError } from './modules/utils/logger.js';
 import { initDeeplinkMediaTypes } from './modules/deeplink/deeplink-media-types.js';
@@ -123,27 +125,14 @@ async function initPrivacyMode() {
   });
 }
 
-// Live language switch: main broadcasts the new preference; re-resolve against this
-// window's OS locale, repoint the catalog, and retranslate the static shell in place.
-// Imperative/dynamic surfaces re-read S as they next re-render (no reload, no lost state).
+// Live language switch: main broadcasts the new preference; the shared `applyLocalePreference`
+// re-resolves it against this window's OS locale, repoints the catalog, retranslates the static
+// shell (applyI18n), re-renders the sidebar (`afterApply` = renderDeviceList), then sweeps the
+// retranslate registries (registered modals + every device panel's imperative surfaces). No reload,
+// no lost state; the panel sweep runs after applyI18n so it repairs any clobbered placeholders.
 function initLocaleLiveSwitch(afterApply?: () => void) {
   if (!window.roku || typeof window.roku.onLocaleChanged !== 'function') return;
-  window.roku.onLocaleChanged((pref: string) => {
-    setLocale(effectiveLocale(pref, navigator.language || ''));
-    applyI18n(document);
-    // Re-render imperative surfaces (e.g. sidebar device cards built from `S.*`, which
-    // applyI18n can't reach). Supplied by the call site so it can reference render fns
-    // scoped to the main try-block; leaves device tab panels (scrollback, input) untouched.
-    if (afterApply) { try { afterApply(); } catch { /* best-effort */ } }
-    // Re-render imperatively-built surfaces that registered themselves (e.g. the open
-    // Action Scripts step-help modal). data-i18n HTML is already handled by applyI18n above.
-    runRetranslate();
-    // Re-render every open device tab panel's imperative surfaces (Network Inspector session
-    // list, Action Scripts steps, App Connector placeholders, Dev App auth badge, performance
-    // charts). Runs AFTER applyI18n(document) so a re-render from current state also repairs any
-    // dynamic content applyI18n reverted to a data-i18n placeholder.
-    runPanelRetranslate();
-  });
+  window.roku.onLocaleChanged((pref: string) => applyLocalePreference(pref, afterApply));
 }
 
 // Wrap everything in try-catch to catch any errors
@@ -279,7 +268,7 @@ function reconcileConnectedDeviceIp(
 
   const panel = document.getElementById(connection.tabId);
   if (panel) {
-    setDeviceHeaderText(panel.querySelector('.device-ip'), newIp);
+    setDynamicText(panel.querySelector('.device-ip'), newIp);
   }
 
   const ctrl = networkTabControllers.get(connection.tabId);
@@ -2131,8 +2120,8 @@ function addDiscoveredDevice(device) {
         const nameText = panel.querySelector('.panel-device-name-text');
         const ipEl = panel.querySelector('.device-ip');
         const iconEl = panel.querySelector('.device-panel-icon');
-        setDeviceHeaderText(nameText, device.deviceName || device.modelName || S.app.unknownRoku);
-        setDeviceHeaderText(ipEl, device.ip);
+        setDynamicText(nameText, device.deviceName || device.modelName || S.app.unknownRoku);
+        setDynamicText(ipEl, device.ip);
         if (iconEl) {
           setDevicePanelIcon(iconEl, device, { isRemote: false });
         }
@@ -2194,20 +2183,6 @@ function updateScanButton(scanning) {
 // ============================================
 // Device List Rendering
 // ============================================
-
-/**
- * Write live device data into a device-panel header element and drop its `data-i18n` placeholder
- * binding. The header's name/IP spans ship with `data-i18n="app.deviceNamePlaceholder"` /
- * `="common.loading"` so they read "Device Name" / "Loading…" before the device resolves; once we
- * fill in the real name/IP the attribute must go, or a later `applyI18n(document)` retranslate pass
- * (fired on a live locale switch) would revert the element back to the placeholder — the "stuck on
- * Loading…" bug.
- */
-function setDeviceHeaderText(el: Element | null, text: string): void {
-  if (!(el instanceof HTMLElement)) return;
-  el.textContent = text;
-  el.removeAttribute('data-i18n');
-}
 
 function renderDeviceList() {
   const devices = Array.from(state.devices.values());
@@ -3694,22 +3669,18 @@ function createDevicePanel(device, tabId, isRemote = false, serverUrl = null, lo
   
   if (isRemote && locationId) {
     const location = state.remoteLocations.get(locationId);
-    if (nameText instanceof HTMLElement) {
-      setSafeHTML(
-        nameText,
-        icon('globe', 'icon-sm', 'icon-cyan') +
-          ' ' +
-          escapeHtml(device.deviceName || device.modelName || S.app.unknownRoku)
-      );
-      // Holds live device data now — see setDeviceHeaderText.
-      nameText.removeAttribute('data-i18n');
-    }
+    setDynamicHTML(
+      nameText,
+      icon('globe', 'icon-sm', 'icon-cyan') +
+        ' ' +
+        escapeHtml(device.deviceName || device.modelName || S.app.unknownRoku)
+    );
     if (ipEl) {
-      setDeviceHeaderText(ipEl, S.app.atLocation(device.ip, location?.name || S.app.remote));
+      setDynamicText(ipEl, S.app.atLocation(device.ip, location?.name || S.app.remote));
     }
   } else {
-    setDeviceHeaderText(nameText, device.deviceName || device.modelName || S.app.unknownRoku);
-    setDeviceHeaderText(ipEl, device.ip);
+    setDynamicText(nameText, device.deviceName || device.modelName || S.app.unknownRoku);
+    setDynamicText(ipEl, device.ip);
   }
   
   if (iconEl) {

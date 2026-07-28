@@ -9,7 +9,8 @@ import {
   type RdsTimingOverrides
 } from './constants.js';
 import { rendererError } from './logger.js';
-import { setLocale, effectiveLocale, SYSTEM_LOCALE } from '@shared/strings/index.js';
+import { SYSTEM_LOCALE } from '@shared/strings/index.js';
+import { setLocaleFromPreference } from './locale-pref.js';
 
 /** Persisted language preference: a locale code (e.g. 'en') or 'system'. Default 'system'. */
 export const SETTINGS_KEY_LANGUAGE = 'language';
@@ -143,8 +144,7 @@ export async function loadPersistedAppSettings(): Promise<void> {
       languageRes && languageRes.success && typeof languageRes.value === 'string' && languageRes.value.trim()
         ? languageRes.value.trim()
         : SYSTEM_LOCALE;
-    const osLocale = typeof navigator !== 'undefined' && navigator.language ? navigator.language : '';
-    setLocale(effectiveLocale(pref, osLocale));
+    setLocaleFromPreference(pref);
 
     /**
      * Read timing from disk *before* resetting live constants. Previously we called

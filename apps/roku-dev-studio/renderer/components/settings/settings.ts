@@ -15,7 +15,9 @@ import {
 } from '@shared/network-inspector/setup-guide.js';
 import { initSideloadRelaySection } from './sideload-relay-section.js';
 import { attachBackdropClickToClose } from '../../modules/utils/modal-backdrop-click.js';
-import { S, applyI18n, availableLocales, getLocale, matchLocale, localeLabel, setLocale, effectiveLocale, SYSTEM_LOCALE } from '@shared/strings/index.js';
+import { S, applyI18n, availableLocales, getLocale, matchLocale, localeLabel, setLocale, SYSTEM_LOCALE } from '@shared/strings/index.js';
+import { applyLocalePreference } from '../../modules/utils/locale-live.js';
+import { setLocaleFromPreference } from '../../modules/utils/locale-pref.js';
 
 const api = (window as any).settingsApi;
 if (!api) {
@@ -1309,7 +1311,7 @@ api.getState().then(function (state: any) {
   // so without this it renders English even when the dropdown shows the saved language
   // (and looked like the choice "reverted" on reopen).
   var langPref = typeof state.language === 'string' ? state.language : SYSTEM_LOCALE;
-  setLocale(effectiveLocale(langPref, (typeof navigator !== 'undefined' && navigator.language) || ''));
+  setLocaleFromPreference(langPref);
   applyI18n(document);
   syncHeaderSectionLabel();
   populateLanguageOptions();
@@ -1434,13 +1436,15 @@ setLanguageSelect(SYSTEM_LOCALE);
 // Retranslate this window in place when the locale changes (on Save, or from elsewhere).
 if (api && typeof api.onLocaleChanged === 'function') {
   api.onLocaleChanged(function (pref: string) {
-    setLocale(effectiveLocale(pref, (typeof navigator !== 'undefined' && navigator.language) || ''));
-    applyI18n(document);
-    syncHeaderSectionLabel();
-    populateLanguageOptions();
-    setLanguageSelect(pref);
-    populateNiBoundLabels();
-    populateNiSetupModal();
+    // Shared live-switch core (setLocale + applyI18n + retranslate registries); `extra` re-renders
+    // the Settings window's own imperative surfaces (language picker, NI labels, setup modal).
+    applyLocalePreference(pref, function () {
+      syncHeaderSectionLabel();
+      populateLanguageOptions();
+      setLanguageSelect(pref);
+      populateNiBoundLabels();
+      populateNiSetupModal();
+    });
   });
 }
 var btnResetGeneral = el('btnResetGeneral');

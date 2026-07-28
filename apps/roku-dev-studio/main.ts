@@ -670,14 +670,17 @@ app.whenReady().then(() => {
   registerStripAuxWindowMenus(app);
   initSettings(app);
   const earlySettings = loadSettings();
+  // The last language preference broadcast to renderers. Tracked in memory (NOT re-read from the
+  // settings file) so the SetLocale handler can no-op an unchanged save: the Settings save persists
+  // `language` to disk *before* it calls setLanguage(), so a file comparison would always look
+  // "unchanged" and break the live switch. Seeded from the persisted value at startup.
+  let lastBroadcastLocalePref =
+    typeof earlySettings['language'] === 'string' && earlySettings['language'].trim()
+      ? earlySettings['language'].trim()
+      : 'system';
   // Resolve the persisted language preference against the OS locale so the native menu
   // (built in createWindow below) renders in the chosen locale from first paint.
-  setLocale(
-    effectiveLocale(
-      typeof earlySettings['language'] === 'string' ? earlySettings['language'] : 'system',
-      app.getLocale()
-    )
-  );
+  setLocale(effectiveLocale(lastBroadcastLocalePref, app.getLocale()));
   const rememberPasswordsInKeychain = earlySettings.rememberPasswordsInKeychain === true;
   secretStore.init(app, { enabled: rememberPasswordsInKeychain });
   registerAboutIpc(ipcMain, clipboard, shell);
@@ -702,6 +705,13 @@ app.whenReady().then(() => {
   // menu in the new locale, and fan the change out so every window retranslates in place.
   ipcMain.handle(IPC.SetLocale, (_event: import('electron').IpcMainInvokeEvent, code: unknown) => {
     const pref = typeof code === 'string' && code.trim() ? code.trim() : 'system';
+    // No-op when the preference is unchanged since the last broadcast. The Settings → General "Save"
+    // button calls setLanguage() on EVERY save, so without this guard a save made for any other reason
+    // would broadcast LocaleChanged and force a full retranslate (+ redundant chart repaint) in every
+    // window for nothing. Compare against the in-memory value, not the file — the save already
+    // persisted `language` before this ran, so a file comparison would miss a genuine change.
+    if (pref === lastBroadcastLocalePref) return { success: true, pref, unchanged: true };
+    lastBroadcastLocalePref = pref;
     const settings = loadSettings();
     settings['language'] = pref;
     saveSettings(settings);

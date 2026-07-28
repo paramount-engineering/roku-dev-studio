@@ -1,6 +1,6 @@
 // Function selector and management
 
-import { escapeHtml, setSafeHTML } from '../../modules/utils/index.js';
+import { escapeHtml, setSafeHTML, setDynamicHTML, clearDynamic } from '../../modules/utils/index.js';
 import { RALE_BUILTIN_COMMANDS } from './rale-builtins.js';
 import { S } from '@shared/strings/index.js';
 import type {
@@ -27,15 +27,12 @@ export function setupFunctionSelector(
 
   let availableFunctions: ExternalControlFunctionMeta[] = [...initialFunctions];
 
-  // Set dynamic hint content (function counts / a function's description) and DROP the data-i18n
-  // binding this element carries in the template. Otherwise a live locale switch's applyI18n pass
-  // would revert this live text back to the generic "Select a function…" placeholder. The
-  // disconnected path re-adds the attribute so the placeholder still retranslates.
-  const setDynamicFuncParamHint = (html: string): void => {
-    if (!funcParamHint) return;
-    setSafeHTML(funcParamHint, html);
-    funcParamHint.removeAttribute('data-i18n');
-  };
+  // Set dynamic hint content (function counts / a function's description). `setDynamicHTML` marks the
+  // element JS-managed so a live locale switch's applyI18n pass won't revert this live text back to
+  // the generic "Select a function…" placeholder. The disconnected path calls `clearDynamic` to hand
+  // the element (with its original data-i18n key untouched) back to applyI18n so the placeholder
+  // retranslates again.
+  const setDynamicFuncParamHint = (html: string): void => setDynamicHTML(funcParamHint, html);
 
   function renderRaleOptgroup() {
     let html = '';
@@ -57,9 +54,9 @@ export function setupFunctionSelector(
       funcNameInput.value = '';
       if (funcParamHint) {
         setSafeHTML(funcParamHint, S.inspector.selectFunctionForParamDetails);
-        // Restore the data-i18n binding (a prior connected state may have removed it — see below) so
-        // applyI18n retranslates this disconnected hint.
-        funcParamHint.setAttribute('data-i18n', 'app.selectFunctionParamHint');
+        // Clear the JS-managed marker (a prior connected state may have set it) so applyI18n
+        // retranslates this disconnected hint via the element's data-i18n key on the next switch.
+        clearDynamic(funcParamHint);
       }
       renderParamInputsFn([]);
       return;
