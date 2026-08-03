@@ -1,0 +1,7 @@
+{
+  "$schema": "https://glama.ai/mcp/schemas/server.json",
+  "maintainers": ["hdonapati"],
+  "description": "MCP server for Roku Dev Studio — lets AI agents (Cursor, Claude Desktop, VS Code) control real Roku devices: keypress, launch, sideload, screenshot, RALE/App Connector, Telnet console, and Action Scripts.",
+  "categories": ["developer-tools", "automation"],
+  "tags": ["roku", "brightscript", "ecp", "mcp", "developer-tools", "tv", "streaming", "scenegraph", "sideload", "automation"]
+}
