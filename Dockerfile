@@ -1,10 +1,10 @@
-# syntax=docker/dockerfile:1
+# syntax=docker/dockerfile:1@sha256:87999aa3d42bdc6bea60565083ee17e86d1f3339802f543c0d03998580f9cb89
 
 # ─── Build stage ─────────────────────────────────────────────────────────────
 # Builds only the three workspace packages the MCP server needs, in dependency
 # order (platform → api → mcp). Deliberately skips apps/* (Electron/Monaco),
 # which the MCP server does not use — keeps the build small and reliable.
-FROM node:22-bookworm-slim AS build
+FROM node:22-bookworm-slim@sha256:f32b81066cde10a75dbac96646099533316d94bac4150c55da1636e1f0ffdc46 AS build
 WORKDIR /app
 
 # CI=true turns each package's `prepare` script into a no-op, so `npm install`
@@ -34,7 +34,7 @@ RUN npm run build --workspace roku-dev-studio-platform \
 # ─── Runtime stage ───────────────────────────────────────────────────────────
 # The bundle inlines every dependency, so the runtime image needs nothing but
 # Node and the single .cjs file.
-FROM node:22-bookworm-slim AS runtime
+FROM node:22-bookworm-slim@sha256:f32b81066cde10a75dbac96646099533316d94bac4150c55da1636e1f0ffdc46 AS runtime
 WORKDIR /app
 COPY --from=build /app/packages/roku-dev-studio-mcp/dist/index.cjs ./index.cjs
 
