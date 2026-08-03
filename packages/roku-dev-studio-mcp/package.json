@@ -2,6 +2,16 @@
   "name": "roku-dev-studio-mcp",
   "version": "1.0.1",
   "description": "MCP server exposing Roku Dev Studio Action Scripts to AI agents",
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "roku",
+    "brightscript",
+    "ai-agent",
+    "cursor",
+    "claude",
+    "developer-tools"
+  ],
   "main": "dist/index.cjs",
   "bin": {
     "roku-dev-studio-mcp": "dist/index.cjs"

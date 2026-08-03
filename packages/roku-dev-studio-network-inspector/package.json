@@ -24,7 +24,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "adm-zip": "^0.5.17",
+    "adm-zip": "^0.6.0",
     "node-forge": "^1.4.0",
     "roku-dev-studio-api": "^1.0.0",
     "roku-dev-studio-platform": "^1.0.0"
