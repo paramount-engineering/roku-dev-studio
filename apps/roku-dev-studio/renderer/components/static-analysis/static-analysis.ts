@@ -651,10 +651,15 @@ function wireBridgeEvents(): void {
   const bridge = getBridge();
   bridge.onToolStatus((status) => setToolStatus(status));
   bridge.onProgress((data) => {
+    // The main process can emit progress (e.g. the command echo) before the `run()` invoke
+    // resolves and assigns the real runId here — adopt it from the first event instead of
+    // dropping everything sent while we're still holding the 'pending' placeholder.
+    if (currentRunId === 'pending') currentRunId = data.runId;
     if (data.runId !== currentRunId) return;
     appendConsole(data.text);
   });
   bridge.onRunResult((result) => {
+    if (currentRunId === 'pending') currentRunId = result.runId;
     if (result.runId !== currentRunId) return;
     setRunning(false);
     renderResults(result);

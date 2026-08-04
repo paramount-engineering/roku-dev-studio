@@ -10,7 +10,7 @@ import * as path from 'path';
 import { execFile, spawn, type ChildProcess } from 'child_process';
 import * as crypto from 'crypto';
 import type { App } from 'electron';
-import type { ScaCategory, ScaError, ScaSeverity, StaticAnalysisRunResult } from '../../shared/ipc/payloads';
+import { SCA_CATEGORIES, type ScaCategory, type ScaError, type ScaSeverity, type StaticAnalysisRunResult } from '../../shared/ipc/payloads';
 import {
   createTelnetIpcCoalesceState,
   scheduleCoalescedMapFlush,
@@ -77,22 +77,14 @@ async function pruneOrphanedReportDirs(app: App, keepRunId: string): Promise<voi
 }
 
 const SEVERITIES: ReadonlySet<string> = new Set(['info', 'warning', 'error']);
-const CATEGORIES: ReadonlySet<string> = new Set([
-  'uncategorized',
-  'deprecated_components',
-  'deprecated_apis',
-  'manifest',
-  'raf',
-  'red',
-  'package'
-]);
+const CATEGORIES: ReadonlySet<string> = new Set(SCA_CATEGORIES);
 
 function buildArgs(inputPath: string, severity: ScaSeverity | undefined, categories: ScaCategory[] | undefined, outputDir: string): string[] {
   const args = [inputPath];
   if (severity && SEVERITIES.has(severity)) args.push('-s', severity);
   const cats = (categories ?? []).filter((c) => CATEGORIES.has(c));
-  // All 7 (or none explicitly narrowed) selected means "no filter" — omit -c rather than
-  // spelling out every category.
+  // All categories (or none explicitly narrowed) selected means "no filter" — omit -c rather
+  // than spelling out every category.
   if (cats.length > 0 && cats.length < CATEGORIES.size) args.push('-c', cats.join(','));
   // Always request both: if `json` turns out unsupported by a given sca-cmd build, console
   // output is still available as a fallback instead of silence.
@@ -102,6 +94,17 @@ function buildArgs(inputPath: string, severity: ScaSeverity | undefined, categor
   // "Is a directory". `outputDir` already exists (created before spawn), so this satisfies that.
   args.push('-o', path.join(outputDir, 'SCA_Report.json'));
   return args;
+}
+
+/** Quotes an arg for display only if it needs it (e.g. a path with spaces) — cosmetic, not
+ *  actually re-parsed by anything. */
+function formatArgForDisplay(arg: string): string {
+  return /\s/.test(arg) ? `"${arg.replace(/"/g, '\\"')}"` : arg;
+}
+
+function formatCommandLine(launcherPath: string, cliArgs: string[]): string {
+  const parts = [path.basename(launcherPath), ...cliArgs].map(formatArgForDisplay);
+  return `$ ${parts.join(' ')}\n\n`;
 }
 
 function killScaChild(child: ChildProcess): void {
@@ -259,6 +262,10 @@ export function startScaRun(args: StartScaRunArgs): { success: boolean; runId?: 
     ipcCoalesce: createTelnetIpcCoalesceState()
   };
   runsById.set(runId, state);
+
+  const commandLine = formatCommandLine(args.launcherPath, cliArgs);
+  appendTail(state, 'stdoutTail', commandLine);
+  state.emit('progress', { runId, stream: 'stdout', text: commandLine });
 
   const onData = (stream: 'stdout' | 'stderr') => (chunk: Buffer) => {
     const text = chunk.toString('utf8');

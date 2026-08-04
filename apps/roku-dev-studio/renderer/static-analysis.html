@@ -68,6 +68,16 @@
         <p class="sca-subtitle" data-i18n="staticAnalysis.subtitle">Run Roku's Static Channel Analysis tool on your Channel.</p>
       </div>
     </div>
+    <div class="sca-header-actions">
+      <button type="button" id="scaAnalyzeBtn" class="btn btn-primary" disabled>
+        <span class="icon icon-sm"><svg><use href="#icon-play"/></svg></span>
+        <span data-i18n="staticAnalysis.analyzeBtn">Analyze</span>
+      </button>
+      <button type="button" id="scaCancelBtn" class="btn btn-danger" hidden>
+        <span class="icon icon-sm"><svg><use href="#icon-stop"/></svg></span>
+        <span data-i18n="staticAnalysis.cancelBtn">Cancel</span>
+      </button>
+    </div>
     <div class="sca-header-status">
       <div class="sca-status-pill" id="scaToolStatus" data-state="checking">
         <span class="sca-status-dot"></span>
@@ -143,26 +153,39 @@
               <span class="sca-category-desc" data-i18n="staticAnalysis.categoryRafDesc">Roku Advertising Framework integration checks.</span>
             </label>
             <label class="sca-category-item">
-              <span class="sca-category-row"><input type="checkbox" value="red" checked><span data-i18n="staticAnalysis.categoryRed">RED</span></span>
-              <span class="sca-category-desc" data-i18n="staticAnalysis.categoryRedDesc">Checks in Roku's RED certification category.</span>
-            </label>
-            <label class="sca-category-item">
               <span class="sca-category-row"><input type="checkbox" value="package" checked><span data-i18n="staticAnalysis.categoryPackage">Package</span></span>
               <span class="sca-category-desc" data-i18n="staticAnalysis.categoryPackageDesc">How your channel's package (zip) is structured.</span>
             </label>
+            <label class="sca-category-item">
+              <span class="sca-category-row"><input type="checkbox" value="channel_store" checked><span data-i18n="staticAnalysis.categoryChannelStore">Channel Store</span></span>
+              <span class="sca-category-desc" data-i18n="staticAnalysis.categoryChannelStoreDesc">Requirements for listing on the Channel Store.</span>
+            </label>
+            <label class="sca-category-item">
+              <span class="sca-category-row"><input type="checkbox" value="authentication" checked><span data-i18n="staticAnalysis.categoryAuthentication">Authentication</span></span>
+              <span class="sca-category-desc" data-i18n="staticAnalysis.categoryAuthenticationDesc">Checks for your channel's sign-in and account linking flows.</span>
+            </label>
+            <label class="sca-category-item">
+              <span class="sca-category-row"><input type="checkbox" value="billing" checked><span data-i18n="staticAnalysis.categoryBilling">Billing</span></span>
+              <span class="sca-category-desc" data-i18n="staticAnalysis.categoryBillingDesc">Checks for your channel's in-app purchase and billing flows.</span>
+            </label>
+            <label class="sca-category-item">
+              <span class="sca-category-row"><input type="checkbox" value="deep_linking" checked><span data-i18n="staticAnalysis.categoryDeepLinking">Deep Linking</span></span>
+              <span class="sca-category-desc" data-i18n="staticAnalysis.categoryDeepLinkingDesc">Checks for your channel's deep linking implementation.</span>
+            </label>
+            <label class="sca-category-item">
+              <span class="sca-category-row"><input type="checkbox" value="analytics" checked><span data-i18n="staticAnalysis.categoryAnalytics">Analytics</span></span>
+              <span class="sca-category-desc" data-i18n="staticAnalysis.categoryAnalyticsDesc">Checks for analytics and telemetry integration.</span>
+            </label>
+            <label class="sca-category-item">
+              <span class="sca-category-row"><input type="checkbox" value="performance" checked><span data-i18n="staticAnalysis.categoryPerformance">Performance</span></span>
+              <span class="sca-category-desc" data-i18n="staticAnalysis.categoryPerformanceDesc">Checks for performance-related issues in your channel.</span>
+            </label>
+            <label class="sca-category-item">
+              <span class="sca-category-row"><input type="checkbox" value="monitoring" checked><span data-i18n="staticAnalysis.categoryMonitoring">Monitoring</span></span>
+              <span class="sca-category-desc" data-i18n="staticAnalysis.categoryMonitoringDesc">Checks for monitoring and health-check integration.</span>
+            </label>
           </div>
         </div>
-      </section>
-
-      <section class="sca-actions-row">
-        <button type="button" id="scaAnalyzeBtn" class="btn btn-primary" disabled>
-          <span class="icon icon-sm"><svg><use href="#icon-play"/></svg></span>
-          <span data-i18n="staticAnalysis.analyzeBtn">Analyze</span>
-        </button>
-        <button type="button" id="scaCancelBtn" class="btn btn-danger" hidden>
-          <span class="icon icon-sm"><svg><use href="#icon-stop"/></svg></span>
-          <span data-i18n="staticAnalysis.cancelBtn">Cancel</span>
-        </button>
       </section>
     </div>
 

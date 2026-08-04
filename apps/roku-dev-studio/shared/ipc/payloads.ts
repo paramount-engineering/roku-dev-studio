@@ -231,14 +231,22 @@ export interface JavaStatus {
 export const SCA_SEVERITIES = ['info', 'warning', 'error'] as const;
 export type ScaSeverity = (typeof SCA_SEVERITIES)[number];
 
+/** Matches the live `sca-cmd` binary's own `-c/--filter-categories` help text — NOT Roku's
+ *  (stale) written docs, which still list a `red` category the current build rejects outright. */
 export const SCA_CATEGORIES = [
   'uncategorized',
   'deprecated_components',
   'deprecated_apis',
   'manifest',
   'raf',
-  'red',
-  'package'
+  'package',
+  'channel_store',
+  'authentication',
+  'billing',
+  'deep_linking',
+  'analytics',
+  'performance',
+  'monitoring'
 ] as const;
 export type ScaCategory = (typeof SCA_CATEGORIES)[number];
 

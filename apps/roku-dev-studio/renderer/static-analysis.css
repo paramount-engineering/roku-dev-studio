@@ -114,13 +114,17 @@ html, body {
   padding: 16px 20px;
   background: var(--bg-primary);
   border-bottom: 1px solid var(--border);
-  display: flex;
+  display: grid;
+  /* Center column is `auto`-sized and true-centered regardless of how wide the outer two
+   * columns end up — a plain flex `space-between` can't center a middle item against the
+   * header as a whole, only against the leftover space next to its neighbors. */
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  justify-content: space-between;
   gap: 16px;
-  flex-wrap: wrap;
 }
-.sca-brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.sca-brand { display: flex; align-items: center; gap: 12px; min-width: 0; justify-self: start; }
+.sca-header-actions { display: flex; align-items: center; gap: 10px; justify-self: center; }
+.sca-header-actions .btn { white-space: nowrap; }
 .sca-brand-badge {
   width: 32px;
   height: 32px;
@@ -137,7 +141,7 @@ html, body {
 .sca-subtitle { margin-top: 2px; font-size: 11px; color: var(--text-muted); }
 
 /* Status badges — relocated into the header */
-.sca-header-status { display: flex; gap: 10px; flex-wrap: wrap; }
+.sca-header-status { display: flex; gap: 10px; flex-wrap: wrap; justify-self: end; }
 
 .sca-layout {
   flex: 1;
@@ -423,10 +427,6 @@ html, body {
   line-height: 1.4;
 }
 
-/* Analyze / Cancel row */
-.sca-actions-row { display: flex; align-items: center; gap: 12px; }
-.sca-actions-row .btn { flex: 1; }
-
 /* Console output */
 .sca-console-output {
   flex: 1;
@@ -456,14 +456,17 @@ html, body {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 10px 16px;
+  /* Matches `.sca-card-heading`'s padding/font-size so the tab bar reads as the same header-bar
+   * height as the Channel File / Options cards' headers, since it plays the same visual role
+   * for the right column. */
+  padding: 12px 16px;
   border: none;
   border-right: 1px solid var(--border);
   background: transparent;
   color: var(--text-secondary);
   font-family: inherit;
   font-weight: 600;
-  font-size: 12.5px;
+  font-size: 13px;
   cursor: pointer;
   transition: background 0.15s, color 0.15s;
 }
