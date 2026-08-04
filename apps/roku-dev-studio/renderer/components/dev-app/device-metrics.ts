@@ -21,6 +21,7 @@ import {
   parseObjectCountsBreakdown,
   parseActiveAppId,
   extractChanperfFailureMessage,
+  isChanperfChannelNotRunning,
   drawTimeseriesChart,
   drawSparklineTimeseries,
   memChartYAxisMaxBytes,
@@ -635,8 +636,15 @@ export function setupRemoteTabMetrics(
   /** `null` until first `dev-app-active-polled` so we do not treat “unknown” as backgrounded. */
   let devAppForeground: boolean | null = null;
 
+  /** `applyConnectionGating` (renderer/app.ts) stamps this once the device-offline banner is
+   *  showing — no point retrying (or toasting about) a metrics query against a device the
+   *  connection-check loop has already confirmed is unreachable. */
+  function isDeviceKnownOffline(): boolean {
+    return panel.dataset.deviceOffline === 'true';
+  }
+
   function shouldPoll(): boolean {
-    if (destroyed || !developerEnabled) return false;
+    if (destroyed || !developerEnabled || isDeviceKnownOffline()) return false;
     return isQuadLayout() && devAppForeground === true;
   }
 
@@ -648,14 +656,22 @@ export function setupRemoteTabMetrics(
     return true;
   }
 
+  /** Raw Node connect errors ("connect EHOSTDOWN 1.2.3.4:8060 - Local (1.2.3.5:49978)") embed a
+   *  fresh ephemeral source port on every single retry, so the same underlying failure never
+   *  string-matches the previous one and the dedup below never engages. Strip it before comparing. */
+  function normalizeMetricsErrorForDedupe(msg: string): string {
+    return msg.replace(/Local \([^)]*\)/g, 'Local (…)');
+  }
+
   function setError(msg: string | null | undefined): void {
     if (msg == null || msg === '') {
       lastMetricsErrorToast = null;
       return;
     }
     if (!shouldSurfaceMetricsToasts()) return;
-    if (msg !== lastMetricsErrorToast) {
-      lastMetricsErrorToast = msg;
+    const normalized = normalizeMetricsErrorForDedupe(msg);
+    if (normalized !== lastMetricsErrorToast) {
+      lastMetricsErrorToast = normalized;
       showToast(msg, 'error');
     }
   }
@@ -1288,17 +1304,25 @@ export function setupRemoteTabMetrics(
       if (!cp.success || typeof cp.data !== 'string') {
         chanperfErr = cp.error || S.devApp.chanperfRequestFailed;
       } else if (!full) {
-        chanperfErr =
-          extractChanperfFailureMessage(chanperfXml) ||
-          S.devApp.couldNotParseChanperf;
+        // "Channel not running: active UI" (and similar) is Roku's own wording for "not attached
+        // yet" — expected for a few hundred ms right after a launch. The Paused nav already
+        // covers it; don't also alarm with a toast for a condition that resolves on its own.
+        chanperfErr = isChanperfChannelNotRunning(chanperfXml)
+          ? null
+          : extractChanperfFailureMessage(chanperfXml) || S.devApp.couldNotParseChanperf;
       }
 
-      const activeId =
-        aa.success && typeof aa.data === 'string' ? parseActiveAppId(aa.data) : null;
-      const objectCountsAppId = activeId || OBJECT_COUNTS_FALLBACK_APP_ID;
-      const oc = await api.query(
-        `/query/app-object-counts/${encodeURIComponent(objectCountsAppId)}`
-      );
+      // Only fall back to the dev-package id when the active-app query genuinely succeeded with
+      // no id — NOT when it failed outright (e.g. the device just went unreachable). Silently
+      // substituting a different app's object count in that case plots an unrelated number as
+      // if it were a continuation of the same series — exactly the failure mode behind a sharp,
+      // spurious spike right at a connection-loss boundary.
+      const activeAppKnown = aa.success && typeof aa.data === 'string';
+      const activeId = aa.success && typeof aa.data === 'string' ? parseActiveAppId(aa.data) : null;
+      const objectCountsAppId = activeId || (activeAppKnown ? OBJECT_COUNTS_FALLBACK_APP_ID : null);
+      const oc = objectCountsAppId
+        ? await api.query(`/query/app-object-counts/${encodeURIComponent(objectCountsAppId)}`)
+        : { success: false as const, error: aa.error || S.devApp.deviceMetricsUnavailable };
 
       let objectOk = false;
       if (oc.success && typeof oc.data === 'string') {
@@ -1344,9 +1368,11 @@ export function setupRemoteTabMetrics(
       const ocErr = oc.success ? null : oc.error || S.devApp.objectCountsFailed;
       if (!full && !objectOk) {
         failStreak += 1;
-        setError(
-          [chanperfErr, ocErr].filter(Boolean).join(' · ') || S.devApp.deviceMetricsUnavailable
-        );
+        // Both queries fail with the exact same underlying cause once the device is actually
+        // unreachable (a timeout, a connection error) — join only distinct messages, otherwise
+        // this reads as "Request timed out · Request timed out".
+        const distinct = [...new Set([chanperfErr, ocErr].filter(Boolean))];
+        setError(distinct.join(' · ') || S.devApp.deviceMetricsUnavailable);
       } else {
         failStreak = 0;
         setError(chanperfErr ?? ocErr);
@@ -1425,7 +1451,10 @@ export function setupRemoteTabMetrics(
   document.addEventListener('visibilitychange', vis);
 
   const mo = new MutationObserver(() => reschedule());
-  mo.observe(panel, { attributes: true, attributeFilter: ['class'] });
+  // 'data-device-offline' (dataset.deviceOffline) so polling stops the moment the connection
+  // check marks this panel unreachable, and resumes automatically once it clears — reuses the
+  // same reschedule() path as the existing 'class' watch (active-tab toggling, etc.).
+  mo.observe(panel, { attributes: true, attributeFilter: ['class', 'data-device-offline'] });
 
   let unsubSettings: (() => void) | null = null;
 

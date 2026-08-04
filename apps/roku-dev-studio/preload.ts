@@ -438,6 +438,12 @@ contextBridge.exposeInMainWorld('roku', {
     return () => ipcRenderer.removeListener(IPC.TelnetDisconnected, handler);
   },
 
+  onDeviceConnectionSuspect: (callback: (data: { ip: string }) => void) => {
+    const handler = (_event: IpcRendererEvent, data: { ip: string }) => callback(data);
+    ipcRenderer.on(IPC.DeviceConnectionSuspect, handler);
+    return () => ipcRenderer.removeListener(IPC.DeviceConnectionSuspect, handler);
+  },
+
   // ============================================
   // BrightScript Debugger (debug protocol, port 8081)
   // ============================================

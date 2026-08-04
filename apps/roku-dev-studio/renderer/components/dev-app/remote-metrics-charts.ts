@@ -155,6 +155,18 @@ export function extractChanperfFailureMessage(xml: string): string | null {
   return null;
 }
 
+/**
+ * True when chanperf's own `<error>` text is Roku's "not attached to the active UI yet" wording
+ * (`Channel not running: active UI`, etc.) — an expected, self-resolving condition during the
+ * few hundred ms right after a launch, before the new channel's UI has attached. The "Paused"
+ * nav already communicates this; it should never also surface as an error toast, regardless of
+ * which caller's poll happened to be in flight when this specific response came back.
+ */
+export function isChanperfChannelNotRunning(xml: string): boolean {
+  const errM = xml.match(/<error>([^<]*)<\/error>/i);
+  return /^channel not running/i.test(errM?.[1]?.trim() ?? '');
+}
+
 export type ObjectCountRow = { label: string; count: number; bytes?: number | null };
 
 /** ECP `/query/active-app` → foreground channel id for object-count queries. */

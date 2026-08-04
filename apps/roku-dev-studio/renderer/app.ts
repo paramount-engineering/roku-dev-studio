@@ -2943,25 +2943,37 @@ function updateDeviceOfflineState(deviceKey, isOffline, isRemote = false) {
         }
       }
 
-      let overlay = panel.querySelector('.device-offline-overlay') as HTMLElement | null;
-      
+      // A non-blocking banner, not a full-panel scrim: going offline shouldn't hide access to
+      // already-received content (NI's captured events, Console's scrollback, etc.) that lives
+      // entirely in renderer state and needs no live connection to view. Only actions that
+      // actually require a live socket should be gated, per-control, at the point of use.
+      let overlay = panel.querySelector('.device-offline-banner') as HTMLElement | null;
+
       if (isOffline) {
         if (!overlay) {
           const newOverlay = document.createElement('div');
-          newOverlay.className = 'device-offline-overlay';
+          newOverlay.className = 'device-offline-banner';
           setSafeHTML(newOverlay, `
-            <div class="offline-content">
-              <div class="offline-icon">${icon('wifi-off', 'icon-xl')}</div>
-              <h3>${S.app.deviceOffline}</h3>
-              <p>${S.app.unableToConnectDevice}</p>
-              <button class="btn btn-primary retry-connection-btn">${icon('refresh', 'icon-xs')} ${S.app.retryConnection}</button>
+            <div class="device-offline-banner-content">
+              <span class="device-offline-banner-icon">${icon('wifi-off', 'icon-sm')}</span>
+              <span class="device-offline-banner-text">
+                <span class="device-offline-banner-title">${S.app.deviceOffline}</span>
+                <span class="device-offline-banner-desc">${S.app.unableToConnectDevice}</span>
+              </span>
+              <button class="device-offline-banner-btn retry-connection-btn">${icon('refresh', 'icon-xs')} ${S.app.retryConnection}</button>
             </div>
           `);
-          const devicePanelRoot = panel.querySelector('.device-panel');
-          if (devicePanelRoot instanceof HTMLElement) {
-            devicePanelRoot.prepend(newOverlay);
+          // After the header/tab bar, not prepended above it — keeps the device branding + tab
+          // switcher as the first thing in the panel (unchanged position) and gives the banner a
+          // natural place to sit as a contextual strip, matching `.dev-mode-warning`'s treatment.
+          const devicePanelHeader = panel.querySelector('.device-panel-header');
+          if (devicePanelHeader) {
+            devicePanelHeader.insertAdjacentElement('afterend', newOverlay);
+          } else {
+            const devicePanelRoot = panel.querySelector('.device-panel');
+            if (devicePanelRoot instanceof HTMLElement) devicePanelRoot.prepend(newOverlay);
           }
-          
+
           // Add retry button handler with correct parameters
           const serverUrl = connection.serverUrl || panel.dataset.serverUrl;
           newOverlay.querySelector('.retry-connection-btn')?.addEventListener('click', () => {
@@ -2969,14 +2981,44 @@ function updateDeviceOfflineState(deviceKey, isOffline, isRemote = false) {
           });
           overlay = newOverlay;
         }
-        overlay.style.display = 'flex';
+        overlay.style.display = 'block';
       } else {
         if (overlay) {
           overlay.style.display = 'none';
         }
       }
+
+      applyConnectionGating(panel, isOffline);
     }
   }
+}
+
+/**
+ * Disables every control marked `data-requires-connection` inside this device panel while the
+ * device is unreachable — the single enforcement point for the "live-only controls must be
+ * gated" rule (see CLAUDE.md). Adding a new live-action control (fires an ECP command, a RALE
+ * call, a deep link, etc.) needs no JS wiring here: just add the attribute in markup and this
+ * pass picks it up on the next connection check. Cached/already-received content (NI's captured
+ * events, Console's scrollback, …) must NOT carry this attribute — it stays usable while offline.
+ *
+ * The attribute works on either a single control (disables that element directly) or a
+ * container wrapping several (e.g. a whole button grid) — any future button added inside an
+ * already-marked container is covered for free, no markup change needed at the new button.
+ *
+ * Also stamps `panel.dataset.deviceOffline` — the one DOM-readable signal other modules (e.g.
+ * device-metrics.ts's own polling loop) should check before firing a live query of their own,
+ * instead of independently retrying/toasting against a device this panel already knows is
+ * unreachable.
+ */
+function applyConnectionGating(panel: HTMLElement, isOffline: boolean): void {
+  panel.dataset.deviceOffline = isOffline ? 'true' : 'false';
+  panel.querySelectorAll<HTMLElement>('[data-requires-connection]').forEach((el) => {
+    el.classList.toggle('is-connection-gated', isOffline);
+    const controls = 'disabled' in el ? [el] : el.querySelectorAll<HTMLElement>('button, input, select, textarea');
+    controls.forEach((c) => {
+      if ('disabled' in c) (c as unknown as { disabled: boolean }).disabled = isOffline;
+    });
+  });
 }
 
 // Apply capability-based visibility to tabs and features
@@ -3117,12 +3159,30 @@ function openDeviceHardwareImageModal(imageSrc, device, opener?: HTMLElement | n
 
   const ip = typeof device.ip === 'string' ? device.ip.trim() : '';
   if (ip) {
+    // This modal is a one-shot snapshot built fresh at open time, not a live-updating element
+    // `updateDeviceOfflineState` can reach later — so it must read the panel's current
+    // `dataset.deviceOffline` (set by `applyConnectionGating`) right now, at build time, instead
+    // of hardcoding "Connected" regardless of actual reachability.
+    let isOffline = false;
+    for (const connection of state.connectedDevices.values()) {
+      if (connection.device?.ip !== ip) continue;
+      const panel = document.getElementById(connection.tabId);
+      isOffline = panel?.dataset.deviceOffline === 'true';
+      break;
+    }
+
     const ipRow = document.createElement('div');
     ipRow.className = 'device-hardware-image-modal-ip-row';
     const dot = document.createElement('span');
     dot.className = 'status-dot';
-    dot.title = S.common.connected;
-    dot.setAttribute('aria-label', S.common.connected);
+    if (isOffline) {
+      dot.style.background = 'var(--accent-red)';
+      dot.title = S.app.deviceOffline;
+      dot.setAttribute('aria-label', S.app.deviceOffline);
+    } else {
+      dot.title = S.common.connected;
+      dot.setAttribute('aria-label', S.common.connected);
+    }
     const ipEl = document.createElement('span');
     ipEl.className = 'device-ip';
     ipEl.textContent = ip;
@@ -4357,11 +4417,33 @@ async function checkConnectedDevices() {
     const locationId = parts.length > 1 ? parts[0] : null;
     
     await checkDeviceConnection(
-      ip, 
-      connection.isRemote ? connection.serverUrl : null, 
+      ip,
+      connection.isRemote ? connection.serverUrl : null,
       connection.isRemote ? locationId : null
     );
   }
+}
+
+/**
+ * A live op against `ip` just failed at the connection level (main process detected it — see
+ * `IPC.DeviceConnectionSuspect`). This is only a hint to re-check *now* instead of waiting for
+ * the next scheduled tick — it re-runs the exact same `checkDeviceConnection` probe the 30s
+ * timer uses, and only that probe's own result can actually flip the offline state. An isolated
+ * service failure (e.g. a crashed channel dropping Telnet) must not mark the device offline on
+ * its own; the immediate ECP re-check is what confirms whether it actually is.
+ *
+ * Only covers directly-connected (non-relay) devices — the signal currently only originates
+ * from local ECP/Telnet handlers, which don't know about relay-routed connections.
+ */
+function wireDeviceConnectionSuspectListener(): void {
+  window.roku.onDeviceConnectionSuspect(({ ip }: { ip: string }) => {
+    for (const [deviceKey, connection] of state.connectedDevices) {
+      if (connection.isRemote) continue;
+      const deviceIp = deviceKey.includes(':') ? deviceKey.split(':')[1] : deviceKey;
+      if (deviceIp !== ip) continue;
+      void checkDeviceConnection(ip, null, null);
+    }
+  });
 }
 
 function startConnectionMonitoring() {
@@ -5440,6 +5522,7 @@ async function init() {
   
   // Start periodic connection monitoring
   startConnectionMonitoring();
+  wireDeviceConnectionSuspectListener();
   
   // BrightScript Fiddle: build a snapshot of currently discovered+connected devices and
   // push it to any open Fiddle window. The main menu's "Open Fiddle" action lands here.

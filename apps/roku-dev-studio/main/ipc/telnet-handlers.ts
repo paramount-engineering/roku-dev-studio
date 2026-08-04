@@ -13,6 +13,7 @@ import {
 } from './telnet-log-ipc-coalesce.js';
 import { getPersistedTimingValue } from '../settings';
 import { mainLog, mainWarn } from '../log.js';
+import { notifyDeviceConnectionSuspect } from '../device-connection-suspect';
 
 const {
   connectRokuDebugTelnet,
@@ -179,6 +180,11 @@ async function connectDebugTelnetInternal(ip: string): Promise<{ success: boolea
     if (safeSend) {
       safeSend(IPC.TelnetError, { ip, connectionId, error: error.message });
     }
+    // This handler only exists on a socket that already connected (registered post-`await
+    // connectRokuDebugTelnet`), and a plain `.destroy()` (every intentional teardown in this
+    // file) never emits 'error' — only 'close' does. So this is never a user-initiated
+    // disconnect misfiring; it's always a hint worth an immediate reachability re-check.
+    notifyDeviceConnectionSuspect(ip);
   });
 
   socket.on('close', (hadError: boolean) => {
@@ -373,6 +379,9 @@ function setupTelnetHandlers(_mainWindow: BrowserWindow | undefined, safeSendToR
 
     socket.on('error', (error: Error) => {
       mainLog('[Telnet System] Socket error:', error.message);
+      // Same reasoning as the 8085 debug console handler above: only attached post-connect, and
+      // a bare `.destroy()` never emits 'error' — so this is always an involuntary drop.
+      notifyDeviceConnectionSuspect(ip);
     });
 
     socket.on('close', (hadError: boolean) => {

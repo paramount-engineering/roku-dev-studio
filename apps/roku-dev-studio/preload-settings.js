@@ -323,6 +323,13 @@ var init_channels = __esm({
        *  retranslates in place (no reload). Payload is the preference string. */
       LocaleChanged: "locale-changed",
       DebugLoggingChanged: "debug-logging-changed",
+      /** Main → all renderers: a live op against this device IP just failed at the connection level
+       *  (ECP request, Telnet socket, …) — a hint to re-check reachability *now* rather than wait for
+       *  the next scheduled poll. NOT itself a verdict: the renderer must still run the real
+       *  `checkDeviceConnection` probe and only flip offline on that check's own result, since an
+       *  isolated service failure (e.g. a crashed channel dropping Telnet) doesn't mean the device
+       *  itself is unreachable. */
+      DeviceConnectionSuspect: "device-connection-suspect",
       /** Win/Linux title-bar hamburger → main-process menu actions. */
       AppMenuAction: "app-menu:action",
       ShowAboutDialog: "show-about-dialog",
