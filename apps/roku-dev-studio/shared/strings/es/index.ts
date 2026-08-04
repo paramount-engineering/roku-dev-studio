@@ -24,6 +24,8 @@ import { deeplink } from './deeplink.js';
 import { utils } from './utils.js';
 import { logFileViewer } from './log-file-viewer.js';
 import { menu } from './menu.js';
+// Placeholder: reuse the English Debugger strings until a Spanish translation exists.
+import { debuggerStrings } from '../debugger.js';
 
 export const es = {
   common,
@@ -47,4 +49,5 @@ export const es = {
   utils,
   logFileViewer,
   menu,
+  debugger: debuggerStrings,
 };

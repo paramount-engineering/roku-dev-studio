@@ -13,6 +13,7 @@ const {
 const { getDeviceImageUrl, fetchDeviceHardwareImage } = require('./lib/device-hardware-image');
 
 const { ssdpDiscover, subnetScan } = require('./lib/discovery');
+const { resolveDeviceIp } = require('./lib/device-registry');
 const { isValidIp, validateDevPassword } = require('roku-dev-studio-platform/validation');
 const { captureRokuScreenshot } = require('./lib/screenshot');
 const { verifyDeveloperDigestAuth } = require('./lib/verify-dev-digest-auth');
@@ -80,6 +81,7 @@ module.exports = {
   // Discovery
   ssdpDiscover,
   subnetScan,
+  resolveDeviceIp,
   // Validation
   isValidIp,
   validateDevPassword,

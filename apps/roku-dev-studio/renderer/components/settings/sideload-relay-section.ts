@@ -10,6 +10,7 @@
  */
 
 import { attachBackdropClickToClose } from '../../modules/utils/modal-backdrop-click.js';
+import { deviceKey } from '@shared/platform/device-identity.js';
 import { S } from '@shared/strings/index.js';
 
 interface Target {
@@ -92,7 +93,7 @@ function EYE_SVG(): Node {
 
 /** Stable identity for merge/dedupe: serial when known, else ip. */
 function keyOf(x: { serial?: string; ip: string }): string {
-  return x.serial || x.ip;
+  return deviceKey(x);
 }
 function isReachable(t: Target): boolean {
   return discovered.some((d) => keyOf(d) === keyOf(t) || d.ip === t.ip);
@@ -250,6 +251,10 @@ function buildModalRows(): void {
     if (!row) row = Array.from(byKey.values()).find((r) => r.ip === d.ip);
     if (row) {
       row.reachable = true;
+      // The device can resurface on a different IP (new network, DHCP lease change,
+      // etc.) — matched here by stable serial, so always trust the freshly
+      // discovered IP over whatever was previously saved.
+      row.ip = d.ip || row.ip;
       row.name = d.name || row.name;
       row.serial = d.serial || row.serial;
       row.location = d.location;

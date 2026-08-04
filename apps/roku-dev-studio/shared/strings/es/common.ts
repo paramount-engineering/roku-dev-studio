@@ -20,6 +20,8 @@ export const common = {
   reset: 'Restablecer',
   edit: 'Editar',
   add: 'Agregar',
+  collapse: 'Contraer',
+  expand: 'Expandir',
   done: 'Listo',
   yes: 'Sí',
   no: 'No',

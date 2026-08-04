@@ -18,7 +18,9 @@ export const MAIN_EXTERNAL = [
   'chokidar',
   // Optional native packet-capture binding (Network Inspector, Windows). Loaded via a guarded
   // runtime require(); must stay external so esbuild doesn't try to bundle its .node binary.
-  'cap'
+  'cap',
+  // Zip reader for scanning sideloaded .brs source for STOP statements (debugger breakpoints).
+  'adm-zip'
 ];
 
 /** Preload bundles, all sharing the same `['electron']` external. `[entry.ts, outfile]`. */

@@ -37,6 +37,7 @@ import { deeplink } from './deeplink.js';
 import { utils } from './utils.js';
 import { logFileViewer } from './log-file-viewer.js';
 import { menu } from './menu.js';
+import { debuggerStrings } from './debugger.js';
 import { es } from './es/index.js';
 import { uk } from './uk/index.js';
 import { pl } from './pl/index.js';
@@ -66,6 +67,7 @@ const en = {
   utils,
   logFileViewer,
   menu,
+  debugger: debuggerStrings,
 } as const;
 
 /** Shape shared by every locale catalog (deep-readonly, literal-typed via `en`). */

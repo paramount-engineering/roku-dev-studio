@@ -966,6 +966,17 @@ app.on('window-all-closed', () => {
   app.quit();
 });
 
+// Close any live BrightScript debug sessions (8081 control + IO sockets) on quit,
+// rather than leaving them to be reaped by process exit. Best-effort; no-op unless
+// someone actually attached the debugger this session.
+app.on('before-quit', () => {
+  try {
+    (require('./main/ipc/debugger-handlers') as { teardownDebuggerSessions: () => void }).teardownDebuggerSessions();
+  } catch {
+    /* best-effort teardown */
+  }
+});
+
 // ============================================
 // Clear Cache and Reload
 // ============================================

@@ -26,6 +26,7 @@ import {
   QUERY_ENDPOINTS
 } from './modules/index.js';
 import { errMessage } from '@shared/platform/err-util.js';
+import { deviceKey } from '@shared/platform/device-identity.js';
 import { S, applyI18n, setLocale } from '@shared/strings/index.js';
 import { applyLocalePreference } from './modules/utils/locale-live.js';
 import { devLog } from './modules/utils/dev-log.js';
@@ -1493,7 +1494,7 @@ function createRemoteDeviceCard(device, locationId) {
       </div>
       <div class="device-detail">
         <span class="label">${S.app.labelSerial}</span>
-        <span class="value device-serial">${escapeHtml(device.serialNumber || S.app.notAvailable)}</span>
+        <span class="value device-serial" data-serial="${escapeHtml(device.serialNumber || '')}">${escapeHtml(device.serialNumber || S.app.notAvailable)}</span>
       </div>
       ${device.softwareVersion ? `
       <div class="device-detail">
@@ -1670,12 +1671,7 @@ let elements = {} as AppDomElements;
 
 // Get unique device ID from serial number (or fallback to IP if serial is missing)
 function getDeviceId(device) {
-  // Use serial number as primary identifier, fallback to IP if serial is missing
-  if (device.serialNumber && device.serialNumber.trim()) {
-    return device.serialNumber.trim();
-  }
-  // Fallback to IP if no serial number (shouldn't happen with real Roku devices)
-  return device.ip;
+  return deviceKey({ serial: device.serialNumber, ip: device.ip });
 }
 
 function parseAutoConnectDeviceEntry(raw: unknown): AutoConnectDeviceEntry | null {
@@ -2334,7 +2330,7 @@ function createDeviceCard(device) {
       </div>
       <div class="device-detail">
         <span class="label">${S.app.labelSerial}</span>
-        <span class="value device-serial">${escapeHtml(device.serialNumber || S.app.notAvailable)}</span>
+        <span class="value device-serial" data-serial="${escapeHtml(device.serialNumber || '')}">${escapeHtml(device.serialNumber || S.app.notAvailable)}</span>
       </div>
       ${device.softwareVersion ? `
       <div class="device-detail">
@@ -2627,6 +2623,11 @@ function showTabHoverTooltip(tab: HTMLElement) {
   if (modelStr) {
     html += `<div class="tab-hover-tooltip-model">${escapeHtml(modelStr)}</div>`;
   }
+  // Unseen debug stop on this device (set by the cross-tab stop alert).
+  const debugStop = tab.dataset.debugStop;
+  if (debugStop) {
+    html += `<div class="tab-hover-tooltip-stop">${escapeHtml(S.debugger.stoppedTabTooltip(debugStop === '1' ? '' : debugStop))}</div>`;
+  }
   setSafeHTML(tip, html);
 
   // Show first (so we can measure), then clamp within the viewport.
@@ -2694,6 +2695,11 @@ function activateTab(tabId) {
     panel.classList.add('active');
     state.activeTabId = tabId;
     pushDeviceListToMcpBridge();
+    // Landing on a device whose Console is the active section counts as acknowledging any
+    // unseen debug stop — clear its tab dot + Console pulse.
+    if (panel.querySelector('.inner-tab[data-inner-tab="telnet"]')?.classList.contains('active')) {
+      clearDebugStopForPanel(panel);
+    }
     
     // Highlight the corresponding device card in sidebar
     const ip = tab.dataset.ip;
@@ -3823,6 +3829,9 @@ function setupInnerTabs(panel) {
       
       // Dispatch custom event for tab switch
       panel.dispatchEvent(new CustomEvent('innertabswitch', { detail: { tab: target } }));
+
+      // Opening the Console section acknowledges any unseen debug stop for this device.
+      if (target === 'telnet') clearDebugStopForPanel(panel as HTMLElement);
 
       // Show / hide the floating remote based on the new inner tab.
       refreshFloatingRemote();
@@ -6237,11 +6246,123 @@ function subscribeToAppZoom() {
   });
 }
 
+// --- Debug-stop cross-tab alerts (Phase 1) ---------------------------------
+// When a debugged app halts on ANY device, draw attention even if the user is on a
+// different device tab or a non-Console section: a persistent dot on the device tab
+// (blinks briefly, then steady), a pulse on that panel's Console section button, a
+// hover-tooltip line, and a clickable toast that jumps straight to that device's
+// Console. Suppressed when the user is already watching that device's Console.
+
+/** Compact "File.brs:42" from a stop snapshot's top stack frame (basename only). */
+function debugStopLocation(d: { stackFrames?: unknown }): string {
+  const frames = Array.isArray(d.stackFrames) ? d.stackFrames : [];
+  const top = (frames[0] ?? {}) as Record<string, unknown>;
+  const rawFile = String(top.filePath ?? top.fileName ?? top.file ?? top.path ?? '');
+  const file = rawFile.replace(/^pkg:\//i, '').split('/').pop() || '';
+  const line = top.lineNumber ?? top.line;
+  return file ? `${file}${line != null && line !== '' ? `:${line}` : ''}` : '';
+}
+
+/** Tab button for a device ip (ip is numeric/dots — safe inside a quoted attr selector). */
+function deviceTabForIp(ip: string): HTMLElement | null {
+  return document.querySelector<HTMLElement>(`.tab-item[data-ip="${ip}"]`);
+}
+
+/** Mark a device tab as having an unseen debug stop: a dot (re-blinks each stop) + tooltip data. */
+function markTabDebugStop(tab: HTMLElement, loc: string): void {
+  tab.dataset.debugStop = loc || '1';
+  tab.classList.add('tab-item--attn');
+  let dot = tab.querySelector<HTMLElement>('.tab-attn-dot');
+  if (!dot) {
+    dot = document.createElement('span');
+    dot.className = 'tab-attn-dot';
+    dot.setAttribute('aria-hidden', 'true');
+    tab.insertBefore(dot, tab.firstChild);
+  }
+  // Re-trigger the finite blink (reflow so the animation restarts on a repeat stop).
+  dot.classList.remove('tab-attn-dot--blink');
+  void dot.offsetWidth;
+  dot.classList.add('tab-attn-dot--blink');
+}
+
+/** Clear the unseen-stop indicators for a device panel (called when its Console is opened). */
+function clearDebugStopForPanel(panel: HTMLElement): void {
+  panel.querySelector('.inner-tab[data-inner-tab="telnet"]')?.classList.remove('inner-tab--attn');
+  const tab = document.querySelector<HTMLElement>(`.tab-item[data-tab-id="${panel.id}"]`);
+  if (tab) {
+    delete tab.dataset.debugStop;
+    tab.classList.remove('tab-item--attn');
+    tab.querySelector('.tab-attn-dot')?.remove();
+  }
+}
+
+/** Jump to a device's Console section (activate its tab, then open the telnet inner-tab). */
+function focusDeviceConsole(tabId: string): void {
+  activateTab(tabId);
+  const panel = document.getElementById(tabId);
+  (panel?.querySelector('.inner-tab[data-inner-tab="telnet"]') as HTMLElement | null)?.click();
+  // Pull the eye to where the halt data lands: pulse the Variables section header once.
+  const varHeader = panel?.querySelector<HTMLElement>('[data-debug-section-header="variables"]');
+  if (varHeader) {
+    varHeader.classList.remove('telnet-debug-section-header--attn');
+    void varHeader.offsetWidth; // reflow so the finite pulse restarts on a repeat stop
+    varHeader.classList.add('telnet-debug-section-header--attn');
+  }
+}
+
+function registerDebugStopAlerts(): void {
+  const roku = (window as any).roku;
+  if (!roku?.onDebuggerStopped) return;
+  // Skip non-halt reasons; runtime errors also arrive here (reason RuntimeError), so we
+  // don't separately listen to onDebuggerRuntimeError (that would double-fire per crash).
+  const SKIP = new Set(['NormalExit', 'NotStopped', 'Undefined']);
+  let lastAt = 0;
+  let lastIp = '';
+  // Returning to the window on a device whose Console is the active section acknowledges any
+  // stop that landed while it was unfocused (its sidebar is already showing the halt).
+  window.addEventListener('focus', () => {
+    const tabId = state.activeTabId;
+    const panel = tabId ? document.getElementById(tabId) : null;
+    if (panel?.querySelector('.inner-tab[data-inner-tab="telnet"]')?.classList.contains('active')) {
+      clearDebugStopForPanel(panel);
+    }
+  });
+  roku.onDebuggerStopped((raw: unknown) => {
+    const d = (raw ?? {}) as { ip?: string; reason?: string; stackFrames?: unknown };
+    const ip = (d.ip || '').trim();
+    if (!ip || (d.reason && SKIP.has(d.reason))) return;
+    // De-dup a burst of stops from the same device (stepping / multi-event crash).
+    const now = Date.now();
+    if (ip === lastIp && now - lastAt < 500) return;
+    lastAt = now;
+    lastIp = ip;
+
+    const tab = deviceTabForIp(ip);
+    if (!tab) return;
+    const tabId = tab.dataset.tabId || '';
+    const panel = tabId ? document.getElementById(tabId) : null;
+    const consoleBtn = panel?.querySelector('.inner-tab[data-inner-tab="telnet"]') ?? null;
+    const consoleActive = !!consoleBtn?.classList.contains('active');
+    // Suppress when the user is already watching this device's Console (active tab + focused).
+    if (state.activeTabId === tabId && consoleActive && document.hasFocus()) return;
+
+    const isError = d.reason === 'RuntimeError' || d.reason === 'CaughtRuntimeError';
+    const loc = debugStopLocation(d);
+    const name = (tab.dataset.deviceName || tab.dataset.ip || ip).trim();
+
+    markTabDebugStop(tab, loc);
+    consoleBtn?.classList.add('inner-tab--attn');
+    const msg = isError ? S.debugger.stoppedAlertError(name, loc) : S.debugger.stoppedAlert(name, loc);
+    showToast(msg, isError ? 'error' : 'warning', tabId ? () => focusDeviceConsole(tabId) : undefined);
+  });
+}
+
 // Start the app when DOM is ready
 function runInit() {
   subscribeToAppZoom();
   registerMcpConnectFlow();
   registerRelayAutoConnect();
+  registerDebugStopAlerts();
   // A password validated in the Sideload Relay setup is a shared device credential —
   // update this window's cache so the Dev App stops prompting for it.
   (window as any).roku?.onSecretsPasswordUpdated?.((serial: string, password: string) => setCachedPassword(serial, password));

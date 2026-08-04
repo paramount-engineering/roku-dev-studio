@@ -55,6 +55,8 @@ import {
   type NetworkEventQuery,
   type ParsedNetworkEvent
 } from './network-inspector/index';
+import { getDebugSessionController } from './ipc/debugger-handlers';
+import type { DebugSessionController } from './debugger/debug-session-controller';
 
 const rokuApi = require('roku-dev-studio-api') as {
   query: (ip: string, endpoint: string) => Promise<unknown>;
@@ -796,6 +798,17 @@ function seedAuditFromPath(audit: AuditDraft, method: string, pathname: string):
     audit.destructive = true;
     return;
   }
+  if (pathname.startsWith('/debugger/')) {
+    // Audit every debugger verb — the handler already fills params + device. Read-only
+    // verbs just observe; everything else changes device/session state, and `evaluate`
+    // runs arbitrary BrightScript in the halted frame, so those are destructive.
+    const verb = pathname.slice('/debugger/'.length);
+    const readOnly = new Set(['status', 'wait-for-stop', 'callstack', 'variables', 'list-breakpoints']);
+    audit.enabled = true;
+    audit.op = `debugger:${verb}`;
+    audit.destructive = !readOnly.has(verb);
+    return;
+  }
   const m = ALIAS_AUDIT_MAP[pathname];
   if (m) {
     audit.enabled = true;
@@ -909,6 +922,138 @@ function sanitizeEventDetail(
   trimSide('httpRequest');
   trimSide('httpResponse');
   return { event: clone, warnings };
+}
+
+// ============================================================
+// BrightScript socket debugger (control port 8081) — bespoke
+// main-direct verbs over the SHARED DebugSessionController (the
+// same one the Telnet debug sidebar drives). The op framework
+// can't reach that main-process singleton, and the debugger is
+// stateful/event-driven, so these are hand-written routes.
+// ============================================================
+
+/** Default / hard-max wait for `wait-for-stop`; kept under the client's 35s request timeout. */
+const DEBUGGER_WAIT_DEFAULT_MS = 15000;
+const DEBUGGER_WAIT_MAX_MS = 30000;
+
+function debuggerDelay(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+/** Coerce an agent breakpoint list to the controller's spec shape (accepting
+ *  `path`/`line`/`condition` aliases and defaulting a bare path to `pkg:/`). */
+function normalizeBridgeBreakpoints(input: unknown): Array<Record<string, unknown>> {
+  if (!Array.isArray(input)) return [];
+  const out: Array<Record<string, unknown>> = [];
+  for (const raw of input) {
+    if (!raw || typeof raw !== 'object') continue;
+    const b = raw as Record<string, unknown>;
+    let filePath = typeof b.filePath === 'string' ? b.filePath : typeof b.path === 'string' ? b.path : '';
+    const line = Number(b.lineNumber ?? b.line);
+    if (!filePath || !Number.isFinite(line) || line <= 0) continue;
+    if (!/^(pkg|lib):\//i.test(filePath)) filePath = 'pkg:/' + filePath.replace(/^\/+/, '');
+    const cond = typeof b.conditionalExpression === 'string' ? b.conditionalExpression : typeof b.condition === 'string' ? b.condition : '';
+    const hit = Number(b.hitCount);
+    out.push({
+      filePath,
+      lineNumber: line,
+      ...(cond.trim() ? { conditionalExpression: cond.trim() } : {}),
+      ...(Number.isFinite(hit) && hit > 0 ? { hitCount: hit } : {})
+    });
+  }
+  return out;
+}
+
+/**
+ * Execute one debugger verb against the shared controller. Returns `{ data }`
+ * (already IPC-plain JSON) for a known verb, or `{ unknownVerb: true }`. Most
+ * verbs require an attached session (the controller throws "Attach first.")
+ * and are only meaningful while the target is HALTED: breakpoints added while
+ * running are queued (returned with `pending:true`) until the next stop.
+ */
+async function runDebuggerVerb(
+  controller: DebugSessionController,
+  verb: string,
+  ip: string,
+  body: JsonObject
+): Promise<{ data?: unknown; unknownVerb?: boolean }> {
+  const num = (v: unknown): number | undefined => (typeof v === 'number' && Number.isFinite(v) ? v : undefined);
+  const str = (v: unknown): string => (typeof v === 'string' ? v : '');
+  switch (verb) {
+    case 'attach': {
+      const r = await controller.attach(ip);
+      if (!r.ok) throw new Error(r.error || 'Attach failed.');
+      notifyAgentAction({ level: 'info', summary: `AI agent attached the debugger to ${deviceLabel(ip)}` });
+      return { data: { ...controller.status(ip), attached: true } };
+    }
+    case 'detach': {
+      await controller.detach(ip);
+      notifyAgentAction({ level: 'info', summary: `AI agent detached the debugger from ${deviceLabel(ip)}` });
+      return { data: { ip, detached: true } };
+    }
+    case 'status':
+      return { data: controller.status(ip) };
+    case 'wait-for-stop': {
+      const timeoutMs = Math.min(num(body.timeoutMs) ?? DEBUGGER_WAIT_DEFAULT_MS, DEBUGGER_WAIT_MAX_MS);
+      const deadline = Date.now() + timeoutMs;
+      for (;;) {
+        const st = controller.status(ip);
+        if (st.state === 'stopped') return { data: { stopped: true, state: st.state, stop: controller.getStop(ip) } };
+        if (st.state === 'disconnected' || st.state === 'error') return { data: { stopped: false, state: st.state } };
+        if (Date.now() >= deadline) return { data: { stopped: false, state: st.state, timedOut: true } };
+        await debuggerDelay(300);
+      }
+    }
+    case 'continue':
+      await controller.continue(ip);
+      return { data: { ip, state: controller.status(ip).state } };
+    case 'pause':
+      await controller.pause(ip);
+      return { data: { ip, requested: 'pause' } };
+    case 'step': {
+      const kind = str(body.kind) || 'over';
+      const ti = num(body.threadIndex);
+      if (kind === 'in') await controller.stepIn(ip, ti);
+      else if (kind === 'out') await controller.stepOut(ip, ti);
+      else await controller.stepOver(ip, ti);
+      return { data: { ip, stepped: kind } };
+    }
+    case 'callstack':
+      return { data: { frames: await controller.stackTrace(ip, num(body.threadIndex)) } };
+    case 'variables':
+      return {
+        data: {
+          variables: await controller.variables(ip, {
+            threadIndex: num(body.threadIndex),
+            stackFrameIndex: num(body.stackFrameIndex),
+            variablePath: Array.isArray(body.variablePath) ? (body.variablePath as string[]) : undefined
+          })
+        }
+      };
+    case 'evaluate': {
+      const expression = str(body.expression);
+      if (!expression.trim()) throw new Error('Missing required `expression`.');
+      const result = await controller.execute(ip, expression, {
+        threadIndex: num(body.threadIndex),
+        stackFrameIndex: num(body.stackFrameIndex)
+      });
+      return { data: { result } };
+    }
+    case 'set-breakpoints':
+      return { data: { breakpoints: await controller.addBreakpoints(ip, normalizeBridgeBreakpoints(body.breakpoints)) } };
+    case 'remove-breakpoints': {
+      const locations = Array.isArray(body.locations)
+        ? (body.locations as Array<Record<string, unknown>>)
+            .map((l) => ({ filePath: str(l.filePath || l.path), lineNumber: num(l.lineNumber ?? l.line) ?? 0 }))
+            .filter((l) => l.filePath && l.lineNumber > 0)
+        : [];
+      return { data: await controller.removeBreakpointsByLocation(ip, locations) };
+    }
+    case 'list-breakpoints':
+      return { data: { breakpoints: controller.getBreakpoints(ip) } };
+    default:
+      return { unknownVerb: true };
+  }
 }
 
 async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
@@ -1723,6 +1868,33 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
       mitmActive: status.mitmActive === true,
       mitmListenAddress: status.mitmListenAddress
     });
+    return;
+  }
+
+  // BrightScript socket debugger — one dispatcher for every `/debugger/<verb>` route
+  // (attach, detach, status, wait-for-stop, continue, pause, step, callstack, variables,
+  // evaluate, set-/remove-/list-breakpoints). See runDebuggerVerb.
+  if (method === 'POST' && pathname.startsWith('/debugger/')) {
+    const verb = pathname.slice('/debugger/'.length);
+    const body = await readJsonLoose(req);
+    if (!send400IfJsonErr(res, body)) return;
+    audit.params = body;
+    const ctx = resolveIpForConnectedDevice(res, body);
+    if (!ctx) return;
+    const { ip } = ctx;
+    audit.device = ip;
+    try {
+      const result = await runDebuggerVerb(getDebugSessionController(), verb, ip, body);
+      if (result.unknownVerb) {
+        sendJson(res, 404, { error: `Unknown debugger verb "${verb}".` });
+        return;
+      }
+      sendJson(res, 200, result.data);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      // "Attach first." → no session yet; 409 tells the agent to call debugger_attach.
+      sendJson(res, /attach first/i.test(msg) ? 409 : 502, { error: msg });
+    }
     return;
   }
 

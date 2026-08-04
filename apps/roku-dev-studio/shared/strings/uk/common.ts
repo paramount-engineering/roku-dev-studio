@@ -20,6 +20,8 @@ export const common = {
   reset: 'Скинути',
   edit: 'Редагувати',
   add: 'Додати',
+  collapse: 'Згорнути',
+  expand: 'Розгорнути',
   done: 'Готово',
   yes: 'Так',
   no: 'Ні',

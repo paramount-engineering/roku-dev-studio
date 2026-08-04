@@ -44,6 +44,19 @@ export function deviceMatches(device: DeviceLike, ref: DeviceRef): boolean {
 }
 
 /**
+ * Canonical identity key for PERSISTING per-device state (settings, breakpoints, saved
+ * preferences, …). Serial when known, else IP. Never persist raw IP alone as a device's
+ * identity — it isn't stable across networks/DHCP, so a device that roams reappears under a
+ * different IP with the same serial and any state keyed by the old IP silently orphans.
+ */
+export function deviceKey(d: DeviceLike): string {
+  const serial = typeof d.serial === 'string' ? d.serial.trim() : '';
+  if (serial) return serial;
+  const ip = typeof d.ip === 'string' ? d.ip.trim() : '';
+  return ip;
+}
+
+/**
  * Find the first device in a collection that matches the ref. Serial lookup runs before IP so a
  * caller that passed a serial wins over an IP alias.
  */
