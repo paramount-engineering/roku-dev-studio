@@ -386,6 +386,24 @@ ul.help-blurb li {
   margin-top: 3px;
   line-height: 1.4;
 }
+/* Long help is clamped to 3 lines (applied by JS only when it actually overflows); the
+   full text is revealed on hover via the shared instant tooltip (utils/instant-tooltip). */
+.settings-row-text .settings-row-desc.settings-row-desc--clamped {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  cursor: help;
+}
+/* App-wide instant custom tooltip (mirrors index.html; see utils/instant-tooltip.ts). */
+.rds-tip {
+  position: fixed; z-index: 10050; pointer-events: none; max-width: 280px;
+  padding: 5px 9px; border-radius: 6px; font-size: 11px; line-height: 1.4;
+  background: var(--bg-elevated, #23232e); color: var(--text-primary);
+  border: 1px solid var(--border); box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+  opacity: 0; visibility: hidden; transition: opacity 0.08s ease; white-space: normal;
+}
+.rds-tip--visible { opacity: 1; visibility: visible; }
 .settings-section-head {
   margin-bottom: 4px;
 }

@@ -15,6 +15,7 @@ import {
 } from '@shared/network-inspector/setup-guide.js';
 import { initSideloadRelaySection } from './sideload-relay-section.js';
 import { attachBackdropClickToClose } from '../../modules/utils/modal-backdrop-click.js';
+import { attachInstantTooltips } from '../../modules/utils/instant-tooltip.js';
 import { S, applyI18n, availableLocales, getLocale, matchLocale, localeLabel, setLocale, SYSTEM_LOCALE } from '@shared/strings/index.js';
 import { applyLocalePreference } from '../../modules/utils/locale-live.js';
 import { setLocaleFromPreference } from '../../modules/utils/locale-pref.js';
@@ -55,6 +56,22 @@ if (typeof api.onPrivacyModeChanged === 'function') {
 // tooltips). Dynamically-built sections use `S.*` directly. Inline English is the
 // fallback for any unresolved key.
 applyI18n(document);
+
+// Long row-help is space-hungry when always-on. Enable the shared instant tooltip for this
+// window, then (via syncSettingsHelpTooltips) clamp only the descriptions that actually
+// overflow 3 lines and reveal their full text on hover — short/dynamic help is untouched.
+attachInstantTooltips(document.body);
+function syncSettingsHelpTooltips(): void {
+  document.querySelectorAll<HTMLElement>('.settings-row-desc').forEach((el) => {
+    el.classList.add('settings-row-desc--clamped'); // clamp, then keep only if it truly overflows
+    if (el.scrollHeight - el.clientHeight > 1) {
+      el.setAttribute('data-tip', (el.textContent || '').trim());
+    } else {
+      el.classList.remove('settings-row-desc--clamped');
+      el.removeAttribute('data-tip');
+    }
+  });
+}
 
 // Set after getState() resolves; all usages are inside async callbacks or user-initiated actions
 // that can only fire after initialization completes.
@@ -1315,6 +1332,7 @@ api.getState().then(function (state: any) {
   applyI18n(document);
   syncHeaderSectionLabel();
   populateLanguageOptions();
+  requestAnimationFrame(syncSettingsHelpTooltips); // clamp/reveal long help once content is laid out
 
   // Populate the NI setup modal from the platform (in the active locale). Re-run on locale
   // change since the body is injected HTML that applyI18n's single-text-node pass can't touch.
@@ -1444,6 +1462,7 @@ if (api && typeof api.onLocaleChanged === 'function') {
       setLanguageSelect(pref);
       populateNiBoundLabels();
       populateNiSetupModal();
+      requestAnimationFrame(syncSettingsHelpTooltips); // re-derive clamp/tooltip for the new locale's text
     });
   });
 }
