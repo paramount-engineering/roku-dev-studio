@@ -37,35 +37,7 @@ import { deeplink } from './deeplink.js';
 import { utils } from './utils.js';
 import { logFileViewer } from './log-file-viewer.js';
 import { menu } from './menu.js';
-import { es } from './es/index.js';
-import { uk } from './uk/index.js';
-import { pl } from './pl/index.js';
-import { ro } from './ro/index.js';
-import { pt } from './pt/index.js';
-
-/** The English catalog — the base locale and the source of the catalog's shape. */
-const en = {
-  common,
-  sideloadRelay,
-  settings,
-  devApp,
-  queries,
-  modals,
-  networkSessionViewer,
-  inspector,
-  networkInspector,
-  actionScripts,
-  consoleLog,
-  ui,
-  app,
-  telnet,
-  fiddle,
-  floatingRemote,
-  about,
-  deeplink,
-  utils,
-  logFileViewer,
-  menu,
+  debugger: debuggerStrings,
 } as const;
 
 /** Shape shared by every locale catalog (deep-readonly, literal-typed via `en`). */

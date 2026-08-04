@@ -652,6 +652,220 @@ const NETWORK_INSPECTOR_TOOLS: Tool[] = [
 ];
 
 // ============================================================================
+// BrightScript socket debugger (control port 8081)
+// ============================================================================
+// Every tool is a thin POST to a `/debugger/<verb>` bridge route backed by the
+// shared main-process DebugSessionController (the same session the Telnet debug
+// sidebar drives). The debugger is STATEFUL and event-driven: attach first, then
+// most verbs (step, callstack, variables, evaluate, and reliable breakpoint
+// registration) only work while the target is HALTED. The loop is:
+// debugger_attach → set breakpoints → debugger_wait_for_stop → inspect → step /
+// continue. A `device` (IP or serial) is optional on every tool — omit it to use
+// the focused Dev Studio tab.
+
+/** POST a debugger verb; pass the tool args straight through as the body. */
+async function debuggerCall(verb: string, label: string, args: Record<string, unknown>): Promise<ToolResult> {
+  const res = await bridgeRequest({ method: 'POST', pathname: `/debugger/${verb}`, body: args });
+  if (!res.ok) return bridgeToolFailure(label, res);
+  return jsonResult(res.body);
+}
+
+/** `device` property shared by every debugger tool schema (optional; focused tab if omitted). */
+const DEVICE_PROP = {
+  device: { type: 'string', description: 'Optional. Roku IP or serial; must match a connected Dev Studio tab. Omit to use the focused tab.' }
+} as const;
+
+const DEBUGGER_TOOLS: Tool[] = [
+  {
+    name: 'debugger_attach',
+    title: 'Debugger: Attach',
+    description:
+      'Open a BrightScript debug session to the Roku on control port 8081. REQUIRED FIRST — every other debugger_* tool needs an attached session. The port is only open when the channel was launched with debugging (sideload "with Debugging", or a STOP in the source auto-enables it); a plain sideload/relaunch does NOT open it, and attach returns an actionable error explaining that. Idempotent: re-attaching replaces the prior session (the port is single-client). On success returns `{ ip, state }`.',
+    inputSchema: { type: 'object', properties: { ...DEVICE_PROP }, additionalProperties: false },
+    annotations: { readOnlyHint: false, idempotentHint: true, openWorldHint: true },
+    handler: async (args) => debuggerCall('attach', 'debugger_attach', args)
+  },
+  {
+    name: 'debugger_detach',
+    title: 'Debugger: Detach',
+    description: 'Close the debug session for a device (releases the 8081 control socket). Idempotent — a no-op if not attached. The running channel keeps executing.',
+    inputSchema: { type: 'object', properties: { ...DEVICE_PROP }, additionalProperties: false },
+    annotations: { readOnlyHint: false, idempotentHint: true, openWorldHint: true },
+    handler: async (args) => debuggerCall('detach', 'debugger_detach', args)
+  },
+  {
+    name: 'debugger_status',
+    title: 'Debugger: Status',
+    description:
+      'Return the session `state` for a device WITHOUT blocking: one of `disconnected` (not attached), `connecting`, `attached`, `running`, `stopped` (HALTED — safe to inspect), or `error`. Poll this to decide whether inspection tools will work; to block until the next halt use debugger_wait_for_stop instead.',
+    inputSchema: { type: 'object', properties: { ...DEVICE_PROP }, additionalProperties: false },
+    annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
+    handler: async (args) => debuggerCall('status', 'debugger_status', args)
+  },
+  {
+    name: 'debugger_wait_for_stop',
+    title: 'Debugger: Wait for Stop',
+    description:
+      'Block (server-side poll) until the target HALTS at a breakpoint / STOP / step-completion / runtime error, then return `{ stopped: true, stop: { reason, detail, threads, stackFrames, variables } }` — the top-frame snapshot. Returns `{ stopped: false, timedOut: true }` if it is still running at the deadline, or `{ stopped:false, state }` if the session ended. Call this right after debugger_continue / debugger_step, or after triggering the app, to know when you can inspect. Optional `timeoutMs` (default 15000, max 30000).',
+    inputSchema: {
+      type: 'object',
+      properties: { ...DEVICE_PROP, timeoutMs: { type: 'number', description: 'Max ms to wait (default 15000, capped at 30000).' } },
+      additionalProperties: false
+    },
+    annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
+    handler: async (args) => debuggerCall('wait-for-stop', 'debugger_wait_for_stop', args)
+  },
+  {
+    name: 'debugger_continue',
+    title: 'Debugger: Continue',
+    description: 'Resume execution from a halted state (run until the next breakpoint / STOP / error). After calling this, use debugger_wait_for_stop to catch the next halt. Only meaningful while `stopped`.',
+    inputSchema: { type: 'object', properties: { ...DEVICE_PROP }, additionalProperties: false },
+    annotations: { readOnlyHint: false, idempotentHint: false, openWorldHint: true },
+    handler: async (args) => debuggerCall('continue', 'debugger_continue', args)
+  },
+  {
+    name: 'debugger_pause',
+    title: 'Debugger: Pause',
+    description: 'Request a halt of a running channel (best-effort). Follow with debugger_wait_for_stop to get the snapshot once it stops. Only meaningful while `running`.',
+    inputSchema: { type: 'object', properties: { ...DEVICE_PROP }, additionalProperties: false },
+    annotations: { readOnlyHint: false, idempotentHint: false, openWorldHint: true },
+    handler: async (args) => debuggerCall('pause', 'debugger_pause', args)
+  },
+  {
+    name: 'debugger_step',
+    title: 'Debugger: Step',
+    description: 'Single-step the halted thread. `kind`: "over" (default — next line, skipping calls), "in" (into the call), or "out" (finish the current function). Requires the target to be HALTED. Follow with debugger_wait_for_stop to get the new location.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        ...DEVICE_PROP,
+        kind: { type: 'string', description: 'Step kind (default "over").', enum: ['over', 'in', 'out'] },
+        threadIndex: { type: 'number', description: 'Optional thread to step (default the stopped/primary thread).' }
+      },
+      additionalProperties: false
+    },
+    annotations: { readOnlyHint: false, idempotentHint: false, openWorldHint: true },
+    handler: async (args) => debuggerCall('step', 'debugger_step', args)
+  },
+  {
+    name: 'debugger_get_callstack',
+    title: 'Debugger: Get Call Stack',
+    description: 'Return the call-stack frames (function, file, line — top frame first) for the halted thread. Requires the target to be HALTED. Optional `threadIndex` (default the stopped/primary thread). A frame index from here feeds `stackFrameIndex` in debugger_get_variables / debugger_evaluate.',
+    inputSchema: {
+      type: 'object',
+      properties: { ...DEVICE_PROP, threadIndex: { type: 'number', description: 'Optional thread index (default the stopped/primary thread).' } },
+      additionalProperties: false
+    },
+    annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
+    handler: async (args) => debuggerCall('callstack', 'debugger_get_callstack', args)
+  },
+  {
+    name: 'debugger_get_variables',
+    title: 'Debugger: Get Variables',
+    description:
+      'Return variables in scope at a stack frame while HALTED. With no `variablePath`, returns the frame\'s locals (incl. `m`); each entry has `name`, `type`, `value`, and for containers a `childCount`. To drill into a container, pass its `variablePath` (e.g. `["m","top"]`; a quoted `"key"` segment forces a case-sensitive AA lookup, a bare number indexes an array) — the response is `[container]` whose `.children` is the next level. Optional `stackFrameIndex` (default 0 = top) and `threadIndex`.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        ...DEVICE_PROP,
+        variablePath: { type: 'array', description: 'Optional path segments to drill into a container (e.g. ["m","top","count"]). Omit for the frame\'s locals.', items: { type: 'string' } },
+        stackFrameIndex: { type: 'number', description: 'Stack frame to read (default 0 = top frame).' },
+        threadIndex: { type: 'number', description: 'Optional thread index (default the stopped/primary thread).' }
+      },
+      additionalProperties: false
+    },
+    annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
+    handler: async (args) => debuggerCall('variables', 'debugger_get_variables', args)
+  },
+  {
+    name: 'debugger_evaluate',
+    title: 'Debugger: Evaluate (REPL)',
+    description:
+      'Run a BrightScript expression/statement in the halted frame (the debug-console REPL) — e.g. `print m.top.count` or `print type(node)`. Output streams to the device console; the result reports compile/runtime errors if any. Requires the target to be HALTED. Can have side effects (it executes code), so it is not read-only. For a plain variable read prefer debugger_get_variables. Optional `stackFrameIndex` / `threadIndex` select the scope.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        ...DEVICE_PROP,
+        expression: { type: 'string', description: 'Required. BrightScript to run in the halted frame (often `print <expr>`).' },
+        stackFrameIndex: { type: 'number', description: 'Stack frame scope (default 0 = top frame).' },
+        threadIndex: { type: 'number', description: 'Optional thread index (default the stopped/primary thread).' }
+      },
+      required: ['expression'],
+      additionalProperties: false
+    },
+    annotations: { readOnlyHint: false, idempotentHint: false, openWorldHint: true },
+    handler: async (args) => debuggerCall('evaluate', 'debugger_evaluate', args)
+  },
+  {
+    name: 'debugger_set_breakpoints',
+    title: 'Debugger: Set Breakpoints',
+    description:
+      'Add breakpoints. `breakpoints`: array of `{ path, line, condition?, hitCount? }` — `path` is a `pkg:/…` source path (a bare path is prefixed with `pkg:/`), `condition` is an optional BrightScript expression (Roku OS 11.5+), `hitCount` skips that many hits first. IMPORTANT: the device only registers breakpoints while HALTED — one added while the channel is running comes back `pending:true` and is queued to register at the next stop. Each result carries a `breakpointId` (registered) or an error. Existing conditions are replaced on re-add.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        ...DEVICE_PROP,
+        breakpoints: {
+          type: 'array',
+          description: 'Breakpoints to set.',
+          items: {
+            type: 'object',
+            properties: {
+              path: { type: 'string', description: 'Source path, e.g. "pkg:/components/Main.brs" (a bare path is prefixed with pkg:/).' },
+              line: { type: 'number', description: '1-based line number.' },
+              condition: { type: 'string', description: 'Optional BrightScript condition; the breakpoint fires only when it is true (Roku OS 11.5+).' },
+              hitCount: { type: 'number', description: 'Optional: ignore this many hits before halting.' }
+            },
+            required: ['path', 'line'],
+            additionalProperties: false
+          }
+        }
+      },
+      required: ['breakpoints'],
+      additionalProperties: false
+    },
+    annotations: { readOnlyHint: false, idempotentHint: true, openWorldHint: true },
+    handler: async (args) => debuggerCall('set-breakpoints', 'debugger_set_breakpoints', args)
+  },
+  {
+    name: 'debugger_remove_breakpoints',
+    title: 'Debugger: Remove Breakpoints',
+    description: 'Remove breakpoints by location. `locations`: array of `{ filePath, lineNumber }` (matching what debugger_list_breakpoints reports). Removal is by file:line so it also clears a still-queued breakpoint that has no device id yet. Returns `{ removed }`.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        ...DEVICE_PROP,
+        locations: {
+          type: 'array',
+          description: 'Breakpoint locations to remove.',
+          items: {
+            type: 'object',
+            properties: {
+              filePath: { type: 'string', description: 'Source path, e.g. "pkg:/components/Main.brs".' },
+              lineNumber: { type: 'number', description: '1-based line number.' }
+            },
+            required: ['filePath', 'lineNumber'],
+            additionalProperties: false
+          }
+        }
+      },
+      required: ['locations'],
+      additionalProperties: false
+    },
+    annotations: { readOnlyHint: false, idempotentHint: true, openWorldHint: true },
+    handler: async (args) => debuggerCall('remove-breakpoints', 'debugger_remove_breakpoints', args)
+  },
+  {
+    name: 'debugger_list_breakpoints',
+    title: 'Debugger: List Breakpoints',
+    description: 'List the breakpoints the debugger is tracking for a device: each with `filePath`, `lineNumber`, `conditionalExpression?`, `hitCount?`, `verified` (registered on the device), `queued` (waiting for the next halt to register), and `breakpointId?`. Read-only.',
+    inputSchema: { type: 'object', properties: { ...DEVICE_PROP }, additionalProperties: false },
+    annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
+    handler: async (args) => debuggerCall('list-breakpoints', 'debugger_list_breakpoints', args)
+  }
+];
+
+// ============================================================================
 // Tool registry
 // ============================================================================
 
@@ -833,6 +1047,7 @@ const BESPOKE_TOOLS: Tool[] = [
 const byName: Map<string, Tool> = new Map();
 for (const t of BESPOKE_TOOLS) byName.set(t.name, t);
 for (const t of NETWORK_INSPECTOR_TOOLS) byName.set(t.name, t);
+for (const t of DEBUGGER_TOOLS) byName.set(t.name, t);
 for (const t of OP_BACKED_TOOLS) byName.set(t.name, t);
 
 export const TOOLS: Tool[] = Array.from(byName.values());

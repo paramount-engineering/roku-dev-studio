@@ -26,7 +26,25 @@ import { RokuEmulator } from './roku-emulator';
 import { runFanout, type FanoutTarget, type RemoteFanoutOps } from './fanout';
 
 const { mainLog, mainWarn } = require('../log');
+const { loadSettings, saveSettings } = require('../settings') as {
+  loadSettings: () => Record<string, unknown>;
+  saveSettings: (s: Record<string, unknown>) => boolean;
+};
 const { DEFAULT_RELAY_PORT } = require('../../shared/sideload-relay/types');
+const { resolveDeviceIp } = require('roku-dev-studio-api') as {
+  resolveDeviceIp: (serial: string | undefined | null, fallbackIp: string) => string;
+};
+
+/**
+ * Device keys (serial preferred, else IP — see `deviceKey()`/`RelayTarget.id`) the user opted
+ * into "Sideload with Debugging" for (persisted from the Dev App checkbox). Also matches the
+ * pre-migration raw-IP form so entries saved before this used serial keys still apply. Shared
+ * setting key with the renderer — keep the literal in sync with sideloading.ts.
+ */
+function readDebugSideloadIps(settings: Record<string, unknown>): string[] {
+  const v = settings['sideload-debug-ips'];
+  return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [];
+}
 const { subscribeDebugTelnetData } = require('../ipc/telnet-handlers') as {
   subscribeDebugTelnetData: (ip: string, cb: (text: string) => void) => () => void;
 };
@@ -233,20 +251,44 @@ export class SideloadRelayService {
     return ok;
   }
 
-  private buildFanoutTargets(): FanoutTarget[] {
+  private buildFanoutTargets(autoDebug = false): FanoutTarget[] {
     // Per-device install password comes ONLY from the shared device-credential
     // store (validated via the setup modal / Dev App). The relay's own Dev
     // Password (IDE→RDS auth) is a separate concept and not used here.
     const pwds = this.config.targetPasswords || {};
+    const debugIps = readDebugSideloadIps(loadSettings());
     return this.enabledTargets().map((t) => ({
       id: t.id,
-      ip: t.ip,
+      // Targets are configured once (Setup Devices) and can go stale after a network change —
+      // resolve against whatever this run's live discovery has actually seen for this serial,
+      // falling back to the saved IP when the serial hasn't been (re)discovered yet this run.
+      ip: t.remote ? t.ip : resolveDeviceIp(t.serial, t.ip),
       name: t.name || t.ip,
       password: pwds[t.id] || '',
       remote: !!t.remote,
       location: t.location,
-      serverUrl: t.serverUrl
+      serverUrl: t.serverUrl,
+      // Enable debugging for a LOCAL target when it opted into "Sideload with
+      // Debugging" OR the uploaded build carries STOP breakpoints / the IDE asked
+      // for a debug launch (autoDebug). Debug-over-relay for remote targets isn't
+      // supported yet, so remote targets never get remotedebug=1.
+      remoteDebug: !t.remote && (debugIps.includes(t.id) || debugIps.includes(t.ip) || autoDebug)
     }));
+  }
+
+  /** Add IPs to the persisted "Sideload with Debugging" list (auto-enable from a STOP scan). */
+  private persistDebugSideloadIps(ips: Set<string>): void {
+    try {
+      const s = loadSettings();
+      const cur = readDebugSideloadIps(s);
+      const merged = [...new Set([...cur, ...ips])];
+      if (merged.length !== cur.length) {
+        s['sideload-debug-ips'] = merged;
+        saveSettings(s);
+      }
+    } catch {
+      /* best-effort persist */
+    }
   }
 
   /**
@@ -339,7 +381,20 @@ export class SideloadRelayService {
 
   private handleUpload(upload: RelayUpload): void {
     const runId = this.nextRunId();
-    const targets = this.buildFanoutTargets();
+    // Match the single-device "Sideload with Debugging" path: scan the uploaded build
+    // for STOP breakpoints and auto-enable debugging on all LOCAL targets when any are
+    // found (or when the IDE explicitly requested a debug launch). Without this a relay
+    // fan-out of a build full of STOPs installs WITHOUT remotedebug=1, so every STOP
+    // falls to the on-device 8085 micro-debugger instead of the RDS debugger.
+    let discovered = 0;
+    try {
+      discovered = (require('../debugger/scan-stops') as { scanZipForStops: (p: string) => unknown[] })
+        .scanZipForStops(upload.filePath).length;
+    } catch {
+      /* scan best-effort */
+    }
+    const autoDebug = discovered > 0 || !!upload.remotedebug;
+    const targets = this.buildFanoutTargets(autoDebug);
     const debugLaunch = upload.remotedebug;
 
     const run: RelayRunStarted = {
@@ -383,6 +438,23 @@ export class SideloadRelayService {
       this.proxy.status('  (no enabled + reachable target devices — nothing to install to)');
     }
     const consoleDone = new Set<string>();
+    // Debug-enabled targets get their debugger reattached once their install lands.
+    const debugTargets = targets.filter((t) => t.remoteDebug);
+    const debugTargetIps = new Set(debugTargets.map((t) => t.ip));
+    if (debugTargetIps.size) {
+      // Remember the package per debug target (Restart + STOP re-scan need the local
+      // zip), and persist the auto-enable so the sidebar / future runs stay in debug
+      // mode (only when the build actually carried STOPs, matching single-device).
+      try {
+        const scan = require('../debugger/scan-stops') as { rememberSideloadZip: (ip: string, p: string) => void };
+        for (const dip of debugTargetIps) scan.rememberSideloadZip(dip, upload.filePath);
+      } catch {
+        /* best-effort */
+      }
+      // Persist by device key (id), not IP — an IP-keyed entry would silently stop
+      // matching this device after a network change.
+      if (discovered > 0) this.persistDebugSideloadIps(new Set(debugTargets.map((t) => t.id)));
+    }
 
     const stepWord = (s: RelayDeviceResult['install']) =>
       s.state === 'ok' ? 'ok' : s.state === 'error' ? `FAILED (${s.message || 'error'})` : s.state;
@@ -396,6 +468,13 @@ export class SideloadRelayService {
       onDeviceResult: (result) => {
         this.lastResults.set(result.targetId, result);
         this.listener.onDeviceResult(result);
+        if (result.done && result.install.state === 'ok' && debugTargetIps.has(result.ip)) {
+          try {
+            (require('../ipc/debugger-handlers') as {
+              notifyDebuggerReattach: (ip: string, extra?: { discovered?: number }) => void;
+            }).notifyDebuggerReattach(result.ip, { discovered });
+          } catch { /* best-effort */ }
+        }
         if (result.done && !consoleDone.has(result.targetId)) {
           consoleDone.add(result.targetId);
           const ok = result.install.state === 'ok';

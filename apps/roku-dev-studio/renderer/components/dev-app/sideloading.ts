@@ -11,6 +11,7 @@ import {
   pollDevAppForegroundOnce
 } from './dev-app-foreground-sync.js';
 import { S } from '@shared/strings/index.js';
+import { deviceKey } from '@shared/platform/device-identity.js';
 
 /**
  * Setup sideloading functionality
@@ -50,6 +51,44 @@ export function setupSideloading(
   } = elements;
   
   let selectedFilePath = '';
+
+  // "Sideload with Debugging": persist the choice per device, keyed by device identity
+  // (serial preferred, else IP — see deviceKey()) so it survives launches AND network
+  // changes, AND so the main-process Sideload Relay can fan out this device with
+  // remotedebug=1. Setting key is allowlisted in main/settings.ts and read back in
+  // main/sideload-relay/service.ts / dev-app-handlers.ts — keep the literal in sync.
+  // Also checks/clears the pre-migration raw-IP entry so older saved prefs keep working.
+  const DEBUG_SIDELOAD_KEY = 'sideload-debug-ips';
+  const debugCheckbox = panel.querySelector('.sideload-debug-checkbox') as HTMLInputElement | null;
+  const deviceIp = panel.dataset.ip || '';
+  const deviceKeyForIp = deviceKey({ serial: serialNumber, ip: deviceIp });
+  if (debugCheckbox && deviceIp) {
+    const readIps = async (): Promise<string[]> => {
+      const res = await window.roku.getSetting(DEBUG_SIDELOAD_KEY);
+      return res && res.success && Array.isArray(res.value) ? (res.value as string[]) : [];
+    };
+    void (async () => {
+      try {
+        const ips = await readIps();
+        debugCheckbox.checked = ips.includes(deviceKeyForIp) || ips.includes(deviceIp);
+      } catch { /* default unchecked */ }
+    })();
+    debugCheckbox.addEventListener('change', () => {
+      void (async () => {
+        try {
+          const ips = new Set(await readIps());
+          if (debugCheckbox.checked) {
+            ips.add(deviceKeyForIp);
+            if (deviceKeyForIp !== deviceIp) ips.delete(deviceIp);
+          } else {
+            ips.delete(deviceKeyForIp);
+            ips.delete(deviceIp);
+          }
+          await window.roku.setSetting(DEBUG_SIDELOAD_KEY, [...ips]);
+        } catch { /* best-effort persistence */ }
+      })();
+    });
+  }
 
   function applySelectedFile(result: { filePath: string; fileName: string; fileSize: number }) {
     selectedFilePath = result.filePath;
@@ -167,7 +206,8 @@ export function setupSideloading(
   sideloadBtn.addEventListener('click', async () => {
     const filePath = selectedFilePath || (filePathInput ? filePathInput.value.trim() : '');
     const password = getPassword();
-    
+    const withDebug = !!(debugCheckbox && debugCheckbox.checked);
+
     if (!filePath || !password) {
       showStatusMessage(statusDiv, S.devApp.selectFileAndPassword, 'warning');
       return;
@@ -180,15 +220,18 @@ export function setupSideloading(
     let sideloadSucceeded = false;
 
     try {
-      const result = await api.sideload(filePath, password);
+      const result = await api.sideload(filePath, password, withDebug, serialNumber);
       progressDiv.style.display = 'none';
-      
+
       if (result.success) {
         sideloadSucceeded = true;
         showStatusMessage(statusDiv, '✓ ' + result.message, 'success');
         if (rememberCheckbox && rememberCheckbox.checked && serialNumber) {
           savePassword(serialNumber, password);
         }
+        // A debug-enabled sideload reopens the device's debug port (8081). The main
+        // process emits DebuggerReattach after the install so the Telnet debug sidebar
+        // reattaches — no renderer-side nudge needed here.
         // Reset file selection on success
         selectedFilePath = '';
         if (filePathInput) filePathInput.value = '';

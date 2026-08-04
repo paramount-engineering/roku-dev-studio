@@ -26,1474 +26,7 @@ import {
   QUERY_ENDPOINTS
 } from './modules/index.js';
 import { errMessage } from '@shared/platform/err-util.js';
-import { S, applyI18n, setLocale } from '@shared/strings/index.js';
-import { applyLocalePreference } from './modules/utils/locale-live.js';
-import { devLog } from './modules/utils/dev-log.js';
-import { rendererWarn, rendererError } from './modules/utils/logger.js';
-import { initDeeplinkMediaTypes } from './modules/deeplink/deeplink-media-types.js';
-import { initDeeplinkPresets } from './modules/deeplink/deeplink-presets.js';
-import { setupDeepLinkPanel } from './modules/deeplink/deeplink-panel.js';
-import {
-  prepareModalOpenOrigin,
-  playModalOpenMotion,
-  closeModalWithOriginMotion,
-  openModalOverlayActiveFromOpener
-} from './modules/utils/modal-origin-motion.js';
-import { attachBackdropClickToClose, attachEscToClose } from './modules/utils/modal-backdrop-click.js';
-import { resolveRokuKeyFromEvent } from './modules/utils/keyboard-remote-keymap.js';
-import { setupTelnet } from './modules/telnet/telnet-console-panel.js';
-import { buildFindBarElement, createFindBar, bindFindShortcut } from './modules/ui/find-bar.js';
-import { makeCenteredSearchResizable } from './modules/ui/header-search-resize.js';
-import { searchWidthKey } from './modules/ui/search-storage-keys.js';
-import { setupQueries as setupQueriesComponent } from './components/queries/index.js';
-import { setupInspector as setupInspectorComponent } from './components/inspector/index.js';
-import { setupDevApp as setupDevAppComponent } from './components/dev-app/index.js';
-import { setupActionScripts as setupActionScriptsComponent } from './components/action-scripts/index.js';
-import {
-  setupNetworkTab,
-  initNetworkInspectorBridge
-} from './components/network-inspector/network-tab.js';
-import { setupRemoteTabMetrics } from './components/dev-app/device-metrics.js';
-import { wireRemoteTabSendText, wireRemoteTabKeyButtons } from './components/dev-app/quick-remote.js';
-import { dispatchDevAppForegroundFromActiveAppXml } from './components/dev-app/dev-app-foreground-sync.js';
-import { registerKeyboardRemoteAutoScreenshotRemote, scheduleKeyboardRemoteAutoScreenshotForActiveInnerTab } from './modules/utils/keyboard-remote-auto-screenshot-registry.js';
-import { registerPanelApi, getPanelApi } from './modules/device-api/panel-api-registry.js';
-import { onAppSettingsChanged } from './modules/utils/app-settings-change-bus.js';
-import {
-  mountFloatingRemote,
-  refreshFloatingRemote,
-  isFloatingRemoteVisible,
-  syncToggleButtonsState as syncFloatingRemoteToggleButtons
-} from './components/floating-remote/floating-remote.js';
-import {
-  pushMcpBridgeState,
-  setFocusedDevice,
-  registerMcpConnectResolver,
-  onMcpAgentAction,
-  ensureMcpStoredPasswordBridge,
-  ensureMcpAgentScreenshotBridge
-} from './modules/mcp-bridge-client.js';
-import { peekAppConnector } from './modules/app-connector/index.js';
-import { mountUpdateNotification } from './components/modals/update-notification.js';
-import { setupWelcomeFeatureModals } from './components/modals/welcome-feature-modal.js';
-
-// Per-device-panel expando hooks set up by the responsive-header measurer and read on
-// live rename / tab-close teardown. Declared here so TypeScript recognizes them on the
-// panel elements (they're intentionally attached to the DOM node, not tracked in a map).
-declare global {
-  interface HTMLElement {
-    _headerResponsiveRemeasure?: () => void;
-    _headerResponsiveCleanup?: () => void;
-  }
-}
-
-// ============================================
-// Developer Mode - Conditional Logging
-// ============================================
-// `devLog` and its Developer-Mode / RDS_DEBUG gating live in the shared dev-log module, which
-// routes through the shared logger and self-initializes from the preload bridge on import (it
-// subscribes to developer-mode changes and reads the RDS_DEBUG flag itself).
-
-// ============================================
-// Privacy Mode - Mask IPs and Serial Numbers
-// ============================================
-
-let privacyModeEnabled = false;
-
-// Apply privacy mode to the document
-function applyPrivacyMode(enabled) {
-  privacyModeEnabled = enabled;
-  if (enabled) {
-    document.body.classList.add('privacy-mode');
-  } else {
-    document.body.classList.remove('privacy-mode');
-  }
-}
-
-// Initialize privacy mode on load
-async function initPrivacyMode() {
-  try {
-    const result = await window.roku.getPrivacyMode();
-    applyPrivacyMode(result.enabled);
-  } catch (e) {
-    // Privacy mode not available, keep disabled
-  }
-  
-  // Listen for changes from the File menu
-  window.roku.onPrivacyModeChanged((enabled) => {
-    applyPrivacyMode(enabled);
-  });
-}
-
-// Live language switch: main broadcasts the new preference; the shared `applyLocalePreference`
-// re-resolves it against this window's OS locale, repoints the catalog, retranslates the static
-// shell (applyI18n), re-renders the sidebar (`afterApply` = renderDeviceList), then sweeps the
-// retranslate registries (registered modals + every device panel's imperative surfaces). No reload,
-// no lost state; the panel sweep runs after applyI18n so it repairs any clobbered placeholders.
-function initLocaleLiveSwitch(afterApply?: () => void) {
-  if (!window.roku || typeof window.roku.onLocaleChanged !== 'function') return;
-  window.roku.onLocaleChanged((pref: string) => applyLocalePreference(pref, afterApply));
-}
-
-// Wrap everything in try-catch to catch any errors
-try {
-
-// ============================================
-// State Management
-// ============================================
-
-const state = {
-  devices: new Map(), // deviceId (serial or ip) -> device info
-  connectedDevices: new Map(), // ip -> { device, tabId, locationId? }
-  activeTabId: null,
-  isScanning: false,
-  // Remote Locations
-  remoteLocations: new Map(), // locationId -> { id, name, host, port, serverUrl, status, devices: Map }
-  scanningLocations: new Set(), // locationIds currently being scanned
-  collapsedLocations: new Set() // locationIds that are collapsed in sidebar
-};
-
-/** Per device tab panel: Network Inspector UI controller. */
-const networkTabControllers = new Map();
-/** Tell every Network Inspector tab whether more than one device tab is open, so a tab only uses its
- *  permissive single-device discovery fallback when it's the sole device (prevents cross-claiming
- *  another device's captured traffic). Call whenever a device tab is added or removed. */
-function syncNetworkTabMultiDevice(): void {
-  const multi = networkTabControllers.size > 1;
-  for (const ctrl of networkTabControllers.values()) ctrl.setMultiDevice?.(multi);
-}
-/** Serial numbers currently seen on the hotspot (local devices only). */
-const hotspotSerialsActive = new Set<string>();
-const hotspotSerialIps = new Map<string, string>();
-/**
- * Tab ids whose Network tab has already been revealed because the MITM proxy is active. The
- * proxy captures dev-channel HTTPS for any reachable device (no hotspot required), so on a shared
- * Wi-Fi the tab must be shown even though the device was never discovered on a hotspot subnet.
- */
-const mitmRevealedTabIds = new Set<string>();
-let lastNiAutoDisabledToast = '';
-
-function hideAllNetworkTabsForDisable(): void {
-  hotspotSerialsActive.clear();
-  hotspotSerialIps.clear();
-  mitmRevealedTabIds.clear();
-  for (const ctrl of networkTabControllers.values()) {
-    ctrl.setVisible(false);
-    ctrl.setHotspotIp(null);
-  }
-}
-
-/** Reveal the Network tab for every connected local device when the MITM proxy is active. */
-function revealLocalNetworkTabsForMitm(): void {
-  if (!NETWORK_INSPECTOR_ENABLED) return;
-  for (const conn of state.connectedDevices.values()) {
-    if (conn.isRemote) continue;
-    if (mitmRevealedTabIds.has(conn.tabId)) continue;
-    const ctrl = networkTabControllers.get(conn.tabId);
-    if (!ctrl) continue;
-    mitmRevealedTabIds.add(conn.tabId);
-    const ip = typeof conn.device.ip === 'string' ? conn.device.ip.trim() : '';
-    ctrl.setVisible(true);
-    if (ip) {
-      ctrl.setHotspotIp(ip);
-      ctrl.setDeviceIp(ip);
-      void loadNetworkTabBufferedEvents(ip, ctrl);
-    }
-  }
-}
-
-function applyNetworkTabForSerial(serial: string, hotspotIp: string | null, visible: boolean): void {
-  if (!serial) return;
-  for (const conn of state.connectedDevices.values()) {
-    if (conn.isRemote) continue;
-    const devSerial =
-      typeof conn.device.serialNumber === 'string' ? conn.device.serialNumber.trim() : '';
-    if (devSerial !== serial) continue;
-    const ctrl = networkTabControllers.get(conn.tabId);
-    if (ctrl) {
-      ctrl.setVisible(visible && NETWORK_INSPECTOR_ENABLED);
-      ctrl.setHotspotIp(hotspotIp);
-      if (hotspotIp) ctrl.setDeviceIp(hotspotIp);
-      if (visible && hotspotIp) void loadNetworkTabBufferedEvents(hotspotIp, ctrl);
-    }
-  }
-}
-
-function syncNetworkTabsForLocalDevice(device: {
-  ip?: string;
-  serialNumber?: string;
-}): void {
-  if (!NETWORK_INSPECTOR_ENABLED) return;
-  const serial = typeof device.serialNumber === 'string' ? device.serialNumber.trim() : '';
-  const ip = typeof device.ip === 'string' ? device.ip.trim() : '';
-  if (!ip) return;
-  for (const conn of state.connectedDevices.values()) {
-    if (conn.isRemote) continue;
-    const devSerial =
-      typeof conn.device.serialNumber === 'string' ? conn.device.serialNumber.trim() : '';
-    const sameDevice =
-      (serial && devSerial === serial) ||
-      conn.device.ip === ip ||
-      (devSerial && hotspotSerialIps.get(devSerial) === ip);
-    if (!sameDevice) continue;
-    conn.device.ip = ip;
-    Object.assign(conn.device, device);
-    const ctrl = networkTabControllers.get(conn.tabId);
-    if (!ctrl) continue;
-    if (serial) {
-      hotspotSerialsActive.add(serial);
-      hotspotSerialIps.set(serial, ip);
-    }
-    if (/^192\.168\.2\.\d{1,3}$/.test(ip)) {
-      ctrl.setVisible(true);
-      ctrl.setHotspotIp(ip);
-      ctrl.setDeviceIp(ip);
-      void loadNetworkTabBufferedEvents(ip, ctrl);
-    }
-  }
-}
-
-function reconcileConnectedDeviceIp(
-  oldIp: string,
-  device: { ip: string; serialNumber?: string; deviceName?: string; modelName?: string }
-): void {
-  const newIp = device.ip?.trim();
-  if (!newIp || !oldIp || oldIp === newIp) return;
-  const connection = state.connectedDevices.get(oldIp);
-  if (!connection || connection.isRemote) return;
-
-  state.connectedDevices.delete(oldIp);
-  state.connectedDevices.set(newIp, connection);
-  connection.device = { ...connection.device, ...device, ip: newIp };
-
-  const panel = document.getElementById(connection.tabId);
-  if (panel) {
-    setDynamicText(panel.querySelector('.device-ip'), newIp);
-  }
-
-  const ctrl = networkTabControllers.get(connection.tabId);
-  if (ctrl) {
-    ctrl.setDeviceIp(newIp);
-    if (/^192\.168\.2\.\d{1,3}$/.test(newIp)) {
-      ctrl.setHotspotIp(newIp);
-      ctrl.setVisible(true);
-      void loadNetworkTabBufferedEvents(newIp, ctrl);
-    }
-  }
-
-  const serial =
-    typeof device.serialNumber === 'string' ? device.serialNumber.trim() : '';
-  if (serial) {
-    hotspotSerialIps.set(serial, newIp);
-    hotspotSerialsActive.add(serial);
-  }
-}
-
-function refreshAllNetworkTabVisibility(): void {
-  // Setting toggled off at runtime: hide every Network tab (and switch any panel
-  // showing it back to Remote). Without this the tab lingers after the user
-  // disables the inspector. Re-enabling re-reveals via the status/MITM listeners.
-  if (!NETWORK_INSPECTOR_ENABLED) {
-    hideAllNetworkTabsForDisable();
-    return;
-  }
-  for (const serial of hotspotSerialsActive) {
-    applyNetworkTabForSerial(serial, hotspotSerialIps.get(serial) || null, true);
-  }
-}
-
-async function syncNetworkTabForConnectedDevice(
-  tabId: string,
-  device: { ip: string; serialNumber?: string },
-  networkCtrl: ReturnType<typeof setupNetworkTab>,
-  isRemote: boolean
-): Promise<void> {
-  if (isRemote || !NETWORK_INSPECTOR_ENABLED || !window.roku?.networkInspectorGetStatus) return;
-  try {
-    const res = await window.roku.networkInspectorGetStatus();
-    const status = res?.status as
-      | {
-          connectedClients?: Array<{ ip?: string; serialNumber?: string }>;
-          mitmActive?: boolean;
-          mitmEnabled?: boolean;
-        }
-      | undefined;
-    const clients = status?.connectedClients || [];
-    const serial = typeof device.serialNumber === 'string' ? device.serialNumber.trim() : '';
-    const match = clients.find(
-      (c) =>
-        (serial && c.serialNumber === serial) ||
-        (c.ip && device.ip && c.ip === device.ip)
-    );
-    if (match?.ip) {
-      hotspotSerialsActive.add(serial || match.ip);
-      hotspotSerialIps.set(serial || match.ip, match.ip);
-      networkCtrl.setVisible(true);
-      networkCtrl.setHotspotIp(match.ip);
-      void loadNetworkTabBufferedEvents(match.ip, networkCtrl);
-      return;
-    }
-    // macOS Internet Sharing default — show tab when already on hotspot range
-    if (/^192\.168\.2\.\d{1,3}$/.test(device.ip)) {
-      if (serial) {
-        hotspotSerialsActive.add(serial);
-        hotspotSerialIps.set(serial, device.ip);
-      }
-      networkCtrl.setVisible(true);
-      networkCtrl.setHotspotIp(device.ip);
-      void loadNetworkTabBufferedEvents(device.ip, networkCtrl);
-      return;
-    }
-    // Shared Wi-Fi (no hotspot): the MITM proxy still records dev-channel HTTPS for any reachable
-    // device, so reveal the tab whenever the proxy is active/enabled even though this device was
-    // never discovered on a hotspot subnet. Watch the device's own IP.
-    if ((status?.mitmActive || status?.mitmEnabled) && device.ip) {
-      mitmRevealedTabIds.add(tabId);
-      networkCtrl.setVisible(true);
-      networkCtrl.setHotspotIp(device.ip);
-      void loadNetworkTabBufferedEvents(device.ip, networkCtrl);
-    }
-  } catch (e) {
-    devLog('[Network Inspector] status sync failed:', e);
-  }
-}
-
-async function loadNetworkTabBufferedEvents(
-  deviceIp: string,
-  networkCtrl: ReturnType<typeof setupNetworkTab>
-): Promise<void> {
-  if (!window.roku?.networkInspectorGetEvents) return;
-  try {
-    const res = await window.roku.networkInspectorGetEvents(deviceIp, 500);
-    if (res?.success && Array.isArray(res.events) && res.events.length > 0) {
-      networkCtrl.loadBufferedEvents(res.events);
-    }
-  } catch {
-    /* ignore */
-  }
-}
-
-function setupNetworkInspectorListeners(): void {
-  initNetworkInspectorBridge({
-    onDeviceDiscovered: (device) => {
-      if (!NETWORK_INSPECTOR_ENABLED) return;
-      addDiscoveredDevice(device);
-      syncNetworkTabsForLocalDevice(device as { ip?: string; serialNumber?: string });
-    },
-    onDeviceJoined: (payload) => {
-      if (!NETWORK_INSPECTOR_ENABLED) return;
-      const serial = payload.serialNumber?.trim();
-      const ip = payload.ip?.trim();
-      if (!serial || !ip) return;
-      hotspotSerialsActive.add(serial);
-      hotspotSerialIps.set(serial, ip);
-      applyNetworkTabForSerial(serial, ip, true);
-    },
-    onDeviceLeft: (payload) => {
-      const serial = payload.serialNumber?.trim();
-      if (!serial) return;
-      hotspotSerialsActive.delete(serial);
-      hotspotSerialIps.delete(serial);
-      applyNetworkTabForSerial(serial, null, false);
-    },
-    onClientsCleared: () => {
-      hotspotSerialsActive.clear();
-      hotspotSerialIps.clear();
-      for (const ctrl of networkTabControllers.values()) {
-        ctrl.setVisible(false);
-        ctrl.setHotspotIp(null);
-        ctrl.clearEvents();
-      }
-    },
-    onStatus: (status) => {
-      const s = status as {
-        enabled?: boolean;
-        packetsCaptured?: number;
-        captureActive?: boolean;
-        hotspotInterfaceDetected?: boolean;
-        lastError?: string;
-        captureInterface?: string;
-        connectedClients?: Array<{ ip?: string; serialNumber?: string }>;
-        eventsBuffered?: number;
-        mitmActive?: boolean;
-        mitmEnabled?: boolean;
-        // Readiness + structured remediation — forwarded so each tab's blocked
-        // state renders the main-process prerequisite steps instead of going
-        // stale until a manual status refresh.
-        platform?: string;
-        captureToolAvailable?: boolean;
-        bpfCaptureAvailable?: boolean;
-        bpfLaunchDaemonInstalled?: boolean;
-        mitmListenAddress?: string;
-        mitmLastError?: string;
-        mitmTransactions?: number;
-        prerequisites?: Array<{
-          ok: boolean;
-          code: string;
-          title: string;
-          message: string;
-          remediation: string[];
-          docsPath?: string;
-          persistentFixInstalled?: boolean;
-        }>;
-      };
-      const autoDisabledMessage =
-        s.enabled === false && typeof s.lastError === 'string' && /^Network Inspector disabled:/i.test(s.lastError)
-          ? s.lastError
-          : '';
-      if (autoDisabledMessage) {
-        if (autoDisabledMessage !== lastNiAutoDisabledToast) {
-          showToast(autoDisabledMessage, 'error');
-          lastNiAutoDisabledToast = autoDisabledMessage;
-        }
-        hideAllNetworkTabsForDisable();
-      } else if (s.enabled !== false) {
-        lastNiAutoDisabledToast = '';
-      }
-
-      const clients = s.connectedClients || [];
-      if (s.enabled !== false) {
-        for (const client of clients) {
-          if (client.serialNumber && client.ip) {
-            hotspotSerialIps.set(client.serialNumber.trim(), client.ip.trim());
-            hotspotSerialsActive.add(client.serialNumber.trim());
-            applyNetworkTabForSerial(client.serialNumber.trim(), client.ip.trim(), true);
-          }
-        }
-      }
-      // Shared Wi-Fi (no hotspot): reveal connected local devices' Network tabs once the proxy is
-      // active, since they won't appear in connectedClients (that list comes from hotspot scans).
-      if (s.enabled !== false && (s.mitmActive || s.mitmEnabled)) revealLocalNetworkTabsForMitm();
-      for (const ctrl of networkTabControllers.values()) {
-        ctrl.setCaptureStatus(s);
-      }
-    },
-    onCaptureEvents: (events) => {
-      if (!NETWORK_INSPECTOR_ENABLED || !Array.isArray(events)) return;
-      for (const ctrl of networkTabControllers.values()) {
-        ctrl.appendEvents(events);
-      }
-    }
-  });
-}
-
-/**
- * Snapshot connectedDevices and push to the MCP bridge so external agents can
- * call `list_devices`. Called on every connect / disconnect / activate-tab.
- * Cheap (small list); idempotent — main just overwrites its cache.
- */
-type DeviceSnap = {
-  ip: string | null;
-  serial: string | null;
-  modelName: string | null;
-  modelNumber: string | null;
-  friendlyDeviceName: string | null;
-  softwareVersion: string | null;
-  source: 'local' | 'remote';
-  remoteLocationId: string | null;
-  isFocused: boolean;
-  isConnected: boolean;
-};
-
-function snapDevice(
-  dev: Record<string, unknown>,
-  extras: {
-    source: 'local' | 'remote';
-    isConnected: boolean;
-    isFocused: boolean;
-    remoteLocationId: string | null;
-  }
-): DeviceSnap {
-  return {
-    ip: typeof dev.ip === 'string' ? dev.ip : null,
-    serial:
-      typeof dev.serialNumber === 'string'
-        ? dev.serialNumber
-        : typeof dev.serial === 'string'
-          ? dev.serial
-          : null,
-    modelName: typeof dev.modelName === 'string' ? dev.modelName : null,
-    modelNumber: typeof dev.modelNumber === 'string' ? dev.modelNumber : null,
-    friendlyDeviceName:
-      typeof dev.userDeviceName === 'string'
-        ? dev.userDeviceName
-        : typeof dev.friendlyDeviceName === 'string'
-          ? dev.friendlyDeviceName
-          : typeof dev.deviceName === 'string'
-            ? dev.deviceName
-            : null,
-    softwareVersion: typeof dev.softwareVersion === 'string' ? dev.softwareVersion : null,
-    source: extras.source,
-    remoteLocationId: extras.remoteLocationId,
-    isFocused: extras.isFocused,
-    isConnected: extras.isConnected
-  };
-}
-
-function pushDeviceListToMcpBridge(): void {
-  try {
-    const activeTabId = state.activeTabId;
-
-    // Build connected list first, and track which ip/locationId:ip pairs are
-    // already connected so we don't duplicate them in `knownDevices`.
-    const connected: DeviceSnap[] = [];
-    const connectedKeys = new Set<string>();
-    state.connectedDevices.forEach((conn: Record<string, unknown>, key: string) => {
-      const dev = (conn?.device as Record<string, unknown>) || {};
-      const isRemote = !!conn?.isRemote;
-      const locId = typeof conn?.locationId === 'string' ? (conn.locationId as string) : null;
-      connected.push(
-        snapDevice(dev, {
-          source: isRemote ? 'remote' : 'local',
-          remoteLocationId: locId,
-          isConnected: true,
-          isFocused: typeof conn?.tabId === 'string' && conn.tabId === activeTabId
-        })
-      );
-      connectedKeys.add(key);
-    });
-
-    // Expand with discovered-on-LAN and remote-location devices the user
-    // hasn't connected yet. The agent can target these via `connect_device`
-    // or per-call overrides.
-    const known: DeviceSnap[] = [...connected];
-
-    state.devices.forEach((dev: Record<string, unknown>) => {
-      const ip = typeof dev.ip === 'string' ? (dev.ip as string) : null;
-      if (!ip) return;
-      if (connectedKeys.has(ip)) return;
-      known.push(
-        snapDevice(dev, {
-          source: 'local',
-          remoteLocationId: null,
-          isConnected: false,
-          isFocused: false
-        })
-      );
-    });
-
-    state.remoteLocations.forEach((loc: Record<string, unknown>, locId: string) => {
-      const devices = loc?.devices;
-      if (!(devices instanceof Map)) return;
-      devices.forEach((dev: Record<string, unknown>) => {
-        const ip = typeof dev.ip === 'string' ? (dev.ip as string) : null;
-        if (!ip) return;
-        const key = `${locId}:${ip}`;
-        if (connectedKeys.has(key)) return;
-        known.push(
-          snapDevice(dev, {
-            source: 'remote',
-            remoteLocationId: locId,
-            isConnected: false,
-            isFocused: false
-          })
-        );
-      });
-    });
-
-    const focused = connected.find((d) => d.isFocused) || null;
-
-    // Let the bridge client know which device is focused so untargeted tool
-    // calls fall back to it.
-    setFocusedDevice(focused ? { serial: focused.serial, ip: focused.ip } : null);
-
-    pushMcpBridgeState({
-      connectedDevices: connected,
-      knownDevices: known,
-      selectedDevice: focused
-        ? {
-            ip: focused.ip,
-            serial: focused.serial,
-            modelName: focused.modelName,
-            modelNumber: focused.modelNumber,
-            friendlyDeviceName: focused.friendlyDeviceName,
-            softwareVersion: focused.softwareVersion,
-            source: focused.source,
-            remoteLocationId: focused.remoteLocationId,
-            isFocused: true,
-            isConnected: true
-          }
-        : null
-    });
-  } catch (e) {
-    rendererWarn('[mcp-bridge] could not push device list', e);
-  }
-}
-
-/**
- * Register an MCP bridge resolver that opens a device tab on agent request.
- * Called once at boot. Looks up the target in `state.devices` (local) or
- * `state.remoteLocations` (remote) and delegates to the existing connect
- * flows.
- */
-function registerMcpConnectFlow(): void {
-  registerMcpConnectResolver(async (target) => {
-    const wantIp = target.ip || '';
-    const wantSerial = target.serial || '';
-
-    // Already connected? Short-circuit with the existing tab.
-    for (const conn of state.connectedDevices.values()) {
-      const dev = (conn as { device?: Record<string, unknown> })?.device || {};
-      const devIp = typeof dev.ip === 'string' ? dev.ip : '';
-      const devSerial =
-        typeof dev.serialNumber === 'string' ? dev.serialNumber : typeof dev.serial === 'string' ? dev.serial : '';
-      if ((wantIp && devIp === wantIp) || (wantSerial && devSerial === wantSerial)) {
-        return { ok: true, device: { ip: devIp || null, serial: devSerial || null } };
-      }
-    }
-
-    // Local scan cache
-    for (const dev of state.devices.values()) {
-      const d = dev as Record<string, unknown>;
-      const devIp = typeof d.ip === 'string' ? d.ip : '';
-      const devSerial =
-        typeof d.serialNumber === 'string' ? d.serialNumber : typeof d.serial === 'string' ? d.serial : '';
-      if ((wantIp && devIp === wantIp) || (wantSerial && devSerial === wantSerial)) {
-        try {
-          await connectDevice(d);
-          return { ok: true, device: { ip: devIp || null, serial: devSerial || null } };
-        } catch (e) {
-          return { ok: false, error: e instanceof Error ? e.message : String(e) };
-        }
-      }
-    }
-
-    return {
-      ok: false,
-      error: `Device "${wantSerial || wantIp}" was not found in the Local Devices list. Scan or add it manually first, then call connect_device again.`
-    };
-  });
-}
-
-/**
- * Auto-connect Sideload Relay targets in the UI. When the relay fans a build out
- * to a device, open that device as a connected tab here (if it isn't already)
- * and connect its console — so a device that wasn't open in RDS shows up
- * connected right after sideloading. `connectDevice` is idempotent (it just
- * activates the existing tab when already connected).
- */
-function registerRelayAutoConnect(): void {
-  const roku = (window as any).roku;
-  if (!roku?.onSideloadRelayResult) return;
-  roku.onSideloadRelayResult((raw: unknown) => {
-    const r = raw as {
-      ip?: string;
-      name?: string;
-      install?: { state?: string };
-      console?: { state?: string };
-      done?: boolean;
-    } | null;
-    if (!r || !r.ip || r.done !== true || r.install?.state !== 'ok') return;
-    const ip = r.ip;
-    try {
-      // Prefer a full device object from the scan cache; fall back to a minimal
-      // one built from the relay target (enough for the tab/panel + passwordless
-      // ECP/telnet).
-      let device: Record<string, unknown> | undefined;
-      for (const dev of state.devices.values()) {
-        if ((dev as { ip?: string }).ip === ip) {
-          device = dev as Record<string, unknown>;
-          break;
-        }
-      }
-      if (!device) device = { ip, deviceName: r.name || ip, modelName: r.name || 'Roku' };
-
-      // connectDevice is idempotent — a brand-new device opens a tab; an
-      // already-connected one just re-activates its existing tab.
-      connectDevice(device);
-
-      // Always bring the console up on a successful relay — no matter the prior
-      // state (device fresh or already-connected, console dropped, never up, or
-      // even auto-console off for this run). `connectTelnet` is idempotent
-      // (`if (isConnected) return`), so a healthy console is a no-op — no bounce;
-      // a dropped/never-connected one gets (re)connected. Defer a tick so a
-      // freshly-created panel finishes wiring.
-      const conn = state.connectedDevices.get(ip) as { tabId?: string } | undefined;
-      const panel = conn?.tabId ? (document.getElementById(conn.tabId) as { connectTelnet?: () => Promise<void> } | null) : null;
-      if (panel?.connectTelnet) {
-        setTimeout(() => {
-          try {
-            void panel.connectTelnet!();
-          } catch (e) {
-            rendererWarn('[SideloadRelay] auto console connect failed', e);
-          }
-        }, 0);
-      }
-    } catch (e) {
-      rendererError('[SideloadRelay] auto-connect failed', e);
-    }
-  });
-}
-
-/** When auto-connect is on, we persist this list and update it on each connect/disconnect. */
-const AUTO_CONNECT_DEVICE_LIST_KEY = 'autoConnectRememberedDevices';
-
-type AutoConnectDeviceEntry = {
-  v: 1;
-  kind: 'local' | 'remote';
-  ip: string;
-  serialNumber?: string;
-  locationId?: string;
-  serverUrl?: string;
-};
-
-let startupLocalScanComplete = false;
-let startupRemoteScanComplete = false;
-let autoConnectLastDeviceAttempted = false;
-/** `undefined` = not read yet */
-let cachedRememberedDeviceList: AutoConnectDeviceEntry[] | undefined = undefined;
-
-/** v2: default is sidebar expanded when key is absent (v1 often stayed `'1'` and felt like the app “auto-collapsed”). */
-const RDS_SIDEBAR_COLLAPSED_KEY = 'rds-sidebar-collapsed-v2';
-
-/** Persisted collapse at launch; used when {@link REMEMBER_SIDEBAR_TOGGLE} to defer “hide sidebar” until post-scan. */
-let rememberedSidebarCollapsedAtLaunch = false;
-/** When true, startup sidebar orchestration has finished (or user took over). */
-let postStartupSidebarDecisionComplete = false;
-/** User used the title-bar sidebar control before post-startup finished. */
-let userToggledSidebarDuringStartup = false;
-/** Pointer or focus entered the sidebar during post-startup; blocks auto-collapse for this launch. */
-let startupSidebarStickySuppress = false;
-/** Session-only: keep sidebar expanded over a persisted `'1'` (sticky / no device / pointer-on-sidebar). */
-let sidebarSessionKeepExpandedOverride = false;
-let postStartupSidebarGraceTimer: number | null = null;
-let lastPointerClientX = -1;
-let lastPointerClientY = -1;
-let startupScansReadyPromise: Promise<void> | null = null;
-
-const POST_STARTUP_SIDEBAR_GRACE_MS = 400;
-
-// ============================================
-// Icon Helper, Password Storage, and Utilities
-// ============================================
-// These are now imported from modules/utils
-// icon, getStoredPassword, removePassword are imported above
-
-// ============================================
-// Unified API Adapter (abstracts local vs remote calls)
-// ============================================
-
-/**
- * Per-method adapter spec. One table drives both local and remote branches so
- * a new device API method is added in a single place.
- *
- *  - `prefix: 'ip'` — local call is `window.roku[localName](ip, ...userArgs)`
- *                    and remote is `window.roku[remoteName](serverUrl, ip, ...userArgs)`.
- *                    This covers the vast majority (keypress, launch, query, …).
- *
- *  - `prefix: 'none'` — the user already provides the identifying token
- *                       (e.g. a RALE `connectionId`). Local call is
- *                       `window.roku[localName](...userArgs)`; remote is
- *                       `window.roku[remoteName](serverUrl, ...userArgs)`.
- *                       Used for `raleCommand` / `raleDisconnect`.
- *
- * `localName` / `remoteName` default to method + `'remote' + Capitalized(method)`;
- * declare them explicitly when the IPC name diverges (e.g. `remoteSideloadUpload`).
- */
-interface AdapterMethodSpec {
-  name: string;
-  prefix: 'ip' | 'none';
-  localName?: string;
-  remoteName?: string;
-}
-
-const ADAPTER_METHOD_SPECS: readonly AdapterMethodSpec[] = [
-  { name: 'keypress', prefix: 'ip' },
-  { name: 'launch', prefix: 'ip' },
-  { name: 'query', prefix: 'ip' },
-  { name: 'post', prefix: 'ip' },
-  { name: 'inputText', prefix: 'ip' },
-  { name: 'deeplink', prefix: 'ip' },
-  { name: 'getIcon', prefix: 'ip' },
-  { name: 'screenshot', prefix: 'ip' },
-  { name: 'verifyDevAuth', prefix: 'ip' },
-  // Local uses `sideload`, remote uses `remoteSideloadUpload` (multipart upload).
-  { name: 'sideload', prefix: 'ip', remoteName: 'remoteSideloadUpload' },
-  { name: 'deleteSideload', prefix: 'ip' },
-  { name: 'raleWake', prefix: 'ip' },
-  { name: 'raleConnect', prefix: 'ip' },
-  // RALE command / disconnect use a per-socket connectionId (not ip) as the
-  // identifying token, so no ip is prepended.
-  { name: 'raleCommand', prefix: 'none' },
-  { name: 'raleDisconnect', prefix: 'none' },
-  // Telnet console (port 8085)
-  { name: 'telnetConnect', prefix: 'ip' },
-  { name: 'telnetDisconnect', prefix: 'ip' },
-  { name: 'telnetSend', prefix: 'ip' },
-  { name: 'telnetStatus', prefix: 'ip' },
-  // Telnet system commands (port 8080)
-  { name: 'telnetSystemConnect', prefix: 'ip' },
-  { name: 'telnetSystemDisconnect', prefix: 'ip' },
-  { name: 'telnetSystemSend', prefix: 'ip' },
-  { name: 'telnetSystemStatus', prefix: 'ip' }
-];
-
-function capitalize(s: string): string {
-  return s.length ? s[0].toUpperCase() + s.slice(1) : s;
-}
-
-function createApiAdapter(isRemote, ip, serverUrl = null) {
-  const useRemote = !!(isRemote && serverUrl);
-  const remoteBase = serverUrl || '';
-
-  // Helper to wrap API calls with logging.
-  const wrapApiCall = (method, fn) => {
-    return async (...args) => {
-      const startTime = Date.now();
-      const target = useRemote ? `${remoteBase} → ${ip}` : ip;
-      const argsStr = args.map(arg => {
-        if (typeof arg === 'string' && arg.length > 100) {
-          return arg.substring(0, 100) + '...';
-        }
-        if (typeof arg === 'string' && (arg.includes('password') || method.includes('password'))) {
-          return '***';
-        }
-        return arg;
-      }).join(', ');
-      devLog(`[API ${method}] ${useRemote ? 'REMOTE' : 'LOCAL'} → ${target}`, argsStr || '(no args)');
-      try {
-        const result = await fn(...args);
-        const duration = Date.now() - startTime;
-        devLog(`[API ${method}] ✓ SUCCESS (${duration}ms)`, result?.success !== undefined ? `success: ${result.success}` : '');
-        return result;
-      } catch (error) {
-        const duration = Date.now() - startTime;
-        devLog(`[API ${method}] ✗ ERROR (${duration}ms):`, errMessage(error));
-        throw error;
-      }
-    };
-  };
-
-  // `window.roku` is typed loosely in this file; the method indexing is
-  // validated at runtime by the adapter-contract assertions in `main.ts` IPC
-  // setup + the preload surface.
-  const roku = window.roku as unknown as Record<string, (...a: unknown[]) => unknown>;
-  const adapter: Record<string, unknown> = {
-    isRemote: useRemote,
-    ip,
-    serverUrl: useRemote ? remoteBase : null
-  };
-
-  for (const spec of ADAPTER_METHOD_SPECS) {
-    const localName = spec.localName ?? spec.name;
-    const remoteName = spec.remoteName ?? `remote${capitalize(spec.name)}`;
-    const impl = useRemote
-      ? spec.prefix === 'ip'
-        ? (...args: unknown[]) => roku[remoteName](remoteBase, ip, ...args)
-        : (...args: unknown[]) => roku[remoteName](remoteBase, ...args)
-      : spec.prefix === 'ip'
-        ? (...args: unknown[]) => roku[localName](ip, ...args)
-        : (...args: unknown[]) => roku[localName](...args);
-    adapter[spec.name] = wrapApiCall(spec.name, impl);
-  }
-
-  if (useRemote) {
-    adapter.telnetClearRelayBuffer = wrapApiCall('telnetClearRelayBuffer', () =>
-      roku.remoteTelnetClearBuffer(remoteBase, ip));
-    adapter.telnetConnect = wrapApiCall(
-      'telnetConnect',
-      (options?: { skipRelayBuffer?: boolean }) =>
-        roku.remoteTelnetConnect(remoteBase, ip, options)
-    );
-  }
-
-  // Cast to `any` to match the duck-typed `api` shape consumed by the various
-  // `setup*` component functions (same looseness as before the refactor).
-  return adapter as any;
-}
-
-// ============================================
-// Remote Location Management
-// ============================================
-
-// Generate unique location ID (cryptographically secure random suffix via Web Crypto API)
-function generateLocationId() {
-  const bytes = new Uint8Array(9);
-  window.crypto.getRandomValues(bytes);
-  const suffix = Array.from(bytes).map(b => (b % 36).toString(36)).join('');
-  return 'loc-' + Date.now() + '-' + suffix;
-}
-
-// Load Remote Locations from localStorage
-async function loadRemoteLocations() {
-  try {
-    // Use file-based storage via IPC (more reliable than localStorage in Electron)
-    const result = await window.roku.getSetting('remote-locations');
-    devLog('[Remote Locations] Loading from file storage:', result);
-    
-    if (result.success && result.value) {
-      const locations = result.value;
-      devLog('[Remote Locations] Parsed locations:', locations);
-      locations.forEach(loc => {
-        devLog('[Remote Locations] Adding location:', loc.name, loc.id);
-        state.remoteLocations.set(loc.id, {
-          ...loc,
-          status: 'unknown',
-          devices: new Map()
-        });
-      });
-      devLog('[Remote Locations] Loaded', state.remoteLocations.size, 'locations');
-    } else {
-      devLog('[Remote Locations] No stored locations found');
-    }
-  } catch (e) {
-    rendererError('Failed to load Remote Locations:', e);
-  }
-}
-
-// Save Remote Locations to file storage (more reliable than localStorage)
-async function saveRemoteLocations() {
-  try {
-    const locations = Array.from(state.remoteLocations.values()).map(loc => ({
-      id: loc.id,
-      name: loc.name,
-      host: loc.host,
-      port: loc.port,
-      serverUrl: loc.serverUrl
-    }));
-    devLog('[Remote Locations] Saving to file storage:', locations);
-    const result = await window.roku.setSetting('remote-locations', locations);
-    devLog('[Remote Locations] Save result:', result);
-  } catch (e) {
-    rendererError('Failed to save Remote Locations:', e);
-  }
-}
-
-// Add a new remote location
-async function addRemoteLocation(name, host, port) {
-  const serverUrl = `http://${host}:${port}`;
-  const hostLower = host.toLowerCase();
-  
-  // Check for duplicate host/IP
-  for (const [id, existingLocation] of state.remoteLocations) {
-    if (existingLocation.host.toLowerCase() === hostLower) {
-      throw new Error(S.app.locationHostExists(host, existingLocation.name));
-    }
-    if (existingLocation.serverUrl === serverUrl) {
-      throw new Error(S.app.locationServerExists(existingLocation.name));
-    }
-  }
-  
-  // First, verify the server is reachable before adding
-  try {
-    const healthResult = await window.roku.remoteHealth(serverUrl);
-    
-    if (!healthResult.success) {
-      throw new Error(S.app.unableToConnectRelay);
-    }
-  } catch (e) {
-    if (errMessage(e).includes('already exists')) {
-      throw e; // Re-throw duplicate error
-    }
-    throw new Error(S.app.unableToConnectRelay);
-  }
-  
-  // Server is reachable, now add the location
-  const id = generateLocationId();
-  
-  const location = {
-    id,
-    name,
-    host,
-    port,
-    serverUrl,
-    status: 'online',
-    devices: new Map()
-  };
-  
-  state.remoteLocations.set(id, location);
-  saveRemoteLocations();
-  renderRemoteLocations();
-  
-  // Discover devices at this location
-  await refreshRemoteLocation(id);
-  
-  return location;
-}
-
-// Remove a remote location
-function removeRemoteLocation(locationId) {
-  const location = state.remoteLocations.get(locationId);
-  if (!location) return;
-  
-  // Disconnect any connected devices from this location
-  location.devices.forEach((device, deviceId) => {
-    const deviceKey = `${locationId}:${device.ip}`;
-    if (state.connectedDevices.has(deviceKey)) {
-      disconnectDevice(deviceKey);
-    }
-  });
-  
-  state.remoteLocations.delete(locationId);
-  saveRemoteLocations();
-  renderRemoteLocations();
-}
-
-// Refresh a remote location (health check + capabilities + device discovery)
-async function refreshRemoteLocation(locationId) {
-  const location = state.remoteLocations.get(locationId);
-  if (!location) return;
-  
-  if (state.scanningLocations.has(locationId)) return;
-  state.scanningLocations.add(locationId);
-  
-  location.status = 'connecting';
-  renderRemoteLocations();
-  
-  try {
-    // Health check
-    const healthResult = await window.roku.remoteHealth(location.serverUrl);
-    
-    if (!healthResult.success) {
-      location.status = 'offline';
-      location.devices.clear();
-      location.capabilities = null;
-      state.scanningLocations.delete(locationId); // Delete BEFORE render
-      renderRemoteLocations();
-      return;
-    }
-    
-    location.status = 'online';
-    
-    // Fetch server capabilities
-    try {
-      const capResult = await window.roku.remoteCapabilities(location.serverUrl);
-      if (capResult.success && capResult.capabilities) {
-        location.capabilities = capResult.capabilities;
-        location.serverVersion = capResult.version;
-        devLog(`[Remote ${location.name}] Capabilities:`, location.capabilities);
-      } else {
-        // Server doesn't support capabilities endpoint - assume all features available
-        location.capabilities = getDefaultCapabilities();
-        devLog(`[Remote ${location.name}] Using default capabilities (server doesn't support /capabilities)`);
-      }
-    } catch (capError) {
-      // Older server without capabilities endpoint - assume all features available
-      location.capabilities = getDefaultCapabilities();
-      devLog(`[Remote ${location.name}] Capabilities fetch failed, using defaults:`, errMessage(capError));
-    }
-    
-    // Discover devices
-    const discoveryStartTime = Date.now();
-    devLog(`[Remote ${location.name}] Starting device discovery on ${location.serverUrl}`);
-    try {
-      const discoverResult = await window.roku.remoteDiscover(location.serverUrl);
-      const discoveryDuration = Date.now() - discoveryStartTime;
-      devLog(`[Remote ${location.name}] Discovery completed (${discoveryDuration}ms):`, {
-        success: discoverResult.success,
-        deviceCount: discoverResult.devices?.length || 0,
-        error: discoverResult.error
-      });
-    
-      if (discoverResult.success && discoverResult.devices && Array.isArray(discoverResult.devices)) {
-      devLog(`[Remote ${location.name}] Found ${discoverResult.devices.length} device(s)`);
-      // Update existing devices or add new ones (deduplicate by serial number)
-      discoverResult.devices.forEach(device => {
-        // Ensure device has required properties
-        if (!device || !device.ip) {
-          devLog(`[Remote ${location.name}] Skipping invalid device:`, device);
-          return;
-        }
-        
-        // Add location info to device
-        device.locationId = locationId;
-        device.locationName = location.name;
-        device.serverUrl = location.serverUrl;
-        device.isRemote = true;
-        device.capabilities = location.capabilities; // Pass capabilities to device
-        
-        const deviceId = getDeviceId(device);
-        const existingDevice = location.devices.get(deviceId);
-        
-        if (existingDevice) {
-          // Device already exists - update IP if it changed
-          if (existingDevice.ip !== device.ip) {
-            devLog(`[Remote ${location.name}] Device ${deviceId} IP changed from ${existingDevice.ip} to ${device.ip}`);
-            existingDevice.ip = device.ip;
-          }
-          // Update any other fields that might have changed, but preserve remote-specific properties
-          const preservedProps = {
-            serverUrl: existingDevice.serverUrl || device.serverUrl,
-            locationId: existingDevice.locationId || device.locationId,
-            locationName: existingDevice.locationName || device.locationName,
-            isRemote: existingDevice.isRemote !== undefined ? existingDevice.isRemote : device.isRemote,
-            capabilities: existingDevice.capabilities || device.capabilities
-          };
-          Object.assign(existingDevice, device, preservedProps);
-        } else {
-          // New device - add it
-          devLog(`[Remote ${location.name}] Adding new device: ${device.deviceName} (${device.ip}), ID: ${deviceId}, serverUrl: ${device.serverUrl}`);
-          location.devices.set(deviceId, device);
-        }
-      });
-      
-      // Remove devices that are no longer found (but keep connected ones)
-      const foundDeviceIds = new Set(discoverResult.devices.map(d => {
-        if (!d || !d.ip) return null;
-        return getDeviceId(d);
-      }).filter(Boolean));
-      
-      location.devices.forEach((device, deviceId) => {
-        // Check if this device is connected by looking up its IP in connectedDevices
-        if (device && device.ip) {
-          const deviceKey = `${locationId}:${device.ip}`;
-          if (!foundDeviceIds.has(deviceId) && !state.connectedDevices.has(deviceKey)) {
-            location.devices.delete(deviceId);
-          }
-        }
-      });
-      } else if (discoverResult.success && (!discoverResult.devices || discoverResult.devices.length === 0)) {
-        // Discovery succeeded but no devices found - clear non-connected devices
-        devLog(`[Remote ${location.name}] Discovery succeeded but no devices found`);
-        location.devices.forEach((device, deviceId) => {
-          if (device && device.ip) {
-            const deviceKey = `${locationId}:${device.ip}`;
-            if (!state.connectedDevices.has(deviceKey)) {
-              location.devices.delete(deviceId);
-            }
-          }
-        });
-      } else {
-        devLog(`[Remote ${location.name}] Discovery failed:`, discoverResult.error || 'Unknown error');
-      }
-    } catch (error) {
-      const discoveryDuration = Date.now() - discoveryStartTime;
-      devLog(`[Remote ${location.name}] Discovery ERROR (${discoveryDuration}ms):`, errMessage(error));
-      rendererError('[Remote %s] Discovery error: %s', location.name, error);
-    }
-    
-    state.scanningLocations.delete(locationId); // Delete BEFORE render so UI shows "complete"
-    renderRemoteLocations();
-  } catch (e) {
-    rendererError('Failed to refresh remote location:', e);
-    location.status = 'offline';
-    location.capabilities = null;
-    state.scanningLocations.delete(locationId); // Delete BEFORE render
-    renderRemoteLocations();
-    return;
-  }
-}
-
-// Default capabilities for servers that don't support the /capabilities endpoint
-function getDefaultCapabilities() {
-  return {
-    remote: true,
-    apps: true,
-    query: true,
-    devApp: true,
-    screenshot: true,
-    console: true,
-    appConnector: true,
-    deepLink: true,
-  };
-}
-
-// Refresh all Remote Locations
-async function refreshAllRemoteLocations(opts?: { notifyStartup?: boolean }) {
-  const notifyStartup = opts?.notifyStartup !== false;
-  const promises = Array.from(state.remoteLocations.keys()).map(id => refreshRemoteLocation(id));
-  await Promise.all(promises);
-  if (notifyStartup) {
-    startupRemoteScanComplete = true;
-    void onStartupScansReady();
-  }
-}
-
-// Render Remote Locations in sidebar
-function renderRemoteLocations() {
-  const container = document.getElementById('remoteLocationsContainer');
-  
-  if (!container) return;
-  
-  // Clear existing content
-  container.innerHTML = '';
-  
-  state.remoteLocations.forEach((location, locationId) => {
-    const section = createRemoteLocationSection(location);
-    container.appendChild(section);
-  });
-
-  // Keep any open BrightScript Fiddle windows in sync with remote-location
-  // device changes (new device discovered, location removed, etc.).
-  try {
-    const w = window as unknown as { __rdsFiddlePushDevices?: () => void };
-    if (typeof w.__rdsFiddlePushDevices === 'function') w.__rdsFiddlePushDevices();
-  } catch {
-    /* ignore */
-  }
-}
-
-// Create a collapsible remote location section with devices
-function createRemoteLocationSection(location) {
-  const isScanning = state.scanningLocations.has(location.id);
-  const statusClass = location.status === 'online' ? 'online' : 
-                      location.status === 'offline' ? 'offline' : '';
-  
-  // Check if this location was previously collapsed
-  const isCollapsed = state.collapsedLocations && state.collapsedLocations.has(location.id);
-  
-  const section = document.createElement('div');
-  section.className = `location-section remote ${statusClass} ${isCollapsed ? 'collapsed' : ''}`;
-  section.dataset.locationId = location.id;
-  
-  // Count connected devices in this location
-  let connectedCount = 0;
-  location.devices.forEach((device, deviceId) => {
-    const deviceKey = `${location.id}:${device.ip}`;
-    if (state.connectedDevices.has(deviceKey)) connectedCount++;
-  });
-  
-  const statusText = isScanning ? S.common.scanning :
-    location.status === 'online' ? '' :
-    location.status === 'offline' ? S.app.statusOffline :
-    (location.status === 'connecting' || location.status === 'unknown') ? S.app.connecting : '';
-  
-  setSafeHTML(section, `
-    <div class="location-header">
-      <div class="location-header-top">
-        <span class="location-status"></span>
-        <span class="location-name">${escapeHtml(location.name)}</span>
-        <button class="location-action-btn icon-btn info-location" title="${S.app.serverInfoTitle}" style="${location.status === 'online' ? '' : 'display:none'}">${icon('info', 'icon-sm')}</button>
-        <button class="location-action-btn icon-btn primary refresh-location${isScanning ? ' scanning' : ''}" title="${isScanning ? S.common.scanning : S.common.refresh}">${icon('refresh', 'icon-sm')}</button>
-        <button class="location-action-btn icon-btn danger delete-location" title="${S.common.remove}">${icon('trash', 'icon-sm')}</button>
-        <span class="location-toggle">${icon('chevron-down', 'icon-sm')}</span>
-      </div>
-      <div class="location-header-bottom">
-        <span class="location-server-url">${escapeHtml(location.host)}:${location.port}</span>
-        <span class="location-device-count">${S.app.deviceCount(location.devices.size)}</span>
-      </div>
-    </div>
-    <div class="location-body">
-      <div class="location-devices">
-        ${location.devices.size === 0 ? 
-          `<div class="location-empty${isScanning || location.status === 'connecting' || location.status === 'unknown' ? ' scanning' : ''}">
-            <div class="empty-icon">${icon(isScanning || location.status === 'connecting' || location.status === 'unknown' ? 'loader' : 'radar', 'icon-xl')}</div>
-            <p>${isScanning ? S.app.scanningForDevices :
-                 (location.status === 'connecting' || location.status === 'unknown') ? S.app.connectingToRelayServer :
-                 location.status === 'offline' ? S.app.serverOffline :
-                 S.app.noRokuDevicesFound}</p>
-          </div>` : ''}
-      </div>
-    </div>
-  `);
-  
-  // Add devices to the list (sorted: DEV-enabled first, then alphabetically by name)
-  const devicesList = section.querySelector('.location-devices');
-  if (location.devices.size > 0 && devicesList) {
-    // Clear the empty state
-    devicesList.innerHTML = '';
-    
-    // Convert to array and sort: DEV-enabled first, then by device name
-    const sortedDevices = Array.from(location.devices.values()).sort((a: any, b: any) => {
-      // DEV-enabled devices come first
-      if (a.developerEnabled && !b.developerEnabled) return -1;
-      if (!a.developerEnabled && b.developerEnabled) return 1;
-      // Then sort alphabetically by device name
-      const nameA = (a.deviceName || a.modelName || 'Unknown').toLowerCase();
-      const nameB = (b.deviceName || b.modelName || 'Unknown').toLowerCase();
-      return nameA.localeCompare(nameB);
-    });
-    
-    sortedDevices.forEach(device => {
-      const deviceCard = createRemoteDeviceCard(device, location.id);
-      devicesList.appendChild(deviceCard);
-    });
-  }
-  
-  // Toggle collapse on header click
-  const header = section.querySelector('.location-header');
-  header?.addEventListener('click', (e) => {
-    // Don't toggle if clicking action buttons
-    const t = e.target;
-    if (t instanceof Element && t.closest('.location-actions')) return;
-    
-    section.classList.toggle('collapsed');
-    
-    // Remember collapsed state
-    if (!state.collapsedLocations) state.collapsedLocations = new Set();
-    if (section.classList.contains('collapsed')) {
-      state.collapsedLocations.add(location.id);
-    } else {
-      state.collapsedLocations.delete(location.id);
-    }
-  });
-  
-  // Event handlers for action buttons
-  const infoBtn = section.querySelector('.info-location');
-  if (infoBtn) {
-    infoBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const opener = infoBtn instanceof HTMLElement ? infoBtn : null;
-      showServerCapabilities(location, opener);
-    });
-  }
-  
-  section.querySelector('.refresh-location')?.addEventListener('click', (e) => {
-    e.stopPropagation();
-    refreshRemoteLocation(location.id);
-  });
-  
-  section.querySelector('.delete-location')?.addEventListener('click', (e) => {
-    e.stopPropagation();
-    if (confirm(S.app.confirmRemoveLocation(location.name))) {
-      removeRemoteLocation(location.id);
-    }
-  });
-  
-  return section;
-}
-
-// Show server capabilities in a modal/popup
-function showServerCapabilities(location, opener?: HTMLElement | null) {
-  const caps = location.capabilities || {};
-  const version = location.serverVersion || S.app.unknown;
-
-  const capabilityLabels = S.app.serverCapabilities;
-
-  // Most capabilities are plain booleans. Network Inspector is an object
-  // ({ supported, requiresRoot, isRoot }) because it needs root on the server, so it has a
-  // third "Needs root" state. Older servers omit it entirely → Not Supported.
-  function capStatus(key: string): { cls: string; text: string } {
-    if (key === 'networkInspector') {
-      const ni = (caps as Record<string, unknown>)['networkInspector'] as
-        | { supported?: boolean; requiresRoot?: boolean; isRoot?: boolean }
-        | undefined;
-      if (ni && ni.supported === true) return { cls: 'supported', text: S.app.capSupported };
-      if (ni && ni.requiresRoot && ni.isRoot === false) return { cls: 'not-supported', text: S.app.capNeedsRoot };
-      return { cls: 'not-supported', text: S.app.capNotSupported };
-    }
-    const enabled = (caps as Record<string, unknown>)[key] === true;
-    return { cls: enabled ? 'supported' : 'not-supported', text: enabled ? S.app.capSupported : S.app.capNotSupported };
-  }
-
-  let capList = '';
-  for (const [key, info] of Object.entries(capabilityLabels)) {
-    const status = capStatus(key);
-    capList += `<div class="capability-item ${status.cls}">
-      <span class="cap-indicator"></span>
-      <div class="cap-info">
-        <span class="cap-label">${info.label}</span>
-        <span class="cap-desc">${info.desc}</span>
-      </div>
-      <span class="cap-status-text">${status.text}</span>
-    </div>`;
-  }
-  
-  const modalContent = `
-    <div class="server-info-modal">
-      <div class="server-info-header">
-        <h3>${icon('server', 'icon-md')} ${escapeHtml(location.name)}</h3>
-        <button class="modal-close close-modal-btn" title="${S.common.close}">${icon('x', 'icon-sm')}</button>
-      </div>
-      <div class="server-info-url">
-        <span class="server-url-value location-server-url">${escapeHtml(location.host)}:${location.port}</span>
-        <span class="server-version">v${escapeHtml(version)}</span>
-      </div>
-      <div class="server-capabilities">
-        <h4>${S.app.capabilitiesHeading}</h4>
-        <div class="capabilities-list">
-          ${capList}
-        </div>
-      </div>
-    </div>
-  `;
-  
-  // Create and show modal
-  const modal = document.createElement('div');
-  modal.className = 'modal-overlay server-info-overlay';
-  setSafeHTML(modal, modalContent);
-  prepareModalOpenOrigin(modal, opener ?? null);
-  document.body.appendChild(modal);
-  modal.classList.add('modal-motion-enabled');
-  playModalOpenMotion(modal);
-
-  let detachEsc = () => {};
-  const removeServerModal = () => {
-    detachEsc();
-    modal.remove();
-  };
-  const requestClose = () => {
-    if (!modal.isConnected) return;
-    closeModalWithOriginMotion(modal, removeServerModal);
-  };
-
-  modal.querySelector('.close-modal-btn')?.addEventListener('click', requestClose);
-  attachBackdropClickToClose(modal, requestClose);
-  detachEsc = attachEscToClose(requestClose);
-}
-
-
-// Create a device card for remote device (matching local device card format)
-function createRemoteDeviceCard(device, locationId) {
-  const deviceKey = `${locationId}:${device.ip}`;
-  const isConnected = state.connectedDevices.has(deviceKey);
-  const connection = state.connectedDevices.get(deviceKey);
-  const isActive = connection && state.activeTabId === connection.tabId;
-  const isDeveloperEnabled = device.developerEnabled === true;
-  const isTv = device.isTv === true;
-  
-  // Determine minimized state: stored preference, or default (non-dev = minimized)
-  const storedMinimized = isDeviceMinimized(deviceKey);
-  const isMinimized = storedMinimized !== null ? storedMinimized : !isDeveloperEnabled;
-  
-  const card = document.createElement('div');
-  card.className = `device-card${isConnected ? ' connected' : ''}${isActive ? ' active' : ''}${!isDeveloperEnabled ? ' not-dev-enabled' : ''}${isMinimized ? ' minimized' : ''}`;
-  card.dataset.deviceKey = deviceKey;
-  card.dataset.ip = device.ip;
-  card.dataset.locationId = locationId;
-  
-  const softwareBuild = device.softwareBuild ? ` (${device.softwareBuild})` : '';
-  const devBadge = isDeveloperEnabled 
-    ? `<span class="dev-badge enabled">${icon('wrench', 'icon-xs')} ${S.app.devBadge}</span>`
-    : '';
-  const ecpMode = getEcpMode(device);
-  const ecpBadge = ecpMode === 'Disabled'
-    ? `<span class="ecp-badge" title="${S.app.ecpBadgeDisabledTitle}">${icon('tv', 'icon-xs')} ${S.app.remoteOff}</span>`
-    : ecpMode === 'Limited'
-      ? `<span class="ecp-badge ecp-badge-limited" title="${S.app.ecpBadgeLimitedTitle}">${icon('tv', 'icon-xs')} ${S.app.ecpLimited}</span>`
-      : '';
-  const deviceType = isTv ? `${icon('tv', 'icon-sm')} ${S.app.deviceTypeTv}` : `${icon('stb', 'icon-sm')} ${S.app.deviceTypeStb}`;
-  
-  setSafeHTML(card, `
-    <div class="device-card-header">
-      <div class="device-card-header-left">
-        <div class="device-card-thumb"></div>
-        <div class="device-card-title-col">
-          <div class="device-name">
-            ${isConnected ? '<span class="status-dot"></span>' : ''}
-            ${escapeHtml(device.deviceName || device.modelName || S.app.unknownRoku)}
-          </div>
-        </div>
-      </div>
-      <div class="device-card-header-right">
-        ${ecpBadge}
-        ${devBadge}
-        <button class="device-toggle-btn" title="${isMinimized ? S.app.expand : S.app.minimize}">
-          ${icon('chevron-down', 'icon-sm')}
-        </button>
-      </div>
-    </div>
-    <div class="device-card-compact">
-      <span class="compact-ip device-ip">${escapeHtml(device.ip)}</span>
-      <span class="compact-separator">•</span>
-      <span class="compact-model">${escapeHtml(device.modelName || device.modelNumber || 'Roku')}</span>
-    </div>
-    <div class="device-details">
-      <div class="device-detail">
-        <span class="label">${S.app.labelType}</span>
-        <span class="value">${deviceType}</span>
-      </div>
-      <div class="device-detail">
-        <span class="label">${S.app.labelIp}</span>
-        <span class="value device-ip">${escapeHtml(device.ip)}</span>
-      </div>
-      <div class="device-detail">
-        <span class="label">${S.app.labelModel}</span>
-        <span class="value">${escapeHtml(device.modelNumber || S.app.notAvailable)}</span>
-      </div>
-      <div class="device-detail">
-        <span class="label">${S.app.labelSerial}</span>
-        <span class="value device-serial">${escapeHtml(device.serialNumber || S.app.notAvailable)}</span>
+        <span class="value device-serial" data-serial="${escapeHtml(device.serialNumber || '')}">${escapeHtml(device.serialNumber || S.app.notAvailable)}</span>
       </div>
       ${device.softwareVersion ? `
       <div class="device-detail">
@@ -1670,12 +203,7 @@ let elements = {} as AppDomElements;
 
 // Get unique device ID from serial number (or fallback to IP if serial is missing)
 function getDeviceId(device) {
-  // Use serial number as primary identifier, fallback to IP if serial is missing
-  if (device.serialNumber && device.serialNumber.trim()) {
-    return device.serialNumber.trim();
-  }
-  // Fallback to IP if no serial number (shouldn't happen with real Roku devices)
-  return device.ip;
+  return deviceKey({ serial: device.serialNumber, ip: device.ip });
 }
 
 function parseAutoConnectDeviceEntry(raw: unknown): AutoConnectDeviceEntry | null {
@@ -2334,7 +862,7 @@ function createDeviceCard(device) {
       </div>
       <div class="device-detail">
         <span class="label">${S.app.labelSerial}</span>
-        <span class="value device-serial">${escapeHtml(device.serialNumber || S.app.notAvailable)}</span>
+        <span class="value device-serial" data-serial="${escapeHtml(device.serialNumber || '')}">${escapeHtml(device.serialNumber || S.app.notAvailable)}</span>
       </div>
       ${device.softwareVersion ? `
       <div class="device-detail">
@@ -2627,6 +1155,11 @@ function showTabHoverTooltip(tab: HTMLElement) {
   if (modelStr) {
     html += `<div class="tab-hover-tooltip-model">${escapeHtml(modelStr)}</div>`;
   }
+  // Unseen debug stop on this device (set by the cross-tab stop alert).
+  const debugStop = tab.dataset.debugStop;
+  if (debugStop) {
+    html += `<div class="tab-hover-tooltip-stop">${escapeHtml(S.debugger.stoppedTabTooltip(debugStop === '1' ? '' : debugStop))}</div>`;
+  }
   setSafeHTML(tip, html);
 
   // Show first (so we can measure), then clamp within the viewport.
@@ -2694,6 +1227,11 @@ function activateTab(tabId) {
     panel.classList.add('active');
     state.activeTabId = tabId;
     pushDeviceListToMcpBridge();
+    // Landing on a device whose Console is the active section counts as acknowledging any
+    // unseen debug stop — clear its tab dot + Console pulse.
+    if (panel.querySelector('.inner-tab[data-inner-tab="telnet"]')?.classList.contains('active')) {
+      clearDebugStopForPanel(panel);
+    }
     
     // Highlight the corresponding device card in sidebar
     const ip = tab.dataset.ip;
@@ -3823,6 +2361,9 @@ function setupInnerTabs(panel) {
       
       // Dispatch custom event for tab switch
       panel.dispatchEvent(new CustomEvent('innertabswitch', { detail: { tab: target } }));
+
+      // Opening the Console section acknowledges any unseen debug stop for this device.
+      if (target === 'telnet') clearDebugStopForPanel(panel as HTMLElement);
 
       // Show / hide the floating remote based on the new inner tab.
       refreshFloatingRemote();
@@ -6237,11 +4778,123 @@ function subscribeToAppZoom() {
   });
 }
 
+// --- Debug-stop cross-tab alerts (Phase 1) ---------------------------------
+// When a debugged app halts on ANY device, draw attention even if the user is on a
+// different device tab or a non-Console section: a persistent dot on the device tab
+// (blinks briefly, then steady), a pulse on that panel's Console section button, a
+// hover-tooltip line, and a clickable toast that jumps straight to that device's
+// Console. Suppressed when the user is already watching that device's Console.
+
+/** Compact "File.brs:42" from a stop snapshot's top stack frame (basename only). */
+function debugStopLocation(d: { stackFrames?: unknown }): string {
+  const frames = Array.isArray(d.stackFrames) ? d.stackFrames : [];
+  const top = (frames[0] ?? {}) as Record<string, unknown>;
+  const rawFile = String(top.filePath ?? top.fileName ?? top.file ?? top.path ?? '');
+  const file = rawFile.replace(/^pkg:\//i, '').split('/').pop() || '';
+  const line = top.lineNumber ?? top.line;
+  return file ? `${file}${line != null && line !== '' ? `:${line}` : ''}` : '';
+}
+
+/** Tab button for a device ip (ip is numeric/dots — safe inside a quoted attr selector). */
+function deviceTabForIp(ip: string): HTMLElement | null {
+  return document.querySelector<HTMLElement>(`.tab-item[data-ip="${ip}"]`);
+}
+
+/** Mark a device tab as having an unseen debug stop: a dot (re-blinks each stop) + tooltip data. */
+function markTabDebugStop(tab: HTMLElement, loc: string): void {
+  tab.dataset.debugStop = loc || '1';
+  tab.classList.add('tab-item--attn');
+  let dot = tab.querySelector<HTMLElement>('.tab-attn-dot');
+  if (!dot) {
+    dot = document.createElement('span');
+    dot.className = 'tab-attn-dot';
+    dot.setAttribute('aria-hidden', 'true');
+    tab.insertBefore(dot, tab.firstChild);
+  }
+  // Re-trigger the finite blink (reflow so the animation restarts on a repeat stop).
+  dot.classList.remove('tab-attn-dot--blink');
+  void dot.offsetWidth;
+  dot.classList.add('tab-attn-dot--blink');
+}
+
+/** Clear the unseen-stop indicators for a device panel (called when its Console is opened). */
+function clearDebugStopForPanel(panel: HTMLElement): void {
+  panel.querySelector('.inner-tab[data-inner-tab="telnet"]')?.classList.remove('inner-tab--attn');
+  const tab = document.querySelector<HTMLElement>(`.tab-item[data-tab-id="${panel.id}"]`);
+  if (tab) {
+    delete tab.dataset.debugStop;
+    tab.classList.remove('tab-item--attn');
+    tab.querySelector('.tab-attn-dot')?.remove();
+  }
+}
+
+/** Jump to a device's Console section (activate its tab, then open the telnet inner-tab). */
+function focusDeviceConsole(tabId: string): void {
+  activateTab(tabId);
+  const panel = document.getElementById(tabId);
+  (panel?.querySelector('.inner-tab[data-inner-tab="telnet"]') as HTMLElement | null)?.click();
+  // Pull the eye to where the halt data lands: pulse the Variables section header once.
+  const varHeader = panel?.querySelector<HTMLElement>('[data-debug-section-header="variables"]');
+  if (varHeader) {
+    varHeader.classList.remove('telnet-debug-section-header--attn');
+    void varHeader.offsetWidth; // reflow so the finite pulse restarts on a repeat stop
+    varHeader.classList.add('telnet-debug-section-header--attn');
+  }
+}
+
+function registerDebugStopAlerts(): void {
+  const roku = (window as any).roku;
+  if (!roku?.onDebuggerStopped) return;
+  // Skip non-halt reasons; runtime errors also arrive here (reason RuntimeError), so we
+  // don't separately listen to onDebuggerRuntimeError (that would double-fire per crash).
+  const SKIP = new Set(['NormalExit', 'NotStopped', 'Undefined']);
+  let lastAt = 0;
+  let lastIp = '';
+  // Returning to the window on a device whose Console is the active section acknowledges any
+  // stop that landed while it was unfocused (its sidebar is already showing the halt).
+  window.addEventListener('focus', () => {
+    const tabId = state.activeTabId;
+    const panel = tabId ? document.getElementById(tabId) : null;
+    if (panel?.querySelector('.inner-tab[data-inner-tab="telnet"]')?.classList.contains('active')) {
+      clearDebugStopForPanel(panel);
+    }
+  });
+  roku.onDebuggerStopped((raw: unknown) => {
+    const d = (raw ?? {}) as { ip?: string; reason?: string; stackFrames?: unknown };
+    const ip = (d.ip || '').trim();
+    if (!ip || (d.reason && SKIP.has(d.reason))) return;
+    // De-dup a burst of stops from the same device (stepping / multi-event crash).
+    const now = Date.now();
+    if (ip === lastIp && now - lastAt < 500) return;
+    lastAt = now;
+    lastIp = ip;
+
+    const tab = deviceTabForIp(ip);
+    if (!tab) return;
+    const tabId = tab.dataset.tabId || '';
+    const panel = tabId ? document.getElementById(tabId) : null;
+    const consoleBtn = panel?.querySelector('.inner-tab[data-inner-tab="telnet"]') ?? null;
+    const consoleActive = !!consoleBtn?.classList.contains('active');
+    // Suppress when the user is already watching this device's Console (active tab + focused).
+    if (state.activeTabId === tabId && consoleActive && document.hasFocus()) return;
+
+    const isError = d.reason === 'RuntimeError' || d.reason === 'CaughtRuntimeError';
+    const loc = debugStopLocation(d);
+    const name = (tab.dataset.deviceName || tab.dataset.ip || ip).trim();
+
+    markTabDebugStop(tab, loc);
+    consoleBtn?.classList.add('inner-tab--attn');
+    const msg = isError ? S.debugger.stoppedAlertError(name, loc) : S.debugger.stoppedAlert(name, loc);
+    showToast(msg, isError ? 'error' : 'warning', tabId ? () => focusDeviceConsole(tabId) : undefined);
+  });
+}
+
 // Start the app when DOM is ready
 function runInit() {
   subscribeToAppZoom();
   registerMcpConnectFlow();
   registerRelayAutoConnect();
+  registerDebugStopAlerts();
   // A password validated in the Sideload Relay setup is a shared device credential —
   // update this window's cache so the Dev App stops prompting for it.
   (window as any).roku?.onSecretsPasswordUpdated?.((serial: string, password: string) => setCachedPassword(serial, password));

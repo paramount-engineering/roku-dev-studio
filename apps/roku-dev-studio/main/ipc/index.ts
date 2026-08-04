@@ -11,6 +11,7 @@ import { setupRemoteHandlers } from './remote-handlers';
 import { setupSystemHandlers } from './system-handlers';
 import { setupNetworkInspectorHandlers } from './network-inspector-handlers';
 import { setupRelayHandlers } from './relay-handlers';
+import { setupDebuggerHandlers } from './debugger-handlers';
 import { cleanupStaleTempFiles } from '../startup-temp-cleanup';
 
 type AppWindowState = {
@@ -52,6 +53,7 @@ function setupIpcHandlers(
   setupSystemHandlers(mainWindow, dialog, Menu, clipboard, app, state);
   setupNetworkInspectorHandlers(mainWindow, safeSendToRenderer, dialog, app.getPath('userData'));
   setupRelayHandlers(mainWindow, safeSendToRenderer);
+  setupDebuggerHandlers(mainWindow);
 }
 
 export { setupIpcHandlers };

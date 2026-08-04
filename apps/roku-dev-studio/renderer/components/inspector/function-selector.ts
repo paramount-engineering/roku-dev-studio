@@ -1,6 +1,7 @@
 // Function selector and management
 
 import { escapeHtml, setSafeHTML } from '../../modules/utils/index.js';
+import { attachBackdropClickToClose } from '../../modules/utils/modal-backdrop-click.js';
 import { RALE_BUILTIN_COMMANDS } from './rale-builtins.js';
 import { S } from '@shared/strings/index.js';
 import type {
@@ -59,9 +60,8 @@ export function setupFunctionSelector(
       if (e.key === 'Escape') close();
     };
     document.addEventListener('keydown', onKey);
-    overlay.addEventListener('click', (e) => {
-      if (e.target === overlay) close();
-    });
+    // mousedown-latched backdrop close (a naive click===overlay closes on a drag-out release).
+    attachBackdropClickToClose(overlay, close);
     overlay.querySelectorAll('.inspector-func-info-close').forEach((el) => {
       el.addEventListener('click', close);
     });

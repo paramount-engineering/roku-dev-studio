@@ -7,6 +7,7 @@ const os = require('os');
 const http = require('http');
 const { getDeviceInfo: fetchDeviceInfo, getDeviceId } = require('./device-info');
 const { getDeviceImageUrl } = require('./device-hardware-image');
+const { recordDeviceSeen } = require('./device-registry');
 
 const SSDP_ADDRESS = '239.255.255.250';
 const SSDP_PORT = 1900;
@@ -74,7 +75,10 @@ function updateDeviceIp(devices, ipToDeviceId, deviceId, ip, port, deviceInfo, o
 }
 
 function ssdpDiscover(opts: SsdpDiscoverOpts = {}) {
-  const onDeviceFound = opts.onDeviceFound;
+  const onDeviceFound = (d: unknown) => {
+    recordDeviceSeen(d as { serialNumber?: unknown; ip?: unknown });
+    if (opts.onDeviceFound) opts.onDeviceFound(d);
+  };
   const log = opts.log || (() => {});
   const timeout = opts.timeout != null ? opts.timeout : 6000;
   const earlyFinishMs = opts.earlyFinishMs != null ? opts.earlyFinishMs : 2500;
@@ -234,7 +238,10 @@ function ssdpDiscover(opts: SsdpDiscoverOpts = {}) {
 }
 
 function subnetScan(opts: SubnetScanOpts = {}) {
-  const onDeviceFound = opts.onDeviceFound;
+  const onDeviceFound = (d: unknown) => {
+    recordDeviceSeen(d as { serialNumber?: unknown; ip?: unknown });
+    if (opts.onDeviceFound) opts.onDeviceFound(d);
+  };
   const log = opts.log || (() => {});
   const requestTimeout = opts.requestTimeout != null ? opts.requestTimeout : 500;
   const concurrency = opts.concurrency != null ? opts.concurrency : 50;

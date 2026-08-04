@@ -231,6 +231,35 @@ var IPC = {
   TelnetSystemSend: "telnet-system:send",
   TelnetSystemStatus: "telnet-system:status",
   TelnetSystemData: "telnet-system:data",
+  // BrightScript socket-based debugger (debug protocol, control port 8081).
+  // Invoke (renderer → main):
+  DebuggerAttach: "debugger:attach",
+  DebuggerDetach: "debugger:detach",
+  DebuggerContinue: "debugger:continue",
+  DebuggerPause: "debugger:pause",
+  DebuggerStepOver: "debugger:step-over",
+  DebuggerStepIn: "debugger:step-in",
+  DebuggerStepOut: "debugger:step-out",
+  DebuggerStackTrace: "debugger:stacktrace",
+  DebuggerVariables: "debugger:variables",
+  DebuggerAddBreakpoints: "debugger:add-breakpoints",
+  DebuggerExecute: "debugger:execute",
+  DebuggerStatus: "debugger:status",
+  /** Scan the device's last debug-sideloaded .zip source for STOP statements. */
+  DebuggerScanStops: "debugger:scan-stops",
+  DebuggerRestart: "debugger:restart",
+  /** Remove breakpoints by file:line (prunes the main-process cache too, so a deleted one can't resurrect). */
+  DebuggerRemoveBreakpointsByLocation: "debugger:remove-breakpoints-by-location",
+  // Push (main → debugger window):
+  DebuggerState: "debugger:state",
+  DebuggerStopped: "debugger:stopped",
+  DebuggerOutput: "debugger:output",
+  DebuggerRuntimeError: "debugger:runtime-error",
+  DebuggerCompileErrors: "debugger:compile-errors",
+  /** Main → windows: breakpoints verified/errored by the device (async). */
+  DebuggerBreakpoints: "debugger:breakpoints",
+  /** Main → windows: a (debug-enabled) device was just (re)sideloaded — reattach. */
+  DebuggerReattach: "debugger:reattach",
   SettingsGet: "settings:get",
   SettingsSet: "settings:set",
   SettingsDelete: "settings:delete",

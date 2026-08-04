@@ -26,6 +26,9 @@ const rokuApi = require('roku-dev-studio-api') as {
     ip: string;
     filePath: string;
     password: string;
+    log?: (msg: string) => void;
+    extraFields?: { name: string; value: string }[];
+    cleanInstall?: boolean;
   }) => Promise<{ success: boolean; error?: string; message?: string }>;
 };
 const { ensureDebugTelnetConnected } = require('../ipc/telnet-handlers') as {
@@ -48,6 +51,13 @@ export interface FanoutTarget {
   location?: string;
   /** Remote server base URL (remote targets only). */
   serverUrl?: string;
+  /**
+   * Per-device opt-in (persisted from the Dev App "Sideload with Debugging"
+   * checkbox): fan out this target's install with `remotedebug=1` so its real
+   * debug protocol port (8081) opens for the BrightScript debugger. Local
+   * targets only — debug-over-relay for remote targets isn't supported yet.
+   */
+  remoteDebug?: boolean;
 }
 
 /** Remote-server operations injected by the Electron layer for remote-target fan-out. */
@@ -110,7 +120,16 @@ export async function runFanout(opts: FanoutOptions, listener: RelayListener): P
       const doInstall = () =>
         isRemote
           ? opts.remoteOps!.sideload(target.serverUrl!, target.ip, packagePath, target.password)
-          : rokuApi.sideloadChannel({ ip: target.ip, filePath: packagePath, password: target.password });
+          : rokuApi.sideloadChannel({
+              ip: target.ip,
+              filePath: packagePath,
+              password: target.password,
+              log: (m: string) => mainLog(`[SideloadRelay ${target.ip}]`, m),
+              // Honor the per-device "Sideload with Debugging" preference so the
+              // fleet's debug-enabled devices open port 8081 (local only). Debug
+              // launches force a clean Delete+Install so remotedebug=1 is honored.
+              ...(target.remoteDebug ? { extraFields: [{ name: 'remotedebug', value: '1' }], cleanInstall: true } : {})
+            });
       const doConsole = () =>
         isRemote
           ? opts.remoteOps!.ensureConsole(target.serverUrl!, target.ip, { holder: 'sideload-relay' })

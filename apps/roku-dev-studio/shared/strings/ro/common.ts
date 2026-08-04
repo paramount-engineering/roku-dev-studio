@@ -20,6 +20,8 @@ export const common = {
   reset: 'Resetează',
   edit: 'Editează',
   add: 'Adaugă',
+  collapse: 'Restrânge',
+  expand: 'Extinde',
   done: 'Gata',
   yes: 'Da',
   no: 'Nu',

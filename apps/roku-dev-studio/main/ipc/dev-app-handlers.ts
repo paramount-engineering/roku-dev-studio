@@ -9,8 +9,9 @@ import type {
   SideloadFilePathPayload
 } from '../../shared/ipc/payloads';
 import { IPC } from '../../shared/ipc/channels';
-import { mainError } from '../log.js';
+import { mainError, mainLog } from '../log.js';
 import { S } from '../../shared/strings/index';
+import { deviceKey } from 'roku-dev-studio-platform/device-ref';
 
 const fs = require('fs');
 const path = require('path');
@@ -140,7 +141,7 @@ function setupDevAppHandlers(mainWindow: BrowserWindow | undefined, dialog: Dial
   });
 
   // Sideload a channel package (shared logic in lib/roku-plugin-install.js). filePath must be under allowed dirs.
-  ipcMain.handle(IPC.RokuSideload, async (_event: IpcMainInvokeEvent, { ip, filePath, password }: IpFilePasswordPayload) => {
+  ipcMain.handle(IPC.RokuSideload, async (_event: IpcMainInvokeEvent, { ip, filePath, password, remoteDebug, serial }: IpFilePasswordPayload & { remoteDebug?: boolean; serial?: string }) => {
     // Go through the same validation as the picker/drag paths so a direct IPC
     // call can't sideload a non-package (or a file outside the allowed dirs).
     const resolvedFile = resolveSideloadPackageFile(filePath);
@@ -148,7 +149,103 @@ function setupDevAppHandlers(mainWindow: BrowserWindow | undefined, dialog: Dial
       return resolvedFile;
     }
     const resolved = resolvedFile.filePath;
-    return sideloadChannel({ ip, filePath: resolved, password });
+    const scan = require('../debugger/scan-stops') as {
+      scanZipForStops: (p: string) => unknown[];
+      rememberSideloadZip: (ip: string, p: string) => void;
+    };
+    const settingsMod = require('../settings') as {
+      loadSettings: () => Record<string, unknown>;
+      saveSettings: (s: Record<string, unknown>) => boolean;
+    };
+
+    // Discover STOP breakpoints in the build's source.
+    let discovered = 0;
+    try {
+      discovered = scan.scanZipForStops(resolved).length;
+    } catch { /* scan best-effort */ }
+
+    // "Debugging enabled" for this device = caller asked (checkbox) OR it opted in
+    // previously (persisted) OR we just DISCOVERED STOP breakpoints (auto-enable).
+    // When enabled, this is a debug sideload: forward `remotedebug=1` (opens 8081).
+    // Persisted by device key (serial preferred, else IP) so the preference survives a
+    // network change; the raw-IP form is also checked for entries saved before this.
+    const key = deviceKey({ serial, ip });
+    let debugEnabled = !!remoteDebug;
+    try {
+      const v = settingsMod.loadSettings()['sideload-debug-ips'];
+      if (Array.isArray(v) && (v.includes(key) || v.includes(ip))) debugEnabled = true;
+    } catch { /* default off */ }
+    if (discovered > 0 && !debugEnabled) {
+      debugEnabled = true;
+      try {
+        // Persist the auto-enable so future sideloads (and the sidebar) stay on.
+        const s = settingsMod.loadSettings();
+        const cur = Array.isArray(s['sideload-debug-ips']) ? (s['sideload-debug-ips'] as string[]) : [];
+        if (!cur.includes(key)) {
+          s['sideload-debug-ips'] = [...cur, key];
+          settingsMod.saveSettings(s);
+        }
+      } catch { /* best-effort persist */ }
+    }
+
+    const extraFields = debugEnabled ? [{ name: 'remotedebug', value: '1' }] : undefined;
+    mainLog(`[sideload] ip=${ip} debugEnabled=${debugEnabled} discovered=${discovered} remotedebug=${debugEnabled ? '1' : '0'} file=${resolvedFile.fileName}`);
+    const result = await sideloadChannel({
+      ip,
+      filePath: resolved,
+      password,
+      log: (m: string) => mainLog('[sideload]', m),
+      // Debug launches need a clean Delete+Install so the device actually relaunches
+      // with remotedebug=1 (Replace can drop it → STOPs hit the 8085 micro-debugger).
+      cleanInstall: debugEnabled,
+      ...(extraFields ? { extraFields } : {})
+    });
+    if (debugEnabled && result && (result as { success?: boolean }).success !== false) {
+      try {
+        // Remember the .zip for STOP scanning, and reattach the debugger to the fresh
+        // run — passing the discovered count so the sidebar can toast it.
+        scan.rememberSideloadZip(ip, resolved);
+        (require('./debugger-handlers') as {
+          notifyDebuggerReattach: (ip: string, extra?: { discovered?: number }) => void;
+        }).notifyDebuggerReattach(ip, { discovered });
+      } catch {
+        /* best-effort */
+      }
+    }
+    return result;
+  });
+
+  // Restart the debug session: re-sideload the last debug .zip we remembered for this
+  // device (clean Delete+Install so remotedebug=1 is honored), then reattach. This is
+  // the one-click edit-run-debug loop — the renderer supplies the stored dev password.
+  ipcMain.handle(IPC.DebuggerRestart, async (_event: IpcMainInvokeEvent, { ip, password }: IpPasswordPayload) => {
+    const scan = require('../debugger/scan-stops') as {
+      getRememberedZip: (ip: string) => string | undefined;
+      rememberSideloadZip: (ip: string, p: string) => void;
+    };
+    const zip = scan.getRememberedZip(ip);
+    if (!zip) return { success: false, error: 'No previous debug sideload to restart. Sideload with Debugging first.' };
+    if (!fs.existsSync(zip)) return { success: false, error: 'The previous debug build is no longer on disk. Sideload again.' };
+    mainLog(`[sideload] restart ip=${ip} remotedebug=1 file=${path.basename(zip)}`);
+    const result = await sideloadChannel({
+      ip,
+      filePath: zip,
+      password: password || '',
+      log: (m: string) => mainLog('[sideload]', m),
+      cleanInstall: true,
+      extraFields: [{ name: 'remotedebug', value: '1' }]
+    });
+    if (result && (result as { success?: boolean }).success !== false) {
+      try {
+        scan.rememberSideloadZip(ip, zip);
+        (require('./debugger-handlers') as {
+          notifyDebuggerReattach: (ip: string, extra?: { discovered?: number }) => void;
+        }).notifyDebuggerReattach(ip);
+      } catch {
+        /* best-effort */
+      }
+    }
+    return result;
   });
 
   // Delete sideloaded channel (shared logic in lib/roku-plugin-install.js)

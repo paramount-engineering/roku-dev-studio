@@ -18,6 +18,8 @@ export const common = {
   reset: 'Resetuj',
   edit: 'Edytuj',
   add: 'Dodaj',
+  collapse: 'Zwiń',
+  expand: 'Rozwiń',
   done: 'Gotowe',
   yes: 'Tak',
   no: 'Nie',

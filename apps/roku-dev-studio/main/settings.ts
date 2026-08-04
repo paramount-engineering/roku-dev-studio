@@ -92,7 +92,15 @@ const RENDERER_WRITABLE_KEYS = new Set<string>([
   'floating-remote.enabled',
   'floating-remote.position',
   'deeplink-custom-media-types',
-  'deeplink-saved-presets'
+  'deeplink-saved-presets',
+  // IPs the user opted into "Sideload with Debugging" for (Dev App checkbox).
+  // Persisted per-device so it survives launches and so the main-process Sideload
+  // Relay can fan out those devices with remotedebug=1.
+  'sideload-debug-ips',
+  // Managed debugger breakpoints, keyed by device IP → [{ path, line, condition? }].
+  'debug-breakpoints',
+  // Debugger watch expressions, keyed by device IP → [expr, …].
+  'debug-watches'
 ]);
 
 /**

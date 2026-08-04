@@ -94,8 +94,8 @@ contextBridge.exposeInMainWorld('roku', {
       return Promise.resolve({ success: false, error: message || 'Could not read the dropped file path' });
     }
   },
-  sideload: (ip: string, filePath: string, password: string | undefined) => 
-    ipcRenderer.invoke(IPC.RokuSideload, { ip, filePath, password }),
+  sideload: (ip: string, filePath: string, password: string | undefined, remoteDebug?: boolean, serial?: string) =>
+    ipcRenderer.invoke(IPC.RokuSideload, { ip, filePath, password, remoteDebug, serial }),
   deleteSideload: (ip: string, password: string | undefined) =>
     ipcRenderer.invoke(IPC.RokuDeleteSideload, { ip, password }),
 
@@ -436,6 +436,64 @@ contextBridge.exposeInMainWorld('roku', {
     const handler = (_event: IpcRendererEvent, data: unknown) => callback(data);
     ipcRenderer.on(IPC.TelnetDisconnected, handler);
     return () => ipcRenderer.removeListener(IPC.TelnetDisconnected, handler);
+  },
+
+  // ============================================
+  // BrightScript Debugger (debug protocol, port 8081)
+  // ============================================
+  debuggerAttach: (ip: string) => ipcRenderer.invoke(IPC.DebuggerAttach, { ip }),
+  debuggerDetach: (ip: string) => ipcRenderer.invoke(IPC.DebuggerDetach, { ip }),
+  debuggerStatus: (ip: string) => ipcRenderer.invoke(IPC.DebuggerStatus, { ip }),
+  debuggerScanStops: (ip: string) => ipcRenderer.invoke(IPC.DebuggerScanStops, { ip }),
+  debuggerRestart: (ip: string, password: string) => ipcRenderer.invoke(IPC.DebuggerRestart, { ip, password }),
+  debuggerContinue: (ip: string) => ipcRenderer.invoke(IPC.DebuggerContinue, { ip }),
+  debuggerPause: (ip: string) => ipcRenderer.invoke(IPC.DebuggerPause, { ip }),
+  debuggerStepOver: (ip: string, threadIndex?: number) => ipcRenderer.invoke(IPC.DebuggerStepOver, { ip, threadIndex }),
+  debuggerStepIn: (ip: string, threadIndex?: number) => ipcRenderer.invoke(IPC.DebuggerStepIn, { ip, threadIndex }),
+  debuggerStepOut: (ip: string, threadIndex?: number) => ipcRenderer.invoke(IPC.DebuggerStepOut, { ip, threadIndex }),
+  debuggerStackTrace: (ip: string, threadIndex?: number) => ipcRenderer.invoke(IPC.DebuggerStackTrace, { ip, threadIndex }),
+  debuggerVariables: (ip: string, opts?: { threadIndex?: number; stackFrameIndex?: number; variablePath?: string[] }) =>
+    ipcRenderer.invoke(IPC.DebuggerVariables, { ip, ...(opts || {}) }),
+  debuggerAddBreakpoints: (ip: string, breakpoints: unknown) => ipcRenderer.invoke(IPC.DebuggerAddBreakpoints, { ip, breakpoints }),
+  debuggerRemoveBreakpointsByLocation: (ip: string, locations: Array<{ filePath: string; lineNumber: number }>) =>
+    ipcRenderer.invoke(IPC.DebuggerRemoveBreakpointsByLocation, { ip, locations }),
+  debuggerExecute: (ip: string, sourceCode: string, opts?: { threadIndex?: number; stackFrameIndex?: number }) =>
+    ipcRenderer.invoke(IPC.DebuggerExecute, { ip, sourceCode, ...(opts || {}) }),
+  // Event subscriptions (each returns an unsubscribe fn).
+  onDebuggerState: (callback: (data: unknown) => void) => {
+    const handler = (_event: IpcRendererEvent, data: unknown) => callback(data);
+    ipcRenderer.on(IPC.DebuggerState, handler);
+    return () => ipcRenderer.removeListener(IPC.DebuggerState, handler);
+  },
+  onDebuggerStopped: (callback: (data: unknown) => void) => {
+    const handler = (_event: IpcRendererEvent, data: unknown) => callback(data);
+    ipcRenderer.on(IPC.DebuggerStopped, handler);
+    return () => ipcRenderer.removeListener(IPC.DebuggerStopped, handler);
+  },
+  onDebuggerOutput: (callback: (data: unknown) => void) => {
+    const handler = (_event: IpcRendererEvent, data: unknown) => callback(data);
+    ipcRenderer.on(IPC.DebuggerOutput, handler);
+    return () => ipcRenderer.removeListener(IPC.DebuggerOutput, handler);
+  },
+  onDebuggerRuntimeError: (callback: (data: unknown) => void) => {
+    const handler = (_event: IpcRendererEvent, data: unknown) => callback(data);
+    ipcRenderer.on(IPC.DebuggerRuntimeError, handler);
+    return () => ipcRenderer.removeListener(IPC.DebuggerRuntimeError, handler);
+  },
+  onDebuggerCompileErrors: (callback: (data: unknown) => void) => {
+    const handler = (_event: IpcRendererEvent, data: unknown) => callback(data);
+    ipcRenderer.on(IPC.DebuggerCompileErrors, handler);
+    return () => ipcRenderer.removeListener(IPC.DebuggerCompileErrors, handler);
+  },
+  onDebuggerBreakpoints: (callback: (data: unknown) => void) => {
+    const handler = (_event: IpcRendererEvent, data: unknown) => callback(data);
+    ipcRenderer.on(IPC.DebuggerBreakpoints, handler);
+    return () => ipcRenderer.removeListener(IPC.DebuggerBreakpoints, handler);
+  },
+  onDebuggerReattach: (callback: (data: unknown) => void) => {
+    const handler = (_event: IpcRendererEvent, data: unknown) => callback(data);
+    ipcRenderer.on(IPC.DebuggerReattach, handler);
+    return () => ipcRenderer.removeListener(IPC.DebuggerReattach, handler);
   },
 
   // ============================================

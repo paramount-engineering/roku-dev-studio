@@ -18,7 +18,19 @@ export const MAIN_EXTERNAL = [
   'chokidar',
   // Optional native packet-capture binding (Network Inspector, Windows). Loaded via a guarded
   // runtime require(); must stay external so esbuild doesn't try to bundle its .node binary.
-  'cap'
+  'cap',
+  // Zip reader for scanning sideloaded .brs source for STOP statements (debugger breakpoints).
+  'adm-zip'
+];
+
+/** Preload bundles, all sharing the same `['electron']` external. `[entry.ts, outfile]`. */
+const PRELOAD_ENTRIES: ReadonlyArray<readonly [string, string]> = [
+  ['preload-about.ts', 'preload-about.js'],
+  ['preload-settings.ts', 'preload-settings.js'],
+  ['preload.ts', 'preload.bundled.cjs'],
+  ['log-viewer-preload.ts', 'log-viewer-preload.bundled.cjs'],
+  ['fiddle-preload.ts', 'fiddle-preload.bundled.cjs'],
+  ['network-session-viewer-preload.ts', 'network-session-viewer-preload.bundled.cjs'],
 ];
 
 /** Preload bundles, all sharing the same `['electron']` external. `[entry.ts, outfile]`. */

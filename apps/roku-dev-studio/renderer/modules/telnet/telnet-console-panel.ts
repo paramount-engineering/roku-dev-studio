@@ -12,6 +12,7 @@ import {
   selectVisibleLogEntries
 } from '../console-log/console-visible-log-text.js';
 import { CONSOLE_VIEWER_CLOSED_EVENT } from '../console-log/console-viewer-bridge.js';
+import { setupTelnetDebugSidebar } from './telnet-debug-sidebar.js';
 import {
   appendTelnetChunk,
   takeTelnetTail,
@@ -1612,6 +1613,23 @@ export function setupTelnet(
     }
   });
 
+  // When the BrightScript debug protocol (8081) is attached, the Roku routes the
+  // channel's print output to the debugger's I/O channel instead of the 8085
+  // console — so surface that io-output here too, else the console looks dead
+  // while debugging. Buffered into complete lines (chunks aren't line-aligned).
+  let debugOutBuffer = '';
+  const debugOutputCleanup = (window.roku as unknown as {
+    onDebuggerOutput?: (cb: (data: unknown) => void) => () => void;
+  }).onDebuggerOutput?.((data) => {
+    const d = (data ?? {}) as { ip?: string; text?: string };
+    if (d.ip && d.ip !== api.ip) return;
+    if (!d.text) return;
+    debugOutBuffer += d.text;
+    const parts = debugOutBuffer.split(/\r?\n/);
+    debugOutBuffer = parts.pop() ?? '';
+    if (parts.length) addLogLinesBatch(parts, true, false);
+  });
+
   const disconnectCleanup = window.roku.onTelnetDisconnected((data) => {
     const payload = data as DebugTelnetIpcPayload & {
       hadError?: boolean;
@@ -1668,7 +1686,58 @@ export function setupTelnet(
   });
   
   // Store cleanup functions on panel for later removal
+  // BrightScript debugger sidebar (Call Stack / Breakpoints / Variables), shown in
+  // this Console tab while debugging is enabled for the device. Display-only; driven
+  // by debug-protocol events the main process mirrors to the main window.
+  const debugSidebar = setupTelnetDebugSidebar(panel, api.ip, {
+    autoConnectConsole: () => {
+      // Auto-connect the 8085 console when debugging is enabled for this device,
+      // if it's currently disconnected (clicks the standard Connect path).
+      if (statusEl.classList.contains('disconnected')) connectBtn.click();
+    }
+  });
+
+  // Debug REPL: an input bar that slides up under the console output while the
+  // debugger is stopped. Evaluates BrightScript in the selected frame; `print`
+  // output streams back through the console via the debug io-output.
+  const replEl = panel.querySelector<HTMLElement>('[data-debug-repl]');
+  const replInput = panel.querySelector<HTMLInputElement>('[data-debug-repl-input]');
+  const replOutputContainer = outputEl.parentElement; // .telnet-output-container
+  let disposeRepl: (() => void) | undefined;
+  if (replEl && replInput) {
+    const runRepl = async (): Promise<void> => {
+      const src = replInput.value.trim();
+      if (!src) return;
+      replInput.value = '';
+      addLogLine(`› ${src}`, false); // echo the command (› prompt)
+      try {
+        const res = await debugSidebar.repl.execute(src);
+        for (const e of res.errors) addLogLine(e, false);
+      } catch (e) {
+        addLogLine(errMessage(e), false);
+      }
+    };
+    const onReplKey = (e: KeyboardEvent): void => {
+      if (e.key === 'Enter') void runRepl();
+    };
+    replInput.addEventListener('keydown', onReplKey);
+    const offAvailability = debugSidebar.repl.onAvailabilityChange((stopped) => {
+      replEl.classList.toggle('telnet-debug-repl--open', stopped);
+      replEl.setAttribute('aria-hidden', String(!stopped));
+      replOutputContainer?.classList.toggle('telnet-output-container--repl', stopped);
+      if (!stopped && document.activeElement === replInput) replInput.blur();
+    });
+    disposeRepl = () => {
+      offAvailability();
+      replInput.removeEventListener('keydown', onReplKey);
+      replEl.classList.remove('telnet-debug-repl--open');
+      replOutputContainer?.classList.remove('telnet-output-container--repl');
+    };
+  }
+
   panel._telnetCleanup = () => {
+    debugSidebar.cleanup();
+    disposeRepl?.();
     clearTimeout(analyticsRefreshTimer);
     analyticsHandle?.close();
     for (const fn of splitMenuCleanups) fn();
@@ -1684,6 +1753,7 @@ export function setupTelnet(
     cancelTelnetFlush();
     clearDeferredTelnetHeavyLines();
     dataCleanup();
+    debugOutputCleanup?.();
     disconnectCleanup();
     errorCleanup();
     // Drop the disk spill for this tab. The renderer-side cleanup is

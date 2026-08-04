@@ -21,11 +21,21 @@ interface SideloadChannelOpts {
   password: string;
   log?: LogFn;
   /**
-   * Optional extra multipart form fields sent alongside `mysubmit=Install` +
-   * `archive` (e.g. a caller that wants to forward `remotedebug=1`). A general
-   * capability; the Sideload Relay fan-out does not currently use it.
+   * Optional extra multipart form fields sent alongside `mysubmit` + `archive`
+   * (e.g. `remotedebug=1`). The Dev App sideload and the Sideload Relay fan-out
+   * both forward this for "Sideload with Debugging" devices. Carried through every
+   * attempt (Replace, Install, and the Delete+Install force-reload) so a debug
+   * sideload keeps opening port 8081 on whichever path lands.
    */
   extraFields?: { name: string; value: string }[];
+  /**
+   * Force a clean Delete+Install launch instead of the Replace fast-path. Required
+   * for DEBUG sideloads: some firmware (seen on Roku OS 15.x) reloads a running
+   * channel on `mysubmit=Replace` WITHOUT re-applying `remotedebug=1`, so the socket
+   * debugger never opens port 8081 and STOPs fall into the 8085 micro-debugger. A
+   * fresh Delete+Install always relaunches with the debug flag honored.
+   */
+  cleanInstall?: boolean;
 }
 
 interface DeleteSideloadOpts {
@@ -103,7 +113,9 @@ async function postPluginInstall(
   log: LogFn
 ): Promise<{ statusCode: number; text: string }> {
   const { body, contentType } = buildMultipartBody(fields, files);
-  log('plugin_install: posting multipart request');
+  // Log the small text fields (mysubmit, remotedebug, …) — NOT the file — so the log
+  // shows exactly what launch flags went to the device (e.g. `mysubmit=Install remotedebug=1`).
+  log(`plugin_install: posting ${fields.map((f) => `${f.name}=${f.value}`).join(' ')}${files.length ? ` + ${files.length} file(s)` : ''}`);
   const { statusCode, body: responseBody } = await httpDigestRequest({
     ip,
     password,
@@ -119,7 +131,7 @@ async function postPluginInstall(
 /**
  * Sideload a channel package to a Roku device.
  */
-async function sideloadChannel({ ip, filePath, password, log = (_m: string) => undefined, extraFields = [] }: SideloadChannelOpts) {
+async function sideloadChannel({ ip, filePath, password, log = (_m: string) => undefined, extraFields = [], cleanInstall = false }: SideloadChannelOpts) {
   const guard = validateDevRequest(ip, password);
   if (guard) return guard;
   if (typeof filePath !== 'string' || !filePath.trim()) {
@@ -136,38 +148,117 @@ async function sideloadChannel({ ip, filePath, password, log = (_m: string) => u
     return { success: false, error: 'File not found' };
   }
 
+  const AUTH_FAIL = { success: false, error: 'Authentication failed. Check your developer password.', authFailed: true };
+  // Roku refuses to Replace a byte-identical build — it keeps the running instance
+  // and returns "Identical to previous version -- not replacing." (reads as success
+  // in the body, but nothing actually reloaded: the "didn't reload" symptom).
+  const isIdentical = (t: string) => /identical to previous version/i.test(t);
+  // An explicit device-side failure (compile error / install failure). When we see
+  // this we must NOT fall back to Delete+Install — that would wipe the working
+  // channel and then fail to install the broken build.
+  const isFailureBody = (t: string) => /Install Failure|Failure/i.test(t);
+
   try {
     const fileData = fs.readFileSync(normalizedPath);
     const filename = path.basename(normalizedPath);
-    const { statusCode, text } = await postPluginInstall(
-      ip,
-      password,
-      [{ name: 'mysubmit', value: 'Install' }, ...extraFields],
-      [{ name: 'archive', filename, data: fileData }],
-      SIDELOAD_TIMEOUT_MS,
-      log
-    );
+    const files = [{ name: 'archive', filename, data: fileData }];
+    const postWith = (submit: string) =>
+      postPluginInstall(ip, password, [{ name: 'mysubmit', value: submit }, ...extraFields], files, SIDELOAD_TIMEOUT_MS, log);
+    const postDelete = () =>
+      postPluginInstall(ip, password, [{ name: 'mysubmit', value: 'Delete' }, { name: 'archive', value: ';' }], [], DELETE_TIMEOUT_MS, log);
 
-    // Wrong developer password comes back as HTTP 401 — trust that over any
-    // body-text heuristic, which can false-match the normal (successful) page.
-    if (statusCode === 401) {
-      return { success: false, error: 'Authentication failed. Check your developer password.', authFailed: true };
-    }
+    // One place to see EXACTLY what the device replied. Success stays terse (one
+    // line, no body) — only something unexpected (failure, auth issue, an
+    // "identical build" no-op, an unrecognized body) dumps the full body
+    // (whitespace-collapsed, truncated so a full HTML page can't flood the log).
+    // That's when a re-sideload "doesn't reload" bug is actually diagnosable from it.
+    const logResp = (tag: string, sc: number, t: string, ok: boolean) => {
+      if (ok) log(`Sideload[${tag}]: status=${sc} ok`);
+      else log(`Sideload[${tag}]: status=${sc} body=${JSON.stringify(t.replace(/\s+/g, ' ').trim().slice(0, 800))}`);
+    };
 
-    const parsed = parsePluginInstallResponse(text);
-    if (!parsed.success) {
-      log(`Sideload: unexpected response (statusCode=${statusCode}, first 500): ${text.substring(0, 500)}`);
-      // The device frequently drops the connection right after a successful
-      // install because it reboots into the new channel, leaving an empty or
-      // unrecognized 2xx body. Don't report that as a failure — there's no
-      // explicit "Install Failure" marker, and the post-install check verifies
-      // the real device state. Genuine failures return a "Install Failure" body.
-      const hasFailureMarker = /Install Failure|Failure/i.test(text);
-      if (statusCode >= 200 && statusCode < 300 && !hasFailureMarker && !text.trim()) {
-        return { success: true, message: 'Channel uploaded. Verifying on device…' };
+    // The clean reload the user does by hand ("delete the app, then sideload").
+    // Roku keeps the old instance on an identical Replace, and some firmware won't
+    // relaunch a running channel on Replace at all — Delete+Install always relaunches.
+    const deleteThenInstall = async (why: string) => {
+      log(`Sideload: ${why} — forcing a clean reload (Delete then Install).`);
+      try {
+        const del = await postDelete();
+        logResp('Delete', del.statusCode, del.text, del.statusCode >= 200 && del.statusCode < 300);
+      } catch (e) {
+        log(`Sideload: Delete before reinstall failed (continuing to Install): ${e instanceof Error ? e.message : String(e)}`);
       }
+      const inst = await postWith('Install');
+      if (inst.statusCode === 401) {
+        logResp('Install(after Delete)', inst.statusCode, inst.text, false);
+        return AUTH_FAIL;
+      }
+      const p = parsePluginInstallResponse(inst.text);
+      const emptyOk = inst.statusCode >= 200 && inst.statusCode < 300 && !isFailureBody(inst.text) && !inst.text.trim();
+      logResp('Install(after Delete)', inst.statusCode, inst.text, p.success || emptyOk);
+      if (p.success) return { success: true, message: 'Channel reloaded on the device.' };
+      if (emptyOk) return { success: true, message: 'Channel reloaded. Verifying on device…' };
+      return p;
+    };
+
+    // 0) Debug sideloads: skip the Replace fast-path entirely. `Replace` can reload a
+    //    running channel WITHOUT re-launching it in debug mode (remotedebug=1 lost →
+    //    STOPs hit the 8085 micro-debugger, port 8081 never opens). A clean
+    //    Delete+Install always relaunches with the debug flag honored.
+    if (cleanInstall) {
+      return await deleteThenInstall('debug sideload — forcing a clean launch so remotedebug=1 is honored');
     }
-    return parsed;
+
+    // 1) Replace first — atomic, and reloads the channel on current firmware.
+    let { statusCode, text } = await postWith('Replace');
+    if (statusCode === 401) {
+      logResp('Replace', statusCode, text, false);
+      return AUTH_FAIL;
+    }
+
+    // 2) "Identical -- not replacing": the device changed nothing and kept the OLD
+    //    instance running. That's the "didn't reload" case — force a real reload
+    //    instead of reporting the misleading success body.
+    const replaceIdentical = isIdentical(text);
+    let parsed = parsePluginInstallResponse(text);
+    logResp('Replace', statusCode, text, !replaceIdentical && parsed.success);
+    if (replaceIdentical) return await deleteThenInstall('device reported an identical build');
+
+    // 3) Replace returned something we don't recognize (older firmware) — retry Install.
+    if (!parsed.success && !parsed.authFailed && !isFailureBody(text)) {
+      const retry = await postWith('Install');
+      if (retry.statusCode === 401) {
+        logResp('Install', retry.statusCode, retry.text, false);
+        return AUTH_FAIL;
+      }
+      const retryIdentical = isIdentical(retry.text);
+      const retryParsed = parsePluginInstallResponse(retry.text);
+      logResp('Install', retry.statusCode, retry.text, !retryIdentical && retryParsed.success);
+      statusCode = retry.statusCode;
+      text = retry.text;
+      if (retryIdentical) return await deleteThenInstall('device reported an identical build');
+      parsed = retryParsed;
+    }
+
+    if (parsed.success) return parsed;
+
+    // 4) The device frequently drops the connection right after a successful install
+    //    (it reboots into the new channel), leaving an empty 2xx body — treat as success.
+    if (statusCode >= 200 && statusCode < 300 && !isFailureBody(text) && !text.trim()) {
+      return { success: true, message: 'Channel uploaded. Verifying on device…' };
+    }
+
+    // 5) A genuine device-reported failure (compile/install error) — surface it as-is;
+    //    do NOT delete the working channel.
+    if (isFailureBody(text)) {
+      log(`Sideload: device reported a failure (status=${statusCode}).`);
+      return parsed;
+    }
+
+    // 6) Last resort: neither Replace nor Install clearly landed and it isn't an
+    //    explicit failure. Do the reliable Delete+Install the user falls back to by
+    //    hand rather than surfacing a confusing "unknown response."
+    return await deleteThenInstall('Replace and Install did not clearly succeed');
   } catch (error: unknown) {
     // Branch on the original error code/message — `mapDeviceHttpError` collapses
     // these into a single generic string, so matching its output for

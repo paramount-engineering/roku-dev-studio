@@ -29,7 +29,9 @@ export interface DevAppApi {
   keypress(key: string): Promise<{ success?: boolean; error?: string }>;
   sideload(
     filePath: string,
-    password: string
+    password: string,
+    remoteDebug?: boolean,
+    serial?: string
   ): Promise<{ success?: boolean; message?: string; error?: string; authFailed?: boolean }>;
   deleteSideload(password: string): Promise<{ success?: boolean; message?: string; error?: string; authFailed?: boolean }>;
   query(endpoint: string): Promise<{ success?: boolean; data?: string; error?: string }>;
