@@ -47,3 +47,4 @@ npm-debug.log*
 .claude/
 .discussion-docs/
 .cursor/
+CLAUDE.md
