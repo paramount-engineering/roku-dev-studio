@@ -392,7 +392,21 @@ export const IPC = {
   /** Main → renderer: a new upload was accepted and fan-out started. */
   SideloadRelayRunStarted: 'sideload-relay:run-started',
   /** Main → renderer: per-device fan-out result update. */
-  SideloadRelayResult: 'sideload-relay:result'
+  SideloadRelayResult: 'sideload-relay:result',
+
+  /** Static Channel Analysis — standalone window wrapping Roku's own `sca-cmd` CLI
+   *  (fetched at runtime, never bundled — see main/static-analysis/sca-tool-manager.ts). */
+  StaticAnalysisEnsureTool: 'static-analysis:ensure-tool',
+  /** Invoke (get current) and push (main → renderer on change) share this one channel. */
+  StaticAnalysisToolStatus: 'static-analysis:tool-status',
+  StaticAnalysisCheckJava: 'static-analysis:check-java',
+  StaticAnalysisChooseFile: 'static-analysis:choose-file',
+  StaticAnalysisRun: 'static-analysis:run',
+  StaticAnalysisCancelRun: 'static-analysis:cancel-run',
+  /** Main → renderer: streamed stdout/stderr while a run is in progress. */
+  StaticAnalysisProgress: 'static-analysis:progress',
+  /** Main → renderer: terminal outcome of a run (report JSON, or raw output + error). */
+  StaticAnalysisRunResult: 'static-analysis:run-result'
 } as const;
 
 export type IpcChannel = (typeof IPC)[keyof typeof IPC];

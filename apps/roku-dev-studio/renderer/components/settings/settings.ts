@@ -15,6 +15,48 @@ import {
 } from '@shared/network-inspector/setup-guide.js';
 import { initSideloadRelaySection } from './sideload-relay-section.js';
 import { attachBackdropClickToClose } from '../../modules/utils/modal-backdrop-click.js';
+import { attachInstantTooltips } from '../../modules/utils/instant-tooltip.js';
+import { S, applyI18n, availableLocales, getLocale, matchLocale, localeLabel, setLocale, SYSTEM_LOCALE } from '@shared/strings/index.js';
+import { applyLocalePreference } from '../../modules/utils/locale-live.js';
+import { setLocaleFromPreference } from '../../modules/utils/locale-pref.js';
+
+const api = (window as any).settingsApi;
+if (!api) {
+  document.body.innerHTML = '<p class="settings-fatal">' + S.settings.apiUnavailable + '</p>';
+  throw new Error('Settings API unavailable');
+}
+
+const INITIAL_SECTION = new URLSearchParams(window.location.search).get('section') || '';
+
+// The main process passes the already-resolved effective locale in the query so we
+// can apply it SYNCHRONOUSLY here — before the first `applyI18n(document)` below —
+// which is before first paint. Without this the shell paints in English and the
+// async getState() apply (further down) re-renders it in the real locale, a visible
+// flash on open. getState() still re-applies later (idempotent, no visible change).
+const INITIAL_LOCALE = new URLSearchParams(window.location.search).get('locale') || '';
+if (INITIAL_LOCALE) setLocale(INITIAL_LOCALE);
+
+/**
+ * Toggle the `privacy-mode` body class so this window's masking CSS (see
+ * settings.css) blurs IPs/serials — e.g. the Sideload Relay device table —
+ * exactly as the main window does. Applied from the loaded state, live from the
+ * Privacy Mode toggle in this window, and from the main-process broadcast when
+ * the menu / another window flips it.
+ */
+function applyPrivacyMode(enabled: boolean): void {
+  document.body.classList.toggle('privacy-mode', !!enabled);
+}
+if (typeof api.onPrivacyModeChanged === 'function') {
+  api.onPrivacyModeChanged(function (enabled: boolean) {
+    applyPrivacyMode(enabled);
+  });
+}
+
+// Localize the static settings.html shell (nav, section headers, toggle labels,
+// tooltips). Dynamically-built sections use `S.*` directly. Inline English is the
+// fallback for any unresolved key.
+applyI18n(document);
+
 // Long row-help is space-hungry when always-on. Enable the shared instant tooltip for this
 // window, then (via syncSettingsHelpTooltips) clamp only the descriptions that actually
 // overflow 3 lines and reveal their full text on hover — short/dynamic help is untouched.
@@ -1290,6 +1332,136 @@ api.getState().then(function (state: any) {
   applyI18n(document);
   syncHeaderSectionLabel();
   populateLanguageOptions();
+  requestAnimationFrame(syncSettingsHelpTooltips); // clamp/reveal long help once content is laid out
+
+  // Populate the NI setup modal from the platform (in the active locale). Re-run on locale
+  // change since the body is injected HTML that applyI18n's single-text-node pass can't touch.
+  populateNiSetupModal();
+
+  setToggle('optDevMode', !!state.developerModeEnabled);
+  setToggle('optPrivacy', !!state.privacyModeEnabled);
+  applyPrivacyMode(!!state.privacyModeEnabled);
+  setToggle('optDebugLog', !!state.debugLoggingEnabled);
+  setToggle('optKeyboardRemote', state.keyboardRemoteShortcutsEnabled === true);
+  setToggle('optAutoConnectLast', state.autoConnectLastDeviceEnabled === true);
+  setToggle('optRememberSidebarToggle', state.rememberSidebarToggle === true);
+  setToggle('optRememberPasswordsInKeychain', state.rememberPasswordsInKeychain === true);
+  setLanguageSelect(langPref);
+  keychainSnap = state.secretStoreStatus || null;
+  updateKeychainStatusHint(state.rememberPasswordsInKeychain === true, keychainSnap);
+  setToggle('optDevicePerfRememberQuad', state.devicePerformanceRememberQuadPerDevice === true);
+  setToggle('optNetworkInspector', state.networkInspectorEnabled === true);
+  if (el('niMitmPort')) el('niMitmPort').value = String(state.networkInspectorMitmPort || 8888);
+  if (el('niMaxRawPackets')) {
+    el('niMaxRawPackets').value = String(
+      typeof state.networkInspectorMaxRawPacketsPerDevice === 'number'
+        ? clampNiMaxRawPackets(state.networkInspectorMaxRawPacketsPerDevice)
+        : NI_MAX_RAW_PACKETS_DEFAULT
+    );
+  }
+  if (el('niMaxBodyKb')) {
+    el('niMaxBodyKb').value = String(
+      typeof state.networkInspectorMaxBodyRetainedBytes === 'number'
+        ? niBodyBytesToKb(state.networkInspectorMaxBodyRetainedBytes)
+        : NI_MAX_BODY_KB_DEFAULT
+    );
+  }
+  populateNiBoundLabels();
+  updateNetworkInspectorStatusLine(state);
+  updateBpfCaptureUi(state.captureToolAvailable === true || state.bpfCaptureAvailable === true);
+  niSavedLocations = Array.isArray(state.remoteLocations) ? state.remoteLocations : [];
+  niLocalSnapshot = {
+    enabled: state.networkInspectorEnabled === true,
+    mitmPort: state.networkInspectorMitmPort || 8888,
+    maxRawPackets: (typeof state.networkInspectorMaxRawPacketsPerDevice === 'number'
+      ? clampNiMaxRawPackets(state.networkInspectorMaxRawPacketsPerDevice)
+      : NI_MAX_RAW_PACKETS_DEFAULT),
+    maxBodyKb: (typeof state.networkInspectorMaxBodyRetainedBytes === 'number'
+      ? niBodyBytesToKb(state.networkInspectorMaxBodyRetainedBytes)
+      : NI_MAX_BODY_KB_DEFAULT)
+  };
+  refreshConnectedPlaces();
+  if (state.logFilePath && el('logPathHint')) {
+    el('logPathHint').textContent = S.settings.logFilePath(state.logFilePath);
+  }
+  setFolderDisplay(state.actionScriptDefaultSaveFolder || '');
+  mcpClientDetections = Array.isArray(state.mcpClientDetections) ? state.mcpClientDetections : [];
+  var stateMcp = (state && state.mcpClients) || {};
+  mcpClientsState = {};
+  MCP_CLIENT_IDS.forEach(function (id) {
+    mcpClientsState[id] = !!stateMcp[id];
+  });
+  renderMcpClients();
+  buildTimingRows(state);
+  validateAllTimingPanels();
+  // All toggles/sections are now populated in the DOM — tell main it can reveal the window
+  // (it was created hidden). Showing only now avoids the toggle-flip / section-populate flash
+  // of showing the static shell first. Main has a fallback timer if this never arrives.
+  if (typeof api.notifyReady === 'function') api.notifyReady();
+}).catch(function (e: any) {
+  setSectionStatus('saveStatusGeneral', String(e && e.message ? e.message : e), true);
+  if (typeof api.notifyReady === 'function') api.notifyReady();
+});
+
+el('btnBrowseFolder').addEventListener('click', function () {
+  api.pickFolder().then(function (res: any) {
+    if (res && res.success && res.folderPath) setFolderDisplay(res.folderPath);
+  });
+});
+var btnResetActionScripts = el('btnResetActionScripts');
+if (btnResetActionScripts) {
+  btnResetActionScripts.addEventListener('click', function () {
+    setFolderDisplay('');
+  });
+}
+var btnResetMcpServer = el('btnResetMcpServer');
+if (btnResetMcpServer) {
+  btnResetMcpServer.addEventListener('click', function () {
+    mcpClientDetections.forEach(function (det) {
+      if (!det || !det.installed) return;
+      var id = det.id;
+      if (MCP_CLIENT_IDS.indexOf(id) === -1) return;
+      mcpClientsState[id] = false;
+    });
+    renderMcpClients();
+  });
+}
+el('btnResetTiming').addEventListener('click', function () {
+  applyDefaultsForKeys(TIMING_KEYS);
+  validateTimingPanel('Timing');
+});
+var btnResetDevicePerf = el('btnResetDevicePerf');
+if (btnResetDevicePerf) {
+  btnResetDevicePerf.addEventListener('click', function () {
+    setToggle('optDevicePerfRememberQuad', false);
+    applyDefaultsForKeys(DEVICE_PERF_KEYS);
+    validateTimingPanel('DevicePerf');
+  });
+}
+var GENERAL_TOGGLE_DEFAULTS: Record<string, boolean> = {
+  optDevMode: false,
+  optPrivacy: false,
+  optDebugLog: false,
+  optKeyboardRemote: false,
+  optAutoConnectLast: false,
+  optRememberSidebarToggle: false,
+  optRememberPasswordsInKeychain: false
+};
+populateLanguageOptions();
+setLanguageSelect(SYSTEM_LOCALE);
+// Language is applied only when the user clicks Save (see the General save button wiring
+// below) — NOT live on dropdown change. The picked value stays in the <select> until Save.
+// Retranslate this window in place when the locale changes (on Save, or from elsewhere).
+if (api && typeof api.onLocaleChanged === 'function') {
+  api.onLocaleChanged(function (pref: string) {
+    // Shared live-switch core (setLocale + applyI18n + retranslate registries); `extra` re-renders
+    // the Settings window's own imperative surfaces (language picker, NI labels, setup modal).
+    applyLocalePreference(pref, function () {
+      syncHeaderSectionLabel();
+      populateLanguageOptions();
+      setLanguageSelect(pref);
+      populateNiBoundLabels();
+      populateNiSetupModal();
       requestAnimationFrame(syncSettingsHelpTooltips); // re-derive clamp/tooltip for the new locale's text
     });
   });

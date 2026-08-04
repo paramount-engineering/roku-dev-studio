@@ -23,5 +23,32 @@ import { deeplink } from './deeplink.js';
 import { utils } from './utils.js';
 import { logFileViewer } from './log-file-viewer.js';
 import { menu } from './menu.js';
+import { staticAnalysis } from './static-analysis.js';
+// Placeholder: reuse the English Debugger strings until a Romanian translation exists.
+import { debuggerStrings } from '../debugger.js';
+
+export const ro = {
+  common,
+  sideloadRelay,
+  settings,
+  devApp,
+  queries,
+  modals,
+  networkSessionViewer,
+  inspector,
+  networkInspector,
+  actionScripts,
+  consoleLog,
+  ui,
+  app,
+  telnet,
+  fiddle,
+  floatingRemote,
+  about,
+  deeplink,
+  utils,
+  logFileViewer,
+  menu,
   debugger: debuggerStrings,
+  staticAnalysis,
 };

@@ -125,12 +125,13 @@ export const modals = {
     },
     console: {
       blurb:
-        'Przesyłaj na żywo strumień BrightScript Debug Output z Roku przez Telnet, z filtrowaniem i wyszukiwaniem, aby wydobyć dokładnie to, co ważne.',
+        'Przesyłaj na żywo strumień BrightScript Debug Output z Roku przez Telnet, z filtrowaniem i wyszukiwaniem, aby wydobyć dokładnie to, co ważne, a także podłącz pełny debugger BrightScript, gdy musisz przejść przez kod krok po kroku.',
       points: [
         'Strumień dziennika Telnet na żywo',
         'Filtrowanie i wyszukiwanie pełnotekstowe',
-        'Kliknij adresy URL lub JSON, aby sprawdzić je w oknie modalnym',
+        'Kliknij URL/JSON/XML, aby wyświetlić je w czytelnej formie w oknie modalnym',
         'Zapisz dziennik do pliku',
+        'Podłącz debugger — punkty przerwania, zmienne, stos wywołań i REPL',
       ],
     },
     actionScripts: {

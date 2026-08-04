@@ -407,32 +407,52 @@ var IPC = {
   StaticAnalysisRunResult: "static-analysis:run-result"
 };
 
-// network-session-viewer-preload.ts
-var { contextBridge, ipcRenderer } = require("electron");
-contextBridge.exposeInMainWorld("roku", {
-  /** Parse the file this window was opened with and return the whole session at once. `format` is
-   *  the detected input kind; `notice` carries a non-fatal parse warning (e.g. odd pcap link type). */
-  loadNetworkSession: () => ipcRenderer.invoke(IPC.NetSessionViewerLoad),
-  copyToClipboard: (text) => ipcRenderer.invoke(IPC.ClipboardWrite, text),
+// static-analysis-preload.ts
+var { contextBridge, ipcRenderer, webUtils } = require("electron");
+contextBridge.exposeInMainWorld("staticAnalysis", {
+  ensureTool: (opts) => ipcRenderer.invoke(IPC.StaticAnalysisEnsureTool, opts ?? {}),
+  checkJava: () => ipcRenderer.invoke(IPC.StaticAnalysisCheckJava),
+  chooseFile: () => ipcRenderer.invoke(IPC.StaticAnalysisChooseFile),
+  // Resolve a drag-dropped File's real filesystem path — modern Electron no longer exposes a
+  // usable `file.path` in the renderer; `webUtils.getPathForFile` is only callable from preload.
+  // Same pattern as the Dev App sideload dropzone's `resolveDroppedSideloadFile`.
+  resolveDroppedFile: (file) => {
+    try {
+      return webUtils.getPathForFile(file) || null;
+    } catch {
+      return null;
+    }
+  },
+  run: (payload) => ipcRenderer.invoke(IPC.StaticAnalysisRun, payload),
+  cancelRun: (payload) => ipcRenderer.invoke(IPC.StaticAnalysisCancelRun, payload),
+  // Reuses the app-wide shell:open-external handler (registered once at app-ready by
+  // `system-handlers.ts`) — a plain `<a target="_blank">` doesn't work in this window since
+  // there's no `setWindowOpenHandler` anywhere in the app; every external link goes through this.
   openExternal: (url) => ipcRenderer.invoke(IPC.ShellOpenExternal, url),
-  // Native right-click menu (used by the Focus-hosts feature). Same channel as the live tab.
-  showContextMenu: (items) => ipcRenderer.invoke(IPC.ShowContextMenu, items),
-  // Privacy Mode — this viewer reuses the live inspector's renderers (device IPs,
-  // client addresses), so it must blur them too. Read the current state at open and
-  // listen for live toggles broadcast from the main process.
-  getPrivacyMode: () => ipcRenderer.invoke(IPC.GetPrivacyMode),
-  onPrivacyModeChanged: (callback) => {
-    const handler = (_e, enabled) => callback(enabled);
-    ipcRenderer.on(IPC.PrivacyModeChanged, handler);
-    return () => ipcRenderer.removeListener(IPC.PrivacyModeChanged, handler);
+  // Reuses the app-wide "save text to file" handler (registered once at app-ready by
+  // `system-handlers.ts`) — the same one Log Viewer / Network Session export already use.
+  saveTextFile: (opts) => ipcRenderer.invoke(IPC.RokuSaveTextFile, opts),
+  // Event subscriptions (return cleanup functions).
+  onToolStatus: (callback) => {
+    const handler = (_event, status) => callback(status);
+    ipcRenderer.on(IPC.StaticAnalysisToolStatus, handler);
+    return () => ipcRenderer.removeListener(IPC.StaticAnalysisToolStatus, handler);
+  },
+  onProgress: (callback) => {
+    const handler = (_event, data) => callback(data);
+    ipcRenderer.on(IPC.StaticAnalysisProgress, handler);
+    return () => ipcRenderer.removeListener(IPC.StaticAnalysisProgress, handler);
+  },
+  onRunResult: (callback) => {
+    const handler = (_event, data) => callback(data);
+    ipcRenderer.on(IPC.StaticAnalysisRunResult, handler);
+    return () => ipcRenderer.removeListener(IPC.StaticAnalysisRunResult, handler);
   },
   // Live locale: apply the current preference on open + retranslate on change.
   getLocale: () => ipcRenderer.invoke(IPC.GetLocale),
   onLocaleChanged: (callback) => {
-    const handler = (_e, pref) => callback(pref);
+    const handler = (_event, pref) => callback(pref);
     ipcRenderer.on(IPC.LocaleChanged, handler);
     return () => ipcRenderer.removeListener(IPC.LocaleChanged, handler);
-  },
-  saveTextFile: (opts) => ipcRenderer.invoke(IPC.RokuSaveTextFile, opts),
-  saveBinaryFile: (opts) => ipcRenderer.invoke(IPC.RokuSaveBinaryFile, opts)
+  }
 });

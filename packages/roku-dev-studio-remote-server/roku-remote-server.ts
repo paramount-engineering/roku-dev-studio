@@ -1553,7 +1553,7 @@ async function handleRequest(req, res) {
           return sendError(res, 'Missing appId parameter', 400);
         }
 
-        const result = await deeplink(ip, params.appId, params.contentId, params.mediaType);
+        const result = await deeplink(ip, params.appId, params.contentId, params.mediaType, { extraParams: params.params });
         return sendJson(res, result);
       }
 

@@ -399,6 +399,20 @@ export const BRS_ERROR_CATALOG: readonly BrsErrorEntry[] = [
     docsUrl: ERR_CODES,
     severity: 'error'
   },
+  {
+    id: 'sg-node-loop-detected',
+    title: 'SceneGraph node loop detected',
+    category: 'SceneGraph/Component',
+    // Device-confirmed telnet: `BRIGHTSCRIPT: ERROR: roSGNode.AddReplace: "content": Loop detected at
+    // RenderableNode: pkg:/…brs(N)`. The method before `.AddReplace`/`.AddChild`/etc. varies, so the
+    // signature anchors on the constant "Loop detected at RenderableNode" tail instead.
+    signatures: ['loop detected at renderablenode'],
+    meaning: 'A field assignment made a node its own ancestor or descendant, creating a cycle in the render tree.',
+    cause: 'AddReplace/AddChild/setField assigned a node to a field where that node is already an ancestor of the target (e.g. a screen setting its own "content" field to itself or to a node already above it in the tree).',
+    fix: 'Assign a distinct node (or a fresh clone) rather than one already in the target\'s own ancestor chain; check for accidental self-assignment or re-parenting of an existing node.',
+    docsUrl: DBG_SCENEGRAPH,
+    severity: 'error'
+  },
 
   // ---- Threading / Rendezvous ---------------------------------------------------------------
   {

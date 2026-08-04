@@ -125,12 +125,13 @@ export const modals = {
     },
     console: {
       blurb:
-        'Transmiteți în timp real BrightScript Debug Output de la Roku prin Telnet, cu filtrare și căutare pentru a scoate la iveală exact ce contează.',
+        'Transmiteți în timp real BrightScript Debug Output de la Roku prin Telnet, cu filtrare și căutare pentru a scoate la iveală exact ce contează, și atașați un depanator BrightScript complet atunci când trebuie să parcurgeți codul pas cu pas.',
       points: [
         'Flux de jurnal Telnet în timp real',
         'Filtrare și căutare în tot textul',
-        'Faceți clic pe URL-uri sau JSON pentru a le inspecta într-o fereastră modală',
+        'Faceți clic pe URL/JSON/XML pentru a le vizualiza formatat într-o fereastră modală',
         'Salvați jurnalul într-un fișier',
+        'Atașați un depanator — puncte de întrerupere, variabile, stivă de apeluri și REPL',
       ],
     },
     actionScripts: {

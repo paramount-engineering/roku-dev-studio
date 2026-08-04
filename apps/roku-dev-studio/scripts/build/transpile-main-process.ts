@@ -31,16 +31,7 @@ const PRELOAD_ENTRIES: ReadonlyArray<readonly [string, string]> = [
   ['log-viewer-preload.ts', 'log-viewer-preload.bundled.cjs'],
   ['fiddle-preload.ts', 'fiddle-preload.bundled.cjs'],
   ['network-session-viewer-preload.ts', 'network-session-viewer-preload.bundled.cjs'],
-];
-
-/** Preload bundles, all sharing the same `['electron']` external. `[entry.ts, outfile]`. */
-const PRELOAD_ENTRIES: ReadonlyArray<readonly [string, string]> = [
-  ['preload-about.ts', 'preload-about.js'],
-  ['preload-settings.ts', 'preload-settings.js'],
-  ['preload.ts', 'preload.bundled.cjs'],
-  ['log-viewer-preload.ts', 'log-viewer-preload.bundled.cjs'],
-  ['fiddle-preload.ts', 'fiddle-preload.bundled.cjs'],
-  ['network-session-viewer-preload.ts', 'network-session-viewer-preload.bundled.cjs'],
+  ['static-analysis-preload.ts', 'static-analysis-preload.bundled.cjs'],
 ];
 
 /**

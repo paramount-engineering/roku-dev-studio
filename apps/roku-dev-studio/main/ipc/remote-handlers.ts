@@ -569,8 +569,8 @@ function setupRemoteHandlers(mainWindow: BrowserWindow | undefined, safeSendToRe
 
   // Deep link via remote server
   ipcMain.handle(IPC.RemoteDeeplink, async (_event: IpcMainInvokeEvent, payload: RemoteDeeplinkPayload) => {
-    const { serverUrl, ip, appId, contentId, mediaType } = payload;
-    return await remoteHttpRequest(serverUrl, devicePath(ip, '/deeplink'), 'POST', { appId, contentId, mediaType });
+    const { serverUrl, ip, appId, contentId, mediaType, params } = payload;
+    return await remoteHttpRequest(serverUrl, devicePath(ip, '/deeplink'), 'POST', { appId, contentId, mediaType, params });
   });
 
   // Get app icon via remote server

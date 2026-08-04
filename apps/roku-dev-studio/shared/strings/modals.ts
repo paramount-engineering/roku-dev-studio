@@ -128,12 +128,13 @@ export const modals = {
     },
     console: {
       blurb:
-        "Stream the Roku's BrightScript Debug Output live over Telnet, with filtering and search to surface exactly what matters.",
+        "Stream the Roku's BrightScript Debug Output live over Telnet, with filtering and search to surface exactly what matters — and attach a full BrightScript debugger when you need to step through code.",
       points: [
         'Live Telnet log stream',
         'Filter and full-text search',
-        'Click URLs or JSON to inspect them in a modal',
+        'Click URL/JSON/XML to pretty-view them in a modal',
         'Save the log to a file',
+        'Attach a debugger — breakpoints, variables, call stack, and REPL',
       ],
     },
     actionScripts: {

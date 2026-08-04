@@ -400,6 +400,7 @@ export function transpileRenderer(appDir: string): void {
     path.join(rendererRoot, 'components', 'network-session-viewer'),
     path.join(rendererRoot, 'components', 'about'),
     path.join(rendererRoot, 'components', 'settings'),
+    path.join(rendererRoot, 'components', 'static-analysis'),
   ];
   const entryPoints = roots.flatMap((r) => walkTsFiles(r));
   const appTs = path.join(rendererRoot, 'app.ts');

@@ -26,6 +26,9 @@ const { broadcastPrivacyModeToAllWindows } = require('./main/privacy-broadcast')
 const { S, setLocale, getLocale, effectiveLocale } = require('@shared/strings/index.js');
 const { broadcastLocaleToAllWindows } = require('./main/locale-broadcast');
 const { registerBsFiddleIpc } = require('./main/ipc/bs-fiddle-handlers');
+const { openStaticAnalysisWindow } = require('./main/static-analysis-window');
+const { registerStaticAnalysisIpc } = require('./main/ipc/static-analysis-handlers');
+const { killAllScaRuns } = require('./main/static-analysis/sca-runner');
 const { showAboutDialog, registerAboutIpc } = require('./main/about-dialog');
 const { setupAutoUpdater } = require('./main/auto-updater');
 // Handle for triggering the update-check flow from the "Check for Updates" menu
@@ -472,6 +475,13 @@ function createWindow(appState: AppWindowState) {
           }
         },
         {
+          label: S.menu.openStaticAnalysis,
+          accelerator: 'CmdOrCtrl+Shift+S',
+          click: () => {
+            openStaticAnalysisWindow(win);
+          }
+        },
+        {
           label: S.menu.openActionScriptsViewer,
           accelerator: 'CmdOrCtrl+Shift+A',
           click: () => {
@@ -700,6 +710,7 @@ app.whenReady().then(() => {
   registerSecretsIpc(ipcMain);
   registerFiddleIpc(ipcMain, () => (mainWindow && !mainWindow.isDestroyed() ? mainWindow.webContents : null));
   registerBsFiddleIpc(ipcMain);
+  registerStaticAnalysisIpc(ipcMain, app);
 
   // Current language preference, so a window opened while a non-default locale is active can
   // resolve + apply it on load (each renderer has its own catalog instance).
@@ -972,6 +983,11 @@ app.on('window-all-closed', () => {
 app.on('before-quit', () => {
   try {
     (require('./main/ipc/debugger-handlers') as { teardownDebuggerSessions: () => void }).teardownDebuggerSessions();
+  } catch {
+    /* best-effort teardown */
+  }
+  try {
+    killAllScaRuns();
   } catch {
     /* best-effort teardown */
   }

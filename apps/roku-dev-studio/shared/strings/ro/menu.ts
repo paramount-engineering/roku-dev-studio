@@ -15,6 +15,7 @@ export const menu = {
   openLogFile: 'Deschide fișierul jurnal',
   openNetworkSession: 'Deschide sesiunea de rețea',
   openFiddle: 'Deschide Fiddle',
+  openStaticAnalysis: 'Analiză statică a canalului',
   openActionScriptsViewer: 'Vizualizează și gestionează Action Scripts',
   checkForUpdates: 'Caută actualizări',
   clearCacheAndReload: 'Golește cache-ul și reîncarcă',

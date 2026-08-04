@@ -17,6 +17,7 @@ export const menu = {
   openLogFile: 'Abrir arquivo de log',
   openNetworkSession: 'Abrir sessão de rede',
   openFiddle: 'Abrir Fiddle',
+  openStaticAnalysis: 'Análise estática do canal',
   openActionScriptsViewer: 'Visualizar e gerenciar Action Scripts',
   checkForUpdates: 'Verificar atualizações',
   clearCacheAndReload: 'Limpar cache e recarregar',

@@ -1,0 +1,716 @@
+/* Static Channel Analysis — standalone window.
+ * Design tokens mirror apps/roku-dev-studio/renderer/index.html (and the other standalone
+ * windows) so this shares the same visual language: Inter, purple accent, subtle border,
+ * rounded cards, matching button/modal shapes. */
+
+:root {
+  --bg-deep: #08080c;
+  --bg-primary: #0e0e14;
+  --bg-secondary: #16161f;
+  --bg-tertiary: #1e1e2a;
+  --bg-elevated: #262635;
+  --bg-hover: #2f2f48;
+  --bg-card: rgba(22, 22, 31, 0.9);
+
+  --accent-purple: #8b5cf6;
+  --accent-purple-dim: rgba(139, 92, 246, 0.15);
+  --accent-cyan: #22d3ee;
+  --accent-green: #10b981;
+  --accent-green-dim: rgba(16, 185, 129, 0.15);
+  --accent-red: #ef4444;
+  --accent-red-dim: rgba(239, 68, 68, 0.15);
+  --accent-amber: #f59e0b;
+  --accent-amber-dim: rgba(245, 158, 11, 0.15);
+
+  --text-primary: #f1f5f9;
+  --text-secondary: #94a3b8;
+  --text-muted: #64748b;
+
+  --border: rgba(139, 92, 246, 0.12);
+  --border-hover: rgba(139, 92, 246, 0.25);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  height: 100%;
+  background: var(--bg-deep);
+  color: var(--text-primary);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 13px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Any author rule setting `display` on a hidden element (e.g. `.btn`'s `display: inline-flex`)
+ * beats the browser's default `[hidden] { display: none }` at equal specificity — author styles
+ * always win over the UA stylesheet regardless of selector weight. Without this, toggling the
+ * `hidden` attribute on a `.btn`/`.sca-*` element does nothing. */
+[hidden] {
+  display: none !important;
+}
+
+.sca-page {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* Icon system (mirrors the other standalone windows) */
+.icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1em;
+  height: 1em;
+  line-height: 1;
+  vertical-align: -0.125em;
+  flex-shrink: 0;
+}
+.icon svg { width: 100%; height: 100%; display: block; }
+.icon-xs { font-size: 12px; }
+.icon-sm { font-size: 14px; }
+.icon-md { font-size: 16px; }
+
+/* Buttons (mirrors the other standalone windows) */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 9px 16px;
+  height: 34px;
+  border: none;
+  border-radius: 8px;
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+  white-space: nowrap;
+}
+.btn:disabled { cursor: not-allowed; opacity: 0.5; }
+.btn-primary { background: var(--accent-purple); color: #fff; }
+.btn-primary:hover:not(:disabled) { background: #7c3aed; }
+.btn-primary:disabled { background: var(--bg-elevated); color: var(--text-muted); }
+.btn-secondary { background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border); }
+.btn-secondary:hover:not(:disabled) { background: var(--accent-purple-dim); border-color: var(--accent-purple); }
+.btn-danger { background: var(--bg-tertiary); color: var(--accent-red); border: 1px solid var(--accent-red-dim); }
+.btn-danger:hover:not(:disabled) { background: var(--accent-red-dim); }
+.btn-ghost { background: transparent; color: var(--text-secondary); border: 1px solid transparent; }
+.btn-ghost:hover:not(:disabled) { background: var(--bg-hover); color: var(--text-primary); }
+.btn-icon { width: 34px; padding: 0; }
+
+/* Header */
+.sca-header {
+  padding: 16px 20px;
+  background: var(--bg-primary);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.sca-brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.sca-brand-badge {
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  background: var(--accent-purple-dim);
+  color: var(--accent-purple);
+  border: 1px solid var(--border-hover);
+  flex-shrink: 0;
+}
+.sca-brand-copy h1 { font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
+.sca-subtitle { margin-top: 2px; font-size: 11px; color: var(--text-muted); }
+
+/* Status badges — relocated into the header */
+.sca-header-status { display: flex; gap: 10px; flex-wrap: wrap; }
+
+.sca-layout {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  /* `fr` (not `25% 75%`) — percentage tracks are sized independently of `gap`, so two tracks
+   * summing to 100% plus a 16px gap overflowed the container by exactly that 16px, silently
+   * eating into the right-side padding (content-independent — showed up even with an empty
+   * panel). `fr` correctly reserves space for the gap before distributing the remainder. */
+  grid-template-columns: 1fr 3fr;
+  gap: 16px;
+  padding: 16px 20px 20px;
+}
+
+.sca-layout-left {
+  min-width: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.sca-layout-right {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+/* Status badges (header) */
+.sca-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px 6px 12px;
+  border-radius: 20px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.sca-status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  flex-shrink: 0;
+}
+.sca-status-pill[data-state="checking"] .sca-status-dot,
+.sca-status-pill[data-state="downloading"] .sca-status-dot {
+  background: var(--accent-cyan);
+  animation: sca-pulse 1.2s ease-in-out infinite;
+}
+.sca-status-pill[data-state="ready"] .sca-status-dot { background: var(--accent-green); }
+.sca-status-pill[data-state="ready"] .sca-status-text { color: var(--accent-green); }
+.sca-status-pill[data-state="warning"] .sca-status-dot { background: var(--accent-amber); }
+.sca-status-pill[data-state="warning"] .sca-status-text { color: var(--accent-amber); }
+.sca-status-pill[data-state="error"] .sca-status-dot { background: var(--accent-red); }
+.sca-status-pill[data-state="error"] .sca-status-text { color: var(--accent-red); }
+@keyframes sca-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+
+.sca-status-retry-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.sca-status-retry-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
+.sca-status-sep { width: 1px; height: 14px; background: var(--border-hover); flex-shrink: 0; }
+.sca-status-info-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 1px solid var(--border-hover);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 10.5px;
+  font-weight: 700;
+  font-style: italic;
+  font-family: Georgia, 'Times New Roman', serif;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.sca-status-info-btn:hover { background: var(--accent-purple-dim); border-color: var(--accent-purple); color: var(--accent-purple); }
+
+.sca-status-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--accent-purple);
+  text-decoration: none;
+  font-weight: 600;
+}
+.sca-status-link:hover { text-decoration: underline; }
+
+/* Info modals (Analysis Tool / Java) — plain explanatory content, no resize/collapse. */
+.sca-info-modal { max-width: 480px; }
+.sca-info-modal .modal-body { font-size: 12.5px; line-height: 1.55; color: var(--text-secondary); }
+.sca-info-modal .modal-body p { margin-bottom: 14px; }
+.sca-info-dl { margin-bottom: 14px; }
+.sca-info-row { display: flex; justify-content: space-between; gap: 12px; padding: 6px 0; border-top: 1px solid var(--border); font-size: 12px; }
+.sca-info-row:first-child { border-top: none; }
+.sca-info-row dt { color: var(--text-muted); }
+.sca-info-row dd { color: var(--text-primary); font-family: 'JetBrains Mono', monospace; text-align: right; }
+.sca-info-link { font-size: 12.5px; }
+.sca-inline-code {
+  font-family: 'JetBrains Mono', ui-monospace, Menlo, Monaco, monospace;
+  font-size: 11px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  padding: 1px 6px;
+  border-radius: 4px;
+  color: var(--text-primary);
+}
+
+/* Cards */
+.sca-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px 16px;
+}
+.sca-card-heading {
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: default;
+}
+/* Bleed out to the card's own edges so the heading reads as a distinct header bar rather than
+ * just the body's first line of text — same gradient/border treatment as the app's `.card-header`.
+ * Applies to any `.sca-card-heading` (Channel File, Options, …), relying on `.sca-card`'s own
+ * fixed 14px/16px padding to bleed out exactly to the card's border. */
+.sca-card-heading {
+  margin: -14px -16px 14px;
+  padding: 12px 16px;
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.1) 0%, transparent 100%);
+  border-bottom: 1px solid var(--border);
+  border-radius: 12px 12px 0 0;
+}
+
+/* File picker — mirrors the Dev App section's channel-upload card: a single dashed dropzone is
+ * the primary click-and-drag target, with a green "file selected" bar appearing below it once a
+ * file is picked (renderer/index.html's `.install-drop-zone` / `.selected-file-info`). */
+/* Dropzone and the "file selected" bar occupy the same grid cell — the row sizes itself to the
+ * taller of the two (the dropzone), so swapping between them via opacity never shifts anything
+ * else in the card. `is-hidden` fades + shrinks the inactive one out and disables its pointer
+ * events, rather than an abrupt `hidden` toggle. */
+.sca-file-slot {
+  display: grid;
+}
+.sca-file-slot > * {
+  grid-area: 1 / 1;
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+.sca-file-slot > .is-hidden {
+  opacity: 0;
+  transform: scale(0.98);
+  pointer-events: none;
+}
+.sca-dropzone {
+  padding: 24px 16px;
+  border: 2px dashed var(--border-hover);
+  border-radius: 12px;
+  text-align: center;
+  cursor: pointer;
+  background: var(--bg-primary);
+  /* Own full list (not just border-color/background) since a same-specificity, later-declared
+   * `transition` on this element would otherwise replace — not merge with — the fade/scale
+   * transition `.sca-file-slot > *` sets above. */
+  transition: opacity 0.18s ease, transform 0.18s ease, border-color 0.15s, background 0.15s;
+}
+.sca-dropzone:hover,
+.sca-dropzone.sca-dropzone-active {
+  border-color: var(--accent-purple);
+  background: var(--accent-purple-dim);
+}
+.sca-dropzone-icon { color: var(--text-muted); margin-bottom: 8px; }
+.sca-dropzone:hover .sca-dropzone-icon,
+.sca-dropzone.sca-dropzone-active .sca-dropzone-icon { color: var(--accent-purple); }
+.sca-dropzone-text { font-size: 13px; font-weight: 600; color: var(--text-primary); margin-bottom: 4px; }
+.sca-dropzone-hint { font-size: 11px; color: var(--text-muted); }
+.sca-selected-file-info {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  background: var(--accent-green-dim);
+  border-radius: 8px;
+  align-self: stretch;
+}
+.sca-selected-file-name {
+  font-size: 12px;
+  color: var(--accent-green);
+  font-family: 'JetBrains Mono', monospace;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Options */
+.sca-options .sca-field { margin-bottom: 26px; }
+.sca-field { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--text-muted); }
+.sca-field-label {
+  font-weight: 700;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--text-secondary);
+  text-align: center;
+}
+
+/* Severity — segmented button panel, one active at a time */
+.sca-severity-panel {
+  display: flex;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.sca-severity-btn {
+  flex: 1;
+  padding: 7px 0;
+  border: none;
+  border-right: 1px solid var(--border);
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.sca-severity-btn:last-child { border-right: none; }
+.sca-severity-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
+.sca-severity-btn:disabled { cursor: not-allowed; }
+.sca-severity-btn:disabled:hover { background: var(--bg-tertiary); color: var(--text-secondary); }
+/* Active fill matches the same severity's color in the results table badges/chips below. */
+.sca-severity-btn[data-severity="info"].is-active { background: var(--accent-green); color: #fff; }
+.sca-severity-btn[data-severity="warning"].is-active { background: var(--accent-amber); color: #1a1206; }
+.sca-severity-btn[data-severity="error"].is-active { background: var(--accent-red); color: #fff; }
+
+/* Locked while a run is in progress — dim + block interaction, but keep the current
+ * severity/category selection visible so it's clear what the in-flight run actually used. */
+.sca-options.is-locked .sca-card-heading,
+.sca-options.is-locked .sca-field-label { opacity: 0.6; }
+.sca-options.is-locked .sca-category-item { cursor: not-allowed; }
+.sca-options.is-locked .sca-category-desc { opacity: 0.7; }
+
+/* Categories — checkbox + description stacked below */
+.sca-categories { display: flex; flex-direction: column; margin-top: 4px; }
+.sca-category-item { display: flex; flex-direction: column; gap: 2px; cursor: pointer; padding: 10px 0; }
+.sca-category-item:first-child { padding-top: 0; }
+.sca-category-item:last-child { padding-bottom: 0; }
+.sca-category-item:not(:first-child) { border-top: 1px solid var(--border); }
+.sca-category-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  color: var(--text-primary);
+}
+.sca-category-desc {
+  margin-left: 20px;
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+/* Analyze / Cancel row */
+.sca-actions-row { display: flex; align-items: center; gap: 12px; }
+.sca-actions-row .btn { flex: 1; }
+
+/* Console output */
+.sca-console-output {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  background: #0d1117;
+  border: 1px solid var(--border);
+  border-radius: 0 0 12px 12px;
+  padding: 12px 14px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11.5px;
+  color: #7ee787;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* Tabs (right column) */
+.sca-tabs {
+  display: flex;
+  border: 1px solid var(--border);
+  border-bottom: none;
+  border-radius: 12px 12px 0 0;
+  background: var(--bg-card);
+  overflow: hidden;
+}
+.sca-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 16px;
+  border: none;
+  border-right: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-weight: 600;
+  font-size: 12.5px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.sca-tab:hover { background: var(--bg-hover); color: var(--text-primary); }
+.sca-tab.is-active { background: var(--bg-tertiary); color: var(--accent-purple); box-shadow: inset 0 -2px 0 var(--accent-purple); }
+.sca-analyzing-label { margin-left: 4px; font-size: 11px; font-weight: 600; color: var(--accent-cyan); }
+
+.sca-tab-panel {
+  flex: 1;
+  min-height: 0;
+  display: none;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: 0 0 12px 12px;
+  background: var(--bg-card);
+  overflow: hidden;
+}
+.sca-tab-panel.is-active { display: flex; }
+
+/* Results table panel */
+#scaPanelTable { padding: 14px 16px; overflow-y: auto; }
+.sca-results-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+
+/* Results */
+.sca-summary-chips { display: flex; gap: 8px; flex-wrap: wrap; }
+.sca-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+}
+.sca-chip-error { background: var(--accent-red-dim); color: var(--accent-red); }
+.sca-chip-warning { background: var(--accent-amber-dim); color: var(--accent-amber); }
+.sca-chip-info { background: var(--accent-green-dim); color: var(--accent-green); }
+.sca-result-note { font-size: 11.5px; color: var(--text-muted); margin: 10px 0; }
+/* `overflow-y` only — the table itself is never allowed to be wider than this wrap (see
+ * table-layout: fixed + word-break below), so there's nothing to scroll horizontally. Without
+ * that, a long unbroken Location path would force the table wider than its container, and the
+ * "missing padding" on the right edge was actually this wrap silently clipping into that overflow
+ * rather than showing a matching right-side gap. */
+.sca-results-table-wrap { overflow-y: auto; overflow-x: hidden; border: 1px solid var(--border); border-radius: 8px; }
+.sca-results-table { width: 100%; table-layout: fixed; border-collapse: collapse; font-size: 12px; }
+.sca-results-table th.sca-th-expand, .sca-results-table td.sca-th-expand { width: 28px; }
+.sca-results-table th:nth-child(2), .sca-results-table td:nth-child(2) { width: 90px; }
+.sca-results-table th:nth-child(3), .sca-results-table td:nth-child(3) { width: 15%; }
+.sca-results-table th:nth-child(5), .sca-results-table td:nth-child(5) { width: 22%; }
+.sca-results-table td { word-break: break-word; overflow-wrap: anywhere; }
+.sca-results-table th {
+  text-align: left;
+  padding: 8px 10px;
+  background: var(--bg-tertiary);
+  color: var(--text-muted);
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  position: sticky;
+  top: 0;
+}
+.sca-results-table td { padding: 8px 10px; border-top: 1px solid var(--border); vertical-align: top; }
+.sca-results-table tr:nth-child(even) { background: rgba(255, 255, 255, 0.015); }
+.sca-severity-badge { display: inline-block; padding: 1px 8px; border-radius: 8px; font-size: 10.5px; font-weight: 600; text-transform: capitalize; }
+.sca-severity-badge.error { background: var(--accent-red-dim); color: var(--accent-red); }
+.sca-severity-badge.warning { background: var(--accent-amber-dim); color: var(--accent-amber); }
+.sca-severity-badge.info { background: var(--accent-green-dim); color: var(--accent-green); }
+
+/* JSON modal — chrome mirrors the other standalone windows' modals (e.g. Fiddle's password
+ * modal), sized larger since it's showing a full report rather than a short form. */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+.modal {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  width: 90%;
+  max-width: 760px;
+  max-height: 82vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  position: relative;
+  min-height: 0;
+}
+/* Drag-to-resize (wired via modules/utils/modal-resize.ts). `is-resized` lets the explicit
+ * inline width/height set by dragging win over the default max-w/h caps above. */
+.modal.is-resized { max-width: none; max-height: none; }
+.modal.is-resized .modal-body { max-height: none; }
+.modal-resize-handle {
+  position: absolute;
+  right: 3px;
+  bottom: 3px;
+  width: 18px;
+  height: 18px;
+  z-index: 3;
+  cursor: nwse-resize;
+  opacity: 0.45;
+  border-bottom-right-radius: 14px;
+  background-image: repeating-linear-gradient(135deg, transparent 0 3px, var(--text-muted) 3px 4px);
+  transition: opacity 0.12s;
+}
+.modal-resize-handle:hover { opacity: 0.85; }
+.modal-header {
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.modal-title { font-size: 14px; font-weight: 600; color: var(--text-primary); }
+.modal-close {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.modal-close:hover { background: var(--bg-hover); color: var(--text-primary); }
+.modal-body { padding: 16px 18px; overflow-y: auto; }
+.sca-json-modal { max-width: 920px; width: 92vw; }
+.sca-json-modal-actions { display: flex; align-items: center; gap: 8px; }
+.sca-json-modal-body { max-height: none; margin: 0; }
+
+/* Collapsible, syntax-highlighted JSON tree — ported from the shared fold engine used by the
+ * Console/Network Inspector/ECP Query JSON viewers (renderer/modules/ui/structured-body.ts +
+ * console-structured-syntax.ts). Same class names so that shared TS can be reused as-is; only
+ * the colors/spacing are copied here since this window has its own separate stylesheet. */
+.telnet-hl-root {
+  display: block;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: inherit;
+  font-size: inherit;
+  line-height: inherit;
+}
+.telnet-fold-twisty {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1ch;
+  height: 1em;
+  margin-right: 4px;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  color: var(--text-muted);
+  font: inherit;
+  line-height: 1;
+  cursor: pointer;
+  vertical-align: baseline;
+  user-select: none;
+}
+.telnet-fold-twisty::before { content: '▾'; font-size: 0.9em; }
+.telnet-fold-collapsed > .telnet-fold-twisty::before { content: '▸'; }
+.telnet-fold-twisty:hover, .telnet-fold-twisty:focus-visible { color: var(--accent-purple); outline: none; }
+.telnet-fold-summary { display: none; color: var(--text-muted); }
+.telnet-fold-summary-ellipsis {
+  margin: 0 2px;
+  padding: 0 4px;
+  border-radius: 4px;
+  background: var(--bg-tertiary);
+  color: var(--text-muted);
+  font-size: 0.9em;
+}
+.telnet-fold-collapsed > .telnet-fold-body { display: none; }
+.telnet-fold-collapsed > .telnet-fold-summary { display: inline; }
+.telnet-hl-json-punct { color: var(--text-muted); }
+.telnet-hl-json-key { color: #d8b4fe; }
+.telnet-hl-json-string { color: #86efac; }
+.telnet-hl-json-number { color: #67e8f9; }
+.telnet-hl-json-literal { color: #fcd34d; }
+
+/* Results table — expandable per-row detail (cert requirements + documentation links) */
+.sca-row-expand-btn {
+  width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 10px;
+}
+.sca-row-expand-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
+.sca-row-expand-btn::before { content: '▸'; }
+tr.is-expanded .sca-row-expand-btn::before { content: '▾'; }
+.sca-detail-row { display: none; }
+tr.is-expanded + .sca-detail-row { display: table-row; }
+.sca-detail-cell {
+  background: var(--bg-tertiary);
+  padding: 10px 14px 12px 34px !important;
+  font-size: 11.5px;
+}
+/* 4-column label/value layout — Cert Requirements | value | Documentation | value. No cell
+ * borders/lines, just column alignment; when only one of the two is present, its label/value
+ * pair simply occupies the first two columns (grid auto-placement leaves the rest empty). */
+.sca-detail-grid {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr) max-content minmax(0, 1fr);
+  column-gap: 24px;
+  align-items: start;
+}
+.sca-detail-label {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  padding-top: 2px;
+  white-space: nowrap;
+}
+.sca-detail-value { min-width: 0; }
+.sca-cert-chip {
+  display: inline-block;
+  margin: 0 6px 6px 0;
+  padding: 2px 8px;
+  border-radius: 8px;
+  background: var(--accent-purple-dim);
+  color: var(--accent-purple);
+  font-size: 10.5px;
+  font-weight: 600;
+}
+.sca-doc-link {
+  display: block;
+  color: var(--accent-cyan);
+  font-size: 11.5px;
+  text-decoration: none;
+  cursor: pointer;
+  margin-bottom: 3px;
+}
+.sca-doc-link:hover { text-decoration: underline; }

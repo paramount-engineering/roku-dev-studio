@@ -114,8 +114,8 @@ contextBridge.exposeInMainWorld('roku', {
     ipcRenderer.invoke(IPC.RokuSaveScreenshot, { tempFile, dataUrl }),
   
   // Deep link to content
-  deeplink: (ip: string, appId: string, contentId: string, mediaType?: string) => 
-    ipcRenderer.invoke(IPC.RokuDeeplink, { ip, appId, contentId, mediaType }),
+  deeplink: (ip: string, appId: string, contentId: string, mediaType?: string, params?: Record<string, string>) =>
+    ipcRenderer.invoke(IPC.RokuDeeplink, { ip, appId, contentId, mediaType, params }),
   
   // Send text input
   inputText: (ip: string, text: string) => ipcRenderer.invoke(IPC.RokuInputText, { ip, text }),
@@ -316,8 +316,8 @@ contextBridge.exposeInMainWorld('roku', {
     ipcRenderer.invoke(IPC.RemoteInputText, { serverUrl, ip, text }),
 
   // Deep link via remote server
-  remoteDeeplink: (serverUrl: string, ip: string, appId: string, contentId: string, mediaType?: string) => 
-    ipcRenderer.invoke(IPC.RemoteDeeplink, { serverUrl, ip, appId, contentId, mediaType }),
+  remoteDeeplink: (serverUrl: string, ip: string, appId: string, contentId: string, mediaType?: string, params?: Record<string, string>) =>
+    ipcRenderer.invoke(IPC.RemoteDeeplink, { serverUrl, ip, appId, contentId, mediaType, params }),
 
   // Get app icon via remote server
   remoteGetIcon: (serverUrl: string, ip: string, appId: string) => 

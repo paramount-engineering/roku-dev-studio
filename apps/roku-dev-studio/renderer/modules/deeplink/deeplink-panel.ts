@@ -8,13 +8,16 @@ import {
   applyPresetToPanel,
   clearSavedPresetSelection,
   deleteDeeplinkPresetById,
+  paramRowHtml,
   populateSavedPresetSelect,
   promptSavePresetName,
   refreshSavedPresetDropdowns,
   saveDeeplinkPreset,
+  setDeepLinkParams,
   suggestPresetName,
   syncSavedPresetDeleteButton,
-  wireSavedPresetSelect
+  wireSavedPresetSelect,
+  type DeeplinkParam
 } from './deeplink-presets.js';
 import { S } from '@shared/strings/index.js';
 
@@ -22,9 +25,68 @@ type DeeplinkApi = {
   deeplink: (
     appId: string,
     contentId: string,
-    mediaType?: string
+    mediaType?: string,
+    params?: Record<string, string>
   ) => Promise<{ success?: boolean; error?: string; statusCode?: number }>;
 };
+
+/** Read the current custom params from the DOM, in row order. Rows with an empty key are skipped
+ *  (an in-progress/blank row shouldn't produce a stray `=value` in the launched URL). */
+function readDeepLinkParams(panel: HTMLElement): DeeplinkParam[] {
+  const rows = panel.querySelectorAll<HTMLElement>('[data-deeplink-param-row]');
+  const out: DeeplinkParam[] = [];
+  rows.forEach((row) => {
+    const keyInput = row.querySelector<HTMLInputElement>('[data-deeplink-param-key]');
+    const valueInput = row.querySelector<HTMLInputElement>('[data-deeplink-param-value]');
+    const key = keyInput?.value.trim() ?? '';
+    if (!key) return;
+    out.push({ key, value: valueInput?.value ?? '' });
+  });
+  return out;
+}
+
+/** `DeeplinkParam[]` → the `Record<string, string>` the IPC/API layer expects (last duplicate wins). */
+function paramsToRecord(params: readonly DeeplinkParam[]): Record<string, string> | undefined {
+  if (params.length === 0) return undefined;
+  const out: Record<string, string> = {};
+  for (const { key, value } of params) out[key] = value;
+  return out;
+}
+
+function addDeepLinkParamRow(panel: HTMLElement, param: DeeplinkParam = { key: '', value: '' }): void {
+  const rowsContainer = panel.querySelector('[data-deeplink-params-rows]');
+  if (!rowsContainer) return;
+  rowsContainer.insertAdjacentHTML('beforeend', paramRowHtml(param));
+}
+
+/** Event delegation on the rows container: one listener handles remove-clicks and edits for every
+ *  row, present now or added later, instead of re-wiring each row individually. */
+function wireDeepLinkParamRows(panel: HTMLElement): void {
+  const rowsContainer = panel.querySelector('[data-deeplink-params-rows]');
+  const addBtn = panel.querySelector('[data-deeplink-params-add]');
+  if (!rowsContainer) return;
+
+  addBtn?.addEventListener('click', () => {
+    addDeepLinkParamRow(panel);
+    clearSavedPresetSelection(panel);
+    syncSavedPresetDeleteButton(panel);
+  });
+
+  rowsContainer.addEventListener('click', (e) => {
+    const removeBtn = (e.target as HTMLElement | null)?.closest('[data-deeplink-param-remove]');
+    if (!removeBtn) return;
+    removeBtn.closest('[data-deeplink-param-row]')?.remove();
+    clearSavedPresetSelection(panel);
+    syncSavedPresetDeleteButton(panel);
+  });
+
+  rowsContainer.addEventListener('input', (e) => {
+    if ((e.target as HTMLElement | null)?.closest('[data-deeplink-param-row]')) {
+      clearSavedPresetSelection(panel);
+      syncSavedPresetDeleteButton(panel);
+    }
+  });
+}
 
 function formatDeepLinkError(
   result: { error?: string; statusCode?: number },
@@ -49,6 +111,7 @@ function readDeepLinkFields(panel: HTMLElement): {
   appId: string;
   contentId: string;
   mediaType: string;
+  params: DeeplinkParam[];
 } | null {
   const appIdInput = panel.querySelector('.deeplink-app-id') as HTMLInputElement | null;
   const contentIdInput = panel.querySelector('.deeplink-content-id') as HTMLInputElement | null;
@@ -60,7 +123,8 @@ function readDeepLinkFields(panel: HTMLElement): {
     mediaTypeSelect,
     appId: appIdInput.value.trim(),
     contentId: contentIdInput.value.trim(),
-    mediaType: mediaTypeSelect.value
+    mediaType: mediaTypeSelect.value,
+    params: readDeepLinkParams(panel)
   };
 }
 
@@ -77,7 +141,7 @@ async function launchDeepLink(
     return false;
   }
 
-  const result = await api.deeplink(fields.appId, fields.contentId, fields.mediaType);
+  const result = await api.deeplink(fields.appId, fields.contentId, fields.mediaType, paramsToRecord(fields.params));
 
   if (result.success) {
     showStatusMessage(statusDiv, S.deeplink.launchedSuccess, 'success');
@@ -171,7 +235,8 @@ function wireLaunchSplitMenu(panel: HTMLElement, api: DeeplinkApi, statusDiv: HT
         {
           appId: fields.appId,
           contentId: fields.contentId,
-          mediaType: fields.mediaType
+          mediaType: fields.mediaType,
+          params: fields.params
         },
         name
       );
@@ -231,6 +296,7 @@ function wireSavedPresetDelete(panel: HTMLElement, statusDiv: HTMLElement): void
     if (appIdInput) appIdInput.value = '';
     if (contentIdInput) contentIdInput.value = '';
     if (mediaTypeSelect) mediaTypeSelect.value = '';
+    setDeepLinkParams(panel, []);
     showStatusMessage(statusDiv, S.deeplink.savedDeleted, 'success');
     syncDeleteEnabled();
   });
@@ -265,6 +331,7 @@ export function setupDeepLinkPanel(panel: HTMLElement, api: DeeplinkApi): void {
 
   wireLaunchSplitMenu(panel, api, statusDiv);
   wireFieldChangeClearsSavedSelect(panel);
+  wireDeepLinkParamRows(panel);
 }
 
 export function refreshDeepLinkSavedRows(): void {

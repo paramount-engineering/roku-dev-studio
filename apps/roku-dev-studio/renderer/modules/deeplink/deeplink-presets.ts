@@ -10,12 +10,17 @@ import {
 import { registerRetranslate } from '../ui/retranslate-registry.js';
 import { S } from '@shared/strings/index.js';
 
+/** One custom key/value query param, beyond contentId/mediaType. */
+export type DeeplinkParam = { key: string; value: string };
+
 export type DeeplinkPreset = {
   id: string;
   name: string;
   appId: string;
   contentId: string;
   mediaType: string;
+  /** Extra key/value params, in the order they were entered. Omitted/empty when there are none. */
+  params?: DeeplinkParam[];
 };
 
 const SETTINGS_KEY = 'deeplink-saved-presets';
@@ -24,8 +29,40 @@ let savedPresets: DeeplinkPreset[] = [];
 let saveModalInitialized = false;
 let pendingSaveResolve: ((name: string | null) => void) | null = null;
 
-function presetKey(preset: Pick<DeeplinkPreset, 'appId' | 'contentId' | 'mediaType'>): string {
-  return `${preset.appId.trim()}|${preset.contentId.trim()}|${preset.mediaType.trim()}`;
+function paramsKey(params: readonly DeeplinkParam[] | undefined): string {
+  return (params ?? []).map((p) => `${p.key.trim()}=${p.value}`).join('&');
+}
+
+function presetKey(preset: Pick<DeeplinkPreset, 'appId' | 'contentId' | 'mediaType' | 'params'>): string {
+  return `${preset.appId.trim()}|${preset.contentId.trim()}|${preset.mediaType.trim()}|${paramsKey(preset.params)}`;
+}
+
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+/** One custom-param row's markup. Exported so the panel's "Add Parameter" button can append a
+ *  single row without duplicating this template. */
+export function paramRowHtml(param: DeeplinkParam): string {
+  return `<div class="deeplink-param-row" data-deeplink-param-row>
+      <input type="text" class="deeplink-param-key" data-deeplink-param-key value="${escapeHtml(param.key)}" placeholder="${S.app.deeplinkParamKeyPlaceholder}" spellcheck="false" autocomplete="off">
+      <input type="text" class="deeplink-param-value" data-deeplink-param-value value="${escapeHtml(param.value)}" placeholder="${S.app.deeplinkParamValuePlaceholder}" spellcheck="false" autocomplete="off">
+      <button type="button" class="btn btn-secondary btn-icon deeplink-param-remove-btn" data-deeplink-param-remove title="${S.app.removeParameter}" aria-label="${S.app.removeParameter}">
+        <span class="icon icon-xs"><svg><use href="#icon-x"/></svg></span>
+      </button>
+    </div>`;
+}
+
+/** Replace a panel's param rows wholesale (used when applying a saved preset, or clearing). */
+export function setDeepLinkParams(panel: HTMLElement, params: readonly DeeplinkParam[]): void {
+  const rowsContainer = panel.querySelector('[data-deeplink-params-rows]');
+  if (!rowsContainer) return;
+  rowsContainer.innerHTML = params.map((p) => paramRowHtml(p)).join('');
 }
 
 function generatePresetId(): string {
@@ -48,6 +85,19 @@ export function suggestPresetName(
   return parts.join(' · ');
 }
 
+function normalizeParams(raw: unknown): DeeplinkParam[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const out: DeeplinkParam[] = [];
+  for (const entry of raw) {
+    if (!entry || typeof entry !== 'object') continue;
+    const key = typeof (entry as DeeplinkParam).key === 'string' ? (entry as DeeplinkParam).key.trim() : '';
+    if (!key) continue;
+    const value = typeof (entry as DeeplinkParam).value === 'string' ? (entry as DeeplinkParam).value : '';
+    out.push({ key, value });
+  }
+  return out.length > 0 ? out : undefined;
+}
+
 function normalizePreset(raw: unknown): DeeplinkPreset | null {
   if (!raw || typeof raw !== 'object') return null;
   const item = raw as DeeplinkPreset;
@@ -59,7 +109,8 @@ function normalizePreset(raw: unknown): DeeplinkPreset | null {
     name,
     appId,
     contentId: typeof item.contentId === 'string' ? item.contentId.trim() : '',
-    mediaType: typeof item.mediaType === 'string' ? item.mediaType.trim() : ''
+    mediaType: typeof item.mediaType === 'string' ? item.mediaType.trim() : '',
+    params: normalizeParams(item.params)
   };
 }
 
@@ -171,6 +222,7 @@ export function applyPresetToPanel(
     const hasOption = Array.from(mediaTypeSelect.options).some((o) => o.value === preset.mediaType);
     mediaTypeSelect.value = hasOption ? preset.mediaType : '';
   }
+  setDeepLinkParams(panel, preset.params ?? []);
   if (opts?.updateSavedSelect !== false && savedSelect) {
     savedSelect.value = preset.id;
   }
@@ -182,7 +234,7 @@ function findPresetById(id: string): DeeplinkPreset | undefined {
 }
 
 export async function saveDeeplinkPreset(
-  fields: Pick<DeeplinkPreset, 'appId' | 'contentId' | 'mediaType'>,
+  fields: Pick<DeeplinkPreset, 'appId' | 'contentId' | 'mediaType' | 'params'>,
   name: string
 ): Promise<DeeplinkPreset> {
   const trimmedName = name.trim();
@@ -192,7 +244,8 @@ export async function saveDeeplinkPreset(
   const normalized = {
     appId: fields.appId.trim(),
     contentId: fields.contentId.trim(),
-    mediaType: fields.mediaType.trim()
+    mediaType: fields.mediaType.trim(),
+    ...(fields.params && fields.params.length > 0 ? { params: fields.params } : {})
   };
   const key = presetKey(normalized);
   const existing = savedPresets.find((p) => presetKey(p) === key);

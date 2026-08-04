@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:;" />
+  <title data-i18n="staticAnalysis.windowTitle">Static Channel Analysis</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" />
+  <link rel="stylesheet" href="static-analysis.css" />
+</head>
+<body class="sca-page">
+  <svg xmlns="http://www.w3.org/2000/svg" style="display: none" aria-hidden="true">
+    <symbol id="icon-sca-report" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="8" y="2" width="8" height="4" rx="1" ry="1" />
+      <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+      <path d="M12 9v4" />
+      <path d="M12 17h.01" />
+    </symbol>
+    <symbol id="icon-upload" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+      <polyline points="17 8 12 3 7 8" />
+      <line x1="12" y1="3" x2="12" y2="15" />
+    </symbol>
+    <symbol id="icon-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M18 6 6 18" />
+      <path d="m6 6 12 12" />
+    </symbol>
+    <symbol id="icon-refresh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M23 4v6h-6" />
+      <path d="M1 20v-6h6" />
+      <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10" />
+      <path d="M20.49 15a9 9 0 0 1-14.85 3.36L1 14" />
+    </symbol>
+    <symbol id="icon-play" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M8 5v14l11-7z" />
+    </symbol>
+    <symbol id="icon-stop" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <rect x="6" y="6" width="12" height="12" rx="1.5" />
+    </symbol>
+    <symbol id="icon-terminal" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="4 17 10 11 4 5" />
+      <line x1="12" y1="19" x2="20" y2="19" />
+    </symbol>
+    <symbol id="icon-table" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="3" y="3" width="18" height="18" rx="2" />
+      <line x1="3" y1="9" x2="21" y2="9" />
+      <line x1="3" y1="15" x2="21" y2="15" />
+      <line x1="12" y1="3" x2="12" y2="21" />
+    </symbol>
+    <symbol id="icon-external" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+      <polyline points="15 3 21 3 21 9" />
+      <line x1="10" y1="14" x2="21" y2="3" />
+    </symbol>
+    <symbol id="icon-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="9" y="9" width="13" height="13" rx="2" />
+      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+    </symbol>
+  </svg>
+
+  <header class="sca-header">
+    <div class="sca-brand">
+      <span class="sca-brand-badge"><span class="icon icon-sm"><svg><use href="#icon-sca-report"/></svg></span></span>
+      <div class="sca-brand-copy">
+        <h1 data-i18n="staticAnalysis.heading">Static Channel Analysis</h1>
+        <p class="sca-subtitle" data-i18n="staticAnalysis.subtitle">Run Roku's Static Channel Analysis tool on your Channel.</p>
+      </div>
+    </div>
+    <div class="sca-header-status">
+      <div class="sca-status-pill" id="scaToolStatus" data-state="checking">
+        <span class="sca-status-dot"></span>
+        <span class="sca-status-text" data-i18n="staticAnalysis.toolStatusChecking">Checking for updates…</span>
+        <button type="button" id="scaToolRetryBtn" class="sca-status-retry-btn" title="Retry" data-i18n-title="staticAnalysis.retryBtn" hidden>
+          <span class="icon icon-xs"><svg><use href="#icon-refresh"/></svg></span>
+        </button>
+        <span class="sca-status-sep"></span>
+        <button type="button" id="scaToolInfoBtn" class="sca-status-info-btn" title="About the Analysis Tool" data-i18n-title="staticAnalysis.toolInfoBtnTitle" aria-label="About the Analysis Tool" data-i18n-aria-label="staticAnalysis.toolInfoBtnTitle">i</button>
+      </div>
+      <div class="sca-status-pill" id="scaJavaStatus" data-state="checking">
+        <span class="sca-status-dot"></span>
+        <span class="sca-status-text" data-i18n="staticAnalysis.javaChecking">Checking Java…</span>
+        <span class="sca-status-sep"></span>
+        <button type="button" id="scaJavaInfoBtn" class="sca-status-info-btn" title="About the Java Requirement" data-i18n-title="staticAnalysis.javaInfoBtnTitle" aria-label="About the Java Requirement" data-i18n-aria-label="staticAnalysis.javaInfoBtnTitle">i</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="sca-layout">
+    <!-- Left column (25%) — everything the user needs to configure a run. -->
+    <div class="sca-layout-left">
+      <section class="sca-card">
+        <h2 class="sca-card-heading" data-i18n="staticAnalysis.channelFileHeading">Channel File</h2>
+        <div class="sca-file-slot">
+          <div id="scaDropzone" class="sca-dropzone" role="button" tabindex="0">
+            <span class="sca-dropzone-icon icon icon-md"><svg><use href="#icon-upload"/></svg></span>
+            <div class="sca-dropzone-text" data-i18n="staticAnalysis.chooseFileBtn">Choose Channel File…</div>
+            <div class="sca-dropzone-hint" data-i18n="staticAnalysis.dropzoneLabel">Or drag a .zip file here</div>
+          </div>
+          <div id="scaSelectedFileInfo" class="sca-selected-file-info is-hidden">
+            <span id="scaFileName" class="sca-selected-file-name"></span>
+            <button type="button" id="scaClearFileBtn" class="btn btn-ghost btn-icon" title="Clear Selected File" data-i18n-title="staticAnalysis.clearFileTitle">
+              <span class="icon icon-xs"><svg><use href="#icon-x"/></svg></span>
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <section class="sca-card sca-options" id="scaOptionsCard">
+        <h2 class="sca-card-heading" data-i18n="staticAnalysis.optionsHeading">Options</h2>
+
+        <div class="sca-field">
+          <span class="sca-field-label" data-i18n="staticAnalysis.severityLabel">Severity</span>
+          <div class="sca-severity-panel" id="scaSeverityPanel" role="group" aria-label="Severity">
+            <button type="button" class="sca-severity-btn" data-severity="info" data-i18n="staticAnalysis.severityInfo">Info</button>
+            <button type="button" class="sca-severity-btn is-active" data-severity="warning" data-i18n="staticAnalysis.severityWarning">Warning</button>
+            <button type="button" class="sca-severity-btn" data-severity="error" data-i18n="staticAnalysis.severityError">Error</button>
+          </div>
+        </div>
+
+        <div class="sca-field">
+          <span class="sca-field-label" data-i18n="staticAnalysis.categoriesLabel">Categories</span>
+          <div class="sca-categories" id="scaCategories">
+            <label class="sca-category-item">
+              <span class="sca-category-row"><input type="checkbox" value="uncategorized" checked><span data-i18n="staticAnalysis.categoryUncategorized">Uncategorized</span></span>
+              <span class="sca-category-desc" data-i18n="staticAnalysis.categoryUncategorizedDesc">Issues that don't fall under any of the other categories.</span>
+            </label>
+            <label class="sca-category-item">
+              <span class="sca-category-row"><input type="checkbox" value="deprecated_components" checked><span data-i18n="staticAnalysis.categoryDeprecatedComponents">Deprecated Components</span></span>
+              <span class="sca-category-desc" data-i18n="staticAnalysis.categoryDeprecatedComponentsDesc">SceneGraph components that Roku has deprecated.</span>
+            </label>
+            <label class="sca-category-item">
+              <span class="sca-category-row"><input type="checkbox" value="deprecated_apis" checked><span data-i18n="staticAnalysis.categoryDeprecatedApis">Deprecated APIs</span></span>
+              <span class="sca-category-desc" data-i18n="staticAnalysis.categoryDeprecatedApisDesc">BrightScript APIs that Roku has deprecated.</span>
+            </label>
+            <label class="sca-category-item">
+              <span class="sca-category-row"><input type="checkbox" value="manifest" checked><span data-i18n="staticAnalysis.categoryManifest">Manifest</span></span>
+              <span class="sca-category-desc" data-i18n="staticAnalysis.categoryManifestDesc">Problems with your channel's manifest file.</span>
+            </label>
+            <label class="sca-category-item">
+              <span class="sca-category-row"><input type="checkbox" value="raf" checked><span data-i18n="staticAnalysis.categoryRaf">RAF</span></span>
+              <span class="sca-category-desc" data-i18n="staticAnalysis.categoryRafDesc">Roku Advertising Framework integration checks.</span>
+            </label>
+            <label class="sca-category-item">
+              <span class="sca-category-row"><input type="checkbox" value="red" checked><span data-i18n="staticAnalysis.categoryRed">RED</span></span>
+              <span class="sca-category-desc" data-i18n="staticAnalysis.categoryRedDesc">Checks in Roku's RED certification category.</span>
+            </label>
+            <label class="sca-category-item">
+              <span class="sca-category-row"><input type="checkbox" value="package" checked><span data-i18n="staticAnalysis.categoryPackage">Package</span></span>
+              <span class="sca-category-desc" data-i18n="staticAnalysis.categoryPackageDesc">How your channel's package (zip) is structured.</span>
+            </label>
+          </div>
+        </div>
+      </section>
+
+      <section class="sca-actions-row">
+        <button type="button" id="scaAnalyzeBtn" class="btn btn-primary" disabled>
+          <span class="icon icon-sm"><svg><use href="#icon-play"/></svg></span>
+          <span data-i18n="staticAnalysis.analyzeBtn">Analyze</span>
+        </button>
+        <button type="button" id="scaCancelBtn" class="btn btn-danger" hidden>
+          <span class="icon icon-sm"><svg><use href="#icon-stop"/></svg></span>
+          <span data-i18n="staticAnalysis.cancelBtn">Cancel</span>
+        </button>
+      </section>
+    </div>
+
+    <!-- Right column (75%) — Terminal / Table tabs. -->
+    <div class="sca-layout-right">
+      <div class="sca-tabs" role="tablist">
+        <button type="button" class="sca-tab is-active" id="scaTabTerminal" data-tab="terminal" role="tab" aria-selected="true">
+          <span class="icon icon-sm"><svg><use href="#icon-terminal"/></svg></span>
+          <span data-i18n="staticAnalysis.consoleOutputLabel">Console Output</span>
+          <span id="scaAnalyzingLabel" class="sca-analyzing-label" data-i18n="staticAnalysis.analyzingLabel" hidden>Analyzing…</span>
+        </button>
+        <button type="button" class="sca-tab" id="scaTabTable" data-tab="table" role="tab" aria-selected="false">
+          <span class="icon icon-sm"><svg><use href="#icon-table"/></svg></span>
+          <span data-i18n="staticAnalysis.resultsHeading">Results</span>
+        </button>
+      </div>
+
+      <div class="sca-tab-panel is-active" id="scaPanelTerminal" role="tabpanel">
+        <pre id="scaConsoleOutput" class="sca-console-output"></pre>
+      </div>
+
+      <div class="sca-tab-panel" id="scaPanelTable" role="tabpanel">
+        <div class="sca-results-toolbar">
+          <div class="sca-summary-chips" id="scaSummaryChips"></div>
+          <button type="button" id="scaViewJsonBtn" class="btn btn-secondary" data-i18n="staticAnalysis.viewJsonBtn" disabled>View JSON</button>
+        </div>
+        <p id="scaResultNote" class="sca-result-note" hidden></p>
+        <div class="sca-results-table-wrap">
+          <table class="sca-results-table" id="scaResultsTable">
+            <thead>
+              <tr>
+                <th class="sca-th-expand"></th>
+                <th data-i18n="staticAnalysis.tableHeaderSeverity">Severity</th>
+                <th data-i18n="staticAnalysis.tableHeaderCategory">Category</th>
+                <th data-i18n="staticAnalysis.tableHeaderMessage">Message</th>
+                <th data-i18n="staticAnalysis.tableHeaderLocation">Location</th>
+              </tr>
+            </thead>
+            <tbody id="scaResultsTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <div id="scaJsonModalOverlay" class="modal-overlay" hidden aria-hidden="true">
+    <div class="modal sca-json-modal" role="dialog" aria-modal="true" aria-labelledby="scaJsonModalTitle">
+      <div class="modal-header">
+        <span class="modal-title" id="scaJsonModalTitle" data-i18n="staticAnalysis.jsonModalTitle">Static Analysis Report — JSON</span>
+        <div class="sca-json-modal-actions">
+          <button type="button" class="btn btn-secondary" id="scaJsonModalSaveBtn" data-i18n="staticAnalysis.saveJsonBtn">Save…</button>
+          <button type="button" class="btn btn-secondary" id="scaJsonModalCopyBtn" data-i18n="common.copy">Copy</button>
+          <button type="button" class="modal-close" id="scaJsonModalCloseBtn" aria-label="Close" data-i18n-aria-label="common.close">
+            <span class="icon icon-sm"><svg><use href="#icon-x"/></svg></span>
+          </button>
+        </div>
+      </div>
+      <div class="modal-body">
+        <div id="scaJsonModalBody" class="sca-console-output sca-json-modal-body" tabindex="0"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="scaToolInfoModalOverlay" class="modal-overlay" hidden aria-hidden="true">
+    <div class="modal sca-info-modal" role="dialog" aria-modal="true" aria-labelledby="scaToolInfoModalTitle">
+      <div class="modal-header">
+        <span class="modal-title" id="scaToolInfoModalTitle" data-i18n="staticAnalysis.toolInfoModalTitle">About the Analysis Tool</span>
+        <button type="button" class="modal-close" id="scaToolInfoModalCloseBtn" aria-label="Close" data-i18n-aria-label="common.close">
+          <span class="icon icon-sm"><svg><use href="#icon-x"/></svg></span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <p data-i18n-html="staticAnalysis.toolInfoModalBodyHtml">
+          Static analysis runs Roku's own <code class="sca-inline-code">sca-cmd</code> command-line tool against your
+          packaged channel to catch certification-style issues — deprecated APIs, manifest problems, ad-framework
+          integration, and more — before you submit to the Channel Store. Roku Dev Studio doesn't ship this tool;
+          it's downloaded from Roku the first time you open this window, and re-checked for updates every time you
+          open it again.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <div id="scaJavaInfoModalOverlay" class="modal-overlay" hidden aria-hidden="true">
+    <div class="modal sca-info-modal" role="dialog" aria-modal="true" aria-labelledby="scaJavaInfoModalTitle">
+      <div class="modal-header">
+        <span class="modal-title" id="scaJavaInfoModalTitle" data-i18n="staticAnalysis.javaInfoModalTitle">About the Java Requirement</span>
+        <button type="button" class="modal-close" id="scaJavaInfoModalCloseBtn" aria-label="Close" data-i18n-aria-label="common.close">
+          <span class="icon icon-sm"><svg><use href="#icon-x"/></svg></span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <p data-i18n-html="staticAnalysis.javaInfoModalBodyHtml">
+          <code class="sca-inline-code">sca-cmd</code> is a Java program and needs a Java 21 or newer runtime
+          installed on this machine to run. Roku Dev Studio only detects Java — it never installs or updates it for
+          you.
+        </p>
+        <dl class="sca-info-dl">
+          <div class="sca-info-row">
+            <dt data-i18n="staticAnalysis.javaInfoRequiredLabel">Required</dt>
+            <dd id="scaJavaInfoRequired"></dd>
+          </div>
+          <div class="sca-info-row">
+            <dt data-i18n="staticAnalysis.javaInfoDetectedLabel">Detected</dt>
+            <dd id="scaJavaInfoDetected"></dd>
+          </div>
+        </dl>
+        <a href="#" id="scaJavaInfoLink" class="sca-status-link sca-info-link">
+          <span data-i18n="staticAnalysis.installJavaLink">Get Java</span><span class="icon icon-xs"><svg><use href="#icon-external"/></svg></span>
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="./dist/components/static-analysis/static-analysis.js"></script>
+</body>
+</html>

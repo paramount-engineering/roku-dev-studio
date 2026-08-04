@@ -431,11 +431,14 @@ const INPUT_TEXT: RokuOp<{ ip: string; text: string }, unknown> = {
   }
 };
 
-const DEEP_LINK: RokuOp<{ ip: string; appId: string; contentId?: string; mediaType?: string }, unknown> = {
+const DEEP_LINK: RokuOp<
+  { ip: string; appId: string; contentId?: string; mediaType?: string; params?: Record<string, string> },
+  unknown
+> = {
   id: 'deep_link',
   title: 'Deep-Link into an App',
   description:
-    'Launch an app straight into a specific piece of content via ECP Deep-Link (contentId + mediaType). Equivalent to /launch/<appId>?contentId=...&mediaType=... Changes device state (foregrounds the app on the requested content). Use this when you have a content id to open; to just open an app to its home screen use launch_app instead.',
+    'Launch an app straight into a specific piece of content via ECP Deep-Link (contentId + mediaType, plus any extra params the channel expects). Equivalent to /launch/<appId>?contentId=...&mediaType=...&<extra params>. Changes device state (foregrounds the app on the requested content). Use this when you have a content id to open; to just open an app to its home screen use launch_app instead.',
   runIn: 'main',
   destructive: false,
   readOnly: false,
@@ -451,7 +454,12 @@ const DEEP_LINK: RokuOp<{ ip: string; appId: string; contentId?: string; mediaTy
         type: 'string',
         description: 'App-specific content identifier to deep-link to (the value the channel expects for this title/episode). Omit for a plain launch.'
       },
-      mediaType: { type: 'string', description: 'Content kind, e.g. "movie", "episode", "series", "season", "short-form".' }
+      mediaType: { type: 'string', description: 'Content kind, e.g. "movie", "episode", "series", "season", "short-form".' },
+      params: {
+        type: 'object',
+        additionalProperties: { type: 'string' },
+        description: 'Extra key/value query params beyond contentId/mediaType, for channels that expect additional launch args (e.g. { "season": "2" }).'
+      }
     },
     required: ['ip', 'appId'],
     additionalProperties: false
@@ -460,7 +468,7 @@ const DEEP_LINK: RokuOp<{ ip: string; appId: string; contentId?: string; mediaTy
   execute: async (p) => {
     const ip = requireIp(p.ip);
     const appId = requireNonEmptyString(p.appId, 'appId');
-    return await deeplink(ip, appId, p.contentId, p.mediaType);
+    return await deeplink(ip, appId, p.contentId, p.mediaType, { extraParams: p.params });
   }
 };
 

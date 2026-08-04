@@ -29,6 +29,8 @@ export interface IpDeeplinkPayload {
   appId: string;
   contentId: string;
   mediaType?: string;
+  /** Extra key/value query params beyond contentId/mediaType, for channels expecting additional launch args. */
+  params?: Record<string, string>;
 }
 export interface IpAppIdPayload {
   ip: string;
@@ -97,6 +99,7 @@ export interface RemoteDeeplinkPayload extends RemoteDevicePayload {
   appId: string;
   contentId: string;
   mediaType?: string;
+  params?: Record<string, string>;
 }
 export interface RemoteAppIdPayload extends RemoteDevicePayload {
   appId: string;
@@ -176,3 +179,99 @@ export type ContextMenuItemLoose = Record<string, unknown>;
 export type GetDeviceInfoFn = (ip: string) => Promise<unknown> | unknown;
 export type GetDeviceIdFn = (device: unknown) => string;
 export type SafeSendFn = (channel: string, data: unknown) => boolean;
+
+// ============================================
+// Static Channel Analysis (sca-cmd wrapper)
+// ============================================
+
+export type ScaToolStatusType = 'idle' | 'checking' | 'downloading' | 'ready' | 'error';
+
+export type ScaErrorCode =
+  | 'network-unreachable'
+  | 'cdn-non-200'
+  | 'disk-full'
+  | 'permission-denied'
+  | 'unexpected-archive-layout'
+  | 'java-not-found'
+  | 'java-check-failed'
+  | 'java-incompatible'
+  | 'invalid-input-path'
+  | 'invalid-input-package'
+  | 'spawn-failed'
+  | 'sca-tool-crashed'
+  | 'timeout'
+  | 'cancelled'
+  | 'report-missing'
+  | 'report-malformed';
+
+export interface ScaError {
+  code: ScaErrorCode;
+  message: string;
+  httpStatus?: number;
+}
+
+/** Status of the locally-cached `sca-cmd` tool — pushed on `IPC.StaticAnalysisToolStatus` and
+ *  returned by `IPC.StaticAnalysisEnsureTool`. */
+export interface ScaToolStatus {
+  type: ScaToolStatusType;
+  /** Set once `type === 'ready'`. */
+  etag?: string;
+  /** True when this cycle actually (re)downloaded a changed copy, vs. reusing the cache as-is. */
+  updated?: boolean;
+  error?: ScaError;
+}
+
+export interface JavaStatus {
+  available: boolean;
+  versionString?: string;
+  majorVersion?: number;
+  error?: { code: 'java-not-found' | 'java-check-failed'; message: string };
+}
+
+export const SCA_SEVERITIES = ['info', 'warning', 'error'] as const;
+export type ScaSeverity = (typeof SCA_SEVERITIES)[number];
+
+export const SCA_CATEGORIES = [
+  'uncategorized',
+  'deprecated_components',
+  'deprecated_apis',
+  'manifest',
+  'raf',
+  'red',
+  'package'
+] as const;
+export type ScaCategory = (typeof SCA_CATEGORIES)[number];
+
+export interface StaticAnalysisRunPayload {
+  inputPath: string;
+  severity?: ScaSeverity;
+  /** Omit or pass every category to mean "no filter" (all categories). */
+  categories?: ScaCategory[];
+}
+
+export interface StaticAnalysisCancelRunPayload {
+  runId: string;
+}
+
+export interface StaticAnalysisProgressPayload {
+  runId: string;
+  stream: 'stdout' | 'stderr';
+  text: string;
+}
+
+/** Terminal outcome of a run, pushed on `IPC.StaticAnalysisRunResult`. */
+export interface StaticAnalysisRunResult {
+  runId: string;
+  /** Parsed `SCA_Report.json` contents, when found and valid — shape is NOT documented by Roku,
+   *  so the renderer must read this defensively. */
+  report?: unknown;
+  reportPath?: string;
+  /** Raw process output, always populated so the UI has something to show even without a report. */
+  rawStdout?: string;
+  rawStderr?: string;
+  exitCode?: number | null;
+  signal?: string | null;
+  timedOut?: boolean;
+  cancelled?: boolean;
+  error?: ScaError;
+}

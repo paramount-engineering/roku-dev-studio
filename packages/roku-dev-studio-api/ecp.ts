@@ -26,6 +26,8 @@ interface EcpCallOpts {
   includeSameSubnet?: boolean;
   /** Reuse TCP connections across sequential ECP calls (used by `inputText`). */
   agent?: import('http').Agent;
+  /** Extra `key=value` query params appended to a deep link, beyond contentID/mediaType (used by `deeplink`). */
+  extraParams?: Record<string, string>;
 }
 
 function ecpErrorFromStatus(statusCode: number): { error: string; authFailed?: boolean } {
@@ -208,6 +210,13 @@ function deeplink(
   const params: string[] = [];
   if (contentId) params.push(`contentID=${encodeURIComponent(contentId)}`);
   if (mediaType) params.push(`mediaType=${encodeURIComponent(mediaType)}`);
+  if (opts.extraParams) {
+    for (const [key, value] of Object.entries(opts.extraParams)) {
+      const trimmedKey = key.trim();
+      if (!trimmedKey) continue;
+      params.push(`${encodeURIComponent(trimmedKey)}=${encodeURIComponent(value)}`);
+    }
+  }
   if (params.length > 0) {
     path += `?${params.join('&')}`;
   }

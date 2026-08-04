@@ -47,7 +47,7 @@ function setupRokuCommands(_mainWindow: BrowserWindow | undefined, _getDeviceInf
     inputText(ip, text));
 
   ipcMain.handle(IPC.RokuDeeplink, async (_event: IpcMainInvokeEvent, payload: IpDeeplinkPayload) =>
-    deeplink(payload.ip, payload.appId, payload.contentId, payload.mediaType));
+    deeplink(payload.ip, payload.appId, payload.contentId, payload.mediaType, { extraParams: payload.params }));
 
   ipcMain.handle(IPC.RokuTestConnection, async (_event: IpcMainInvokeEvent, { ip }: IpOnly) =>
     testConnection(ip));

@@ -129,12 +129,13 @@ export const modals = {
     },
     console: {
       blurb:
-        'Transmita a saída de depuração BrightScript do Roku ao vivo via Telnet, com filtragem e busca para mostrar exatamente o que importa.',
+        'Transmita a saída de depuração BrightScript do Roku ao vivo via Telnet, com filtragem e busca para mostrar exatamente o que importa, e conecte um depurador completo do BrightScript quando precisar percorrer o código passo a passo.',
       points: [
         'Fluxo de log Telnet ao vivo',
         'Filtro e busca de texto completo',
-        'Clique em URLs ou JSON para inspecioná-los em um modal',
+        'Clique em URL/JSON/XML para visualizá-los formatados em um modal',
         'Salve o log em um arquivo',
+        'Conecte um depurador — breakpoints, variáveis, pilha de chamadas e REPL',
       ],
     },
     actionScripts: {
