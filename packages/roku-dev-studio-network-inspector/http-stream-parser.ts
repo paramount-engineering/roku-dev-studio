@@ -119,6 +119,19 @@ function decodeChunked(buf: Buffer, bodyStart: number, bodyEnd: number): Buffer 
   return parts.length ? Buffer.concat(parts) : Buffer.alloc(0);
 }
 
+/**
+ * Some hotspot/captive-portal forward proxies rewrite the request target to carry the real
+ * destination as a semicolon "matrix param" after their own path, e.g.
+ * `http://192.168.11.105:8080/;https://real-target.example/path`. Passive (non-MITM) hotspot
+ * capture sees the proxy as the literal TCP peer, which then surfaces as the "Remote Address" for
+ * every UI reader of `httpRequest.url` — unwrap back to the real target here, once, upstream of
+ * all of them.
+ */
+function unwrapProxyEmbeddedTarget(raw: string): string {
+  const m = /;(https?:\/\/.+)$/i.exec(raw);
+  return m ? m[1] : raw;
+}
+
 type ExtractResult =
   | { status: 'need-more' }
   | { status: 'none' }
@@ -148,7 +161,7 @@ function extractMessage(buf: Buffer, isRequest: boolean, closed: boolean): Extra
     const m = start.match(/^([A-Z]+)\s+(\S+)\s+HTTP\/[\d.]+$/i);
     if (!m) return { status: 'none' };
     method = m[1].toUpperCase();
-    url = m[2];
+    url = unwrapProxyEmbeddedTarget(m[2]);
   } else {
     const m = start.match(/^HTTP\/[\d.]+\s+(\d{3})(?:\s+(.*))?$/i);
     if (!m) return { status: 'none' };
@@ -243,13 +256,25 @@ function drainDirection(flow: FlowState, isRequest: boolean): void {
   }
 }
 
+/** When the request line is itself absolute-form (`GET https://host/path HTTP/1.1`, sent to an
+ *  explicit proxy), its own authority is the real target — and is authoritative over `Host`,
+ *  which some simple device HTTP clients set to the proxy's address instead of the target's. */
+function absoluteFormHost(request: NetworkHttpMessage | undefined): string | undefined {
+  if (!request?.url || !/^https?:\/\//i.test(request.url)) return undefined;
+  try {
+    return new URL(request.url).host;
+  } catch {
+    return undefined;
+  }
+}
+
 function makeEvent(
   flow: FlowState,
   request: NetworkHttpMessage | undefined,
   response: NetworkHttpMessage | undefined,
   timestamp: string
 ): ParsedNetworkEvent {
-  const host = request?.headers?.host || request?.url || flow.remoteIp;
+  const host = absoluteFormHost(request) || request?.headers?.host || request?.url || flow.remoteIp;
   return {
     id: nextId(),
     type: 'http-transaction',
