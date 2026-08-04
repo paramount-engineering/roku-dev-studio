@@ -969,6 +969,13 @@ export function setupRemoteTabMetrics(
       const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg') as SVGSVGElement;
       svg.classList.add('remote-cpu-process-fault-spark');
       sparkWrap.appendChild(svg);
+
+      card.appendChild(header);
+      card.appendChild(sparkWrap);
+      faultsBlock.appendChild(card);
+
+      // Must be connected to the document before drawing — `drawSparklineTimeseries`
+      // bails out via `isSvgRenderable()` (checks `svg.isConnected`) on a detached node.
       const peak = opts.sparkRing.reduce<number>(
         (m, v) => (v != null && Number.isFinite(v) && v > m ? v : m),
         0
@@ -982,10 +989,6 @@ export function setupRemoteTabMetrics(
         nowMs: frame.nowMs,
         maxSampleGapMs: frame.maxSampleGapMs
       });
-
-      card.appendChild(header);
-      card.appendChild(sparkWrap);
-      faultsBlock.appendChild(card);
     };
 
     addInfoRow(S.devApp.stateFieldLabel, stateToLabel(ps.state), {
