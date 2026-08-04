@@ -15,6 +15,7 @@
   --accent-purple: #8b5cf6;
   --accent-purple-dim: rgba(139, 92, 246, 0.15);
   --accent-cyan: #22d3ee;
+  --accent-cyan-dim: rgba(34, 211, 238, 0.15);
   --accent-green: #10b981;
   --accent-green-dim: rgba(16, 185, 129, 0.15);
   --accent-red: #ef4444;
@@ -391,7 +392,7 @@ html, body {
 .sca-severity-btn:disabled { cursor: not-allowed; }
 .sca-severity-btn:disabled:hover { background: var(--bg-tertiary); color: var(--text-secondary); }
 /* Active fill matches the same severity's color in the results table badges/chips below. */
-.sca-severity-btn[data-severity="info"].is-active { background: var(--accent-green); color: #fff; }
+.sca-severity-btn[data-severity="info"].is-active { background: var(--accent-cyan); color: #062a30; }
 .sca-severity-btn[data-severity="warning"].is-active { background: var(--accent-amber); color: #1a1206; }
 .sca-severity-btn[data-severity="error"].is-active { background: var(--accent-red); color: #fff; }
 
@@ -485,21 +486,43 @@ html, body {
 /* Results table panel */
 #scaPanelTable { padding: 14px 16px; overflow-y: auto; }
 .sca-results-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+.sca-results-toolbar-actions { display: flex; align-items: center; gap: 10px; }
+.sca-category-filter {
+  height: 34px;
+  padding: 0 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.sca-category-filter:disabled { cursor: not-allowed; opacity: 0.6; }
 
-/* Results */
+/* Results — chips double as severity-filter toggles: click one to isolate that severity in the
+ * table below, click again (or Escape via re-click) to go back to showing everything. */
 .sca-summary-chips { display: flex; gap: 8px; flex-wrap: wrap; }
 .sca-chip {
   display: inline-flex;
   align-items: center;
   gap: 4px;
   padding: 4px 10px;
+  border: 1px solid transparent;
   border-radius: 12px;
   font-size: 11px;
   font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: opacity 0.12s, border-color 0.12s;
 }
+.sca-chip:hover { opacity: 0.85; }
+.sca-summary-chips.has-active-filter .sca-chip:not(.is-active) { opacity: 0.45; }
+.sca-chip.is-active { border-color: currentColor; }
 .sca-chip-error { background: var(--accent-red-dim); color: var(--accent-red); }
 .sca-chip-warning { background: var(--accent-amber-dim); color: var(--accent-amber); }
-.sca-chip-info { background: var(--accent-green-dim); color: var(--accent-green); }
+.sca-chip-info { background: var(--accent-cyan-dim); color: var(--accent-cyan); }
 .sca-result-note { font-size: 11.5px; color: var(--text-muted); margin: 10px 0; }
 /* `overflow-y` only — the table itself is never allowed to be wider than this wrap (see
  * table-layout: fixed + word-break below), so there's nothing to scroll horizontally. Without
@@ -529,7 +552,7 @@ html, body {
 .sca-severity-badge { display: inline-block; padding: 1px 8px; border-radius: 8px; font-size: 10.5px; font-weight: 600; text-transform: capitalize; }
 .sca-severity-badge.error { background: var(--accent-red-dim); color: var(--accent-red); }
 .sca-severity-badge.warning { background: var(--accent-amber-dim); color: var(--accent-amber); }
-.sca-severity-badge.info { background: var(--accent-green-dim); color: var(--accent-green); }
+.sca-severity-badge.info { background: var(--accent-cyan-dim); color: var(--accent-cyan); }
 
 /* JSON modal — chrome mirrors the other standalone windows' modals (e.g. Fiddle's password
  * modal), sized larger since it's showing a full report rather than a short form. */

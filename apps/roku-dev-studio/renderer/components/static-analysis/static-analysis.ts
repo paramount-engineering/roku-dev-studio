@@ -114,6 +114,7 @@ const els = {
   panelTable: q<HTMLElement>('#scaPanelTable'),
   consoleOutput: q<HTMLElement>('#scaConsoleOutput'),
   summaryChips: q<HTMLElement>('#scaSummaryChips'),
+  categoryFilter: q<HTMLSelectElement>('#scaCategoryFilter'),
   resultNote: q<HTMLElement>('#scaResultNote'),
   resultsTableBody: q<HTMLElement>('#scaResultsTableBody'),
   viewJsonBtn: q<HTMLButtonElement>('#scaViewJsonBtn'),
@@ -131,6 +132,13 @@ let currentRunId: string | null = null;
 /** Text shown by the "View JSON" modal — the parsed report pretty-printed, or raw output when no
  *  report was produced. Kept as a plain variable rather than re-reading a hidden DOM node. */
 let lastJsonModalText = '';
+
+/** Full, unfiltered rows from the most recent run — the Severity chips / Category select filter
+ *  which of these render into the table, without re-running the tool (mirrors Roku's own web
+ *  dashboard, which lets you filter an already-completed report the same way). */
+let allIssueRows: ScaIssueRow[] = [];
+let activeSeverityFilter: string | null = null;
+let activeCategoryFilter = '';
 
 function syncAnalyzeEnabled(): void {
   els.analyzeBtn.disabled = !(toolReady && javaOk && !!selectedFilePath && !currentRunId);
@@ -319,12 +327,95 @@ function escapeHtml(text: string): string {
   return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
+/** Populate the Category `<select>` from whatever category strings actually appear in this
+ *  report (free-form text from the tool, not the fixed 7 `-c` CLI buckets — real reports contain
+ *  values like "billing"/"authentication" that aren't among those 7). */
+function populateCategoryFilter(rows: ScaIssueRow[]): void {
+  const categories = Array.from(new Set(rows.map((r) => r.category).filter(Boolean))).sort((a, b) => a.localeCompare(b));
+  els.categoryFilter.innerHTML = [`<option value="">${escapeHtml(S.staticAnalysis.allCategoriesOption)}</option>`]
+    .concat(categories.map((c) => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`))
+    .join('');
+  els.categoryFilter.disabled = categories.length === 0;
+  els.categoryFilter.value = '';
+}
+
+function buildRowsHtml(rows: ScaIssueRow[]): string {
+  return rows
+    .map((row, i) => {
+      const hasDetail = !!(row.certRequirements?.length || row.documentationUrls?.length);
+      const expandCell = hasDetail
+        ? `<button type="button" class="sca-row-expand-btn" data-row-index="${i}" title="${escapeHtml(S.staticAnalysis.expandDetailsTitle)}"></button>`
+        : '';
+      const mainRow = `<tr class="${hasDetail ? 'sca-has-detail' : ''}" data-row-index="${i}">
+        <td class="sca-th-expand">${expandCell}</td>
+        <td><span class="sca-severity-badge ${row.severity}">${row.severity}</span></td>
+        <td>${escapeHtml(row.category)}</td>
+        <td>${escapeHtml(row.message)}</td>
+        <td>${escapeHtml(row.location)}</td>
+      </tr>`;
+      if (!hasDetail) return mainRow;
+      // 4-column label/value grid — Cert Requirements | value | Documentation | value. When
+      // only one of the two is present, its pair is the only thing pushed, so it simply lands
+      // in the first two columns rather than leaving two empty ones.
+      const cols: string[] = [];
+      if (row.certRequirements?.length) {
+        cols.push(
+          `<div class="sca-detail-label">${escapeHtml(S.staticAnalysis.certRequirementsLabel)}</div>`,
+          `<div class="sca-detail-value">${row.certRequirements.map((c) => `<span class="sca-cert-chip">${escapeHtml(c)}</span>`).join('')}</div>`
+        );
+      }
+      if (row.documentationUrls?.length) {
+        cols.push(
+          `<div class="sca-detail-label">${escapeHtml(S.staticAnalysis.documentationLabel)}</div>`,
+          `<div class="sca-detail-value">${row.documentationUrls
+            .map((d) => `<a href="#" class="sca-doc-link" data-doc-url="${escapeHtml(d.url)}">${escapeHtml(d.alias || d.url)}</a>`)
+            .join('')}</div>`
+        );
+      }
+      const detailRow = `<tr class="sca-detail-row"><td class="sca-detail-cell" colspan="5"><div class="sca-detail-grid">${cols.join('')}</div></td></tr>`;
+      return mainRow + detailRow;
+    })
+    .join('');
+}
+
+/** Re-renders the chips + table from `allIssueRows` against the current filter state — never
+ *  re-runs the tool. Chips always reflect the FULL (unfiltered) counts and double as severity
+ *  toggles; the Category `<select>` narrows further. Mirrors Roku's own web dashboard, which lets
+ *  you filter an already-completed report the same way. */
+function renderFilteredTable(): void {
+  const counts = { error: 0, warning: 0, info: 0 } as Record<string, number>;
+  for (const row of allIssueRows) counts[row.severity] = (counts[row.severity] ?? 0) + 1;
+  const chip = (severity: string, cls: string, label: string): string =>
+    `<button type="button" class="sca-chip ${cls}${severity === activeSeverityFilter ? ' is-active' : ''}" data-severity="${severity}">${label}</button>`;
+  els.summaryChips.classList.toggle('has-active-filter', !!activeSeverityFilter);
+  els.summaryChips.innerHTML = [
+    counts.error ? chip('error', 'sca-chip-error', S.staticAnalysis.summaryErrors(counts.error)) : '',
+    counts.warning ? chip('warning', 'sca-chip-warning', S.staticAnalysis.summaryWarnings(counts.warning)) : '',
+    counts.info ? chip('info', 'sca-chip-info', S.staticAnalysis.summaryInfo(counts.info)) : ''
+  ].join('');
+
+  const visibleRows = allIssueRows.filter(
+    (row) => (!activeSeverityFilter || row.severity === activeSeverityFilter) && (!activeCategoryFilter || row.category === activeCategoryFilter)
+  );
+  if (visibleRows.length === 0) {
+    els.resultNote.hidden = false;
+    els.resultNote.textContent = S.staticAnalysis.noFilterMatchNote;
+    els.resultsTableBody.innerHTML = '';
+  } else {
+    els.resultNote.hidden = true;
+    els.resultsTableBody.innerHTML = buildRowsHtml(visibleRows);
+  }
+}
+
 function renderResults(result: StaticAnalysisRunResult): void {
   els.resultNote.hidden = true;
   els.summaryChips.innerHTML = '';
+  els.summaryChips.classList.remove('has-active-filter');
   els.resultsTableBody.innerHTML = '';
+  allIssueRows = result.report ? extractIssues(result.report) : [];
+  activeSeverityFilter = null;
+  activeCategoryFilter = '';
 
-  const rows = result.report ? extractIssues(result.report) : [];
   lastJsonModalText = result.report
     ? JSON.stringify(result.report, null, 2)
     : (result.rawStdout || '') + (result.rawStderr ? `\n${result.rawStderr}` : '');
@@ -345,54 +436,12 @@ function renderResults(result: StaticAnalysisRunResult): void {
     els.resultNote.hidden = false;
     els.resultNote.textContent =
       result.error?.code === 'report-malformed' ? S.staticAnalysis.malformedReportNote : S.staticAnalysis.noReportFallbackNote;
-  } else if (rows.length === 0) {
+  } else if (allIssueRows.length === 0) {
     els.resultNote.hidden = false;
     els.resultNote.textContent = S.staticAnalysis.noIssuesFound;
   } else {
-    const counts = { error: 0, warning: 0, info: 0 } as Record<string, number>;
-    for (const row of rows) counts[row.severity] = (counts[row.severity] ?? 0) + 1;
-    const chip = (cls: string, label: string): string => `<span class="sca-chip ${cls}">${label}</span>`;
-    els.summaryChips.innerHTML = [
-      counts.error ? chip('sca-chip-error', S.staticAnalysis.summaryErrors(counts.error)) : '',
-      counts.warning ? chip('sca-chip-warning', S.staticAnalysis.summaryWarnings(counts.warning)) : '',
-      counts.info ? chip('sca-chip-info', S.staticAnalysis.summaryInfo(counts.info)) : ''
-    ].join('');
-    els.resultsTableBody.innerHTML = rows
-      .map((row, i) => {
-        const hasDetail = !!(row.certRequirements?.length || row.documentationUrls?.length);
-        const expandCell = hasDetail
-          ? `<button type="button" class="sca-row-expand-btn" data-row-index="${i}" title="${escapeHtml(S.staticAnalysis.expandDetailsTitle)}"></button>`
-          : '';
-        const mainRow = `<tr class="${hasDetail ? 'sca-has-detail' : ''}" data-row-index="${i}">
-          <td class="sca-th-expand">${expandCell}</td>
-          <td><span class="sca-severity-badge ${row.severity}">${row.severity}</span></td>
-          <td>${escapeHtml(row.category)}</td>
-          <td>${escapeHtml(row.message)}</td>
-          <td>${escapeHtml(row.location)}</td>
-        </tr>`;
-        if (!hasDetail) return mainRow;
-        // 4-column label/value grid — Cert Requirements | value | Documentation | value. When
-        // only one of the two is present, its pair is the only thing pushed, so it simply lands
-        // in the first two columns rather than leaving two empty ones.
-        const cols: string[] = [];
-        if (row.certRequirements?.length) {
-          cols.push(
-            `<div class="sca-detail-label">${escapeHtml(S.staticAnalysis.certRequirementsLabel)}</div>`,
-            `<div class="sca-detail-value">${row.certRequirements.map((c) => `<span class="sca-cert-chip">${escapeHtml(c)}</span>`).join('')}</div>`
-          );
-        }
-        if (row.documentationUrls?.length) {
-          cols.push(
-            `<div class="sca-detail-label">${escapeHtml(S.staticAnalysis.documentationLabel)}</div>`,
-            `<div class="sca-detail-value">${row.documentationUrls
-              .map((d) => `<a href="#" class="sca-doc-link" data-doc-url="${escapeHtml(d.url)}">${escapeHtml(d.alias || d.url)}</a>`)
-              .join('')}</div>`
-          );
-        }
-        const detailRow = `<tr class="sca-detail-row"><td class="sca-detail-cell" colspan="5"><div class="sca-detail-grid">${cols.join('')}</div></td></tr>`;
-        return mainRow + detailRow;
-      })
-      .join('');
+    populateCategoryFilter(allIssueRows);
+    renderFilteredTable();
   }
 }
 
@@ -547,6 +596,22 @@ function wireResultsTable(): void {
   });
 }
 
+/** Severity chips + Category select both re-filter `allIssueRows` client-side — no re-run. A
+ *  chip click toggles: clicking the already-active severity clears back to "all". */
+function wireResultsFilters(): void {
+  els.summaryChips.addEventListener('click', (e) => {
+    const chipEl = (e.target as HTMLElement | null)?.closest('.sca-chip');
+    if (!(chipEl instanceof HTMLElement)) return;
+    const severity = chipEl.getAttribute('data-severity');
+    activeSeverityFilter = activeSeverityFilter === severity ? null : severity;
+    renderFilteredTable();
+  });
+  els.categoryFilter.addEventListener('change', () => {
+    activeCategoryFilter = els.categoryFilter.value;
+    renderFilteredTable();
+  });
+}
+
 function wireJsonModal(): void {
   const modalEl = els.jsonModalOverlay.querySelector('.modal');
   if (modalEl instanceof HTMLElement) attachModalResize(modalEl);
@@ -610,6 +675,7 @@ async function main(): Promise<void> {
   wireTabs();
   wireAnalyze();
   wireResultsTable();
+  wireResultsFilters();
   wireJsonModal();
   wireBridgeEvents();
   setSelectedFile(null);

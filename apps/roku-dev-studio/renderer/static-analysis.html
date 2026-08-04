@@ -187,7 +187,12 @@
       <div class="sca-tab-panel" id="scaPanelTable" role="tabpanel">
         <div class="sca-results-toolbar">
           <div class="sca-summary-chips" id="scaSummaryChips"></div>
-          <button type="button" id="scaViewJsonBtn" class="btn btn-secondary" data-i18n="staticAnalysis.viewJsonBtn" disabled>View JSON</button>
+          <div class="sca-results-toolbar-actions">
+            <select id="scaCategoryFilter" class="sca-category-filter" aria-label="Filter by Category" data-i18n-aria-label="staticAnalysis.categoryFilterLabel" disabled>
+              <option value="" data-i18n="staticAnalysis.allCategoriesOption">All Categories</option>
+            </select>
+            <button type="button" id="scaViewJsonBtn" class="btn btn-secondary" data-i18n="staticAnalysis.viewJsonBtn" disabled>View JSON</button>
+          </div>
         </div>
         <p id="scaResultNote" class="sca-result-note" hidden></p>
         <div class="sca-results-table-wrap">
