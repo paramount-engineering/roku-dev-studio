@@ -41,6 +41,15 @@ export type ConsoleDeferredHeavyDrainOpts = {
    * background URL/structured detection on the same main thread.
    */
   isModalOpen: () => boolean;
+  /**
+   * Returns true while the user has a live text selection inside the console output. A drained
+   * job replaces `contentEl`'s children (`populateConsoleLineContentWithUrls` →
+   * `contentEl.replaceChildren()`) — if that row's original text node is part of an in-progress
+   * selection Range (its anchor, or anywhere the drag has passed over), destroying and rebuilding
+   * it collapses/truncates the selection out from under the user, even though the row's own
+   * element is never unmounted. Pause the same way as `isModalOpen`.
+   */
+  isSelectionActive: () => boolean;
 };
 
 export type ConsoleDeferredHeavyDrainHandle = {
@@ -80,11 +89,10 @@ export function createConsoleDeferredHeavyDrain(
       const sliceStart = performance.now();
 
       while (queue.length > 0) {
-        if (opts.isModalOpen()) {
-          // Bail; caller will re-schedule via `schedule()` once the modal
-          // closes (`onTelnetViewerClosedResume` in the panel listens for the
-          // viewer-closed event). Don't reschedule here — that would spin
-          // wakeups against an open modal.
+        if (opts.isModalOpen() || opts.isSelectionActive()) {
+          // Bail; caller re-schedules via `schedule()` once the modal closes or the selection
+          // clears (`onTelnetViewerClosedResume` / `onSelectionChange` in the panel). Don't
+          // reschedule here — that would spin wakeups against an open modal/active selection.
           return;
         }
         if (performance.now() - sliceStart > DRAIN_SLICE_MS) {

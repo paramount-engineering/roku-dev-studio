@@ -297,7 +297,8 @@ export function setupTelnet(
   // content modal is open). Owns its own queue + timer; the panel only sees
   // `enqueue` / `clear` / `schedule`. See `console-deferred-heavy-drain.ts`.
   const deferredHeavyDrain = createConsoleDeferredHeavyDrain({
-    isModalOpen: () => isTelnetContentModalOpen()
+    isModalOpen: () => isTelnetContentModalOpen(),
+    isSelectionActive: () => userSelecting
   });
 
   /**
@@ -341,11 +342,24 @@ export function setupTelnet(
    *  coalesce onto the in-flight chain instead of stacking a new 3-pass run. */
   let tailFollowScheduled = false;
   /** True while the user has a live (non-collapsed) text selection inside the
-   *  console output. Auto-scroll-to-tail and scrollback trim are paused while
-   *  this holds so the selection's DOM nodes aren't scrolled/recycled/removed
-   *  mid-drag — that was collapsing the selection and snapping the view to the
-   *  top or bottom. Tailing/trim resume once the selection is cleared. */
+   *  console output, OR is mid-drag having pressed the mouse down inside it.
+   *  Auto-scroll-to-tail, scrollback trim, unmounting, and the heavy-line
+   *  drain are all paused while this holds so the selection's DOM nodes
+   *  aren't scrolled/recycled/removed/rewritten mid-drag — that was
+   *  collapsing the selection and snapping the view to the top or bottom.
+   *  Everything resumes once the selection is cleared. */
   let userSelecting = false;
+  /** True from a left-button mousedown inside the console output until the
+   *  next mouseup anywhere. `selectionActiveInOutput()` alone is too fragile
+   *  a signal *during* a drag: the browser's own auto-scroll-while-dragging
+   *  (triggered by holding the mouse near the viewport's bottom edge — the
+   *  exact gesture a long drag-select uses) can transiently compute the
+   *  live selection's `commonAncestorContainer` as sitting outside
+   *  `outputEl` for a frame, which would flip `userSelecting` back to
+   *  `false` mid-drag and immediately resume unmounting/the drain — undoing
+   *  the fix the instant it's needed most. The mouse-button state can't
+   *  flicker like that: it's down for the whole gesture, full stop. */
+  let mouseDownInOutput = false;
 
   /** Is there a non-collapsed selection whose range lives inside the console
    *  output? Cheap enough to call on every `selectionchange`. */
@@ -355,16 +369,41 @@ export function setupTelnet(
     return outputEl.contains(sel.getRangeAt(0).commonAncestorContainer);
   }
 
-  const onSelectionChange = (): void => {
-    const active = selectionActiveInOutput();
+  function updateUserSelecting(): void {
+    const active = mouseDownInOutput || selectionActiveInOutput();
     if (active === userSelecting) return;
     userSelecting = active;
+    // A long drag-select that scrolls (manually, or the browser's own edge auto-scroll while
+    // dragging near the viewport bottom) would otherwise unmount earlier-selected rows as they
+    // fall out of the virtualizer's overscan buffer, collapsing/truncating the selection — its
+    // Range holds actual DOM nodes, not logical line indices. Suspend unmounting for the
+    // duration of the selection; resuming immediately unmounts everything outside the current
+    // window in one pass, so this doesn't leave stray rows mounted indefinitely.
+    virt.setUnmountSuspended(active);
     // Selection just cleared: catch back up to the tail (and let the deferred
     // scrollback trim run) if we were pinned to the bottom.
-    if (!active && pinnedToBottom) {
-      ensureTelnetScrollbackRoom(0);
-      followTailScroll();
+    if (!active) {
+      // Heavy-line drain paused itself (`isSelectionActive`) rather than rescheduling — nudge it
+      // awake now, same as the modal-close resume path.
+      scheduleDeferredTelnetDrain();
+      if (pinnedToBottom) {
+        ensureTelnetScrollbackRoom(0);
+        followTailScroll();
+      }
     }
+  }
+
+  const onSelectionChange = (): void => updateUserSelecting();
+
+  const onOutputMouseDown = (e: MouseEvent): void => {
+    if (e.button !== 0) return;
+    mouseDownInOutput = true;
+    updateUserSelecting();
+  };
+  const onWindowMouseUp = (): void => {
+    if (!mouseDownInOutput) return;
+    mouseDownInOutput = false;
+    updateUserSelecting();
   };
 
   function distanceFromBottom(): number {
@@ -993,7 +1032,12 @@ export function setupTelnet(
     if (delta < -5) {
       pinnedToBottom = false;
       updateScrollToBottomAffordance();
-    } else if (!pinnedToBottom && delta > 5 && isNearBottom()) {
+    } else if (!pinnedToBottom && isNearBottom()) {
+      // Re-pin on proximity alone, not "this single event moved >5px" — a slow/gentle scroll
+      // (trackpad, gradual wheel) reaches the bottom via many small deltas that individually
+      // never clear a >5px gate, which left the ↓ button stuck visible even once the user was
+      // genuinely sitting at the tail. The `delta < -5` branch above already takes priority for
+      // a decisive move away, so proximity here can't fight a real "leaving the tail" signal.
       pinnedToBottom = true;
       updateScrollToBottomAffordance();
     }
@@ -1322,10 +1366,13 @@ export function setupTelnet(
 
   outputEl.addEventListener('scroll', handleScroll, { passive: true });
 
-  // Pause auto-scroll / trim while the user is selecting text in the console
-  // (see `userSelecting`). selectionchange is the reliable signal — it covers
-  // mouse drag, shift-click and keyboard selection alike.
+  // Pause auto-scroll / trim / unmounting / the heavy-line drain while the user is selecting
+  // text in the console (see `userSelecting`). selectionchange covers mouse drag, shift-click,
+  // and keyboard selection alike; mousedown/mouseup cover the drag itself even through a frame
+  // where selectionchange's live computation is momentarily unreliable (see `mouseDownInOutput`).
   document.addEventListener('selectionchange', onSelectionChange);
+  outputEl.addEventListener('mousedown', onOutputMouseDown);
+  window.addEventListener('mouseup', onWindowMouseUp, { capture: true });
 
   // Centered, drag-to-resize find bar — shared helper (its ResizeObserver on the
   // header re-clamps the width whenever the header resizes, e.g. the sidebar is
@@ -1749,6 +1796,8 @@ export function setupTelnet(
     surface.dispose();
     disposeFindResize?.dispose();
     document.removeEventListener('selectionchange', onSelectionChange);
+    outputEl.removeEventListener('mousedown', onOutputMouseDown);
+    window.removeEventListener('mouseup', onWindowMouseUp, { capture: true });
     document.removeEventListener(CONSOLE_VIEWER_CLOSED_EVENT, onTelnetViewerClosedResume);
     cancelTelnetFlush();
     clearDeferredTelnetHeavyLines();

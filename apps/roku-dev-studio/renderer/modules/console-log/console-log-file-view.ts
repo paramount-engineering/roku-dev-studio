@@ -168,6 +168,8 @@ export type ConsoleLogFileViewHandle = {
    *  log-file model calls this after a byte-window load lands so "loading"
    *  placeholder rows are replaced by real content. */
   remountVisible(): void;
+  /** Forwarded to the virtualizer — see `ConsoleVirtualizerHandle.setUnmountSuspended`. */
+  setUnmountSuspended(suspended: boolean): void;
   /** Tear down the underlying virtualizer (detach scroll/resize observers
    *  and remove all mounted rows). The caller still owns `outputEl`. */
   dispose(): void;
@@ -364,6 +366,7 @@ export function mountConsoleLogFileView(
     shiftIndicesAfterPrepend: (headCount) => virtualizer.shiftIndicesAfterPrepend(headCount),
     getContainerEl: () => containerEl,
     remountVisible: () => virtualizer.remountVisible(),
+    setUnmountSuspended: (suspended) => virtualizer.setUnmountSuspended(suspended),
     dispose: () => virtualizer.dispose()
   };
 }

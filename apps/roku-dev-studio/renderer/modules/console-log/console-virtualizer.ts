@@ -112,6 +112,17 @@ export type ConsoleVirtualizerHandle = {
    * Cheap — only the ~visible window (+overscan) is ever mounted.
    */
   remountVisible: () => void;
+  /**
+   * While `true`, `sync()` keeps mounting newly-visible rows as usual but stops removing rows
+   * that scroll out of the window+overscan. A native text selection is a `Range` over actual DOM
+   * nodes — if a long drag-select scrolls (manually, or the browser's own edge auto-scroll) far
+   * enough that earlier-selected rows fall out of the overscan buffer, the normal unmount tears
+   * those nodes out from under the selection, collapsing or truncating it. The caller resumes
+   * (`false`) once the selection ends, which immediately unmounts everything outside the current
+   * window in one pass — this only holds extra rows for the duration of one active drag, not
+   * indefinitely.
+   */
+  setUnmountSuspended: (suspended: boolean) => void;
   dispose: () => void;
 };
 
@@ -147,6 +158,9 @@ export function createConsoleVirtualizer(opts: ConsoleVirtualizerOpts): ConsoleV
    *      real measurement deterministically. Repeated calls with the same
    *      size are cheap — `resizeItem` early-returns on `delta === 0`.
    */
+  // See `setUnmountSuspended` on the returned handle.
+  let unmountSuspended = false;
+
   const pendingMeasure: Array<{ index: number; el: HTMLElement }> = [];
   let measureScheduled = false;
   function scheduleMeasurePass(): void {
@@ -260,12 +274,15 @@ export function createConsoleVirtualizer(opts: ConsoleVirtualizerOpts): ConsoleV
       prevEl = el;
     }
 
-    // Unmount: anything in `mounted` that's no longer in `desired`.
-    for (const [idx, el] of mounted) {
-      if (!desired.has(idx)) {
-        opts.onUnmount?.(idx, el);
-        el.remove();
-        mounted.delete(idx);
+    // Unmount: anything in `mounted` that's no longer in `desired` — skipped while
+    // `unmountSuspended` (active text selection); see `setUnmountSuspended`.
+    if (!unmountSuspended) {
+      for (const [idx, el] of mounted) {
+        if (!desired.has(idx)) {
+          opts.onUnmount?.(idx, el);
+          el.remove();
+          mounted.delete(idx);
+        }
       }
     }
 
@@ -411,6 +428,13 @@ export function createConsoleVirtualizer(opts: ConsoleVirtualizerOpts): ConsoleV
       }
       mounted.clear();
       sync();
+    },
+    setUnmountSuspended(suspended) {
+      if (unmountSuspended === suspended) return;
+      unmountSuspended = suspended;
+      // Resuming: catch up on every deferred unmount in one pass rather than waiting for the
+      // next scroll-driven onChange (which may not fire at all if the view doesn't move again).
+      if (!suspended) sync();
     },
     dispose() {
       detach();

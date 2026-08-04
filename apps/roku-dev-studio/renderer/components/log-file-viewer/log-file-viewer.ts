@@ -213,6 +213,49 @@ async function main() {
     onSelectAll: () => void copyExport(S.logFileViewer.copiedEntireLog)
   });
   model.bindSurface(surface);
+
+  // A long drag-select that scrolls (manually, or the browser's own edge auto-scroll while
+  // dragging near the viewport bottom) would otherwise unmount earlier-selected rows as they
+  // scroll out of the virtualizer's overscan buffer, collapsing/truncating the native selection
+  // — its Range holds actual DOM nodes, not logical line indices. Suspend unmounting for the
+  // duration of the selection; resuming immediately unmounts everything outside the current
+  // window in one pass. Same fix as the live Console (`telnet-console-panel.ts`), same surface.
+  if (outputEl instanceof HTMLElement) {
+    let selecting = false;
+    // Mouse-button state, not just the live selection extent — the browser's own
+    // auto-scroll-while-dragging (holding the mouse near the viewport's bottom edge, exactly
+    // the gesture a long drag-select uses) can transiently compute the selection's
+    // `commonAncestorContainer` as sitting outside `outputEl` for a frame, which would flip
+    // this back to "not selecting" mid-drag and immediately resume unmounting. The mouse button
+    // can't flicker like that: it's down for the whole gesture, full stop. See the identical
+    // fix (with the full rationale) in `telnet-console-panel.ts`'s `mouseDownInOutput`.
+    let mouseDownInOutput = false;
+    const isSelectionActive = (): boolean => {
+      const sel = window.getSelection();
+      return !!sel && !sel.isCollapsed && sel.rangeCount > 0 && outputEl.contains(sel.getRangeAt(0).commonAncestorContainer);
+    };
+    const update = (): void => {
+      const active = mouseDownInOutput || isSelectionActive();
+      if (active === selecting) return;
+      selecting = active;
+      surface.view.setUnmountSuspended(active);
+    };
+    document.addEventListener('selectionchange', update);
+    outputEl.addEventListener('mousedown', (e) => {
+      if (e.button !== 0) return;
+      mouseDownInOutput = true;
+      update();
+    });
+    window.addEventListener(
+      'mouseup',
+      () => {
+        if (!mouseDownInOutput) return;
+        mouseDownInOutput = false;
+        update();
+      },
+      { capture: true }
+    );
+  }
   // Centered, drag-to-resize behavior for the find bar in the header.
   if (findHostEl instanceof HTMLElement && headerEl instanceof HTMLElement) {
     makeCenteredSearchResizable(findHostEl, {
