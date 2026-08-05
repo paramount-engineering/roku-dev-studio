@@ -1,25 +1,30 @@
 /**
- * BrightScript socket-based debugger — main-process session controller.
+ * BrightScript socket-based debugger — transport-agnostic session controller.
  *
  * Wraps RDS's in-house {@link DebugProtocolClient} (the binary debug protocol on
  * control port 8081, implemented under ./protocol — no `roku-debug` dependency)
- * into a small, IPC-friendly controller. One `DebugSession` per device IP.
+ * into a small, event-driven controller. One `DebugSession` per device IP.
+ *
+ * Emits neutral event kinds (see {@link DEBUGGER_EVENTS}) via the injected `emit`
+ * callback — this module has no Electron/IPC dependency of its own. A host
+ * (Electron main process, a future remote-server relay, …) maps those events
+ * onto its own transport (IPC channel, WebSocket frame, …).
  *
  * Scope (Phase 1 spike): attach/detach, execution control (continue / pause /
  * step), on-stop snapshot (threads + stack + top-frame variables), a REPL
  * (`executeCommand`), breakpoint add/remove/list, and live console output
- * (`io-output`). Emitted events are forwarded verbatim to the Debugger window
- * via the injected `emit`.
+ * (`io-output`). Emitted events are forwarded verbatim to the host via the
+ * injected `emit`.
  *
  * NOT yet handled (Phase 2/3): coordinating the single-client 8081 lease with
  * the 8085 telnet console (a real device can't cleanly serve both at once — see
  * telnet-handlers.ts holder/lease pattern), source-map (`pkg:/`) resolution,
  * and Privacy Mode masking of variable values.
  */
-import { IPC } from '../../shared/ipc/channels';
-import { mainError, mainLog } from '../log.js';
+import { apiError, apiLog } from '../log';
 import { DEBUG_CONTROL_PORT } from './protocol/constants';
 import { DebugProtocolClient } from './protocol/debug-protocol-client';
+
 /** Total budget to keep retrying attach after a debug sideload (8081 opens a beat late). */
 const PORT_WAIT_MS = 20000;
 /** Per-attempt bound on connect + handshake (belt-and-suspenders around the socket connect). */
@@ -29,6 +34,22 @@ const PROBE_INTERVAL_MS = 800;
 /** At the entry halt, wait this long for the renderer's initial breakpoint push to
  *  arrive before flushing + continuing — breakpoints only register while stopped. */
 const ENTRY_BREAKPOINT_GRACE_MS = 600;
+
+/**
+ * Neutral event kinds emitted via the injected `emit` callback. A host maps these
+ * onto its own transport — e.g. the Electron app relays each one onto its matching
+ * `IPC.Debugger*` channel (see `apps/roku-dev-studio/main/ipc/debugger-handlers.ts`).
+ */
+export const DEBUGGER_EVENTS = {
+  State: 'state',
+  Stopped: 'stopped',
+  Output: 'output',
+  RuntimeError: 'runtime-error',
+  CompileErrors: 'compile-errors',
+  Breakpoints: 'breakpoints'
+} as const;
+
+export type DebuggerEventKind = (typeof DEBUGGER_EVENTS)[keyof typeof DEBUGGER_EVENTS];
 
 type SessionState = 'connecting' | 'attached' | 'stopped' | 'running' | 'disconnected' | 'error';
 
@@ -59,7 +80,7 @@ interface DebugSession {
   lastStop?: Record<string, unknown>;
 }
 
-type Emit = (channel: string, payload: unknown) => void;
+type Emit = (event: DebuggerEventKind, payload: unknown) => void;
 
 export class DebugSessionController {
   private sessions = new Map<string, DebugSession>();
@@ -69,7 +90,7 @@ export class DebugSessionController {
   private setState(session: DebugSession, state: SessionState, extra?: Record<string, unknown>): void {
     session.state = state;
     if (state === 'running') session.lastStop = undefined; // the retained snapshot is stale once we resume
-    this.emit(IPC.DebuggerState, { ip: session.ip, state, protocolVersion: session.protocolVersion, ...extra });
+    this.emit(DEBUGGER_EVENTS.State, { ip: session.ip, state, protocolVersion: session.protocolVersion, ...extra });
   }
 
   /** True if a session for `ip` exists and is not disconnected. */
@@ -96,7 +117,7 @@ export class DebugSessionController {
 
     // Surface "connecting" immediately; the port can take a beat to open after a
     // debug-enabled sideload.
-    this.emit(IPC.DebuggerState, { ip: clean, state: 'connecting' });
+    this.emit(DEBUGGER_EVENTS.State, { ip: clean, state: 'connecting' });
 
     // The debug control port is SINGLE-CLIENT: any TCP connection consumes the one
     // slot. So we must NOT pre-probe with a throwaway socket (that burns the slot
@@ -123,7 +144,7 @@ export class DebugSessionController {
         // Handshake succeeded — this is our live session.
         this.sessions.set(clean, session);
         if (session.state === 'connecting') this.setState(session, 'attached');
-        mainLog(`[debugger] attached to ${clean}:${DEBUG_CONTROL_PORT} (attempt ${attempt})`);
+        apiLog(`[debugger] attached to ${clean}:${DEBUG_CONTROL_PORT} (attempt ${attempt})`);
         return { ok: true };
       } catch (e) {
         lastError = e instanceof Error ? e.message : String(e);
@@ -152,8 +173,8 @@ export class DebugSessionController {
       : `Connected to debug port ${DEBUG_CONTROL_PORT} on ${clean} but the debug handshake never completed. ${desc} ` +
         `The port may be held by another debugger (a VS Code BrightScript session or a second RDS window), or the ` +
         `running channel is not a debug build. Close other debuggers and re-sideload with debugging.`;
-    this.emit(IPC.DebuggerState, { ip: clean, state: 'error', message: summary, detail });
-    mainError(`[debugger] attach gave up for ${clean} after ${attempt} attempt(s): ${lastError} (${refused ? 'port closed' : 'handshake never completed'}). ${desc}`);
+    this.emit(DEBUGGER_EVENTS.State, { ip: clean, state: 'error', message: summary, detail });
+    apiError(`[debugger] attach gave up for ${clean} after ${attempt} attempt(s): ${lastError} (${refused ? 'port closed' : 'handshake never completed'}). ${desc}`);
     return { ok: false, error: detail };
   }
 
@@ -165,9 +186,9 @@ export class DebugSessionController {
     try {
       await s.client.destroy(true);
     } catch (e) {
-      mainError('[debugger] destroy error:', ip, e instanceof Error ? e.message : String(e));
+      apiError('[debugger] destroy error:', ip, e instanceof Error ? e.message : String(e));
     }
-    this.emit(IPC.DebuggerState, { ip, state: 'disconnected' });
+    this.emit(DEBUGGER_EVENTS.State, { ip, state: 'disconnected' });
   }
 
   /** Close every session (called when the Debugger window closes / on quit). */
@@ -272,15 +293,15 @@ export class DebugSessionController {
         ...(b.hitCount ? { hitCount: b.hitCount } : {})
       })));
       this.recordBreakpointIds(session, pending, res);
-      mainLog(`[debugger] flushed ${pending.length} breakpoint(s) to ${session.ip} while halted`);
+      apiLog(`[debugger] flushed ${pending.length} breakpoint(s) to ${session.ip} while halted`);
     } catch (e) {
       for (const b of pending) b.sent = false; // failed → allow a later retry
-      mainError('[debugger] breakpoint flush failed:', session.ip, e instanceof Error ? e.message : String(e));
+      apiError('[debugger] breakpoint flush failed:', session.ip, e instanceof Error ? e.message : String(e));
     }
   }
 
   /** Map the device's per-breakpoint response (in request order) back to cached entries:
-   *  store each `breakpointId` (so it can be removed later) and tell the renderer, keyed by
+   *  store each `breakpointId` (so it can be removed later) and tell the host, keyed by
    *  file:line, so a queued breakpoint that only just registered gets its id + loses "Q". */
   private recordBreakpointIds(session: DebugSession | undefined, entries: CachedBreakpoint[], res: unknown): void {
     if (!session) return;
@@ -292,7 +313,7 @@ export class DebugSessionController {
       const id = Number(r.breakpointId ?? r.breakpoint_id ?? 0);
       if (id > 0) { e.breakpointId = id; registered.push({ filePath: e.filePath, lineNumber: e.lineNumber, breakpointId: id }); }
     });
-    if (registered.length) this.emit(IPC.DebuggerBreakpoints, { ip: session.ip, registered });
+    if (registered.length) this.emit(DEBUGGER_EVENTS.Breakpoints, { ip: session.ip, registered });
   }
 
   /** Remove breakpoints by file:line — prunes the session cache (so flush can't resurrect a
@@ -321,12 +342,12 @@ export class DebugSessionController {
     client.on('io-output', (arg) => {
       const text = typeof arg === 'string' ? arg : safeText(arg);
       if (!text) return;
-      this.emit(IPC.DebuggerOutput, { ip, text });
+      this.emit(DEBUGGER_EVENTS.Output, { ip, text });
     });
 
     client.on('protocol-version', (arg) => {
       session.protocolVersion = versionString(arg);
-      this.emit(IPC.DebuggerState, { ip, state: session.state, protocolVersion: session.protocolVersion });
+      this.emit(DEBUGGER_EVENTS.State, { ip, state: session.state, protocolVersion: session.protocolVersion });
     });
 
     // A thread stopped (breakpoint / STOP / step complete). Gather a snapshot.
@@ -337,23 +358,23 @@ export class DebugSessionController {
       // A runtime error IS a stop — the device is halted at the throw site. Surface
       // the error message AND snapshot the crash location's stack + variables so the
       // sidebar can show where it died (previously this only set state, no stack).
-      this.emit(IPC.DebuggerRuntimeError, { ip, error: plain(arg), message: stopDetail(arg) });
+      this.emit(DEBUGGER_EVENTS.RuntimeError, { ip, error: plain(arg), message: stopDetail(arg) });
       void this.emitStopSnapshot(session, arg);
     });
     client.on('compile-error', (arg) => {
-      this.emit(IPC.DebuggerCompileErrors, { ip, errors: plain(arg) });
+      this.emit(DEBUGGER_EVENTS.CompileErrors, { ip, errors: plain(arg) });
     });
 
     // Device verified (or errored) breakpoints we sent — async, may arrive after
     // addBreakpoints resolves (e.g. deferred verification in not-yet-loaded code).
     client.on('breakpoints-verified', (arg) => {
       const list = (arg as { breakpoints?: unknown } | undefined)?.breakpoints ?? arg;
-      this.emit(IPC.DebuggerBreakpoints, { ip, verified: plain(list) });
+      this.emit(DEBUGGER_EVENTS.Breakpoints, { ip, verified: plain(list) });
     });
     // Device REJECTED a breakpoint (bad path/line, unsupported condition, …). Surface it
     // instead of dropping it — otherwise a breakpoint silently never hits.
     client.on('breakpoint-error', (arg) => {
-      this.emit(IPC.DebuggerBreakpoints, { ip, error: plain(arg) });
+      this.emit(DEBUGGER_EVENTS.Breakpoints, { ip, error: plain(arg) });
     });
 
     const end = (): void => {
@@ -361,11 +382,11 @@ export class DebugSessionController {
       // Tear the client down so the SEPARATE io socket (+ its 'io-output' listener) and
       // the client's timers/listeners are released. Without this, a device-initiated end
       // (channel exit, or a control-socket error while the app is still printing) leaves
-      // the io socket live, emitting ghost DebuggerOutput for a session we've marked
+      // the io socket live, emitting ghost output for a session we've marked
       // disconnected — and a later re-attach can't clean it up (detach() early-returns
       // once the session is gone). destroy(true) is idempotent (guards on `ended`).
       void session.client.destroy(true);
-      this.emit(IPC.DebuggerState, { ip, state: 'disconnected' });
+      this.emit(DEBUGGER_EVENTS.State, { ip, state: 'disconnected' });
     };
     client.on('app-exit', end);
     client.on('close', end);
@@ -388,13 +409,13 @@ export class DebugSessionController {
         await sleep(ENTRY_BREAKPOINT_GRACE_MS);
         await this.flushBreakpoints(session);
       } catch (e) {
-        mainError('[debugger] entry breakpoint flush failed:', session.ip, e instanceof Error ? e.message : String(e));
+        apiError('[debugger] entry breakpoint flush failed:', session.ip, e instanceof Error ? e.message : String(e));
       }
       this.setState(session, 'running');
       try {
         await session.client.continue();
       } catch (e) {
-        mainError('[debugger] entry auto-continue failed:', session.ip, e instanceof Error ? e.message : String(e));
+        apiError('[debugger] entry auto-continue failed:', session.ip, e instanceof Error ? e.message : String(e));
       }
       return;
     }
@@ -403,8 +424,8 @@ export class DebugSessionController {
 
   /**
    * Set `stopped` and emit a full snapshot (threads + top-frame stack + top-frame
-   * variables) as `DebuggerStopped`. Shared by a normal suspend and a runtime error
-   * (both leave the device halted; the renderer selects a thread/frame from here).
+   * variables) as a `Stopped` event. Shared by a normal suspend and a runtime error
+   * (both leave the device halted; the host selects a thread/frame from here).
    */
   private async emitStopSnapshot(session: DebugSession, arg: unknown): Promise<void> {
     this.setState(session, 'stopped');
@@ -413,12 +434,12 @@ export class DebugSessionController {
     await this.flushBreakpoints(session);
     const payload: Record<string, unknown> = { ip: session.ip, reason: stopReason(arg), detail: stopDetail(arg) };
     // The in-house client exposes arrays at `response.data.{threads,entries,variables}`;
-    // extract them explicitly so the renderer sees a populated stack/variables list.
+    // extract them explicitly so the host sees a populated stack/variables list.
     try { payload.threads = plain(dataArray(await session.client.threads(), 'threads')); } catch { /* best-effort */ }
     try { payload.stackFrames = plain(dataArray(await session.client.getStackTrace(), 'entries', 'stackFrames')); } catch { /* best-effort */ }
     try { payload.variables = plain(dataArray(await session.client.getVariables([], 0), 'variables')); } catch { /* best-effort */ }
     session.lastStop = payload; // retain for pollers (MCP bridge wait-for-stop)
-    this.emit(IPC.DebuggerStopped, payload);
+    this.emit(DEBUGGER_EVENTS.Stopped, payload);
   }
 
   // --- read-only views (shared with the MCP bridge) --------------------------
@@ -483,10 +504,10 @@ function normalizeBreakpoints(
 /** Best-effort "Device: Roku OS <ver>, <model>." so an attach failure is diagnostic, not opaque. */
 async function describeDevice(ip: string): Promise<string> {
   try {
-    const api = require('roku-dev-studio-api') as {
+    const { testConnection } = require('../../ecp') as {
       testConnection: (ip: string) => Promise<{ success?: boolean; deviceInfo?: Record<string, unknown> }>;
     };
-    const res = await api.testConnection(ip);
+    const res = await testConnection(ip);
     const di = (res && res.deviceInfo) || {};
     const ver = String(di.softwareVersion ?? di['software-version'] ?? '') || '?';
     const model = String(di.friendlyModelName ?? di.modelName ?? di.friendlyDeviceName ?? di['model-number'] ?? '');

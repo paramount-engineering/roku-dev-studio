@@ -56,7 +56,7 @@ import {
   type ParsedNetworkEvent
 } from './network-inspector/index';
 import { getDebugSessionController } from './ipc/debugger-handlers';
-import type { DebugSessionController } from './debugger/debug-session-controller';
+import type { DebugSessionController } from 'roku-dev-studio-api/lib/debugger/debug-session-controller';
 
 const rokuApi = require('roku-dev-studio-api') as {
   query: (ip: string, endpoint: string) => Promise<unknown>;

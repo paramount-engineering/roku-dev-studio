@@ -16,7 +16,6 @@
     "verify:structured-pills": "tsx scripts/verify-structured-pills.ts",
     "verify:i18n": "tsx scripts/verify-i18n-keys.ts",
     "typecheck:scripts": "tsc --noEmit -p tsconfig.scripts.json",
-    "test": "tsx scripts/test/debug-protocol.test.ts",
     "dev:solid": "tsx scripts/build/index.ts && concurrently -k \"npm run renderer:solid:dev\" \"wait-on tcp:127.0.0.1:5173 && cross-env RDS_SOLID_RENDERER=1 tsx scripts/run-electron.ts\"",
     "build:desktop": "tsx scripts/build/index.ts",
     "build:preload": "tsx scripts/build/index.ts",

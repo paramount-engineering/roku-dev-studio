@@ -10,7 +10,7 @@
  */
 const AdmZip = require('adm-zip');
 const fs = require('fs');
-import { mainError } from '../log.js';
+import { apiError } from '../log';
 
 export interface ScannedStop {
   /** `pkg:/…` path (matches the debug protocol's file_spec). */
@@ -50,7 +50,7 @@ export function scanZipForStops(zipPath: string): ScannedStop[] {
   try {
     zip = new AdmZip(zipPath);
   } catch (e) {
-    mainError('[debugger] STOP scan: cannot open zip', zipPath, e instanceof Error ? e.message : String(e));
+    apiError('[debugger] STOP scan: cannot open zip', zipPath, e instanceof Error ? e.message : String(e));
     return out;
   }
   for (const entry of zip.getEntries()) {

@@ -47,10 +47,12 @@
     "test": "tsx --test test/*.test.ts"
   },
   "dependencies": {
+    "adm-zip": "^0.6.0",
     "archiver": "^5.3.2",
     "commander": "^15.0.0"
   },
   "devDependencies": {
+    "@types/adm-zip": "0.5.8",
     "@types/archiver": "8.0.0",
     "@types/node": "22.19.17",
     "esbuild": "0.28.1",

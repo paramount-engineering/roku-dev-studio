@@ -388,7 +388,7 @@ export class SideloadRelayService {
     // falls to the on-device 8085 micro-debugger instead of the RDS debugger.
     let discovered = 0;
     try {
-      discovered = (require('../debugger/scan-stops') as { scanZipForStops: (p: string) => unknown[] })
+      discovered = (require('roku-dev-studio-api/lib/debugger/scan-stops') as { scanZipForStops: (p: string) => unknown[] })
         .scanZipForStops(upload.filePath).length;
     } catch {
       /* scan best-effort */
@@ -446,7 +446,7 @@ export class SideloadRelayService {
       // zip), and persist the auto-enable so the sidebar / future runs stay in debug
       // mode (only when the build actually carried STOPs, matching single-device).
       try {
-        const scan = require('../debugger/scan-stops') as { rememberSideloadZip: (ip: string, p: string) => void };
+        const scan = require('roku-dev-studio-api/lib/debugger/scan-stops') as { rememberSideloadZip: (ip: string, p: string) => void };
         for (const dip of debugTargetIps) scan.rememberSideloadZip(dip, upload.filePath);
       } catch {
         /* best-effort */

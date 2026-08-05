@@ -149,7 +149,7 @@ function setupDevAppHandlers(mainWindow: BrowserWindow | undefined, dialog: Dial
       return resolvedFile;
     }
     const resolved = resolvedFile.filePath;
-    const scan = require('../debugger/scan-stops') as {
+    const scan = require('roku-dev-studio-api/lib/debugger/scan-stops') as {
       scanZipForStops: (p: string) => unknown[];
       rememberSideloadZip: (ip: string, p: string) => void;
     };
@@ -219,7 +219,7 @@ function setupDevAppHandlers(mainWindow: BrowserWindow | undefined, dialog: Dial
   // device (clean Delete+Install so remotedebug=1 is honored), then reattach. This is
   // the one-click edit-run-debug loop — the renderer supplies the stored dev password.
   ipcMain.handle(IPC.DebuggerRestart, async (_event: IpcMainInvokeEvent, { ip, password }: IpPasswordPayload) => {
-    const scan = require('../debugger/scan-stops') as {
+    const scan = require('roku-dev-studio-api/lib/debugger/scan-stops') as {
       getRememberedZip: (ip: string) => string | undefined;
       rememberSideloadZip: (ip: string, p: string) => void;
     };

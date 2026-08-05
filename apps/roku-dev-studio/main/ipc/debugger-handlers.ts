@@ -12,9 +12,19 @@
  */
 import type { BrowserWindow, IpcMainInvokeEvent } from 'electron';
 import { IPC } from '../../shared/ipc/channels';
-import { DebugSessionController } from '../debugger/debug-session-controller';
-import { getScannedStops } from '../debugger/scan-stops';
+import { DebugSessionController, DEBUGGER_EVENTS, type DebuggerEventKind } from 'roku-dev-studio-api/lib/debugger/debug-session-controller';
+import { getScannedStops } from 'roku-dev-studio-api/lib/debugger/scan-stops';
 import { mainError } from '../log.js';
+
+/** Maps the controller's transport-agnostic event kinds onto this app's concrete IPC channels. */
+const EVENT_TO_IPC_CHANNEL: Record<DebuggerEventKind, string> = {
+  [DEBUGGER_EVENTS.State]: IPC.DebuggerState,
+  [DEBUGGER_EVENTS.Stopped]: IPC.DebuggerStopped,
+  [DEBUGGER_EVENTS.Output]: IPC.DebuggerOutput,
+  [DEBUGGER_EVENTS.RuntimeError]: IPC.DebuggerRuntimeError,
+  [DEBUGGER_EVENTS.CompileErrors]: IPC.DebuggerCompileErrors,
+  [DEBUGGER_EVENTS.Breakpoints]: IPC.DebuggerBreakpoints
+};
 
 interface IpPayload { ip?: string }
 interface StepPayload { ip?: string; threadIndex?: number }
@@ -55,7 +65,9 @@ export function notifyDebuggerReattach(ip: string, extra?: { discovered?: number
 let controllerSingleton: DebugSessionController | null = null;
 function getController(): DebugSessionController {
   if (!controllerSingleton) {
-    controllerSingleton = new DebugSessionController(broadcastDebugEvent);
+    controllerSingleton = new DebugSessionController((event, payload) => {
+      broadcastDebugEvent(EVENT_TO_IPC_CHANNEL[event], payload);
+    });
   }
   return controllerSingleton;
 }
