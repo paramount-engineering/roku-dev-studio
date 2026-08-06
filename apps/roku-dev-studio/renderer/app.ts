@@ -2907,9 +2907,11 @@ async function checkDeviceConnection(
     if (!result.success) {
       // Device is offline
       updateDeviceOfflineState(deviceKey, true, !!serverUrl);
+      recordConnectionCheckResult(deviceKey, false);
     } else {
       // Device is online
       updateDeviceOfflineState(deviceKey, false, !!serverUrl);
+      recordConnectionCheckResult(deviceKey, true);
       // Merge fresh device info into connection so panel has correct ecpSettingMode, developerEnabled, etc.
       if (result.deviceInfo && connection && connection.device) {
         Object.assign(connection.device, result.deviceInfo);
@@ -2931,6 +2933,7 @@ async function checkDeviceConnection(
   } catch (error) {
     rendererError('Connection check failed for', ip, ':', error);
     updateDeviceOfflineState(deviceKey, true, !!serverUrl);
+    recordConnectionCheckResult(deviceKey, false);
   }
 }
 
@@ -4491,13 +4494,49 @@ function setupDevApp(panel, device, api) {
 
 let connectionCheckInterval: ReturnType<typeof setInterval> | null = null;
 
+/**
+ * Per-device failure-streak state for the periodic check, keyed the same way as
+ * `state.connectedDevices` — kept separate rather than folded into that map so this stays purely a
+ * within-this-mechanism concern. A device that keeps failing (lost network, out of range, powered
+ * off) would otherwise get retried every `CONNECTION_CHECK_INTERVAL` forever; widening its own
+ * cadence after repeated misses avoids hammering an unreachable IP for as long as the app stays
+ * open, while a single success snaps it straight back to the normal cadence.
+ */
+const connectionCheckBackoff = new Map<string, { failureStreak: number; nextCheckAt: number }>();
+const CONNECTION_CHECK_BACKOFF_MAX_MS = 5 * 60_000;
+
+function recordConnectionCheckResult(deviceKey: string, ok: boolean): void {
+  if (ok) {
+    connectionCheckBackoff.delete(deviceKey);
+    return;
+  }
+  const failureStreak = (connectionCheckBackoff.get(deviceKey)?.failureStreak ?? 0) + 1;
+  // First miss stays at the normal cadence (could be a one-off blip); only doubles once it's
+  // clearly not coming back on its own.
+  const widenedMs = Math.min(
+    CONNECTION_CHECK_INTERVAL * 2 ** Math.max(0, failureStreak - 1),
+    CONNECTION_CHECK_BACKOFF_MAX_MS
+  );
+  connectionCheckBackoff.set(deviceKey, { failureStreak, nextCheckAt: Date.now() + widenedMs });
+}
+
 async function checkConnectedDevices() {
+  // Prune backoff entries for devices that disconnected since the last tick so this map can't
+  // grow unbounded over a long session of connect/disconnect cycles across different devices.
+  for (const key of connectionCheckBackoff.keys()) {
+    if (!state.connectedDevices.has(key)) connectionCheckBackoff.delete(key);
+  }
+
+  const now = Date.now();
   for (const [deviceKey, connection] of state.connectedDevices) {
+    const backoff = connectionCheckBackoff.get(deviceKey);
+    if (backoff && now < backoff.nextCheckAt) continue; // still backed off — skip this tick
+
     // deviceKey is either "ip" for local or "locationId:ip" for remote
     const parts = deviceKey.split(':');
     const ip = parts.length > 1 ? parts[1] : parts[0];
     const locationId = parts.length > 1 ? parts[0] : null;
-    
+
     await checkDeviceConnection(
       ip,
       connection.isRemote ? connection.serverUrl : null,
@@ -4526,6 +4565,25 @@ function wireDeviceConnectionSuspectListener(): void {
       void checkDeviceConnection(ip, null, null);
     }
   });
+}
+
+/**
+ * The "Dev City" welcome-screen background (`.dev-city-bg`) animates purely for decoration —
+ * twinkling stars, flickering windows, driving cars — via plain CSS `infinite` animations with no
+ * JS timer. Chromium already pauses those when the page is truly hidden/occluded, but NOT when the
+ * window is simply open-but-unfocused (e.g. left in the background while the user works in another
+ * app) — exactly the state an idle "no devices connected" welcome screen would sit in for hours.
+ * Toggling `.is-paused` (which sets `animation-play-state: paused` — see index.html) closes that
+ * gap for zero functional cost, since the scene is purely decorative.
+ */
+function wireDevCityAnimationPause(): void {
+  const updateState = (): void => {
+    document.body.classList.toggle('dev-city-paused', document.hidden || !document.hasFocus());
+  };
+  document.addEventListener('visibilitychange', updateState);
+  window.addEventListener('blur', updateState);
+  window.addEventListener('focus', updateState);
+  updateState();
 }
 
 function startConnectionMonitoring() {
@@ -5605,6 +5663,7 @@ async function init() {
   // Start periodic connection monitoring
   startConnectionMonitoring();
   wireDeviceConnectionSuspectListener();
+  wireDevCityAnimationPause();
   
   // BrightScript Fiddle: build a snapshot of currently discovered+connected devices and
   // push it to any open Fiddle window. The main menu's "Open Fiddle" action lands here.

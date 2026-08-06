@@ -1321,14 +1321,20 @@
       overflow: hidden;
       pointer-events: none;
       z-index: 0;
-      background: linear-gradient(180deg, 
-        #0a0a12 0%, 
+      background: linear-gradient(180deg,
+        #0a0a12 0%,
         #0f0a1a 20%,
-        #1a1035 50%, 
+        #1a1035 50%,
         #2d1b4e 80%,
         #3d2066 100%);
     }
-    
+    /* Purely decorative — freeze every animation in the scene while the window is hidden or
+       unfocused (see wireDevCityAnimationPause in app.ts) rather than animating it for hours with
+       nothing looking at it. */
+    body.dev-city-paused .dev-city-bg * {
+      animation-play-state: paused !important;
+    }
+
     /* Stars - Dense twinkling field */
     .stars {
       position: absolute;
