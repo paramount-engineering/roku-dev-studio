@@ -366,7 +366,7 @@ function buildRowsHtml(rows: ScaIssueRow[]): string {
             .map((c) => {
               const url = resolveCertRequirementUrl(c);
               return url
-                ? `<a href="#" class="sca-cert-chip" data-open-url="${escapeHtml(url)}">${escapeHtml(c)}</a>`
+                ? `<a href="${escapeHtml(url)}" class="sca-cert-chip" target="_blank" rel="noreferrer">${escapeHtml(c)}</a>`
                 : `<span class="sca-cert-chip">${escapeHtml(c)}</span>`;
             })
             .join('')}</div>`
@@ -376,7 +376,7 @@ function buildRowsHtml(rows: ScaIssueRow[]): string {
         cols.push(
           `<div class="sca-detail-label">${escapeHtml(S.staticAnalysis.documentationLabel)}</div>`,
           `<div class="sca-detail-value">${row.documentationUrls
-            .map((d) => `<a href="#" class="sca-doc-link" data-open-url="${escapeHtml(d.url)}">${escapeHtml(d.alias || d.url)}</a>`)
+            .map((d) => `<a href="${escapeHtml(d.url)}" class="sca-doc-link" target="_blank" rel="noreferrer">${escapeHtml(d.alias || d.url)}</a>`)
             .join('')}</div>`
         );
       }
@@ -582,18 +582,14 @@ function wireAnalyze(): void {
 }
 
 /** Delegated clicks on the results table body: expand/collapse the cert-requirements +
- *  documentation detail row, and open cert/documentation links externally (same "no
- *  setWindowOpenHandler in this app" reason the Java link goes through `openExternal`). */
+ *  documentation detail row. The cert/documentation links themselves are plain
+ *  `target="_blank"` anchors (same as the Console Monitor's docs links) — with no
+ *  `setWindowOpenHandler` registered anywhere in this app, Electron's default behavior opens
+ *  those in their own in-app window rather than the system browser, so no click handling is
+ *  needed here at all. */
 function wireResultsTable(): void {
   els.resultsTableBody.addEventListener('click', (e) => {
     const target = e.target as HTMLElement | null;
-    const openUrlEl = target?.closest('[data-open-url]');
-    if (openUrlEl instanceof HTMLElement) {
-      e.preventDefault();
-      const url = openUrlEl.getAttribute('data-open-url');
-      if (url) void getBridge().openExternal(url);
-      return;
-    }
     const expandBtn = target?.closest('.sca-row-expand-btn');
     if (expandBtn instanceof HTMLElement) {
       const row = expandBtn.closest('tr');
