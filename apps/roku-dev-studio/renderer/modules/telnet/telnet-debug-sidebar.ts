@@ -217,6 +217,10 @@ export function setupTelnetDebugSidebar(panel: HTMLElement, ip: string, opts: Si
   const statusText = q<HTMLElement>('[data-debug-statustext]');
   const whyBtn = q<HTMLButtonElement>('[data-debug-why]');
   const attachBtn = q<HTMLButtonElement>('[data-debug-cmd="attach"]');
+  // Continue/Pause/Step/Restart/Stop cluster — hidden while no session is attached (see
+  // updateControls) so a disabled, unusable button row doesn't force the toolbar to wrap onto a
+  // second line around the status + Attach/Detach group, which stays the sole, prominent action.
+  const execGroup = q<HTMLElement>('[data-debug-exec-group]');
   const continueBtn = q<HTMLButtonElement>('[data-debug-cmd="continue"]');
   const pauseBtn = q<HTMLButtonElement>('[data-debug-cmd="pause"]');
   const stepBtns = ['stepOver', 'stepIn', 'stepOut'].map((c) => q<HTMLButtonElement>(`[data-debug-cmd="${c}"]`));
@@ -365,6 +369,9 @@ export function setupTelnetDebugSidebar(panel: HTMLElement, ip: string, opts: Si
 
   const updateControls = (): void => {
     const attached = isAttached() || state === 'connecting';
+    // Only reveal the exec cluster once a session is genuinely up (not just "connecting" — that
+    // still shows the prominent status + Attach/Detach alone, single row).
+    if (execGroup) execGroup.hidden = !isAttached();
     if (attachBtn) {
       // Stamp I18N_DYNAMIC_ATTR via setDynamicText so a live-locale-switch applyI18n pass
       // doesn't revert this data-i18n button back to "Attach" while it's showing "Detach"
@@ -1012,6 +1019,10 @@ export function setupTelnetDebugSidebar(panel: HTMLElement, ip: string, opts: Si
       return;
     }
     setStatus(S.debugger.restarting, 'connecting');
+    // Optimistic — `state` itself only changes once a real DebuggerState event arrives (via
+    // updateControls), which would otherwise leave the exec cluster visible with stale
+    // enabled/disabled buttons for the "Restarting…" window if this device was already attached.
+    if (execGroup) execGroup.hidden = true;
     try {
       const res = await debugApi.debuggerRestart(ip, pwd);
       if (res && res.success === false) setStatus(S.debugger.status.error, 'error', res.error || S.debugger.attachFailed(''));

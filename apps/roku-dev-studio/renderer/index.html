@@ -6829,6 +6829,13 @@
       background: var(--bg-tertiary);
       border-bottom: 1px solid var(--border);
     }
+    /* Continue/Pause/Step/Restart/Stop cluster — a flex item of its own so nested children
+       (notably the separator's align-self:stretch) still lay out as if unwrapped. Toggled via
+       the `hidden` attribute in JS; the compound [hidden] selector below outranks the plain
+       class rule's `display` (equal-specificity author rules lose to source order, not intent —
+       an attribute-qualified selector is unambiguously more specific, so this always wins). */
+    .telnet-debug-toolbar-exec { display: flex; align-items: center; gap: 4px; }
+    .telnet-debug-toolbar-exec[hidden] { display: none; }
     .telnet-debug-btn {
       padding: 5px 9px;
       border-radius: 6px;
@@ -16004,14 +16011,20 @@
                 <div class="telnet-debug-resize" data-debug-resize role="separator" aria-orientation="vertical" title="Drag to resize" data-i18n-title="debugger.dragToResize"></div>
                 <div class="telnet-debug-inner">
                   <div class="telnet-debug-toolbar" data-debug-toolbar>
-                    <button type="button" class="telnet-debug-btn telnet-debug-iconbtn" data-debug-cmd="continue" title="Continue" data-i18n-title="debugger.continue" aria-label="Continue" data-i18n-aria-label="debugger.continue" disabled><span class="icon icon-xs"><svg><use href="#icon-play"/></svg></span></button>
-                    <button type="button" class="telnet-debug-btn telnet-debug-iconbtn" data-debug-cmd="pause" title="Pause" data-i18n-title="debugger.pause" aria-label="Pause" data-i18n-aria-label="debugger.pause" disabled><span class="icon icon-xs"><svg><use href="#icon-pause"/></svg></span></button>
-                    <span class="telnet-debug-toolbar-sep" aria-hidden="true"></span>
-                    <button type="button" class="telnet-debug-btn" data-debug-cmd="stepOver" title="Step Over" data-i18n-title="debugger.stepOver" data-i18n="debugger.stepOverShort" disabled>Over</button>
-                    <button type="button" class="telnet-debug-btn" data-debug-cmd="stepIn" title="Step In" data-i18n-title="debugger.stepIn" data-i18n="debugger.stepInShort" disabled>In</button>
-                    <button type="button" class="telnet-debug-btn" data-debug-cmd="stepOut" title="Step Out" data-i18n-title="debugger.stepOut" data-i18n="debugger.stepOutShort" disabled>Out</button>
-                    <button type="button" class="telnet-debug-btn telnet-debug-iconbtn" data-debug-cmd="restart" title="Restart" data-i18n-title="debugger.restartTitle" aria-label="Restart" data-i18n-aria-label="debugger.restart"><span class="icon icon-xs"><svg><use href="#icon-refresh"/></svg></span></button>
-                    <button type="button" class="telnet-debug-btn telnet-debug-iconbtn telnet-debug-btn--danger" data-debug-cmd="stop" title="Stop &amp; Exit App" data-i18n-title="debugger.stop" aria-label="Stop &amp; Exit App" data-i18n-aria-label="debugger.stop"><span class="icon icon-xs"><svg><use href="#icon-stop"/></svg></span></button>
+                    <!-- Hidden while no session is attached (idle/connecting/error/disconnected) — these
+                         are meaningless without one, and showing them disabled alongside the status +
+                         Attach/Detach forced a wrap onto a second row. Shown (enabled per-state) once
+                         attached; see updateControls() in telnet-debug-sidebar.ts. -->
+                    <div class="telnet-debug-toolbar-exec" data-debug-exec-group hidden>
+                      <button type="button" class="telnet-debug-btn telnet-debug-iconbtn" data-debug-cmd="continue" title="Continue" data-i18n-title="debugger.continue" aria-label="Continue" data-i18n-aria-label="debugger.continue" disabled><span class="icon icon-xs"><svg><use href="#icon-play"/></svg></span></button>
+                      <button type="button" class="telnet-debug-btn telnet-debug-iconbtn" data-debug-cmd="pause" title="Pause" data-i18n-title="debugger.pause" aria-label="Pause" data-i18n-aria-label="debugger.pause" disabled><span class="icon icon-xs"><svg><use href="#icon-pause"/></svg></span></button>
+                      <span class="telnet-debug-toolbar-sep" aria-hidden="true"></span>
+                      <button type="button" class="telnet-debug-btn" data-debug-cmd="stepOver" title="Step Over" data-i18n-title="debugger.stepOver" data-i18n="debugger.stepOverShort" disabled>Over</button>
+                      <button type="button" class="telnet-debug-btn" data-debug-cmd="stepIn" title="Step In" data-i18n-title="debugger.stepIn" data-i18n="debugger.stepInShort" disabled>In</button>
+                      <button type="button" class="telnet-debug-btn" data-debug-cmd="stepOut" title="Step Out" data-i18n-title="debugger.stepOut" data-i18n="debugger.stepOutShort" disabled>Out</button>
+                      <button type="button" class="telnet-debug-btn telnet-debug-iconbtn" data-debug-cmd="restart" title="Restart" data-i18n-title="debugger.restartTitle" aria-label="Restart" data-i18n-aria-label="debugger.restart"><span class="icon icon-xs"><svg><use href="#icon-refresh"/></svg></span></button>
+                      <button type="button" class="telnet-debug-btn telnet-debug-iconbtn telnet-debug-btn--danger" data-debug-cmd="stop" title="Stop &amp; Exit App" data-i18n-title="debugger.stop" aria-label="Stop &amp; Exit App" data-i18n-aria-label="debugger.stop"><span class="icon icon-xs"><svg><use href="#icon-stop"/></svg></span></button>
+                    </div>
                     <div class="telnet-debug-toolbar-right">
                       <span class="telnet-debug-statustext" data-debug-statustext></span>
                       <span class="telnet-debug-statusdot" data-debug-status role="img" aria-label="Debugger status"></span>
