@@ -200,7 +200,11 @@ let server: http.Server | null = null;
 let bridgePort = 0;
 let bridgeToken = '';
 let descriptorPath = '';
-let descriptorRecheckInterval: NodeJS.Timeout | null = null;
+/** Primary heal path — near-instant, event-driven (see `startDescriptorWatch`). */
+let descriptorWatcher: fs.FSWatcher | null = null;
+/** Backstop for `fs.watch`'s known cross-platform flakiness (missed events, network filesystems,
+ *  or the watch failing to set up at all) — same guarantee as the old 2s poll, ~30x less often. */
+let descriptorFallbackInterval: NodeJS.Timeout | null = null;
 let getRendererSender: (() => WebContents | null) = () => null;
 // Kept so stopMcpBridge can remove the result-channel listeners registered in
 // startMcpBridge. Without this, a restart-in-process stacks a second set of listeners
@@ -344,7 +348,7 @@ function writeDescriptor(userData: string): void {
 
 async function rewriteDescriptorIfMissing(): Promise<void> {
   if (!descriptorPath || !descriptorPayload) return;
-  // Async fs so the 2s watcher never blocks the main thread for the app's lifetime.
+  // Async fs so a check never blocks the main thread for the app's lifetime.
   try {
     await fs.promises.access(descriptorPath);
     return; // descriptor present — nothing to do
@@ -360,6 +364,68 @@ async function rewriteDescriptorIfMissing(): Promise<void> {
     logInfo(`bridge descriptor was missing — rewrote at ${descriptorPath} (port ${bridgePort})`);
   } catch (e) {
     logWarn('failed to rewrite bridge descriptor', e);
+  }
+}
+
+const DESCRIPTOR_FALLBACK_INTERVAL_MS = 60_000;
+
+/**
+ * Defense-in-depth: an external delete or a partial-quit sequence (the `before-quit` →
+ * `stopMcpBridge` → window-close-prevented path documented in
+ * `.discussion-docs/mcp-flows-test-report.md`) can leave the bridge alive while the descriptor
+ * file disappears. Heals it two ways: an `fs.watch` on the containing directory reacts to a
+ * delete near-instantly, backstopped by an infrequent poll in case the watch misses an event
+ * (known `fs.watch` flakiness on some filesystems) or never set up at all.
+ */
+function startDescriptorWatch(userDataDir: string): void {
+  if (!descriptorWatcher) {
+    try {
+      descriptorWatcher = fs.watch(userDataDir, (_event, filename) => {
+        if (filename && filename !== BRIDGE_FILE_NAME) return;
+        void rewriteDescriptorIfMissing();
+      });
+      descriptorWatcher.on('error', (e) => {
+        logWarn('descriptor watcher error — relying on the fallback poll only', e);
+        try {
+          descriptorWatcher?.close();
+        } catch {
+          /* ignore */
+        }
+        descriptorWatcher = null;
+      });
+    } catch (e) {
+      logWarn('fs.watch unavailable for descriptor dir — relying on the fallback poll only', e);
+    }
+  }
+  if (descriptorFallbackInterval == null) {
+    descriptorFallbackInterval = setInterval(() => {
+      if (!server) return;
+      void rewriteDescriptorIfMissing();
+    }, DESCRIPTOR_FALLBACK_INTERVAL_MS);
+    // Don't keep the event loop alive just for this watcher; if the process is otherwise idle and
+    // quitting, let it.
+    if (typeof descriptorFallbackInterval.unref === 'function') {
+      descriptorFallbackInterval.unref();
+    }
+  }
+}
+
+function stopDescriptorWatch(): void {
+  if (descriptorWatcher) {
+    try {
+      descriptorWatcher.close();
+    } catch {
+      /* ignore */
+    }
+    descriptorWatcher = null;
+  }
+  if (descriptorFallbackInterval) {
+    try {
+      clearInterval(descriptorFallbackInterval);
+    } catch {
+      /* ignore */
+    }
+    descriptorFallbackInterval = null;
   }
 }
 
@@ -2022,24 +2088,7 @@ export function startMcpBridge(deps: BridgeDeps): void {
     if (addr && typeof addr !== 'string') {
       bridgePort = addr.port;
       writeDescriptor(app.getPath('userData'));
-      // Defense-in-depth: an external delete or a partial-quit sequence
-      // (the `before-quit` → `stopMcpBridge` → window-close-prevented
-      // path documented in `.discussion-docs/mcp-flows-test-report.md`)
-      // can leave the bridge alive while the descriptor file disappears.
-      // Re-write it any time it goes missing while the server is still
-      // listening — the MCP server polls for the file every few seconds,
-      // so a single rewrite restores the connection.
-      if (descriptorRecheckInterval == null) {
-        descriptorRecheckInterval = setInterval(() => {
-          if (!server) return;
-          void rewriteDescriptorIfMissing();
-        }, 2000);
-        // Don't keep the event loop alive just for this watcher; if the
-        // process is otherwise idle and quitting, let it.
-        if (typeof descriptorRecheckInterval.unref === 'function') {
-          descriptorRecheckInterval.unref();
-        }
-      }
+      startDescriptorWatch(app.getPath('userData'));
     }
   });
 
@@ -2183,14 +2232,7 @@ export function stopMcpBridge(): void {
     }
     bridgeIpcMain = null;
   }
-  if (descriptorRecheckInterval) {
-    try {
-      clearInterval(descriptorRecheckInterval);
-    } catch {
-      /* ignore */
-    }
-    descriptorRecheckInterval = null;
-  }
+  stopDescriptorWatch();
   if (server) {
     try {
       server.close();
