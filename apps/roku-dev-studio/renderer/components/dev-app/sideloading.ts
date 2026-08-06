@@ -62,6 +62,10 @@ export function setupSideloading(
   const debugCheckbox = panel.querySelector('.sideload-debug-checkbox') as HTMLInputElement | null;
   const deviceIp = panel.dataset.ip || '';
   const deviceKeyForIp = deviceKey({ serial: serialNumber, ip: deviceIp });
+  if (debugCheckbox && api.isRemote && api.debuggerSupported === false) {
+    debugCheckbox.disabled = true;
+    debugCheckbox.title = S.debugger.unsupportedByServerTitle;
+  }
   if (debugCheckbox && deviceIp) {
     const readIps = async (): Promise<string[]> => {
       const res = await window.roku.getSetting(DEBUG_SIDELOAD_KEY);

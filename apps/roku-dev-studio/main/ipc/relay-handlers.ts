@@ -17,6 +17,7 @@ import { getSideloadRelayService, initSideloadRelayFromSettings } from '../sidel
 import { isRelaySelfDevice } from '../sideload-relay/fake-device-info';
 import { remoteHttpRequest } from '../remote-http';
 import { readRemoteLocations } from '../remote-locations';
+import { recordRemoteDeviceSeen } from '../remote-device-registry';
 
 const { mainLog, mainWarn } = require('../log');
 const secretStore = require('../secret-store') as typeof import('../secret-store');
@@ -265,13 +266,21 @@ function setupRelayHandlers(_mainWindow: BrowserWindow | undefined, safeSendToRe
       }
 
       // --- Remote locations (best-effort; each location discovered in parallel) ---
+      // The remote server's own `/devices` route runs a fresh `ssdpDiscover` (6000ms default,
+      // and ONLY resolves early if it actually finds a device) then, if that comes up empty,
+      // falls back to a subnet scan — so its worst case comfortably exceeds 6s before it can
+      // even start replying. A 5000ms HTTP timeout here would time out on every quiet remote
+      // LAN, silently dropping that location's devices from the results.
       const locations = readRemoteLocations(loadSettings());
       await Promise.all(
         locations.map(async (loc) => {
-          const res = await remoteHttpRequest(loc.serverUrl, '/devices', 'GET', null, 5000);
+          const res = await remoteHttpRequest(loc.serverUrl, '/devices', 'GET', null, 15000);
           const devices = Array.isArray(res) ? res : Array.isArray(res?.devices) ? res.devices : [];
           for (const d of devices) {
-            if (d && typeof d === 'object') add(toCandidate(d as Record<string, unknown>, loc.name, true, allPasswords, loc.serverUrl, loc.id));
+            if (d && typeof d === 'object') {
+              recordRemoteDeviceSeen(d as Record<string, unknown>);
+              add(toCandidate(d as Record<string, unknown>, loc.name, true, allPasswords, loc.serverUrl, loc.id));
+            }
           }
         })
       );

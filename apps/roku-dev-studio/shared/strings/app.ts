@@ -48,6 +48,7 @@ export const app = {
     devApp: { label: 'Dev App', desc: 'Sideload Development Channels' },
     screenshot: { label: 'Screenshot', desc: 'Capture Device Screen' },
     console: { label: 'Console', desc: 'BrightScript Debug Output' },
+    debugger: { label: 'Debugger', desc: 'Breakpoints, Step Execution, Variable Inspection' },
     appConnector: { label: 'App Connector', desc: 'RALE TrackerTask Integration' },
     deepLink: { label: 'Deep-Link', desc: 'Launch Content with Parameters' },
     networkInspector: { label: 'Network Inspector', desc: 'Capture DNS/SNI/HTTP + MITM Proxy' }

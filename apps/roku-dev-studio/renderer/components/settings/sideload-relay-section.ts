@@ -12,6 +12,7 @@
 import { attachBackdropClickToClose } from '../../modules/utils/modal-backdrop-click.js';
 import { deviceKey } from '@shared/platform/device-identity.js';
 import { S } from '@shared/strings/index.js';
+import { registerRetranslate } from '../../modules/ui/retranslate-registry.js';
 
 interface Target {
   id: string;
@@ -539,7 +540,10 @@ function buildDom(root: HTMLElement): void {
   // (`style-src 'self'`) blocks injected inline <style> blocks.
   const toggleRow = (id: string, title: string, desc: string) =>
     h('div', { class: 'settings-row-toggle' }, [
-      h('div', { class: 'settings-row-text' }, [h('strong', {}, [title]), h('span', { class: 'settings-row-desc' }, [desc])]),
+      h('div', { class: 'settings-row-text' }, [
+        h('strong', { id: id + '-title' }, [title]),
+        h('span', { class: 'settings-row-desc', id: id + '-desc' }, [desc])
+      ]),
       h('label', { class: 'settings-toggle-wrap', for: id }, [
         h('input', { type: 'checkbox', id, class: 'settings-toggle-input', role: 'switch', 'aria-label': title }),
         h('span', { class: 'settings-toggle-ui', 'aria-hidden': 'true' }, [])
@@ -549,7 +553,7 @@ function buildDom(root: HTMLElement): void {
   // Password field with an inline show/hide eye toggle.
   const passwordRow = (id: string, title: string, desc: string, placeholder: string) => {
     const input = h('input', { type: 'password', id, class: 'settings-text-input sr-pw-reveal-input', 'aria-label': title, placeholder, autocomplete: 'off' }) as HTMLInputElement;
-    const eye = h('button', { type: 'button', class: 'sr-pw-eye', 'aria-label': S.sideloadRelay.showPassword, 'aria-pressed': 'false', title: S.sideloadRelay.showPassword }, [EYE_SVG()]);
+    const eye = h('button', { type: 'button', class: 'sr-pw-eye', id: id + '-eye', 'aria-label': S.sideloadRelay.showPassword, 'aria-pressed': 'false', title: S.sideloadRelay.showPassword }, [EYE_SVG()]);
     // The saved password lives in the backend, not the config. When revealing an
     // empty field that has a saved password, fetch and fill it; when hiding, if
     // the value is still exactly that fetched value (untouched), clear it again so
@@ -581,7 +585,10 @@ function buildDom(root: HTMLElement): void {
       input.focus();
     });
     return h('div', { class: 'settings-row-input' }, [
-      h('div', { class: 'settings-row-text' }, [h('strong', {}, [title]), h('span', { class: 'settings-row-desc' }, [desc])]),
+      h('div', { class: 'settings-row-text' }, [
+        h('strong', { id: id + '-title' }, [title]),
+        h('span', { class: 'settings-row-desc', id: id + '-desc' }, [desc])
+      ]),
       h('div', { class: 'sr-pw-reveal-wrap' }, [input, eye])
     ]);
   };
@@ -599,7 +606,7 @@ function buildDom(root: HTMLElement): void {
   root.append(
     h('div', { class: 'settings-row-toggle sr-summary-row' }, [
       h('div', { class: 'settings-row-text' }, [
-        h('strong', {}, [S.sideloadRelay.targetedDevicesTitle]),
+        h('strong', { id: 'srTargetedDevicesTitle' }, [S.sideloadRelay.targetedDevicesTitle]),
         h('span', { class: 'settings-row-desc', id: 'srTargetSummary', 'aria-live': 'polite' }, [S.sideloadRelay.targetSummaryLoading])
       ]),
       h('button', { type: 'button', class: 'btn btn-secondary btn-sm', id: 'srSetupBtn' }, [S.sideloadRelay.setupDevicesBtn])
@@ -610,7 +617,7 @@ function buildDom(root: HTMLElement): void {
   const overlay = h('div', { class: 'sr-modal-overlay', id: 'srSetupOverlay', hidden: '' }, [
     h('div', { class: 'sr-modal' }, [
       h('div', { class: 'sr-modal-header' }, [
-        h('h2', {}, [S.sideloadRelay.modalTitle]),
+        h('h2', { id: 'srModalTitleText' }, [S.sideloadRelay.modalTitle]),
         h('div', { class: 'sr-modal-header-actions' }, [
           h('button', { type: 'button', class: 'sr-scan-btn', id: 'srRescanBtn' }, [
             h('span', { class: 'sr-scan-text' }, [S.sideloadRelay.scanBtn])
@@ -618,7 +625,7 @@ function buildDom(root: HTMLElement): void {
           h('button', { type: 'button', class: 'sr-modal-close', id: 'srModalClose', 'aria-label': S.common.close }, ['×'])
         ])
       ]),
-      h('div', { class: 'sr-modal-sub' }, [S.sideloadRelay.modalSubtitle]),
+      h('div', { class: 'sr-modal-sub', id: 'srModalSubtitle' }, [S.sideloadRelay.modalSubtitle]),
       h('div', { class: 'sr-modal-toolbar' }, [h('span', { class: 'sr-scan-status', id: 'srScanStatus', 'aria-live': 'polite' }, [])]),
       h('div', { class: 'sr-modal-table-wrap' }, [h('div', { id: 'srDeviceTable' }, [])]),
       h('div', { class: 'sr-modal-footer' }, [
@@ -631,6 +638,58 @@ function buildDom(root: HTMLElement): void {
     ])
   ]);
   document.body.appendChild(overlay);
+}
+
+/**
+ * Reset every statically-labeled piece of this section's DOM to the CURRENT locale's strings.
+ * `buildDom()` bakes `S.sideloadRelay.*`/`S.common.*` text into plain DOM nodes once at
+ * construction — no `data-i18n`, so `applyI18n(document)` can't reach them — so this is the
+ * imperative counterpart, registered via `registerRetranslate` (see init below) so a live locale
+ * switch doesn't leave this section's rows showing the OLD language until the Settings window is
+ * closed and reopened. Table/summary text that's already re-derived from live state on scans and
+ * toggles gets refreshed too (state-preserving — no data is reset).
+ */
+function relabelStaticText(): void {
+  const setText = (id: string, text: string): void => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = text;
+  };
+
+  setText('optSideloadRelay-title', S.sideloadRelay.enableTitle);
+  setText('optSideloadRelay-desc', S.sideloadRelay.enableDesc);
+  setText('srPassword-title', S.sideloadRelay.passwordTitle);
+  setText('srPassword-desc', S.sideloadRelay.passwordDesc);
+  setText('optSrAutoConsole-title', S.sideloadRelay.autoConsoleTitle);
+  setText('optSrAutoConsole-desc', S.sideloadRelay.autoConsoleDesc);
+  setText('optSrRetry-title', S.sideloadRelay.retryTitle);
+  setText('optSrRetry-desc', S.sideloadRelay.retryDesc);
+  setText('srTargetedDevicesTitle', S.sideloadRelay.targetedDevicesTitle);
+  setText('srSetupBtn', S.sideloadRelay.setupDevicesBtn);
+
+  const eye = document.getElementById('srPassword-eye');
+  if (eye) {
+    const label = eye.classList.contains('revealed') ? S.sideloadRelay.hidePassword : S.sideloadRelay.showPassword;
+    eye.setAttribute('aria-label', label);
+    eye.setAttribute('title', label);
+  }
+
+  setText('srModalTitleText', S.sideloadRelay.modalTitle);
+  setText('srModalSubtitle', S.sideloadRelay.modalSubtitle);
+  document.getElementById('srModalClose')?.setAttribute('aria-label', S.common.close);
+  setText('srModalCancel', S.common.cancel);
+  setText('srModalSave', S.common.save);
+
+  const scanBtn = document.getElementById('srRescanBtn');
+  const scanText = scanBtn?.querySelector('.sr-scan-text');
+  if (scanText) scanText.textContent = scanBtn?.classList.contains('scanning') ? S.sideloadRelay.scanning : S.sideloadRelay.scanBtn;
+
+  // Re-derive count/summary strings (template functions like `targetSummaryReachable(n)`, not
+  // static text) from current in-memory state; if the setup modal is open, its headers/rows/
+  // summary too (renderModalTable rebuilds from `modalRows`, calling updateModalSummary itself).
+  updateTargetSummary();
+  updateGateBanner();
+  const overlay = document.getElementById('srSetupOverlay');
+  if (overlay && !overlay.hasAttribute('hidden')) renderModalTable();
 }
 
 /** Set a toggle's value + aria state. (aria change-wiring is done once in init.) */
@@ -745,6 +804,9 @@ export function initSideloadRelaySection(): void {
   const root = document.getElementById('sideloadRelayRoot');
   if (!root || !api || !api.sideloadRelayGetConfig) return;
   buildDom(root);
+  // Window-lifetime registration (never unregistered) — the Settings window reloads fresh on
+  // every open, so this can't accumulate across sessions the way a repeatedly-mounted surface would.
+  registerRetranslate(relabelStaticText);
 
   ['optSideloadRelay', 'optSrAutoConsole', 'optSrRetry'].forEach(wireToggleAria);
 

@@ -24,6 +24,7 @@ import { DebugEndpoints } from './debug-endpoints';
 import { SsdpResponder } from './ssdp-responder';
 import { RokuEmulator } from './roku-emulator';
 import { runFanout, type FanoutTarget, type RemoteFanoutOps } from './fanout';
+import { resolveRemoteDeviceIp } from '../remote-device-registry';
 
 const { mainLog, mainWarn } = require('../log');
 const { loadSettings, saveSettings } = require('../settings') as {
@@ -262,17 +263,20 @@ export class SideloadRelayService {
       // Targets are configured once (Setup Devices) and can go stale after a network change —
       // resolve against whatever this run's live discovery has actually seen for this serial,
       // falling back to the saved IP when the serial hasn't been (re)discovered yet this run.
-      ip: t.remote ? t.ip : resolveDeviceIp(t.serial, t.ip),
+      // Local and remote serials are tracked in separate registries (a remote location's device
+      // list never reaches the local ssdpDiscover/subnetScan-fed one).
+      ip: t.remote ? resolveRemoteDeviceIp(t.serial, t.ip) : resolveDeviceIp(t.serial, t.ip),
       name: t.name || t.ip,
       password: pwds[t.id] || '',
       remote: !!t.remote,
       location: t.location,
       serverUrl: t.serverUrl,
-      // Enable debugging for a LOCAL target when it opted into "Sideload with
-      // Debugging" OR the uploaded build carries STOP breakpoints / the IDE asked
-      // for a debug launch (autoDebug). Debug-over-relay for remote targets isn't
-      // supported yet, so remote targets never get remotedebug=1.
-      remoteDebug: !t.remote && (debugIps.includes(t.id) || debugIps.includes(t.ip) || autoDebug)
+      locationId: t.locationId,
+      // Enable debugging for a target when it opted into "Sideload with Debugging"
+      // OR the uploaded build carries STOP breakpoints / the IDE asked for a debug
+      // launch (autoDebug). Honored for remote targets too — the remote server runs
+      // its own DebugSessionController with real network access to the device.
+      remoteDebug: debugIps.includes(t.id) || debugIps.includes(t.ip) || autoDebug
     }));
   }
 
@@ -470,9 +474,13 @@ export class SideloadRelayService {
         this.listener.onDeviceResult(result);
         if (result.done && result.install.state === 'ok' && debugTargetIps.has(result.ip)) {
           try {
+            const target = debugTargets.find((t) => t.id === result.targetId);
             (require('../ipc/debugger-handlers') as {
-              notifyDebuggerReattach: (ip: string, extra?: { discovered?: number }) => void;
-            }).notifyDebuggerReattach(result.ip, { discovered });
+              notifyDebuggerReattach: (ip: string, extra?: { discovered?: number; isRemote?: boolean; serverUrl?: string }) => void;
+            }).notifyDebuggerReattach(result.ip, {
+              discovered,
+              ...(target?.remote ? { isRemote: true, serverUrl: target.serverUrl } : {})
+            });
           } catch { /* best-effort */ }
         }
         if (result.done && !consoleDone.has(result.targetId)) {

@@ -92,3 +92,81 @@ export function remoteHttpRequest(
     req.end();
   });
 }
+
+/** Cap on an accumulated binary export (pcap / CA cert) — generous but bounded. */
+const MAX_BINARY_RESPONSE_BYTES = 64 * 1024 * 1024;
+
+/**
+ * Issue a GET request to `serverUrl + pathStr` and resolve the raw response bytes as a `Buffer`
+ * (or `{ success: false, error }` on any failure — never rejects). Use this instead of
+ * {@link remoteHttpRequest} for binary downloads (pcap export, CA cert export) — that function
+ * accumulates chunks via string concatenation, which corrupts non-UTF8 bytes.
+ */
+export function remoteHttpRequestBinary(
+  serverUrl: string,
+  pathStr: string,
+  timeout = 30000
+): Promise<{ success: boolean; buffer?: Buffer; contentType?: string; headers?: Record<string, string | string[] | undefined>; error?: string }> {
+  return new Promise((resolve) => {
+    if (!isSafeRelayUrl(serverUrl)) {
+      resolve({ success: false, error: 'Invalid relay server URL' });
+      return;
+    }
+    const url = new URL(pathStr, serverUrl);
+    const isHttps = url.protocol === 'https:';
+    const httpModule = isHttps ? require('https') : require('http');
+
+    const req = httpModule.request(
+      {
+        hostname: url.hostname,
+        port: url.port || (isHttps ? 443 : 80),
+        path: url.pathname + url.search,
+        method: 'GET',
+        timeout
+      },
+      (res: IncomingMessage) => {
+        if ((res.statusCode ?? 0) >= 400) {
+          let errData = '';
+          res.on('data', (chunk: Buffer) => { errData += chunk.toString('utf8'); });
+          res.on('end', () => {
+            try {
+              resolve({ success: false, error: JSON.parse(errData)?.error || `Server responded ${res.statusCode}` });
+            } catch {
+              resolve({ success: false, error: `Server responded ${res.statusCode}` });
+            }
+          });
+          return;
+        }
+        const chunks: Buffer[] = [];
+        let total = 0;
+        let aborted = false;
+        res.on('data', (chunk: Buffer) => {
+          if (aborted) return;
+          total += chunk.length;
+          if (total > MAX_BINARY_RESPONSE_BYTES) {
+            aborted = true;
+            res.destroy();
+            resolve({ success: false, error: 'Response too large' });
+            return;
+          }
+          chunks.push(chunk);
+        });
+        res.on('end', () => {
+          if (aborted) return;
+          resolve({
+            success: true,
+            buffer: Buffer.concat(chunks),
+            contentType: res.headers['content-type'],
+            headers: res.headers
+          });
+        });
+      }
+    );
+    req.on('error', (err: Error) => resolve({ success: false, error: err.message }));
+    req.on('timeout', () => {
+      req.destroy();
+      resolve({ success: false, error: 'Request timed out' });
+    });
+    req.end();
+  });
+}

@@ -863,10 +863,16 @@ function applyRemoteProbeResult(place: string, res: any) {
     setNiSectionUnsupported(true);
     setToggle('optNetworkInspector', false);
     renderNiPortConflict(null);
+    if (el('niCaRow')) el('niCaRow').hidden = true;
     return;
   }
   setNiSectionUnsupported(false);
   setNiControlsDisabled(false);
+  // This location can capture, so its CA is real too — show the row and point the description
+  // at THIS server's certificate authority, not the local one.
+  if (el('niCaRow')) el('niCaRow').hidden = false;
+  if (el('niCaRowDesc')) el('niCaRowDesc').textContent = S.settings.caRowDescRemote;
+  if (el('niCaSectionDesc')) el('niCaSectionDesc').textContent = S.settings.caSectionDescRemote;
   if (el('niMaxRawPackets')) el('niMaxRawPackets').disabled = true;
   if (el('niMaxBodyKb')) el('niMaxBodyKb').disabled = true;
   var cfg = res.config || {};
@@ -970,14 +976,20 @@ function applyNiPlace() {
     setNiPlaceHint('', false);
     if (setupRow) setupRow.hidden = false;
     if (maxRawRow) maxRawRow.disabled = false;
-    // The CA is this machine's local certificate authority — only meaningful for the local place.
+    // This machine's own certificate authority — restore the local wording in case a previously
+    // selected remote place swapped it to the remote variant (applyRemoteProbeResult).
     if (caRow) caRow.hidden = false;
+    if (el('niCaRowDesc')) el('niCaRowDesc').textContent = S.settings.caRowDesc;
+    if (el('niCaSectionDesc')) el('niCaSectionDesc').textContent = S.settings.caSectionDesc;
     applyLocalNiValues();
     refreshNiPortConflict();
     return;
   }
+  // Default to hidden while probing (avoids a flash of the previous place's CA info);
+  // applyRemoteProbeResult reveals it once we know this place actually supports capture.
   if (caRow) caRow.hidden = true;
-  // The CA modal is only meaningful for the local place — close it if switching to remote.
+  // Close any open CA modal so a place switch can't leave stale info on screen — the reopened
+  // "View Certificate" button re-fetches for whichever place is now selected.
   if (isNiCaOpen()) closeNiCa();
   if (setupRow) setupRow.hidden = true;
   if (maxRawRow) maxRawRow.disabled = true;
@@ -1236,8 +1248,11 @@ function formatCaValidity(fromIso: string, toIso: string): string {
 }
 
 function refreshCaInfo() {
-  if (!api.networkInspectorGetCaInfo) return;
-  api.networkInspectorGetCaInfo().then(function (res: any) {
+  var place = currentNiPlace();
+  var isRemotePlace = place !== 'local';
+  if (isRemotePlace ? !api.remoteNetworkGetCaInfo : !api.networkInspectorGetCaInfo) return;
+  var req = isRemotePlace ? api.remoteNetworkGetCaInfo(place) : api.networkInspectorGetCaInfo();
+  req.then(function (res: any) {
     var ca = res && res.caInfo;
     if (res && res.success && ca) {
       if (el('niCaSubject')) el('niCaSubject').textContent = ca.commonName || '';
@@ -1279,10 +1294,15 @@ function setCaExportStatus(msg: string, isErr: boolean) {
 
 function wireCaExportButtons() {
   var btnPem = el('btnExportCaPem') as HTMLButtonElement | null;
-  if (btnPem && api.networkInspectorExportCaPem) {
+  if (btnPem && (api.networkInspectorExportCaPem || api.remoteNetworkExportCaPem)) {
     btnPem.addEventListener('click', function () {
+      var place = currentNiPlace();
+      var req = place !== 'local' && api.remoteNetworkExportCaPem
+        ? api.remoteNetworkExportCaPem(place)
+        : api.networkInspectorExportCaPem && api.networkInspectorExportCaPem();
+      if (!req) return;
       btnPem!.disabled = true;
-      api.networkInspectorExportCaPem().then(function (res: any) {
+      req.then(function (res: any) {
         btnPem!.disabled = false;
         if (res && res.success) {
           setCaExportStatus(S.settings.caExportedPem, false);
@@ -1298,10 +1318,15 @@ function wireCaExportButtons() {
     });
   }
   var btnCrt = el('btnExportCaCrt') as HTMLButtonElement | null;
-  if (btnCrt && api.networkInspectorExportCaCert) {
+  if (btnCrt && (api.networkInspectorExportCaCert || api.remoteNetworkExportCaCert)) {
     btnCrt.addEventListener('click', function () {
+      var place = currentNiPlace();
+      var req = place !== 'local' && api.remoteNetworkExportCaCert
+        ? api.remoteNetworkExportCaCert(place)
+        : api.networkInspectorExportCaCert && api.networkInspectorExportCaCert();
+      if (!req) return;
       btnCrt!.disabled = true;
-      api.networkInspectorExportCaCert().then(function (res: any) {
+      req.then(function (res: any) {
         btnCrt!.disabled = false;
         if (res && res.success) {
           setCaExportStatus(S.settings.caExportedCrt, false);

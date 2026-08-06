@@ -114,6 +114,8 @@ export interface RemoteVerifyDevAuthPayload extends RemoteDevicePayload {
 export interface RemoteSideloadPayload extends RemoteDevicePayload {
   filePath: string;
   password?: string;
+  remoteDebug?: boolean;
+  serial?: string;
 }
 export interface RemoteRaleWakePayload extends RemoteDevicePayload {
   port: number;

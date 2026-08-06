@@ -224,6 +224,22 @@ var init_channels = __esm({
       RemoteNetworkEventDetail: "remote:network-event-detail",
       RemoteNetworkClear: "remote:network-clear",
       RemoteNetworkSetupCapture: "remote:network-setup-capture",
+      // Live SSE relay from the remote server's /network/stream — one connection per serverUrl,
+      // reference-counted across every device panel pointed at that server (mirrors the
+      // RemoteTelnetConnect/Disconnect lease model below). Forwarded events land on the same
+      // NetworkInspector* push channels the local engine uses, tagged { isRemote: true, serverUrl }.
+      RemoteNetworkStreamConnect: "remote:network-stream-connect",
+      RemoteNetworkStreamDisconnect: "remote:network-stream-disconnect",
+      RemoteNetworkSetEventNote: "remote:network-set-event-note",
+      RemoteNetworkGetTrafficRules: "remote:network-get-traffic-rules",
+      RemoteNetworkSetDeviceTrafficRules: "remote:network-set-device-traffic-rules",
+      RemoteNetworkReplayRequest: "remote:network-replay-request",
+      RemoteNetworkFind: "remote:network-find",
+      RemoteNetworkSetRecording: "remote:network-set-recording",
+      RemoteNetworkExportPcap: "remote:network-export-pcap",
+      RemoteNetworkGetCaInfo: "remote:network-get-ca-info",
+      RemoteNetworkExportCaPem: "remote:network-export-ca-pem",
+      RemoteNetworkExportCaCert: "remote:network-export-ca-cert",
       RemoteDeviceInfo: "remote:device-info",
       RemoteKeypress: "remote:keypress",
       RemoteLaunch: "remote:launch",
@@ -293,6 +309,27 @@ var init_channels = __esm({
       DebuggerBreakpoints: "debugger:breakpoints",
       /** Main → windows: a (debug-enabled) device was just (re)sideloaded — reattach. */
       DebuggerReattach: "debugger:reattach",
+      // Remote debugger — the session runs on the remote RDS server (real network access to the
+      // device); these proxy each request over HTTP. Push events reuse the local Debugger* channels
+      // above (tagged { isRemote: true, serverUrl } by the relay) rather than duplicating them.
+      // DebuggerScanStops has no remote equivalent — it reads the local sideload .zip already on
+      // the Electron host's disk, which is identical for a local or remote sideload target.
+      RemoteDebuggerAttach: "remote:debugger-attach",
+      RemoteDebuggerDetach: "remote:debugger-detach",
+      RemoteDebuggerStatus: "remote:debugger-status",
+      RemoteDebuggerContinue: "remote:debugger-continue",
+      RemoteDebuggerPause: "remote:debugger-pause",
+      RemoteDebuggerStepOver: "remote:debugger-step-over",
+      RemoteDebuggerStepIn: "remote:debugger-step-in",
+      RemoteDebuggerStepOut: "remote:debugger-step-out",
+      RemoteDebuggerStackTrace: "remote:debugger-stacktrace",
+      RemoteDebuggerVariables: "remote:debugger-variables",
+      RemoteDebuggerAddBreakpoints: "remote:debugger-add-breakpoints",
+      RemoteDebuggerRemoveBreakpointsByLocation: "remote:debugger-remove-breakpoints-by-location",
+      RemoteDebuggerExecute: "remote:debugger-execute",
+      RemoteDebuggerRestart: "remote:debugger-restart",
+      RemoteDebuggerStreamConnect: "remote:debugger-stream-connect",
+      RemoteDebuggerStreamDisconnect: "remote:debugger-stream-disconnect",
       SettingsGet: "settings:get",
       SettingsSet: "settings:set",
       SettingsDelete: "settings:delete",
@@ -489,6 +526,13 @@ contextBridge.exposeInMainWorld("settingsApi", {
   // Remote Network Inspector (per-location): probe capability + config, and apply config.
   remoteNetworkProbe: (serverUrl) => ipcRenderer.invoke(IPC2.SettingsWindowRemoteNetworkProbe, { serverUrl }),
   remoteNetworkSetConfig: (serverUrl, config) => ipcRenderer.invoke(IPC2.SettingsWindowRemoteNetworkSetConfig, { serverUrl, config }),
+  // Remote CA (per-location Certificate Authority card). Reuses the same IPC.RemoteNetwork*
+  // channels the main window's device panels use — those handlers are registered globally on
+  // ipcMain (see main/ipc/remote-handlers.ts), so invoking them from the Settings webContents
+  // reaches them exactly like the local NetworkInspector* CA channels above.
+  remoteNetworkGetCaInfo: (serverUrl) => ipcRenderer.invoke(IPC2.RemoteNetworkGetCaInfo, { serverUrl }),
+  remoteNetworkExportCaPem: (serverUrl) => ipcRenderer.invoke(IPC2.RemoteNetworkExportCaPem, { serverUrl }),
+  remoteNetworkExportCaCert: (serverUrl) => ipcRenderer.invoke(IPC2.RemoteNetworkExportCaCert, { serverUrl }),
   // Sideload Relay — config (gate/port/password/flags/targets) + live per-device results.
   sideloadRelayGetStatus: () => ipcRenderer.invoke(IPC2.SideloadRelayGetStatus),
   sideloadRelayGetConfig: () => ipcRenderer.invoke(IPC2.SideloadRelayGetConfig),

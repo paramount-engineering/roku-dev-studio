@@ -32,6 +32,60 @@ function errMsg(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
 }
 
+/**
+ * Decide whether a sideload should be a debug launch, and discover STOP breakpoints
+ * in its source. "Debugging enabled" = caller asked (checkbox) OR the device opted in
+ * previously (persisted) OR we just DISCOVERED STOP breakpoints (auto-enable) — when
+ * enabled, the caller should forward `remotedebug=1` (opens 8081) and use a clean
+ * Delete+Install. Persisted by device key (serial preferred, else IP) so the preference
+ * survives a network change; the raw-IP form is also checked for entries saved before
+ * device-key migration.
+ *
+ * `filePath` is always the LOCAL disk path — even for a remote-managed device the
+ * package is uploaded FROM this file, so the STOP scan and the "last debug zip" memory
+ * (used by Restart / the Breakpoints panel's scan-stops IPC) are identical for a local
+ * or remote sideload target and never need a remote-server counterpart.
+ */
+function computeSideloadDebugFlags(
+  ip: string,
+  serial: string | undefined,
+  filePath: string,
+  remoteDebug: boolean | undefined
+): { debugEnabled: boolean; discovered: number } {
+  const scan = require('roku-dev-studio-api/lib/debugger/scan-stops') as {
+    scanZipForStops: (p: string) => unknown[];
+  };
+  const settingsMod = require('../settings') as {
+    loadSettings: () => Record<string, unknown>;
+    saveSettings: (s: Record<string, unknown>) => boolean;
+  };
+
+  let discovered = 0;
+  try {
+    discovered = scan.scanZipForStops(filePath).length;
+  } catch { /* scan best-effort */ }
+
+  const key = deviceKey({ serial, ip });
+  let debugEnabled = !!remoteDebug;
+  try {
+    const v = settingsMod.loadSettings()['sideload-debug-ips'];
+    if (Array.isArray(v) && (v.includes(key) || v.includes(ip))) debugEnabled = true;
+  } catch { /* default off */ }
+  if (discovered > 0 && !debugEnabled) {
+    debugEnabled = true;
+    try {
+      // Persist the auto-enable so future sideloads (and the sidebar) stay on.
+      const s = settingsMod.loadSettings();
+      const cur = Array.isArray(s['sideload-debug-ips']) ? (s['sideload-debug-ips'] as string[]) : [];
+      if (!cur.includes(key)) {
+        s['sideload-debug-ips'] = [...cur, key];
+        settingsMod.saveSettings(s);
+      }
+    } catch { /* best-effort persist */ }
+  }
+  return { debugEnabled, discovered };
+}
+
 const SIDELOAD_PACKAGE_EXTENSIONS = new Set(['zip', 'pkg']);
 
 function getSideloadAllowedBases(): string[] {
@@ -150,44 +204,9 @@ function setupDevAppHandlers(mainWindow: BrowserWindow | undefined, dialog: Dial
     }
     const resolved = resolvedFile.filePath;
     const scan = require('roku-dev-studio-api/lib/debugger/scan-stops') as {
-      scanZipForStops: (p: string) => unknown[];
       rememberSideloadZip: (ip: string, p: string) => void;
     };
-    const settingsMod = require('../settings') as {
-      loadSettings: () => Record<string, unknown>;
-      saveSettings: (s: Record<string, unknown>) => boolean;
-    };
-
-    // Discover STOP breakpoints in the build's source.
-    let discovered = 0;
-    try {
-      discovered = scan.scanZipForStops(resolved).length;
-    } catch { /* scan best-effort */ }
-
-    // "Debugging enabled" for this device = caller asked (checkbox) OR it opted in
-    // previously (persisted) OR we just DISCOVERED STOP breakpoints (auto-enable).
-    // When enabled, this is a debug sideload: forward `remotedebug=1` (opens 8081).
-    // Persisted by device key (serial preferred, else IP) so the preference survives a
-    // network change; the raw-IP form is also checked for entries saved before this.
-    const key = deviceKey({ serial, ip });
-    let debugEnabled = !!remoteDebug;
-    try {
-      const v = settingsMod.loadSettings()['sideload-debug-ips'];
-      if (Array.isArray(v) && (v.includes(key) || v.includes(ip))) debugEnabled = true;
-    } catch { /* default off */ }
-    if (discovered > 0 && !debugEnabled) {
-      debugEnabled = true;
-      try {
-        // Persist the auto-enable so future sideloads (and the sidebar) stay on.
-        const s = settingsMod.loadSettings();
-        const cur = Array.isArray(s['sideload-debug-ips']) ? (s['sideload-debug-ips'] as string[]) : [];
-        if (!cur.includes(key)) {
-          s['sideload-debug-ips'] = [...cur, key];
-          settingsMod.saveSettings(s);
-        }
-      } catch { /* best-effort persist */ }
-    }
-
+    const { debugEnabled, discovered } = computeSideloadDebugFlags(ip, serial, resolved, remoteDebug);
     const extraFields = debugEnabled ? [{ name: 'remotedebug', value: '1' }] : undefined;
     mainLog(`[sideload] ip=${ip} debugEnabled=${debugEnabled} discovered=${discovered} remotedebug=${debugEnabled ? '1' : '0'} file=${resolvedFile.fileName}`);
     const result = await sideloadChannel({
@@ -329,4 +348,4 @@ function setupDevAppHandlers(mainWindow: BrowserWindow | undefined, dialog: Dial
   });
 }
 
-export { setupDevAppHandlers };
+export { setupDevAppHandlers, computeSideloadDebugFlags };

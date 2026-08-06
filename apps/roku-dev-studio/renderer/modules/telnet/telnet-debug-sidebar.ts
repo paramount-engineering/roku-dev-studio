@@ -34,6 +34,8 @@ function resolvePanelSerial(devPanel: Element): string {
   return (devPanel.querySelector('.device-serial')?.getAttribute('data-serial') || '').trim();
 }
 
+/** The subset of `window.roku` this sidebar drives directly, dispatched to either the
+ *  local or the remote-server debugger session (see `debugApi` below). */
 interface DebuggerBridge {
   getSetting(key: string): Promise<{ success?: boolean; value?: unknown }>;
   setSetting(key: string, value: unknown): Promise<unknown>;
@@ -61,11 +63,48 @@ interface DebuggerBridge {
   onDebuggerCompileErrors(cb: (data: unknown) => void): () => void;
 }
 
+/** The `remoteDebugger*`/`remoteKeypress` counterparts — the session runs on the
+ *  remote server; these proxy over HTTP but resolve to the same `{ ok, data }` shape. */
+interface RemoteDebuggerBridge {
+  remoteDebuggerStatus(serverUrl: string, ip: string): Promise<{ ok?: boolean; data?: { state?: string } }>;
+  remoteDebuggerAttach(serverUrl: string, ip: string): Promise<{ ok?: boolean; error?: string }>;
+  remoteDebuggerDetach(serverUrl: string, ip: string): Promise<unknown>;
+  remoteKeypress(serverUrl: string, ip: string, key: string): Promise<{ success?: boolean; error?: string }>;
+  remoteDebuggerContinue(serverUrl: string, ip: string): Promise<unknown>;
+  remoteDebuggerPause(serverUrl: string, ip: string): Promise<unknown>;
+  remoteDebuggerStepOver(serverUrl: string, ip: string): Promise<unknown>;
+  remoteDebuggerStepIn(serverUrl: string, ip: string): Promise<unknown>;
+  remoteDebuggerStepOut(serverUrl: string, ip: string): Promise<unknown>;
+  remoteDebuggerAddBreakpoints(serverUrl: string, ip: string, breakpoints: unknown): Promise<{ ok?: boolean; data?: unknown }>;
+  remoteDebuggerRemoveBreakpointsByLocation(serverUrl: string, ip: string, locations: Array<{ filePath: string; lineNumber: number }>): Promise<unknown>;
+  remoteDebuggerStackTrace(serverUrl: string, ip: string, threadIndex?: number): Promise<{ ok?: boolean; data?: unknown }>;
+  remoteDebuggerVariables(serverUrl: string, ip: string, opts: { variablePath?: string[]; stackFrameIndex?: number; threadIndex?: number }): Promise<{ ok?: boolean; data?: unknown }>;
+  remoteDebuggerExecute(serverUrl: string, ip: string, sourceCode: string, opts?: { threadIndex?: number; stackFrameIndex?: number }): Promise<{ ok?: boolean; data?: unknown; error?: string }>;
+  remoteDebuggerRestart(serverUrl: string, ip: string, password: string): Promise<{ success?: boolean; error?: string; message?: string }>;
+}
+
+/** The request/action subset of `DebuggerBridge` that gets dispatched locally or
+ *  remotely — excludes the `onDebugger*` event subscriptions, which are never
+ *  branched (both a local and a remote session push through the same channels,
+ *  tagged) and stay directly on `roku`. */
+type DebuggerActions = Omit<
+  DebuggerBridge,
+  'onDebuggerState' | 'onDebuggerStopped' | 'onDebuggerBreakpoints' | 'onDebuggerReattach' | 'onDebuggerRuntimeError' | 'onDebuggerCompileErrors'
+>;
+
 type SessionState = 'idle' | 'connecting' | 'attached' | 'running' | 'stopped' | 'error' | 'disconnected';
 
 interface SidebarOpts {
   /** Called once when debugging is enabled, so the panel can auto-connect the 8085 console. */
   autoConnectConsole?: () => void;
+  /** When set, the debug session runs on this remote RDS server, not the Electron host. */
+  isRemote?: boolean;
+  serverUrl?: string | null;
+  /** False when a remote device's server reports `capabilities.debugger === false` (see
+   *  createApiAdapter in app.ts). Disables the toggle button and skips all wiring instead of
+   *  attempting a session the server has no debug-protocol route for. Always true/undefined
+   *  for local devices. */
+  debuggerSupported?: boolean;
 }
 
 /**
@@ -113,10 +152,53 @@ const NOOP_HANDLE: DebugSidebarHandle = {
 };
 
 export function setupTelnetDebugSidebar(panel: HTMLElement, ip: string, opts: SidebarOpts = {}): DebugSidebarHandle {
-  const roku = (window as unknown as { roku?: DebuggerBridge }).roku;
+  const roku = (window as unknown as { roku?: DebuggerBridge & RemoteDebuggerBridge }).roku;
   const sidebar = panel.querySelector<HTMLElement>('[data-telnet-debug-sidebar]');
   const toggleBtn = panel.querySelector<HTMLButtonElement>('[data-telnet-debug-toggle]');
   if (!roku || !sidebar || !toggleBtn) return NOOP_HANDLE;
+
+  if (opts.debuggerSupported === false) {
+    toggleBtn.disabled = true;
+    toggleBtn.title = S.debugger.unsupportedByServerTitle;
+    sidebar.hidden = true;
+    return NOOP_HANDLE;
+  }
+
+  const serverUrl = opts.isRemote ? (opts.serverUrl ?? null) : null;
+  const isRemote = !!(opts.isRemote && serverUrl);
+
+  // Dispatches every debugger action to the local controller or the remote server's,
+  // keeping every call site below unchanged (`debugApi.debuggerAttach(ip)`, etc.) —
+  // same shape as `createApiAdapter()` in app.ts. `debuggerScanStops` has no remote
+  // route (it reads the local sideload .zip, identical either way) and `getSetting`/
+  // `setSetting` are plain Electron settings, so both stay on `roku` directly.
+  const debugApi: DebuggerActions = isRemote
+    ? {
+        getSetting: (k) => roku.getSetting(k),
+        setSetting: (k, v) => roku.setSetting(k, v),
+        debuggerScanStops: (i) => roku.debuggerScanStops(i),
+        debuggerStatus: (i) => roku.remoteDebuggerStatus(serverUrl!, i),
+        debuggerAttach: (i) => roku.remoteDebuggerAttach(serverUrl!, i),
+        debuggerDetach: (i) => roku.remoteDebuggerDetach(serverUrl!, i),
+        keypress: (i, key) => roku.remoteKeypress(serverUrl!, i, key),
+        debuggerContinue: (i) => roku.remoteDebuggerContinue(serverUrl!, i),
+        debuggerPause: (i) => roku.remoteDebuggerPause(serverUrl!, i),
+        debuggerStepOver: (i) => roku.remoteDebuggerStepOver(serverUrl!, i),
+        debuggerStepIn: (i) => roku.remoteDebuggerStepIn(serverUrl!, i),
+        debuggerStepOut: (i) => roku.remoteDebuggerStepOut(serverUrl!, i),
+        debuggerAddBreakpoints: (i, bps2) => roku.remoteDebuggerAddBreakpoints(serverUrl!, i, bps2),
+        debuggerRemoveBreakpointsByLocation: (i, locs) => roku.remoteDebuggerRemoveBreakpointsByLocation(serverUrl!, i, locs),
+        debuggerStackTrace: (i, ti) => roku.remoteDebuggerStackTrace(serverUrl!, i, ti),
+        debuggerVariables: (i, vOpts) => roku.remoteDebuggerVariables(serverUrl!, i, vOpts),
+        debuggerExecute: (i, src, eOpts) => roku.remoteDebuggerExecute(serverUrl!, i, src, eOpts),
+        debuggerRestart: (i, pwd) => roku.remoteDebuggerRestart(serverUrl!, i, pwd)
+      }
+    : roku;
+
+  /** True if a debugger push event's origin tag matches this sidebar's (local vs. this
+   *  specific remote server) — same filtering shape as the Network Inspector tab controllers. */
+  const originMatches = (d: { isRemote?: boolean; serverUrl?: string }): boolean =>
+    !!d.isRemote === isRemote && (!isRemote || d.serverUrl === serverUrl);
 
   // Persisted per-device state (breakpoints, watches) is keyed by serial, not IP — IP isn't
   // stable across networks/DHCP, so an IP-keyed entry would silently orphan on a network change.
@@ -435,7 +517,7 @@ export function setupTelnetDebugSidebar(panel: HTMLElement, ip: string, opts: Si
     const toSend = (only ? [only] : managedList()).filter((e) => e.breakpointId == null);
     if (!toSend.length) return;
     try {
-      const res = await roku.debuggerAddBreakpoints(
+      const res = await debugApi.debuggerAddBreakpoints(
         ip,
         toSend.map((e) => ({ filePath: e.path, lineNumber: e.line, ...(e.condition ? { conditionalExpression: e.condition } : {}) }))
       );
@@ -477,7 +559,7 @@ export function setupTelnetDebugSidebar(panel: HTMLElement, ip: string, opts: Si
     // but IS cached in the main process — location removal prunes that cache so it can't
     // resurrect at the next stop, and removes the device breakpoint if it was registered.
     if (isAttached()) {
-      try { await roku.debuggerRemoveBreakpointsByLocation(ip, [{ filePath: e.path, lineNumber: e.line }]); } catch { /* ignore */ }
+      try { await debugApi.debuggerRemoveBreakpointsByLocation(ip, [{ filePath: e.path, lineNumber: e.line }]); } catch { /* ignore */ }
     }
     if (!e.scanned && !e.hit) bps.delete(keyOf(e.path, e.line));
     renderBreakpoints();
@@ -486,7 +568,7 @@ export function setupTelnetDebugSidebar(panel: HTMLElement, ip: string, opts: Si
 
   const loadScanned = async (): Promise<void> => {
     try {
-      const res = await roku.debuggerScanStops(ip);
+      const res = await debugApi.debuggerScanStops(ip);
       const stops = okArray<{ path?: string; line?: number }>(res);
       for (const s of stops) {
         if (s.path && s.line) upsert(s.path, s.line).scanned = true;
@@ -542,7 +624,7 @@ export function setupTelnetDebugSidebar(panel: HTMLElement, ip: string, opts: Si
   /** Fetch a frame's top-level variables on demand (frame 0 comes free with the stop). */
   const loadFrameVars = async (fi: number): Promise<void> => {
     try {
-      const res = await roku.debuggerVariables(ip, { variablePath: [], stackFrameIndex: fi, threadIndex: selectedThread });
+      const res = await debugApi.debuggerVariables(ip, { variablePath: [], stackFrameIndex: fi, threadIndex: selectedThread });
       frameVars.set(fi, okArray(res));
     } catch {
       frameVars.set(fi, []);
@@ -675,7 +757,7 @@ export function setupTelnetDebugSidebar(panel: HTMLElement, ip: string, opts: Si
     // Children already present (one level came with the stop / a prior fetch)?
     if (!varChildren(v, key)) {
       try {
-        const res = await roku.debuggerVariables(ip, { variablePath: path, stackFrameIndex: scope.frameIndex, threadIndex: selectedThread });
+        const res = await debugApi.debuggerVariables(ip, { variablePath: path, stackFrameIndex: scope.frameIndex, threadIndex: selectedThread });
         const arr = okArray(res);
         const first = arr[0] as { children?: unknown } | undefined;
         varChildCache.set(key, first && Array.isArray(first.children) ? (first.children as unknown[]) : arr);
@@ -803,7 +885,7 @@ export function setupTelnetDebugSidebar(panel: HTMLElement, ip: string, opts: Si
     varChildCache.clear();
     frameVars.clear();
     try {
-      const st = await roku.debuggerStackTrace(ip, i);
+      const st = await debugApi.debuggerStackTrace(ip, i);
       lastFrames = okArray(st);
     } catch { lastFrames = []; }
     collapsedFrames.clear();
@@ -839,7 +921,7 @@ export function setupTelnetDebugSidebar(panel: HTMLElement, ip: string, opts: Si
     const path = parseWatchPath(expr);
     if (!path.length) { watchResults.set(expr, null); return; }
     try {
-      const res = await roku.debuggerVariables(ip, { variablePath: path, stackFrameIndex: selectedFrame, threadIndex: selectedThread });
+      const res = await debugApi.debuggerVariables(ip, { variablePath: path, stackFrameIndex: selectedFrame, threadIndex: selectedThread });
       const arr = res && res.ok && Array.isArray(res.data) ? (res.data as unknown[]) : [];
       watchResults.set(expr, arr[0] ?? null);
     } catch { watchResults.set(expr, null); }
@@ -931,7 +1013,7 @@ export function setupTelnetDebugSidebar(panel: HTMLElement, ip: string, opts: Si
     }
     setStatus(S.debugger.restarting, 'connecting');
     try {
-      const res = await roku.debuggerRestart(ip, pwd);
+      const res = await debugApi.debuggerRestart(ip, pwd);
       if (res && res.success === false) setStatus(S.debugger.status.error, 'error', res.error || S.debugger.attachFailed(''));
       // On success the main process fires DebuggerReattach → the sidebar reattaches.
     } catch (e) {
@@ -959,7 +1041,7 @@ export function setupTelnetDebugSidebar(panel: HTMLElement, ip: string, opts: Si
   const doAttach = async (): Promise<void> => {
     setStatus(S.debugger.status.connecting, 'connecting');
     try {
-      await roku.debuggerAttach(ip);
+      await debugApi.debuggerAttach(ip);
       // On failure the controller emits a DebuggerState 'error' carrying a compact summary
       // + full remediation, rendered by the state handler; we don't set the long error
       // here (it would clobber the summary and get clipped).
@@ -969,14 +1051,14 @@ export function setupTelnetDebugSidebar(panel: HTMLElement, ip: string, opts: Si
   };
   /** Detach and collapse the sidebar — a disconnect must never leave it stuck open. */
   const doDetach = async (): Promise<void> => {
-    try { await roku.debuggerDetach(ip); } catch { /* best-effort */ }
+    try { await debugApi.debuggerDetach(ip); } catch { /* best-effort */ }
     collapsed = true;
     updateVisibility();
   };
   /** Detach, send the Home key to exit the channel on-device, and collapse the sidebar. */
   const doStop = async (): Promise<void> => {
-    try { await roku.debuggerDetach(ip); } catch { /* best-effort */ }
-    try { await roku.keypress(ip, 'Home'); } catch { /* best-effort */ }
+    try { await debugApi.debuggerDetach(ip); } catch { /* best-effort */ }
+    try { await debugApi.keypress(ip, 'Home'); } catch { /* best-effort */ }
     collapsed = true;
     updateVisibility();
   };
@@ -988,11 +1070,11 @@ export function setupTelnetDebugSidebar(panel: HTMLElement, ip: string, opts: Si
       case 'detach': void doDetach(); break;
       case 'stop': void doStop(); break;
       case 'restart': void doRestart(); break;
-      case 'continue': void roku.debuggerContinue(ip); break;
-      case 'pause': void roku.debuggerPause(ip); break;
-      case 'stepOver': void roku.debuggerStepOver(ip); break;
-      case 'stepIn': void roku.debuggerStepIn(ip); break;
-      case 'stepOut': void roku.debuggerStepOut(ip); break;
+      case 'continue': void debugApi.debuggerContinue(ip); break;
+      case 'pause': void debugApi.debuggerPause(ip); break;
+      case 'stepOver': void debugApi.debuggerStepOver(ip); break;
+      case 'stepIn': void debugApi.debuggerStepIn(ip); break;
+      case 'stepOut': void debugApi.debuggerStepOut(ip); break;
     }
   };
   toolbar?.addEventListener('click', onToolbarClick);
@@ -1223,8 +1305,9 @@ export function setupTelnetDebugSidebar(panel: HTMLElement, ip: string, opts: Si
 
   let wasAttached = false;
   const stateUnsub = roku.onDebuggerState((data) => {
-    const d = (data ?? {}) as { ip?: string; state?: SessionState; message?: string; detail?: string; protocolVersion?: string };
+    const d = (data ?? {}) as { ip?: string; state?: SessionState; message?: string; detail?: string; protocolVersion?: string; isRemote?: boolean; serverUrl?: string };
     if (d.ip && d.ip !== ip) return;
+    if (!originMatches(d)) return;
     if (!d.state) return;
     state = d.state;
     sessionActive = d.state !== 'disconnected';
@@ -1257,8 +1340,9 @@ export function setupTelnetDebugSidebar(panel: HTMLElement, ip: string, opts: Si
   });
 
   const stoppedUnsub = roku.onDebuggerStopped((data) => {
-    const d = (data ?? {}) as { ip?: string; stackFrames?: unknown; variables?: unknown; threads?: unknown };
+    const d = (data ?? {}) as { ip?: string; stackFrames?: unknown; variables?: unknown; threads?: unknown; isRemote?: boolean; serverUrl?: string };
     if (d.ip && d.ip !== ip) return;
+    if (!originMatches(d)) return;
     state = 'stopped';
     syncSectionsForState(true); // reveal Call Stack + Variables now that they have data
     if (collapsed) { collapsed = false; updateVisibility(); } // auto-open on halt so the data is visible
@@ -1301,8 +1385,9 @@ export function setupTelnetDebugSidebar(panel: HTMLElement, ip: string, opts: Si
   });
 
   const bpUnsub = roku.onDebuggerBreakpoints((data) => {
-    const d = (data ?? {}) as { ip?: string; verified?: unknown; error?: unknown; registered?: unknown };
+    const d = (data ?? {}) as { ip?: string; verified?: unknown; error?: unknown; registered?: unknown; isRemote?: boolean; serverUrl?: string };
     if (d.ip && d.ip !== ip) return;
+    if (!originMatches(d)) return;
     // Main registered these on the device (incl. ones that were queued while running) —
     // record the device id by file:line so removal works, and clear the "Q" pending badge.
     if (d.registered) {
@@ -1350,8 +1435,9 @@ export function setupTelnetDebugSidebar(panel: HTMLElement, ip: string, opts: Si
   // Runtime error: the device is halted at the throw site. Surface the message; the
   // stack + variables arrive via DebuggerStopped (the controller snapshots on error).
   const runtimeErrUnsub = roku.onDebuggerRuntimeError((data) => {
-    const d = (data ?? {}) as { ip?: string; message?: string; error?: unknown };
+    const d = (data ?? {}) as { ip?: string; message?: string; error?: unknown; isRemote?: boolean; serverUrl?: string };
     if (d.ip && d.ip !== ip) return;
+    if (!originMatches(d)) return;
     const msg = d.message || pick(d.error, 'stopReasonDetail', 'detail', 'reason');
     lastError = S.debugger.runtimeError(msg);
     try { showToast(lastError, 'error'); } catch { /* best-effort */ }
@@ -1360,8 +1446,9 @@ export function setupTelnetDebugSidebar(panel: HTMLElement, ip: string, opts: Si
 
   // Compile error: the build failed to load — surface it prominently.
   const compileErrUnsub = roku.onDebuggerCompileErrors((data) => {
-    const d = (data ?? {}) as { ip?: string; errors?: unknown };
+    const d = (data ?? {}) as { ip?: string; errors?: unknown; isRemote?: boolean; serverUrl?: string };
     if (d.ip && d.ip !== ip) return;
+    if (!originMatches(d)) return;
     const first = asArray(d.errors, 'errors')[0] ?? d.errors;
     const msg = pick(first, 'errorMessage', 'message') || (typeof d.errors === 'string' ? d.errors : '');
     lastError = `${S.debugger.compileErrorTitle}${msg ? `: ${msg}` : ''}`;
@@ -1372,8 +1459,9 @@ export function setupTelnetDebugSidebar(panel: HTMLElement, ip: string, opts: Si
   // Main fires this after ANY sideload (normal or relay) to a debug-enabled device,
   // so the sidebar reattaches to the fresh run (the device just reopened 8081).
   const reattachUnsub = roku.onDebuggerReattach((data) => {
-    const d = (data ?? {}) as { ip?: string; discovered?: number };
+    const d = (data ?? {}) as { ip?: string; discovered?: number; isRemote?: boolean; serverUrl?: string };
     if (d.ip && d.ip !== ip) return;
+    if (!originMatches(d)) return;
     prefEnabled = true;
     didAutoStart = true;
     updateVisibility();
@@ -1398,7 +1486,7 @@ export function setupTelnetDebugSidebar(panel: HTMLElement, ip: string, opts: Si
     didAutoStart = true;
     opts.autoConnectConsole?.();
     try {
-      const st = await roku.debuggerStatus(ip);
+      const st = await debugApi.debuggerStatus(ip);
       const cur = st?.data?.state;
       if (cur && cur !== 'disconnected') void doAttach(); // already debugging → sync UI
       else setStatus(S.debugger.status.idle);
@@ -1427,7 +1515,7 @@ export function setupTelnetDebugSidebar(panel: HTMLElement, ip: string, opts: Si
   const repl: ReplController = {
     isStopped: () => state === 'stopped',
     execute: async (source: string) => {
-      const res = await roku.debuggerExecute(ip, source, { threadIndex: selectedThread, stackFrameIndex: selectedFrame });
+      const res = await debugApi.debuggerExecute(ip, source, { threadIndex: selectedThread, stackFrameIndex: selectedFrame });
       const outer = (res && res.ok ? res.data : null) as { data?: unknown } | unknown[] | null;
       // controller.execute returns the raw protocol result → { data: { compileErrors, … } }.
       const inner = (outer && typeof outer === 'object' && !Array.isArray(outer) && 'data' in outer
@@ -1470,7 +1558,7 @@ export function setupTelnetDebugSidebar(panel: HTMLElement, ip: string, opts: Si
     runtimeErrUnsub();
     compileErrUnsub();
     replListeners.clear();
-    if (sessionActive) void roku.debuggerDetach(ip);
+    if (sessionActive) void debugApi.debuggerDetach(ip);
   };
 
   return { cleanup, repl };

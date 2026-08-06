@@ -53,6 +53,7 @@ export const app = {
     devApp: { label: 'Dev App', desc: 'Încarcă lateral canale de dezvoltare' },
     screenshot: { label: 'Captură de ecran', desc: 'Capturează ecranul dispozitivului' },
     console: { label: 'Consolă', desc: 'Ieșire de depanare BrightScript' },
+    debugger: { label: 'Depanator', desc: 'Puncte de întrerupere, execuție pas cu pas, inspecția variabilelor' },
     appConnector: { label: 'App Connector', desc: 'Integrare RALE TrackerTask' },
     deepLink: { label: 'Deep-Link', desc: 'Lansează conținut cu parametri' },
     networkInspector: { label: 'Inspector de rețea', desc: 'Capturează DNS/SNI/HTTP + proxy MITM' }

@@ -16,6 +16,11 @@ export const debuggerStrings = {
   sideloadWithDebugging: 'Sideload with Debugging',
   sideloadWithDebuggingTitle: 'Reinstall with the BrightScript debug protocol (port 8081) enabled, then open the debugger.',
 
+  // Shown (toggle disabled) when a remote-managed device's server reports `debugger: false`
+  // from its /capabilities — an older or reduced-build remote server without the debug
+  // protocol wired in.
+  unsupportedByServerTitle: "This location's remote server does not support the BrightScript Debugger.",
+
   // Status labels
   status: {
     idle: 'Not attached',

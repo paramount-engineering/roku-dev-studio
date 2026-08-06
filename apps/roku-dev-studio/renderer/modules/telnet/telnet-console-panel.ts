@@ -47,6 +47,10 @@ export type TelnetConsoleApi = {
   ip: string;
   isRemote?: boolean;
   serverUrl?: string | null;
+  /** False when a remote device's server reports `capabilities.debugger === false` — the debug
+   *  sidebar disables itself instead of attempting a session the server can't run. Always true
+   *  for local devices (RDS's own in-process session, no negotiation needed). */
+  debuggerSupported?: boolean;
   telnetConnect: (options?: { skipRelayBuffer?: boolean }) => Promise<{ success: boolean; error?: string }>;
   telnetDisconnect: () => Promise<unknown>;
   /** Remote relay only — clears the server-side gap buffer without closing 8085. */
@@ -1668,8 +1672,9 @@ export function setupTelnet(
   const debugOutputCleanup = (window.roku as unknown as {
     onDebuggerOutput?: (cb: (data: unknown) => void) => () => void;
   }).onDebuggerOutput?.((data) => {
-    const d = (data ?? {}) as { ip?: string; text?: string };
+    const d = (data ?? {}) as { ip?: string; text?: string; isRemote?: boolean; serverUrl?: string };
     if (d.ip && d.ip !== api.ip) return;
+    if (!!d.isRemote !== !!api.isRemote || (api.isRemote && d.serverUrl !== api.serverUrl)) return;
     if (!d.text) return;
     debugOutBuffer += d.text;
     const parts = debugOutBuffer.split(/\r?\n/);
@@ -1732,6 +1737,16 @@ export function setupTelnet(
     }
   });
   
+  // For a remote-managed device the debug session runs on the remote server, not this
+  // machine — subscribe to its live event stream (server-wide, like the Network
+  // Inspector stream) before the sidebar attaches. `panel.id` is the tab's stable id
+  // (same one app.ts uses as the DOM element id), so it doubles as the holder key —
+  // no separate tabId plumbing needed here. Skipped when the server itself doesn't support
+  // the debugger (`capabilities.debugger === false`) — nothing will ever come through it.
+  if (api.isRemote && api.serverUrl && api.debuggerSupported !== false && window.roku?.remoteDebuggerStreamConnect) {
+    void window.roku.remoteDebuggerStreamConnect(api.serverUrl, panel.id);
+  }
+
   // Store cleanup functions on panel for later removal
   // BrightScript debugger sidebar (Call Stack / Breakpoints / Variables), shown in
   // this Console tab while debugging is enabled for the device. Display-only; driven
@@ -1741,7 +1756,10 @@ export function setupTelnet(
       // Auto-connect the 8085 console when debugging is enabled for this device,
       // if it's currently disconnected (clicks the standard Connect path).
       if (statusEl.classList.contains('disconnected')) connectBtn.click();
-    }
+    },
+    isRemote: api.isRemote,
+    serverUrl: api.serverUrl,
+    debuggerSupported: api.debuggerSupported
   });
 
   // Debug REPL: an input bar that slides up under the console output while the
@@ -1784,6 +1802,9 @@ export function setupTelnet(
 
   panel._telnetCleanup = () => {
     debugSidebar.cleanup();
+    if (api.isRemote && api.serverUrl && window.roku?.remoteDebuggerStreamDisconnect) {
+      void window.roku.remoteDebuggerStreamDisconnect(api.serverUrl, panel.id);
+    }
     disposeRepl?.();
     clearTimeout(analyticsRefreshTimer);
     analyticsHandle?.close();

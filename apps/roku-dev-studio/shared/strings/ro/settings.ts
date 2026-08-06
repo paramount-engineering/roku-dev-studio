@@ -262,9 +262,12 @@ export const settings = {
   // ── Network Inspector — Certificate Authority card (surface the CA) ──
   caSectionTitle: 'Autoritate de certificare',
   caRowDesc: 'Autoritatea de certificare locală pe care proxy-ul o folosește pentru a decripta traficul HTTPS.',
+  caRowDescRemote: 'Autoritatea de certificare a acestei locații, folosită de proxy-ul ei pentru a decripta traficul HTTPS.',
   caViewCert: 'Vezi certificatul',
   caSectionDesc:
     'Inspector de rețea semnează traficul HTTPS decriptat cu o autoritate de certificare locală. Acordați-i încredere sau importați-o pe dispozitiv, astfel încât canalul dvs. de dezvoltare să accepte proxy-ul. Cheia privată nu părăsește niciodată acest computer.',
+  caSectionDescRemote:
+    'Inspector de rețea semnează traficul HTTPS decriptat cu autoritatea de certificare a acestei locații. Acordați-i încredere sau importați-o pe dispozitiv, astfel încât canalul dvs. de dezvoltare să accepte proxy-ul. Cheia privată nu părăsește niciodată acel server.',
   caSubject: 'Subiect',
   caFingerprint: 'Amprentă SHA-256',
   caValidity: 'Valabilitate',

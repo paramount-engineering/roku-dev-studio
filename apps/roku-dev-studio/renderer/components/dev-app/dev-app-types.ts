@@ -10,6 +10,10 @@ export interface DevAppDevice {
 /** Unified local/remote API surface used by Dev App modules. */
 export interface DevAppApi {
   isRemote: boolean;
+  /** False when a remote device's server reports `capabilities.debugger === false` (see
+   *  createApiAdapter in app.ts) — "Sideload with Debugging" disables itself since the
+   *  server has no debug-protocol route to attach through. Always true/undefined locally. */
+  debuggerSupported?: boolean;
   screenshot(
     password: string,
     options?: unknown

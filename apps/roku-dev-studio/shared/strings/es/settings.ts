@@ -258,9 +258,12 @@ export const settings = {
   // ── Network Inspector — Certificate Authority card (surface the CA) ──
   caSectionTitle: 'Autoridad de certificación',
   caRowDesc: 'La autoridad de certificación local que el proxy usa para descifrar HTTPS.',
+  caRowDescRemote: 'La autoridad de certificación de esta ubicación, usada por su proxy para descifrar HTTPS.',
   caViewCert: 'Ver certificado',
   caSectionDesc:
     'Inspector de red firma el HTTPS descifrado con una autoridad de certificación local. Confíe en ella o impórtela en el dispositivo para que su canal de desarrollador acepte el proxy. La clave privada nunca sale de esta máquina.',
+  caSectionDescRemote:
+    'Inspector de red firma el HTTPS descifrado con la autoridad de certificación de esta ubicación. Confíe en ella o impórtela en el dispositivo para que su canal de desarrollador acepte el proxy. La clave privada nunca sale de ese servidor.',
   caSubject: 'Sujeto',
   caFingerprint: 'Huella SHA-256',
   caValidity: 'Validez',

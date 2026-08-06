@@ -225,7 +225,10 @@ function eventMatchesTab(ev: ParsedNetworkEvent, state: NetworkTabState): boolea
 export function setupNetworkTab(
   panel: HTMLElement,
   device: { ip: string; serialNumber?: string; deviceName?: string; modelName?: string },
-  isRemote: boolean
+  // The shared local/remote adapter from `createApiAdapter` (renderer/app.ts). Only
+  // `api.isRemote` and the `network*` methods (status/events/eventDetail/clearEvents/
+  // setupCapture) are used here — those are the ones with a remote-server route today.
+  api: any
 ): {
   destroy: () => void;
   setHotspotIp: (ip: string | null) => void;
@@ -257,6 +260,11 @@ export function setupNetworkTab(
     prerequisites?: PrerequisiteCheck[];
   }) => void;
   loadBufferedEvents: (events: ParsedNetworkEvent[]) => void;
+  /** Whether this panel is backed by a remote-server device — read by app.ts's global
+   *  NetworkInspector push fan-out so a push tagged for one server/local only reaches the
+   *  controllers it actually belongs to. */
+  readonly isRemote: boolean;
+  readonly serverUrl: string | null;
 } {
   const tabBtn = panel.querySelector('.inner-tab[data-inner-tab="network"]') as HTMLElement | null;
   const tabContent = panel.querySelector('.inner-tab-content[data-inner-content="network"]') as HTMLElement | null;
@@ -553,12 +561,11 @@ export function setupNetworkTab(
   async function ensureDetailLoaded(summary: ParsedNetworkEvent): Promise<void> {
     if (selectedDetail?.id === summary.id) return;
     if (!summary.detailAvailable || detailUnavailableIds.has(summary.id)) return;
-    const api = window.roku;
-    if (!api?.networkInspectorGetEventDetail) return;
+    if (typeof api?.networkEventDetail !== 'function') return;
     const id = summary.id;
     const token = ++detailLoadToken;
     try {
-      const res = await api.networkInspectorGetEventDetail(id);
+      const res = await api.networkEventDetail(id);
       // Ignore if a newer selection/load superseded this fetch or the selection moved on.
       if (token !== detailLoadToken || state.selectedEventId !== id) return;
       const full = (res?.event ?? null) as ParsedNetworkEvent | null;
@@ -808,23 +815,26 @@ export function setupNetworkTab(
   }
 
   async function syncRecordingToMain(): Promise<void> {
-    const api = window.roku;
-    if (!api?.networkInspectorSetRecording) return;
     const ips = watchDeviceIps();
     if (ips.length === 0) return;
     try {
-      await api.networkInspectorSetRecording({ deviceIps: ips, recording: state.capturing });
+      if (api?.isRemote) {
+        if (typeof window.roku?.remoteNetworkSetRecording !== 'function') return;
+        await window.roku.remoteNetworkSetRecording(api.serverUrl, ips, state.capturing);
+      } else {
+        if (typeof window.roku?.networkInspectorSetRecording !== 'function') return;
+        await window.roku.networkInspectorSetRecording({ deviceIps: ips, recording: state.capturing });
+      }
     } catch {
       /* ignore */
     }
   }
 
   async function clearSessionsOnMain(): Promise<void> {
-    const api = window.roku;
-    if (!api?.networkInspectorClearEvents) return;
+    if (typeof api?.networkClearEvents !== 'function') return;
     const ips = watchDeviceIps();
     try {
-      await api.networkInspectorClearEvents(ips.length > 0 ? ips : undefined);
+      await api.networkClearEvents(ips.length > 0 ? ips : undefined);
     } catch {
       /* ignore */
     }
@@ -1653,11 +1663,11 @@ export function setupNetworkTab(
   /** One-click Replay: re-issue the selected request from the host (active traffic rules bypassed),
    *  then select the new "Replayed" row the live capture-events push renders. */
   async function replaySelected(): Promise<void> {
-    const api = window.roku;
     const summary = selectedEvent();
     if (!isExportableEvent(summary) || !summary) return;
     closeReplayDropdown();
-    if (!api?.networkInspectorReplayRequest) {
+    const isRemoteTab = !!api?.isRemote;
+    if (isRemoteTab ? typeof window.roku?.remoteNetworkReplayRequest !== 'function' : typeof window.roku?.networkInspectorReplayRequest !== 'function') {
       showToast(S.networkInspector.replayUnavailable, 'error');
       return;
     }
@@ -1670,7 +1680,9 @@ export function setupNetworkTab(
     const deviceIp = summary.deviceIp || watchDeviceIps()[0] || '';
     showToast(S.networkInspector.replayStarting, 'info');
     try {
-      const res = await api.networkInspectorReplayRequest({ deviceIp, input });
+      const res = isRemoteTab
+        ? await window.roku.remoteNetworkReplayRequest(api.serverUrl, { deviceIp, input })
+        : await window.roku.networkInspectorReplayRequest({ deviceIp, input });
       if (res?.success && res.event?.id) {
         selectEventById(res.event.id);
         showToast(S.networkInspector.replayAddedToList, 'success');
@@ -1692,7 +1704,13 @@ export function setupNetworkTab(
     void (async () => {
       await ensureDetailLoaded(summary);
       const ev = selectedDetail?.id === summary.id ? selectedDetail.event : summary;
-      await openComposeModal({ event: ev, deviceIp, onSent: (id) => selectEventById(id) });
+      await openComposeModal({
+        event: ev,
+        deviceIp,
+        onSent: (id) => selectEventById(id),
+        isRemote: api?.isRemote,
+        serverUrl: api?.serverUrl
+      });
     })();
   }
 
@@ -1764,13 +1782,15 @@ export function setupNetworkTab(
   /** Save the raw packet capture (.pcap). Only yields data when hotspot frames were captured;
    *  MITM-proxied sessions have no raw frames, so surface that instead of failing silently. */
   async function exportPcap(): Promise<void> {
-    const api = window.roku;
-    if (!api?.networkInspectorExportPcap) return;
+    const isRemoteTab = !!api?.isRemote;
+    if (isRemoteTab ? typeof window.roku?.remoteNetworkExportPcap !== 'function' : typeof window.roku?.networkInspectorExportPcap !== 'function') return;
     // Scope the pcap to this device's traffic only — capture stays whole-hotspot, but the
     // download filters to the watched device IPs (device + its hotspot lease).
     const ips = watchDeviceIps();
     try {
-      const res = await api.networkInspectorExportPcap(ips.length > 0 ? ips : undefined);
+      const res = isRemoteTab
+        ? await window.roku.remoteNetworkExportPcap(api.serverUrl, ips.length > 0 ? ips : undefined)
+        : await window.roku.networkInspectorExportPcap(ips.length > 0 ? ips : undefined);
       if (res?.success) {
         const n = typeof res.packetsWritten === 'number' ? res.packetsWritten : 0;
         showToast(S.networkInspector.savedPackets(n, res.filePath || S.networkInspector.fileFallback), 'success');
@@ -2073,11 +2093,10 @@ export function setupNetworkTab(
   }
 
   async function runCaptureSetup(): Promise<{ success?: boolean; error?: string }> {
-    const api = window.roku;
-    if (!api?.networkInspectorInstallBpfAccess) {
+    if (typeof api?.networkSetupCapture !== 'function') {
       return { success: false, error: S.networkInspector.setupNotAvailable };
     }
-    const res = await api.networkInspectorInstallBpfAccess();
+    const res = await api.networkSetupCapture();
     if (res?.success) {
       state.captureError = null;
       await refreshNetworkCaptureStatus();
@@ -2184,10 +2203,9 @@ export function setupNetworkTab(
   }
 
   async function refreshNetworkCaptureStatus(): Promise<void> {
-    const api = window.roku;
-    if (!api?.networkInspectorGetStatus) return;
+    if (typeof api?.networkStatus !== 'function') return;
     try {
-      const res = await api.networkInspectorGetStatus();
+      const res = await api.networkStatus();
       if (res?.status) applyStatusFields(res.status as Parameters<typeof applyStatusFields>[0]);
     } catch {
       /* ignore */
@@ -2196,8 +2214,8 @@ export function setupNetworkTab(
 
   async function loadBufferedForTab(): Promise<void> {
     if (!state.capturing) return;
-    const api = window.roku;
-    if (!api?.networkInspectorGetEvents) return;
+    const isRemoteTab = !!api?.isRemote;
+    if (isRemoteTab ? typeof window.roku?.remoteNetworkEvents !== 'function' : typeof window.roku?.networkInspectorGetEvents !== 'function') return;
     const now = Date.now();
     if (now - lastBufferedPollAt < 500) return;
     lastBufferedPollAt = now;
@@ -2209,9 +2227,15 @@ export function setupNetworkTab(
       try {
         // Cursor-based delta: pass the last sequence we've seen for this IP so the main process
         // returns only new/updated events (not the whole buffer), and advance the cursor from the
-        // response so trimmed-out history is never re-delivered.
+        // response so trimmed-out history is never re-delivered. This loop can watch IPs other than
+        // this panel's own device (multi-device mode), so it goes straight through window.roku with
+        // an explicit per-ip local/remote branch rather than the adapter (which is bound to this
+        // panel's single device ip) — the remote route has no cursor support yet (Phase 3), so it
+        // just re-fetches the most recent window each poll.
         const sinceSeq = lastSeqByIp.get(ip) ?? 0;
-        const res = await api.networkInspectorGetEvents(ip, 2000, sinceSeq);
+        const res = isRemoteTab
+          ? await window.roku.remoteNetworkEvents(api.serverUrl, ip, 2000)
+          : await window.roku.networkInspectorGetEvents(ip, 2000, sinceSeq);
         if (res?.success) {
           if (typeof res.cursor === 'number') lastSeqByIp.set(ip, res.cursor);
           if (Array.isArray(res.events) && res.events.length > 0) {
@@ -2469,7 +2493,11 @@ export function setupNetworkTab(
         if (selectedDetail?.id === savedId) selectedDetail.event.note = note;
         updateRowNoteMarker(savedId, note);
         detailPane?.querySelector('[data-ni-note-open]')?.classList.toggle('has-note', !!note);
-        window.roku?.networkInspectorSetEventNote?.({ id: savedId, note: value });
+        if (api?.isRemote && api?.serverUrl) {
+          void window.roku?.remoteNetworkSetEventNote?.(api.serverUrl, savedId, value);
+        } else {
+          window.roku?.networkInspectorSetEventNote?.({ id: savedId, note: value });
+        }
       }
     });
   }
@@ -2632,7 +2660,9 @@ export function setupNetworkTab(
       deviceIp,
       deviceName,
       deviceSerial: state.deviceSerial,
-      hostSuggestions
+      hostSuggestions,
+      isRemote: api?.isRemote,
+      serverUrl: api?.serverUrl
     });
   }, listenerOpts);
 
@@ -2658,11 +2688,6 @@ export function setupNetworkTab(
       hidePortConflictModal();
     }
   }, listenerOpts);
-
-  if (isRemote && tabBtn) {
-    tabBtn.remove();
-    tabContent?.remove();
-  }
 
   // Build + insert the find bar just above each body scroll area, then wire it. Visibility is
   // driven by the Body tab in syncPaneChrome (no search on Overview / Headers).
@@ -2715,8 +2740,8 @@ export function setupNetworkTab(
   let pendingFindVisualUpdate: (() => void) | null = null;
   findModal = createNetworkFindModal({
     async search(request) {
-      const api = window.roku;
-      if (!api?.networkInspectorFind) return [];
+      const isRemoteTab = !!api?.isRemote;
+      if (isRemoteTab ? typeof window.roku?.remoteNetworkFind !== 'function' : typeof window.roku?.networkInspectorFind !== 'function') return [];
       // Search each watched device's captured traffic and merge (ids are globally unique).
       const ips = watchDeviceIps();
       const merged: NetworkFindMatch[] = [];
@@ -2724,7 +2749,9 @@ export function setupNetworkTab(
       await Promise.all(
         ips.map(async (ip) => {
           try {
-            const res = await api.networkInspectorFind(ip, request);
+            const res = isRemoteTab
+              ? await window.roku.remoteNetworkFind(api.serverUrl, ip, request)
+              : await window.roku.networkInspectorFind(ip, request);
             const matches = (res?.matches ?? []) as NetworkFindMatch[];
             for (const m of matches) {
               if (!seen.has(m.id)) {
@@ -2861,6 +2888,8 @@ export function setupNetworkTab(
   });
 
   return {
+    isRemote: !!api?.isRemote,
+    serverUrl: api?.isRemote ? (api?.serverUrl ?? null) : null,
     destroy() {
       listenerAc.abort();
       niFilterResize?.dispose();
@@ -2906,7 +2935,7 @@ export function setupNetworkTab(
       void loadBufferedForTab();
     },
     setVisible(visible: boolean) {
-      if (!tabBtn || !tabContent || isRemote) return;
+      if (!tabBtn || !tabContent) return;
       tabBtn.style.display = visible ? '' : 'none';
       if (visible) {
         tabContent.style.removeProperty('display');
@@ -3056,7 +3085,9 @@ export function initNetworkInspectorBridge(handlers: {
   onDeviceDiscovered: (device: Record<string, unknown>) => void;
   onDeviceJoined: (payload: { serialNumber?: string; ip?: string }) => void;
   onDeviceLeft: (payload: { serialNumber?: string }) => void;
-  onClientsCleared: () => void;
+  // Undefined for a local-origin clear; `{ isRemote: true, serverUrl }` when relayed from a
+  // remote server (see createSseRelay/networkStreamRelay in main/ipc/remote-handlers.ts).
+  onClientsCleared: (payload?: { isRemote?: boolean; serverUrl?: string }) => void;
   onStatus: (status: Record<string, unknown>) => void;
   onCaptureEvents: (events: ParsedNetworkEvent[]) => void;
 }): () => void {
@@ -3073,7 +3104,7 @@ export function initNetworkInspectorBridge(handlers: {
     cleanups.push(api.onNetworkInspectorDeviceLeft((d) => handlers.onDeviceLeft(d as { serialNumber?: string })));
   }
   if (api.onNetworkInspectorClientsCleared) {
-    cleanups.push(api.onNetworkInspectorClientsCleared(() => handlers.onClientsCleared()));
+    cleanups.push(api.onNetworkInspectorClientsCleared((p) => handlers.onClientsCleared(p as { isRemote?: boolean; serverUrl?: string } | undefined)));
   }
   if (api.onNetworkInspectorStatus) {
     cleanups.push(api.onNetworkInspectorStatus((s) => handlers.onStatus(s as Record<string, unknown>)));

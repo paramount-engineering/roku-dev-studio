@@ -25,6 +25,10 @@ type RokuApi = {
     applyTrafficRules?: boolean;
     timeoutMs?: number;
   }) => Promise<{ success?: boolean; event?: { id?: string }; error?: string }>;
+  remoteNetworkReplayRequest?: (
+    serverUrl: string,
+    payload: { deviceIp: string; input: ReplayHttpInput; applyTrafficRules?: boolean; timeoutMs?: number }
+  ) => Promise<{ success?: boolean; event?: { id?: string }; error?: string }>;
 };
 
 // HTTP method tokens — protocol values, not catalog strings.
@@ -171,8 +175,13 @@ export async function openComposeModal(opts: {
   event: ParsedNetworkEvent;
   deviceIp: string;
   onSent?: (eventId: string) => void;
+  /** Set when this device panel is backed by a remote-server device (see createApiAdapter in
+   *  renderer/app.ts) — routes the resend through the remote server instead of the local engine. */
+  isRemote?: boolean;
+  serverUrl?: string | null;
 }): Promise<void> {
   const api = (window as unknown as { roku?: RokuApi }).roku;
+  const isRemote = !!(opts.isRemote && opts.serverUrl);
   const prefill = buildReplayInputFromEvent(opts.event);
   const isBinary = prefill.bodyEncoding === 'base64';
   const currentMethod = (prefill.method || 'GET').toUpperCase();
@@ -401,7 +410,7 @@ export async function openComposeModal(opts: {
       setStatus(S.networkInspector.replayInvalidUrl, true);
       return;
     }
-    if (!api?.networkInspectorReplayRequest) {
+    if (isRemote ? !api?.remoteNetworkReplayRequest : !api?.networkInspectorReplayRequest) {
       setStatus(S.networkInspector.replayUnavailable, true);
       return;
     }
@@ -429,11 +438,14 @@ export async function openComposeModal(opts: {
     if (sendBtn) sendBtn.disabled = true;
     setStatus(S.networkInspector.composeSending);
     try {
-      const res = await api.networkInspectorReplayRequest({
+      const replayPayload = {
         deviceIp: opts.deviceIp,
         input,
         applyTrafficRules: applyEl?.checked === true
-      });
+      };
+      const res = isRemote
+        ? await api?.remoteNetworkReplayRequest?.(opts.serverUrl as string, replayPayload)
+        : await api?.networkInspectorReplayRequest?.(replayPayload);
       if (res?.success && res.event?.id) {
         setStatus(S.networkInspector.replayAddedToList);
         opts.onSent?.(res.event.id);

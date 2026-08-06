@@ -46,6 +46,16 @@ contextBridge.exposeInMainWorld('settingsApi', {
     ipcRenderer.invoke(IPC.SettingsWindowRemoteNetworkProbe, { serverUrl }),
   remoteNetworkSetConfig: (serverUrl: string, config: unknown) =>
     ipcRenderer.invoke(IPC.SettingsWindowRemoteNetworkSetConfig, { serverUrl, config }),
+  // Remote CA (per-location Certificate Authority card). Reuses the same IPC.RemoteNetwork*
+  // channels the main window's device panels use — those handlers are registered globally on
+  // ipcMain (see main/ipc/remote-handlers.ts), so invoking them from the Settings webContents
+  // reaches them exactly like the local NetworkInspector* CA channels above.
+  remoteNetworkGetCaInfo: (serverUrl: string) =>
+    ipcRenderer.invoke(IPC.RemoteNetworkGetCaInfo, { serverUrl }),
+  remoteNetworkExportCaPem: (serverUrl: string) =>
+    ipcRenderer.invoke(IPC.RemoteNetworkExportCaPem, { serverUrl }),
+  remoteNetworkExportCaCert: (serverUrl: string) =>
+    ipcRenderer.invoke(IPC.RemoteNetworkExportCaCert, { serverUrl }),
 
   // Sideload Relay — config (gate/port/password/flags/targets) + live per-device results.
   sideloadRelayGetStatus: () => ipcRenderer.invoke(IPC.SideloadRelayGetStatus),

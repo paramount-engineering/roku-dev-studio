@@ -51,6 +51,7 @@ export const app = {
     devApp: { label: 'Dev App', desc: 'Sideload de canales de desarrollo' },
     screenshot: { label: 'Captura de pantalla', desc: 'Capturar la pantalla del dispositivo' },
     console: { label: 'Consola', desc: 'Salida de depuración de BrightScript' },
+    debugger: { label: 'Depurador', desc: 'Puntos de interrupción, ejecución paso a paso, inspección de variables' },
     appConnector: { label: 'App Connector', desc: 'Integración de RALE TrackerTask' },
     deepLink: { label: 'Deep-Link', desc: 'Iniciar contenido con parámetros' },
     networkInspector: { label: 'Inspector de red', desc: 'Capturar DNS/SNI/HTTP + proxy MITM' }

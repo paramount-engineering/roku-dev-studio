@@ -307,11 +307,11 @@ async function syncNetworkTabForConnectedDevice(
   tabId: string,
   device: { ip: string; serialNumber?: string },
   networkCtrl: ReturnType<typeof setupNetworkTab>,
-  isRemote: boolean
+  api: any
 ): Promise<void> {
-  if (isRemote || !NETWORK_INSPECTOR_ENABLED || !window.roku?.networkInspectorGetStatus) return;
+  if (!NETWORK_INSPECTOR_ENABLED || typeof api?.networkStatus !== 'function') return;
   try {
-    const res = await window.roku.networkInspectorGetStatus();
+    const res = await api.networkStatus();
     const status = res?.status as
       | {
           connectedClients?: Array<{ ip?: string; serialNumber?: string }>;
@@ -334,8 +334,10 @@ async function syncNetworkTabForConnectedDevice(
       void loadNetworkTabBufferedEvents(match.ip, networkCtrl);
       return;
     }
-    // macOS Internet Sharing default — show tab when already on hotspot range
-    if (/^192\.168\.2\.\d{1,3}$/.test(device.ip)) {
+    // macOS Internet Sharing default — show tab when already on hotspot range. Local-only
+    // heuristic: a remote server's own hotspot/shared-connection range isn't assumed to fall
+    // in this block, so remote devices rely on the connectedClients match above instead.
+    if (!api?.isRemote && /^192\.168\.2\.\d{1,3}$/.test(device.ip)) {
       if (serial) {
         hotspotSerialsActive.add(serial);
         hotspotSerialIps.set(serial, device.ip);
@@ -397,10 +399,18 @@ function setupNetworkInspectorListeners(): void {
       hotspotSerialIps.delete(serial);
       applyNetworkTabForSerial(serial, null, false);
     },
-    onClientsCleared: () => {
-      hotspotSerialsActive.clear();
-      hotspotSerialIps.clear();
+    onClientsCleared: (payload) => {
+      const pushIsRemote = !!payload?.isRemote;
+      const pushServerUrl = payload?.serverUrl ?? null;
+      // hotspotSerialsActive/hotspotSerialIps track this machine's own shared-connection clients
+      // only — a remote server clearing its clients says nothing about the local hotspot.
+      if (!pushIsRemote) {
+        hotspotSerialsActive.clear();
+        hotspotSerialIps.clear();
+      }
       for (const ctrl of networkTabControllers.values()) {
+        if (ctrl.isRemote !== pushIsRemote) continue;
+        if (pushIsRemote && ctrl.serverUrl !== pushServerUrl) continue;
         ctrl.setVisible(false);
         ctrl.setHotspotIp(null);
         ctrl.clearEvents();
@@ -437,41 +447,62 @@ function setupNetworkInspectorListeners(): void {
           docsPath?: string;
           persistentFixInstalled?: boolean;
         }>;
+        // Present only on a push relayed from a remote server (see
+        // createSseRelay/networkStreamRelay in main/ipc/remote-handlers.ts).
+        isRemote?: boolean;
+        serverUrl?: string;
       };
-      const autoDisabledMessage =
-        s.enabled === false && typeof s.lastError === 'string' && /^Network Inspector disabled:/i.test(s.lastError)
-          ? s.lastError
-          : '';
-      if (autoDisabledMessage) {
-        if (autoDisabledMessage !== lastNiAutoDisabledToast) {
-          showToast(autoDisabledMessage, 'error');
-          lastNiAutoDisabledToast = autoDisabledMessage;
-        }
-        hideAllNetworkTabsForDisable();
-      } else if (s.enabled !== false) {
-        lastNiAutoDisabledToast = '';
-      }
+      const pushIsRemote = !!s.isRemote;
+      const pushServerUrl = s.serverUrl ?? null;
 
-      const clients = s.connectedClients || [];
-      if (s.enabled !== false) {
-        for (const client of clients) {
-          if (client.serialNumber && client.ip) {
-            hotspotSerialIps.set(client.serialNumber.trim(), client.ip.trim());
-            hotspotSerialsActive.add(client.serialNumber.trim());
-            applyNetworkTabForSerial(client.serialNumber.trim(), client.ip.trim(), true);
+      // Everything below this point except the final per-controller loop is about THIS machine's
+      // own hotspot/shared-connection + toast state — a remote server's status says nothing about
+      // that, so none of it applies to a remote-origin push.
+      if (!pushIsRemote) {
+        const autoDisabledMessage =
+          s.enabled === false && typeof s.lastError === 'string' && /^Network Inspector disabled:/i.test(s.lastError)
+            ? s.lastError
+            : '';
+        if (autoDisabledMessage) {
+          if (autoDisabledMessage !== lastNiAutoDisabledToast) {
+            showToast(autoDisabledMessage, 'error');
+            lastNiAutoDisabledToast = autoDisabledMessage;
+          }
+          hideAllNetworkTabsForDisable();
+        } else if (s.enabled !== false) {
+          lastNiAutoDisabledToast = '';
+        }
+
+        const clients = s.connectedClients || [];
+        if (s.enabled !== false) {
+          for (const client of clients) {
+            if (client.serialNumber && client.ip) {
+              hotspotSerialIps.set(client.serialNumber.trim(), client.ip.trim());
+              hotspotSerialsActive.add(client.serialNumber.trim());
+              applyNetworkTabForSerial(client.serialNumber.trim(), client.ip.trim(), true);
+            }
           }
         }
+        // Shared Wi-Fi (no hotspot): reveal connected local devices' Network tabs once the proxy is
+        // active, since they won't appear in connectedClients (that list comes from hotspot scans).
+        if (s.enabled !== false && (s.mitmActive || s.mitmEnabled)) revealLocalNetworkTabsForMitm();
       }
-      // Shared Wi-Fi (no hotspot): reveal connected local devices' Network tabs once the proxy is
-      // active, since they won't appear in connectedClients (that list comes from hotspot scans).
-      if (s.enabled !== false && (s.mitmActive || s.mitmEnabled)) revealLocalNetworkTabsForMitm();
       for (const ctrl of networkTabControllers.values()) {
+        if (ctrl.isRemote !== pushIsRemote) continue;
+        if (pushIsRemote && ctrl.serverUrl !== pushServerUrl) continue;
         ctrl.setCaptureStatus(s);
       }
     },
     onCaptureEvents: (events) => {
-      if (!NETWORK_INSPECTOR_ENABLED || !Array.isArray(events)) return;
+      if (!NETWORK_INSPECTOR_ENABLED || !Array.isArray(events) || events.length === 0) return;
+      // Every event in one push shares an origin (one SSE connection == one server), so the first
+      // element's tag is enough to route the whole batch to the right controllers.
+      const firstTag = events[0] as unknown as { isRemote?: boolean; serverUrl?: string };
+      const pushIsRemote = !!firstTag?.isRemote;
+      const pushServerUrl = firstTag?.serverUrl ?? null;
       for (const ctrl of networkTabControllers.values()) {
+        if (ctrl.isRemote !== pushIsRemote) continue;
+        if (pushIsRemote && ctrl.serverUrl !== pushServerUrl) continue;
         ctrl.appendEvents(events);
       }
     }
@@ -670,8 +701,8 @@ function registerMcpConnectFlow(): void {
  * Auto-connect Sideload Relay targets in the UI. When the relay fans a build out
  * to a device, open that device as a connected tab here (if it isn't already)
  * and connect its console — so a device that wasn't open in RDS shows up
- * connected right after sideloading. `connectDevice` is idempotent (it just
- * activates the existing tab when already connected).
+ * connected right after sideloading. `connectDevice`/`connectRemoteDevice` are
+ * idempotent (they just activate the existing tab when already connected).
  */
 function registerRelayAutoConnect(): void {
   const roku = (window as any).roku;
@@ -683,25 +714,48 @@ function registerRelayAutoConnect(): void {
       install?: { state?: string };
       console?: { state?: string };
       done?: boolean;
+      remote?: boolean;
+      serverUrl?: string;
+      locationId?: string;
     } | null;
     if (!r || !r.ip || r.done !== true || r.install?.state !== 'ok') return;
     const ip = r.ip;
     try {
-      // Prefer a full device object from the scan cache; fall back to a minimal
-      // one built from the relay target (enough for the tab/panel + passwordless
-      // ECP/telnet).
-      let device: Record<string, unknown> | undefined;
-      for (const dev of state.devices.values()) {
-        if ((dev as { ip?: string }).ip === ip) {
-          device = dev as Record<string, unknown>;
-          break;
+      let connKey: string;
+      if (r.remote && r.locationId) {
+        // Remote target — route through connectRemoteDevice (keyed by `${locationId}:${ip}`,
+        // wired for the remote transport) instead of the local-only connectDevice, which would
+        // open a direct-IP tab for a device this machine can't actually reach and re-open a new
+        // one on every subsequent sideload since it never matches the real remote connection.
+        let device: Record<string, unknown> | undefined;
+        const location = state.remoteLocations.get(r.locationId) as { devices?: Map<string, unknown> } | undefined;
+        for (const dev of location?.devices?.values() || []) {
+          if ((dev as { ip?: string }).ip === ip) {
+            device = dev as Record<string, unknown>;
+            break;
+          }
         }
-      }
-      if (!device) device = { ip, deviceName: r.name || ip, modelName: r.name || 'Roku' };
+        if (!device) device = { ip, deviceName: r.name || ip, modelName: r.name || 'Roku', serverUrl: r.serverUrl };
+        connectRemoteDevice(device, r.locationId);
+        connKey = `${r.locationId}:${ip}`;
+      } else {
+        // Prefer a full device object from the scan cache; fall back to a minimal
+        // one built from the relay target (enough for the tab/panel + passwordless
+        // ECP/telnet).
+        let device: Record<string, unknown> | undefined;
+        for (const dev of state.devices.values()) {
+          if ((dev as { ip?: string }).ip === ip) {
+            device = dev as Record<string, unknown>;
+            break;
+          }
+        }
+        if (!device) device = { ip, deviceName: r.name || ip, modelName: r.name || 'Roku' };
 
-      // connectDevice is idempotent — a brand-new device opens a tab; an
-      // already-connected one just re-activates its existing tab.
-      connectDevice(device);
+        // connectDevice is idempotent — a brand-new device opens a tab; an
+        // already-connected one just re-activates its existing tab.
+        connectDevice(device);
+        connKey = ip;
+      }
 
       // Always bring the console up on a successful relay — no matter the prior
       // state (device fresh or already-connected, console dropped, never up, or
@@ -709,7 +763,7 @@ function registerRelayAutoConnect(): void {
       // (`if (isConnected) return`), so a healthy console is a no-op — no bounce;
       // a dropped/never-connected one gets (re)connected. Defer a tick so a
       // freshly-created panel finishes wiring.
-      const conn = state.connectedDevices.get(ip) as { tabId?: string } | undefined;
+      const conn = state.connectedDevices.get(connKey) as { tabId?: string } | undefined;
       const panel = conn?.tabId ? (document.getElementById(conn.tabId) as { connectTelnet?: () => Promise<void> } | null) : null;
       if (panel?.connectTelnet) {
         setTimeout(() => {
@@ -826,14 +880,22 @@ const ADAPTER_METHOD_SPECS: readonly AdapterMethodSpec[] = [
   { name: 'telnetSystemConnect', prefix: 'ip' },
   { name: 'telnetSystemDisconnect', prefix: 'ip' },
   { name: 'telnetSystemSend', prefix: 'ip' },
-  { name: 'telnetSystemStatus', prefix: 'ip' }
+  { name: 'telnetSystemStatus', prefix: 'ip' },
+  // Network Inspector — status/events/detail/clear/setup-capture only. Traffic rules, notes,
+  // find, replay, pcap export, and CA-cert distribution have no remote-server route yet and
+  // stay local-only (see .discussion-docs/ for the phased rollout).
+  { name: 'networkStatus', prefix: 'none', localName: 'networkInspectorGetStatus', remoteName: 'remoteNetworkStatus' },
+  { name: 'networkEvents', prefix: 'ip', localName: 'networkInspectorGetEvents', remoteName: 'remoteNetworkEvents' },
+  { name: 'networkEventDetail', prefix: 'none', localName: 'networkInspectorGetEventDetail', remoteName: 'remoteNetworkEventDetail' },
+  { name: 'networkClearEvents', prefix: 'none', localName: 'networkInspectorClearEvents', remoteName: 'remoteNetworkClear' },
+  { name: 'networkSetupCapture', prefix: 'none', localName: 'networkInspectorInstallBpfAccess', remoteName: 'remoteNetworkSetupCapture' }
 ];
 
 function capitalize(s: string): string {
   return s.length ? s[0].toUpperCase() + s.slice(1) : s;
 }
 
-function createApiAdapter(isRemote, ip, serverUrl = null) {
+function createApiAdapter(isRemote, ip, serverUrl = null, capabilities: Record<string, unknown> | null = null) {
   const useRemote = !!(isRemote && serverUrl);
   const remoteBase = serverUrl || '';
 
@@ -872,7 +934,12 @@ function createApiAdapter(isRemote, ip, serverUrl = null) {
   const adapter: Record<string, unknown> = {
     isRemote: useRemote,
     ip,
-    serverUrl: useRemote ? remoteBase : null
+    serverUrl: useRemote ? remoteBase : null,
+    // Local devices always support the debugger (RDS's own in-process session — no
+    // negotiation needed). A remote device depends on that location's server actually
+    // having the debug protocol wired in (see `capabilities.debugger` in
+    // roku-remote-server.ts's /capabilities, computed from DEBUGGER_ENDPOINTS_AVAILABLE).
+    debuggerSupported: !useRemote || capabilities?.['debugger'] !== false
   };
 
   for (const spec of ADAPTER_METHOD_SPECS) {
@@ -1184,8 +1251,10 @@ function getDefaultCapabilities() {
     devApp: true,
     screenshot: true,
     console: true,
+    debugger: true,
     appConnector: true,
     deepLink: true,
+    networkInspector: { supported: true },
   };
 }
 
@@ -2503,6 +2572,9 @@ function disconnectDevice(deviceKey) {
   // events so a closed tab can't keep merging pushed capture events into dead state.
   const networkCtrl = networkTabControllers.get(tabId);
   if (networkCtrl) {
+    if (networkCtrl.isRemote && networkCtrl.serverUrl && window.roku?.remoteNetworkStreamDisconnect) {
+      void window.roku.remoteNetworkStreamDisconnect(networkCtrl.serverUrl, tabId);
+    }
     try { networkCtrl.destroy?.(); } catch (_) {}
     networkTabControllers.delete(tabId);
     mitmRevealedTabIds.delete(tabId);
@@ -3032,11 +3104,16 @@ function applyCapabilities(panel, capabilities) {
     'query': 'query',          // Query tab
     'devApp': 'devapp',        // Dev App tab
     'console': 'telnet',       // Console tab (telnet)
-    'appConnector': 'inspector' // App Connector tab
+    'appConnector': 'inspector', // App Connector tab
+    'networkInspector': 'network' // Network tab — gated on the remote server actually having
+                                   // packet-capture privileges (it reports `{ supported, requiresRoot }`,
+                                   // not a plain boolean, since capture needs root on a headless host)
   };
-  
+
   for (const [capKey, tabKey] of Object.entries(tabCapabilityMap)) {
-    const isEnabled = capabilities[capKey] !== false; // Default to enabled if not specified
+    const isEnabled = capKey === 'networkInspector'
+      ? capabilities.networkInspector?.supported !== false // Default to enabled if not specified
+      : capabilities[capKey] !== false; // Default to enabled if not specified
     
     // Find the tab button and content
     const tabBtn = panel.querySelector(`.inner-tab[data-inner-tab="${tabKey}"]`);
@@ -3717,7 +3794,7 @@ function createDevicePanel(device, tabId, isRemote = false, serverUrl = null, lo
   applyI18n(panel);
 
   // Create the unified API adapter
-  const api = createApiAdapter(isRemote, device.ip, serverUrl);
+  const api = createApiAdapter(isRemote, device.ip, serverUrl, device.capabilities || null);
   // Expose it to cross-cutting code (e.g. global keyboard-remote shortcuts)
   // so they can go through the local-vs-remote branch instead of calling
   // `window.roku.*` directly with `panel.dataset.ip`.
@@ -3767,10 +3844,15 @@ function createDevicePanel(device, tabId, isRemote = false, serverUrl = null, lo
     setupInspector(panel, device, api);
     setupTelnet(panel, device, api, { devLog });
     setupActionScripts(panel, device, api);
-    const networkCtrl = setupNetworkTab(panel, device, isRemote);
+    const networkCtrl = setupNetworkTab(panel, device, api);
     networkTabControllers.set(tabId, networkCtrl);
     syncNetworkTabMultiDevice();
-    void syncNetworkTabForConnectedDevice(tabId, device, networkCtrl, isRemote);
+    void syncNetworkTabForConnectedDevice(tabId, device, networkCtrl, api);
+    // Start the live SSE relay for this server (ref-counted — a second panel against the
+    // same remote server just adds another holder, it doesn't open a second connection).
+    if (networkCtrl.isRemote && networkCtrl.serverUrl && window.roku?.remoteNetworkStreamConnect) {
+      void window.roku.remoteNetworkStreamConnect(networkCtrl.serverUrl, tabId);
+    }
     
     // Update dev mode warnings based on device status
     updateDevModeWarnings(panel, device.developerEnabled === true);

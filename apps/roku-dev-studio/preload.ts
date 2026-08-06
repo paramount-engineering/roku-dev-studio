@@ -290,6 +290,34 @@ contextBridge.exposeInMainWorld('roku', {
     ipcRenderer.invoke(IPC.RemoteNetworkClear, { serverUrl, deviceIps }),
   remoteNetworkSetupCapture: (serverUrl: string) =>
     ipcRenderer.invoke(IPC.RemoteNetworkSetupCapture, { serverUrl }),
+  // Live SSE relay — `holder` should be the calling device panel's tabId so the main-process
+  // ref-count releases the connection only once every panel watching that server has gone away.
+  remoteNetworkStreamConnect: (serverUrl: string, holder?: string) =>
+    ipcRenderer.invoke(IPC.RemoteNetworkStreamConnect, { serverUrl, holder }),
+  remoteNetworkStreamDisconnect: (serverUrl: string, holder?: string) =>
+    ipcRenderer.invoke(IPC.RemoteNetworkStreamDisconnect, { serverUrl, holder }),
+  remoteNetworkSetEventNote: (serverUrl: string, id: string, note: string) =>
+    ipcRenderer.invoke(IPC.RemoteNetworkSetEventNote, { serverUrl, id, note }),
+  remoteNetworkGetTrafficRules: (serverUrl: string) =>
+    ipcRenderer.invoke(IPC.RemoteNetworkGetTrafficRules, { serverUrl }),
+  remoteNetworkSetDeviceTrafficRules: (serverUrl: string, deviceIp: string, rules: unknown) =>
+    ipcRenderer.invoke(IPC.RemoteNetworkSetDeviceTrafficRules, { serverUrl, deviceIp, rules }),
+  remoteNetworkReplayRequest: (
+    serverUrl: string,
+    payload: { deviceIp?: string; input: unknown; applyTrafficRules?: boolean; timeoutMs?: number }
+  ) => ipcRenderer.invoke(IPC.RemoteNetworkReplayRequest, { serverUrl, ...payload }),
+  remoteNetworkFind: (serverUrl: string, deviceIp: string, options: unknown) =>
+    ipcRenderer.invoke(IPC.RemoteNetworkFind, { serverUrl, deviceIp, options }),
+  remoteNetworkSetRecording: (serverUrl: string, deviceIps: string[], recording: boolean) =>
+    ipcRenderer.invoke(IPC.RemoteNetworkSetRecording, { serverUrl, deviceIps, recording }),
+  remoteNetworkExportPcap: (serverUrl: string, deviceIps?: string[]) =>
+    ipcRenderer.invoke(IPC.RemoteNetworkExportPcap, { serverUrl, deviceIps }),
+  remoteNetworkGetCaInfo: (serverUrl: string) =>
+    ipcRenderer.invoke(IPC.RemoteNetworkGetCaInfo, { serverUrl }),
+  remoteNetworkExportCaPem: (serverUrl: string) =>
+    ipcRenderer.invoke(IPC.RemoteNetworkExportCaPem, { serverUrl }),
+  remoteNetworkExportCaCert: (serverUrl: string) =>
+    ipcRenderer.invoke(IPC.RemoteNetworkExportCaCert, { serverUrl }),
 
   // Get device info from remote location
   remoteDeviceInfo: (serverUrl: string, ip: string) => 
@@ -333,9 +361,12 @@ contextBridge.exposeInMainWorld('roku', {
   remoteSideload: (serverUrl: string, ip: string, filePath: string, password: string | undefined) => 
     ipcRenderer.invoke(IPC.RemoteSideload, { serverUrl, ip, filePath, password }),
   
-  // Sideload via remote server with file upload from local machine
-  remoteSideloadUpload: (serverUrl: string, ip: string, filePath: string, password: string | undefined) => 
-    ipcRenderer.invoke(IPC.RemoteSideloadUpload, { serverUrl, ip, filePath, password }),
+  // Sideload via remote server with file upload from local machine. remoteDebug/serial
+  // mirror the local `sideload(ip, filePath, password, remoteDebug, serial)` signature —
+  // previously dropped here, which silently prevented "Sideload with Debugging" from
+  // ever opening port 8081 on a remote-managed device.
+  remoteSideloadUpload: (serverUrl: string, ip: string, filePath: string, password: string | undefined, remoteDebug?: boolean, serial?: string) =>
+    ipcRenderer.invoke(IPC.RemoteSideloadUpload, { serverUrl, ip, filePath, password, remoteDebug, serial }),
 
   // Delete sideload via remote server
   remoteDeleteSideload: (serverUrl: string, ip: string, password: string | undefined) => 
@@ -501,6 +532,41 @@ contextBridge.exposeInMainWorld('roku', {
     ipcRenderer.on(IPC.DebuggerReattach, handler);
     return () => ipcRenderer.removeListener(IPC.DebuggerReattach, handler);
   },
+
+  // ============================================
+  // BrightScript Debugger via remote server — the session runs on the remote
+  // server (real network access to the device); push events reuse the local
+  // onDebugger* listeners above (tagged { isRemote: true, serverUrl } by the relay).
+  // No remote equivalent for debuggerScanStops — it reads the local sideload .zip,
+  // identical for a local or remote sideload target.
+  // ============================================
+  remoteDebuggerAttach: (serverUrl: string, ip: string) => ipcRenderer.invoke(IPC.RemoteDebuggerAttach, { serverUrl, ip }),
+  remoteDebuggerDetach: (serverUrl: string, ip: string) => ipcRenderer.invoke(IPC.RemoteDebuggerDetach, { serverUrl, ip }),
+  remoteDebuggerStatus: (serverUrl: string, ip: string) => ipcRenderer.invoke(IPC.RemoteDebuggerStatus, { serverUrl, ip }),
+  remoteDebuggerRestart: (serverUrl: string, ip: string, password: string) =>
+    ipcRenderer.invoke(IPC.RemoteDebuggerRestart, { serverUrl, ip, password }),
+  remoteDebuggerContinue: (serverUrl: string, ip: string) => ipcRenderer.invoke(IPC.RemoteDebuggerContinue, { serverUrl, ip }),
+  remoteDebuggerPause: (serverUrl: string, ip: string) => ipcRenderer.invoke(IPC.RemoteDebuggerPause, { serverUrl, ip }),
+  remoteDebuggerStepOver: (serverUrl: string, ip: string, threadIndex?: number) =>
+    ipcRenderer.invoke(IPC.RemoteDebuggerStepOver, { serverUrl, ip, threadIndex }),
+  remoteDebuggerStepIn: (serverUrl: string, ip: string, threadIndex?: number) =>
+    ipcRenderer.invoke(IPC.RemoteDebuggerStepIn, { serverUrl, ip, threadIndex }),
+  remoteDebuggerStepOut: (serverUrl: string, ip: string, threadIndex?: number) =>
+    ipcRenderer.invoke(IPC.RemoteDebuggerStepOut, { serverUrl, ip, threadIndex }),
+  remoteDebuggerStackTrace: (serverUrl: string, ip: string, threadIndex?: number) =>
+    ipcRenderer.invoke(IPC.RemoteDebuggerStackTrace, { serverUrl, ip, threadIndex }),
+  remoteDebuggerVariables: (serverUrl: string, ip: string, opts?: { threadIndex?: number; stackFrameIndex?: number; variablePath?: string[] }) =>
+    ipcRenderer.invoke(IPC.RemoteDebuggerVariables, { serverUrl, ip, ...(opts || {}) }),
+  remoteDebuggerAddBreakpoints: (serverUrl: string, ip: string, breakpoints: unknown) =>
+    ipcRenderer.invoke(IPC.RemoteDebuggerAddBreakpoints, { serverUrl, ip, breakpoints }),
+  remoteDebuggerRemoveBreakpointsByLocation: (serverUrl: string, ip: string, locations: Array<{ filePath: string; lineNumber: number }>) =>
+    ipcRenderer.invoke(IPC.RemoteDebuggerRemoveBreakpointsByLocation, { serverUrl, ip, locations }),
+  remoteDebuggerExecute: (serverUrl: string, ip: string, sourceCode: string, opts?: { threadIndex?: number; stackFrameIndex?: number }) =>
+    ipcRenderer.invoke(IPC.RemoteDebuggerExecute, { serverUrl, ip, sourceCode, ...(opts || {}) }),
+  remoteDebuggerStreamConnect: (serverUrl: string, holder?: string) =>
+    ipcRenderer.invoke(IPC.RemoteDebuggerStreamConnect, { serverUrl, holder }),
+  remoteDebuggerStreamDisconnect: (serverUrl: string, holder?: string) =>
+    ipcRenderer.invoke(IPC.RemoteDebuggerStreamDisconnect, { serverUrl, holder }),
 
   // ============================================
   // Telnet System Commands (Port 8080)
@@ -679,8 +745,11 @@ contextBridge.exposeInMainWorld('roku', {
     ipcRenderer.on(IPC.NetworkInspectorDeviceDiscovered, handler);
     return () => ipcRenderer.removeListener(IPC.NetworkInspectorDeviceDiscovered, handler);
   },
-  onNetworkInspectorClientsCleared: (callback: () => void) => {
-    const handler = () => callback();
+  // `payload` carries `{ isRemote, serverUrl }` when this came from a remote server's relay
+  // (see createSseRelay/networkStreamRelay in main/ipc/remote-handlers.ts); undefined for a
+  // local-origin clear. Forwarded (not discarded) so app.ts's fan-out can scope which panels react.
+  onNetworkInspectorClientsCleared: (callback: (payload?: { isRemote?: boolean; serverUrl?: string }) => void) => {
+    const handler = (_event: IpcRendererEvent, payload?: { isRemote?: boolean; serverUrl?: string }) => callback(payload);
     ipcRenderer.on(IPC.NetworkInspectorClientsCleared, handler);
     return () => ipcRenderer.removeListener(IPC.NetworkInspectorClientsCleared, handler);
   },

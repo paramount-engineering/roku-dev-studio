@@ -21,6 +21,12 @@ type RokuApi = {
     rules: DeviceTrafficRules | null
   ) => Promise<{ success?: boolean }>;
   networkInspectorPickMockFile?: () => Promise<{ success?: boolean; filePath?: string; canceled?: boolean }>;
+  remoteNetworkGetTrafficRules?: (serverUrl: string) => Promise<{ success?: boolean; rules?: Record<string, DeviceTrafficRules> }>;
+  remoteNetworkSetDeviceTrafficRules?: (
+    serverUrl: string,
+    deviceIp: string,
+    rules: DeviceTrafficRules | null
+  ) => Promise<{ success?: boolean }>;
 };
 
 // Bandwidth presets (download cap in kbps; 0 = unlimited). A function (not a const)
@@ -340,12 +346,21 @@ export async function openTrafficRulesModal(opts: {
   deviceName?: string;
   deviceSerial?: string;
   hostSuggestions: string[];
+  /** Set when this device panel is backed by a remote-server device (see createApiAdapter in
+   *  renderer/app.ts) — routes rule reads/writes through the remote server instead of the local
+   *  engine. "Map Local" (a mock rule served from a file on THIS machine) has no remote equivalent
+   *  yet and stays local-only regardless. */
+  isRemote?: boolean;
+  serverUrl?: string | null;
 }): Promise<void> {
   const api = (window as unknown as { roku?: RokuApi }).roku;
+  const isRemote = !!(opts.isRemote && opts.serverUrl);
 
   let current: DeviceTrafficRules = {};
   try {
-    const res = await api?.networkInspectorGetTrafficRules?.();
+    const res = isRemote
+      ? await api?.remoteNetworkGetTrafficRules?.(opts.serverUrl as string)
+      : await api?.networkInspectorGetTrafficRules?.();
     if (res?.success && res.rules && res.rules[opts.deviceIp]) {
       current = res.rules[opts.deviceIp];
     }
@@ -908,13 +923,15 @@ export async function openTrafficRulesModal(opts: {
       if (hostRules.length > 0) rules.hosts = hostRules;
 
       const statusEl = overlay.querySelector('[data-rules-status]');
-      if (!api?.networkInspectorSetDeviceTrafficRules) {
+      if (isRemote ? !api?.remoteNetworkSetDeviceTrafficRules : !api?.networkInspectorSetDeviceTrafficRules) {
         if (statusEl) statusEl.textContent = S.networkInspector.restartToSave;
         return;
       }
       try {
         const hasAny = blockAll || noCaching || blockCookies || !!devThrottle || hostRules.length > 0;
-        const res = await api.networkInspectorSetDeviceTrafficRules(opts.deviceIp, hasAny ? rules : null);
+        const res = isRemote
+          ? await api?.remoteNetworkSetDeviceTrafficRules?.(opts.serverUrl as string, opts.deviceIp, hasAny ? rules : null)
+          : await api?.networkInspectorSetDeviceTrafficRules?.(opts.deviceIp, hasAny ? rules : null);
         if (res?.success) {
           close();
         } else if (statusEl) {

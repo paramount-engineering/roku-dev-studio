@@ -59,6 +59,7 @@ export const app = {
     devApp: { label: 'Dev App', desc: 'Sideload каналів розробки' },
     screenshot: { label: 'Знімок екрана', desc: 'Захоплення екрана пристрою' },
     console: { label: 'Консоль', desc: 'Налагоджувальний вивід BrightScript' },
+    debugger: { label: 'Налагоджувач', desc: 'Точки зупинки, покрокове виконання, перегляд змінних' },
     appConnector: { label: 'App Connector', desc: 'Інтеграція RALE TrackerTask' },
     deepLink: { label: 'Deep-Link', desc: 'Запуск контенту з параметрами' },
     networkInspector: { label: 'Інспектор мережі', desc: 'Захоплення DNS/SNI/HTTP + MITM-проксі' }

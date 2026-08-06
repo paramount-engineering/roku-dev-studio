@@ -8,10 +8,10 @@
  * is streamed back through the listener as a `RelayDeviceResult` so the renderer
  * can render live per-device status.
  *
- * Every enabled target is a plain install → console. There is no
- * "primary/debug device" special-casing anymore: RDS emulates the debug
- * endpoints (8081/8085) itself, so devices never need `remotedebug=1` and the
- * whole fleet just runs the build.
+ * Every enabled target is install → console, with no "primary device" — each
+ * target that opted into "Sideload with Debugging" (or whose build carries
+ * STOP breakpoints) additionally gets `remotedebug=1` so its real debug
+ * protocol port (8081) opens, local or remote alike (see `FanoutTarget.remoteDebug`).
  */
 
 import type {
@@ -51,18 +51,22 @@ export interface FanoutTarget {
   location?: string;
   /** Remote server base URL (remote targets only). */
   serverUrl?: string;
+  /** Remote location id (remote targets only) — passed through to the renderer's result stream. */
+  locationId?: string;
   /**
    * Per-device opt-in (persisted from the Dev App "Sideload with Debugging"
    * checkbox): fan out this target's install with `remotedebug=1` so its real
-   * debug protocol port (8081) opens for the BrightScript debugger. Local
-   * targets only — debug-over-relay for remote targets isn't supported yet.
+   * debug protocol port (8081) opens for the BrightScript debugger. Honored for
+   * both local targets (`rokuApi.sideloadChannel`) and remote targets (the
+   * remote server's own `DebugSessionController` attaches over its own network
+   * access to the device — see `RemoteFanoutOps.sideload`'s 5th param).
    */
   remoteDebug?: boolean;
 }
 
 /** Remote-server operations injected by the Electron layer for remote-target fan-out. */
 export interface RemoteFanoutOps {
-  sideload: (serverUrl: string, ip: string, filePath: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  sideload: (serverUrl: string, ip: string, filePath: string, password: string, remoteDebug?: boolean) => Promise<{ success: boolean; error?: string }>;
   ensureConsole: (serverUrl: string, ip: string, options?: { holder?: string }) => Promise<{ success: boolean; error?: string }>;
 }
 
@@ -94,7 +98,10 @@ export async function runFanout(opts: FanoutOptions, listener: RelayListener): P
         name: target.name,
         install: step('pending'),
         console: step('pending'),
-        done: false
+        done: false,
+        // Lets the renderer's auto-connect flow route through `connectRemoteDevice` for a
+        // remote target instead of the local-only `connectDevice` (see RelayDeviceResult).
+        ...(target.remote ? { remote: true, serverUrl: target.serverUrl, locationId: target.locationId } : {})
       };
       const emit = () => {
         try {
@@ -119,15 +126,15 @@ export async function runFanout(opts: FanoutOptions, listener: RelayListener): P
       }
       const doInstall = () =>
         isRemote
-          ? opts.remoteOps!.sideload(target.serverUrl!, target.ip, packagePath, target.password)
+          ? opts.remoteOps!.sideload(target.serverUrl!, target.ip, packagePath, target.password, target.remoteDebug)
           : rokuApi.sideloadChannel({
               ip: target.ip,
               filePath: packagePath,
               password: target.password,
               log: (m: string) => mainLog(`[SideloadRelay ${target.ip}]`, m),
               // Honor the per-device "Sideload with Debugging" preference so the
-              // fleet's debug-enabled devices open port 8081 (local only). Debug
-              // launches force a clean Delete+Install so remotedebug=1 is honored.
+              // fleet's debug-enabled devices open port 8081. Debug launches force a
+              // clean Delete+Install so remotedebug=1 is honored.
               ...(target.remoteDebug ? { extraFields: [{ name: 'remotedebug', value: '1' }], cleanInstall: true } : {})
             });
       const doConsole = () =>

@@ -262,9 +262,12 @@ export const settings = {
   // ── Network Inspector — Certificate Authority card (surface the CA) ──
   caSectionTitle: 'Urząd certyfikacji',
   caRowDesc: 'Lokalny urząd certyfikacji, którego serwer proxy używa do odszyfrowywania ruchu HTTPS.',
+  caRowDescRemote: 'Urząd certyfikacji tej lokalizacji, używany przez jej serwer proxy do odszyfrowywania ruchu HTTPS.',
   caViewCert: 'Pokaż certyfikat',
   caSectionDesc:
     'Inspektor sieci podpisuje odszyfrowany ruch HTTPS lokalnym urzędem certyfikacji. Zaufaj mu lub zaimportuj go na urządzeniu, aby Twój kanał deweloperski akceptował serwer proxy. Klucz prywatny nigdy nie opuszcza tego komputera.',
+  caSectionDescRemote:
+    'Inspektor sieci podpisuje odszyfrowany ruch HTTPS urzędem certyfikacji tej lokalizacji. Zaufaj mu lub zaimportuj go na urządzeniu, aby Twój kanał deweloperski akceptował serwer proxy. Klucz prywatny nigdy nie opuszcza tego serwera.',
   caSubject: 'Podmiot',
   caFingerprint: 'Odcisk SHA-256',
   caValidity: 'Ważność',

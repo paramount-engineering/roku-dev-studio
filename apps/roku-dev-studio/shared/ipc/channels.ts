@@ -192,6 +192,22 @@ export const IPC = {
   RemoteNetworkEventDetail: 'remote:network-event-detail',
   RemoteNetworkClear: 'remote:network-clear',
   RemoteNetworkSetupCapture: 'remote:network-setup-capture',
+  // Live SSE relay from the remote server's /network/stream — one connection per serverUrl,
+  // reference-counted across every device panel pointed at that server (mirrors the
+  // RemoteTelnetConnect/Disconnect lease model below). Forwarded events land on the same
+  // NetworkInspector* push channels the local engine uses, tagged { isRemote: true, serverUrl }.
+  RemoteNetworkStreamConnect: 'remote:network-stream-connect',
+  RemoteNetworkStreamDisconnect: 'remote:network-stream-disconnect',
+  RemoteNetworkSetEventNote: 'remote:network-set-event-note',
+  RemoteNetworkGetTrafficRules: 'remote:network-get-traffic-rules',
+  RemoteNetworkSetDeviceTrafficRules: 'remote:network-set-device-traffic-rules',
+  RemoteNetworkReplayRequest: 'remote:network-replay-request',
+  RemoteNetworkFind: 'remote:network-find',
+  RemoteNetworkSetRecording: 'remote:network-set-recording',
+  RemoteNetworkExportPcap: 'remote:network-export-pcap',
+  RemoteNetworkGetCaInfo: 'remote:network-get-ca-info',
+  RemoteNetworkExportCaPem: 'remote:network-export-ca-pem',
+  RemoteNetworkExportCaCert: 'remote:network-export-ca-cert',
   RemoteDeviceInfo: 'remote:device-info',
   RemoteKeypress: 'remote:keypress',
   RemoteLaunch: 'remote:launch',
@@ -261,6 +277,27 @@ export const IPC = {
   DebuggerBreakpoints: 'debugger:breakpoints',
   /** Main → windows: a (debug-enabled) device was just (re)sideloaded — reattach. */
   DebuggerReattach: 'debugger:reattach',
+  // Remote debugger — the session runs on the remote RDS server (real network access to the
+  // device); these proxy each request over HTTP. Push events reuse the local Debugger* channels
+  // above (tagged { isRemote: true, serverUrl } by the relay) rather than duplicating them.
+  // DebuggerScanStops has no remote equivalent — it reads the local sideload .zip already on
+  // the Electron host's disk, which is identical for a local or remote sideload target.
+  RemoteDebuggerAttach: 'remote:debugger-attach',
+  RemoteDebuggerDetach: 'remote:debugger-detach',
+  RemoteDebuggerStatus: 'remote:debugger-status',
+  RemoteDebuggerContinue: 'remote:debugger-continue',
+  RemoteDebuggerPause: 'remote:debugger-pause',
+  RemoteDebuggerStepOver: 'remote:debugger-step-over',
+  RemoteDebuggerStepIn: 'remote:debugger-step-in',
+  RemoteDebuggerStepOut: 'remote:debugger-step-out',
+  RemoteDebuggerStackTrace: 'remote:debugger-stacktrace',
+  RemoteDebuggerVariables: 'remote:debugger-variables',
+  RemoteDebuggerAddBreakpoints: 'remote:debugger-add-breakpoints',
+  RemoteDebuggerRemoveBreakpointsByLocation: 'remote:debugger-remove-breakpoints-by-location',
+  RemoteDebuggerExecute: 'remote:debugger-execute',
+  RemoteDebuggerRestart: 'remote:debugger-restart',
+  RemoteDebuggerStreamConnect: 'remote:debugger-stream-connect',
+  RemoteDebuggerStreamDisconnect: 'remote:debugger-stream-disconnect',
   SettingsGet: 'settings:get',
   SettingsSet: 'settings:set',
   SettingsDelete: 'settings:delete',

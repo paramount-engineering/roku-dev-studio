@@ -266,9 +266,14 @@ export const settings = {
   caSectionTitle: 'Certificate Authority',
   // Short description shown on the settings row; the full caSectionDesc lives in the modal.
   caRowDesc: 'The local certificate authority the proxy uses to decrypt HTTPS.',
+  // Shown instead of caRowDesc/caSectionDesc when the selected place is a remote location —
+  // the certificate authority (and its private key) live on that server, not this machine.
+  caRowDescRemote: "This location's certificate authority, used by its proxy to decrypt HTTPS.",
   caViewCert: 'View Certificate',
   caSectionDesc:
     'The Network Inspector signs decrypted HTTPS with a local certificate authority. Trust or import it on the device so your dev channel accepts the proxy. The private key never leaves this machine.',
+  caSectionDescRemote:
+    'The Network Inspector signs decrypted HTTPS with this location’s certificate authority. Trust or import it on the device so your dev channel accepts the proxy. The private key never leaves that server.',
   caSubject: 'Subject',
   caFingerprint: 'SHA-256 Fingerprint',
   caValidity: 'Validity',

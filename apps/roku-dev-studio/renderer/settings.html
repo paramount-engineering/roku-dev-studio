@@ -268,7 +268,7 @@
               <div class="settings-row-input" id="niCaRow">
                 <div class="settings-row-text">
                   <strong data-i18n="settings.caSectionTitle">Certificate Authority</strong>
-                  <span class="settings-row-desc" data-i18n="settings.caRowDesc">The local certificate authority the proxy uses to decrypt HTTPS.</span>
+                  <span class="settings-row-desc" id="niCaRowDesc" data-i18n="settings.caRowDesc">The local certificate authority the proxy uses to decrypt HTTPS.</span>
                 </div>
                 <button type="button" class="btn btn-secondary btn-sm" id="btnOpenNiCa" data-i18n="settings.caViewCert">View Certificate</button>
               </div>
@@ -331,7 +331,7 @@
         </button>
       </div>
       <div class="ni-modal-body">
-        <p class="settings-row-desc" data-i18n="settings.caSectionDesc">The Network Inspector signs decrypted HTTPS with a local certificate authority. Trust or import it on the device so your dev channel accepts the proxy. The private key never leaves this machine.</p>
+        <p class="settings-row-desc" id="niCaSectionDesc" data-i18n="settings.caSectionDesc">The Network Inspector signs decrypted HTTPS with a local certificate authority. Trust or import it on the device so your dev channel accepts the proxy. The private key never leaves this machine.</p>
         <table class="ni-ca-table" id="niCaInfo" hidden>
           <tbody>
             <tr>

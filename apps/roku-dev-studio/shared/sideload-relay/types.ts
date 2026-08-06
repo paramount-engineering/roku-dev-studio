@@ -68,6 +68,17 @@ export interface RelayDeviceResult {
   console: RelayStepResult;
   /** Set once all steps have settled. */
   done: boolean;
+  /**
+   * True for a remote-location target. The renderer's auto-connect flow needs this (plus
+   * `serverUrl`/`locationId`) to open the device through `connectRemoteDevice` instead of the
+   * local-only `connectDevice` — otherwise it opens a direct-IP tab for a device that isn't
+   * reachable from this machine, and re-opens a new one on every subsequent sideload.
+   */
+  remote?: boolean;
+  /** Remote server base URL (remote targets only). */
+  serverUrl?: string;
+  /** Remote location id (remote targets only) — the key `connectRemoteDevice` tabs use. */
+  locationId?: string;
 }
 
 /** Emitted when a new upload is accepted and fan-out begins. */
