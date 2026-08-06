@@ -348,7 +348,7 @@ export class NetworkInspectorService {
   // so the orchestrator below has no `process.platform` branches.
   private readonly platform: CapturePlatform = getCapturePlatform();
   private capture = new CaptureEngine(() => this.platform.createFrameSource());
-  private pollTimer: ReturnType<typeof setInterval> | null = null;
+  private pollTimer: ReturnType<typeof setTimeout> | null = null;
   private clients = new Map<string, HotspotClientDevice>();
   private matchedSerials = new Set<string>();
   // In-memory buffer holds only lightweight summaries (no headers/bodies — those live on disk in
@@ -385,8 +385,15 @@ export class NetworkInspectorService {
   // keeps changing, and doubles up to the ceiling once the set is stable (or empty) so an idle
   // hotspot isn't probed with 254 HTTP gets every cycle.
   private readonly subnetScanBackoff: BackoffStepper = exponentialBackoff({ baseMs: 12_000, maxMs: 60_000 });
-  // Guards against overlapping ticks: a slow subnet scan can exceed the 4s timer, and `setInterval`
-  // would otherwise stack a second tick (and a second scan) on top of the in-flight one.
+  // Outer tick cadence: stays at the 4s floor while a hotspot is present (or was just checked for
+  // the first time), and backs off toward 60s once ticks keep finding no hotspot at all — so a
+  // machine that's offline / has no hotspot enabled isn't woken up 900x/hour for nothing. Resets to
+  // the floor the instant a hotspot reappears. Self-rescheduling (see `scheduleNextTick`) rather
+  // than a fixed `setInterval` so the cadence can actually change tick-to-tick.
+  private readonly tickBackoff: BackoffStepper = exponentialBackoff({ baseMs: 4_000, maxMs: 60_000 });
+  // Guards against overlapping ticks: a slow subnet scan can exceed the tick cadence, and a
+  // self-rescheduling timer would otherwise stack a second tick (and a second scan) on top of the
+  // in-flight one.
   private tickInFlight = false;
   // Trailing throttle: a burst of state changes (a tick + many event flushes) collapses into one
   // getStatus() rebuild + emit. The latest state is read at fire time, so nothing is lost.
@@ -1187,20 +1194,45 @@ export class NetworkInspectorService {
     return 'waiting';
   }
 
+  private scheduleNextTick(): void {
+    this.pollTimer = setTimeout(() => {
+      // `tickInner` awaits async platform calls that can reject; swallow so a failing tick can't
+      // become an unhandled rejection (noisy, and fatal under strict main-process settings).
+      void this.tick()
+        .catch(() => {})
+        .then(() => this.scheduleNextTick());
+    }, this.tickBackoff.value);
+  }
+
   private startPolling(): void {
     if (this.pollTimer) return;
-    // `tickInner` awaits async platform calls that can reject; swallow so a failing tick can't become
-    // an unhandled rejection (noisy, and fatal under strict main-process settings).
-    const runTick = (): void => void this.tick().catch(() => {});
-    runTick();
-    this.pollTimer = setInterval(runTick, 4000);
+    void this.tick().catch(() => {});
+    this.scheduleNextTick();
   }
 
   private stopPolling(): void {
     if (this.pollTimer) {
-      clearInterval(this.pollTimer);
+      clearTimeout(this.pollTimer);
       this.pollTimer = null;
     }
+  }
+
+  /** Called by the Electron adapter on system suspend — stops the tick loop entirely rather than
+   *  letting it keep firing (and, on Linux, spawning `getcap`) for the duration of a sleeping
+   *  machine. A real OS suspend freezes the process anyway; this also covers the "Power Nap" /
+   *  dark-wake window some machines briefly enter, where JS timers would otherwise still fire. */
+  pauseForSystemSleep(): void {
+    this.stopPolling();
+  }
+
+  /** Called by the Electron adapter on system resume. Only restarts if still enabled — a
+   *  suspend/resume that happens to bracket the user disabling the inspector must not silently
+   *  turn it back on. Resets the backoff so the first tick after waking runs at the fast cadence
+   *  instead of wherever the backoff happened to be before sleep. */
+  resumeFromSystemSleep(): void {
+    if (!this.enabled) return;
+    this.tickBackoff.reset();
+    this.startPolling();
   }
 
   private stopAll(): void {
@@ -1212,6 +1244,7 @@ export class NetworkInspectorService {
     this.captureStartSuppressed = false;
     this.captureSuppressedAt = 0;
     this.subnetScanBackoff.reset();
+    this.tickBackoff.reset();
     this.lastSubnetScanAt = 0;
     this.hotspotSubnet = undefined;
     this.clients.clear();
@@ -1290,9 +1323,14 @@ export class NetworkInspectorService {
       // instead of waiting out a stretched (up to 60s) interval inherited from the previous session.
       this.subnetScanBackoff.reset();
       this.lastSubnetScanAt = 0;
+      // No hotspot to do anything with this tick — back off the outer cadence too (see
+      // `tickBackoff`'s doc comment). MITM (if enabled) already ran above regardless of this.
+      this.tickBackoff.next();
       this.broadcastStatus();
       return;
     }
+    // A hotspot is present — keep ticking at the fast floor the whole time it stays present.
+    this.tickBackoff.reset();
     const subnet = iface.subnet;
     this.gatewayIp = iface.gatewayIp;
     // Retry capture once access is restored at runtime (macOS BPF becoming writable). The worker

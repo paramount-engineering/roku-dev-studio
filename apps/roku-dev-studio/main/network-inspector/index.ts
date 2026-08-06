@@ -12,6 +12,7 @@ import {
 } from 'roku-dev-studio-network-inspector';
 import { createElectronIpcListener } from './electron-ipc-listener';
 import { loadSettings, saveSettings } from '../settings';
+import { onSystemSuspend, onSystemResume } from '../power-state';
 
 // Re-export the engine's public API so existing `./network-inspector/index` imports keep working.
 export * from 'roku-dev-studio-network-inspector';
@@ -59,6 +60,11 @@ export function getNetworkInspectorService(safeSend: SafeSendFn): NetworkInspect
         baseListener.onStatus(status);
       }
     });
+    // A sleeping machine (lid closed, no Wi-Fi) has no use for a poll loop that keeps firing (and,
+    // on Linux, spawning `getcap`) for no purpose — pause entirely on suspend, resume at the fast
+    // cadence on wake.
+    onSystemSuspend(() => singleton?.pauseForSystemSleep());
+    onSystemResume(() => singleton?.resumeFromSystemSleep());
   }
   return singleton;
 }
