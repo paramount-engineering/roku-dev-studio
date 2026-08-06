@@ -332,11 +332,12 @@ export const networkInspector = {
     `Захоплення через точку доступу заблоковано, але проксі MITM за адресою <strong>${addr}</strong> усе одно може записувати проксі-запити. Використовуйте <code>host:port</code> лише в BrightScript (наприклад, <code>192.168.2.1:8888</code>), а не IP пристрою й не <code>http://</code>.`,
   mitmActiveNoCaptureLine: (addr: string): string =>
     `Проксі MITM активний за адресою <code class="ni-hint-code">${addr}</code>. Спрямуйте свій канал dev через нього, щоб захоплювати мережеві запити.`,
-  mitmDecryptingHint: ' Проксі MITM розшифровує HTTPS каналу dev, спрямований через Roku Dev Studio.',
+  mitmDecryptingHint: (addr: string): string =>
+    ` Проксі MITM розшифровує HTTPS каналу dev, спрямований через Roku Dev Studio за адресою <code class="ni-hint-code">${addr}</code>.`,
   hotspotEncryptedHint: ' Тіла HTTPS зашифровані в режимі захоплення через точку доступу — увімкніть MITM у Налаштуваннях для каналів Dev.',
   capturingOnHotspot: 'Захоплення через точку доступу. Переглядайте або відтворюйте вміст на Roku.',
-  connectWifiHint:
-    'Підключіть Roku до тієї самої мережі Wi‑Fi (або точки доступу вашого комп’ютера), потім увімкніть <strong>проксі MITM</strong> у Налаштування → Інспектор мережі, щоб захоплювати HTTPS каналу dev.',
+  connectWifiHint: (addr: string): string =>
+    `Підключіть Roku до тієї самої мережі Wi‑Fi (або точки доступу вашого комп’ютера), потім увімкніть <strong>проксі MITM</strong> у Налаштування → Інспектор мережі, щоб захоплювати HTTPS каналу dev — він слухатиме за адресою <code class="ni-hint-code">${addr}</code>.`,
   sessionListAria: 'Список мережевих сеансів. Використовуйте клавіші зі стрілками для навігації.',
   // Layout toggle.
   layoutToggleTitle: (stacked: boolean): string =>

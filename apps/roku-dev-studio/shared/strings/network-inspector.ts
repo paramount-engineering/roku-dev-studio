@@ -309,11 +309,12 @@ export const networkInspector = {
     `Hotspot capture is blocked, but the MITM proxy at <strong>${addr}</strong> can still record proxied requests. Use <code>host:port</code> only in BrightScript (e.g. <code>192.168.2.1:8888</code>), not the device IP and not <code>http://</code>.`,
   mitmActiveNoCaptureLine: (addr: string): string =>
     `MITM proxy is active at <code class="ni-hint-code">${addr}</code>. Route your dev channel through it to capture Network Requests.`,
-  mitmDecryptingHint: ' MITM proxy is decrypting dev-channel HTTPS routed through Roku Dev Studio.',
+  mitmDecryptingHint: (addr: string): string =>
+    ` MITM proxy is decrypting dev-channel HTTPS routed through Roku Dev Studio at <code class="ni-hint-code">${addr}</code>.`,
   hotspotEncryptedHint: ' HTTPS bodies are encrypted in hotspot capture mode — enable MITM in Settings for Dev channels.',
   capturingOnHotspot: 'Capturing on Hotspot. Browse or play content on the Roku.',
-  connectWifiHint:
-    'Connect the Roku to the same Wi‑Fi (or your machine hotspot), then enable the <strong>MITM proxy</strong> in Settings → Network Inspector to capture dev-channel HTTPS.',
+  connectWifiHint: (addr: string): string =>
+    `Connect the Roku to the same Wi‑Fi (or your machine hotspot), then enable the <strong>MITM proxy</strong> in Settings → Network Inspector to capture dev-channel HTTPS — it will listen at <code class="ni-hint-code">${addr}</code>.`,
   sessionListAria: 'Network session list. Use arrow keys to navigate.',
   // Layout toggle.
   layoutToggleTitle: (stacked: boolean): string =>

@@ -332,11 +332,12 @@ export const networkInspector = {
     `Przechwytywanie hotspotu jest zablokowane, ale serwer proxy MITM pod adresem <strong>${addr}</strong> nadal może rejestrować żądania przez proxy. Używaj <code>host:port</code> tylko w BrightScript (np. <code>192.168.2.1:8888</code>), a nie IP urządzenia i nie <code>http://</code>.`,
   mitmActiveNoCaptureLine: (addr: string): string =>
     `Serwer proxy MITM jest aktywny pod adresem <code class="ni-hint-code">${addr}</code>. Skieruj przez niego swój kanał dev, aby przechwytywać żądania sieciowe.`,
-  mitmDecryptingHint: ' Serwer proxy MITM odszyfrowuje HTTPS kanału dev kierowany przez Roku Dev Studio.',
+  mitmDecryptingHint: (addr: string): string =>
+    ` Serwer proxy MITM odszyfrowuje HTTPS kanału dev kierowany przez Roku Dev Studio pod adresem <code class="ni-hint-code">${addr}</code>.`,
   hotspotEncryptedHint: ' Treści HTTPS są zaszyfrowane w trybie przechwytywania hotspotu — włącz MITM w Ustawieniach dla kanałów Dev.',
   capturingOnHotspot: 'Przechwytywanie na hotspocie. Przeglądaj lub odtwarzaj zawartość na Roku.',
-  connectWifiHint:
-    'Podłącz Roku do tej samej sieci Wi‑Fi (lub hotspotu swojego komputera), a następnie włącz <strong>serwer proxy MITM</strong> w Ustawienia → Inspektor sieci, aby przechwytywać HTTPS kanału dev.',
+  connectWifiHint: (addr: string): string =>
+    `Podłącz Roku do tej samej sieci Wi‑Fi (lub hotspotu swojego komputera), a następnie włącz <strong>serwer proxy MITM</strong> w Ustawienia → Inspektor sieci, aby przechwytywać HTTPS kanału dev — będzie słuchać na <code class="ni-hint-code">${addr}</code>.`,
   sessionListAria: 'Lista sesji sieciowych. Użyj klawiszy strzałek do nawigacji.',
   // Layout toggle.
   layoutToggleTitle: (stacked: boolean): string =>

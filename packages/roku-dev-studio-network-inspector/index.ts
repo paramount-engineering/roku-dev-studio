@@ -804,7 +804,10 @@ export class NetworkInspectorService {
       mitmEnabled: this.mitmEnabled,
       mitmActive: !!this.mitmProxy?.isRunning(),
       mitmPort: this.mitmPort,
-      mitmListenAddress: this.mitmEnabled ? this.getMitmProxyHostPort() : undefined,
+      // Always computed (not just when the proxy is actually enabled/running) — `hotspotGatewayIp`
+      // above already resolves the same way unconditionally, and knowing the address BEFORE turning
+      // the proxy on is exactly what the app's "not enabled yet" empty-state hint needs to show it.
+      mitmListenAddress: this.getMitmProxyHostPort(),
       // Fall back to the proxy's own last error for the asynchronous listen failure path, where the
       // server errored after start() returned (covered by onError, but stay robust if it didn't run).
       mitmLastError: this.mitmLastError ?? this.mitmProxy?.getLastError(),

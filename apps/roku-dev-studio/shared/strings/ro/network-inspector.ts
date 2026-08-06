@@ -322,11 +322,12 @@ export const networkInspector = {
     `Captura hotspot este blocată, dar proxy-ul MITM de la <strong>${addr}</strong> poate în continuare înregistra cererile prin proxy. Folosiți <code>host:port</code> doar în BrightScript (de ex. <code>192.168.2.1:8888</code>), nu IP-ul dispozitivului și nu <code>http://</code>.`,
   mitmActiveNoCaptureLine: (addr: string): string =>
     `Proxy-ul MITM este activ la <code class="ni-hint-code">${addr}</code>. Direcționați canalul dev prin el pentru a captura cererile de rețea.`,
-  mitmDecryptingHint: ' Proxy-ul MITM decriptează HTTPS-ul canalului dev direcționat prin Roku Dev Studio.',
+  mitmDecryptingHint: (addr: string): string =>
+    ` Proxy-ul MITM decriptează HTTPS-ul canalului dev direcționat prin Roku Dev Studio la <code class="ni-hint-code">${addr}</code>.`,
   hotspotEncryptedHint: ' Corpurile HTTPS sunt criptate în modul de captură hotspot — activați MITM în Setări pentru canalele Dev.',
   capturingOnHotspot: 'Se capturează pe hotspot. Navigați sau redați conținut pe Roku.',
-  connectWifiHint:
-    'Conectați Roku la aceeași rețea Wi‑Fi (sau la hotspotul mașinii dvs.), apoi activați <strong>proxy-ul MITM</strong> în Setări → Inspector de rețea pentru a captura HTTPS-ul canalului dev.',
+  connectWifiHint: (addr: string): string =>
+    `Conectați Roku la aceeași rețea Wi‑Fi (sau la hotspotul mașinii dvs.), apoi activați <strong>proxy-ul MITM</strong> în Setări → Inspector de rețea pentru a captura HTTPS-ul canalului dev — va asculta la <code class="ni-hint-code">${addr}</code>.`,
   sessionListAria: 'Lista sesiunilor de rețea. Folosiți tastele săgeți pentru a naviga.',
   // Layout toggle.
   layoutToggleTitle: (stacked: boolean): string =>

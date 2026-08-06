@@ -1320,15 +1320,24 @@ export function setupNetworkTab(
         const proxyAddr = state.mitmListenAddress || S.networkInspector.proxyAddrFallback;
         body = `<p class="ni-hint">${S.networkInspector.mitmActiveNoCaptureLine(escapeHtml(proxyAddr))}</p>`;
       } else if (state.captureActive || state.mitmActive) {
+        // Both hotspot capture AND the MITM proxy can run at once — capture gives free metadata
+        // (DNS/SNI) for everything the Roku does, MITM decrypts whatever's actually routed
+        // through it. Surface the live proxy address here too (not just the no-hotspot branch
+        // above) so the combined-state hint is just as actionable.
         const mitmHint = state.mitmActive
-          ? S.networkInspector.mitmDecryptingHint
+          ? S.networkInspector.mitmDecryptingHint(escapeHtml(state.mitmListenAddress || S.networkInspector.proxyAddrFallback))
           : S.networkInspector.hotspotEncryptedHint;
         body =
           `<p class="ni-hint">${S.networkInspector.capturingOnHotspot}</p>` +
           `<p class="ni-hint">${mitmHint}</p>`;
       } else {
+        // Neither capture nor MITM is on yet — still preview the address the proxy WOULD listen
+        // at (host is resolved from network interfaces regardless of enabled state; see
+        // mitmListenAddress in roku-dev-studio-network-inspector's getStatus()), so the user knows
+        // what to configure without having to enable it first just to find out.
+        const proxyAddr = state.mitmListenAddress || S.networkInspector.proxyAddrFallback;
         body =
-          `<p class="ni-hint">${S.networkInspector.connectWifiHint}</p>`;
+          `<p class="ni-hint">${S.networkInspector.connectWifiHint(escapeHtml(proxyAddr))}</p>`;
       }
       sessionListEl.innerHTML = `<div class="ni-session-empty"><p>${S.networkInspector.noSessions}</p>${body}</div>`;
       renderDetail();
