@@ -131,3 +131,22 @@ To build Linux artifacts, the build host needs the standard build essentials (`g
 ## CI release pipeline
 
 GitHub Actions workflow + secret layout (signing identity, notarization API keys, etc.) is documented in **[`RELEASE_SETUP.md`](RELEASE_SETUP.md)**.
+
+## Troubleshooting
+
+### Connection Issues
+
+1. **Ensure Roku and computer are on the same network**
+2. **Control by Mobile Apps (ECP):**
+   Settings → System → Advanced system settings → Control by mobile apps → **Network access**. The app supports all four modes:
+   - **Disabled** – Remote control is off; the app shows a warning and blocks remote/keypress areas.
+   - **Limited** – Text input, app launch, and app query work; full remote keypress may not. The app shows an "ECP Limited" badge and adapts.
+   - **Permissive** – Full control; Roku accepts commands only from private network or same subnet. If you see a "Check Network" warning, ensure this computer is on the same subnet.
+   - **Enabled** – Full control on private network addresses.
+3. **Firewall:** Allow connections on port 8060
+
+### Building Issues
+
+- **macOS code signing:** For distribution, you'll need an Apple Developer certificate
+- **Windows builds on macOS:** Use a Windows VM or GitHub Actions
+- **Linux builds:** Ensure required dependencies are installed (see package.json deb.depends)
