@@ -161,6 +161,11 @@ const NETWORK_INSPECTOR_MITM_PORT = 8888;
 const networkInspectorPkg =
   require('roku-dev-studio-network-inspector') as typeof import('roku-dev-studio-network-inspector');
 const { NetworkInspectorService, initCaStore } = networkInspectorPkg;
+// Shared with the Electron app's main/ipc/network-inspector-handlers.ts so a validation change
+// (a new allowed field, a tighter cap) can't silently drift between the two transports.
+const inputSanitizePkg =
+  require('roku-dev-studio-network-inspector/input-sanitize') as typeof import('roku-dev-studio-network-inspector/input-sanitize');
+const { sanitizeFindOptions, sanitizeReplayInput, MAX_REPLAY_TIMEOUT_MS } = inputSanitizePkg;
 
 const networkSseClients = new Set<any>();
 let latestNetworkStatus: unknown = null;
@@ -189,6 +194,42 @@ const networkListener: import('roku-dev-studio-network-inspector').NetworkInspec
 };
 
 const networkInspector = new NetworkInspectorService(networkListener);
+
+// The BrightScript socket debugger (control port 8081) is transport-agnostic the same way — one
+// controller instance manages every device's session, and its emitted events fan out to SSE
+// subscribers here (the desktop app's remote view), mirroring the Network Inspector wiring above.
+// This server has real network access to the device, so the session itself (and its single-client
+// 8081 lease) lives here rather than being relayed byte-for-byte to the Electron host.
+//
+// Guarded (unlike NETWORK_INSPECTOR_ENDPOINTS_AVAILABLE above, which is a static marker — those
+// routes are always wired in whenever this file is): the debug-session-controller module CAN fail
+// to load/construct on a broken or partial install, and `DEBUGGER_ENDPOINTS_AVAILABLE` is what
+// `/capabilities` reports as `capabilities.debugger` — the desktop app depends on that flag to
+// decide whether to even offer the BrightScript Debugger UI for a device managed by this server
+// (see `capabilities.debugger` handling in the app's `main/ipc/remote-handlers.ts`).
+let debugSessionController: any = null;
+let DEBUGGER_ENDPOINTS_AVAILABLE = false;
+const debuggerSseClients = new Set<any>();
+
+function debuggerBroadcast(type: string, payload: unknown): void {
+  const line = `data: ${JSON.stringify({ type, payload })}\n\n`;
+  for (const client of debuggerSseClients) {
+    try {
+      client.write(line);
+    } catch {
+      /* drop dead subscribers on next close event */
+    }
+  }
+}
+
+try {
+  const debugControllerPkg =
+    require('roku-dev-studio-api/lib/debugger/debug-session-controller') as typeof import('roku-dev-studio-api/lib/debugger/debug-session-controller');
+  debugSessionController = new debugControllerPkg.DebugSessionController((event, payload) => debuggerBroadcast(event, payload));
+  DEBUGGER_ENDPOINTS_AVAILABLE = true;
+} catch (e) {
+  log(`[Debugger] Init failed — BrightScript Debugger routes disabled: ${errMsg(e)}`);
+}
 
 // Persist enable/port config on the server so it survives restarts (the systemd/launchd service
 // re-reads it on boot), mirroring how the desktop app persists Network Inspector settings.
@@ -250,6 +291,17 @@ try {
   initCaStore(NETWORK_DATA_DIR);
   networkInspector.setUserDataPath(NETWORK_DATA_DIR);
   applyNetworkConfig(loadNetworkConfig());
+  // Unambiguous startup signal: whether MITM actually binds a moment later is confirmed by
+  // NetworkInspectorService's own "MITM proxy listening on ..." log, but if capture is off
+  // altogether that async confirmation never comes — silence here otherwise reads as a hang.
+  const niBoot = networkInspector.getStatus();
+  if (!niBoot.enabled) {
+    log('[Network Inspector] Disabled for this server. Enable it from RDS Settings → Network Inspector for this location to start MITM capture.');
+  } else if (!niBoot.mitmEnabled) {
+    log('[Network Inspector] Enabled, but MITM capture is off (metadata-only). Enable "MITM Proxy" too if you need to decrypt HTTPS.');
+  } else {
+    log(`[Network Inspector] Enabled — binding MITM proxy on port ${niBoot.mitmPort ?? NETWORK_INSPECTOR_MITM_PORT}...`);
+  }
 } catch (e) {
   log(`[Network Inspector] Init failed: ${errMsg(e)}`);
 }
@@ -1158,20 +1210,36 @@ async function handleRequest(req, res) {
           
           // Debug features
           console: true,          // Telnet debug console (port 8085)
-          
+          // BrightScript socket debugger (control port 8081) — a REAL check (unlike the other
+          // booleans here): false when debug-session-controller failed to load/construct at
+          // startup (see DEBUGGER_ENDPOINTS_AVAILABLE above), so an older/reduced-build server
+          // correctly tells the app it can't offer the debugger for devices managed here.
+          debugger: DEBUGGER_ENDPOINTS_AVAILABLE,
+
           // Advanced features
           appConnector: true,     // RALE App Connector / Inspector
           deepLink: true,         // Deep linking support
 
-          // Network Inspector (capture + MITM). Only "supported" when the server runs as root
-          // (headless capture needs raw-socket privilege) AND the engine endpoints are wired in.
-          // The app uses this to enable/disable the Remote entry in the Network Inspector place
-          // dropdown and to show the "run the server as root" remediation when it can't.
+          // Network Inspector (capture + MITM). `supported` is a STATIC capability check (root +
+          // endpoints wired in) — the app uses it to enable/disable the Remote entry in the Network
+          // Inspector place dropdown and to show the "run the server as root" remediation. The
+          // fields below it are the LIVE state (same source as GET /network/status) so a single
+          // capabilities check also answers "is it actually on and listening right now" without a
+          // second request — `supported: true` does NOT imply capture is enabled or bound.
           networkInspector: {
             supported: isRunningAsRoot() && NETWORK_INSPECTOR_ENDPOINTS_AVAILABLE,
             requiresRoot: true,
             isRoot: isRunningAsRoot(),
-            mitmPort: NETWORK_INSPECTOR_MITM_PORT
+            mitmPort: NETWORK_INSPECTOR_MITM_PORT,
+            ...(() => {
+              const s = networkInspector.getStatus();
+              return {
+                enabled: s.enabled,
+                mitmEnabled: s.mitmEnabled,
+                mitmActive: s.mitmActive,
+                ...(s.mitmLastError ? { mitmLastError: s.mitmLastError } : {})
+              };
+            })()
           },
         },
         serverInfo: {
@@ -1237,6 +1305,167 @@ async function handleRequest(req, res) {
       return sendJson(res, result);
     }
 
+    // Per-event annotation (session-scoped, not persisted across restarts — matches the local engine).
+    const networkEventNoteMatch = pathname.match(/^\/network\/event\/(.+)\/note$/);
+    if (networkEventNoteMatch && method === 'POST') {
+      const body = await readBody(req);
+      const params = (parseBody(body as string, req.headers['content-type']) || {}) as { note?: unknown };
+      const note = typeof params.note === 'string' ? params.note.slice(0, 4000) : '';
+      networkInspector.setEventNote(decodeURIComponent(networkEventNoteMatch[1]), note);
+      return sendJson(res, { success: true });
+    }
+
+    // Per-device MITM block/throttle/rewrite/mock rules.
+    if (pathname === '/network/traffic-rules' && method === 'GET') {
+      return sendJson(res, { success: true, rules: networkInspector.getTrafficRules() });
+    }
+
+    const deviceTrafficRulesMatch = pathname.match(/^\/network\/device\/([^\/]+)\/traffic-rules$/);
+    if (deviceTrafficRulesMatch && (method === 'PUT' || method === 'POST')) {
+      const deviceIp = decodeURIComponent(deviceTrafficRulesMatch[1]);
+      if (!isValidIp(deviceIp)) return sendError(res, 'Invalid device IP', 400);
+      const body = await readBody(req);
+      const params = (parseBody(body as string, req.headers['content-type']) || {}) as { rules?: unknown };
+      networkInspector.setDeviceTrafficRules(deviceIp, (params.rules as never) || undefined);
+      return sendJson(res, { success: true, rules: networkInspector.getDeviceTrafficRules(deviceIp) });
+    }
+
+    // Replay / Edit-&-Resend — re-issue a request from THIS host, optionally through a device's
+    // traffic rules. Validation is shared with the local NetworkInspectorReplayRequest handler
+    // (roku-dev-studio-network-inspector/input-sanitize) so the two transports can't drift.
+    if (pathname === '/network/replay' && method === 'POST') {
+      const body = await readBody(req);
+      const params = (parseBody(body as string, req.headers['content-type']) || {}) as {
+        deviceIp?: unknown;
+        input?: unknown;
+        applyTrafficRules?: unknown;
+        timeoutMs?: unknown;
+      };
+      const input = sanitizeReplayInput(params.input);
+      if (!input) return sendError(res, 'invalid url', 400);
+      const deviceIp = typeof params.deviceIp === 'string' ? params.deviceIp.trim() : '';
+      const applyTrafficRules = params.applyTrafficRules === true;
+      const timeoutMs =
+        typeof params.timeoutMs === 'number' && Number.isFinite(params.timeoutMs)
+          ? Math.min(MAX_REPLAY_TIMEOUT_MS, Math.max(1000, Math.floor(params.timeoutMs)))
+          : undefined;
+      const result = await networkInspector.replayRequest({ deviceIp, input, applyTrafficRules, timeoutMs });
+      return sendJson(res, result);
+    }
+
+    // "Find in content" — cross-request search across URL/headers/bodies for one device.
+    if (pathname === '/network/find' && method === 'POST') {
+      const body = await readBody(req);
+      const params = (parseBody(body as string, req.headers['content-type']) || {}) as {
+        deviceIp?: unknown;
+        options?: unknown;
+      };
+      const deviceIp = typeof params.deviceIp === 'string' ? params.deviceIp.trim() : '';
+      if (!deviceIp) return sendError(res, 'deviceIp required', 400);
+      const options = sanitizeFindOptions(params.options);
+      if (!options) return sendJson(res, { success: true, matches: [] });
+      const matches = await networkInspector.searchEvents(deviceIp, options);
+      return sendJson(res, { success: true, matches });
+    }
+
+    // Pause/resume capture for specific devices without disconnecting.
+    if (pathname === '/network/recording' && method === 'POST') {
+      const body = await readBody(req);
+      const params = (parseBody(body as string, req.headers['content-type']) || {}) as {
+        deviceIps?: unknown;
+        recording?: unknown;
+      };
+      const deviceIps = Array.isArray(params.deviceIps)
+        ? params.deviceIps.filter((ip: unknown): ip is string => typeof ip === 'string' && !!ip.trim())
+        : [];
+      networkInspector.setRecordingForDevices(deviceIps, params.recording === true);
+      return sendJson(res, { success: true });
+    }
+
+    // Raw-packet export — the engine's API is disk-oriented (matching the desktop app's native
+    // save-dialog flow), so this writes to a temp file, streams the bytes back, then cleans up.
+    if (pathname === '/network/export-pcap' && method === 'GET') {
+      const deviceIpsRaw = parsedUrl.searchParams.get('deviceIps') || '';
+      const deviceIps = deviceIpsRaw.split(',').map((ip) => ip.trim()).filter(Boolean);
+      const tempPath =
+        resolveUnderBase(TEMP_DIR, `pcap-${nodeCrypto.randomUUID()}.pcap`) ||
+        path.join(TEMP_DIR, `pcap-${Date.now()}.pcap`);
+      try {
+        const result = await networkInspector.exportPcap(tempPath, deviceIps.length > 0 ? deviceIps : undefined);
+        if (!result.success || !fs.existsSync(tempPath)) {
+          return sendError(res, result.error || 'Export failed', 400);
+        }
+        const buf = fs.readFileSync(tempPath);
+        const pcapHeaders: Record<string, string> = {
+          'Content-Type': 'application/vnd.tcpdump.pcap',
+          'Content-Disposition': 'attachment; filename="capture.pcap"',
+          'X-Packets-Written': String(result.packetsWritten ?? 0)
+        };
+        if (res._corsOrigin) pcapHeaders['Access-Control-Allow-Origin'] = res._corsOrigin;
+        res.writeHead(200, pcapHeaders);
+        res.end(buf);
+        return;
+      } finally {
+        try { fs.unlinkSync(tempPath); } catch { /* best-effort */ }
+      }
+    }
+
+    // MITM CA certificate — metadata, then downloadable PEM/CRT so a Roku (or a browser) can trust
+    // THIS server's proxy cert. There's no native save dialog on a headless server, so these just
+    // serve the bytes directly (a temp file is still the engine's only export API, so write-then-
+    // stream-then-delete same as the pcap route above).
+    if (pathname === '/network/ca/info' && method === 'GET') {
+      return sendJson(res, {
+        success: true,
+        caInfo: networkInspector.getCaInfo(),
+        proxyHostPort: networkInspector.getMitmProxyHostPort()
+      });
+    }
+
+    if (pathname === '/network/ca/pem' && method === 'GET') {
+      const tempPath =
+        resolveUnderBase(TEMP_DIR, `ca-${nodeCrypto.randomUUID()}.pem`) || path.join(TEMP_DIR, `ca-${Date.now()}.pem`);
+      try {
+        const result = networkInspector.exportCaPem(tempPath);
+        if (!result.success || !fs.existsSync(tempPath)) {
+          return sendError(res, result.error || 'Export failed', 400);
+        }
+        const buf = fs.readFileSync(tempPath);
+        const pemHeaders: Record<string, string> = {
+          'Content-Type': 'application/x-pem-file',
+          'Content-Disposition': 'attachment; filename="rds-network-inspector-ca.pem"'
+        };
+        if (res._corsOrigin) pemHeaders['Access-Control-Allow-Origin'] = res._corsOrigin;
+        res.writeHead(200, pemHeaders);
+        res.end(buf);
+        return;
+      } finally {
+        try { fs.unlinkSync(tempPath); } catch { /* best-effort */ }
+      }
+    }
+
+    if (pathname === '/network/ca/cert' && method === 'GET') {
+      const tempPath =
+        resolveUnderBase(TEMP_DIR, `ca-${nodeCrypto.randomUUID()}.crt`) || path.join(TEMP_DIR, `ca-${Date.now()}.crt`);
+      try {
+        const result = networkInspector.exportCaCert(tempPath);
+        if (!result.success || !fs.existsSync(tempPath)) {
+          return sendError(res, result.error || 'Export failed', 400);
+        }
+        const buf = fs.readFileSync(tempPath);
+        const crtHeaders: Record<string, string> = {
+          'Content-Type': 'application/x-x509-ca-cert',
+          'Content-Disposition': 'attachment; filename="rds-network-inspector-ca.crt"'
+        };
+        if (res._corsOrigin) crtHeaders['Access-Control-Allow-Origin'] = res._corsOrigin;
+        res.writeHead(200, crtHeaders);
+        res.end(buf);
+        return;
+      } finally {
+        try { fs.unlinkSync(tempPath); } catch { /* best-effort */ }
+      }
+    }
+
     // Live event/status stream (Server-Sent Events). The app subscribes here for the remote
     // Network Inspector view; only lightweight summaries cross the wire (bodies are fetched on
     // demand via /network/event/:id).
@@ -1267,6 +1496,43 @@ async function handleRequest(req, res) {
         sseCleaned = true;
         clearInterval(heartbeat);
         networkSseClients.delete(res);
+      };
+      req.on('close', cleanupSse);
+      res.on('close', cleanupSse);
+      res.on('error', cleanupSse);
+      return;
+    }
+
+    // ============================================
+    // BrightScript Debugger — live SSE event stream (per-device REST routes
+    // live under /device/:ip/debugger/* further below)
+    // ============================================
+    if (pathname === '/debugger/stream' && method === 'GET') {
+      if (!DEBUGGER_ENDPOINTS_AVAILABLE) {
+        return sendError(res, 'BrightScript Debugger is not available on this server', 503);
+      }
+      const sseHeaders: Record<string, string> = {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        Connection: 'keep-alive',
+        'X-Accel-Buffering': 'no'
+      };
+      if (res._corsOrigin) sseHeaders['Access-Control-Allow-Origin'] = res._corsOrigin;
+      res.writeHead(200, sseHeaders);
+      debuggerSseClients.add(res);
+      const heartbeat = setInterval(() => {
+        try {
+          res.write(': ping\n\n');
+        } catch {
+          /* ignore */
+        }
+      }, 25000);
+      let sseCleaned = false;
+      const cleanupSse = () => {
+        if (sseCleaned) return;
+        sseCleaned = true;
+        clearInterval(heartbeat);
+        debuggerSseClients.delete(res);
       };
       req.on('close', cleanupSse);
       res.on('close', cleanupSse);
@@ -1466,6 +1732,12 @@ async function handleRequest(req, res) {
         return sendError(res, 'Invalid device IP', 400);
       }
 
+      // Every /device/:ip/debugger/* route below assumes `debugSessionController` is real —
+      // fail clearly here instead of every individual handler throwing on a null dereference.
+      if (subPath.startsWith('/debugger/') && !DEBUGGER_ENDPOINTS_AVAILABLE) {
+        return sendError(res, 'BrightScript Debugger is not available on this server', 503);
+      }
+
       // Get device info
       if (subPath === '/info' && method === 'GET') {
         try {
@@ -1593,7 +1865,8 @@ async function handleRequest(req, res) {
         let filePath = null;
         let password = null;
         let tempFile = null;
-        
+        let remoteDebugFlag = false;
+
         // Handle multipart file upload
         if (contentType.includes('multipart/form-data')) {
           const boundaryMatch = contentType.match(/boundary=([^;]+)/);
@@ -1601,18 +1874,19 @@ async function handleRequest(req, res) {
             log(`Sideload: No boundary found in content-type: ${contentType}`);
             return sendError(res, 'Invalid multipart boundary', 400);
           }
-          
+
           const boundary = boundaryMatch[1].trim();
           log(`Sideload: Processing multipart upload with boundary: ${boundary}`);
-          
+
           const buffer = await readBodyBuffer(req);
           log(`Sideload: Received ${buffer.length} bytes`);
-          
+
           const parts = parseMultipart(buffer, boundary) as Record<string, any>;
           log(`Sideload: Parsed fields: ${Object.keys(parts).join(', ')}`);
-          
+
           password = parts.password;
-          
+          remoteDebugFlag = parts.remotedebug === '1' || parts.remotedebug === 'true';
+
           if (parts.file && parts.file.data) {
             // Save uploaded file to temp location (extension only, no path from filename)
             const ext = (path.extname(parts.file.filename) || '.zip').replace(/[^a-zA-Z0-9.]/g, '') || '.zip';
@@ -1637,6 +1911,7 @@ async function handleRequest(req, res) {
               filePath = resolvedTempPath;
             }
             password = params.password;
+            remoteDebugFlag = params.remotedebug === '1' || params.remotedebug === true;
           }
         }
         
@@ -1646,7 +1921,15 @@ async function handleRequest(req, res) {
         }
 
         try {
-          const result = await sideloadChannel({ ip, filePath, password, log: (msg) => log(msg) });
+          // Debug launches need a clean Delete+Install so the device actually relaunches with
+          // remotedebug=1 (a Replace can drop it), matching the local app's sideload handler.
+          const result = await sideloadChannel({
+            ip,
+            filePath,
+            password,
+            log: (msg) => log(msg),
+            ...(remoteDebugFlag ? { cleanInstall: true, extraFields: [{ name: 'remotedebug', value: '1' }] } : {})
+          });
           if (tempFile && fs.existsSync(tempFile)) {
             fs.unlinkSync(tempFile);
             log(`Cleaned up temp file: ${tempFile}`);
@@ -1775,6 +2058,134 @@ async function handleRequest(req, res) {
         const result = raleDisconnect(params.connectionId);
         return sendJson(res, result);
       }
+
+      // BrightScript Debugger (control port 8081). The session runs on this server (real
+      // network access to the device); events fan out over /debugger/stream. Every route
+      // wraps the controller call so a rejection (e.g. "No debug session for X. Attach
+      // first.") becomes a normal { success: false } response instead of a 500.
+      if (subPath === '/debugger/attach' && method === 'POST') {
+        try {
+          const attachResult = await debugSessionController.attach(ip);
+          return sendJson(res, attachResult.ok ? { success: true } : { success: false, error: attachResult.error || 'Attach failed.' });
+        } catch (error) {
+          return sendJson(res, { success: false, error: errMsg(error) });
+        }
+      }
+
+      if (subPath === '/debugger/detach' && method === 'POST') {
+        try {
+          await debugSessionController.detach(ip);
+          return sendJson(res, { success: true });
+        } catch (error) {
+          return sendJson(res, { success: false, error: errMsg(error) });
+        }
+      }
+
+      if (subPath === '/debugger/status' && method === 'GET') {
+        return sendJson(res, { success: true, data: debugSessionController.status(ip) });
+      }
+
+      if (subPath === '/debugger/continue' && method === 'POST') {
+        try {
+          await debugSessionController.continue(ip);
+          return sendJson(res, { success: true });
+        } catch (error) {
+          return sendJson(res, { success: false, error: errMsg(error) });
+        }
+      }
+
+      if (subPath === '/debugger/pause' && method === 'POST') {
+        try {
+          await debugSessionController.pause(ip);
+          return sendJson(res, { success: true });
+        } catch (error) {
+          return sendJson(res, { success: false, error: errMsg(error) });
+        }
+      }
+
+      const debugStepMatch = subPath.match(/^\/debugger\/(step-over|step-in|step-out)$/);
+      if (debugStepMatch && method === 'POST') {
+        try {
+          const body = await readBody(req);
+          const params = parseJson(body) || {};
+          const threadIndex = typeof params.threadIndex === 'number' ? params.threadIndex : undefined;
+          if (debugStepMatch[1] === 'step-over') await debugSessionController.stepOver(ip, threadIndex);
+          else if (debugStepMatch[1] === 'step-in') await debugSessionController.stepIn(ip, threadIndex);
+          else await debugSessionController.stepOut(ip, threadIndex);
+          return sendJson(res, { success: true });
+        } catch (error) {
+          return sendJson(res, { success: false, error: errMsg(error) });
+        }
+      }
+
+      if (subPath === '/debugger/stack-trace' && method === 'POST') {
+        try {
+          const body = await readBody(req);
+          const params = parseJson(body) || {};
+          const threadIndex = typeof params.threadIndex === 'number' ? params.threadIndex : undefined;
+          const data = await debugSessionController.stackTrace(ip, threadIndex);
+          return sendJson(res, { success: true, data });
+        } catch (error) {
+          return sendJson(res, { success: false, error: errMsg(error) });
+        }
+      }
+
+      if (subPath === '/debugger/variables' && method === 'POST') {
+        try {
+          const body = await readBody(req);
+          const params = parseJson(body) || {};
+          const data = await debugSessionController.variables(ip, {
+            threadIndex: params.threadIndex,
+            stackFrameIndex: params.stackFrameIndex,
+            variablePath: params.variablePath
+          });
+          return sendJson(res, { success: true, data });
+        } catch (error) {
+          return sendJson(res, { success: false, error: errMsg(error) });
+        }
+      }
+
+      if (subPath === '/debugger/execute' && method === 'POST') {
+        const body = await readBody(req);
+        const params = parseJson(body);
+        if (!params || typeof params.sourceCode !== 'string') {
+          return sendError(res, 'Missing sourceCode', 400);
+        }
+        try {
+          const data = await debugSessionController.execute(ip, params.sourceCode, {
+            threadIndex: params.threadIndex,
+            stackFrameIndex: params.stackFrameIndex
+          });
+          return sendJson(res, { success: true, data });
+        } catch (error) {
+          return sendJson(res, { success: false, error: errMsg(error) });
+        }
+      }
+
+      if (subPath === '/debugger/add-breakpoints' && method === 'POST') {
+        try {
+          const body = await readBody(req);
+          const params = parseJson(body) || {};
+          const data = await debugSessionController.addBreakpoints(ip, params.breakpoints);
+          return sendJson(res, { success: true, data });
+        } catch (error) {
+          return sendJson(res, { success: false, error: errMsg(error) });
+        }
+      }
+
+      if (subPath === '/debugger/remove-breakpoints-by-location' && method === 'POST') {
+        try {
+          const body = await readBody(req);
+          const params = parseJson(body) || {};
+          const data = await debugSessionController.removeBreakpointsByLocation(
+            ip,
+            Array.isArray(params.locations) ? params.locations : []
+          );
+          return sendJson(res, { success: true, data });
+        } catch (error) {
+          return sendJson(res, { success: false, error: errMsg(error) });
+        }
+      }
     }
 
     // 404 for unknown routes
@@ -1891,6 +2302,7 @@ function shutdown(signal: string): void {
   log(`Received ${signal}, shutting down...`);
   clearInterval(staleSessionCleanupInterval);
   raleDisconnectAll();
+  void debugSessionController.detachAll().catch(() => { /* best-effort */ });
   telnetSessions.forEach((_, id) => telnetSessionClose(id));
   telnetSystemConnections.forEach((connection) => {
     if (connection.socket && !connection.socket.destroyed) {

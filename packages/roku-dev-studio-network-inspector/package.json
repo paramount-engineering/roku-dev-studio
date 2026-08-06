@@ -47,6 +47,7 @@
     "./prerequisites": "./prerequisites.ts",
     "./setup-guide": "./setup-guide.ts",
     "./packet-parser": "./packet-parser.ts",
-    "./http-stream-parser": "./http-stream-parser.ts"
+    "./http-stream-parser": "./http-stream-parser.ts",
+    "./input-sanitize": "./input-sanitize.ts"
   }
 }
