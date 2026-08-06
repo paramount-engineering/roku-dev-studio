@@ -19,6 +19,7 @@ import { rendererError } from '../../modules/utils/logger.js';
 import { attachBackdropClickToClose } from '../../modules/utils/modal-backdrop-click.js';
 import { attachModalResize } from '../../modules/utils/modal-resize.js';
 import { renderStructuredInto, attachFoldToggle, structuredBodyText, detectStructuredKind } from '../../modules/ui/structured-body.js';
+import { resolveCertRequirementUrl } from './cert-requirements-map.js';
 
 export {};
 
@@ -361,14 +362,21 @@ function buildRowsHtml(rows: ScaIssueRow[]): string {
       if (row.certRequirements?.length) {
         cols.push(
           `<div class="sca-detail-label">${escapeHtml(S.staticAnalysis.certRequirementsLabel)}</div>`,
-          `<div class="sca-detail-value">${row.certRequirements.map((c) => `<span class="sca-cert-chip">${escapeHtml(c)}</span>`).join('')}</div>`
+          `<div class="sca-detail-value">${row.certRequirements
+            .map((c) => {
+              const url = resolveCertRequirementUrl(c);
+              return url
+                ? `<a href="#" class="sca-cert-chip" data-open-url="${escapeHtml(url)}">${escapeHtml(c)}</a>`
+                : `<span class="sca-cert-chip">${escapeHtml(c)}</span>`;
+            })
+            .join('')}</div>`
         );
       }
       if (row.documentationUrls?.length) {
         cols.push(
           `<div class="sca-detail-label">${escapeHtml(S.staticAnalysis.documentationLabel)}</div>`,
           `<div class="sca-detail-value">${row.documentationUrls
-            .map((d) => `<a href="#" class="sca-doc-link" data-doc-url="${escapeHtml(d.url)}">${escapeHtml(d.alias || d.url)}</a>`)
+            .map((d) => `<a href="#" class="sca-doc-link" data-open-url="${escapeHtml(d.url)}">${escapeHtml(d.alias || d.url)}</a>`)
             .join('')}</div>`
         );
       }
@@ -574,15 +582,15 @@ function wireAnalyze(): void {
 }
 
 /** Delegated clicks on the results table body: expand/collapse the cert-requirements +
- *  documentation detail row, and open documentation links externally (same "no
+ *  documentation detail row, and open cert/documentation links externally (same "no
  *  setWindowOpenHandler in this app" reason the Java link goes through `openExternal`). */
 function wireResultsTable(): void {
   els.resultsTableBody.addEventListener('click', (e) => {
     const target = e.target as HTMLElement | null;
-    const docLink = target?.closest('.sca-doc-link');
-    if (docLink instanceof HTMLElement) {
+    const openUrlEl = target?.closest('[data-open-url]');
+    if (openUrlEl instanceof HTMLElement) {
       e.preventDefault();
-      const url = docLink.getAttribute('data-doc-url');
+      const url = openUrlEl.getAttribute('data-open-url');
       if (url) void getBridge().openExternal(url);
       return;
     }
