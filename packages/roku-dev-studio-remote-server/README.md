@@ -196,6 +196,32 @@ All device endpoints use the pattern: `/device/:ip/...`
 | `/device/:ip/rale/command` | POST | Send RALE command |
 | `/device/:ip/rale/disconnect` | POST | Disconnect |
 
+### Network Inspector (MITM capture)
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/network/status` | GET | Live state: `enabled`, `mitmEnabled`, `mitmActive` (really bound, not just configured), `mitmLastError` |
+| `/network/config` | GET / PUT | Read or persist `enabled` / `mitmEnabled` / `mitmPort` — persisted config survives restarts |
+| `/network/stream` | GET | Server-Sent-Events stream of live status + captured events |
+| `/network/events` | GET | Buffered captured events for a device |
+| `/network/ca/pem`, `/network/ca/cert` | GET | Download the RDS CA certificate the sideloaded channel must trust |
+
+**Network Inspector starts disabled on every fresh install.** Nothing is captured and MITM never binds a port until something enables it — after that, the setting is persisted (`~/.roku-dev-studio-remote/network-inspector.json`) and restored automatically on every restart. Enable it from Roku Dev Studio's Settings → Network Inspector location dropdown, or directly:
+
+```bash
+curl -X PUT http://<relay-host>:4951/network/config \
+  -H "Content-Type: application/json" \
+  -d '{"enabled": true, "mitmEnabled": true}'
+```
+
+Confirm it's actually running (don't rely on `capabilities.networkInspector.supported` for this — that only means the *feature* is available on this host, not that it's currently on):
+
+```bash
+curl http://<relay-host>:4951/network/status | jq '{enabled, mitmEnabled, mitmActive, mitmLastError}'
+```
+
+**MITM capture requires the sideloaded dev channel to route its own HTTPS traffic through the proxy** — Roku has no device-wide proxy setting. The channel's BrightScript must prefix outgoing request URLs, e.g. `http://<relay-host>:8888/;https://example.com/api`, and the device must trust the RDS CA certificate (`/network/ca/pem` / `/network/ca/cert`). Without both of those, `mitmActive: true` (the proxy really is listening) but zero captured traffic is expected — not a bug.
+
 ## Example Usage
 
 Replace `<relay-host>` with the address (hostname or IP) of the machine running the relay, and `<roku-ip>` with the device IP as seen on the relay's network.
@@ -284,6 +310,10 @@ sudo ufw allow 4951/tcp
 - Ensure the sideloaded app has TrackerTask integrated
 - Check if the dev app is running on the Roku
 - Verify the correct port (default: 49200)
+
+### Network Inspector shows no traffic
+- Check `GET /network/status` (or `/capabilities`'s `networkInspector` object) for `mitmActive` — if it's `false`/missing, MITM was never turned on (see [Network Inspector](#network-inspector-mitm-capture)) or failed to bind a port (`mitmLastError` says why, e.g. already in use — check with `lsof -i :8888`). The server also logs its Network Inspector state once at startup so this shouldn't be a mystery from the console alone.
+- Even with `mitmActive: true`, the sideloaded channel must explicitly route its own requests through the proxy URL and trust the RDS CA cert — Roku has no device-wide proxy setting, so a correctly running proxy with a channel that was never built to use it will also show zero traffic.
 
 ## License
 

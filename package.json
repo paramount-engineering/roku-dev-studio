@@ -25,6 +25,7 @@
     "build:linux": "npm --prefix apps/roku-dev-studio run build:linux",
     "build:all": "npm --prefix apps/roku-dev-studio run build:all",
     "remote-server": "cd packages/roku-dev-studio-remote-server && node roku-remote-server.js",
+    "deploy:remote-server": "node scripts/prepare-remote-server-deploy.mjs",
     "rds": "node packages/roku-dev-studio-api/dist/cli.js",
     "ci:api": "node -e \"require('roku-dev-studio-api'); console.log('roku-dev-studio-api ok')\" && node packages/roku-dev-studio-api/dist/cli.js --help >/dev/null",
     "ci:remote-check": "npm run build -w roku-dev-studio-remote-server && node --check packages/roku-dev-studio-remote-server/roku-remote-server.js",
