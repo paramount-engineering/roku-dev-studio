@@ -1,0 +1,628 @@
+/*
+ * Roku Dev Studio docs site — shared design system.
+ * Palette is pulled directly from the app's own renderer theme (apps/roku-dev-studio/renderer/index.html)
+ * for the dark variant, so the docs site actually looks like the product. Light variant is a
+ * complementary palette using the same accent hues, deepened slightly for AA contrast on white.
+ *
+ * Theme resolution (see assets/nav.js):
+ *   1. Default: follows the OS/browser preference via `prefers-color-scheme` — no JS needed.
+ *   2. Explicit override: the nav bar's theme toggle sets `data-theme="light"|"dark"` on <html>
+ *      and persists the choice in localStorage; those attribute selectors below have higher
+ *      specificity than the media query, so they win regardless of the system setting.
+ *   3. "System" is re-selected by removing the attribute (falls back to step 1 again).
+ */
+
+:root {
+  --bg: #ffffff;
+  --bg-alt: #f7f6fb;
+  --bg-elevated: #ffffff;
+  --bg-code: #f1f0f6;
+  --text: #16161f;
+  --text-secondary: #4b4b57;
+  --text-muted: #7a7a86;
+  --border: rgba(124, 58, 237, 0.16);
+  --border-strong: rgba(124, 58, 237, 0.3);
+  --accent-purple: #7c3aed;
+  --accent-purple-dim: rgba(124, 58, 237, 0.1);
+  --accent-cyan: #0e8fa8;
+  --accent-cyan-dim: rgba(14, 143, 168, 0.12);
+  --accent-green: #059669;
+  --accent-red: #dc2626;
+  --accent-amber: #b45309;
+  --shadow: 0 4px 24px rgba(20, 10, 40, 0.08);
+  --shadow-lg: 0 12px 40px rgba(20, 10, 40, 0.12);
+  --radius: 14px;
+  --radius-sm: 8px;
+  --max-width: 1080px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #08080c;
+    --bg-alt: #0e0e14;
+    --bg-elevated: #1e1e2a;
+    --bg-code: #16161f;
+    --text: #f1f5f9;
+    --text-secondary: #94a3b8;
+    --text-muted: #64748b;
+    --border: rgba(139, 92, 246, 0.16);
+    --border-strong: rgba(139, 92, 246, 0.35);
+    --accent-purple: #8b5cf6;
+    --accent-purple-dim: rgba(139, 92, 246, 0.15);
+    --accent-cyan: #22d3ee;
+    --accent-cyan-dim: rgba(34, 211, 238, 0.12);
+    --accent-green: #10b981;
+    --accent-red: #ef4444;
+    --accent-amber: #f59e0b;
+    --shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
+    --shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.5);
+  }
+}
+
+/* Explicit user override (nav toggle) — wins over prefers-color-scheme via specificity. */
+:root[data-theme="dark"] {
+  --bg: #08080c;
+  --bg-alt: #0e0e14;
+  --bg-elevated: #1e1e2a;
+  --bg-code: #16161f;
+  --text: #f1f5f9;
+  --text-secondary: #94a3b8;
+  --text-muted: #64748b;
+  --border: rgba(139, 92, 246, 0.16);
+  --border-strong: rgba(139, 92, 246, 0.35);
+  --accent-purple: #8b5cf6;
+  --accent-purple-dim: rgba(139, 92, 246, 0.15);
+  --accent-cyan: #22d3ee;
+  --accent-cyan-dim: rgba(34, 211, 238, 0.12);
+  --accent-green: #10b981;
+  --accent-red: #ef4444;
+  --accent-amber: #f59e0b;
+  --shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.5);
+}
+:root[data-theme="light"] {
+  --bg: #ffffff;
+  --bg-alt: #f7f6fb;
+  --bg-elevated: #ffffff;
+  --bg-code: #f1f0f6;
+  --text: #16161f;
+  --text-secondary: #4b4b57;
+  --text-muted: #7a7a86;
+  --border: rgba(124, 58, 237, 0.16);
+  --border-strong: rgba(124, 58, 237, 0.3);
+  --accent-purple: #7c3aed;
+  --accent-purple-dim: rgba(124, 58, 237, 0.1);
+  --accent-cyan: #0e8fa8;
+  --accent-cyan-dim: rgba(14, 143, 168, 0.12);
+  --accent-green: #059669;
+  --accent-red: #dc2626;
+  --accent-amber: #b45309;
+  --shadow: 0 4px 24px rgba(20, 10, 40, 0.08);
+  --shadow-lg: 0 12px 40px rgba(20, 10, 40, 0.12);
+}
+
+* { box-sizing: border-box; }
+
+html { scroll-behavior: smooth; scroll-padding-top: 84px; }
+
+body {
+  margin: 0;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+a { color: var(--accent-purple); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* ---------- Icons — sprite shared with assets/icons.svg (copied from the app's own icon set) ----------
+ * width/height are set BOTH as HTML attributes (in the markup, so sizing is correct even before
+ * this stylesheet loads) and here as CSS (so they still scale with heading font-size); CSS wins
+ * once loaded per the normal cascade, the attribute is just a same-size fallback.
+ * Colored (not flat currentColor/black) to match the app's own purple/cyan accent palette,
+ * alternating on grids of cards for a bit of visual variety rather than one flat tint everywhere.
+ */
+.icon {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  vertical-align: -0.15em;
+  stroke: currentColor;
+  fill: none;
+  color: var(--accent-purple);
+}
+h2 .icon, .brand .icon { width: 1.15em; height: 1.15em; color: var(--accent-purple); }
+.feature-card h3 .icon, .feature-card h4 .icon { width: 1em; height: 1em; color: var(--accent-purple); }
+.feature-grid .feature-card:nth-child(even) h3 .icon,
+.feature-grid .feature-card:nth-child(even) h4 .icon { color: var(--accent-cyan); }
+.arch-box .icon { width: 1.4em; height: 1.4em; color: var(--accent-purple); }
+.platform-strip .platform-pill:nth-child(1) .icon { color: var(--accent-purple); }
+.platform-strip .platform-pill:nth-child(2) .icon { color: var(--accent-cyan); }
+.platform-strip .platform-pill:nth-child(3) .icon { color: var(--accent-green); }
+.footer-org .icon { width: 1em; height: 1em; color: var(--accent-purple); }
+/* Neutral utility buttons (nav hamburger, theme switcher) stay icon-colored like plain UI chrome,
+ * not brand-accented, so they read as controls rather than content. */
+.nav-toggle .icon, .theme-toggle .icon { color: inherit; width: 16px; height: 16px; }
+
+code, pre {
+  font-family: 'SF Mono', Consolas, 'Liberation Mono', monospace;
+  font-size: 0.9em;
+}
+code {
+  background: var(--bg-code);
+  padding: 0.15em 0.45em;
+  border-radius: 5px;
+  color: var(--accent-purple);
+}
+pre {
+  background: var(--bg-code);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 16px 20px;
+  overflow-x: auto;
+}
+pre code { background: none; padding: 0; color: var(--text); }
+
+.container { max-width: var(--max-width); margin: 0 auto; padding: 0 24px; }
+
+/* ---------- Header / nav ---------- */
+.site-header {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--border);
+}
+.site-header .container {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 64px;
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 700;
+  font-size: 1.05em;
+  color: var(--text);
+}
+.brand:hover { text-decoration: none; }
+.brand-icon { width: 30px; height: 30px; border-radius: 8px; flex: none; }
+.nav-links {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+.nav-links a {
+  color: var(--text-secondary);
+  font-weight: 600;
+  font-size: 0.92em;
+  padding: 8px 14px;
+  border-radius: var(--radius-sm);
+}
+.nav-links a:hover { color: var(--text); background: var(--accent-purple-dim); text-decoration: none; }
+.nav-links a.active { color: var(--accent-purple); background: var(--accent-purple-dim); }
+.nav-links a.nav-cta {
+  color: #fff;
+  background: linear-gradient(135deg, var(--accent-purple), var(--accent-cyan));
+}
+.nav-links a.nav-cta:hover { opacity: 0.9; background: linear-gradient(135deg, var(--accent-purple), var(--accent-cyan)); }
+.nav-toggle { display: none; }
+
+.nav-right { display: flex; align-items: center; gap: 10px; }
+
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: none;
+  color: var(--text-secondary);
+  font-size: 1.05em;
+  line-height: 1;
+  cursor: pointer;
+  flex: none;
+}
+.theme-toggle:hover { color: var(--text); border-color: var(--border-strong); background: var(--accent-purple-dim); }
+
+@media (max-width: 780px) {
+  .nav-links {
+    display: none;
+    position: absolute;
+    top: 64px;
+    left: 0;
+    right: 0;
+    flex-direction: column;
+    align-items: stretch;
+    background: var(--bg);
+    border-bottom: 1px solid var(--border);
+    padding: 8px 24px 16px;
+    gap: 2px;
+  }
+  .nav-links.open { display: flex; }
+  .nav-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 38px;
+    height: 38px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    background: none;
+    color: var(--text);
+    font-size: 1.2em;
+    cursor: pointer;
+  }
+}
+
+/* ---------- Hero ---------- */
+.hero {
+  padding: 72px 0 48px;
+  text-align: center;
+}
+.hero-wordmark {
+  /* Plain bold text, matching the app's own wordmark treatment (About dialog / titlebar) —
+     no gradient clip, which the app itself never uses for its name. */
+  font-size: clamp(2.2em, 6vw, 3.6em);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin: 20px 0 12px;
+  color: var(--text);
+}
+.hero-tagline {
+  font-size: clamp(1.05em, 2vw, 1.35em);
+  font-weight: 600;
+  color: var(--text);
+  max-width: 720px;
+  margin: 0 auto 10px;
+}
+.hero-sub {
+  font-size: 1.05em;
+  color: var(--text-secondary);
+  max-width: 640px;
+  margin: 0 auto 32px;
+}
+.hero-actions { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+.hero-shot {
+  margin-top: 48px;
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: var(--shadow-lg);
+  border: 1px solid var(--border);
+}
+.hero-shot img { display: block; width: 100%; height: auto; }
+
+/* ---------- Buttons ---------- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 22px;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 0.95em;
+  border: 1px solid transparent;
+  cursor: pointer;
+}
+.btn:hover { text-decoration: none; }
+.btn-primary {
+  color: #fff;
+  background: linear-gradient(135deg, var(--accent-purple), var(--accent-cyan));
+}
+.btn-primary:hover { opacity: 0.92; }
+.btn-secondary {
+  color: var(--text);
+  background: var(--bg-elevated);
+  border-color: var(--border-strong);
+}
+.btn-secondary:hover { border-color: var(--accent-purple); }
+
+/* ---------- Sections ---------- */
+.section { padding: 56px 0; }
+.section-title-eyebrow {
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.78em;
+  font-weight: 700;
+  color: var(--accent-purple);
+  margin-bottom: 8px;
+}
+.section-heading {
+  font-size: clamp(1.5em, 3vw, 2.1em);
+  font-weight: 800;
+  margin: 0 0 12px;
+  letter-spacing: -0.01em;
+}
+.section-lead {
+  font-size: 1.05em;
+  color: var(--text-secondary);
+  max-width: 700px;
+  margin: 0 0 32px;
+}
+
+/* ---------- Feature grid / cards ---------- */
+.feature-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 18px;
+  margin: 24px 0;
+}
+.feature-card {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 22px;
+  box-shadow: var(--shadow);
+}
+.feature-card h3, .feature-card h4 {
+  margin: 0 0 8px;
+  font-size: 1.05em;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.feature-card p { margin: 0; color: var(--text-secondary); font-size: 0.95em; }
+.feature-card ul { margin: 10px 0 0; padding-left: 20px; color: var(--text-secondary); font-size: 0.93em; }
+.feature-card ul li { margin-bottom: 6px; }
+.feature-card img {
+  width: 100%;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  margin-top: 14px;
+}
+
+/* ---------- Home page "At a glance" marquee — one row with all 21 features, an infinite
+ * CSS-only loop (a track holding the full set repeated 2×, translated exactly -50% per cycle so
+ * the seam is invisible). Pure CSS, no JS.
+ *
+ * The loop point is only exact when spacing is folded into each card's own box (margin-right on
+ * every card, including the last) rather than a flex `gap` — gap only sits *between* items, so
+ * the fractional-repeat point of the whole track doesn't land exactly on a repeat boundary and
+ * the loop visibly hitches. margin-right gives every item (real or duplicate) the same total
+ * width, so half the cards is always exactly half the pixel width.
+ *
+ * Only 2 copies needed (unlike the smaller card sets tried earlier): one copy of all 21 cards is
+ * already 21 × 318px = 6678px — comfortably wider than any realistic browser viewport — so
+ * there's always a full copy's worth of real content ahead of the visible window right up to the
+ * wrap point, with no empty stretch.
+ */
+.marquee-wrap {
+  overflow: hidden;
+  margin: 32px 0;
+  -webkit-mask-image: linear-gradient(90deg, transparent, black 6%, black 94%, transparent);
+  mask-image: linear-gradient(90deg, transparent, black 6%, black 94%, transparent);
+}
+.marquee-row { overflow: hidden; padding: 5px 0; }
+.marquee-track {
+  display: flex;
+  align-items: flex-start; /* so the stagger below actually offsets cards, instead of flex's
+                              default stretch masking it by equalizing every item's height */
+  width: max-content;
+  /* 179s to cross ONE copy (50% of the 2-copy track, 6678px) — matches the original per-card
+     speed (~37px/s) from the very first 4-card version, just scaled up to a much longer track. */
+  animation: marquee-scroll 179s linear infinite;
+}
+/* Hovering or keyboard-focusing any card pauses the whole row — one still frame to read, not the
+ * row sliding away under you while you read a card. */
+.marquee-wrap:hover .marquee-track,
+.marquee-wrap:focus-within .marquee-track { animation-play-state: paused; }
+.marquee-track .feature-card {
+  display: block;
+  flex: 0 0 300px;
+  width: 300px;
+  margin-right: 18px;
+  text-decoration: none;
+  color: inherit;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.marquee-track .feature-card:hover {
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-lg);
+}
+/* Stagger: every other card sits lower, brick-style, instead of all 8 sitting on one flat line. */
+.marquee-track .feature-card:nth-child(even) { margin-top: 40px; }
+.marquee-track .feature-card:nth-child(even) h4 .icon { color: var(--accent-cyan); }
+@keyframes marquee-scroll {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); } /* one of the 2 duplicated copies */
+}
+@media (prefers-reduced-motion: reduce) {
+  .marquee-track { animation: none; }
+}
+@media (max-width: 640px) {
+  .marquee-track .feature-card { flex-basis: 240px; width: 240px; }
+  .marquee-track .feature-card:nth-child(even) { margin-top: 28px; }
+}
+
+/* Two-up screenshot rows */
+.shot-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 18px;
+  margin: 20px 0;
+}
+/* Fixed 2 columns regardless of item count — for a 4-shot set that should read as a 2x2
+ * grid instead of auto-fit's "3 across, 1 stretched alone on its own row". */
+.shot-grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (max-width: 560px) {
+  .shot-grid-2 { grid-template-columns: 1fr; }
+}
+.shot-grid figure { margin: 0; }
+.shot-grid img {
+  width: 100%;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+}
+.shot-grid figcaption {
+  margin-top: 8px;
+  font-size: 0.85em;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+/* ---------- Long-form content (feature detail sections, install steps) ---------- */
+.doc-section {
+  padding: 40px 0;
+  border-bottom: 1px solid var(--border);
+}
+.doc-section:last-child { border-bottom: none; }
+.doc-section h2 {
+  font-size: 1.5em;
+  margin: 0 0 4px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.doc-section .doc-kicker {
+  color: var(--text-muted);
+  font-size: 0.9em;
+  margin: 0 0 18px;
+}
+.doc-section ul { margin: 0 0 16px; padding-left: 22px; }
+.doc-section li { margin-bottom: 8px; color: var(--text-secondary); }
+.doc-section li strong { color: var(--text); }
+.doc-section img {
+  display: block;
+  max-width: 100%;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+  margin: 18px 0;
+}
+
+/* ---------- Features page: left sidebar + single-panel content (no page reload) ---------- */
+.features-layout {
+  display: flex;
+  gap: 32px;
+  align-items: flex-start;
+  padding: 8px 24px 64px;
+}
+.features-sidebar {
+  flex: 0 0 230px;
+  position: sticky;
+  top: 84px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: calc(100vh - 104px);
+  overflow-y: auto;
+}
+.features-nav-link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: 0.88em;
+  font-weight: 600;
+  line-height: 1.3;
+}
+.features-nav-link .icon { color: inherit; }
+.features-nav-link:hover { background: var(--accent-purple-dim); color: var(--text); text-decoration: none; }
+.features-nav-link.active { background: var(--accent-purple-dim); color: var(--accent-purple); }
+.features-content { flex: 1; min-width: 0; }
+/* Only one panel is ever unhidden at a time (see assets/nav.js) — no stacked borders/padding
+ * needed since there's nothing above/below it to separate from. */
+.features-content .doc-section { border-bottom: none; padding: 4px 0 0; }
+.features-content .doc-section[hidden] { display: none; }
+
+@media (max-width: 780px) {
+  .features-layout { flex-direction: column; padding: 4px 16px 48px; }
+  .features-sidebar {
+    position: sticky;
+    top: 64px;
+    flex-direction: row;
+    flex: none;
+    width: 100%;
+    max-height: none;
+    overflow-x: auto;
+    overflow-y: hidden;
+    background: var(--bg);
+    border-bottom: 1px solid var(--border);
+    padding: 6px 0 10px;
+    z-index: 5;
+  }
+  .features-nav-link { white-space: nowrap; }
+}
+
+/* ---------- Info box callout ---------- */
+.info-box {
+  background: var(--accent-purple-dim);
+  border: 1px solid var(--border-strong);
+  border-left: 4px solid var(--accent-purple);
+  border-radius: var(--radius-sm);
+  padding: 16px 20px;
+  margin: 24px 0;
+  font-size: 0.95em;
+}
+.info-box strong { color: var(--accent-purple); }
+
+/* ---------- Tables ---------- */
+table { width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 0.93em; }
+th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--border); }
+th { color: var(--text-muted); text-transform: uppercase; font-size: 0.78em; letter-spacing: 0.04em; }
+
+/* ---------- Platform strip ---------- */
+.platform-strip {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.platform-pill {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 10px 18px;
+  font-weight: 600;
+  font-size: 0.9em;
+}
+
+/* ---------- Architecture diagram ---------- */
+.arch-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin: 28px 0;
+}
+.arch-box {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 18px 22px;
+  text-align: center;
+  font-weight: 700;
+  box-shadow: var(--shadow);
+}
+.arch-box.highlight { border-color: var(--accent-purple); background: var(--accent-purple-dim); color: var(--accent-purple); }
+.arch-arrow { font-size: 1.4em; color: var(--text-muted); }
+
+/* ---------- Footer ---------- */
+.site-footer {
+  border-top: 1px solid var(--border);
+  padding: 32px 0 40px;
+  margin-top: 32px;
+  color: var(--text-muted);
+  font-size: 0.88em;
+}
+.site-footer .container { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; }
+.site-footer a { color: var(--text-muted); }
+.site-footer a:hover { color: var(--accent-purple); }
+.footer-brand { display: flex; flex-direction: column; gap: 3px; }
+.footer-org { font-weight: 700; font-size: 1.05em; color: var(--text); }
+.footer-org:hover { color: var(--accent-purple); }
+.footer-sub { color: var(--text-muted); }

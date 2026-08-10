@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Features — Roku Dev Studio</title>
+<meta name="description" content="The full feature tour for Roku Dev Studio: Remote Control, Device Discovery, Sideload Relay, Network Inspector, BrightScript Debugger, Action Scripts, AI Agents (MCP), Static Channel Analysis, and more.">
+<link rel="icon" href="images/icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/style.css?v=9">
+<script>(function(){try{var t=localStorage.getItem("rds-docs-theme");if(t)document.documentElement.setAttribute("data-theme",t);}catch(e){}})();</script>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="container">
+    <a class="brand" href="index.html">
+      <img class="brand-icon" src="images/icon.png" alt="">
+      Roku Dev Studio
+    </a>
+    <div class="nav-right">
+      <nav class="nav-links">
+        <a href="features.html" class="active">Features</a>
+        <a href="install.html">Install</a>
+        <a href="remote-server.html">Remote Server</a>
+        <a href="https://github.com/paramount-engineering/roku-dev-studio" class="nav-cta" target="_blank" rel="noopener noreferrer">GitHub</a>
+      </nav>
+      <button class="theme-toggle" aria-label="Toggle theme" title="Theme: System (click to change)"><svg class="icon" width="16" height="16"><use href="assets/icons.svg#icon-devices"></use></svg></button>
+      <button class="nav-toggle" aria-label="Toggle navigation" aria-expanded="false"><svg class="icon" width="16" height="16"><use href="assets/icons.svg#icon-menu"></use></svg></button>
+    </div>
+  </div>
+</header>
+
+<section class="section container" style="padding-bottom: 0;">
+  <h1 class="section-heading">Features</h1>
+  <p class="section-lead">Everything Roku Dev Studio does, in one place. Pick one from the left.</p>
+</section>
+
+<div class="features-layout container">
+  <nav class="features-sidebar" aria-label="Features">
+    <a href="#remote-control" data-feature="remote-control" class="features-nav-link active"><svg class="icon" width="16" height="16"><use href="assets/icons.svg#icon-gamepad"></use></svg><span>Remote Control</span></a>
+    <a href="#device-performance" data-feature="device-performance" class="features-nav-link"><svg class="icon" width="16" height="16"><use href="assets/icons.svg#icon-cpu"></use></svg><span>Device Performance</span></a>
+    <a href="#device-discovery" data-feature="device-discovery" class="features-nav-link"><svg class="icon" width="16" height="16"><use href="assets/icons.svg#icon-radar"></use></svg><span>Device Discovery</span></a>
+    <a href="#app-launcher" data-feature="app-launcher" class="features-nav-link"><svg class="icon" width="16" height="16"><use href="assets/icons.svg#icon-app"></use></svg><span>App Launcher &amp; Management</span></a>
+    <a href="#device-queries" data-feature="device-queries" class="features-nav-link"><svg class="icon" width="16" height="16"><use href="assets/icons.svg#icon-scan"></use></svg><span>Device Queries</span></a>
+    <a href="#dev-app-management" data-feature="dev-app-management" class="features-nav-link"><svg class="icon" width="16" height="16"><use href="assets/icons.svg#icon-zap"></use></svg><span>Dev App Management</span></a>
+    <a href="#sideload-relay" data-feature="sideload-relay" class="features-nav-link"><svg class="icon" width="16" height="16"><use href="assets/icons.svg#icon-send"></use></svg><span>Sideload Relay</span></a>
+    <a href="#console-debugging" data-feature="console-debugging" class="features-nav-link"><svg class="icon" width="16" height="16"><use href="assets/icons.svg#icon-terminal"></use></svg><span>Console &amp; Debugging</span></a>
+    <a href="#brightscript-debugger" data-feature="brightscript-debugger" class="features-nav-link"><svg class="icon" width="16" height="16"><use href="assets/icons.svg#icon-debug-run"></use></svg><span>BrightScript Debugger</span></a>
+    <a href="#app-connector" data-feature="app-connector" class="features-nav-link"><svg class="icon" width="16" height="16"><use href="assets/icons.svg#icon-plug"></use></svg><span>App Connector (using RALE)</span></a>
+    <a href="#network-inspector" data-feature="network-inspector" class="features-nav-link"><svg class="icon" width="16" height="16"><use href="assets/icons.svg#icon-network"></use></svg><span>Network Inspector</span></a>
+    <a href="#network-session-viewer" data-feature="network-session-viewer" class="features-nav-link"><svg class="icon" width="16" height="16"><use href="assets/icons.svg#icon-folder"></use></svg><span>Network Session Viewer</span></a>
+    <a href="#action-scripts" data-feature="action-scripts" class="features-nav-link"><svg class="icon" width="16" height="16"><use href="assets/icons.svg#icon-list"></use></svg><span>Action Scripts</span></a>
+    <a href="#ai-agents" data-feature="ai-agents" class="features-nav-link"><svg class="icon" width="16" height="16"><use href="assets/icons.svg#icon-mcp"></use></svg><span>AI Agents (MCP Server)</span></a>
+    <a href="#brightscript-fiddle" data-feature="brightscript-fiddle" class="features-nav-link"><svg class="icon" width="16" height="16"><use href="assets/icons.svg#icon-code"></use></svg><span>BrightScript Fiddle</span></a>
+    <a href="#log-file-viewer" data-feature="log-file-viewer" class="features-nav-link"><svg class="icon" width="16" height="16"><use href="assets/icons.svg#icon-book"></use></svg><span>Log File Viewer</span></a>
+    <a href="#static-channel-analysis" data-feature="static-channel-analysis" class="features-nav-link"><svg class="icon" width="16" height="16"><use href="assets/icons.svg#icon-file-text"></use></svg><span>Static Channel Analysis</span></a>
+    <a href="#rds-cli" data-feature="rds-cli" class="features-nav-link"><svg class="icon" width="16" height="16"><use href="assets/icons.svg#icon-terminal"></use></svg><span>rds CLI (terminal)</span></a>
+    <a href="#remote-server-support" data-feature="remote-server-support" class="features-nav-link"><svg class="icon" width="16" height="16"><use href="assets/icons.svg#icon-server"></use></svg><span>Remote Server Support</span></a>
+    <a href="#settings" data-feature="settings" class="features-nav-link"><svg class="icon" width="16" height="16"><use href="assets/icons.svg#icon-settings"></use></svg><span>Settings</span></a>
+    <a href="#developer-features" data-feature="developer-features" class="features-nav-link"><svg class="icon" width="16" height="16"><use href="assets/icons.svg#icon-wrench"></use></svg><span>Developer Features</span></a>
+  </nav>
+
+  <div class="features-content">
+
+<section class="doc-section" id="remote-control" data-feature-panel>
+  <h2><svg class="icon" width="16" height="16"><use href="assets/icons.svg#icon-gamepad"></use></svg> Remote Control</h2>
+  <ul>
+    <li><strong>Full D-Pad Control:</strong> Navigate menus, select items, go back/home</li>
+    <li><strong>Media Controls:</strong> Play, pause, rewind, fast-forward, volume control</li>
+    <li><strong>Optional Keyboard Remote:</strong> Enable in Settings → General → Roku Remote - Use Keyboard (off by default); arrow keys, Enter, Backspace, Escape, Space work as the remote on the Remote tab or Dev App tab for the open device</li>
+    <li><strong>Visual Remote Interface:</strong> On-screen remote with all buttons</li>
+    <li><strong>Works Locally &amp; Remotely:</strong> Control devices on local network or via remote server</li>
+    <li><strong>Floating Remote:</strong> A draggable mini remote you can pop open on any tab that doesn't already show a full remote (e.g. Query, App Connector)</li>
+  </ul>
+  <img src="images/REMOTE.png" alt="Remote Control tab">
+</section>
+
+<section class="doc-section" id="device-performance" data-feature-panel hidden>
+  <h2><svg class="icon" width="16" height="16"><use href="assets/icons.svg#icon-cpu"></use></svg> Device Performance</h2>
+  <p class="doc-kicker">Remote Section</p>
+  <ul>
+    <li><strong>Live charts:</strong> On Remote, turn on Show Device Performance for a quad layout with CPU, memory, and object charts</li>
+    <li><strong>When it applies:</strong> Reflects the running app when Developer Mode is on and your sideloaded dev channel is in the foreground</li>
+    <li><strong>Settings → Device Performance:</strong> Tune chart sample interval and history window; optional "Remember Show Device Performance" per device</li>
+    <li><strong>Action Scripts:</strong> Capture chart cards into run results — e.g. PNGs included in exported PDFs</li>
+  </ul>
+  <img src="images/REMOTE_WITH_DEVICE_PERFORMANCE.png" alt="Remote Section with Show Device Performance on — CPU, memory, and object charts">
+</section>
+
+<section class="doc-section" id="device-discovery" data-feature-panel hidden>
+  <h2><svg class="icon" width="16" height="16"><use href="assets/icons.svg#icon-radar"></use></svg> Device Discovery</h2>
+  <ul>
+    <li><strong>Automatic SSDP Discovery:</strong> Automatically finds Roku devices on your local network</li>
+    <li><strong>Subnet Scanning:</strong> Fallback discovery method when SSDP multicast is unavailable</li>
+    <li><strong>Remote Device Discovery:</strong> Discover devices on remote networks via server bridge</li>
+    <li><strong>Real-time Updates:</strong> Devices appear as they're discovered</li>
+  </ul>
+</section>
+
+<section class="doc-section" id="app-launcher" data-feature-panel hidden>
+  <h2><svg class="icon" width="16" height="16"><use href="assets/icons.svg#icon-app"></use></svg> App Launcher &amp; Management</h2>
+  <ul>
+    <li><strong>Installed Apps Browser:</strong> View and launch all apps installed on the device</li>
+    <li><strong>App Icons:</strong> Display actual app icons loaded from the device in a grid layout</li>
+    <li><strong>Custom App Launch:</strong> Launch any app by entering App ID</li>
+    <li><strong>Deep-Linking:</strong> Launch apps with specific content (movies, shows, channels)</li>
+    <li><strong>HDMI Inputs:</strong> Switch to HDMI inputs on TV devices</li>
+    <li><strong>Remote Launch:</strong> Launch apps on remote devices via server</li>
+  </ul>
+  <img src="images/APPS.png" alt="App Launcher tab">
+</section>
+
+<section class="doc-section" id="device-queries" data-feature-panel hidden>
+  <h2><svg class="icon" width="16" height="16"><use href="assets/icons.svg#icon-scan"></use></svg> Device Queries</h2>
+  <ul>
+    <li><strong>Device Info:</strong> Get device name, model, serial, software version, network info</li>
+    <li><strong>All Apps:</strong> List all installed apps with details</li>
+    <li><strong>Active App:</strong> Get currently running app information</li>
+    <li><strong>Media Player:</strong> Query current media playback status</li>
+    <li><strong>SceneGraph Nodes:</strong> Query all nodes or root nodes</li>
+    <li><strong>SG Rendezvous:</strong> Get SceneGraph events and track/untrack</li>
+    <li><strong>FW Beacons:</strong> Query firmware beacons</li>
+    <li><strong>Plugins &amp; Memory:</strong> Get plugin info and memory usage</li>
+    <li><strong>System Commands:</strong> Execute system-level commands via telnet (port 8080)</li>
+    <li><strong>Command History:</strong> View and re-run previous commands</li>
+    <li><strong>Custom Queries:</strong> Run any custom ECP query endpoint</li>
+  </ul>
+  <img src="images/QUERIES.png" alt="Device Queries tab">
+</section>
+
+<section class="doc-section" id="dev-app-management" data-feature-panel hidden>
+  <h2><svg class="icon" width="16" height="16"><use href="assets/icons.svg#icon-zap"></use></svg> Dev App Management</h2>
+  <ul>
+    <li><strong>Remote Sideloading:</strong> Upload and install dev channels to local or remote devices</li>
+    <li><strong>Auto Screenshot:</strong> Automatically capture screenshots after keypresses, text input, and Dev App Launch</li>
+    <li><strong>Launch Dev App:</strong> Launch sideloaded dev channel with one click</li>
+    <li><strong>Delete Sideload:</strong> Remove sideloaded channel remotely</li>
+    <li><strong>Dev App Status:</strong> View currently sideloaded app information</li>
+    <li><strong>Progress Tracking:</strong> Real-time upload progress for sideloading</li>
+  </ul>
+  <img src="images/DEV_APP.png" alt="Dev App tab">
+</section>
+
+<section class="doc-section" id="sideload-relay" data-feature-panel hidden>
+  <h2><svg class="icon" width="16" height="16"><use href="assets/icons.svg#icon-send"></use></svg> Sideload Relay</h2>
+  <ul>
+    <li><strong>One build → many devices:</strong> With the relay on, Roku Dev Studio advertises itself as a Roku over SSDP; point your IDE (VS Code BrightScript / roku-deploy) or a browser at this machine, upload once, and RDS fans the build out (install → launch → console) to every targeted device — local or at a remote location</li>
+    <li><strong>Enable in Settings → Sideload Relay</strong> (off by default): set a Relay Dev Password and pick targets in Setup Devices</li>
+    <li><strong>Browser upload page:</strong> A themed drag-and-drop .zip uploader is served at the relay address for sideloads without an IDE</li>
+    <li><strong>Auto-connect:</strong> Each device that receives a build opens as a connected tab with its debug console attached; live fan-out progress streams on telnet 8085</li>
+    <li><strong>Source approval:</strong> A sideload from another machine prompts for allow / deny on the RDS host; remote browser uploads also require the Relay Dev Password</li>
+  </ul>
+</section>
+
+<section class="doc-section" id="console-debugging" data-feature-panel hidden>
+  <h2><svg class="icon" width="16" height="16"><use href="assets/icons.svg#icon-terminal"></use></svg> Console &amp; Debugging</h2>
+  <ul>
+    <li><strong>Telnet Console Access:</strong> Direct access to Roku console logs (port 8085)</li>
+    <li><strong>Remote Console:</strong> Access console logs on remote devices via server</li>
+    <li><strong>Real-time Output:</strong> See console log output in real-time</li>
+    <li><strong>System Commands:</strong> Execute system commands via telnet (port 8080)</li>
+    <li><strong>Log Export:</strong> Save console logs to file</li>
+  </ul>
+  <img src="images/TELNET_CONSOLE.png" alt="Console tab">
+</section>
+
+<section class="doc-section" id="brightscript-debugger" data-feature-panel hidden>
+  <h2><svg class="icon" width="16" height="16"><use href="assets/icons.svg#icon-debug-run"></use></svg> BrightScript Debugger</h2>
+  <ul>
+    <li><strong>Socket debug protocol (port 8081):</strong> Attach to a dev channel sideloaded with debugging enabled; RDS re-sideloads with the protocol turned on if needed</li>
+    <li><strong>Execution control:</strong> Attach / Detach, Continue, Pause, Step Over / In / Out, and Restart (re-sideload with debugging + reattach)</li>
+    <li><strong>Breakpoints:</strong> Add / edit / remove, including conditional breakpoints (Roku OS 11.5+); STOPs already in the channel are discovered automatically</li>
+    <li><strong>Threads &amp; Call Stack, Variables, Watch:</strong> Inspect the call stack and live variables at a stop, and track watch expressions across stops</li>
+    <li><strong>Lives in the Telnet Console sidebar:</strong> Toggle the debug sidebar from the Console tab; works on local and remote devices (server-capability-gated)</li>
+  </ul>
+</section>
+
+<section class="doc-section" id="app-connector" data-feature-panel hidden>
+  <h2><svg class="icon" width="16" height="16"><use href="assets/icons.svg#icon-plug"></use></svg> App Connector (using RALE)</h2>
+  <ul>
+    <li><strong>RALE Connection:</strong> Connect to TrackerTask in your dev app (default port 49200)</li>
+    <li><strong>Function Discovery:</strong> Auto-discover everything GetExternalControlFunctions exposes in your scene</li>
+    <li><strong>Remote Execution:</strong> Execute any BrightScript function with parameters; positional functionParams array</li>
+    <li><strong>Return Values:</strong> Get function return values in real-time</li>
+    <li><strong>Update Node:</strong> After Get Node by ID, open the Update Node modal to selectNode, setField, or removeField on the matched node</li>
+    <li><strong>RALE built-ins:</strong> Node lookup plus a full registry editor</li>
+    <li><strong>Integration Guide modal:</strong> In-app TrackerTask tutorial with BrightScript snippets and a Save TrackerTask.xml button</li>
+    <li><strong>Remote Function Calls:</strong> Works on local and remote devices via server</li>
+  </ul>
+  <div class="shot-grid">
+    <figure><img src="images/APP_CONNECTOR.png" alt="App Connector tab"><figcaption>App Connector tab</figcaption></figure>
+    <figure><img src="images/INTEGRATION_GUIDE_MODAL.png" alt="Integration Guide modal"><figcaption>Integration Guide modal</figcaption></figure>
+  </div>
+</section>
+
+<section class="doc-section" id="network-inspector" data-feature-panel hidden>
+  <h2><svg class="icon" width="16" height="16"><use href="assets/icons.svg#icon-network"></use></svg> Network Inspector</h2>
+  <ul>
+    <li><strong>MITM proxy:</strong> A local proxy decrypts your dev channel's HTTPS so you can inspect full request / response headers and bodies — enable it in Settings → Network Inspector</li>
+    <li><strong>Hotspot capture (optional):</strong> Records SNI / DNS metadata for all device traffic via OS packet capture (macOS BPF, Windows Npcap)</li>
+    <li><strong>Session list &amp; filters:</strong> Filter by host, method, status, type, kind, path (comma = OR), group by host, jump to errors</li>
+    <li><strong>Inspect &amp; export:</strong> View request/response overview, headers, and bodies; copy a body or export as cURL / HAR; save captured packets as .pcap</li>
+    <li><strong>Traffic rules:</strong> Block, throttle, or mock responses per host / path</li>
+  </ul>
+  <p>Available for locally connected devices; engine lives in <a href="https://github.com/paramount-engineering/roku-dev-studio/tree/main/packages/roku-dev-studio-network-inspector" target="_blank" rel="noopener noreferrer">roku-dev-studio-network-inspector</a>.</p>
+</section>
+
+<section class="doc-section" id="network-session-viewer" data-feature-panel hidden>
+  <h2><svg class="icon" width="16" height="16"><use href="assets/icons.svg#icon-folder"></use></svg> Network Session Viewer</h2>
+  <ul>
+    <li><strong>Open a saved capture:</strong> File → Open Network Session (Ctrl/Cmd+Shift+N) loads a .rds-network-inspector.json bundle, a HAR 1.2 file, or a .pcap</li>
+    <li><strong>Same UI, read-only:</strong> Browses the session with the identical two-pane list/detail view as the live Network Inspector tab</li>
+  </ul>
+</section>
+
+<section class="doc-section" id="action-scripts" data-feature-panel hidden>
+  <h2><svg class="icon" width="16" height="16"><use href="assets/icons.svg#icon-list"></use></svg> Action Scripts</h2>
+  <ul>
+    <li><strong>Script Builder:</strong> Create scripted sequences with keypresses, send-text, ECP query/POST, launch, sideload, delete-sideload, screenshots, App Connector calls, RALE commands, Device Performance chart capture, and waits</li>
+    <li><strong>Variables (script v2):</strong> Set Variable step or assignToVar stores values; reference as <code>${name}</code> in later steps</li>
+    <li><strong>Conditionals (script v2):</strong> If / Else if / Else branches sourced from media-player state, active app, a RALE node field, or a stored variable</li>
+    <li><strong>Wait conditions:</strong> Fixed delay, or wait until media-player state or a RALE node field condition is met</li>
+    <li><strong>Script Executor:</strong> Import / paste / validate, run with pause / resume / stop, per-step skip, inline screenshots</li>
+    <li><strong>PDF export:</strong> Run results — including screenshots and Device Performance chart cards — exportable as PDF</li>
+    <li><strong>Headless / CLI:</strong> Same scripts run from the terminal via <code>rds script run</code></li>
+    <li><strong>Standalone window:</strong> File → View and Manage Action Scripts opens the Builder over your saved-scripts library independent of any connected device</li>
+  </ul>
+  <div class="shot-grid">
+    <figure><img src="images/ACTION-SCRIPTS_BUILDER.png" alt="Action Scripts Builder"><figcaption>Builder</figcaption></figure>
+    <figure><img src="images/ACTION-SCRIPTS_EXECUTOR.png" alt="Action Scripts Executor"><figcaption>Executor</figcaption></figure>
+  </div>
+</section>
+
+<section class="doc-section" id="ai-agents" data-feature-panel hidden>
+  <h2><svg class="icon" width="16" height="16"><use href="assets/icons.svg#icon-mcp"></use></svg> AI Agents (MCP Server)</h2>
+  <ul>
+    <li><strong>Model Context Protocol:</strong> Bundled roku-dev-studio-mcp server lets Cursor, Claude Desktop, and VS Code drive a real Roku through this app while it's open</li>
+    <li><strong>Settings → MCP Server:</strong> Toggle a client to add or remove its roku-dev-studio MCP entry</li>
+    <li><strong>Two surfaces:</strong> Direct device ops for one-shot actions plus Action Scripts for multi-step / conditional flows that drop into the Builder for human review</li>
+    <li><strong>Toasts on agent actions:</strong> Destructive ops surface a non-blocking toast so you always see what the agent did</li>
+    <li><strong>Passwords stay local:</strong> Sideload / screenshot / delete-sideload reuse the password the device panel remembered — the agent never sends one</li>
+  </ul>
+  <img src="images/SETTINGS_MCP_SERVER.png" alt="Settings → MCP Server panel">
+  <p>See the <a href="https://github.com/paramount-engineering/roku-dev-studio/blob/main/packages/roku-dev-studio-mcp/README.md" target="_blank" rel="noopener noreferrer">MCP package README</a> for the tool catalog, bridge protocol, and design notes.</p>
+</section>
+
+<section class="doc-section" id="brightscript-fiddle" data-feature-panel hidden>
+  <h2><svg class="icon" width="16" height="16"><use href="assets/icons.svg#icon-code"></use></svg> BrightScript Fiddle</h2>
+  <ul>
+    <li><strong>Open Fiddle:</strong> File → Open Fiddle (Ctrl/Cmd+Shift+B) or the Open Fiddle button on the Query tab</li>
+    <li><strong>Monaco + brighterscript:</strong> BrightScript editor with live linting; Run is disabled while errors are present</li>
+    <li><strong>One-click run:</strong> Wraps your snippet into a minimal SceneGraph channel, sideloads it on the selected device, and streams the debug console into the Fiddle window</li>
+    <li><strong>Auto-cleanup:</strong> Stop / window close removes the Fiddle channel from the device</li>
+  </ul>
+  <div class="shot-grid">
+    <figure><img src="images/BRIGHTSCRIPT_FIDDLE.png" alt="Fiddle window"><figcaption>Fiddle window — Monaco editor + live debug console</figcaption></figure>
+    <figure><img src="images/BRIGHTSCRIPT_FIDDLE_ON_TV.png" alt="Fiddle channel on the Roku"><figcaption>Same snippet running on the Roku</figcaption></figure>
+  </div>
+</section>
+
+<section class="doc-section" id="log-file-viewer" data-feature-panel hidden>
+  <h2><svg class="icon" width="16" height="16"><use href="assets/icons.svg#icon-book"></use></svg> Log File Viewer</h2>
+  <ul>
+    <li><strong>Open saved logs:</strong> File → Open Log File (Ctrl/Cmd+Shift+O) opens a dedicated window with the same find / structured-log / URL-detection chrome as the live Console tab</li>
+  </ul>
+</section>
+
+<section class="doc-section" id="static-channel-analysis" data-feature-panel hidden>
+  <h2><svg class="icon" width="16" height="16"><use href="assets/icons.svg#icon-file-text"></use></svg> Static Channel Analysis</h2>
+  <ul>
+    <li><strong>Wraps Roku's own sca-cmd:</strong> Runs Roku's static-analysis CLI against a packaged channel — RDS downloads the tool at runtime, never ships it</li>
+    <li><strong>Filters:</strong> Severity (Info / Warning / Error) and category (Manifest, Deprecated APIs, RAF, Channel Store, Authentication, Billing, Deep Linking, Analytics, Performance, Monitoring, …)</li>
+    <li><strong>Results table:</strong> Cert Requirements chips link straight to the relevant section of Roku's certification / ad-requirements / Roku Pay docs; Documentation links open Roku's API reference</li>
+    <li><strong>Terminal + Table tabs:</strong> Live raw tool output alongside a structured, filterable results table; View JSON / Save the full report</li>
+    <li><strong>Requires Java 21+:</strong> RDS detects your Java install and reports version compatibility</li>
+  </ul>
+  <p class="doc-kicker">File → Static Channel Analysis (Ctrl/Cmd+Shift+S)</p>
+</section>
+
+<section class="doc-section" id="rds-cli" data-feature-panel hidden>
+  <h2><svg class="icon" width="16" height="16"><use href="assets/icons.svg#icon-terminal"></use></svg> rds CLI (terminal)</h2>
+  <ul>
+    <li>Ships with <a href="https://github.com/paramount-engineering/roku-dev-studio/blob/main/packages/roku-dev-studio-api/README.md#cli-rds" target="_blank" rel="noopener noreferrer">roku-dev-studio-api</a>: <code>rds discover</code>, <code>rds device info</code>, <code>rds keypress</code>, <code>rds launch</code>, <code>rds ecp query</code>, <code>rds sideload</code>, <code>rds screenshot</code>, <code>rds script validate / run</code>, <code>rds rale repl</code>, <code>rds appconnector connect</code> — works direct over LAN or against a <code>--relay</code> server URL</li>
+  </ul>
+</section>
+
+<section class="doc-section" id="remote-server-support" data-feature-panel hidden>
+  <h2><svg class="icon" width="16" height="16"><use href="assets/icons.svg#icon-server"></use></svg> Remote Server Support</h2>
+  <ul>
+    <li><strong>Internet Bridge:</strong> Control Roku devices over the internet via remote server</li>
+    <li><strong>Full ECP Proxy:</strong> Complete ECP protocol implementation through server</li>
+    <li><strong>Device Discovery:</strong> Automatically discovers all Roku devices on remote network</li>
+    <li><strong>All Features Supported:</strong> Remote control, queries, sideloading, console, and RALE work remotely</li>
+    <li><strong>Swagger API:</strong> Interactive API documentation for remote server</li>
+  </ul>
+  <img src="images/REMOTE_SERVER_SWAGGER.png" alt="Remote server Swagger UI at /api-docs">
+  <p>Full setup lives on the <a href="remote-server.html">Remote Server</a> page.</p>
+</section>
+
+<section class="doc-section" id="settings" data-feature-panel hidden>
+  <h2><svg class="icon" width="16" height="16"><use href="assets/icons.svg#icon-settings"></use></svg> Settings</h2>
+  <p class="doc-kicker">Ctrl/Cmd+, — seven sections</p>
+  <ul>
+    <li><strong>General:</strong> Developer Mode, Privacy Mode (mask IPs/serials), Debug Logging to file, Roku Remote - Use Keyboard, Auto Connect to Devices, Auto Hide SideBar</li>
+    <li><strong>Action Scripts:</strong> Default folder for run artifacts (screenshots, exported PDFs)</li>
+    <li><strong>Device Performance:</strong> Chart sample interval, chart history window, "Remember Show Device Performance" per device</li>
+    <li><strong>Timing &amp; Network:</strong> Connection / query / telnet timeouts and other knobs</li>
+    <li><strong>Network Inspector:</strong> Enable the local MITM proxy and hotspot packet capture</li>
+    <li><strong>Sideload Relay:</strong> Advertise RDS as a Roku and fan one sideload out to many devices</li>
+    <li><strong>MCP Server:</strong> Toggle roku-dev-studio in your AI client(s)</li>
+  </ul>
+  <div class="shot-grid shot-grid-2">
+    <figure><img src="images/SETTINGS_GENERAL.png" alt="Settings General"><figcaption>General</figcaption></figure>
+    <figure><img src="images/SETTINGS_ACTION_SCRIPTS.png" alt="Settings Action Scripts"><figcaption>Action Scripts</figcaption></figure>
+    <figure><img src="images/SETTINGS_DEVICE_PERFORMANCE.png" alt="Settings Device Performance"><figcaption>Device Performance</figcaption></figure>
+    <figure><img src="images/SETTINGS_TIMING_NETWORK.png" alt="Settings Timing & Network"><figcaption>Timing &amp; Network</figcaption></figure>
+  </div>
+</section>
+
+<section class="doc-section" id="developer-features" data-feature-panel hidden>
+  <h2><svg class="icon" width="16" height="16"><use href="assets/icons.svg#icon-wrench"></use></svg> Developer Features</h2>
+  <ul>
+    <li><strong>Developer Mode:</strong> Enhanced debugging and development features (Ctrl/Cmd+Shift+D)</li>
+    <li><strong>Privacy Mode:</strong> Mask IP addresses and serial numbers in UI (Ctrl/Cmd+Shift+P)</li>
+    <li><strong>Debug Logging to file:</strong> Optional file-based debug logging in app userData (Ctrl/Cmd+Shift+L)</li>
+    <li><strong>Encrypted dev-password storage:</strong> "Remember password" persists via Electron safeStorage — macOS Keychain, Windows DPAPI, secret-service, or kwallet</li>
+    <li><strong>Settings persistence:</strong> Preferences and device connections saved between sessions</li>
+    <li><strong>Quick Remote (Dev App tab):</strong> Compact remote strip plus drag-drop sideload right next to the screenshot pane</li>
+    <li><strong>Secret Screens modal:</strong> One-click presets for Roku's hidden screens</li>
+    <li><strong>TrackerTask Export:</strong> Save TrackerTask.xml from the App Connector → Integration Guide</li>
+    <li><strong>Clear Cache and Reload:</strong> Wipe Chromium cache without restarting the app</li>
+  </ul>
+</section>
+
+  </div>
+</div>
+
+<footer class="site-footer">
+  <div class="container">
+    <div class="footer-brand">
+      <div>
+        <a class="footer-org" href="https://github.com/paramount-engineering" target="_blank" rel="noopener noreferrer">Paramount Engineering</a> ·
+        <a class="footer-org" href="https://github.com/paramount-engineering/roku-dev-studio" target="_blank" rel="noopener noreferrer">Roku Dev Studio</a>
+      </div>
+      <div class="footer-sub">
+        <a href="https://github.com/paramount-engineering/roku-dev-studio/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">MIT License</a> ·
+        <a href="https://github.com/hdonapati" target="_blank" rel="noopener noreferrer">created by Hareendra Donapati</a>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<script src="assets/nav.js?v=9"></script>
+</body>
+</html>

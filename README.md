@@ -1,5 +1,5 @@
 <h1>
-  <img src="images/icon.png" alt="Roku Dev Studio icon" height="72" align="middle" />
+  <img src="docs/images/icon.png" alt="Roku Dev Studio icon" height="72" align="middle" />
   &nbsp;Roku Dev Studio
 </h1>
 
@@ -61,7 +61,7 @@ Roku Dev Studio is available for:
 
 |           Home           |
 |--------------------------|
-| ![Home](images/HOME.png) |
+| ![Home](docs/images/HOME.png) |
 
 ## Features
 

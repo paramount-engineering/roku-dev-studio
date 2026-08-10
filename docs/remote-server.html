@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Remote Server — Roku Dev Studio</title>
+<meta name="description" content="Control Roku devices over the internet with the Roku Dev Studio remote server bridge — setup, architecture, API endpoints, and Swagger docs.">
+<link rel="icon" href="images/icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/style.css?v=9">
+<script>(function(){try{var t=localStorage.getItem("rds-docs-theme");if(t)document.documentElement.setAttribute("data-theme",t);}catch(e){}})();</script>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="container">
+    <a class="brand" href="index.html">
+      <img class="brand-icon" src="images/icon.png" alt="">
+      Roku Dev Studio
+    </a>
+    <div class="nav-right">
+      <nav class="nav-links">
+        <a href="features.html">Features</a>
+        <a href="install.html">Install</a>
+        <a href="remote-server.html" class="active">Remote Server</a>
+        <a href="https://github.com/paramount-engineering/roku-dev-studio" class="nav-cta" target="_blank" rel="noopener noreferrer">GitHub</a>
+      </nav>
+      <button class="theme-toggle" aria-label="Toggle theme" title="Theme: System (click to change)"><svg class="icon" width="16" height="16"><use href="assets/icons.svg#icon-devices"></use></svg></button>
+      <button class="nav-toggle" aria-label="Toggle navigation" aria-expanded="false"><svg class="icon" width="16" height="16"><use href="assets/icons.svg#icon-menu"></use></svg></button>
+    </div>
+  </div>
+</header>
+
+<section class="section container" style="padding-bottom: 0;">
+  <div class="section-title-eyebrow">Control devices over the internet</div>
+  <h1 class="section-heading">Remote Server</h1>
+  <p class="section-lead">A lightweight Node.js server that runs on a computer at a remote location so Roku Dev Studio can control Roku devices over the network — no physical access needed, and you don't have to be on the same LAN.</p>
+</section>
+
+<div class="container">
+
+<section class="doc-section" id="architecture">
+  <h2>Architecture</h2>
+  <div class="arch-row">
+    <div class="arch-box">Desktop App<br>(Your Computer)</div>
+    <span class="arch-arrow">↔</span>
+    <div class="arch-box highlight">Remote Server</div>
+    <span class="arch-arrow">↔</span>
+    <div class="arch-box">Roku Device<br>(Remote Location)</div>
+  </div>
+  <div class="info-box"><strong>Shared stack:</strong> The desktop app and remote server both use the same <code>roku-dev-studio-api</code> library for discovery and ECP. Local traffic talks to the Roku directly; remote traffic goes through a relay client hosted on the server.</div>
+</section>
+
+<section class="doc-section" id="run">
+  <h2>1. Run the relay server</h2>
+  <h3>Option A — from this repo</h3>
+  <pre><code>git clone https://github.com/paramount-engineering/roku-dev-studio.git
+cd roku-dev-studio
+npm install
+npm run remote-server     # listens on port 4951 by default</code></pre>
+  <h3>Option B — from npm</h3>
+  <pre><code>npm install -g roku-dev-studio-remote-server
+roku-remote-server        # or: roku-remote-server 4951</code></pre>
+  <p>Package: <a href="https://www.npmjs.com/package/roku-dev-studio-remote-server" target="_blank" rel="noopener noreferrer">npmjs.com/package/roku-dev-studio-remote-server</a></p>
+</section>
+
+<section class="doc-section" id="network">
+  <h2>2. Configure the network</h2>
+  <ul>
+    <li>Open the chosen port (default <code>4951</code>) on the host running the relay</li>
+    <li>For internet exposure, prefer a VPN or tunnel rather than a public-internet port</li>
+  </ul>
+</section>
+
+<section class="doc-section" id="connect">
+  <h2>3. Connect from the desktop app</h2>
+  <ul>
+    <li>Click <strong>Add Remote Location</strong> in the device selector</li>
+    <li>Enter the server URL (e.g. <code>http://remote-server-ip:4951</code>)</li>
+    <li>Click <strong>Connect</strong> to discover remote devices</li>
+  </ul>
+</section>
+
+<section class="doc-section" id="capabilities">
+  <h2>Capabilities</h2>
+  <div class="feature-grid">
+    <div class="feature-card"><h4><svg class="icon" width="16" height="16"><use href="assets/icons.svg#icon-globe"></use></svg> Internet Bridge</h4><p>All ECP commands work through the server</p></div>
+    <div class="feature-card"><h4><svg class="icon" width="16" height="16"><use href="assets/icons.svg#icon-radar"></use></svg> Device Discovery</h4><p>Automatically finds devices on the remote network</p></div>
+    <div class="feature-card"><h4><svg class="icon" width="16" height="16"><use href="assets/icons.svg#icon-terminal"></use></svg> Telnet Relay</h4><p>Console access (ports 8085 &amp; 8080) via WebSocket</p></div>
+    <div class="feature-card"><h4><svg class="icon" width="16" height="16"><use href="assets/icons.svg#icon-upload"></use></svg> File Upload</h4><p>Sideload dev apps from your desktop to remote devices</p></div>
+  </div>
+</section>
+
+<section class="doc-section" id="swagger">
+  <h2>Swagger API</h2>
+  <p>Interactive API documentation, powered by Swagger/OpenAPI 3.0, at <code>http://localhost:4951/api-docs</code>.</p>
+  <img src="images/REMOTE_SERVER_SWAGGER.png" alt="Remote server Swagger UI at /api-docs">
+</section>
+
+<section class="doc-section" id="service">
+  <h2>Running as a service</h2>
+  <p>Starter service files ship with the package for all three platforms:</p>
+  <ul>
+    <li><strong>macOS:</strong> a Launch Agent plist (<code>com.roku-dev-studio.remote-server.plist</code>)</li>
+    <li><strong>Linux:</strong> a systemd unit (<code>roku-remote-server.service</code>)</li>
+    <li><strong>Windows:</strong> run at logon via Task Scheduler, or wrap with <a href="https://nssm.cc/" target="_blank" rel="noopener noreferrer">NSSM</a></li>
+  </ul>
+  <p>Full step-by-step service setup, the complete API endpoint reference, and security considerations are in the <a href="https://github.com/paramount-engineering/roku-dev-studio/blob/main/packages/roku-dev-studio-remote-server/README.md" target="_blank" rel="noopener noreferrer">remote server package README</a>.</p>
+</section>
+
+</div>
+
+<footer class="site-footer">
+  <div class="container">
+    <div class="footer-brand">
+      <div>
+        <a class="footer-org" href="https://github.com/paramount-engineering" target="_blank" rel="noopener noreferrer">Paramount Engineering</a> ·
+        <a class="footer-org" href="https://github.com/paramount-engineering/roku-dev-studio" target="_blank" rel="noopener noreferrer">Roku Dev Studio</a>
+      </div>
+      <div class="footer-sub">
+        <a href="https://github.com/paramount-engineering/roku-dev-studio/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">MIT License</a> ·
+        <a href="https://github.com/hdonapati" target="_blank" rel="noopener noreferrer">created by Hareendra Donapati</a>
+      </div>
+    </div>
+    <span>
+      <a href="https://github.com/paramount-engineering/roku-dev-studio/tree/main/packages/roku-dev-studio-remote-server" target="_blank" rel="noopener noreferrer"><code>remote-server</code> package</a>
+    </span>
+  </div>
+</footer>
+
+<script src="assets/nav.js?v=9"></script>
+</body>
+</html>

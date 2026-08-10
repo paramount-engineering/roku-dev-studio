@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Install — Roku Dev Studio</title>
+<meta name="description" content="Install and build Roku Dev Studio: quick start for development, distributable builds for macOS, Windows, and Linux, and per-platform notes on code signing and dependencies.">
+<link rel="icon" href="images/icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/style.css?v=9">
+<script>(function(){try{var t=localStorage.getItem("rds-docs-theme");if(t)document.documentElement.setAttribute("data-theme",t);}catch(e){}})();</script>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="container">
+    <a class="brand" href="index.html">
+      <img class="brand-icon" src="images/icon.png" alt="">
+      Roku Dev Studio
+    </a>
+    <div class="nav-right">
+      <nav class="nav-links">
+        <a href="features.html">Features</a>
+        <a href="install.html" class="active">Install</a>
+        <a href="remote-server.html">Remote Server</a>
+        <a href="https://github.com/paramount-engineering/roku-dev-studio" class="nav-cta" target="_blank" rel="noopener noreferrer">GitHub</a>
+      </nav>
+      <button class="theme-toggle" aria-label="Toggle theme" title="Theme: System (click to change)"><svg class="icon" width="16" height="16"><use href="assets/icons.svg#icon-devices"></use></svg></button>
+      <button class="nav-toggle" aria-label="Toggle navigation" aria-expanded="false"><svg class="icon" width="16" height="16"><use href="assets/icons.svg#icon-menu"></use></svg></button>
+    </div>
+  </div>
+</header>
+
+<section class="section container" style="padding-bottom: 0;">
+  <div class="section-title-eyebrow">Get started</div>
+  <h1 class="section-heading">Install &amp; Build</h1>
+  <p class="section-lead">Roku Dev Studio is an npm workspace monorepo. Run everything from the repository root so the workspaces link correctly. See the full <a href="https://github.com/paramount-engineering/roku-dev-studio/blob/main/INSTALLATION.md" target="_blank" rel="noopener noreferrer">INSTALLATION.md</a> for the complete guide, including the monorepo layout and the CI release pipeline.</p>
+</section>
+
+<div class="container">
+
+<section class="doc-section" id="requirements">
+  <h2>Requirements</h2>
+  <ul>
+    <li><strong>Node.js 24.17+</strong></li>
+    <li><strong>npm</strong> (bundled with Node.js)</li>
+    <li>A Roku device on your local network, or a remote server for remote access</li>
+  </ul>
+  <p class="doc-kicker">Building distributables also needs platform tools: Xcode Command Line Tools (macOS), Windows SDK (Windows, for the NSIS installer), or standard build essentials — gcc, make, etc. (Linux).</p>
+</section>
+
+<section class="doc-section" id="quick-start">
+  <h2>Quick Start (Development)</h2>
+  <ul>
+    <li><strong>Install dependencies</strong> (from repo root):
+      <pre><code>npm install</code></pre>
+    </li>
+    <li><strong>Run the app:</strong>
+      <pre><code>npm start</code></pre>
+    </li>
+    <li><strong>Optional — verify TypeScript</strong> across every workspace (API, Electron main/preload, renderer, remote server):
+      <pre><code>npm run typecheck</code></pre>
+    </li>
+  </ul>
+</section>
+
+<section class="doc-section" id="building">
+  <h2>Building Distributable Apps</h2>
+  <h3>macOS</h3>
+  <pre><code>npm run build:mac</code></pre>
+  <p>Creates, under <code>apps/roku-dev-studio/dist/</code>:</p>
+  <ul>
+    <li><code>mac/arm64/Roku Dev Studio-{version}-arm64.dmg</code> — Apple Silicon installer</li>
+    <li><code>mac/arm64/Roku Dev Studio-{version}-arm64-mac.zip</code> — portable Apple Silicon app</li>
+  </ul>
+  <p>Intel Mac builds are no longer produced by default; build locally (deprecated) with <code>npm run build:mac:intel</code>.</p>
+
+  <h3>Windows</h3>
+  <pre><code>npm run build:win</code></pre>
+  <p>Creates a Windows installer (<code>Roku Dev Studio Setup {version}.exe</code>) and a portable executable, both x64.</p>
+
+  <h3>Linux</h3>
+  <pre><code>npm run build:linux</code></pre>
+  <p>Creates a Debian package (<code>.deb</code>, x64 &amp; arm64) and an AppImage (x64 &amp; arm64).</p>
+
+  <h3>All platforms</h3>
+  <pre><code>npm run build:all</code></pre>
+</section>
+
+<section class="doc-section" id="platform-notes">
+  <h2>Per-platform notes</h2>
+  <h3>macOS — code signing &amp; notarization</h3>
+  <p>By default, <code>electron-builder</code> produces a signed-but-not-notarized build if a Developer ID Application certificate is present in your login keychain, and an ad-hoc-signed build otherwise. Without a Developer ID, end users need to clear quarantine before launching:</p>
+  <pre><code>xattr -cr "/Applications/Roku Dev Studio.app"</code></pre>
+  <p>Full one-time signing/notarization setup is in the repo's <a href="https://github.com/paramount-engineering/roku-dev-studio/blob/main/.discussion-docs/macos-code-signing-and-notarization.md" target="_blank" rel="noopener noreferrer">code-signing notes</a>.</p>
+
+  <h3>Windows</h3>
+  <p>No code signing is configured by default — Windows shows a SmartScreen warning until you add an Authenticode certificate. Cross-building from macOS/Linux requires Wine; the reliable option is building on Windows (or in a Windows VM / GitHub Actions runner).</p>
+
+  <h3>Linux</h3>
+  <p>The <code>.deb</code> target lists its runtime dependencies in <code>package.json</code> → <code>build.deb.depends</code>:</p>
+  <pre><code>libgtk-3-0  libnotify4  libnss3  libxss1  libxtst6  xdg-utils  libatspi2.0-0  libuuid1</code></pre>
+  <p>Debian/Ubuntu users install with <code>sudo apt install ./Roku Dev Studio-*.deb</code> (apt resolves the depends automatically). The AppImage is self-contained — <code>chmod +x</code> and run.</p>
+</section>
+
+<section class="doc-section" id="troubleshooting">
+  <h2>Troubleshooting</h2>
+  <h3>Connection issues</h3>
+  <ul>
+    <li>Ensure the Roku and your computer are on the same network</li>
+    <li><strong>Control by Mobile Apps (ECP):</strong> Settings → System → Advanced system settings → Control by mobile apps → Network access. Roku's <em>Disabled</em> mode blocks remote/keypress entirely; <em>Limited</em> allows text input / app launch / query but not full remote keypress; <em>Permissive</em> needs this computer on the same subnet; <em>Enabled</em> gives full control on private network addresses</li>
+    <li>Allow connections on port 8060 in your firewall</li>
+  </ul>
+  <h3>Building issues</h3>
+  <ul>
+    <li><strong>macOS code signing:</strong> distribution needs an Apple Developer certificate</li>
+    <li><strong>Windows builds on macOS:</strong> use a Windows VM or GitHub Actions</li>
+    <li><strong>Linux builds:</strong> ensure the dependencies above are installed on the build host</li>
+  </ul>
+</section>
+
+</div>
+
+<footer class="site-footer">
+  <div class="container">
+    <div class="footer-brand">
+      <div>
+        <a class="footer-org" href="https://github.com/paramount-engineering" target="_blank" rel="noopener noreferrer">Paramount Engineering</a> ·
+        <a class="footer-org" href="https://github.com/paramount-engineering/roku-dev-studio" target="_blank" rel="noopener noreferrer">Roku Dev Studio</a>
+      </div>
+      <div class="footer-sub">
+        <a href="https://github.com/paramount-engineering/roku-dev-studio/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">MIT License</a> ·
+        <a href="https://github.com/hdonapati" target="_blank" rel="noopener noreferrer">created by Hareendra Donapati</a>
+      </div>
+    </div>
+    <span>
+      <a href="https://github.com/paramount-engineering/roku-dev-studio/blob/main/INSTALLATION.md" target="_blank" rel="noopener noreferrer"><code>INSTALLATION.md</code></a>
+    </span>
+  </div>
+</footer>
+
+<script src="assets/nav.js?v=9"></script>
+</body>
+</html>

@@ -11,7 +11,7 @@
 - **Visual Remote Interface:** On-screen remote with all buttons
 - **Works Locally & Remotely:** Control devices on local network or via remote server
 - **Floating Remote:** A draggable mini remote you can pop open on any tab that doesn't already show a full remote (e.g. Query, App Connector), so D-pad control stays one click away while you work elsewhere
-![Remote](images/REMOTE.png)
+![Remote](docs/images/REMOTE.png)
 
 <a id="device-performance"></a>
 
@@ -21,7 +21,7 @@
 - **Settings → Device Performance:** Tune chart **sample interval** and **history** window; optional **Remember 'Show Device Performance'** restores whether the quad was on **per device** between sessions.
 - **Action Scripts:** Add **Device Performance** steps to capture chart cards into run results (for example PNGs included when you export results to PDF).
 
-![Remote Section with Show Device Performance on — BrightScript object counts (top right), CPU usage with total/user/kernel hover tooltip (bottom left), and System Memory used/resident/anonymous/shared/limit chart (bottom right)](images/REMOTE_WITH_DEVICE_PERFORMANCE.png)
+![Remote Section with Show Device Performance on — BrightScript object counts (top right), CPU usage with total/user/kernel hover tooltip (bottom left), and System Memory used/resident/anonymous/shared/limit chart (bottom right)](docs/images/REMOTE_WITH_DEVICE_PERFORMANCE.png)
 
 <a id="device-discovery"></a>
 
@@ -40,7 +40,7 @@
 - **Deep-Linking:** Launch apps with specific content (movies, shows, channels)
 - **HDMI Inputs:** Switch to HDMI inputs on TV devices
 - **Remote Launch:** Launch apps on remote devices via server
-![Apps](images/APPS.png)
+![Apps](docs/images/APPS.png)
 
 <a id="device-queries"></a>
 
@@ -56,7 +56,7 @@
 - **System Commands:** Execute system-level commands via telnet (port 8080)
 - **Command History:** View and re-run previous commands
 - **Custom Queries:** Run any custom ECP query endpoint
-![Queries](images/QUERIES.png)
+![Queries](docs/images/QUERIES.png)
 
 <a id="dev-app-management"></a>
 
@@ -67,7 +67,7 @@
 - **Delete Sideload:** Remove sideloaded channel remotely
 - **Dev App Status:** View currently sideloaded app information
 - **Progress Tracking:** Real-time upload progress for sideloading
-![Dev App](images/DEV_APP.png)
+![Dev App](docs/images/DEV_APP.png)
 
 <a id="sideload-relay"></a>
 
@@ -86,7 +86,7 @@
 - **Real-time Output:** See console log output in real-time
 - **System Commands:** Execute system commands via telnet (port 8080)
 - **Log Export:** Save console logs to file
-![Console](images/TELNET_CONSOLE.png)
+![Console](docs/images/TELNET_CONSOLE.png)
 
 <a id="brightscript-debugger"></a>
 
@@ -108,8 +108,8 @@
 - **RALE built-ins:** Node lookup (`getNodeById`, `getNodeByName`) plus a full **registry editor** — get all sections, add / update section, remove section, set / edit / remove section key, clear all
 - **Integration Guide modal:** In-app TrackerTask tutorial with BrightScript snippets, supported parameter types, and a *Save TrackerTask.xml* button
 - **Remote Function Calls:** Works on local and remote devices via server
-![App Connector](images/APP_CONNECTOR.png)
-![Integration Guide modal — TrackerTask tutorial with BrightScript snippets and Save TrackerTask.xml](images/INTEGRATION_GUIDE_MODAL.png)
+![App Connector](docs/images/APP_CONNECTOR.png)
+![Integration Guide modal — TrackerTask tutorial with BrightScript snippets and Save TrackerTask.xml](docs/images/INTEGRATION_GUIDE_MODAL.png)
 
 <a id="network-inspector"></a>
 
@@ -139,8 +139,8 @@
 - **PDF export:** Run results — including screenshots and Device Performance chart cards — exportable as PDF
 - **Headless / CLI:** Same scripts run from the terminal via [`rds script run`](packages/roku-dev-studio-api/README.md#cli-rds)
 - **Standalone window:** *File → View and Manage Action Scripts* (`Ctrl/Cmd+Shift+A`) opens the Builder over your saved-scripts library independent of any connected device — pick a script, edit steps / JSON, Save / Duplicate / Delete, or push it into the main window's Builder
-![Action Scripts Builder](images/ACTION-SCRIPTS_BUILDER.png)
-![Action Scripts Executor](images/ACTION-SCRIPTS_EXECUTOR.png)
+![Action Scripts Builder](docs/images/ACTION-SCRIPTS_BUILDER.png)
+![Action Scripts Executor](docs/images/ACTION-SCRIPTS_EXECUTOR.png)
 
 <a id="ai-agents-mcp-server"></a>
 
@@ -152,7 +152,7 @@
 - **Passwords stay local:** Sideload / screenshot / delete-sideload reuse the password the device panel remembered — the agent never sends one
 - See **[`packages/roku-dev-studio-mcp/README.md`](packages/roku-dev-studio-mcp/README.md)** for the tool catalog, bridge protocol, and design notes
 
-![Settings → MCP Server panel](images/SETTINGS_MCP_SERVER.png)
+![Settings → MCP Server panel](docs/images/SETTINGS_MCP_SERVER.png)
 
 Each row is one supported host (Cursor, Claude Desktop, VS Code, Visual Studio Code Insiders, VSCodium, ChatGPT Desktop, Windsurf). Toggling a row writes / removes only the `roku-dev-studio` entry in that client's MCP config — other entries in the same file are left untouched. **Open Config File** opens the rendered JSON for inspection. Hosts that aren't installed are disabled with an inline hint.
 
@@ -166,9 +166,9 @@ Each row is one supported host (Cursor, Claude Desktop, VS Code, Visual Studio C
 
 | Fiddle window (desktop) |
 |:---:|
-| ![BrightScript Fiddle window — Monaco editor + live debug console](images/BRIGHTSCRIPT_FIDDLE.png) |
+| ![BrightScript Fiddle window — Monaco editor + live debug console](docs/images/BRIGHTSCRIPT_FIDDLE.png) |
 | **Same snippet running on the Roku** |
-| ![Fiddle channel on the Roku — source mirrored on screen, hint footer reports run state](images/BRIGHTSCRIPT_FIDDLE_ON_TV.png) |
+| ![Fiddle channel on the Roku — source mirrored on screen, hint footer reports run state](docs/images/BRIGHTSCRIPT_FIDDLE_ON_TV.png) |
 
 <a id="log-file-viewer"></a>
 
@@ -198,7 +198,7 @@ Each row is one supported host (Cursor, Claude Desktop, VS Code, Visual Studio C
 - **Device Discovery:** Automatically discovers all Roku devices on remote network
 - **All Features Supported:** Remote control, queries, sideloading, console, and RALE work remotely
 - **Swagger API:** Interactive API documentation for remote server
-![Remote server Swagger UI at /api-docs](images/REMOTE_SERVER_SWAGGER.png)
+![Remote server Swagger UI at /api-docs](docs/images/REMOTE_SERVER_SWAGGER.png)
 
 Setup instructions (running the relay server, opening the port, connecting from the desktop app) live in the **[remote server package README](packages/roku-dev-studio-remote-server/README.md)**.
 
@@ -217,9 +217,9 @@ Open with `Ctrl/Cmd+,` (or *Roku Dev Studio → Settings* on macOS, *File → Se
 
 | General | Action Scripts |
 |:---:|:---:|
-| ![Settings → General](images/SETTINGS_GENERAL.png) | ![Settings → Action Scripts](images/SETTINGS_ACTION_SCRIPTS.png) |
+| ![Settings → General](docs/images/SETTINGS_GENERAL.png) | ![Settings → Action Scripts](docs/images/SETTINGS_ACTION_SCRIPTS.png) |
 | **Device Performance** | **Timing & Network** |
-| ![Settings → Device Performance](images/SETTINGS_DEVICE_PERFORMANCE.png) | ![Settings → Timing & Network](images/SETTINGS_TIMING_NETWORK.png) |
+| ![Settings → Device Performance](docs/images/SETTINGS_DEVICE_PERFORMANCE.png) | ![Settings → Timing & Network](docs/images/SETTINGS_TIMING_NETWORK.png) |
 
 <a id="developer-features"></a>
 
