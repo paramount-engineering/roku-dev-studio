@@ -13,6 +13,10 @@
  */
 
 :root {
+  /* Tells the browser this page is light — without it, native UI (scrollbars, form
+     controls) defaults to light styling even when the dark palette below is active,
+     which is why the sidebar's scrollbar rendered white-on-dark. */
+  color-scheme: light;
   --bg: #ffffff;
   --bg-alt: #f7f6fb;
   --bg-elevated: #ffffff;
@@ -38,6 +42,7 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
+    color-scheme: dark;
     --bg: #08080c;
     --bg-alt: #0e0e14;
     --bg-elevated: #1e1e2a;
@@ -61,6 +66,7 @@
 
 /* Explicit user override (nav toggle) — wins over prefers-color-scheme via specificity. */
 :root[data-theme="dark"] {
+  color-scheme: dark;
   --bg: #08080c;
   --bg-alt: #0e0e14;
   --bg-elevated: #1e1e2a;
@@ -81,6 +87,7 @@
   --shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.5);
 }
 :root[data-theme="light"] {
+  color-scheme: light;
   --bg: #ffffff;
   --bg-alt: #f7f6fb;
   --bg-elevated: #ffffff;
@@ -186,12 +193,25 @@ pre code { background: none; padding: 0; color: var(--text); }
   display: flex;
   align-items: center;
   gap: 10px;
-  font-weight: 700;
   font-size: 1.05em;
-  color: var(--text);
 }
 .brand:hover { text-decoration: none; }
 .brand-icon { width: 30px; height: 30px; border-radius: 8px; flex: none; }
+/* Same animated gradient text treatment as the app's own .welcome-title
+   (apps/roku-dev-studio/renderer/index.html) — purple -> cyan -> purple, sliding via
+   background-position over a 200%-wide background so the hue drifts smoothly. Applied to
+   a dedicated span (not the whole .brand link) so the gradient is computed across just the
+   text's own box, same as the app — not stretched across the icon + gap too. */
+.brand-text {
+  font-weight: 800;
+  background: linear-gradient(135deg, var(--accent-purple) 0%, var(--accent-cyan) 50%, var(--accent-purple) 100%);
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+  animation: gradientShift 6s ease-in-out infinite;
+}
 .nav-links {
   display: flex;
   gap: 4px;
@@ -268,13 +288,23 @@ pre code { background: none; padding: 0; color: var(--text); }
   text-align: center;
 }
 .hero-wordmark {
-  /* Plain bold text, matching the app's own wordmark treatment (About dialog / titlebar) —
-     no gradient clip, which the app itself never uses for its name. */
+  /* Same animated gradient text treatment as the app's own .welcome-title (the heading on
+     its home tab, apps/roku-dev-studio/renderer/index.html) — see .brand-text above. */
   font-size: clamp(2.2em, 6vw, 3.6em);
-  font-weight: 700;
+  font-weight: 800;
   letter-spacing: -0.02em;
   margin: 20px 0 12px;
-  color: var(--text);
+  background: linear-gradient(135deg, var(--accent-purple) 0%, var(--accent-cyan) 50%, var(--accent-purple) 100%);
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+  animation: gradientShift 6s ease-in-out infinite;
+}
+@keyframes gradientShift {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
 }
 .hero-tagline {
   font-size: clamp(1.05em, 2vw, 1.35em);
@@ -435,6 +465,7 @@ pre code { background: none; padding: 0; color: var(--text); }
 }
 @media (prefers-reduced-motion: reduce) {
   .marquee-track { animation: none; }
+  .hero-wordmark, .brand-text { animation: none; background-position: 0% 50%; }
 }
 @media (max-width: 640px) {
   .marquee-track .feature-card { flex-basis: 240px; width: 240px; }
@@ -514,7 +545,22 @@ pre code { background: none; padding: 0; color: var(--text); }
   gap: 2px;
   max-height: calc(100vh - 104px);
   overflow-y: auto;
+  /* Un-inherit the smooth scroll-behavior set on <html>. Clicking a nav link (especially a
+   * wrapped 2-line one near the edge of this list's own visible scroll window) focuses it,
+   * which makes the browser auto-scroll THIS container to reveal it — inherited smooth
+   * behavior animated that internal scroll at the same time as nav.js's own smooth
+   * window-level scrollIntoView, and the two competing animations looked like a jump. */
+  scroll-behavior: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
 }
+.features-sidebar::-webkit-scrollbar { width: 8px; }
+.features-sidebar::-webkit-scrollbar-track { background: transparent; }
+.features-sidebar::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: var(--radius-sm);
+}
+.features-sidebar::-webkit-scrollbar-thumb:hover { background: var(--accent-purple); }
 .features-nav-link {
   display: flex;
   align-items: center;
@@ -626,3 +672,52 @@ th { color: var(--text-muted); text-transform: uppercase; font-size: 0.78em; let
 .footer-org { font-weight: 700; font-size: 1.05em; color: var(--text); }
 .footer-org:hover { color: var(--accent-purple); }
 .footer-sub { color: var(--text-muted); }
+
+/* ---------- Image lightbox (assets/nav.js) ---------- */
+/* Every screenshot on the site is clickable except the small header logo (.brand-icon),
+   which nav.js excludes by class rather than this needing an opt-in attribute per image. */
+img:not(.brand-icon) { cursor: zoom-in; }
+.lightbox-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(10, 6, 20, 0.86);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 16px;
+  padding: 56px 24px;
+  z-index: 1000;
+}
+.lightbox-overlay.open { display: flex; }
+.lightbox-overlay img {
+  max-width: min(92vw, 1400px);
+  max-height: 78vh;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-lg);
+  cursor: default;
+}
+.lightbox-caption {
+  color: #f2f0f8;
+  font-size: 0.95em;
+  text-align: center;
+  max-width: 80vw;
+}
+.lightbox-caption:empty { display: none; }
+.lightbox-close {
+  position: fixed;
+  top: 20px;
+  right: 24px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.lightbox-close:hover { background: rgba(255, 255, 255, 0.18); }
+.lightbox-close .icon { color: #fff; }

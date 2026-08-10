@@ -47,6 +47,68 @@ document.addEventListener('DOMContentLoaded', function () {
     showFeature(location.hash ? location.hash.slice(1) : defaultFeatureId);
   }
 
+  // Image lightbox: click any screenshot to view it full-size, with its caption (a
+  // <figcaption> when the image is wrapped in a <figure>, else its alt text). Every <img>
+  // qualifies except the small header logo (.brand-icon) — no per-image opt-in needed.
+  var lightboxImages = Array.prototype.filter.call(document.querySelectorAll('img'), function (img) {
+    return !img.classList.contains('brand-icon');
+  });
+  if (lightboxImages.length) {
+    var lbOverlay = document.createElement('div');
+    lbOverlay.className = 'lightbox-overlay';
+    lbOverlay.setAttribute('role', 'dialog');
+    lbOverlay.setAttribute('aria-modal', 'true');
+    lbOverlay.innerHTML =
+      '<button type="button" class="lightbox-close" aria-label="Close">' +
+      '<svg class="icon" width="18" height="18"><use href="assets/icons.svg#icon-x"></use></svg>' +
+      '</button>' +
+      '<img alt="">' +
+      '<div class="lightbox-caption"></div>';
+    document.body.appendChild(lbOverlay);
+
+    var lbImg = lbOverlay.querySelector('img');
+    var lbCaption = lbOverlay.querySelector('.lightbox-caption');
+    var lbClose = lbOverlay.querySelector('.lightbox-close');
+    var lastFocused = null;
+
+    var closeLightbox = function () {
+      lbOverlay.classList.remove('open');
+      lbImg.src = '';
+      if (lastFocused) lastFocused.focus();
+    };
+
+    var openLightbox = function (img) {
+      lastFocused = img;
+      lbImg.src = img.currentSrc || img.src;
+      var figure = img.closest('figure');
+      var caption = figure ? figure.querySelector('figcaption') : null;
+      lbCaption.textContent = (caption ? caption.textContent : img.getAttribute('alt') || '').trim();
+      lbOverlay.classList.add('open');
+      lbClose.focus();
+    };
+
+    lightboxImages.forEach(function (img) {
+      img.addEventListener('click', function () { openLightbox(img); });
+    });
+
+    lbClose.addEventListener('click', closeLightbox);
+
+    // Backdrop click-to-close, mousedown-latched: only closes when BOTH the press AND the
+    // release land on the overlay itself (not the image/caption/close button) — a plain
+    // click listener would also fire after a drag-select that starts on the image and is
+    // released over the backdrop, closing the lightbox out from under an unrelated gesture.
+    var backdropPressed = false;
+    lbOverlay.addEventListener('mousedown', function (e) { backdropPressed = e.target === lbOverlay; });
+    lbOverlay.addEventListener('mouseup', function (e) {
+      if (backdropPressed && e.target === lbOverlay) closeLightbox();
+      backdropPressed = false;
+    });
+
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && lbOverlay.classList.contains('open')) closeLightbox();
+    });
+  }
+
   // Theme: 'light' | 'dark' | null (null = follow system, the default — see assets/style.css).
   // The choice is applied instantly in <head> (before paint, see the inline script in each
   // page) to avoid a flash of the wrong theme; this only handles the click-to-cycle + icon sync.
