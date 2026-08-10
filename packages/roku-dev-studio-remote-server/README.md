@@ -136,7 +136,7 @@ The server includes interactive API documentation powered by Swagger/OpenAPI 3.0
 
 **Access Swagger UI:** `http://localhost:4951/api-docs`
 
-![Swagger UI at /api-docs](https://raw.githubusercontent.com/paramount-engineering/roku-dev-studio/main/images/REMOTE_SERVER_SWAGGER.png)
+![Swagger UI at /api-docs](https://raw.githubusercontent.com/paramount-engineering/roku-dev-studio/main/docs/images/REMOTE_SERVER_SWAGGER.png)
 
 The Swagger UI provides:
 - Interactive API explorer (Health, Capabilities, Discovery, Device Info, Remote Control, RALE …)

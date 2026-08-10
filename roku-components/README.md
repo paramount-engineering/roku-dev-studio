@@ -47,11 +47,11 @@ Both routes call into your scene via `root.callFunc("GetExternalControlFunctions
 
 Once connected, the **App Connector** tab pulls your channel's function list (via `GetExternalControlFunctions`) into the *Function* picker on the right and exposes the RALE built-ins (`Get Node by ID`, registry CRUD, …) too:
 
-![App Connector connected to a TrackerTask-equipped channel](../images/APP_CONNECTOR.png)
+![App Connector connected to a TrackerTask-equipped channel](../docs/images/APP_CONNECTOR.png)
 
 The **Integration Guide** button (left column, under the connection panel) opens an in-app modal with the worked BrightScript examples for both interface functions, the supported parameter types (`Boolean`, `Integer`, `LongInteger`, `Float`, `Double`, `String`, `roAssociativeArray`, `roArray`, `roList`), end-to-end calling patterns, and a *Save TrackerTask.xml* button:
 
-![Integration Guide modal with TrackerTask + interface-function snippets](../images/INTEGRATION_GUIDE_MODAL.png)
+![Integration Guide modal with TrackerTask + interface-function snippets](../docs/images/INTEGRATION_GUIDE_MODAL.png)
 
 **Hypothetical** function names used in the tutorial (e.g. `PlayContent`, `SetUserPreferences`) are illustrative only — your scene exposes whatever you want via `GetExternalControlFunctions`.
 
@@ -88,7 +88,7 @@ When you press **Run** in the Fiddle window the desktop app:
 
 | Fiddle window (desktop) | Same snippet running on the TV |
 |:---:|:---:|
-| ![BrightScript Fiddle window — Monaco editor + live debug console](../images/BRIGHTSCRIPT_FIDDLE.png) | ![Fiddle channel on the Roku — source mirrored on screen, hint footer reports run state](../images/BRIGHTSCRIPT_FIDDLE_ON_TV.png) |
+| ![BrightScript Fiddle window — Monaco editor + live debug console](../docs/images/BRIGHTSCRIPT_FIDDLE.png) | ![Fiddle channel on the Roku — source mirrored on screen, hint footer reports run state](../docs/images/BRIGHTSCRIPT_FIDDLE_ON_TV.png) |
 
 The window's *DEVICE* picker chooses which connected Roku the snippet sideloads onto, the left pane is Monaco with **brighterscript** live linting (the *Run* button is disabled while errors are present), and the right pane streams everything `print` writes to the debug console (port 8085) framed by `[FIDDLE_BEGIN:<id>]` / `[FIDDLE_END:<id>]` so you can tell one run from the next. On the device itself the Fiddle channel mirrors the snippet's source on screen with a footer hint (Up/Down to scroll, run state in the corner) so you can see at a glance what's installed without alt-tabbing back to the desktop.
 
