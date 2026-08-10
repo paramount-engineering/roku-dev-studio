@@ -1,0 +1,28 @@
+# Roku Dev Studio
+
+> A free, open-source (MIT) desktop application for macOS, Windows, and Linux that controls and develops on Roku devices — Remote Control, Device Discovery, App Sideloading, Network Inspection (local MITM HTTPS proxy), a socket-based BrightScript Debugger, Action Scripts automation, an MCP server for AI agents, and a `rds` terminal CLI. Works on the local network or over the internet via a bundled remote relay server.
+
+Built by Paramount Engineering. Roku Dev Studio replaces terminal-only, IDE-locked Roku tooling with a single GUI: discover devices over SSDP, sideload and deep-link channels, inspect decrypted HTTPS traffic, attach a real socket debugger (breakpoints, step execution, variables), automate end-to-end test flows with Action Scripts, and let AI agents (Claude, Cursor, VS Code) drive a real device over MCP — all controllable locally or through a remote relay server for devices at other physical locations.
+
+## Docs
+
+- [Home](https://paramount-engineering.github.io/roku-dev-studio/): Overview, screenshots, and supported platforms
+- [Features](https://paramount-engineering.github.io/roku-dev-studio/features.html): Full feature tour — Remote Control, Device Performance, Device Discovery, App Launcher & Management, Device Queries, Dev App Management, Sideload Relay, Console & Debugging, BrightScript Debugger, App Connector (RALE), Network Inspector, Network Session Viewer, Action Scripts, AI Agents (MCP Server), BrightScript Fiddle, Log File Viewer, Static Channel Analysis, rds CLI, Remote Server Support, Settings, and Developer Features
+- [Install](https://paramount-engineering.github.io/roku-dev-studio/install.html): Quick start for development, building distributable apps per platform, and troubleshooting
+- [Remote Server](https://paramount-engineering.github.io/roku-dev-studio/remote-server.html): Architecture, setup, capabilities, and the Swagger/OpenAPI reference for the remote relay server
+
+## Source (plain Markdown)
+
+- [README](https://github.com/paramount-engineering/roku-dev-studio/blob/main/README.md): Repository overview, workspace layout, and setup
+- [FEATURES.md](https://github.com/paramount-engineering/roku-dev-studio/blob/main/FEATURES.md): Detailed feature reference
+- [INSTALLATION.md](https://github.com/paramount-engineering/roku-dev-studio/blob/main/INSTALLATION.md): Full setup and build guide, including the monorepo layout and CI release pipeline
+- [Remote server package README](https://github.com/paramount-engineering/roku-dev-studio/blob/main/packages/roku-dev-studio-remote-server/README.md): Full REST API endpoint reference and service-install instructions
+
+## Packages
+
+- [roku-dev-studio-remote-server](https://www.npmjs.com/package/roku-dev-studio-remote-server): Standalone HTTP/WebSocket relay server for controlling Roku devices over the internet
+
+## Optional
+
+- [GitHub repository](https://github.com/paramount-engineering/roku-dev-studio): Full source code
+- [LICENSE](https://github.com/paramount-engineering/roku-dev-studio/blob/main/LICENSE): MIT License
