@@ -85,6 +85,17 @@
               </div>
               <div class="settings-row-toggle">
                 <div class="settings-row-text">
+                  <strong data-i18n="settings.tryDemoAppToggle">Show Try Demo App Button</strong>
+                  <span class="settings-row-desc" data-i18n="settings.tryDemoAppToggleDesc">When On, a Try Demo App button appears in the title bar for sideloading the bundled Roku Dev Studio Showcase demo channel to a device.</span>
+                </div>
+                <button type="button" class="btn btn-secondary btn-sm" id="tryDemoAppOpenBtn" data-i18n="settings.tryDemoAppOpenBtn" data-i18n-aria-label="settings.tryDemoAppOpenBtnAria" aria-label="Open the Try Demo App picker" hidden>Open Demo App</button>
+                <label class="settings-toggle-wrap" for="optTryDemoApp">
+                  <input type="checkbox" id="optTryDemoApp" class="settings-toggle-input" role="switch" aria-label="Show Try Demo App button" aria-checked="true" data-i18n-aria-label="settings.tryDemoAppToggleAria" />
+                  <span class="settings-toggle-ui" aria-hidden="true"></span>
+                </label>
+              </div>
+              <div class="settings-row-toggle">
+                <div class="settings-row-text">
                   <strong data-i18n="settings.autoConnect">Auto Connect to Devices</strong>
                   <span class="settings-row-desc" data-i18n="settings.autoConnectDesc">When On, the app will automatically connect to devices that were stayed connected when closing the app in the previous session.</span>
                 </div>

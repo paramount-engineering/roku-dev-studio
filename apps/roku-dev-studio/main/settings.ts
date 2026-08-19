@@ -113,6 +113,7 @@ const RENDERER_READABLE_KEYS = new Set<string>([
   ...RENDERER_WRITABLE_KEYS,
   'devicePerformanceRememberQuadPerDevice',
   'keyboardRemoteShortcutsEnabled',
+  'tryDemoAppEnabled',
   'autoConnectLastDeviceEnabled',
   'rememberSidebarToggle',
   'rememberPasswordsInKeychain',

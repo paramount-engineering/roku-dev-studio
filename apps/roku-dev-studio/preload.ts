@@ -98,6 +98,14 @@ contextBridge.exposeInMainWorld('roku', {
     ipcRenderer.invoke(IPC.RokuSideload, { ip, filePath, password, remoteDebug, serial }),
   deleteSideload: (ip: string, password: string | undefined) =>
     ipcRenderer.invoke(IPC.RokuDeleteSideload, { ip, password }),
+  launchDemoApp: (payload: { ip: string; isRemote?: boolean; serverUrl?: string | null; password: string }) =>
+    ipcRenderer.invoke(IPC.DemoAppLaunch, payload),
+  /** The Settings window's "Demo App" button asked main to open the picker here. */
+  onDemoAppOpenRequested: (callback: () => void) => {
+    const handler = () => callback();
+    ipcRenderer.on(IPC.DemoAppOpenOnMain, handler);
+    return () => ipcRenderer.removeListener(IPC.DemoAppOpenOnMain, handler);
+  },
 
   // Device dev-portal operations (require the developer password)
   reboot: (ip: string, password: string | undefined) =>

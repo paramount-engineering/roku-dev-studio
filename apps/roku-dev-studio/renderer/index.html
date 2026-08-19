@@ -12889,6 +12889,34 @@
     .apply-to-device-select:focus { outline: none; border-color: var(--accent-purple); }
     .apply-to-device-footer { display: flex; justify-content: flex-end; gap: 8px; padding: 16px 24px; border-top: 1px solid var(--border); }
 
+    /* Try Demo App picker modal (try-demo-app-modal.ts) */
+    .try-demo-app-modal { width: min(600px, 92vw); max-width: 600px; }
+    .try-demo-app-explainer { margin: 0 0 18px; color: var(--text-secondary); font-size: 13px; line-height: 1.55; }
+    .try-demo-app-tips { margin: 0 0 18px; padding: 14px 18px; border-radius: 10px; background: var(--bg-tertiary); border: 1px solid var(--border); }
+    .try-demo-app-tips-heading { margin: 0 0 10px; color: var(--text-primary); font-size: 12.5px; font-weight: 600; }
+    .try-demo-app-tips-list { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 10px; }
+    .try-demo-app-tips-list li { color: var(--text-secondary); font-size: 13px; line-height: 1.5; }
+    .try-demo-app-tips-list li strong { color: var(--text-primary); font-weight: 600; }
+    .try-demo-app-tips-list li code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 11.5px;
+      color: #c4b5fd;
+      background: rgba(139, 92, 246, 0.14);
+      border: 1px solid rgba(139, 92, 246, 0.32);
+      border-radius: 5px;
+      padding: 1px 6px;
+      white-space: nowrap;
+    }
+    .try-demo-app-row { display: flex; align-items: center; gap: 10px; }
+    .try-demo-app-select-label { flex: 0 0 auto; font-size: 13px; color: var(--text-secondary); }
+    .try-demo-app-select {
+      flex: 1 1 auto; min-width: 0; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border);
+      background: var(--bg-tertiary); color: var(--text-primary); font-family: inherit; font-size: 13px; cursor: pointer;
+    }
+    .try-demo-app-select:focus { outline: none; border-color: var(--accent-purple); }
+    .try-demo-app-error { margin: 12px 0 0; color: var(--accent-red, #ef4444); font-size: 12.5px; }
+    .try-demo-app-footer { display: flex; justify-content: flex-end; gap: 8px; padding: 16px 24px; border-top: 1px solid var(--border); }
+
     /* Import Action Script modal */
     .action-scripts-import-modal .action-scripts-import-modal-box { max-width: 720px; width: 90vw; max-height: 85vh; display: flex; flex-direction: column; }
     .action-scripts-import-modal .action-scripts-import-modal-box .modal-body { overflow: auto; flex: 1; min-height: 0; }
@@ -13788,6 +13816,38 @@
     }
 
     /*
+     * "Try Demo App" — a one-shot action button (no on/off state, unlike
+     * Floating Remote), so it reuses the same base look/hover/sizing without
+     * the `--on` modifier. Hidden via the `hidden` attribute by app.ts
+     * whenever the Settings → General toggle is off or no dev-mode-enabled
+     * device is known.
+     */
+    .titlebar-try-demo-app-btn {
+      -webkit-app-region: no-drag;
+      display: inline-flex;
+      align-items: center;
+      gap: calc(5px * var(--titlebar-content-scale));
+      height: calc(28px * var(--titlebar-content-scale));
+      padding: 0 calc(10px * var(--titlebar-content-scale));
+      border: 1px solid var(--border);
+      border-radius: calc(6px * var(--titlebar-content-scale));
+      background: transparent;
+      color: var(--text-secondary);
+      font-size: calc(12px * var(--titlebar-content-scale));
+      font-weight: 500;
+      cursor: pointer;
+      transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+    }
+    .titlebar-try-demo-app-btn:hover {
+      color: var(--text-primary);
+      border-color: var(--accent-purple);
+      background: rgba(124, 58, 237, 0.08);
+    }
+    .titlebar-try-demo-app-btn[hidden] {
+      display: none !important;
+    }
+
+    /*
      * Win/Linux app menu — sits in `.titlebar-trailing` immediately to the
      * right of Floating Remote (when visible) and left of the zoom indicator.
      * macOS keeps the system menu bar; this control is hidden there.
@@ -14316,6 +14376,19 @@
       >
         <span class="icon icon-sm" aria-hidden="true"><svg><use href="#icon-gamepad"/></svg></span>
         <span class="titlebar-floating-remote-btn-label" data-i18n="app.floatingRemote">Floating Remote</span>
+      </button>
+      <button
+        type="button"
+        class="titlebar-try-demo-app-btn"
+        id="titlebarTryDemoAppBtn"
+        title="Try the bundled Roku Dev Studio Showcase demo channel"
+        data-i18n-title="app.tryDemoAppTitle"
+        aria-label="Try Demo App"
+        data-i18n-aria-label="app.tryDemoAppAria"
+        hidden
+      >
+        <span class="icon icon-sm" aria-hidden="true"><svg><use href="#icon-play"/></svg></span>
+        <span class="titlebar-try-demo-app-btn-label" data-i18n="app.tryDemoApp">Try Demo App</span>
       </button>
       <button
         type="button"

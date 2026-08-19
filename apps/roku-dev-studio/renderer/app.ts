@@ -23,8 +23,13 @@ import {
   AUTO_CONNECT_LAST_DEVICE_ENABLED,
   REMEMBER_SIDEBAR_TOGGLE,
   NETWORK_INSPECTOR_ENABLED,
+  TRY_DEMO_APP_ENABLED,
   QUERY_ENDPOINTS
 } from './modules/index.js';
+import {
+  openTryDemoAppModal,
+  type TryDemoAppDeviceOption
+} from './components/try-demo-app/try-demo-app-modal.js';
 import { errMessage } from '@shared/platform/err-util.js';
 import { deviceKey } from '@shared/platform/device-identity.js';
 import { S, applyI18n, setLocale } from '@shared/strings/index.js';
@@ -698,11 +703,81 @@ function registerMcpConnectFlow(): void {
 }
 
 /**
- * Auto-connect Sideload Relay targets in the UI. When the relay fans a build out
- * to a device, open that device as a connected tab here (if it isn't already)
- * and connect its console — so a device that wasn't open in RDS shows up
- * connected right after sideloading. `connectDevice`/`connectRemoteDevice` are
- * idempotent (they just activate the existing tab when already connected).
+ * Ensure a device's tab is open and its Console is connected after a successful sideload —
+ * shared by Sideload Relay's auto-connect and "Try Demo App" (both fire this once a build has
+ * landed on a device that may or may not already be open in RDS).
+ *
+ * `connectDevice`/`connectRemoteDevice` are idempotent (an already-connected device just
+ * re-activates its existing tab), but that re-activation calls `activateTab()`, which
+ * unconditionally strips + re-applies the tab/device-card `active` class and re-runs
+ * `checkDeviceConnection()` — for an ALREADY-open, already-connected tab this visibly replayed
+ * a "connecting" flicker for no reason, so this only calls them when the tab isn't open yet.
+ * The Console connect stays unconditional either way: `connectTelnet()` is a clean no-op when
+ * already connected (`if (isConnected) return`), so a dropped/never-opened console still comes
+ * up, no matter the device tab's prior state.
+ */
+function ensureDeviceConnectedWithConsole(
+  ip: string,
+  opts: { isRemote?: boolean; locationId?: string; fallbackDevice?: Record<string, unknown> } = {}
+): void {
+  const { isRemote, locationId, fallbackDevice } = opts;
+  let tabId: string;
+
+  if (isRemote && locationId) {
+    const connKey = `${locationId}:${ip}`;
+    const existing = state.connectedDevices.get(connKey) as { tabId?: string } | undefined;
+    if (existing?.tabId) {
+      tabId = existing.tabId;
+    } else {
+      // Remote target — route through connectRemoteDevice (keyed by `${locationId}:${ip}`,
+      // wired for the remote transport) instead of the local-only connectDevice, which would
+      // open a direct-IP tab for a device this machine can't actually reach. Prefer a full
+      // device object from the scan cache; fall back to the caller's hint (or a minimal one).
+      let liveDevice: Record<string, unknown> | undefined;
+      const location = state.remoteLocations.get(locationId) as
+        | { devices?: Map<string, unknown>; serverUrl?: string }
+        | undefined;
+      for (const dev of location?.devices?.values() || []) {
+        if ((dev as { ip?: string }).ip === ip) {
+          liveDevice = dev as Record<string, unknown>;
+          break;
+        }
+      }
+      if (!liveDevice) {
+        liveDevice = fallbackDevice || { ip, deviceName: ip, modelName: 'Roku', serverUrl: location?.serverUrl };
+      }
+      connectRemoteDevice(liveDevice, locationId);
+      tabId = `tab-remote-${locationId}-${ip.replace(/\./g, '-')}`;
+    }
+  } else {
+    const existing = state.connectedDevices.get(ip) as { tabId?: string } | undefined;
+    if (existing?.tabId) {
+      tabId = existing.tabId;
+    } else {
+      // Prefer a full device object from the scan cache; fall back to the caller's hint (or a
+      // minimal one — enough for the tab/panel + passwordless ECP/telnet).
+      let liveDevice: Record<string, unknown> | undefined;
+      for (const dev of state.devices.values()) {
+        if ((dev as { ip?: string }).ip === ip) {
+          liveDevice = dev as Record<string, unknown>;
+          break;
+        }
+      }
+      if (!liveDevice) liveDevice = fallbackDevice || { ip, deviceName: ip, modelName: 'Roku' };
+      connectDevice(liveDevice);
+      tabId = `tab-${ip.replace(/\./g, '-')}`;
+    }
+  }
+
+  const panel = document.getElementById(tabId) as (HTMLElement & { connectTelnet?: () => Promise<void> }) | null;
+  if (panel?.connectTelnet) {
+    void panel.connectTelnet().catch((e: unknown) => rendererWarn('[auto console connect] failed', e));
+  }
+}
+
+/**
+ * Auto-connect Sideload Relay targets in the UI. When the relay fans a build out to a device,
+ * open that device as a connected tab (if it isn't already) and connect its console.
  */
 function registerRelayAutoConnect(): void {
   const roku = (window as any).roku;
@@ -721,59 +796,13 @@ function registerRelayAutoConnect(): void {
     if (!r || !r.ip || r.done !== true || r.install?.state !== 'ok') return;
     const ip = r.ip;
     try {
-      let connKey: string;
-      if (r.remote && r.locationId) {
-        // Remote target — route through connectRemoteDevice (keyed by `${locationId}:${ip}`,
-        // wired for the remote transport) instead of the local-only connectDevice, which would
-        // open a direct-IP tab for a device this machine can't actually reach and re-open a new
-        // one on every subsequent sideload since it never matches the real remote connection.
-        let device: Record<string, unknown> | undefined;
-        const location = state.remoteLocations.get(r.locationId) as { devices?: Map<string, unknown> } | undefined;
-        for (const dev of location?.devices?.values() || []) {
-          if ((dev as { ip?: string }).ip === ip) {
-            device = dev as Record<string, unknown>;
-            break;
-          }
-        }
-        if (!device) device = { ip, deviceName: r.name || ip, modelName: r.name || 'Roku', serverUrl: r.serverUrl };
-        connectRemoteDevice(device, r.locationId);
-        connKey = `${r.locationId}:${ip}`;
-      } else {
-        // Prefer a full device object from the scan cache; fall back to a minimal
-        // one built from the relay target (enough for the tab/panel + passwordless
-        // ECP/telnet).
-        let device: Record<string, unknown> | undefined;
-        for (const dev of state.devices.values()) {
-          if ((dev as { ip?: string }).ip === ip) {
-            device = dev as Record<string, unknown>;
-            break;
-          }
-        }
-        if (!device) device = { ip, deviceName: r.name || ip, modelName: r.name || 'Roku' };
-
-        // connectDevice is idempotent — a brand-new device opens a tab; an
-        // already-connected one just re-activates its existing tab.
-        connectDevice(device);
-        connKey = ip;
-      }
-
-      // Always bring the console up on a successful relay — no matter the prior
-      // state (device fresh or already-connected, console dropped, never up, or
-      // even auto-console off for this run). `connectTelnet` is idempotent
-      // (`if (isConnected) return`), so a healthy console is a no-op — no bounce;
-      // a dropped/never-connected one gets (re)connected. Defer a tick so a
-      // freshly-created panel finishes wiring.
-      const conn = state.connectedDevices.get(connKey) as { tabId?: string } | undefined;
-      const panel = conn?.tabId ? (document.getElementById(conn.tabId) as { connectTelnet?: () => Promise<void> } | null) : null;
-      if (panel?.connectTelnet) {
-        setTimeout(() => {
-          try {
-            void panel.connectTelnet!();
-          } catch (e) {
-            rendererWarn('[SideloadRelay] auto console connect failed', e);
-          }
-        }, 0);
-      }
+      ensureDeviceConnectedWithConsole(ip, {
+        isRemote: !!r.remote,
+        locationId: r.locationId,
+        fallbackDevice: r.remote
+          ? { ip, deviceName: r.name || ip, modelName: r.name || 'Roku', serverUrl: r.serverUrl }
+          : { ip, deviceName: r.name || ip, modelName: r.name || 'Roku' }
+      });
     } catch (e) {
       rendererError('[SideloadRelay] auto-connect failed', e);
     }
@@ -2806,6 +2835,7 @@ function updateTabBarVisibility() {
   const noDevices = state.connectedDevices.size === 0;
   elements.tabBar.classList.toggle('hidden', onHome && noDevices);
   updateTitlebarFloatingRemoteVisibility();
+  updateTryDemoAppButtonVisibility();
 }
 
 /**
@@ -2824,6 +2854,35 @@ function updateTitlebarFloatingRemoteVisibility() {
   if (!hasConnected) {
     refreshFloatingRemote();
   }
+}
+
+/**
+ * "Try Demo App" is hidden unless the Settings → General toggle is on AND at
+ * least one known device has `developerEnabled === true` — same predicate
+ * `buildFiddleDeviceSnapshot()` (defined inside `init()`) filters on, since
+ * sideloading requires it regardless of whether the device is currently
+ * "connected" in the ECP sense (unlike Floating Remote, which needs a live
+ * connected device). Duplicated here as a lightweight existence check
+ * (no password lookups) so this module-top-level function doesn't need
+ * access to `init()`'s local closure.
+ */
+function hasAnyDevModeDevice(): boolean {
+  for (const device of state.devices.values()) {
+    if (device.developerEnabled === true) return true;
+  }
+  for (const location of state.remoteLocations.values()) {
+    if (!location || !location.devices) continue;
+    for (const device of location.devices.values()) {
+      if (device.developerEnabled === true) return true;
+    }
+  }
+  return false;
+}
+
+function updateTryDemoAppButtonVisibility() {
+  const btn = document.getElementById('titlebarTryDemoAppBtn');
+  if (!(btn instanceof HTMLElement)) return;
+  btn.hidden = !TRY_DEMO_APP_ENABLED || !hasAnyDevModeDevice();
 }
 
 /**
@@ -5543,6 +5602,7 @@ async function init() {
     cachedRememberedDeviceList = undefined;
     cancelPostStartupSidebarGraceTimer();
     refreshAllNetworkTabVisibility();
+    updateTryDemoAppButtonVisibility();
     if (!REMEMBER_SIDEBAR_TOGGLE) {
       postStartupSidebarDecisionComplete = true;
       sidebarSessionKeepExpandedOverride = false;
@@ -5603,6 +5663,28 @@ async function init() {
     // buttons, so this button scans everything: local + every remote location.
     elements.titlebarScanBtn.addEventListener('click', () => {
       void runFullUserScan();
+    });
+  }
+  const tryDemoAppBtn = document.getElementById('titlebarTryDemoAppBtn');
+  if (tryDemoAppBtn) {
+    tryDemoAppBtn.addEventListener('click', () => {
+      openTryDemoAppModal({
+        initialDevices: buildTryDemoAppDeviceOptions(),
+        rescan: buildTryDemoAppDeviceOptions,
+        onLaunched: (device) => connectAndOpenConsoleForTryDemoAppDevice(device.id)
+      });
+    });
+  }
+  // Settings window's "Demo App" button (shown when the titlebar button is toggled off) relays
+  // through main to open the same picker here — the titlebar button itself may be hidden, so
+  // this is the only way to reach it in that state.
+  if (typeof window.roku.onDemoAppOpenRequested === 'function') {
+    window.roku.onDemoAppOpenRequested(() => {
+      openTryDemoAppModal({
+        initialDevices: buildTryDemoAppDeviceOptions(),
+        rescan: buildTryDemoAppDeviceOptions,
+        onLaunched: (device) => connectAndOpenConsoleForTryDemoAppDevice(device.id)
+      });
     });
   }
   if (elements.manualConnectBtn) {
@@ -5702,6 +5784,44 @@ async function init() {
     }
 
     return out;
+  }
+
+  // "Try Demo App" (titlebar button): same underlying device snapshot as
+  // Fiddle, reshaped into the modal's {id, label} + sideload-descriptor shape.
+  function buildTryDemoAppDeviceOptions(): TryDemoAppDeviceOption[] {
+    return buildFiddleDeviceSnapshot().map((d) => ({
+      id: d.id,
+      label: d.modelName ? `${d.name} (${d.modelName})` : d.name,
+      ip: d.ip,
+      isRemote: d.isRemote,
+      serverUrl: d.serverUrl,
+      password: d.password
+    }));
+  }
+
+  // "Try Demo App": after a successful sideload, bring the target device's tab up (opening
+  // one if it wasn't already) and connect its Console — same idempotent
+  // connectDevice/connectRemoteDevice + panel.connectTelnet() pattern as
+  // registerRelayAutoConnect() and applyScriptToDevice(), so a device that wasn't open in RDS
+  // shows up connected with its console live right after the demo channel launches.
+  // Reuses the exact same "open tab if needed, always ensure Console is connected" behavior as
+  // Sideload Relay's auto-connect (ensureDeviceConnectedWithConsole, module scope above).
+  function connectAndOpenConsoleForTryDemoAppDevice(id: string): void {
+    for (const device of state.devices.values()) {
+      if (getDeviceId(device) === id) {
+        ensureDeviceConnectedWithConsole(device.ip, { fallbackDevice: device });
+        return;
+      }
+    }
+    for (const [locationId, location] of state.remoteLocations) {
+      if (!location || !location.devices) continue;
+      for (const device of location.devices.values()) {
+        if (getDeviceId(device) === id) {
+          ensureDeviceConnectedWithConsole(device.ip, { isRemote: true, locationId, fallbackDevice: device });
+          return;
+        }
+      }
+    }
   }
 
   // "Apply to Device" (from the View & Manage Action Scripts window): show a device picker, then

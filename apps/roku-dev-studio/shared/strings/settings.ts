@@ -211,6 +211,12 @@ export const settings = {
   useKeyboardRemoteDesc:
     'When On, you can use the keyboard to control the Roku. Keyboard shortcuts are listed in the Remote Help modal.',
   useKeyboardRemoteAria: 'Roku Remote - Use Keyboard ',
+  tryDemoAppToggle: 'Show Try Demo App Button',
+  tryDemoAppToggleDesc:
+    'When On, a Try Demo App button appears in the title bar for sideloading the bundled Roku Dev Studio Showcase demo channel to a device.',
+  tryDemoAppToggleAria: 'Show Try Demo App button',
+  tryDemoAppOpenBtn: 'Open Demo App',
+  tryDemoAppOpenBtnAria: 'Open the Try Demo App picker',
   autoConnect: 'Auto Connect to Devices',
   autoConnectDesc:
     'When On, the app will automatically connect to devices that were stayed connected when closing the app in the previous session.',

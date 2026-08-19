@@ -26,6 +26,7 @@ const { broadcastPrivacyModeToAllWindows } = require('./main/privacy-broadcast')
 const { S, setLocale, getLocale, effectiveLocale } = require('@shared/strings/index.js');
 const { broadcastLocaleToAllWindows } = require('./main/locale-broadcast');
 const { registerBsFiddleIpc } = require('./main/ipc/bs-fiddle-handlers');
+const { registerDemoAppIpc } = require('./main/ipc/demo-app-handlers');
 const { openStaticAnalysisWindow } = require('./main/static-analysis-window');
 const { registerStaticAnalysisIpc } = require('./main/ipc/static-analysis-handlers');
 const { killAllScaRuns } = require('./main/static-analysis/sca-runner');
@@ -710,6 +711,7 @@ app.whenReady().then(() => {
   registerSecretsIpc(ipcMain);
   registerFiddleIpc(ipcMain, () => (mainWindow && !mainWindow.isDestroyed() ? mainWindow.webContents : null));
   registerBsFiddleIpc(ipcMain);
+  registerDemoAppIpc(ipcMain);
   registerStaticAnalysisIpc(ipcMain, app);
 
   // Current language preference, so a window opened while a non-default locale is active can
@@ -802,6 +804,18 @@ app.whenReady().then(() => {
       if (mainWindow.isMinimized()) mainWindow.restore();
       mainWindow.focus();
       mainWindow.webContents.send(IPC.ActionScriptApplyToDeviceOnMain, { deviceId: p.deviceId, json: p.json });
+      return { success: true };
+    }
+    return { success: false };
+  });
+
+  // Settings window's "Demo App" button (shown when the titlebar button is toggled off): bring
+  // the main window forward and have it open the same picker modal the titlebar button opens.
+  ipcMain.handle(IPC.DemoAppRequestOpen, () => {
+    if (mainWindow && !mainWindow.isDestroyed() && mainWindow.webContents && !mainWindow.webContents.isDestroyed()) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.focus();
+      mainWindow.webContents.send(IPC.DemoAppOpenOnMain);
       return { success: true };
     }
     return { success: false };

@@ -26,6 +26,8 @@ import { menu } from './menu.js';
 import { staticAnalysis } from './static-analysis.js';
 // Placeholder: reuse the English Debugger strings until a Ukrainian translation exists.
 import { debuggerStrings } from '../debugger.js';
+// Placeholder: reuse the English "Try Demo App" strings until a Ukrainian translation exists.
+import { tryDemoApp } from '../try-demo-app.js';
 
 export const uk = {
   common,
@@ -51,4 +53,5 @@ export const uk = {
   menu,
   debugger: debuggerStrings,
   staticAnalysis,
+  tryDemoApp,
 };

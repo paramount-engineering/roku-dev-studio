@@ -208,6 +208,12 @@ export const settings = {
   useKeyboardRemoteDesc:
     'Când este activat, puteți folosi tastatura pentru a controla dispozitivul Roku. Comenzile rapide de la tastatură sunt listate în fereastra de ajutor pentru telecomandă.',
   useKeyboardRemoteAria: 'Telecomandă Roku - folosește tastatura ',
+  tryDemoAppToggle: 'Afișează Butonul Încearcă Aplicația Demo',
+  tryDemoAppToggleDesc:
+    'Când este activat, apare un buton Încearcă Aplicația Demo în bara de titlu pentru a încărca canalul demonstrativ inclus Roku Dev Studio Showcase pe un dispozitiv.',
+  tryDemoAppToggleAria: 'Afișează butonul încearcă aplicația demo',
+  tryDemoAppOpenBtn: 'Deschide Aplicația Demo',
+  tryDemoAppOpenBtnAria: 'Deschide selectorul încearcă aplicația demo',
   autoConnect: 'Conectare automată la dispozitive',
   autoConnectDesc:
     'Când este activat, aplicația se va conecta automat la dispozitivele care au rămas conectate la închiderea aplicației în sesiunea anterioară.',

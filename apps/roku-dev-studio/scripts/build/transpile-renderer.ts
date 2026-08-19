@@ -396,6 +396,7 @@ export function transpileRenderer(appDir: string): void {
     path.join(rendererRoot, 'components', 'modals'),
     path.join(rendererRoot, 'components', 'log-file-viewer'),
     path.join(rendererRoot, 'components', 'fiddle'),
+    path.join(rendererRoot, 'components', 'try-demo-app'),
     path.join(rendererRoot, 'components', 'network-inspector'),
     path.join(rendererRoot, 'components', 'network-session-viewer'),
     path.join(rendererRoot, 'components', 'about'),

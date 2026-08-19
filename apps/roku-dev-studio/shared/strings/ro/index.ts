@@ -26,6 +26,8 @@ import { menu } from './menu.js';
 import { staticAnalysis } from './static-analysis.js';
 // Placeholder: reuse the English Debugger strings until a Romanian translation exists.
 import { debuggerStrings } from '../debugger.js';
+// Placeholder: reuse the English "Try Demo App" strings until a Romanian translation exists.
+import { tryDemoApp } from '../try-demo-app.js';
 
 export const ro = {
   common,
@@ -51,4 +53,5 @@ export const ro = {
   menu,
   debugger: debuggerStrings,
   staticAnalysis,
+  tryDemoApp,
 };

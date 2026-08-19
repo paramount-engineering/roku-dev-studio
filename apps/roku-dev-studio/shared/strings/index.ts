@@ -39,6 +39,7 @@ import { logFileViewer } from './log-file-viewer.js';
 import { menu } from './menu.js';
 import { debuggerStrings } from './debugger.js';
 import { staticAnalysis } from './static-analysis.js';
+import { tryDemoApp } from './try-demo-app.js';
 import { es } from './es/index.js';
 import { uk } from './uk/index.js';
 import { pl } from './pl/index.js';
@@ -70,6 +71,7 @@ const en = {
   menu,
   debugger: debuggerStrings,
   staticAnalysis,
+  tryDemoApp,
 } as const;
 
 /** Shape shared by every locale catalog (deep-readonly, literal-typed via `en`). */

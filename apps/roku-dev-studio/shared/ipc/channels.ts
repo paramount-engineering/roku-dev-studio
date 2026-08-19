@@ -378,6 +378,13 @@ export const IPC = {
   FiddleClearPasswordRequest: 'fiddle:clear-password-request',
   /** Main renderer pushes scan status (spinner state) to open Fiddle windows. */
   FiddleScanStatus: 'fiddle:scan-status',
+  /** "Try Demo App" — sideload the bundled Roku Dev Studio Showcase channel
+   * to a device chosen in the main window's own modal (no separate window). */
+  DemoAppLaunch: 'demo-app:launch',
+  /** Settings window's "Demo App" button (shown when the titlebar button is off) asks main to
+   * open the picker in the main window; main relays it over `DemoAppOpenOnMain`. */
+  DemoAppRequestOpen: 'demo-app:request-open',
+  DemoAppOpenOnMain: 'demo-app:open-on-main',
   /** Network Inspector — hotspot traffic capture (local devices). */
   NetworkInspectorGetStatus: 'network-inspector:get-status',
   NetworkInspectorGetEvents: 'network-inspector:get-events',

@@ -1097,6 +1097,7 @@ function buildPayload() {
     actionScriptDefaultSaveFolder: folderPath,
     devicePerformanceRememberQuadPerDevice: boolFromToggle('optDevicePerfRememberQuad'),
     keyboardRemoteShortcutsEnabled: boolFromToggle('optKeyboardRemote'),
+    tryDemoAppEnabled: boolFromToggle('optTryDemoApp'),
     autoConnectLastDeviceEnabled: boolFromToggle('optAutoConnectLast'),
     rememberSidebarToggle: boolFromToggle('optRememberSidebarToggle'),
     rememberPasswordsInKeychain: boolFromToggle('optRememberPasswordsInKeychain'),
@@ -1368,6 +1369,8 @@ api.getState().then(function (state: any) {
   applyPrivacyMode(!!state.privacyModeEnabled);
   setToggle('optDebugLog', !!state.debugLoggingEnabled);
   setToggle('optKeyboardRemote', state.keyboardRemoteShortcutsEnabled === true);
+  setToggle('optTryDemoApp', state.tryDemoAppEnabled !== false);
+  syncTryDemoAppOpenBtnVisibility();
   setToggle('optAutoConnectLast', state.autoConnectLastDeviceEnabled === true);
   setToggle('optRememberSidebarToggle', state.rememberSidebarToggle === true);
   setToggle('optRememberPasswordsInKeychain', state.rememberPasswordsInKeychain === true);
@@ -1514,6 +1517,29 @@ if (optPrivacy) {
   });
 }
 wireToggleAria('optKeyboardRemote');
+// "Open Demo App" button next to the toggle: only useful once the titlebar button itself is
+// hidden (toggle off), since it's otherwise redundant with that always-visible button.
+var optTryDemoApp = el('optTryDemoApp') as HTMLInputElement | null;
+var tryDemoAppOpenBtn = el('tryDemoAppOpenBtn') as HTMLButtonElement | null;
+function syncTryDemoAppOpenBtnVisibility() {
+  if (tryDemoAppOpenBtn) tryDemoAppOpenBtn.hidden = !!(optTryDemoApp && optTryDemoApp.checked);
+}
+if (optTryDemoApp) {
+  optTryDemoApp.addEventListener('change', syncTryDemoAppOpenBtnVisibility);
+}
+if (tryDemoAppOpenBtn) {
+  tryDemoAppOpenBtn.addEventListener('click', function () {
+    tryDemoAppOpenBtn!.disabled = true;
+    api
+      .requestOpenTryDemoApp()
+      .then(function () {
+        requestCloseSettingsWindow();
+      })
+      .catch(function () {
+        tryDemoAppOpenBtn!.disabled = false;
+      });
+  });
+}
 wireToggleAria('optAutoConnectLast');
 wireToggleAria('optRememberSidebarToggle');
 wireToggleAria('optRememberPasswordsInKeychain');

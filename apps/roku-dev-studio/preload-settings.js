@@ -410,6 +410,13 @@ var init_channels = __esm({
       FiddleClearPasswordRequest: "fiddle:clear-password-request",
       /** Main renderer pushes scan status (spinner state) to open Fiddle windows. */
       FiddleScanStatus: "fiddle:scan-status",
+      /** "Try Demo App" — sideload the bundled Roku Dev Studio Showcase channel
+       * to a device chosen in the main window's own modal (no separate window). */
+      DemoAppLaunch: "demo-app:launch",
+      /** Settings window's "Demo App" button (shown when the titlebar button is off) asks main to
+       * open the picker in the main window; main relays it over `DemoAppOpenOnMain`. */
+      DemoAppRequestOpen: "demo-app:request-open",
+      DemoAppOpenOnMain: "demo-app:open-on-main",
       /** Network Inspector — hotspot traffic capture (local devices). */
       NetworkInspectorGetStatus: "network-inspector:get-status",
       NetworkInspectorGetEvents: "network-inspector:get-events",
@@ -516,6 +523,9 @@ contextBridge.exposeInMainWorld("settingsApi", {
   pickFolder: () => ipcRenderer.invoke(IPC2.SettingsWindowPickFolder),
   openMcpConfig: (id) => ipcRenderer.invoke(IPC2.SettingsWindowOpenMcpConfig, { id }),
   closeWindow: () => ipcRenderer.send(IPC2.SettingsWindowClose),
+  // "Demo App" button shown next to the "Show Try Demo App Button" toggle when it's off — asks
+  // main to bring the main window forward and open the same picker modal there.
+  requestOpenTryDemoApp: () => ipcRenderer.invoke(IPC2.DemoAppRequestOpen),
   getNetworkInspectorStatus: () => ipcRenderer.invoke(IPC2.NetworkInspectorGetStatus),
   installBpfAccess: () => ipcRenderer.invoke(IPC2.NetworkInspectorInstallBpfAccess),
   // Certificate Authority (read-only CA card in the Network Inspector tab). The handlers are

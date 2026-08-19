@@ -208,6 +208,12 @@ export const settings = {
   useKeyboardRemoteDesc:
     'Quando ativado, você pode usar o teclado para controlar o Roku. Os atalhos de teclado estão listados na janela de ajuda do controle remoto.',
   useKeyboardRemoteAria: 'Controle remoto do Roku - Usar o teclado ',
+  tryDemoAppToggle: 'Mostrar Botão Experimentar App de Demonstração',
+  tryDemoAppToggleDesc:
+    'Quando ativado, um botão Experimentar App de Demonstração aparece na barra de título para carregar o canal de demonstração Roku Dev Studio Showcase incluso em um dispositivo.',
+  tryDemoAppToggleAria: 'Mostrar botão experimentar app de demonstração',
+  tryDemoAppOpenBtn: 'Abrir App de Demonstração',
+  tryDemoAppOpenBtnAria: 'Abrir o seletor experimentar app de demonstração',
   autoConnect: 'Conectar automaticamente aos dispositivos',
   autoConnectDesc:
     'Quando ativado, o aplicativo se conectará automaticamente aos dispositivos que permaneceram conectados ao fechar o aplicativo na sessão anterior.',
