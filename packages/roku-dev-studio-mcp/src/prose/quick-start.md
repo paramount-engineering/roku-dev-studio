@@ -14,7 +14,7 @@ device through the Roku Dev Studio desktop app and exposes **two surfaces**:
    A script opens in the Builder UI for the human to review. Nothing runs
    automatically.
 
-## 0. Pick the surface **before** picking tools
+## 1. Pick the surface **before** picking tools
 
 - **Single deterministic action** — "press Home", "launch YouTube",
   "send one POST", "run one RALE command", "GET /query/active-app",
@@ -28,7 +28,7 @@ device through the Roku Dev Studio desktop app and exposes **two surfaces**:
   `while` / `if` / `for` around it or when the user explicitly asked
   for a saved artifact.
 
-## 1. Before doing anything (once per session)
+## 2. Before doing anything (once per session)
 
 ```
 probe_bridge        → { live, port, pid, startedAt } | { live: false, reason }
@@ -38,7 +38,7 @@ If `live` is **false**, stop and tell the user to open Roku Dev Studio.
 After one successful probe, call bridge-dependent tools (direct ops **and**
 `send_script_to_builder`) freely — no need to re-probe before each call.
 
-## 2. Load authoring knowledge **once** and cache it (only if authoring a script)
+## 3. Load authoring knowledge **once** and cache it (only if authoring a script)
 
 Read the resource `roku-dev-studio://capability-bundle.json` (or call
 `get_capability_bundle`). It contains every static catalog you need:
@@ -55,7 +55,7 @@ Read the resource `roku-dev-studio://capability-bundle.json` (or call
 Do not re-fetch each turn. It does not change during a session. If you are
 only making one direct-op call you usually do **not** need the bundle at all.
 
-## 3. Picking a device
+## 4. Picking a device
 
 ```
 list_devices                    → every known device (connected + discovered)
@@ -66,7 +66,7 @@ connect_device({ device: "..." })   → open a tab (IP or serial)
 For every tool that talks to a device, `device` is **optional** — omit to
 target the focused tab.
 
-## 4. Doing a single action (direct ops path)
+## 5. Doing a single action (direct ops path)
 
 Examples of tasks that should be one tool call, not a script:
 
@@ -87,7 +87,7 @@ screenshot({})                            // capture current screen
 All of them return immediately. Pick them over Action Scripts whenever the
 task is a single, deterministic action.
 
-### 4a. App Connector Functions
+### 5a. App Connector Functions
 
 When the user asks you to invoke one function on the sideloaded channel,
 **use `app_function`, not an `appFunction` Action Script step.**
@@ -157,7 +157,7 @@ the call is part of a larger flow (e.g. connect → call → wait for
 media-player state → screenshot). One function call in isolation should
 never be a one-step script.
 
-## 5. Authoring a script (script path)
+## 6. Authoring a script (script path)
 
 1. Read `roku-dev-studio://action-script-contract.md` (or field
    `actionScriptAgentContract` from the bundle).
@@ -174,7 +174,7 @@ never be a one-step script.
 Never embed the Dev Password in script JSON. Dev Studio supplies it from
 local storage at run time.
 
-## 6. Live read-only lookups
+## 7. Live read-only lookups
 
 ```
 ecp_query({ endpoint, device? })             → any ECP query
@@ -183,7 +183,7 @@ rale_get_node_by_id({ id, path?, device? })  → scene graph read
 
 Use these directly for inspection — don't wrap them in a script.
 
-## 7. BrightScript debug console (telnet on port 8085)
+## 8. BrightScript debug console (telnet on port 8085)
 
 Reading `print` output / runtime errors from a sideloaded channel is a
 **three-step** flow. The Roku 8085 socket is single-client, so logs only
@@ -214,7 +214,7 @@ reporting "no logs". Connecting may displace another client (e.g. a
 BrightScript IDE) that currently holds 8085; surface that to the user when
 relevant.
 
-## 8. Tools are tagged
+## 9. Tools are tagged
 
 Every tool carries MCP `annotations`:
 - `readOnlyHint` — safe to call without confirmation

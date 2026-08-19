@@ -96,20 +96,24 @@ The validator only hard-rejects primitive values (string / number / boolean) for
 ### wait steps (condition.source === "media-player")
 - Either `delayMs` (number, fixed wait) **or** `condition` (object).
 - For media-player, set `"source": "media-player"` explicitly. Satisfy the wait with **any one** of:
-  - `state`: one of **play | pause | buffer | close | startup | stop** (see list_media_player_states), or
+  - `state`: one of **play | pause | buffer | close | startup | stop** (the media-player state vocabulary in `get_capability_bundle`), or
   - `check`: string expression evaluated against parsed player XML, or
   - RALE-style: `field: "state"`, `operator: "equals"`, `value`: same state vocabulary as above.
 - Common optional fields: `timeoutMs`, `pollIntervalMs`.
 
 ### wait / if — rale-node-field
-- `path`: array (use `[]` for root), `id`: string, `field`: string, `operator`, `value` when the operator requires it. See describe_rale_node_field_operators.
+- `path`: array (use `[]` for root), `id`: string, `field`: string, `operator`, `value` when the operator requires it. See the RALE node-field operators in `get_capability_bundle`.
 
 ### Other rules
-- Call **get_authoring_rules** for hard constraints (e.g. never embed `devPassword` in JSON).
+- See the authoring rules in `get_capability_bundle` (or read `roku-dev-studio://authoring-rules.json` directly) for hard constraints — e.g. never embed `devPassword` in JSON.
 - **device** on bridge tools: optional string — Roku **IP** or **serial**; omit to use the device tab the user has focused in Dev Studio.
 
 ### Suggested tool order for authoring
-1. probe_bridge → 2. get_capability_bundle + get_authoring_rules → 3. list_app_connector_functions → 4. validate_script (fix until `ok: true`) → 5. send_script_to_builder
+1. `probe_bridge`
+2. `get_capability_bundle` (covers authoring rules too — no separate call needed)
+3. `list_app_connector_functions`
+4. `validate_script` — fix every entry in `errors[]` until `ok: true`
+5. `send_script_to_builder`
 
 ### Reading tool results
 - Success and validation responses are JSON in the tool **text** content and in **structuredContent** when the host supports it.
