@@ -2,6 +2,8 @@
 
 A lightweight Node.js server that runs on a computer at a remote location so the **Roku Dev Studio** desktop app can control Roku devices over the network. The server discovers Rokus on its own LAN and exposes an HTTP/WebSocket bridge that mirrors all Roku ECP (External Control Protocol) functionality, plus telnet relay and RALE / App Connector access.
 
+> Part of [Roku Dev Studio](https://paramount-engineering.github.io/roku-dev-studio/) — see the [main repo](https://github.com/paramount-engineering/roku-dev-studio) for the desktop app, MCP server, and other packages.
+
 ## Requirements
 
 - Node.js 18 or higher

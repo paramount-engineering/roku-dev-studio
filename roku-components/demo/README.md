@@ -170,3 +170,10 @@ Both are plain synchronous reads (see `GetDeviceInfo()`/`GetMemoryInfo()` in
 7. **Console Monitor** — call `TriggerConsoleFinding` with `kind: "all"`
    (App Connector), then open Console Monitor in the app and capture the
    thirteen recognized findings it surfaces from the same session.
+8. **Sideload Relay fan-out** — this is a root-app feature, not a channel
+   function: add 2+ Rokus as Sideload Relay targets (Settings → Sideload
+   Relay), point your IDE's sideload at RDS's advertised relay address
+   instead of a device IP, and push this same demo package. Capture the
+   fan-out table updating live across all targets in one push — no other
+   channel does this any differently, so the demo package is just a
+   convenient, disposable payload for it.
