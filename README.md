@@ -14,9 +14,9 @@
 
 A comprehensive cross-platform desktop application for controlling and developing on Roku devices over your local network or via remote server using the External Control Protocol (ECP).
 
-## Why Roku Dev Studio?
+## Why Roku Dev Studio? (vs. official Roku tools)
 
-Roku development is normally split across a pile of separate, single-purpose tools that don't talk to each other. Roku Dev Studio doesn't replace Roku's own protocols (ECP, RALE, telnet, `sca-cmd`) — it wraps all of them in one GUI, one CLI (`rds`), and one MCP server:
+Roku development is normally split across a pile of separate, single-purpose official tools — the Roku Remote Tool, the browser-based sideload installer, raw `telnet`, RALE, `sca-cmd` — that don't talk to each other. Roku Dev Studio doesn't replace Roku's own protocols (ECP, RALE, telnet, `sca-cmd`) — it wraps all of them in one GUI, one CLI (`rds`), and one MCP server:
 
 | Task | Without Roku Dev Studio | With Roku Dev Studio |
 |------|--------------------------|------------------------|

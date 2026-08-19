@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MCP Server — Roku Dev Studio</title>
+<meta name="description" content="The Roku Dev Studio MCP server: let Cursor, Claude Desktop, or VS Code drive a real Roku device — full tool catalog, setup, and security notes.">
+<link rel="canonical" href="https://paramount-engineering.github.io/roku-dev-studio/mcp.html">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Roku Dev Studio">
+<meta property="og:title" content="MCP Server — Roku Dev Studio">
+<meta property="og:description" content="The Roku Dev Studio MCP server: let Cursor, Claude Desktop, or VS Code drive a real Roku device — full tool catalog, setup, and security notes.">
+<meta property="og:url" content="https://paramount-engineering.github.io/roku-dev-studio/mcp.html">
+<meta property="og:image" content="https://paramount-engineering.github.io/roku-dev-studio/images/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="MCP Server — Roku Dev Studio">
+<meta name="twitter:description" content="The Roku Dev Studio MCP server: let Cursor, Claude Desktop, or VS Code drive a real Roku device — full tool catalog, setup, and security notes.">
+<meta name="twitter:image" content="https://paramount-engineering.github.io/roku-dev-studio/images/og-image.png">
+<link rel="icon" href="images/icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/style.css?v=13">
+<script>(function(){try{var t=localStorage.getItem("rds-docs-theme");if(t)document.documentElement.setAttribute("data-theme",t);}catch(e){}})();</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "Roku Dev Studio MCP Server",
+  "operatingSystem": "macOS, Windows, Linux",
+  "applicationCategory": "DeveloperApplication",
+  "description": "Model Context Protocol server bundled with Roku Dev Studio — lets Cursor, Claude Desktop, VS Code, and other MCP clients drive a real Roku device: remote control, sideload, App Connector, Network Inspector, and BrightScript debugging.",
+  "url": "https://paramount-engineering.github.io/roku-dev-studio/mcp.html",
+  "image": "https://paramount-engineering.github.io/roku-dev-studio/images/og-image.png",
+  "softwareVersion": "1.1.0",
+  "license": "https://github.com/paramount-engineering/roku-dev-studio/blob/main/LICENSE",
+  "downloadUrl": "https://github.com/paramount-engineering/roku-dev-studio/releases",
+  "author": {
+    "@type": "Organization",
+    "name": "Paramount Engineering",
+    "url": "https://github.com/paramount-engineering"
+  },
+  "offers": {
+    "@type": "Offer",
+    "price": "0",
+    "priceCurrency": "USD"
+  }
+}
+</script>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="container">
+    <a class="brand" href="index.html">
+      <img class="brand-icon" src="images/icon.png" alt="">
+      <span class="brand-text">Roku Dev Studio</span>
+    </a>
+    <div class="nav-right">
+      <nav class="nav-links">
+        <a href="features.html">Features</a>
+        <a href="install.html">Install</a>
+        <a href="mcp.html" class="active">MCP</a>
+        <a href="remote-server.html">Remote Server</a>
+        <a href="https://github.com/paramount-engineering/roku-dev-studio" class="nav-cta" target="_blank" rel="noopener noreferrer">GitHub</a>
+      </nav>
+      <button class="theme-toggle" aria-label="Toggle theme" title="Theme: System (click to change)"><svg class="icon" width="16" height="16"><use href="assets/icons.svg#icon-devices"></use></svg></button>
+      <button class="nav-toggle" aria-label="Toggle navigation" aria-expanded="false"><svg class="icon" width="16" height="16"><use href="assets/icons.svg#icon-menu"></use></svg></button>
+    </div>
+  </div>
+</header>
+
+<section class="section container" style="padding-bottom: 0;">
+  <div class="section-title-eyebrow">AI agents, real devices</div>
+  <h1 class="section-heading">MCP Server</h1>
+  <p class="section-lead">Roku Dev Studio bundles a Model Context Protocol (MCP) server so Cursor, Claude Desktop, VS Code, and other MCP clients can drive a real Roku device from inside a chat — remote control, sideload, App Connector, Network Inspector, and BrightScript debugging, all as callable tools.</p>
+</section>
+
+<div class="container">
+
+<section class="doc-section" id="architecture">
+  <h2>How it connects</h2>
+  <div class="arch-row">
+    <div class="arch-box">AI Agent<br>(Cursor, Claude Desktop, VS Code)</div>
+    <span class="arch-arrow">↔</span>
+    <div class="arch-box highlight">MCP Server<br>(stdio, JSON-RPC)</div>
+    <span class="arch-arrow">↔</span>
+    <div class="arch-box">Roku Dev Studio<br>(loopback HTTP + token)</div>
+  </div>
+  <div class="info-box"><strong>Two hops, not one:</strong> the agent's host spawns the MCP server as a local child process and talks to it over stdio. The MCP server then reaches the running Roku Dev Studio app over loopback HTTP (<code>127.0.0.1</code>) using a per-launch bearer token — never over the network, and never persisted beyond a single app session.</div>
+  <p><strong>Roku Dev Studio must be running</strong> for any live tool to work. A handful of static/meta tools (<code>list_action_types</code>, <code>get_action_schema</code>, <code>get_capability_bundle</code>, <code>validate_script</code>) work even with the app closed. The first live call in a session should be <code>probe_bridge</code>, which returns a clear <code>{ live: false, reason }</code> if the app isn't open yet.</p>
+</section>
+
+<section class="doc-section" id="setup">
+  <h2>Setup</h2>
+  <p>Most users don't hand-edit any config. Open <strong>Settings → MCP Server</strong> in Roku Dev Studio — each row is a supported host (Cursor, Claude Desktop, VS Code, VS Code Insiders, VSCodium, ChatGPT Desktop, Windsurf). Toggling a row writes or removes only the <code>roku-dev-studio</code> entry in that client's own MCP config file; everything else in the file is left untouched. Hosts that aren't installed are disabled with an inline hint.</p>
+  <img src="images/SETTINGS_MCP_SERVER.png" alt="Settings → MCP Server panel, listing supported AI agent hosts">
+  <p>For a host not wired up by Settings, add this manually to that client's MCP config:</p>
+  <pre><code>{
+  "mcpServers": {
+    "roku-dev-studio": {
+      "command": "node",
+      "args": ["/absolute/path/to/packages/roku-dev-studio-mcp/dist/index.cjs"]
+    }
+  }
+}</code></pre>
+</section>
+
+<section class="doc-section" id="two-surfaces">
+  <h2>Two surfaces, one picker rule</h2>
+  <p>The server exposes two kinds of tools so an agent can pick the right one for the job instead of wrapping everything in a script:</p>
+  <div class="feature-grid">
+    <div class="feature-card"><h4><svg class="icon" width="16" height="16"><use href="assets/icons.svg#icon-zap"></use></svg> Direct device ops</h4><p>One-shot tools that do exactly one thing and return immediately — keypresses, queries, sideload, screenshots, App Connector calls, Network Inspector reads, debugger control, and more.</p></div>
+    <div class="feature-card"><h4><svg class="icon" width="16" height="16"><use href="assets/icons.svg#icon-list"></use></svg> Action Scripts</h4><p><code>validate_script</code> + <code>send_script_to_builder</code> — a multi-step, conditional, or polling flow lands in the Action Scripts Builder for a human to review and run. Nothing executes automatically.</p></div>
+  </div>
+  <p>Rule of thumb: a single deterministic action is a direct op; a multi-step, conditional, polling, or save-for-later flow is an Action Script.</p>
+</section>
+
+<section class="doc-section" id="tools">
+  <h2>Tool catalog</h2>
+  <p>Dozens of tools across five categories. Every op below also accepts an optional <code>device</code> (IP or serial) — omit it and the tool targets whichever device tab is focused in the app.</p>
+
+  <h3>Discovery &amp; scripting (work even with a device offline)</h3>
+  <table>
+    <thead><tr><th>Tool</th><th>What it does</th></tr></thead>
+    <tbody>
+      <tr><td><code>list_action_types</code></td><td>Every Action Script step type, with labels and required/optional fields</td></tr>
+      <tr><td><code>get_action_schema</code></td><td>Full schema for one step type</td></tr>
+      <tr><td><code>get_capability_bundle</code></td><td>The complete static catalog + authoring contract in one call</td></tr>
+      <tr><td><code>validate_script</code></td><td>Validate an Action Script and return structured errors</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Bridge &amp; device</h3>
+  <table>
+    <thead><tr><th>Tool</th><th>What it does</th></tr></thead>
+    <tbody>
+      <tr><td><code>probe_bridge</code></td><td>Check whether Roku Dev Studio is up — call once per session first</td></tr>
+      <tr><td><code>get_selected_device</code> / <code>list_devices</code> / <code>connect_device</code></td><td>Read or change which device is targeted</td></tr>
+      <tr><td><code>list_app_connector_functions</code></td><td>The live RALE function list a channel exposes right now</td></tr>
+      <tr><td><code>rale_get_node_by_id</code></td><td>Read-only SceneGraph node lookup</td></tr>
+      <tr><td><code>send_script_to_builder</code></td><td>Validate + hand a script to the Builder UI for human review/run</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Device control &amp; App Connector</h3>
+  <table>
+    <thead><tr><th>Tool</th><th>What it does</th></tr></thead>
+    <tbody>
+      <tr><td><code>keypress</code> / <code>input_text</code> / <code>launch_app</code> / <code>deep_link</code></td><td>Remote control and app launching</td></tr>
+      <tr><td><code>ecp_query</code> / <code>ecp_post</code></td><td>Raw ECP reads and writes</td></tr>
+      <tr><td><code>sideload</code> / <code>delete_sideload</code> / <code>screenshot</code></td><td>Dev channel install/remove and screen capture</td></tr>
+      <tr><td><code>scan_devices</code> / <code>test_connection</code> / <code>get_app_icon</code></td><td>Discovery and diagnostics</td></tr>
+      <tr><td><code>rale_command</code> / <code>app_connector_connect</code> / <code>app_connector_disconnect</code></td><td>Any built-in RALE command, plus session control</td></tr>
+      <tr><td><code>app_function</code></td><td>Call one of your channel's own exported functions (call <code>list_app_connector_functions</code> first for exact names/params)</td></tr>
+      <tr><td><code>telnet_connect</code> / <code>telnet_disconnect</code> / <code>get_telnet_log</code> / <code>console_monitor_findings</code></td><td>Debug console access and recognized-issue parsing</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Network Inspector <span style="font-weight:400; color:var(--text-secondary);">(requires the feature enabled in Settings)</span></h3>
+  <table>
+    <thead><tr><th>Tool</th><th>What it does</th></tr></thead>
+    <tbody>
+      <tr><td><code>network_inspector_status</code></td><td>Enabled/capturing state, connected devices, MITM state</td></tr>
+      <tr><td><code>network_inspector_list_events</code> / <code>network_inspector_get_event_detail</code></td><td>Captured traffic summaries and full request/response detail</td></tr>
+      <tr><td><code>network_inspector_analyze</code></td><td>Aggregate rollups — status classes, top hosts, content types, errors</td></tr>
+      <tr><td><code>network_inspector_get_ca_info</code></td><td>MITM CA fingerprint, proxy host:port, and the BrightScript trust snippet</td></tr>
+    </tbody>
+  </table>
+
+  <h3>BrightScript debugger <span style="font-weight:400; color:var(--text-secondary);">(requires the channel launched with debugging enabled)</span></h3>
+  <table>
+    <thead><tr><th>Tool</th><th>What it does</th></tr></thead>
+    <tbody>
+      <tr><td><code>debugger_attach</code> / <code>debugger_detach</code> / <code>debugger_status</code></td><td>Open, close, and check a debug session</td></tr>
+      <tr><td><code>debugger_wait_for_stop</code> / <code>debugger_continue</code> / <code>debugger_pause</code> / <code>debugger_step</code></td><td>Execution control — halt, resume, and step (over/in/out)</td></tr>
+      <tr><td><code>debugger_get_callstack</code> / <code>debugger_get_variables</code> / <code>debugger_evaluate</code></td><td>Inspect state and evaluate BrightScript in the halted frame (REPL)</td></tr>
+      <tr><td><code>debugger_set_breakpoints</code> / <code>debugger_remove_breakpoints</code> / <code>debugger_list_breakpoints</code></td><td>Manage breakpoints</td></tr>
+    </tbody>
+  </table>
+
+  <p>Resources: <code>roku-dev-studio://quick-start.md</code>, <code>action-script-contract.md</code>, <code>capability-bundle.json</code>, <code>authoring-rules.json</code>. Prompts: <code>roku-one-shot-action</code>, <code>roku-action-script-quickstart</code>, <code>roku-debug-device</code>.</p>
+</section>
+
+<section class="doc-section" id="security">
+  <h2>Security &amp; limitations</h2>
+  <ul>
+    <li><strong>Local only.</strong> The agent-to-server hop is stdio (no network); the server-to-app hop is loopback HTTP with a per-launch bearer token that's never written anywhere durable and is removed when the app quits.</li>
+    <li><strong>No accidental script execution.</strong> Action Scripts only ever land in the Builder UI for a human to run — an agent can stage one, never trigger it.</li>
+    <li><strong>Passwords stay out of the agent's hands.</strong> Sideload-family tools use whichever password you've saved via "Remember" on the device panel; nothing is sent unless you've already stored it, and <code>validate_script</code> rejects any script containing a literal password value.</li>
+    <li><strong>Cloud-sandboxed agents are guarded.</strong> If <code>sideload</code>'s file path looks like a cloud agent sandbox path, it's rejected with an actionable error — use <code>contentBase64</code> + <code>filename</code> instead.</li>
+    <li>Device selection isn't always automatic — most tools accept an optional <code>device</code>; omit it and they use the focused tab, or resolve one first with <code>list_devices</code> / <code>connect_device</code>.</li>
+  </ul>
+  <p>Full source, exact parameter schemas, and design notes live in the <a href="https://github.com/paramount-engineering/roku-dev-studio/blob/main/packages/roku-dev-studio-mcp/README.md" target="_blank" rel="noopener noreferrer">MCP package README</a>. Also listed on <a href="https://glama.ai/mcp/servers/paramount-engineering/roku-dev-studio" target="_blank" rel="noopener noreferrer">Glama</a> and <a href="https://mcpmarket.com/server/roku-dev-studio" target="_blank" rel="noopener noreferrer">MCP Market</a>.</p>
+</section>
+
+</div>
+
+<footer class="site-footer">
+  <div class="container">
+    <div class="footer-brand">
+      <div>
+        <a class="footer-org" href="https://github.com/paramount-engineering" target="_blank" rel="noopener noreferrer">Paramount Engineering</a> ·
+        <a class="footer-org" href="https://github.com/paramount-engineering/roku-dev-studio" target="_blank" rel="noopener noreferrer">Roku Dev Studio</a>
+      </div>
+      <div class="footer-sub">
+        <a href="https://github.com/paramount-engineering/roku-dev-studio/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">MIT License</a> ·
+        <a href="https://github.com/hdonapati" target="_blank" rel="noopener noreferrer">created by Hareendra Donapati</a>
+      </div>
+    </div>
+    <span>
+      <a href="https://github.com/paramount-engineering/roku-dev-studio/tree/main/packages/roku-dev-studio-mcp" target="_blank" rel="noopener noreferrer"><code>mcp</code> package</a>
+    </span>
+  </div>
+</footer>
+
+<script src="assets/nav.js?v=11"></script>
+</body>
+</html>

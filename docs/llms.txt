@@ -9,6 +9,7 @@ Built by Paramount Engineering. Roku Dev Studio replaces terminal-only, IDE-lock
 - [Home](https://paramount-engineering.github.io/roku-dev-studio/): Overview, screenshots, and supported platforms
 - [Features](https://paramount-engineering.github.io/roku-dev-studio/features.html): Full feature tour — Remote Control, Device Performance, Device Discovery, App Launcher & Management, Device Queries, Dev App Management, Sideload Relay, Console & Debugging, BrightScript Debugger, App Connector (RALE), Network Inspector, Network Session Viewer, Action Scripts, AI Agents (MCP Server), BrightScript Fiddle, Log File Viewer, Static Channel Analysis, rds CLI, Remote Server Support, Settings, and Developer Features
 - [Install](https://paramount-engineering.github.io/roku-dev-studio/install.html): Quick start for development, building distributable apps per platform, and troubleshooting
+- [MCP](https://paramount-engineering.github.io/roku-dev-studio/mcp.html): The bundled MCP server — full tool/resource/prompt catalog, how agents connect (Cursor, Claude Desktop, VS Code), and security notes
 - [Remote Server](https://paramount-engineering.github.io/roku-dev-studio/remote-server.html): Architecture, setup, capabilities, and the Swagger/OpenAPI reference for the remote relay server
 
 ## Source (plain Markdown)
