@@ -9,6 +9,11 @@
  */
 import { escapeHtml, setSafeHTML } from '../../modules/utils/index.js';
 import { attachBackdropClickToClose } from '../../modules/utils/modal-backdrop-click.js';
+import {
+  prepareModalOpenOrigin,
+  playModalOpenMotion,
+  closeModalWithOriginMotion
+} from '../../modules/utils/modal-origin-motion.js';
 import { showToast } from '../../modules/utils/ui.js';
 import { S } from '@shared/strings/index.js';
 
@@ -25,15 +30,18 @@ export function openTryDemoAppModal(opts: {
   initialDevices: TryDemoAppDeviceOption[];
   rescan: () => TryDemoAppDeviceOption[];
   onLaunched?: (device: TryDemoAppDeviceOption) => void;
+  /** Button that triggered the open — the modal scales in/out from its position. Omit for
+   * programmatic opens (e.g. relayed from the Settings window), which fall back to a center zoom. */
+  opener?: HTMLElement | null;
 }): void {
   const overlay = document.createElement('div');
-  overlay.className = 'modal-overlay active try-demo-app-overlay';
+  overlay.className = 'modal-overlay try-demo-app-overlay';
   setSafeHTML(
     overlay,
     `<div class="modal try-demo-app-modal" role="dialog" aria-modal="true" aria-label="${escapeHtml(S.tryDemoApp.modalTitle)}">
        <div class="modal-header">
          <h2>${escapeHtml(S.tryDemoApp.modalTitle)}</h2>
-         <button type="button" class="modal-close try-demo-app-close" title="${escapeHtml(S.common.close)}" aria-label="${escapeHtml(S.common.close)}">&times;</button>
+         <button type="button" class="modal-close try-demo-app-close" title="${escapeHtml(S.common.close)}" aria-label="${escapeHtml(S.common.close)}"><span class="icon icon-sm"><svg><use href="#icon-x"/></svg></span></button>
        </div>
        <div class="modal-body">
          <p class="try-demo-app-explainer">${escapeHtml(S.tryDemoApp.explainer)}</p>
@@ -49,7 +57,7 @@ export function openTryDemoAppModal(opts: {
          <p class="try-demo-app-error" hidden></p>
        </div>
        <div class="modal-footer try-demo-app-footer">
-         <button type="button" class="btn btn-secondary try-demo-app-cancel">${escapeHtml(S.common.cancel)}</button>
+         <button type="button" class="try-demo-app-settings-link" aria-label="${escapeHtml(S.tryDemoApp.settingsLinkAria)}">${escapeHtml(S.tryDemoApp.settingsLink)}</button>
          <button type="button" class="btn btn-primary try-demo-app-launch" disabled>${escapeHtml(S.tryDemoApp.launchBtn)}</button>
        </div>
      </div>`
@@ -63,8 +71,10 @@ export function openTryDemoAppModal(opts: {
   let devices: TryDemoAppDeviceOption[] = [];
 
   const settle = (): void => {
-    document.removeEventListener('keydown', onKey);
-    overlay.remove();
+    closeModalWithOriginMotion(overlay, () => {
+      document.removeEventListener('keydown', onKey);
+      overlay.remove();
+    });
   };
   const onKey = (e: KeyboardEvent): void => {
     if (e.key === 'Escape') settle();
@@ -149,9 +159,15 @@ export function openTryDemoAppModal(opts: {
   });
 
   overlay.querySelector('.try-demo-app-close')?.addEventListener('click', settle);
-  overlay.querySelector('.try-demo-app-cancel')?.addEventListener('click', settle);
+  overlay.querySelector('.try-demo-app-settings-link')?.addEventListener('click', () => {
+    settle();
+    window.roku.openSettings('general', 'tryDemoAppSettingsRow');
+  });
   attachBackdropClickToClose(overlay, settle);
   document.addEventListener('keydown', onKey);
 
+  prepareModalOpenOrigin(overlay, opts.opener ?? null);
   document.body.appendChild(overlay);
+  overlay.classList.add('active');
+  playModalOpenMotion(overlay);
 }

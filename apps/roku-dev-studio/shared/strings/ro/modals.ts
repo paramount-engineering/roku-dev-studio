@@ -307,7 +307,7 @@ export const modals = {
     actionMute: 'Mut',
     actionPower: 'Pornire',
     footnote:
-      'Dezactivați Telecomanda de la tastatură din Setări dacă nu doriți ca tastele săgeți și alte taste mapate să trimită apăsări de taste către Roku.',
+      'Dezactivați Telecomanda de la tastatură din <button type="button" class="help-settings-link" data-settings-section="general" data-settings-highlight="keyboardRemoteSettingsRow">Setări</button> dacă nu doriți ca tastele săgeți și alte taste mapate să trimită apăsări de taste către Roku.',
   },
 
   secretScreens: {
@@ -402,7 +402,7 @@ export const modals = {
       'Vă puteți conecta și manual introducând o adresă IP în secțiunea „Conectare manuală” din partea de jos a barei laterale.',
 
     remoteControlHeading: 'Telecomandă',
-    remoteControlIntroHtml: `Folosiți telecomanda virtuală pentru a controla dispozitivul Roku. Comenzile rapide de la tastatură opționale sunt disponibile când activați <strong>Setări → General → Telecomandă Roku - folosește tastatura </strong> (dezactivat implicit). Se aplică pe fila <strong>Telecomandă</strong> (individual sau în aspectul cvadruplu de performanță a dispozitivului) sau pe fila <strong>Dev App</strong>, doar pentru fila de dispozitiv pe care o aveți deschisă — nu în alte secțiuni, câmpuri de text sau ferestre modale.`,
+    remoteControlIntroHtml: `Folosiți telecomanda virtuală pentru a controla dispozitivul Roku. Comenzile rapide de la tastatură opționale sunt disponibile când activați <button type="button" class="help-settings-link" data-settings-section="general" data-settings-highlight="keyboardRemoteSettingsRow">Setări → General → Telecomandă Roku - folosește tastatura </button> (dezactivat implicit). Se aplică pe fila <strong>Telecomandă</strong> (individual sau în aspectul cvadruplu de performanță a dispozitivului) sau pe fila <strong>Dev App</strong>, doar pentru fila de dispozitiv pe care o aveți deschisă — nu în alte secțiuni, câmpuri de text sau ferestre modale.`,
     remoteControlTabHtml: `Pe fila <strong>Telecomandă</strong> sau <strong>Dev App</strong>, apăsați <span class="help-kbd">Tab</span> din controalele telecomenzii (nu din filele de secțiune sau din alt câmp de text) pentru a sări la câmpul <strong>Trimite text</strong>. <span class="help-kbd">Enter</span> trimite din acel câmp.`,
     remoteControlMediaHtml: `Controalele media (Derulare înapoi, Redare/Pauză, Derulare înainte) și butoanele de volum sunt disponibile și pe telecomanda virtuală. Folosiți <strong>Trimite text</strong> din partea de jos pentru a introduce text direct în câmpul de text activ al dispozitivului.`,
     scNavigation: 'Navigare',
@@ -499,7 +499,7 @@ export const modals = {
             <li><strong>Conectare la consolă</strong> - Opțional, conectați-vă automat la consola de depanare în timpul rulărilor</li>
           `,
     actionScriptsDevPasswordHtml: `<strong>Parolă de dezvoltator</strong> - Acțiuni precum Screenshot, Sideload și Delete Sideload necesită o parolă de dezvoltator. Parola este rezolvată în ordine: <code>"password"</code> la nivel de acțiune → <code>"devPassword"</code> la nivel de script → parola din secțiunea de autentificare Dev App. Dacă nu se găsește niciuna, vi se va cere în timpul validării.`,
-    actionScriptsSaveFolderHtml: `<strong>Folder de salvare</strong> - Folderul de salvare implicit se află la <strong>Setări → Scripturi de acțiune → Folder implicit</strong>. La fiecare rulare puteți alege alt folder. Artefactele (capturi de ecran, imagini PNG cu grafice de performanță, PDF-uri exportate) ajung într-un subfolder cu marcaj temporal, creat doar când se produce efectiv ceva.`,
+    actionScriptsSaveFolderHtml: `<strong>Folder de salvare</strong> - Folderul de salvare implicit se află la <button type="button" class="help-settings-link" data-settings-section="action-scripts" data-settings-highlight="actionScriptsDefaultFolderSettingsRow">Setări → Scripturi de acțiune → Folder implicit</button>. La fiecare rulare puteți alege alt folder. Artefactele (capturi de ecran, imagini PNG cu grafice de performanță, PDF-uri exportate) ajung într-un subfolder cu marcaj temporal, creat doar când se produce efectiv ceva.`,
     actionScriptsAiAgentsHtml: `<strong>Agenți IA</strong> - Scripturile de acțiune pe care le construiți în Constructor pot fi create și de agenți IA prin serverul MCP (vezi secțiunea <em>Agenți IA (MCP)</em> de mai jos); scriptul agentului ajunge întotdeauna în Constructor pentru revizuire umană înainte de rulare.`,
     actionScriptsIntro:
       'Automatizați secvențe de acțiuni ale dispozitivului folosind scripturi bazate pe JSON. Sunt disponibile două vizualizări:',
@@ -509,7 +509,7 @@ export const modals = {
     devicePerformanceListHtml: `
             <li>Grafice pentru <strong>utilizarea CPU</strong>, <strong>memoria sistemului</strong> și <strong>obiectele BrightScript</strong> (vizualizare după număr sau memorie, unde este disponibilă)</li>
             <li>Graficele reflectă aplicația în execuție — pentru citiri reprezentative, dispozitivul ar trebui să aibă <strong>Modul dezvoltator</strong> activat și <strong>canalul de dezvoltare încărcat (sideload)</strong> în prim-plan</li>
-            <li><strong>Setări → Performanța dispozitivului</strong> reglează intervalul de eșantionare al graficelor și fereastra de istoric; activați <strong>Reține „Afișează performanța dispozitivului”</strong> pentru a restaura aspectul cvadruplu pentru fiecare dispozitiv între sesiuni</li>
+            <li><button type="button" class="help-settings-link" data-settings-section="device-performance" data-settings-highlight="devicePerfRows">Setări → Performanța dispozitivului</button> reglează intervalul de eșantionare al graficelor și fereastra de istoric; activați <strong>Reține „Afișează performanța dispozitivului”</strong> pentru a restaura aspectul cvadruplu pentru fiecare dispozitiv între sesiuni</li>
             <li>În Scripturi de acțiune, pașii <strong>Device Performance</strong> capturează carduri de grafice în rezultatele rulării (și în exportul PDF)</li>
           `,
 
@@ -517,8 +517,8 @@ export const modals = {
     networkInspectorIntroHtml: `Inspectați traficul HTTP(S) generat de canalul dvs. de dezvoltare. Roku Dev Studio rulează un <strong>proxy MITM</strong> local care decriptează traficul HTTPS al canalului de dezvoltare direcționat prin el, astfel încât să puteți vedea anteturile și corpurile complete de cerere/răspuns.`,
     networkInspectorGettingStartedHtml: `<strong>Primii pași</strong>`,
     networkInspectorGettingStartedListHtml: `
-            <li>Activați <strong>proxy-ul MITM</strong> în <strong>Setări → Inspector de rețea</strong>, apoi faceți ca acel canal de dezvoltare să își direcționeze cererile prin adresa de proxy afișată — folosiți <code>host:port</code> (ex. <code>192.168.1.50:8888</code>). Modul în care canalul aplică acel proxy depinde de codul de rețea al aplicației dvs.</li>
-            <li><strong>Captura prin hotspot</strong> opțională înregistrează metadate SNI/DNS pentru tot traficul dispozitivului; necesită acces la captura de pachete a sistemului de operare (BPF pe macOS, Npcap pe Windows). Setări → Inspector de rețea prezintă configurarea pentru fiecare platformă.</li>
+            <li>Activați <strong>proxy-ul MITM</strong> în <button type="button" class="help-settings-link" data-settings-section="network-inspector" data-settings-highlight="networkInspectorEnableSettingsRow">Setări → Inspector de rețea</button>, apoi faceți ca acel canal de dezvoltare să își direcționeze cererile prin adresa de proxy afișată — folosiți <code>host:port</code> (ex. <code>192.168.1.50:8888</code>). Modul în care canalul aplică acel proxy depinde de codul de rețea al aplicației dvs.</li>
+            <li><strong>Captura prin hotspot</strong> opțională înregistrează metadate SNI/DNS pentru tot traficul dispozitivului; necesită acces la captura de pachete a sistemului de operare (BPF pe macOS, Npcap pe Windows). <button type="button" class="help-settings-link" data-settings-section="network-inspector" data-settings-highlight="niSetupRow">Setări → Inspector de rețea</button> prezintă configurarea pentru fiecare platformă.</li>
           `,
     networkInspectorToolbarHtml: `<strong>Bara de instrumente</strong> (în dreapta sus a panoului): <strong>Pornește/Oprește captura</strong>, <strong>Aspect panouri</strong> (stivuit față de cerere/răspuns unul lângă altul) și <strong>Configurează regulile de trafic</strong>.`,
     networkInspectorToolbarListHtml: `
@@ -541,7 +541,7 @@ export const modals = {
     aiAgentsHeading: 'Agenți IA (MCP)',
     aiAgentsIntroHtml: `Roku Dev Studio include un server <strong>MCP (Model Context Protocol)</strong> astfel încât agenții IA din Cursor, Claude Desktop sau VS Code pot controla un dispozitiv real prin această aplicație:`,
     aiAgentsListHtml: `
-            <li><strong>Setări → Server MCP</strong> - Comutați un client pentru a adăuga sau elimina intrarea sa MCP <code>roku-dev-studio</code>; celelalte intrări din configurația MCP a acelui client rămân neatinse</li>
+            <li><button type="button" class="help-settings-link" data-settings-section="mcp-server">Setări → Server MCP</button> - Comutați un client pentru a adăuga sau elimina intrarea sa MCP <code>roku-dev-studio</code>; celelalte intrări din configurația MCP a acelui client rămân neatinse</li>
             <li><strong>Două suprafețe</strong> - Operații directe pe dispozitiv pentru acțiuni unice (<code>keypress</code>, <code>launch_app</code>, <code>screenshot</code>, <code>app_function</code>, <code>rale_command</code>, telnet …) și <strong>Scripturi de acțiune</strong> pentru fluxuri cu mai mulți pași / condiționale care ajung în Constructor pentru revizuire</li>
             <li><strong>Notificări toast</strong> - Acțiunile distructive ale agentului (lansare, sideload, ștergere sideload, captură de ecran, comenzi RALE distructive) afișează o notificare toast neblocantă în aplicație, astfel încât să vedeți întotdeauna ce a făcut agentul</li>
             <li><strong>Parolele rămân locale</strong> - Sideload / captură de ecran / ștergere sideload refolosesc parola memorată de panoul dispozitivului; agentul nu trebuie să trimită niciodată una</li>
@@ -588,7 +588,7 @@ export const modals = {
 
     sideloadRelayHeading: 'Sideload Relay',
     sideloadRelayIntroHtml: `Încărcați (sideload) o singură versiune pe <strong>mai multe dispozitive deodată</strong>. Când releul este activat, Roku Dev Studio se anunță ca un Roku în rețeaua dvs.: îndreptați IDE-ul (VS Code BrightScript / roku-deploy / Eclipse) sau un browser către acest computer, încărcați o singură dată, iar RDS distribuie versiunea — <em>instalare → lansare → consolă</em> — către fiecare dispozitiv vizat, local sau dintr-o locație la distanță.`,
-    sideloadRelayEnableHtml: `<strong>Activați-l</strong> în <strong>Setări → Sideload Relay</strong> (dezactivat implicit). Două condiții prealabile controlează comutatorul:`,
+    sideloadRelayEnableHtml: `<strong>Activați-l</strong> în <button type="button" class="help-settings-link" data-settings-section="sideload-relay" data-settings-highlight="optSideloadRelay-row">Setări → Sideload Relay</button> (dezactivat implicit). Două condiții prealabile controlează comutatorul:`,
     sideloadRelayEnableListHtml: `
             <li><strong>Parolă de dezvoltator releu</strong> - Parola cu care IDE-ul dvs. se autentifică la RDS (utilizator <code>rokudev</code>), exact ca parola de dezvoltator a unui Roku real. Aceasta este separată de parola de dezvoltator proprie a fiecărui dispozitiv vizat.</li>
             <li><strong>Configurează dispozitivele</strong> - Deschideți fereastra modală de configurare a dispozitivelor și activați cel puțin un dispozitiv accesibil, cu Modul dezvoltator activat. Aceasta listează dispozitive locale și la distanță (din locația releu); activați-le pe cele care ar trebui să primească fiecare versiune. Dispozitivele fără o parolă de dezvoltator salvată afișează <strong>🔒 Setează parola</strong> pentru a valida una pe loc. Dispozitivele vizate anterior care se deconectează rămân listate (dezactivate) și se realătură automat când devin din nou accesibile.</li>

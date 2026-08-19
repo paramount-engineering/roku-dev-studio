@@ -297,7 +297,7 @@ function showReleaseNotesModal(opts: { originRect?: DOMRect } = {}): void {
               <line x1="10" y1="14" x2="21" y2="3"/>
             </svg>
           </button>
-          <button type="button" class="rds-release-notes-close" aria-label="${S.common.close}">×</button>
+          <button type="button" class="rds-release-notes-close" aria-label="${S.common.close}"><span class="icon icon-sm"><svg><use href="#icon-x"/></svg></span></button>
         </div>
       </div>
       <div class="rds-release-notes-content" id="rdsReleaseNotesContent"></div>
@@ -359,18 +359,23 @@ function ensureBannerStyles(): void {
   // defined in renderer/index.html :root so every modal surface looks identical.
   //
   // Shared modal constants (mirror the canonical values from index.html):
-  //   Overlay:  rgba(0,0,0,0.7)  backdrop-filter: blur(4px)  z-index: 100000
+  //   Overlay:  rgba(0,0,0,0.7)  backdrop-filter: blur(4px)  z-index: 5000
   //   Dialog:   bg var(--bg-tertiary)  border var(--border)  radius 16px
   //             shadow 0 20px 60px rgba(0,0,0,0.5)
   //   Header:   padding 16px 20px  title 16px/600
   //   Btn close: 28×28  bg var(--bg-elevated)  hover var(--bg-elevated) +10%
+  //
+  // Stacking tiers (app-wide): normal UI < toast/notification (2000) < modal (5000).
+  // The banner itself is a toast, not a modal — it must stay BELOW any open modal so a
+  // modal always wins visually — but the Release Notes dialog it opens IS a real modal
+  // and lives in the modal tier (see .rds-release-notes-overlay below).
   style.textContent = `
     /* ── Update notification banner ─────────────────────────────────── */
     #rds-update-banner {
       position: fixed;
       bottom: 20px;
       right: 20px;
-      z-index: 100000;
+      z-index: 2000;
       background: var(--bg-tertiary);
       border: 1px solid var(--border-hover, rgba(139, 92, 246, 0.25));
       border-radius: 12px;
@@ -501,7 +506,7 @@ function ensureBannerStyles(): void {
     .rds-release-notes-overlay {
       position: fixed;
       inset: 0;
-      z-index: 100000;
+      z-index: 5000;
       background: rgba(0, 0, 0, 0.7);
       backdrop-filter: blur(4px);
       display: flex;
@@ -543,9 +548,7 @@ function ensureBannerStyles(): void {
       flex-shrink: 0;
       margin-left: 8px;
     }
-    /* Shared icon-button style — used for both the external-link and close buttons */
-    .rds-release-notes-icon-btn,
-    .rds-release-notes-close {
+    .rds-release-notes-icon-btn {
       width: 28px;
       height: 28px;
       border: none;
@@ -561,11 +564,29 @@ function ensureBannerStyles(): void {
       padding: 0;
       transition: background 0.15s, color 0.15s;
     }
-    .rds-release-notes-icon-btn:hover,
-    .rds-release-notes-close:hover {
+    .rds-release-notes-icon-btn:hover {
       background: var(--bg-elevated);
       color: var(--text-primary);
       border: 1px solid var(--border-hover, rgba(139,92,246,0.25));
+    }
+    /* Matches the shared .modal-close look (index.html) so every modal's close button is identical. */
+    .rds-release-notes-close {
+      width: 28px;
+      height: 28px;
+      border: none;
+      background: var(--bg-tertiary);
+      color: var(--text-muted);
+      border-radius: 6px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+      transition: background 0.15s, color 0.15s;
+    }
+    .rds-release-notes-close:hover {
+      background: var(--accent-red-dim, rgba(239, 68, 68, 0.15));
+      color: var(--accent-red, #ef4444);
     }
     .rds-release-notes-content {
       padding: 16px 20px;

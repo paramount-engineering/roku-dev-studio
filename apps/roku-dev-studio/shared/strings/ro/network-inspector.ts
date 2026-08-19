@@ -317,17 +317,19 @@ export const networkInspector = {
     `Proxy-ul MITM nu poate folosi portul ${port} — ${who} îl folosește. Faceți clic pe <strong>Port proxy indisponibil</strong> de mai sus pentru a-l închide sau a schimba portul.`,
   mitmFailedLine: (err: string): string => `Proxy-ul MITM nu a putut porni: ${err}.`,
   mitmStarting: 'Proxy-ul MITM pornește — relansați Roku Dev Studio dacă persistă.',
-  enableMitmSettings: 'Activați <strong>proxy-ul MITM</strong> în Setări → Inspector de rețea.',
+  enableMitmSettings:
+    'Activați <strong>proxy-ul MITM</strong> în <button type="button" class="help-settings-link" data-settings-section="network-inspector" data-settings-highlight="networkInspectorEnableSettingsRow">Setări → Inspector de rețea</button>.',
   hotspotBlockedMitmLine: (addr: string): string =>
     `Captura hotspot este blocată, dar proxy-ul MITM de la <strong>${addr}</strong> poate în continuare înregistra cererile prin proxy. Folosiți <code>host:port</code> doar în BrightScript (de ex. <code>192.168.2.1:8888</code>), nu IP-ul dispozitivului și nu <code>http://</code>.`,
   mitmActiveNoCaptureLine: (addr: string): string =>
     `Proxy-ul MITM este activ la <code class="ni-hint-code">${addr}</code>. Direcționați canalul dev prin el pentru a captura cererile de rețea.`,
   mitmDecryptingHint: (addr: string): string =>
     ` Proxy-ul MITM decriptează HTTPS-ul canalului dev direcționat prin Roku Dev Studio la <code class="ni-hint-code">${addr}</code>.`,
-  hotspotEncryptedHint: ' Corpurile HTTPS sunt criptate în modul de captură hotspot — activați MITM în Setări pentru canalele Dev.',
+  hotspotEncryptedHint:
+    ' Corpurile HTTPS sunt criptate în modul de captură hotspot — activați MITM în <button type="button" class="help-settings-link" data-settings-section="network-inspector" data-settings-highlight="networkInspectorEnableSettingsRow">Setări</button> pentru canalele Dev.',
   capturingOnHotspot: 'Se capturează pe hotspot. Navigați sau redați conținut pe Roku.',
   connectWifiHint: (addr: string): string =>
-    `Conectați Roku la aceeași rețea Wi‑Fi (sau la hotspotul mașinii dvs.), apoi activați <strong>proxy-ul MITM</strong> în Setări → Inspector de rețea pentru a captura HTTPS-ul canalului dev — va asculta la <code class="ni-hint-code">${addr}</code>.`,
+    `Conectați Roku la aceeași rețea Wi‑Fi (sau la hotspotul mașinii dvs.), apoi activați <strong>proxy-ul MITM</strong> în <button type="button" class="help-settings-link" data-settings-section="network-inspector" data-settings-highlight="networkInspectorEnableSettingsRow">Setări → Inspector de rețea</button> pentru a captura HTTPS-ul canalului dev — va asculta la <code class="ni-hint-code">${addr}</code>.`,
   sessionListAria: 'Lista sesiunilor de rețea. Folosiți tastele săgeți pentru a naviga.',
   // Layout toggle.
   layoutToggleTitle: (stacked: boolean): string =>

@@ -81,6 +81,16 @@ function h<K extends keyof HTMLElementTagNameMap>(
   return node;
 }
 
+/** X icon for modal close buttons — inline (this window has no shared SVG sprite), matches the
+ * shared .modal-close look used app-wide. */
+function CLOSE_ICON_SVG(): Node {
+  const span = document.createElement('span');
+  span.setAttribute('aria-hidden', 'true');
+  span.innerHTML =
+    '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
+  return span;
+}
+
 /** Eye / eye-off icon pair for the password reveal toggle (CSS swaps which shows). */
 function EYE_SVG(): Node {
   const span = document.createElement('span');
@@ -539,7 +549,7 @@ function buildDom(root: HTMLElement): void {
   // NOTE: all `.sr-*` styles live in settings.css — the settings window's CSP
   // (`style-src 'self'`) blocks injected inline <style> blocks.
   const toggleRow = (id: string, title: string, desc: string) =>
-    h('div', { class: 'settings-row-toggle' }, [
+    h('div', { class: 'settings-row-toggle', id: id + '-row' }, [
       h('div', { class: 'settings-row-text' }, [
         h('strong', { id: id + '-title' }, [title]),
         h('span', { class: 'settings-row-desc', id: id + '-desc' }, [desc])
@@ -622,7 +632,7 @@ function buildDom(root: HTMLElement): void {
           h('button', { type: 'button', class: 'sr-scan-btn', id: 'srRescanBtn' }, [
             h('span', { class: 'sr-scan-text' }, [S.sideloadRelay.scanBtn])
           ]),
-          h('button', { type: 'button', class: 'sr-modal-close', id: 'srModalClose', 'aria-label': S.common.close }, ['×'])
+          h('button', { type: 'button', class: 'modal-close', id: 'srModalClose', title: S.common.close, 'aria-label': S.common.close }, [CLOSE_ICON_SVG()])
         ])
       ]),
       h('div', { class: 'sr-modal-sub', id: 'srModalSubtitle' }, [S.sideloadRelay.modalSubtitle]),
@@ -631,7 +641,6 @@ function buildDom(root: HTMLElement): void {
       h('div', { class: 'sr-modal-footer' }, [
         h('span', { class: 'sr-modal-summary', id: 'srModalSummary', 'aria-live': 'polite' }, []),
         h('div', { class: 'sr-modal-actions' }, [
-          h('button', { type: 'button', class: 'btn btn-secondary btn-sm', id: 'srModalCancel' }, [S.common.cancel]),
           h('button', { type: 'button', class: 'btn btn-primary btn-sm', id: 'srModalSave' }, [S.common.save])
         ])
       ])
@@ -676,7 +685,6 @@ function relabelStaticText(): void {
   setText('srModalTitleText', S.sideloadRelay.modalTitle);
   setText('srModalSubtitle', S.sideloadRelay.modalSubtitle);
   document.getElementById('srModalClose')?.setAttribute('aria-label', S.common.close);
-  setText('srModalCancel', S.common.cancel);
   setText('srModalSave', S.common.save);
 
   const scanBtn = document.getElementById('srRescanBtn');
@@ -818,7 +826,6 @@ export function initSideloadRelaySection(): void {
   document.getElementById('btnResetSideloadRelay')?.addEventListener('click', () => resetToDefaults());
   document.getElementById('srSetupBtn')?.addEventListener('click', () => openSetupModal());
   document.getElementById('srModalClose')?.addEventListener('click', () => closeSetupModal());
-  document.getElementById('srModalCancel')?.addEventListener('click', () => closeSetupModal());
   document.getElementById('srModalSave')?.addEventListener('click', () => applySetupModal());
   document.getElementById('srRescanBtn')?.addEventListener('click', () => void scanDevices(true));
   const srSetupOverlay = document.getElementById('srSetupOverlay');

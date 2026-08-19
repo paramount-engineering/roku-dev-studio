@@ -2601,7 +2601,7 @@
     .welcome-detail-overlay {
       position: fixed;
       inset: 0;
-      z-index: 100000;
+      z-index: 5000;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -2639,12 +2639,12 @@
       position: absolute;
       top: 14px;
       right: 14px;
-      width: 30px;
-      height: 30px;
+      width: 28px;
+      height: 28px;
       border: none;
-      background: var(--bg-elevated);
+      background: var(--bg-tertiary);
       color: var(--text-muted);
-      border-radius: 8px;
+      border-radius: 6px;
       cursor: pointer;
       display: flex;
       align-items: center;
@@ -2652,9 +2652,8 @@
       transition: background 0.15s, color 0.15s;
     }
     .welcome-detail-close:hover {
-      background: var(--bg-elevated);
-      color: var(--text-primary);
-      border: 1px solid var(--border-hover, rgba(139, 92, 246, 0.25));
+      background: var(--accent-red-dim);
+      color: var(--accent-red);
     }
 
     .welcome-detail-hero {
@@ -8798,8 +8797,8 @@
     /* Color popover — portaled to <body> (position:fixed) so its expandable inline picker isn't
        clipped by the modal's overflow. Presets are squares; the custom-picker toggle is a ringed
        rainbow CIRCLE so it's obviously "pick anything" and not another preset. */
-    /* Above the modal overlay (z-index 1000) so the picker isn't hidden behind the blocking backdrop. */
-    .ni-find-pop { position: fixed; z-index: 1100; background: var(--bg-secondary); border: 1px solid var(--border-hover); border-radius: 8px; padding: 8px; box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5); }
+    /* Above the modal overlay (z-index 5000) so the picker isn't hidden behind the blocking backdrop. */
+    .ni-find-pop { position: fixed; z-index: 5100; background: var(--bg-secondary); border: 1px solid var(--border-hover); border-radius: 8px; padding: 8px; box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5); }
     .ni-find-color-pop { display: flex; flex-direction: column; gap: 8px; }
     .ni-find-color-swatches { display: flex; align-items: center; gap: 8px; }
     .ni-find-color-swatch { width: 22px; height: 22px; border-radius: 5px; border: 2px solid transparent; cursor: pointer; padding: 0; }
@@ -8931,7 +8930,7 @@
     .ni-bw-caret { position: absolute; right: 1px; top: 1px; bottom: 1px; width: 26px; display: inline-flex; align-items: center; justify-content: center; background: transparent; border: none; color: var(--text-muted); cursor: pointer; border-radius: 0 6px 6px 0; }
     .ni-bw-caret:hover { color: var(--text-secondary); }
     .ni-bw-combo:has(.ni-rules-bw:disabled) .ni-bw-caret { opacity: 0.4; pointer-events: none; }
-    .ni-bw-menu { position: fixed; z-index: 1100; max-height: 240px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; padding: 4px; background: var(--bg-elevated); border: 1px solid var(--border-hover); border-radius: 8px; box-shadow: 0 14px 34px rgba(0, 0, 0, 0.55); }
+    .ni-bw-menu { position: fixed; z-index: 5100; max-height: 240px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; padding: 4px; background: var(--bg-elevated); border: 1px solid var(--border-hover); border-radius: 8px; box-shadow: 0 14px 34px rgba(0, 0, 0, 0.55); }
     .ni-bw-menu[hidden] { display: none; }
     .ni-bw-opt { text-align: left; background: transparent; border: none; color: var(--text-primary); font: inherit; font-size: 12px; padding: 7px 10px; border-radius: 6px; cursor: pointer; white-space: nowrap; }
     .ni-bw-opt:hover { background: var(--accent-purple-dim); }
@@ -12758,7 +12757,13 @@
       opacity: 0.65;
     }
 
-    /* Help Modal */
+    /* Help Modal
+       Stacking tiers (app-wide): normal UI < toast/notification (z-index 2000) < modal (z-index
+       5000). Every modal shares this SAME z-index value — a modal opened from within an already-open
+       modal (e.g. Deep Link's "Delete Media Type" confirm from inside "Manage Media Types", or the
+       Network Inspector's Port Conflict modal appearing over another open NI modal) is appended to the
+       DOM after its parent, and same-z-index siblings stack in DOM order, so the child always renders
+       on top without needing its own bumped value. */
     .modal-overlay {
       position: fixed;
       top: 0;
@@ -12769,7 +12774,7 @@
       display: none;
       align-items: center;
       justify-content: center;
-      z-index: 1000;
+      z-index: 5000;
       backdrop-filter: blur(4px);
     }
     
@@ -12836,10 +12841,11 @@
       justify-content: center;
       transition: all 0.15s;
     }
-    
+
+    /* Matches the tab-close (×) button's existing red-on-hover convention. */
     .modal-close:hover {
-      background: var(--bg-hover);
-      color: var(--text-primary);
+      background: var(--accent-red-dim);
+      color: var(--accent-red);
     }
     
     .modal-body {
@@ -12915,7 +12921,13 @@
     }
     .try-demo-app-select:focus { outline: none; border-color: var(--accent-purple); }
     .try-demo-app-error { margin: 12px 0 0; color: var(--accent-red, #ef4444); font-size: 12.5px; }
-    .try-demo-app-footer { display: flex; justify-content: flex-end; gap: 8px; padding: 16px 24px; border-top: 1px solid var(--border); }
+    .try-demo-app-footer { display: flex; align-items: center; justify-content: flex-end; gap: 8px; padding: 16px 24px; border-top: 1px solid var(--border); }
+    .try-demo-app-settings-link {
+      margin-right: auto; background: none; border: none; padding: 0; cursor: pointer;
+      color: var(--text-secondary); font-size: 12.5px; text-decoration: underline; text-decoration-color: transparent;
+      transition: text-decoration-color 0.15s ease, color 0.15s ease;
+    }
+    .try-demo-app-settings-link:hover { color: var(--text-primary); text-decoration-color: currentColor; }
 
     /* Import Action Script modal */
     .action-scripts-import-modal .action-scripts-import-modal-box { max-width: 720px; width: 90vw; max-height: 85vh; display: flex; flex-direction: column; }
@@ -13175,9 +13187,18 @@
     
     .help-section ul {
       margin-left: 20px;
+      margin-bottom: 12px;
       font-size: 13px;
       color: var(--text-secondary);
       line-height: 1.8;
+    }
+    /* Bullet items had no gap of their own — only line-height, which spaces lines *within* an
+       item, not the items apart — so a multi-line bullet ran straight into the next one. */
+    .help-section li {
+      margin-bottom: 8px;
+    }
+    .help-section li:last-child {
+      margin-bottom: 0;
     }
     /* Network Inspector help: clear separation between its subsections (Getting started, Toolbar,
        Traffic Rules, …) so a heading never hugs the previous list. */
@@ -13228,6 +13249,17 @@
       font-family: 'JetBrains Mono', monospace;
       color: var(--text-primary);
     }
+
+    /* Inline "jump to Settings" link embedded in help/info modal prose (see
+       modules/utils/help-settings-link.ts) — reads like the bold text it replaces, but
+       clickable, so it needs no separate icon/affordance to signal that. */
+    .help-settings-link {
+      background: none; border: none; padding: 0; margin: 0; cursor: pointer;
+      font: inherit; font-weight: 600; color: var(--text-primary);
+      text-decoration: underline; text-decoration-color: transparent;
+      transition: text-decoration-color 0.15s ease, color 0.15s ease;
+    }
+    .help-settings-link:hover { color: var(--accent-purple); text-decoration-color: currentColor; }
 
     .keyboard-remote-help-btn {
       display: none;
@@ -13425,7 +13457,7 @@
       display: none;
       align-items: center;
       justify-content: center;
-      z-index: 1000;
+      z-index: 5000;
       backdrop-filter: blur(4px);
     }
     
@@ -13536,7 +13568,8 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      z-index: 10000;
+      /* z-index intentionally omitted — inherits the shared .modal-overlay tier (5000) above
+         so every modal, this one included, stacks consistently. */
       backdrop-filter: blur(4px);
     }
     
@@ -13781,7 +13814,7 @@
       padding: 0 calc(10px * var(--titlebar-content-scale));
       border: 1px solid var(--border);
       border-radius: calc(6px * var(--titlebar-content-scale));
-      background: transparent;
+      background: var(--bg-tertiary);
       color: var(--text-secondary);
       font-size: calc(12px * var(--titlebar-content-scale));
       font-weight: 500;
@@ -13831,7 +13864,7 @@
       padding: 0 calc(10px * var(--titlebar-content-scale));
       border: 1px solid var(--border);
       border-radius: calc(6px * var(--titlebar-content-scale));
-      background: transparent;
+      background: var(--bg-tertiary);
       color: var(--text-secondary);
       font-size: calc(12px * var(--titlebar-content-scale));
       font-weight: 500;

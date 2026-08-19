@@ -714,7 +714,7 @@ contextBridge.exposeInMainWorld('roku', {
   networkInspectorInstallBpfAccess: () => ipcRenderer.invoke(IPC.NetworkInspectorInstallBpfAccess),
   networkInspectorGetTrafficRules: () => ipcRenderer.invoke(IPC.NetworkInspectorGetTrafficRules),
   /** Open the Settings window, optionally navigated to a section (e.g. 'network-inspector'). */
-  openSettings: (section?: string) => ipcRenderer.send(IPC.SettingsOpen, { section }),
+  openSettings: (section?: string, highlightId?: string) => ipcRenderer.send(IPC.SettingsOpen, { section, highlightId }),
   networkInspectorSetDeviceTrafficRules: (deviceIp: string, rules: unknown) =>
     ipcRenderer.invoke(IPC.NetworkInspectorSetDeviceTrafficRules, { deviceIp, rules }),
   /** Replay / Edit & Resend — re-issue a captured request from the host; result arrives as a new

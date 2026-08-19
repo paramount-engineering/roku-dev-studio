@@ -61,7 +61,7 @@ function ensureConsoleAnalyticsStyles(): void {
   const style = document.createElement('style');
   style.id = ANALYTICS_STYLE_ID;
   style.textContent = `
-    .telnet-an-overlay { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.7); display: flex; align-items: center; justify-content: center; z-index: 1000; backdrop-filter: blur(4px); }
+    .telnet-an-overlay { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.7); display: flex; align-items: center; justify-content: center; z-index: 5000; backdrop-filter: blur(4px); }
     .telnet-an-modal {
       width: 820px; max-width: 96vw; min-width: 460px; max-height: 88vh; min-height: 260px;
       display: flex; flex-direction: column; background: var(--bg-secondary); border: 1px solid var(--border);
@@ -76,8 +76,9 @@ function ensureConsoleAnalyticsStyles(): void {
     .telnet-an-sub { margin: 2px 0 0; font-size: 11.5px; color: var(--text-secondary); }
     .telnet-an-sub-note { color: var(--text-muted); }
     .telnet-an-sub-crash { color: #fca5a5; font-weight: 700; }
-    .telnet-an-close { border: none; background: transparent; color: var(--text-secondary); font-size: 20px; line-height: 1; cursor: pointer; padding: 0 4px; flex: 0 0 auto; }
-    .telnet-an-close:hover { color: var(--text-primary); }
+    /* Matches the shared .modal-close look (index.html) so every modal's close button is identical. */
+    .telnet-an-close { width: 28px; height: 28px; flex: 0 0 auto; border: none; background: var(--bg-tertiary); color: var(--text-muted); border-radius: 6px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background 0.15s, color 0.15s; }
+    .telnet-an-close:hover { background: var(--accent-red-dim, rgba(239, 68, 68, 0.15)); color: var(--accent-red, #ef4444); }
     .telnet-an-body { flex: 1 1 auto; min-height: 0; padding: 14px 16px; overflow-y: auto; }
     .telnet-an-section { margin-top: 18px; }
     .telnet-an-section:first-child { margin-top: 0; }
@@ -86,11 +87,11 @@ function ensureConsoleAnalyticsStyles(): void {
     .telnet-an-cats { display: flex; flex-wrap: wrap; gap: 6px; }
     .telnet-an-cat { display: inline-flex; align-items: center; gap: 6px; padding: 3px 6px 3px 10px; font-size: 11.5px; color: var(--text-primary); background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 999px; }
     .telnet-an-cat-count { font-size: 10px; font-weight: 700; font-variant-numeric: tabular-nums; background: var(--bg-deep); color: var(--text-secondary); border-radius: 999px; padding: 1px 6px; }
-    .telnet-an-issue { border: 1px solid var(--border); border-radius: 10px; margin-bottom: 16px; background: var(--bg-tertiary); overflow: hidden; }
+    .telnet-an-issue { border: 1px solid var(--border); border-radius: 10px; margin-bottom: 16px; background: var(--bg-tertiary); overflow: hidden; transition: border-color 0.15s ease; }
     .telnet-an-issue:last-child { margin-bottom: 0; }
     .telnet-an-issue[open] { border-color: var(--border-hover); }
     /* Header row: [count]  message  [copy]  ————  [severity] */
-    .telnet-an-issue > summary { display: flex; align-items: center; gap: 10px; padding: 11px 14px; cursor: pointer; list-style: none; }
+    .telnet-an-issue > summary { display: flex; align-items: center; gap: 10px; padding: 11px 14px; cursor: pointer; list-style: none; transition: background 0.15s ease; }
     .telnet-an-issue > summary::-webkit-details-marker { display: none; }
     .telnet-an-issue > summary:hover { background: var(--bg-secondary); }
     /* When expanded, make the header read as a distinct title bar: a divider + a subtle lighter tint
@@ -122,7 +123,23 @@ function ensureConsoleAnalyticsStyles(): void {
     .telnet-an-bt-func { flex: 1 1 auto; min-width: 0; font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 11px; line-height: 1.5; color: var(--text-secondary); word-break: break-word; }
     .telnet-an-bt-loc { flex: 0 0 auto; align-self: baseline; font-size: 10px; color: var(--text-muted); font-family: var(--font-mono, ui-monospace, monospace); white-space: nowrap; }
     .telnet-an-crash-note { margin: 0; font-size: 12px; color: var(--text-secondary); }
-    /* Top padding gives the body breathing room below the header divider when expanded. */
+    /* Expand/collapse: entirely native, no JS. Chrome's ::details-content pseudo-element (which wraps
+       every non-summary child) is specifically built to animate <details> open/close — it keeps the
+       content actually rendered through the closing transition (normally <details> yanks non-open
+       content out of layout instantly, which is what made a JS-driven approach fight the browser) and
+       supports height:auto as a genuine transition endpoint. The open attribute still flips exactly
+       when the browser's native summary click handles it; only the visual reveal is deferred. */
+    .telnet-an-issue { interpolate-size: allow-keywords; }
+    .telnet-an-issue::details-content {
+      height: 0;
+      overflow: clip;
+      opacity: 0;
+      transition: height 0.28s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.22s ease, content-visibility 0.28s allow-discrete;
+    }
+    .telnet-an-issue[open]::details-content { height: auto; opacity: 1; }
+    @media (prefers-reduced-motion: reduce) {
+      .telnet-an-issue::details-content { transition: none; }
+    }
     .telnet-an-issue-body { padding: 15px 14px 16px; }
     .telnet-an-issue-kind { margin: 0 0 12px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); }
     /* Label / value grid — replaces the packed "What: … Cause: …" paragraphs. */
@@ -389,7 +406,7 @@ export function openConsoleAnalyticsModal(
           <h3>${S.consoleLog.monitorTitle}</h3>
           <p class="telnet-an-sub" data-an-sub></p>
         </div>
-        <button type="button" class="telnet-an-close" title="${S.common.close}" aria-label="${S.common.close}">×</button>
+        <button type="button" class="telnet-an-close" title="${S.common.close}" aria-label="${S.common.close}"><span class="icon icon-sm"><svg><use href="#icon-x"/></svg></span></button>
       </div>
       <div class="telnet-an-body" data-an-body></div>
     </div>`;

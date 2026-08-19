@@ -603,7 +603,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  z-index: 5000;
   opacity: 1;
   transition: opacity 0.2s ease;
 }
@@ -661,15 +661,15 @@ body {
   padding: 0;
   border: none;
   border-radius: 6px;
-  background: transparent;
+  background: var(--bg-tertiary);
   color: var(--text-muted);
   cursor: pointer;
   transition: background 0.15s, color 0.15s;
 }
 
 .modal-close:hover {
-  background: var(--bg-hover);
-  color: var(--text-primary);
+  background: var(--accent-red-dim);
+  color: var(--accent-red);
 }
 
 .modal-body {

@@ -742,14 +742,19 @@ app.whenReady().then(() => {
     return { success: true, pref };
   });
 
-  // Main renderer (e.g. the Network Inspector port-conflict modal) asks to open Settings, optionally
-  // navigated straight to a section.
-  ipcMain.on(IPC.SettingsOpen, (event: import('electron').IpcMainEvent, payload: { section?: unknown }) => {
-    const parent = BrowserWindow.fromWebContents(event.sender) || mainWindow;
-    if (!parent) return;
-    const section = typeof payload?.section === 'string' ? payload.section : undefined;
-    showSettingsDialog(parent, section);
-  });
+  // Main renderer (e.g. the Network Inspector port-conflict modal, the Try Demo App modal's
+  // "Turn this off in Settings" link) asks to open Settings, optionally navigated straight to a
+  // section and/or with a specific row scrolled-to and highlighted.
+  ipcMain.on(
+    IPC.SettingsOpen,
+    (event: import('electron').IpcMainEvent, payload: { section?: unknown; highlightId?: unknown }) => {
+      const parent = BrowserWindow.fromWebContents(event.sender) || mainWindow;
+      if (!parent) return;
+      const section = typeof payload?.section === 'string' ? payload.section : undefined;
+      const highlightId = typeof payload?.highlightId === 'string' ? payload.highlightId : undefined;
+      showSettingsDialog(parent, section, highlightId);
+    }
+  );
 
   // Renderer replies to the "Open Fiddle" menu click with the device snapshot.
   ipcMain.on(IPC.FiddleOpen, (event: import('electron').IpcMainEvent, payload: { devices?: unknown; initialDeviceId?: string | null }) => {

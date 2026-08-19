@@ -16,6 +16,8 @@
   --accent-purple-dim: rgba(168, 85, 247, 0.15);
   --accent-cyan: #22d3ee;
   --accent-green: #4ade80;
+  --accent-red: #ef4444;
+  --accent-red-dim: rgba(239, 68, 68, 0.15);
 }
 
 * {
@@ -358,7 +360,7 @@ body {
   display: none;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  z-index: 5000;
   backdrop-filter: blur(4px);
 }
 .modal-overlay.active {
@@ -403,8 +405,8 @@ body {
   justify-content: center;
 }
 .modal-close:hover {
-  background: var(--bg-hover);
-  color: var(--text-primary);
+  background: var(--accent-red-dim);
+  color: var(--accent-red);
 }
 
 .modal-body {

@@ -183,9 +183,10 @@ export function showPortConflictModal(conflict: PortConflictInfo, opts?: { force
   attachBackdropClickToClose(overlay, () => closeAction());
   overlay.querySelector('.ni-port-modal-close')?.addEventListener('click', () => closeAction());
 
-  // Port changes happen in Settings → Network Inspector only; this button takes the user there.
+  // Port changes happen in Settings → Network Inspector only; this button takes the user there
+  // and scrolls straight to the MITM Proxy Port row instead of leaving them to hunt for it.
   overlay.querySelector('[data-ni-port-modal-settings]')?.addEventListener('click', () => {
-    window.roku?.openSettings?.('network-inspector');
+    window.roku?.openSettings?.('network-inspector', 'mitmProxyPortSettingsRow');
     closeAction();
   });
 

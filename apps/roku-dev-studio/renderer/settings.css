@@ -117,8 +117,8 @@ body {
   padding: 0;
 }
 .modal-close:hover {
-  background: var(--bg-hover);
-  color: var(--text-primary);
+  background: var(--accent-red-dim);
+  color: var(--accent-red);
 }
 .modal-close svg {
   display: block;
@@ -365,6 +365,11 @@ ul.help-blurb li {
   padding: 12px 0;
   border-bottom: 1px solid var(--border);
 }
+@keyframes settingsRowHighlightPulse {
+  0%, 100% { box-shadow: inset 0 0 0 0 rgba(139, 92, 246, 0); background-color: transparent; }
+  50% { box-shadow: inset 0 0 0 2px rgba(139, 92, 246, 0.5); background-color: rgba(139, 92, 246, 0.08); }
+}
+.settings-row-highlight { border-radius: 8px; animation: settingsRowHighlightPulse 1.2s ease-in-out 2; }
 .settings-row-text {
   flex: 4 1 0;
   min-width: 0;
@@ -998,7 +1003,7 @@ ul.help-blurb li {
 .ni-modal-overlay {
   position: fixed;
   inset: 0;
-  z-index: 100;
+  z-index: 5000;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1129,13 +1134,11 @@ ul.help-blurb li {
 #sideloadRelayRoot .sr-summary-row .settings-row-text { flex: 1; min-width: 0; }
 
 /* Setup modal (mounted on <body>) */
-.sr-modal-overlay { position: fixed; inset: 0; background: rgba(6, 6, 12, .6); backdrop-filter: blur(3px); display: flex; align-items: center; justify-content: center; z-index: 9999; }
+.sr-modal-overlay { position: fixed; inset: 0; background: rgba(6, 6, 12, .6); backdrop-filter: blur(3px); display: flex; align-items: center; justify-content: center; z-index: 5000; }
 .sr-modal-overlay[hidden] { display: none; }
 .sr-modal { width: min(760px, 94vw); max-height: 86vh; display: flex; flex-direction: column; background: var(--bg-secondary, #1a1a2e); border: 1px solid var(--border, #2a2a40); border-radius: 14px; box-shadow: 0 24px 60px rgba(0, 0, 0, .5); overflow: hidden; }
 .sr-modal-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid var(--border, #2a2a40); }
 .sr-modal-header h2 { margin: 0; font-size: 16px; font-weight: 650; }
-.sr-modal-close { background: transparent; border: 0; color: var(--text-secondary, #9aa); font-size: 20px; line-height: 1; cursor: pointer; padding: 4px 8px; border-radius: 6px; }
-.sr-modal-close:hover { background: var(--bg-elevated, #2a2a40); color: var(--text-primary, #e8e8f0); }
 .sr-modal-header-actions { display: flex; align-items: center; gap: 10px; }
 .sr-scan-btn { background: linear-gradient(180deg, #c084fc, #a855f7); color: #fff; border: 0; border-radius: 8px; padding: 6px 13px; font-size: 12.5px; font-weight: 600; cursor: pointer; white-space: nowrap; }
 .sr-scan-btn:hover:not(:disabled) { filter: brightness(1.08); }

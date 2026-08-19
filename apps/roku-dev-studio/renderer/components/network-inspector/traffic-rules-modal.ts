@@ -463,7 +463,6 @@ export async function openTrafficRulesModal(opts: {
       </div>
       <div class="ni-rules-footer">
         <span class="ni-rules-status" data-rules-status aria-live="polite"></span>
-        <button type="button" class="btn btn-secondary" data-rules-cancel>${S.common.cancel}</button>
         <button type="button" class="btn btn-primary" data-rules-save>${S.networkInspector.saveChanges}</button>
       </div>
     </div>`;
@@ -550,7 +549,6 @@ export async function openTrafficRulesModal(opts: {
   document.addEventListener('keydown', onKey);
   attachBackdropClickToClose(overlay, close);
   overlay.querySelector('.ni-rules-close')?.addEventListener('click', close);
-  overlay.querySelector('[data-rules-cancel]')?.addEventListener('click', close);
 
   const hostList = overlay.querySelector('[data-host-list]') as HTMLElement | null;
   const addInput = overlay.querySelector('[data-add-host]') as HTMLInputElement | null;

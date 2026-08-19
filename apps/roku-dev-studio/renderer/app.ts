@@ -46,6 +46,7 @@ import {
   openModalOverlayActiveFromOpener
 } from './modules/utils/modal-origin-motion.js';
 import { attachBackdropClickToClose, attachEscToClose } from './modules/utils/modal-backdrop-click.js';
+import { wireHelpSettingsLinks } from './modules/utils/help-settings-link.js';
 import { resolveRokuKeyFromEvent } from './modules/utils/keyboard-remote-keymap.js';
 import { setupTelnet } from './modules/telnet/telnet-console-panel.js';
 import { buildFindBarElement, createFindBar, bindFindShortcut } from './modules/ui/find-bar.js';
@@ -1749,7 +1750,7 @@ interface AppDomElements {
   locationName: HTMLInputElement | null;
   locationHost: HTMLInputElement | null;
   locationPort: HTMLInputElement | null;
-  cancelAddLocation: HTMLButtonElement | null;
+  addLocationClose: HTMLButtonElement | null;
   confirmAddLocation: HTMLButtonElement | null;
   remoteLocationsContainer: HTMLElement | null;
   localDevicesSection: HTMLElement | null;
@@ -4912,13 +4913,12 @@ async function manualConnect() {
 function setupRemoteLocationModal() {
   const modal = elements.addLocationModal;
   const addBtn = elements.addLocationBtn;
-  const cancelBtn = elements.cancelAddLocation;
   const confirmBtn = elements.confirmAddLocation;
   const nameInput = elements.locationName;
   const hostInput = elements.locationHost;
   const portInput = elements.locationPort;
-  
-  if (!modal || !addBtn || !cancelBtn || !confirmBtn || !nameInput || !hostInput || !portInput) {
+
+  if (!modal || !addBtn || !confirmBtn || !nameInput || !hostInput || !portInput) {
     devLog('Remote location modal elements not found');
     return;
   }
@@ -4944,8 +4944,8 @@ function setupRemoteLocationModal() {
     });
   }
   
-  cancelBtn.addEventListener('click', closeModal);
-  
+  elements.addLocationClose?.addEventListener('click', closeModal);
+
   // Close on backdrop click, guarded so a drag that starts inside and releases
   // on the backdrop doesn't dismiss the modal (see modal-backdrop-click.ts).
   attachBackdropClickToClose(locationModal, closeModal);
@@ -5518,6 +5518,11 @@ async function init() {
   // Localize the static index.html shell + the just-injected modal fragments in one
   // pass (elements carry data-i18n* attributes; inline English is the fallback).
   applyI18n(document);
+  // One delegated listener on `document` covers every `.help-settings-link` anywhere —
+  // the modals just mounted above (Help & Guide, Remote Help, …) and the Network
+  // Inspector tab's own dynamically-rendered hints — with no per-container wiring needed
+  // as new links are added.
+  wireHelpSettingsLinks(document);
   // The local device-count badge is parametrized (S.app.deviceCount), so it can't carry
   // a data-i18n attribute; seed its initial "0 devices" label from the catalog. Later
   // renderDeviceList() calls keep it in sync as devices connect/disconnect.
@@ -5552,7 +5557,7 @@ async function init() {
     locationName: document.getElementById('locationName') as HTMLInputElement | null,
     locationHost: document.getElementById('locationHost') as HTMLInputElement | null,
     locationPort: document.getElementById('locationPort') as HTMLInputElement | null,
-    cancelAddLocation: document.getElementById('cancelAddLocation') as HTMLButtonElement | null,
+    addLocationClose: document.getElementById('addLocationClose') as HTMLButtonElement | null,
     confirmAddLocation: document.getElementById('confirmAddLocation') as HTMLButtonElement | null,
     remoteLocationsContainer: document.getElementById('remoteLocationsContainer'),
     // Local devices section
@@ -5671,7 +5676,8 @@ async function init() {
       openTryDemoAppModal({
         initialDevices: buildTryDemoAppDeviceOptions(),
         rescan: buildTryDemoAppDeviceOptions,
-        onLaunched: (device) => connectAndOpenConsoleForTryDemoAppDevice(device.id)
+        onLaunched: (device) => connectAndOpenConsoleForTryDemoAppDevice(device.id),
+        opener: tryDemoAppBtn
       });
     });
   }

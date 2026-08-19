@@ -44,7 +44,7 @@ export function setupFunctionSelector(
       `<div class="modal inspector-func-info-modal" role="dialog" aria-modal="true" aria-label="${escapeHtml(S.inspector.functionDetailsTitle)}">
          <div class="modal-header">
            <h2>${escapeHtml(S.inspector.functionDetailsTitle)}</h2>
-           <button type="button" class="modal-close inspector-func-info-close" title="${escapeHtml(S.common.close)}" aria-label="${escapeHtml(S.common.close)}">&times;</button>
+           <button type="button" class="modal-close inspector-func-info-close" title="${escapeHtml(S.common.close)}" aria-label="${escapeHtml(S.common.close)}"><span class="icon icon-sm"><svg><use href="#icon-x"/></svg></span></button>
          </div>
          <div class="modal-body">
            <p class="inspector-func-info-text">${escapeHtml(body)}</p>

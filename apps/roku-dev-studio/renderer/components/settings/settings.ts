@@ -27,6 +27,7 @@ if (!api) {
 }
 
 const INITIAL_SECTION = new URLSearchParams(window.location.search).get('section') || '';
+const INITIAL_HIGHLIGHT = new URLSearchParams(window.location.search).get('highlight') || '';
 
 // The main process passes the already-resolved effective locale in the query so we
 // can apply it SYNCHRONOUSLY here — before the first `applyI18n(document)` below —
@@ -1741,9 +1742,23 @@ setInterval(function () {
   if (panel && panel.classList.contains('active')) refreshNiPortConflict();
 }, 5000);
 
+// Scrolls a settings row into view and flashes it, so a deep link from elsewhere in the app
+// (e.g. the Try Demo App modal's "Turn this off in Settings" link) lands the user right on the
+// relevant toggle instead of a bare section switch they'd have to scan for.
+function highlightSettingsRow(rowId: string): void {
+  var row = document.getElementById(rowId);
+  if (!row) return;
+  row.scrollIntoView({ behavior: prefersReducedMotion() ? 'auto' : 'smooth', block: 'center' });
+  row.classList.remove('settings-row-highlight');
+  void row.offsetWidth; // reflow so a repeat highlight restarts the animation
+  row.classList.add('settings-row-highlight');
+  setTimeout(function () { row!.classList.remove('settings-row-highlight'); }, 3000);
+}
+
 (window as any).requestCloseSettingsWindow = requestCloseSettingsWindow;
-(window as any).rdsNavigateSettingsSection = function (id: string) {
+(window as any).rdsNavigateSettingsSection = function (id: string, highlightId?: string) {
   if (id) { try { selectSection(id); } catch (e) {} }
+  if (highlightId) { setTimeout(function () { highlightSettingsRow(highlightId); }, 80); }
 };
 
 try { initSideloadRelaySection(); } catch (e) {}
@@ -1752,3 +1767,6 @@ if (INITIAL_SECTION) {
   try { selectSection(INITIAL_SECTION); } catch (e) {}
 }
 animateOpen();
+if (INITIAL_HIGHLIGHT) {
+  setTimeout(function () { highlightSettingsRow(INITIAL_HIGHLIGHT); }, MOTION_FALLBACK_MS);
+}

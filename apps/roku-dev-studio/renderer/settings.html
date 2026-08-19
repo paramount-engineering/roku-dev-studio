@@ -73,7 +73,7 @@
                   <span class="settings-toggle-ui" aria-hidden="true"></span>
                 </label>
               </div>
-              <div class="settings-row-toggle">
+              <div class="settings-row-toggle" id="keyboardRemoteSettingsRow">
                 <div class="settings-row-text">
                   <strong data-i18n="settings.useKeyboardRemote">Use Keyboard for Roku Remote</strong>
                   <span class="settings-row-desc" data-i18n="settings.useKeyboardRemoteDesc">When On, you can use the keyboard to control the Roku. Keyboard shortcuts are listed in the Remote Help modal.</span>
@@ -83,7 +83,7 @@
                   <span class="settings-toggle-ui" aria-hidden="true"></span>
                 </label>
               </div>
-              <div class="settings-row-toggle">
+              <div class="settings-row-toggle" id="tryDemoAppSettingsRow">
                 <div class="settings-row-text">
                   <strong data-i18n="settings.tryDemoAppToggle">Show Try Demo App Button</strong>
                   <span class="settings-row-desc" data-i18n="settings.tryDemoAppToggleDesc">When On, a Try Demo App button appears in the title bar for sideloading the bundled Roku Dev Studio Showcase demo channel to a device.</span>
@@ -138,7 +138,7 @@
       <div class="settings-panel" data-section="action-scripts" id="panel-action-scripts" role="tabpanel" aria-labelledby="nav-action-scripts" aria-hidden="true">
         <div class="settings-panel-fill">
           <div class="settings-panel-scroll">
-            <div class="settings-section folder-scripts-block">
+            <div class="settings-section folder-scripts-block" id="actionScriptsDefaultFolderSettingsRow">
               <p class="help-blurb" data-i18n="settings.actionScriptsBlurb">Default folder for screenshots and logs when a script needs saves. You can still pick another folder per run.</p>
               <div class="folder-action-row">
                 <div class="folder-integrated">
@@ -226,7 +226,7 @@
               </div>
             </div>
             <div class="settings-section" id="niSection">
-              <div class="settings-row-toggle">
+              <div class="settings-row-toggle" id="networkInspectorEnableSettingsRow">
                 <div class="settings-row-text">
                   <strong data-i18n="settings.enableNetworkInspector">Enable Network Inspector</strong>
                   <span class="settings-row-desc" data-i18n="settings.enableNetworkInspectorDesc">Inspect a device's network traffic. Decrypts your dev channel's HTTPS via the local proxy (any network); a hotspot also captures DNS/SNI. Stored locally only.</span>
@@ -236,7 +236,7 @@
                   <span class="settings-toggle-ui" aria-hidden="true"></span>
                 </label>
               </div>
-              <div class="settings-row-input">
+              <div class="settings-row-input" id="mitmProxyPortSettingsRow">
                 <div class="settings-row-text">
                   <strong data-i18n="settings.mitmProxyPort">MITM Proxy Port</strong>
                   <span class="settings-row-desc" data-i18n="settings.mitmProxyPortDesc">Port the local decrypting proxy listens on. Route your sideloaded dev channel through it — stock channels can't be intercepted.</span>

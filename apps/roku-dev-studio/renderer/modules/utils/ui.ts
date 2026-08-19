@@ -43,7 +43,7 @@ export function showToast(message: string, type: StatusType | string = 'info', o
       position: fixed;
       bottom: 20px;
       right: 20px;
-      z-index: 10000;
+      z-index: 2000;
       display: flex;
       flex-direction: column;
       gap: 10px;

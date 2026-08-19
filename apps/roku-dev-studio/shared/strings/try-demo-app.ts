@@ -17,6 +17,8 @@ export const tryDemoApp = {
     '<strong>Console Monitor:</strong> call <code>TriggerConsoleFinding</code> from App Connector to surface real BrightScript findings.',
     '<strong>MCP / AI agent:</strong> from an MCP-connected client, call the <code>app_function</code> tool against <code>SearchCatalog</code> or <code>PlayContentById</code>.',
   ],
+  settingsLink: 'Turn this off in Settings',
+  settingsLinkAria: 'Open Settings to turn off the Try Demo App button',
   deviceSelectLabel: 'Device',
   deviceSelectPlaceholder: 'Select a device',
   noDevicesText: 'No developer-mode devices found. Discover or add one first.',

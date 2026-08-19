@@ -22,7 +22,7 @@ export function openApplyToDeviceModal(opts: {
     `<div class="modal apply-to-device-modal" role="dialog" aria-modal="true" aria-label="${escapeHtml(S.actionScripts.viewerApplyToDevice)}">
        <div class="modal-header">
          <h2>${escapeHtml(S.actionScripts.viewerApplyToDevice)}</h2>
-         <button type="button" class="modal-close apply-to-device-close" title="${escapeHtml(S.common.close)}" aria-label="${escapeHtml(S.common.close)}">&times;</button>
+         <button type="button" class="modal-close apply-to-device-close" title="${escapeHtml(S.common.close)}" aria-label="${escapeHtml(S.common.close)}"><span class="icon icon-sm"><svg><use href="#icon-x"/></svg></span></button>
        </div>
        <div class="modal-body">
          <div class="apply-to-device-row">
@@ -31,7 +31,6 @@ export function openApplyToDeviceModal(opts: {
          </div>
        </div>
        <div class="modal-footer apply-to-device-footer">
-         <button type="button" class="btn btn-secondary apply-to-device-cancel">${escapeHtml(S.common.cancel)}</button>
          <button type="button" class="btn btn-primary apply-to-device-apply" disabled>${escapeHtml(S.actionScripts.viewerApply)}</button>
        </div>
      </div>`
@@ -92,7 +91,6 @@ export function openApplyToDeviceModal(opts: {
   });
 
   overlay.querySelector('.apply-to-device-close')?.addEventListener('click', settle);
-  overlay.querySelector('.apply-to-device-cancel')?.addEventListener('click', settle);
   attachBackdropClickToClose(overlay, settle);
   document.addEventListener('keydown', onKey);
 
