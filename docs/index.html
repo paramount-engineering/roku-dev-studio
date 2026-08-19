@@ -4,19 +4,19 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Roku Dev Studio — Roku Developer Tools for macOS, Windows &amp; Linux</title>
-<meta name="description" content="Roku Dev Studio is a comprehensive desktop app for controlling and developing on Roku devices — Remote Control, App Side-loading, ECP automation, RALE / App Connector, Network Inspector, a BrightScript Debugger, Action Scripts, an MCP server for AI agents, and a rds CLI. Works locally or over the internet via a remote server bridge.">
+<meta name="description" content="Roku Dev Studio — the unified, single desktop app for Roku development, sideloading, debugging, network inspection, and AI agents via MCP.">
 <link rel="canonical" href="https://paramount-engineering.github.io/roku-dev-studio/">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Roku Dev Studio">
 <meta property="og:title" content="Roku Dev Studio — Roku Developer Tools for macOS, Windows &amp; Linux">
-<meta property="og:description" content="Roku Dev Studio is a comprehensive desktop app for controlling and developing on Roku devices — Remote Control, App Side-loading, ECP automation, RALE / App Connector, Network Inspector, a BrightScript Debugger, Action Scripts, an MCP server for AI agents, and a rds CLI. Works locally or over the internet via a remote server bridge.">
+<meta property="og:description" content="Roku Dev Studio — the unified, single desktop app for Roku development, sideloading, debugging, network inspection, and AI agents via MCP.">
 <meta property="og:url" content="https://paramount-engineering.github.io/roku-dev-studio/">
 <meta property="og:image" content="https://paramount-engineering.github.io/roku-dev-studio/images/og-image.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Roku Dev Studio — Roku Developer Tools for macOS, Windows &amp; Linux">
-<meta name="twitter:description" content="Roku Dev Studio is a comprehensive desktop app for controlling and developing on Roku devices — Remote Control, App Side-loading, ECP automation, RALE / App Connector, Network Inspector, a BrightScript Debugger, Action Scripts, an MCP server for AI agents, and a rds CLI. Works locally or over the internet via a remote server bridge.">
+<meta name="twitter:description" content="Roku Dev Studio — the unified, single desktop app for Roku development, sideloading, debugging, network inspection, and AI agents via MCP.">
 <meta name="twitter:image" content="https://paramount-engineering.github.io/roku-dev-studio/images/og-image.png">
 <link rel="icon" href="images/icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -30,7 +30,7 @@
   "name": "Roku Dev Studio",
   "operatingSystem": "macOS, Windows, Linux",
   "applicationCategory": "DeveloperApplication",
-  "description": "A comprehensive desktop application for developing and testing on Roku devices: remote control, sideloading, network inspection, an in-app BrightScript debugger, scripted automation, and an MCP server so AI agents can drive a real device too.",
+  "description": "The unified, single desktop application for developing and testing on Roku devices: remote control, sideloading, network inspection, an in-app BrightScript debugger, scripted automation, and an MCP server so AI agents like Cursor and Claude Desktop can drive a real device too.",
   "url": "https://paramount-engineering.github.io/roku-dev-studio/",
   "image": "https://paramount-engineering.github.io/roku-dev-studio/images/og-image.png",
   "softwareVersion": "1.1.0",
@@ -73,8 +73,8 @@
 <section class="hero container">
   <div class="section-title-eyebrow">Open Source · macOS · Windows · Linux</div>
   <h1 class="hero-wordmark">Roku Dev Studio</h1>
-  <p class="hero-tagline">Control Roku devices locally or remotely over the internet — no terminal required.</p>
-  <p class="hero-sub">A comprehensive desktop application for developing and testing on Roku devices: remote control, sideloading, network inspection, an in-app BrightScript debugger, scripted automation, and an MCP server so AI agents can drive a real device too.</p>
+  <p class="hero-tagline">The unified tool for Roku development — control devices locally or remotely over the internet, no terminal required.</p>
+  <p class="hero-sub">A single desktop application for developing and testing on Roku devices: remote control, sideloading, network inspection, an in-app BrightScript debugger, scripted automation, and an MCP server so AI agents like Cursor, Claude Desktop, and VS Code can drive a real device too.</p>
   <div class="hero-actions">
     <a class="btn btn-primary" href="install.html">Get Started</a>
     <a class="btn btn-secondary" href="features.html">Explore Features</a>
@@ -99,13 +99,36 @@
     <div class="feature-card">
       <h3><svg class="icon" width="16" height="16"><use href="assets/icons.svg#icon-check"></use></svg> The solution</h3>
       <ul>
-        <li>A GUI for almost everything — most features need zero terminal knowledge</li>
+        <li>One unified, single desktop app instead of a dozen terminal tools and IDE plugins — most features need zero terminal knowledge</li>
         <li>Automatic screenshots during keypress / text-input / sideload workflows</li>
         <li>A remote server bridge controls devices anywhere over the internet, no physical access needed</li>
         <li>App Connector (RALE) executes your channel's own functions with live output</li>
       </ul>
     </div>
   </div>
+</section>
+
+<section class="section container">
+  <div class="section-title-eyebrow">Why Roku Dev Studio?</div>
+  <h2 class="section-heading">One app instead of a dozen tools</h2>
+  <p class="section-lead">Roku Dev Studio doesn't replace Roku's own protocols (ECP, RALE, telnet, <code>sca-cmd</code>) — it wraps all of them in one GUI, one CLI (<code>rds</code>), and one MCP server.</p>
+  <table>
+    <thead>
+      <tr><th>Task</th><th>Without Roku Dev Studio</th><th>With Roku Dev Studio</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Remote control</td><td>The official Roku Remote Tool, or raw ECP <code>keypress</code> calls via curl/Postman</td><td>One tab: full D-Pad, keyboard remote, and a floating mini-remote</td></tr>
+      <tr><td>Sideloading</td><td>The device's browser-based installer or a VS Code extension — one IP at a time</td><td><strong>Sideload Relay</strong> — one push from your IDE installs, launches, and captures console on every targeted device</td></tr>
+      <tr><td>Debug console</td><td><code>telnet &lt;ip&gt; 8085</code> in a raw terminal or through an IDE — no search/filter/save either way</td><td>A structured console with search, filtering, and saved logs</td></tr>
+      <tr><td>BrightScript debugging</td><td>The socket debug protocol, usable mainly through a single IDE's extension</td><td>A standalone debugger: breakpoints, step execution, call stack, variables, watch</td></tr>
+      <tr><td>App inspection (RALE)</td><td>RALE alone only inspects SceneGraph nodes — no way to call into a channel or exchange data with it</td><td><strong>App Connector</strong> — extends RALE with the ability to call your channel's own functions and pass data back and forth (GET/POST-style), unlocking automation that didn't exist before</td></tr>
+      <tr><td>Network traffic</td><td>A separately configured MITM proxy (Charles/mitmproxy/Fiddler) with manual device setup</td><td>Built-in local MITM proxy + optional hotspot packet capture</td></tr>
+      <tr><td>Static analysis</td><td><code>sca-cmd</code> output cross-referenced by hand against Roku's cert docs</td><td>Runs <code>sca-cmd</code> for you, with cert-requirement links straight to Roku's docs</td></tr>
+      <tr><td>Remote locations / labs</td><td>Physical presence required — ECP only works on the local network</td><td>A bundled remote server bridges ECP over the internet</td></tr>
+      <tr><td>Repeatable testing</td><td>Hand-rolled scripts around ECP and RALE</td><td><strong>Action Scripts</strong> — build a flow (keypresses, queries, conditionals, waits) from a GUI, or run it headless via <code>rds</code></td></tr>
+      <tr><td>AI-agent access</td><td>Nothing official</td><td>A bundled <strong>MCP server</strong> lets Cursor, Claude Desktop, or VS Code drive a real device</td></tr>
+    </tbody>
+  </table>
 </section>
 
 <section class="section">

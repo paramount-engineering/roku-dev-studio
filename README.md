@@ -14,6 +14,23 @@
 
 A comprehensive cross-platform desktop application for controlling and developing on Roku devices over your local network or via remote server using the External Control Protocol (ECP).
 
+## Why Roku Dev Studio?
+
+Roku development is normally split across a pile of separate, single-purpose tools that don't talk to each other. Roku Dev Studio doesn't replace Roku's own protocols (ECP, RALE, telnet, `sca-cmd`) — it wraps all of them in one GUI, one CLI (`rds`), and one MCP server:
+
+| Task | Without Roku Dev Studio | With Roku Dev Studio |
+|------|--------------------------|------------------------|
+| Remote control | The official Roku Remote Tool, or raw ECP `keypress` calls via curl/Postman | One tab: full D-Pad, keyboard remote, and a floating mini-remote |
+| Sideloading | The device's browser-based installer or a VS Code extension — one IP at a time | **Sideload Relay** — one push from your IDE installs, launches, and captures console on every targeted device |
+| Debug console | `telnet <ip> 8085` in a raw terminal or through an IDE — no search/filter/save either way | A structured console with search, filtering, and saved logs |
+| BrightScript debugging | The socket debug protocol, usable mainly through a single IDE's extension | A standalone debugger: breakpoints, step execution, call stack, variables, watch |
+| App inspection (RALE) | RALE alone only inspects SceneGraph nodes — no way to call into a channel or exchange data with it | **App Connector** — extends RALE with the ability to call your channel's own functions and pass data back and forth (GET/POST-style), unlocking automation that didn't exist before |
+| Network traffic | A separately configured MITM proxy (Charles/mitmproxy/Fiddler) with manual device setup | Built-in local MITM proxy + optional hotspot packet capture |
+| Static analysis | `sca-cmd` output cross-referenced by hand against Roku's cert docs | Runs `sca-cmd` for you, with cert-requirement links straight to Roku's docs |
+| Remote locations / labs | Physical presence required — ECP only works on the local network | A bundled remote server bridges ECP over the internet |
+| Repeatable testing | Hand-rolled scripts around ECP and RALE | **Action Scripts** — build a flow (keypresses, queries, conditionals, waits) from a GUI, or run it headless via `rds` |
+| AI-agent access | Nothing official | A bundled **MCP server** lets Cursor, Claude Desktop, or VS Code drive a real device |
+
 This repository is an **npm workspace** monorepo. Run **`npm install`** and **`npm start`** from the **repository root** so workspaces link correctly. Installing runs a `postinstall` (`npm run build:libs`) that compiles the shared `roku-dev-studio-platform` and `roku-dev-studio-api` packages to their `dist/` outputs, which the app and remote server import. Use **`npm run typecheck`** for a full TypeScript check across every workspace and **`npm test`** to run unit tests. CI runs these plus per-package build/syntax smoke checks on each push and pull request. Setup, scripts, and distributable builds are documented in **[INSTALLATION.md](INSTALLATION.md)**.
 
 ## Repository layout
@@ -62,6 +79,16 @@ Roku Dev Studio is available for:
 |           Home           |
 |--------------------------|
 | ![Home](docs/images/HOME.png) |
+
+|           Remote + Device Performance           |           App Connector (RALE)           |           Action Scripts Builder           |
+|--------------------------------------------------|--------------------------------------------|-----------------------------------------------|
+| ![Remote with Device Performance](docs/images/REMOTE_WITH_DEVICE_PERFORMANCE.png) | ![App Connector](docs/images/APP_CONNECTOR.png) | ![Action Scripts Builder](docs/images/ACTION-SCRIPTS_BUILDER.png) |
+
+|           BrightScript Fiddle           |           MCP Server Settings           |           Dev App / Sideload           |
+|-------------------------------------------|--------------------------------------------|--------------------------------------------|
+| ![BrightScript Fiddle](docs/images/BRIGHTSCRIPT_FIDDLE.png) | ![Settings MCP Server](docs/images/SETTINGS_MCP_SERVER.png) | ![Dev App](docs/images/DEV_APP.png) |
+
+More screenshots for every feature: **[FEATURES.md](FEATURES.md)**.
 
 ## Features
 
