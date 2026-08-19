@@ -1,0 +1,12 @@
+{
+    "items": [
+        { "id": "deep-blue", "title": "Deep Blue", "description": "Sweeping stock footage of open ocean and rolling waves.", "streamUrl": "https://vjs.zencdn.net/v/oceans.mp4", "streamFormat": "mp4" },
+        { "id": "big-buck-bunny", "title": "Big Buck Bunny", "description": "A gentle giant rabbit gets sweet revenge on the bullies of the forest. Full Blender Foundation short film.", "streamUrl": "https://media.w3.org/2010/05/bunny/movie.mp4", "streamFormat": "mp4" },
+        { "id": "sintel", "title": "Sintel", "description": "A lone wanderer searches a war-torn land for the baby dragon she raised and lost. HD trailer.", "streamUrl": "https://media.w3.org/2010/05/sintel/trailer_hd.mp4", "streamFormat": "mp4" },
+        { "id": "sintel-trailer", "title": "Sintel: Trailer", "description": "A preview of one wanderer's search for the baby dragon she calls Scales.", "streamUrl": "https://media.w3.org/2010/05/sintel/trailer.mp4", "streamFormat": "mp4" },
+        { "id": "big-buck-bunny-trailer", "title": "Big Buck Bunny: Trailer", "description": "A quick look at the giant rabbit's revenge on the bullies of the forest.", "streamUrl": "https://media.w3.org/2010/05/bunny/trailer.mp4", "streamFormat": "mp4" },
+        { "id": "big-buck-bunny-clip", "title": "Big Buck Bunny: Scene Clip", "description": "A short highlight clip from the giant rabbit's forest adventure.", "streamUrl": "https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/720/Big_Buck_Bunny_720_10s_5MB.mp4", "streamFormat": "mp4" },
+        { "id": "jellyfish", "title": "Jellyfish", "description": "Slow, mesmerizing footage of jellyfish drifting through open water.", "streamUrl": "https://test-videos.co.uk/vids/jellyfish/mp4/h264/360/Jellyfish_360_10s_1MB.mp4", "streamFormat": "mp4" },
+        { "id": "sintel-clip", "title": "Sintel: Scene Clip", "description": "A short scene from the wanderer's search across a war-torn land.", "streamUrl": "https://test-videos.co.uk/vids/sintel/mp4/h264/360/Sintel_360_10s_1MB.mp4", "streamFormat": "mp4" }
+    ]
+}

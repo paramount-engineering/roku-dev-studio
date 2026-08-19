@@ -1,13 +1,14 @@
 # `roku-components/` — BrightScript-side components
 
-Roku-side BrightScript / SceneGraph artifacts that Roku Dev Studio depends on. Two distinct things live here:
+Roku-side BrightScript / SceneGraph artifacts that Roku Dev Studio depends on. Three distinct things live here:
 
 | Path | What it is | Who consumes it |
 |------|-----------|-----------------|
 | **`TrackerTask.xml`** | The TrackerTask SceneGraph component (Roku's own RALE component, with two extra hooks for the Dev Studio App Connector). Roku channel developers drop this into their own app's `components/` folder to make their channel reachable from the Dev Studio Inspector / App Connector / `rale_command` MCP tool / `rds rale` CLI. | **External — Roku channel developers** integrating their channel with Roku Dev Studio. |
 | **`fiddle/`** | A minimal SceneGraph "scratch channel" (manifest, scene component, splash images, `main.brs`). The desktop app sideloads this onto a selected Roku to host **BrightScript Fiddle** — when you click *Run* in the Fiddle window, the editor's code is wrapped into this channel and pushed to the device. | **Internal — Roku Dev Studio itself**. Hand-edits should be rare. |
+| **`demo/`** | A standalone, fictitious "Roku Dev Studio Showcase" channel (poster grid, Details/Player, App Connector functions, real HTTPS catalog fetch) for capturing screenshots/GIFs of Remote Control, App Connector, Network Inspector, and MCP/AI-agent flows — see [`demo/README.md`](demo/README.md). | **Internal — marketing/docs screenshots**. Sideload it standalone like any dev channel. |
 
-Neither folder is built or generated; both ship as plain text the way Roku channels expect.
+Neither of the first two folders is built or generated; they ship as plain text the way Roku channels expect. `demo/` has one generator script (`generate-images.mjs`) for its placeholder art only — the BrightScript/XML itself is hand-authored.
 
 ---
 

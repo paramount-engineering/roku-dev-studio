@@ -19,6 +19,7 @@ const { captureRokuScreenshot } = require('./lib/screenshot');
 const { verifyDeveloperDigestAuth } = require('./lib/verify-dev-digest-auth');
 const { sideloadChannel, deleteSideload, rebootDevice, checkForUpdate } = require('./lib/plugin-install');
 const { buildFiddleZip, userCodeDefinesInit } = require('./lib/bs-fiddle-template');
+const { buildDemoZip } = require('./lib/demo-channel-template');
 
 const {
   ecpErrorFromStatus,
@@ -95,6 +96,8 @@ module.exports = {
   // BrightScript Fiddle (generate minimal sideloadable channel around user code)
   buildFiddleZip,
   userCodeDefinesInit,
+  // Demo channel (static sideloadable "Roku Dev Studio Showcase" channel)
+  buildDemoZip,
   // ECP
   ecpErrorFromStatus,
   ecpRequest,
