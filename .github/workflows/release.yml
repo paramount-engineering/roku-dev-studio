@@ -140,6 +140,10 @@ jobs:
         with:
           tag_name: ${{ steps.get_version.outputs.TAG_NAME }}
           name: Roku Dev Studio v${{ steps.get_version.outputs.VERSION }}
+          # Appends GitHub's own auto-compiled "What's Changed" (commits/PRs since the last
+          # tag) after the body below — supplements the curated CHANGELOG.md entry rather than
+          # replacing the templated downloads/install instructions.
+          generate_release_notes: true
           body: |
             ## Roku Dev Studio v${{ steps.get_version.outputs.VERSION }}
 
@@ -152,7 +156,7 @@ jobs:
             | **Linux** | roku-dev-studio_${{ steps.get_version.outputs.VERSION }}_amd64.deb, Roku Dev Studio-${{ steps.get_version.outputs.VERSION }}-x86_64.AppImage | roku-dev-studio_${{ steps.get_version.outputs.VERSION }}_arm64.deb, Roku Dev Studio-${{ steps.get_version.outputs.VERSION }}-arm64.AppImage |
 
             ### What's New
-            - See commit history for changes
+            See [CHANGELOG.md](https://github.com/paramount-engineering/roku-dev-studio/blob/main/CHANGELOG.md#${{ steps.get_version.outputs.VERSION }}) for a curated summary, or "What's Changed" below for the full commit list.
 
             ### Installation
 
