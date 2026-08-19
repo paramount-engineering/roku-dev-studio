@@ -182,11 +182,16 @@ export function renderParamInputs(
   
   let html = '';
   params.forEach((param: unknown, index: number) => {
-    const p = param as { name?: string; type?: string; defaultValue?: unknown };
+    const p = param as { name?: string; type?: string; defaultValue?: unknown; placeholder?: unknown };
     const paramName = typeof param === 'string' ? param : (p.name || `param${index + 1}`);
     const paramType = typeof param === 'object' && param != null && p.type ? p.type : 'Dynamic';
     const isComplex = isComplexType(paramType);
-    const placeholder = getTypePlaceholder(paramType, paramName);
+    // A function's own descriptor can override the generic per-type hint (e.g. a param that's
+    // optional with a specific fallback, like SetProxy's `port`) with a `placeholder` string.
+    const placeholder =
+      typeof param === 'object' && param != null && Object.prototype.hasOwnProperty.call(param, 'placeholder')
+        ? String(p.placeholder ?? '')
+        : getTypePlaceholder(paramType, paramName);
     const defaultValue =
       typeof param === 'object' && param != null && Object.prototype.hasOwnProperty.call(param, 'defaultValue')
         ? String(p.defaultValue ?? '')

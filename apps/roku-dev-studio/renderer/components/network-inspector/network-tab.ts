@@ -2209,6 +2209,12 @@ export function setupNetworkTab(
     if (shouldPollEvents()) startPolling();
     else stopPolling();
     updateCaptureButton();
+    // The empty-state hint (and its proxy address / MITM state) is painted synchronously by
+    // setVisible()'s render() before this async status ever lands — without this, the very
+    // first status fetch after opening the tab would leave the placeholder host address
+    // (`S.networkInspector.proxyAddrFallback`, "machine-ip:8888") on screen indefinitely, since
+    // nothing else repaints an empty session list once its zero-events guidance is up.
+    if (state.events.length === 0) scheduleSessionListPaint({ force: true });
   }
 
   async function refreshNetworkCaptureStatus(): Promise<void> {
