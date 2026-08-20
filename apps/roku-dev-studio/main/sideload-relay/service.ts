@@ -36,6 +36,11 @@ const { resolveDeviceIp } = require('roku-dev-studio-api') as {
   resolveDeviceIp: (serial: string | undefined | null, fallbackIp: string) => string;
 };
 
+/** Privacy Mode placeholder for the per-device status line streamed to the 8085 debug console (see
+ *  `isPrivacyModeEnabled` above) — this text is what a screen-shared telnet client sees in place of
+ *  the real IP, not a real address, so it's a fixed literal rather than an IP-shaped mask. */
+const PRIVACY_IP_MASK = '#IP.MAS.KED.###';
+
 /**
  * Device keys (serial preferred, else IP — see `deviceKey()`/`RelayTarget.id`) the user opted
  * into "Sideload with Debugging" for (persisted from the Dev App checkbox). Also matches the
@@ -93,10 +98,21 @@ export class SideloadRelayService {
   private endEmitTimer: ReturnType<typeof setTimeout> | null = null;
 
   private readonly remoteOps?: RemoteFanoutOps;
+  /** Read live (not snapshotted at construction) so toggling Privacy Mode mid-run takes effect on
+   *  the next status line — this proxy's output has no DOM to apply the usual CSS blur to (it's
+   *  plain text streamed to whatever telnet-speaking client is watching this run's 8085 console),
+   *  so IPs are masked at the string itself instead. */
+  private readonly isPrivacyModeEnabled: () => boolean;
 
-  constructor(listener: RelayListener, authorizeSource?: AuthorizeSource, remoteOps?: RemoteFanoutOps) {
+  constructor(
+    listener: RelayListener,
+    authorizeSource?: AuthorizeSource,
+    remoteOps?: RemoteFanoutOps,
+    isPrivacyModeEnabled?: () => boolean
+  ) {
     this.listener = listener;
     this.remoteOps = remoteOps;
+    this.isPrivacyModeEnabled = isPrivacyModeEnabled || (() => false);
     this.proxy = new DebugEndpoints();
     this.ingest = new RelayIngestServer({
       getPassword: () => this.config.password,
@@ -236,7 +252,9 @@ export class SideloadRelayService {
     authorize: AuthorizeSource,
     info: { ip: string }
   ): Promise<boolean> {
-    this.proxy.status(`[Sideload Relay] Deploy request from ${info.ip}.`);
+    this.proxy.status(
+      `[Sideload Relay] Deploy request from ${this.isPrivacyModeEnabled() ? PRIVACY_IP_MASK : info.ip}.`
+    );
     this.proxy.status('[Sideload Relay] Waiting for the Roku Dev Studio host to allow this device… (a prompt is open on the host)');
     let ok = false;
     try {
@@ -434,9 +452,10 @@ export class SideloadRelayService {
     // Kick off the live 8085 status console for this run.
     this.proxy.beginRun(upload.filename, Math.round(upload.bytes / 1024), targets.length);
     if (targets.length) {
+      const maskIp = this.isPrivacyModeEnabled();
       for (const t of targets) {
         const via = t.remote ? ` — via ${t.location || 'remote'}` : '';
-        this.proxy.status(`  • ${t.name} (${t.ip})${via}`);
+        this.proxy.status(`  • ${t.name} (${maskIp ? PRIVACY_IP_MASK : t.ip})${via}`);
       }
     } else {
       this.proxy.status('  (no enabled + reachable target devices — nothing to install to)');
@@ -486,8 +505,9 @@ export class SideloadRelayService {
         if (result.done && !consoleDone.has(result.targetId)) {
           consoleDone.add(result.targetId);
           const ok = result.install.state === 'ok';
+          const resultIp = this.isPrivacyModeEnabled() ? PRIVACY_IP_MASK : result.ip;
           this.proxy.status(
-            `[${ok ? ' OK ' : 'FAIL'}] ${result.name} (${result.ip}): ` +
+            `[${ok ? ' OK ' : 'FAIL'}] ${result.name} (${resultIp}): ` +
               `install ${stepWord(result.install)}, console ${stepWord(result.console)}`
           );
         }

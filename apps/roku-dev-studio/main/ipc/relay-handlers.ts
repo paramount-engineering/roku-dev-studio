@@ -158,8 +158,15 @@ function sanitizedConfig(settings: Record<string, unknown>) {
   };
 }
 
-function setupRelayHandlers(_mainWindow: BrowserWindow | undefined, safeSendToRenderer: SafeSendFn) {
+function setupRelayHandlers(
+  _mainWindow: BrowserWindow | undefined,
+  safeSendToRenderer: SafeSendFn,
+  state: { privacyModeEnabled: boolean }
+) {
   const { ipcMain, app } = require('electron') as typeof import('electron');
+  // Read live, not snapshotted here — `state` is the same object System Handlers' Privacy Mode
+  // toggle mutates, so a toggle mid-run is reflected on the very next status line.
+  const isPrivacyModeEnabled = () => state.privacyModeEnabled;
 
   // One-time migration: fold any legacy per-relay device passwords
   // (`sideload-relay-target:<serial|ip>`) into the shared device-credential store
@@ -178,21 +185,21 @@ function setupRelayHandlers(_mainWindow: BrowserWindow | undefined, safeSendToRe
 
   function syncFromDisk(): void {
     const settings = loadSettings();
-    initSideloadRelayFromSettings(safeSendToRenderer, readBootConfig(settings));
+    initSideloadRelayFromSettings(safeSendToRenderer, readBootConfig(settings), isPrivacyModeEnabled);
   }
 
   syncFromDisk();
 
   app?.once('will-quit', () => {
     try {
-      void getSideloadRelayService(safeSendToRenderer).dispose();
+      void getSideloadRelayService(safeSendToRenderer, isPrivacyModeEnabled).dispose();
     } catch {
       /* ignore */
     }
   });
 
   ipcMain.handle(IPC.SideloadRelayGetStatus, async () => {
-    const svc = getSideloadRelayService(safeSendToRenderer);
+    const svc = getSideloadRelayService(safeSendToRenderer, isPrivacyModeEnabled);
     return { success: true, status: svc.getStatus(), lastRun: svc.getLastRun() };
   });
 
@@ -238,7 +245,7 @@ function setupRelayHandlers(_mainWindow: BrowserWindow | undefined, safeSendToRe
       }
 
       syncFromDisk();
-      return { success: true, status: getSideloadRelayService(safeSendToRenderer).getStatus() };
+      return { success: true, status: getSideloadRelayService(safeSendToRenderer, isPrivacyModeEnabled).getStatus() };
     }
   );
 
