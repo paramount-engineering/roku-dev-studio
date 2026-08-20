@@ -180,6 +180,14 @@ function tryXmlPayload(fromFirstLt: string): StructuredConsolePayload | null {
   const candidate = fromFirstLt.trim();
   if (!candidate || candidate.length < 3) return null;
 
+  // `DOMParser` (and the `Node`/`Element` globals `prettyXmlElement` below relies on) don't exist in
+  // a Worker's global scope — this module is shared with the telnet console's per-connection parse
+  // worker (see telnet-parse.worker.ts), which runs this same code off the main thread. Degrade to
+  // "no XML match" there rather than throwing and losing the whole batch the line arrived in; JSON
+  // detection (no DOM dependency) is unaffected. XML "open in viewer" still works everywhere else
+  // this module runs (main thread — Log Viewer, disconnected telnet fallback).
+  if (typeof DOMParser === 'undefined') return null;
+
   const doc = new DOMParser().parseFromString(candidate, 'application/xml');
   const err = doc.querySelector('parsererror');
   if (err) return null;

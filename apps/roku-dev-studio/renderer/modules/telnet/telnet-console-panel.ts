@@ -20,8 +20,11 @@ import {
 } from './telnet-console-buffer.js';
 import {
   createConsoleLineParserState,
-  parseConsoleLineBatch
+  parseConsoleLineBatch,
+  type ParsedTelnetEntry
 } from '../console-log/console-line-parser.js';
+import { createWorkerPool, type WorkerPool } from '../concurrency/worker-pool.js';
+import type { TelnetParseResult } from './telnet-parse.worker.js';
 import { icon, setSafeHTML } from '../index.js';
 import {
   openConsoleAnalyticsModal,
@@ -70,23 +73,26 @@ export type TelnetLogSnapshot = {
 
 export type TelnetPanelElement = HTMLElement & {
   _telnetCleanup?: () => void;
-  getTelnetLogText?: () => string;
+  /** Async: flushes any queued-but-not-yet-parsed lines through the per-connection worker first. */
+  getTelnetLogText?: () => Promise<string>;
   /**
    * Cursor-aware log snapshot for MCP agents.
    * - `afterCursor` (default 0): skip lines already seen; pass back the previous `cursor`.
    * - `maxLines` (default 500, capped at 2000): max lines returned in one call.
    */
-  getTelnetLogSnapshot?: (afterCursor?: number, maxLines?: number) => TelnetLogSnapshot;
+  getTelnetLogSnapshot?: (afterCursor?: number, maxLines?: number) => Promise<TelnetLogSnapshot>;
   /**
    * Console Monitor findings — the recognized BrightScript issues in the buffer, aggregated exactly as
    * the Console Monitor modal renders them (via the shared `computeConsoleFindings`). Backs the
    * `console_monitor_findings` MCP tool.
    */
-  getConsoleMonitorFindings?: () => ConsoleFindings & {
-    connected: boolean;
-    scannedLines: number;
-    totalCaptured: number;
-  };
+  getConsoleMonitorFindings?: () => Promise<
+    ConsoleFindings & {
+      connected: boolean;
+      scannedLines: number;
+      totalCaptured: number;
+    }
+  >;
   isTelnetConnected?: () => boolean;
   /**
    * Programmatically open the Telnet console connection, exactly as if the
@@ -283,9 +289,28 @@ export function setupTelnet(
   const findBarHandle = surface.findBar;
   // Per-connection parser state. The pending `[DEBUG]`-on-its-own-line prefix
   // can carry across IPC chunks, so the state lives at panel scope (one per
-  // device) — calls to `parseConsoleLineBatch` thread it through.
+  // device) — calls to `parseConsoleLineBatch` thread it through. Used as the
+  // *disconnected* fallback below; while connected, the equivalent state lives
+  // inside `telnetParseWorker` instead (see `getParsedTelnetEntries`).
   const telnetParserState = createConsoleLineParserState();
   const telnetTcpState: TelnetLineBufferState = { value: '' };
+  /** One dedicated worker per connection (not a shared pool task — the parser state it holds must
+   *  see this connection's chunks in order). Spun up in `connectTelnet`, torn down on disconnect. */
+  let telnetParseWorker: WorkerPool<string[], TelnetParseResult> | null = null;
+
+  /** Route through the per-connection worker when one exists (i.e. while connected); otherwise fall
+   *  back to the synchronous parse using the disconnected-fallback state above. The two states are
+   *  never both live for the same stretch of input — the worker is created/destroyed exactly around
+   *  the connected lifetime — so there's no continuation split between them. Either way,
+   *  `telnetParserState.pendingLogPrefix` ends up mirroring whichever state actually ran (the
+   *  fallback call mutates it directly; the worker reports its own copy back), so the existing
+   *  disconnect-time "flush a dangling prefix" check keeps working unchanged either way. */
+  async function getParsedTelnetEntries(lines: string[]): Promise<ParsedTelnetEntry[]> {
+    if (!telnetParseWorker) return parseConsoleLineBatch(telnetParserState, lines);
+    const result = await telnetParseWorker.run(lines);
+    telnetParserState.pendingLogPrefix = result.pendingLogPrefix;
+    return result.entries;
+  }
   /** Complete lines waiting for one DOM flush (coalesces bursty IPC / main-process batches). */
   let pendingTelnetLines: string[] = [];
   /** Paced flush: limits work per frame + spacing so JSON/XML/URL modals and scrolling stay responsive while streaming. */
@@ -826,14 +851,17 @@ export function setupTelnet(
     telnetFlushHandle = requestAnimationFrame(pump);
   }
 
-  /** Flush queued TCP lines immediately (disconnect / user-facing events). */
-  function flushTelnetPendingLinesSync() {
+  /** Flush queued TCP lines now instead of waiting for the next paced render (disconnect /
+   *  user-facing "give me everything captured so far" reads). No longer literally synchronous —
+   *  each batch goes through `getParsedTelnetEntries` like any other, off-thread while connected —
+   *  but callers can still rely on every queued line having landed in `logLines` once this resolves. */
+  async function flushTelnetPendingLines() {
     cancelTelnetFlush();
     while (pendingTelnetLines.length > 0) {
       const take = Math.min(pendingTelnetLines.length, TELNET_STREAM_MAX_LINES_PER_FLUSH * 12);
       const batch = pendingTelnetLines.splice(0, take);
       if (batch.length) {
-        addLogLinesBatch(batch, true, false);
+        await addLogLinesBatch(batch, true, false);
       }
     }
   }
@@ -861,7 +889,7 @@ export function setupTelnet(
   }
 
   /** Add many complete log lines in one layout pass (stable under flood). */
-  function addLogLinesBatch(rawLineChunks: string[], timestamp = true, splitEntries = true) {
+  async function addLogLinesBatch(rawLineChunks: string[], timestamp = true, splitEntries = true) {
     // Collapse incoming raw chunks into a flat per-line list. `splitEntries`
     // is the "this came as a multi-line blob, please split me" flag — set by
     // synthetic injections like `--- Connected ---` that arrive whole. The
@@ -877,10 +905,21 @@ export function setupTelnet(
       for (const line of rawLineChunks) linesToProcess.push(line);
     }
 
-    // Shared parser (`console-line-parser.ts`) — same logic the file viewer
-    // uses, threading through `telnetParserState` so a `[DEBUG]` prefix line
-    // whose continuation arrives in the next batch isn't dropped.
-    const parsed = parseConsoleLineBatch(telnetParserState, linesToProcess);
+    // Shared parser (`console-line-parser.ts`) — same logic the file viewer uses. Off the main
+    // thread via `telnetParseWorker` while connected (see `getParsedTelnetEntries`); either way the
+    // continuation state ([DEBUG]-prefix line whose continuation arrives in the next batch) is
+    // threaded through correctly since only one of the two states is ever live at a time.
+    let parsed: ParsedTelnetEntry[];
+    try {
+      parsed = await getParsedTelnetEntries(linesToProcess);
+    } catch (err) {
+      // A rejected worker task must not silently drop this whole batch of real device output —
+      // fall back to a same-thread parse so the lines still render (possibly against the
+      // disconnected-fallback state rather than the worker's, a one-batch inconsistency that
+      // self-corrects on the next call; better than losing console output outright).
+      rendererError('[Telnet] parse failed, falling back to main-thread parse:', err);
+      parsed = parseConsoleLineBatch(telnetParserState, linesToProcess);
+    }
     if (parsed.length === 0) return;
 
     const newEntries: TelnetLogEntry[] = parsed.map((p) => ({
@@ -925,8 +964,8 @@ export function setupTelnet(
     }
   }
 
-  function addLogLine(text: string, timestamp = true) {
-    addLogLinesBatch([text], timestamp, true);
+  function addLogLine(text: string, timestamp = true): Promise<void> {
+    return addLogLinesBatch([text], timestamp, true);
   }
 
   /**
@@ -1087,6 +1126,14 @@ export function setupTelnet(
           pendingTelnetLines.length = 0;
           cancelTelnetFlush();
           clearDeferredTelnetHeavyLines();
+          // Fresh parser state per connection, off the main thread — torn down in the disconnect
+          // handler below. Defensive destroy first: a prior worker should already be gone by the
+          // time a new Connect succeeds, but a stray one must not be leaked.
+          telnetParseWorker?.destroy();
+          telnetParseWorker = createWorkerPool<string[], TelnetParseResult>({
+            workerUrl: new URL('./telnet-parse.worker.js', import.meta.url),
+            poolSize: 1
+          });
           // Start every Connect with a clean view. Previously the in-memory
           // scrollback survived a disconnect → reconnect (or a brief drop),
           // so reconnecting showed a stale mix of the old session's lines plus
@@ -1235,7 +1282,7 @@ export function setupTelnet(
    * drifting between Copy and Save body paths.
    */
   async function loadAllEntriesForExport(): Promise<TelnetLogEntry[]> {
-    flushTelnetPendingLinesSync();
+    await flushTelnetPendingLines();
     return loadAllEntriesIncludingSpill();
   }
 
@@ -1612,13 +1659,15 @@ export function setupTelnet(
     });
   }
 
-  // Expose full console log to Action Script executor (reads in-memory logLines, not DOM)
-  panel.getTelnetLogText = function () {
-    flushTelnetPendingLinesSync();
+  // Expose full console log to Action Script executor (reads in-memory logLines, not DOM). Async
+  // since the flush now goes through the per-connection worker while connected (see
+  // `getParsedTelnetEntries`) — callers (MCP tool handlers) already await these.
+  panel.getTelnetLogText = async function () {
+    await flushTelnetPendingLines();
     return logLines.map(log => (log.timestamp ? `[${log.timestamp}] ${log.text}` : log.text)).join('\n');
   };
-  panel.getTelnetLogSnapshot = function (afterCursor = 0, maxLines = 500) {
-    flushTelnetPendingLinesSync();
+  panel.getTelnetLogSnapshot = async function (afterCursor = 0, maxLines = 500) {
+    await flushTelnetPendingLines();
     const cap = Math.min(Math.max(1, maxLines), 2000);
     const start = Math.max(0, Math.min(afterCursor, logLines.length));
     const slice = logLines.slice(start, start + cap);
@@ -1632,8 +1681,8 @@ export function setupTelnet(
   panel.isTelnetConnected = function () {
     return isConnected;
   };
-  panel.getConsoleMonitorFindings = function () {
-    flushTelnetPendingLinesSync();
+  panel.getConsoleMonitorFindings = async function () {
+    await flushTelnetPendingLines();
     return {
       connected: isConnected,
       scannedLines: logLines.length,
@@ -1682,7 +1731,7 @@ export function setupTelnet(
     if (parts.length) addLogLinesBatch(parts, true, false);
   });
 
-  const disconnectCleanup = window.roku.onTelnetDisconnected((data) => {
+  const disconnectCleanup = window.roku.onTelnetDisconnected(async (data) => {
     const payload = data as DebugTelnetIpcPayload & {
       hadError?: boolean;
       aliveMs?: number;
@@ -1693,9 +1742,9 @@ export function setupTelnet(
       if (tail) {
         pendingTelnetLines.push(tail);
       }
-      flushTelnetPendingLinesSync();
+      await flushTelnetPendingLines();
       if (telnetParserState.pendingLogPrefix) {
-        addLogLine(telnetParserState.pendingLogPrefix);
+        await addLogLine(telnetParserState.pendingLogPrefix);
         telnetParserState.pendingLogPrefix = '';
       }
 
@@ -1710,7 +1759,7 @@ export function setupTelnet(
         ? (aliveMs < 1000 ? `${aliveMs}ms` : `${(aliveMs / 1000).toFixed(1)}s`)
         : null;
 
-      addLogLine(S.telnet.lineConnectionClosed(aliveStr, bytes), false);
+      await addLogLine(S.telnet.lineConnectionClosed(aliveStr, bytes), false);
 
       // Heuristic hint: short-lived socket + zero bytes ⇒ Roku didn't
       // bind its log stream to us. Most common causes: another telnet
@@ -1721,10 +1770,15 @@ export function setupTelnet(
       // (firewall / Developer Mode off). hadError adds the OS-level
       // signal that the close was abnormal (RST etc.).
       if (aliveMs >= 0 && aliveMs < 5000 && bytes <= 0) {
-        addLogLine(S.telnet.hintNoLogData, false);
+        await addLogLine(S.telnet.hintNoLogData, false);
       } else if (payload.hadError) {
-        addLogLine(S.telnet.hintAbnormalClose, false);
+        await addLogLine(S.telnet.hintAbnormalClose, false);
       }
+
+      // Every line up to and including the close message has been enqueued and awaited above, so
+      // it's safe to tear the worker down now — nothing left in flight for it to drop.
+      telnetParseWorker?.destroy();
+      telnetParseWorker = null;
 
       updateConnectionState(false, false, payload.hadError ? S.telnet.connectionLost : null);
     }
@@ -1842,5 +1896,10 @@ export function setupTelnet(
     if (isConnected) {
       api.telnetDisconnect().catch(() => {});
     }
+    // `disconnectCleanup()` above already unregistered the `onTelnetDisconnected` listener that
+    // would normally tear this down, so a panel destroyed while still connected needs its own
+    // explicit destroy here — otherwise the worker thread leaks past the panel's own lifetime.
+    telnetParseWorker?.destroy();
+    telnetParseWorker = null;
   };
 }

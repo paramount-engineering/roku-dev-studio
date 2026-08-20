@@ -64,4 +64,19 @@ export function transpileMainProcess(appDir: string): void {
 
   for (const [entry, outfile] of PRELOAD_ENTRIES) bundleNode(entry, outfile, ['electron']);
   bundleNode('main.ts', 'main.bundled.cjs', MAIN_EXTERNAL);
+
+  // worker_threads entries: each needs its own standalone file (`new Worker(path)` can't load a
+  // symbol out of main.bundled.cjs), so they're bundled the same way as main itself. Output goes to
+  // appDir root (bare filename), same as the preload bundles above — `__dirname` inside
+  // main.bundled.cjs resolves to appDir root at runtime (see e.g. the preload path lookups in
+  // main/*-window.ts), so callers do `path.join(__dirname, '<name>.worker.js')`.
+  bundleNode('main/network-session-parse.worker.ts', 'network-session-parse.worker.js', MAIN_EXTERNAL);
+  // Lives in the shared network-inspector package (mitm-proxy.ts is transport-agnostic, used by both
+  // this app and the remote server) — same source file, bundled separately here and again by
+  // roku-dev-studio-remote-server/build.mjs for its own process.
+  bundleNode(
+    '../../packages/roku-dev-studio-network-inspector/leaf-cert.worker.ts',
+    'leaf-cert.worker.js',
+    MAIN_EXTERNAL
+  );
 }

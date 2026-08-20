@@ -123,7 +123,9 @@
       "!apps/**"
     ],
     "asarUnpack": [
-      "**/node_modules/cap/**"
+      "**/node_modules/cap/**",
+      "network-session-parse.worker.js",
+      "leaf-cert.worker.js"
     ],
     "compression": "maximum",
     "mac": {

@@ -304,6 +304,16 @@ export function setupActionScripts(panel: DevicePanelRoot, device, api) {
           : null,
     ip: typeof devRec.ip === 'string' ? devRec.ip : null
   };
+  // `handlerKey` is stored *by reference* by every registerMcpXxx call below (see
+  // mcp-bridge-client.ts's HandlerEntry) — a device opened via Sideload Relay auto-connect has
+  // no serial yet, so mutating `.serial` in place once a health check learns it is enough to fix
+  // serial-targeted MCP dispatch for every handler/tool registered with this key, with no need to
+  // re-register any of them individually.
+  panel.addEventListener('device-info-refreshed', (e: Event) => {
+    const ce = e as CustomEvent<{ device?: { serialNumber?: string } }>;
+    const next = ce.detail?.device?.serialNumber;
+    if (typeof next === 'string' && next.trim()) handlerKey.serial = next.trim();
+  });
   registerMcpFunctionsHandler(handlerKey, functionsHandler);
   registerMcpRaleHandler(handlerKey, raleHandler);
   registerMcpBuilderDropHandler(handlerKey, dropHandler);
@@ -494,10 +504,10 @@ export function setupActionScripts(panel: DevicePanelRoot, device, api) {
       const afterCursor = typeof a.afterCursor === 'number' ? a.afterCursor : 0;
       const maxLines = typeof a.maxLines === 'number' ? a.maxLines : 500;
       const telnetPanel = panel as unknown as {
-        getTelnetLogSnapshot?: (ac: number, ml: number) => unknown;
+        getTelnetLogSnapshot?: (ac: number, ml: number) => Promise<unknown>;
       };
       const snap = typeof telnetPanel.getTelnetLogSnapshot === 'function'
-        ? telnetPanel.getTelnetLogSnapshot(afterCursor, maxLines)
+        ? await telnetPanel.getTelnetLogSnapshot(afterCursor, maxLines)
         : null;
       if (!snap) {
         return {
@@ -514,10 +524,10 @@ export function setupActionScripts(panel: DevicePanelRoot, device, api) {
     handlerKey,
     async () => {
       const telnetPanel = panel as unknown as {
-        getConsoleMonitorFindings?: () => unknown;
+        getConsoleMonitorFindings?: () => Promise<unknown>;
       };
       const findings = typeof telnetPanel.getConsoleMonitorFindings === 'function'
-        ? telnetPanel.getConsoleMonitorFindings()
+        ? await telnetPanel.getConsoleMonitorFindings()
         : null;
       if (!findings) {
         return {
@@ -593,33 +603,41 @@ export function setupActionScripts(panel: DevicePanelRoot, device, api) {
   );
 
   // Push a state snapshot so the MCP bridge can answer get_selected_device /
-  // list_app_connector_functions. Re-pushed whenever this panel sets up
-  // (which happens when the user opens or switches a device tab).
-  try {
-    const dev = (device || {}) as Record<string, unknown>;
-    const isRemote = !!(dev.isRemote || dev.remoteLocationId);
-    pushMcpBridgeState({
-      selectedDevice: {
-        ip: typeof dev.ip === 'string' ? dev.ip : null,
-        serial: typeof dev.serial === 'string' ? dev.serial : (typeof dev.id === 'string' ? dev.id : null),
-        modelName: typeof dev.modelName === 'string' ? dev.modelName : null,
-        modelNumber: typeof dev.modelNumber === 'string' ? dev.modelNumber : null,
-        friendlyDeviceName:
-          typeof dev.friendlyDeviceName === 'string'
-            ? dev.friendlyDeviceName
-            : typeof dev.userDeviceName === 'string'
-              ? dev.userDeviceName
-              : null,
-        softwareVersion: typeof dev.softwareVersion === 'string' ? dev.softwareVersion : null,
-        source: isRemote ? 'remote' : 'local',
-        remoteLocationId: typeof dev.remoteLocationId === 'string' ? dev.remoteLocationId : null,
-        isFocused: true,
-        isConnected: true
-      }
-    });
-  } catch (e) {
-    rendererWarn('[mcp-bridge] could not push selectedDevice', e);
+  // list_app_connector_functions. Re-pushed whenever this panel sets up (which happens when the
+  // user opens or switches a device tab), and again on `device-info-refreshed` — a device opened
+  // via Sideload Relay auto-connect has an empty/generic `dev` here at setup time (no serial,
+  // model, or software version yet), and `device` is the same live object a health check
+  // (renderer/app.ts) mutates in place, so re-reading it once that fires keeps this snapshot from
+  // staying stale until the tab is closed and reopened.
+  function pushSelectedDeviceSnapshot(): void {
+    try {
+      const dev = (device || {}) as Record<string, unknown>;
+      const isRemote = !!(dev.isRemote || dev.remoteLocationId);
+      pushMcpBridgeState({
+        selectedDevice: {
+          ip: typeof dev.ip === 'string' ? dev.ip : null,
+          serial: typeof dev.serial === 'string' ? dev.serial : (typeof dev.id === 'string' ? dev.id : null),
+          modelName: typeof dev.modelName === 'string' ? dev.modelName : null,
+          modelNumber: typeof dev.modelNumber === 'string' ? dev.modelNumber : null,
+          friendlyDeviceName:
+            typeof dev.friendlyDeviceName === 'string'
+              ? dev.friendlyDeviceName
+              : typeof dev.userDeviceName === 'string'
+                ? dev.userDeviceName
+                : null,
+          softwareVersion: typeof dev.softwareVersion === 'string' ? dev.softwareVersion : null,
+          source: isRemote ? 'remote' : 'local',
+          remoteLocationId: typeof dev.remoteLocationId === 'string' ? dev.remoteLocationId : null,
+          isFocused: true,
+          isConnected: true
+        }
+      });
+    } catch (e) {
+      rendererWarn('[mcp-bridge] could not push selectedDevice', e);
+    }
   }
+  pushSelectedDeviceSnapshot();
+  panel.addEventListener('device-info-refreshed', () => pushSelectedDeviceSnapshot());
 
 
   if (builderElements.builderImportBtn) {
