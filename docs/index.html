@@ -113,21 +113,21 @@
   <div class="section-title-eyebrow">Why Roku Dev Studio? (vs. official Roku tools)</div>
   <h2 class="section-heading">One app instead of a dozen tools</h2>
   <p class="section-lead">Roku development is normally split across separate official tools — the Roku Remote Tool, the browser-based sideload installer, raw <code>telnet</code>, RALE, <code>sca-cmd</code> — that don't talk to each other. Roku Dev Studio doesn't replace Roku's own protocols (ECP, RALE, telnet, <code>sca-cmd</code>) — it wraps all of them in one GUI, one CLI (<code>rds</code>), and one MCP server.</p>
-  <table>
+  <table class="compare-table">
     <thead>
       <tr><th>Task</th><th>Without Roku Dev Studio</th><th>With Roku Dev Studio</th></tr>
     </thead>
     <tbody>
-      <tr><td>Remote control</td><td>The official Roku Remote Tool, or raw ECP <code>keypress</code> calls via curl/Postman</td><td>One tab: full D-Pad, keyboard remote, and a floating mini-remote</td></tr>
+      <tr><td>Remote Control</td><td>The official Roku Remote Tool, or raw ECP <code>keypress</code> calls via curl/Postman</td><td>One tab: full D-Pad, keyboard remote, and a floating mini-remote</td></tr>
       <tr><td>Sideloading</td><td>The device's browser-based installer or a VS Code extension — one IP at a time</td><td><strong>Sideload Relay</strong> — one push from your IDE installs, launches, and captures console on every targeted device</td></tr>
-      <tr><td>Debug console</td><td><code>telnet &lt;ip&gt; 8085</code> in a raw terminal or through an IDE — no search/filter/save either way</td><td>A structured console with search, filtering, and saved logs</td></tr>
-      <tr><td>BrightScript debugging</td><td>The socket debug protocol, usable mainly through a single IDE's extension</td><td>A standalone debugger: breakpoints, step execution, call stack, variables, watch</td></tr>
-      <tr><td>App inspection (RALE)</td><td>RALE alone only inspects SceneGraph nodes — no way to call into a channel or exchange data with it</td><td><strong>App Connector</strong> — extends RALE with the ability to call your channel's own functions and pass data back and forth (GET/POST-style), unlocking automation that didn't exist before</td></tr>
-      <tr><td>Network traffic</td><td>A separately configured MITM proxy (Charles/mitmproxy/Fiddler) with manual device setup</td><td>Built-in local MITM proxy + optional hotspot packet capture</td></tr>
-      <tr><td>Static analysis</td><td><code>sca-cmd</code> output cross-referenced by hand against Roku's cert docs</td><td>Runs <code>sca-cmd</code> for you, with cert-requirement links straight to Roku's docs</td></tr>
-      <tr><td>Remote locations / labs</td><td>Physical presence required — ECP only works on the local network</td><td>A bundled remote server bridges ECP over the internet</td></tr>
-      <tr><td>Repeatable testing</td><td>Hand-rolled scripts around ECP and RALE</td><td><strong>Action Scripts</strong> — build a flow (keypresses, queries, conditionals, waits) from a GUI, or run it headless via <code>rds</code></td></tr>
-      <tr><td>AI-agent access</td><td>Nothing official</td><td>A bundled <strong>MCP server</strong> lets Cursor, Claude Desktop, or VS Code drive a real device</td></tr>
+      <tr><td>Debug Console</td><td><code>telnet &lt;ip&gt; 8085</code> in a raw terminal or through an IDE — no search/filter/save either way</td><td>A structured console with search, filtering, and saved logs</td></tr>
+      <tr><td>BrightScript Debugging</td><td>The socket debug protocol, usable mainly through a single IDE's extension</td><td>A standalone debugger: breakpoints, step execution, call stack, variables, watch</td></tr>
+      <tr><td>App Inspection (RALE)</td><td>RALE alone only inspects SceneGraph nodes — no way to call into a channel or exchange data with it</td><td><strong>App Connector</strong> — extends RALE with the ability to call your channel's own functions and pass data back and forth (GET/POST-style), unlocking automation that didn't exist before</td></tr>
+      <tr><td>Network Traffic</td><td>A separately configured MITM proxy (Charles/mitmproxy/Fiddler) with manual device setup</td><td>Built-in local MITM proxy + optional hotspot packet capture</td></tr>
+      <tr><td>Static Analysis</td><td><code>sca-cmd</code> output cross-referenced by hand against Roku's cert docs</td><td>Runs <code>sca-cmd</code> for you, with cert-requirement links straight to Roku's docs</td></tr>
+      <tr><td>Remote Locations / labs</td><td>Physical presence required — ECP only works on the local network</td><td>A bundled remote server bridges ECP over the internet</td></tr>
+      <tr><td>Repeatable Testing</td><td>Hand-rolled scripts around ECP and RALE</td><td><strong>Action Scripts</strong> — build a flow (keypresses, queries, conditionals, waits) from a GUI, or run it headless via <code>rds</code></td></tr>
+      <tr><td>AI-Agent Access</td><td>Nothing official</td><td>A bundled <strong>MCP server</strong> lets Cursor, Claude Desktop, or VS Code drive a real device</td></tr>
     </tbody>
   </table>
 </section>
