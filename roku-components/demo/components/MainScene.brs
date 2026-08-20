@@ -22,6 +22,15 @@ sub init()
     m.focusHighlight = m.top.findNode("focusHighlight")
     m.statusLabel = m.top.findNode("statusLabel")
 
+    m.connectorHintText = m.top.findNode("connectorHintText")
+    m.connectorHintTimer = m.top.findNode("connectorHintTimer")
+    m.connectorHintFadeOut = m.top.findNode("connectorHintFadeOut")
+    m.connectorHintFadeIn = m.top.findNode("connectorHintFadeIn")
+    m.connectorHintTimer.observeField("fire", "OnConnectorHintTimerFire")
+    m.connectorHintFadeOut.observeField("state", "OnConnectorFadeOutState")
+    m.connectorHints = []
+    m.connectorHintIndex = 0
+
     m.playerGroup = m.top.findNode("playerGroup")
     m.playerVideo = m.top.findNode("playerVideo")
     m.playerTitle = m.top.findNode("playerTitle")
@@ -63,6 +72,7 @@ function _rdsShowcase_start() as void
     LoadDefaultCatalog()
     RenderGrid()
     UpdateFocusHighlight()
+    StartConnectorHintCarousel()
 end function
 
 ' Routes HelperTask's `output` by operation — one Task instance handles both
@@ -633,6 +643,52 @@ function onKeyEvent(key as string, press as boolean) as boolean
         return true
     end if
     return false
+end function
+
+' ===== App Connector hint carousel =====
+' Cycles the header's top-right space through GetExternalControlFunctions()'s
+' own list (name + description), fading the label out/in on each swap — a
+' live read of the exact contract App Connector clients see, not a
+' hand-maintained duplicate that could drift as functions are added below.
+
+sub StartConnectorHintCarousel()
+    m.connectorHints = GetExternalControlFunctions()
+    if m.connectorHints.Count() = 0 then return
+    m.connectorHintIndex = 0
+    m.connectorHintText.text = FormatConnectorHint(m.connectorHints[0])
+    m.connectorHintTimer.control = "start"
+end sub
+
+sub OnConnectorHintTimerFire()
+    m.connectorHintFadeOut.control = "start"
+end sub
+
+sub OnConnectorFadeOutState()
+    if m.connectorHintFadeOut.state <> "stopped" then return
+    m.connectorHintIndex = (m.connectorHintIndex + 1) MOD m.connectorHints.Count()
+    m.connectorHintText.text = FormatConnectorHint(m.connectorHints[m.connectorHintIndex])
+    m.connectorHintFadeIn.control = "start"
+end sub
+
+' "FnName — first ~64 chars of its description…", cut at a word boundary
+' (not mid-word) when the description runs long.
+function FormatConnectorHint(fn as object) as string
+    maxDescLen = 64
+    desc = fn.description
+    if Len(desc) > maxDescLen then
+        cut = Left(desc, maxDescLen)
+        spaceIdx = LastIndexOfSpace(cut)
+        if spaceIdx > 1 then cut = Left(cut, spaceIdx - 1)
+        desc = cut + "…"
+    end if
+    return fn.name + " — " + desc
+end function
+
+function LastIndexOfSpace(s as string) as integer
+    for i = Len(s) to 1 step -1
+        if Mid(s, i, 1) = " " then return i
+    end for
+    return 0
 end function
 
 ' ===== App Connector / RALE contract =====

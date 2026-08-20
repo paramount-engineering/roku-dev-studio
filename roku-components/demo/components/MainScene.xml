@@ -11,10 +11,25 @@
     <children>
         <Rectangle width="1920" height="1080" color="0x0a0a12ff" />
 
-        <Poster uri="pkg:/images/channel_icon_wide.png" width="120" height="68"
-                translation="[60, 30]" loadDisplayMode="scaleToFit" />
-        <Label text="Roku Dev Studio Showcase" translation="[200, 50]"
+        <Poster uri="pkg:/images/channel_icon_wide.png" width="176" height="100"
+                translation="[50, 20]" loadDisplayMode="scaleToFit" />
+        <Label text="Roku Dev Studio Showcase" translation="[256, 54]"
                color="0xf1f5f9ff" font="font:MediumBoldSystemFont" />
+
+        <!-- App Connector hint carousel — cycles through GetExternalControlFunctions(),
+             fading out/in on each swap. See StartConnectorHintCarousel() in MainScene.brs. -->
+        <Label id="connectorHintCaption" translation="[900, 30]" width="960" horizAlign="right"
+               text="TRY IT VIA APP CONNECTOR" color="0x8b5cf6ff" font="font:SmallestSystemFont" />
+        <Label id="connectorHintText" translation="[900, 60]" width="960" height="64" wrap="true"
+               horizAlign="right" text="" color="0xcbd5e1ff" font="font:SmallSystemFont" />
+        <Timer id="connectorHintTimer" duration="5" repeat="true" />
+        <Animation id="connectorHintFadeOut" duration="0.35" easeFunction="linear">
+            <FloatFieldInterpolator key="[0.0, 1.0]" keyValue="[1.0, 0.0]" fieldToInterp="connectorHintText.opacity" />
+        </Animation>
+        <Animation id="connectorHintFadeIn" duration="0.35" easeFunction="linear">
+            <FloatFieldInterpolator key="[0.0, 1.0]" keyValue="[0.0, 1.0]" fieldToInterp="connectorHintText.opacity" />
+        </Animation>
+
         <Rectangle translation="[60, 140]" width="1800" height="2" color="0x8b5cf6cc" />
 
         <Rectangle id="focusHighlight" translation="[52, 164]" width="1816" height="98" color="0x8b5cf633" />
