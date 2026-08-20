@@ -7467,7 +7467,15 @@
       border-color: var(--accent-purple);
       background: var(--accent-purple-dim);
     }
-    
+
+    /* Dragging an Installed Apps tile over an App ID field (see app-id-drag-drop.ts). */
+    .app-id-drop-target--dragover {
+      border-color: var(--accent-purple) !important;
+      background: var(--accent-purple-dim) !important;
+      outline: 2px solid var(--accent-purple);
+      outline-offset: -1px;
+    }
+
     .drop-zone-icon {
       font-size: 32px;
       margin-bottom: 8px;
@@ -15589,28 +15597,7 @@
         <div class="apps-tab-layout">
           <!-- Left Column (30%) -->
           <div class="apps-tab-layout-col-left">
-            <!-- Custom Launch (Row 1) -->
-            <div class="card" style="flex: 0 0 auto;">
-              <div class="card-header" style="padding: 4px 12px;">
-                <span class="card-icon"><span class="icon icon-sm"><svg><use href="#icon-zap"/></svg></span></span>
-                <span class="card-title" data-i18n="app.customLaunch">Custom Launch</span>
-                <div class="card-header-actions">
-                  <button class="btn btn-success launch-custom-btn" style="padding: 4px 12px; font-size: 11px;" data-i18n="app.launch">Launch</button>
-                </div>
-              </div>
-              <div class="card-body" style="display: flex; flex-direction: column; gap: 12px;">
-                <input type="text" class="custom-app-id" placeholder="App ID (e.g., 12)" data-i18n-placeholder="app.customAppIdPlaceholder" style="width: 100%; padding: 10px 14px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-primary); color: var(--text-primary); font-family: 'JetBrains Mono', monospace; font-size: 13px; box-sizing: border-box;">
-                <div class="tv-inputs-row" style="display: none; gap: 6px; flex-wrap: wrap; align-items: center; margin-top: 8px;">
-                  <span style="font-size: 11px; color: var(--text-muted);" data-i18n="app.tvInputsLabel">TV Inputs:</span>
-                  <button class="btn btn-secondary hdmi-btn" data-app="tvinput.hdmi1" style="padding: 4px 8px; font-size: 10px;" data-i18n="app.hdmi1">HDMI 1</button>
-                  <button class="btn btn-secondary hdmi-btn" data-app="tvinput.hdmi2" style="padding: 4px 8px; font-size: 10px;" data-i18n="app.hdmi2">HDMI 2</button>
-                  <button class="btn btn-secondary hdmi-btn" data-app="tvinput.hdmi3" style="padding: 4px 8px; font-size: 10px;" data-i18n="app.hdmi3">HDMI 3</button>
-                  <button class="btn btn-secondary hdmi-btn" data-app="tvinput.hdmi4" style="padding: 4px 8px; font-size: 10px;" data-i18n="app.hdmi4">HDMI 4</button>
-                </div>
-              </div>
-            </div>
-            
-            <!-- Deep Link (Row 2) -->
+            <!-- Deep Link (Row 1) -->
             <div class="card" style="flex: 0 0 auto;">
               <div class="card-header" style="padding: 4px 12px;">
                 <span class="card-icon"><span class="icon icon-sm"><svg><use href="#icon-link"/></svg></span></span>

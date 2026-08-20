@@ -148,8 +148,12 @@ type ConnectResolver = (target: { ip?: string; serial?: string }) => Promise<Con
 export type HandlerKey = { serial?: string | null; ip?: string | null };
 
 type HandlerEntry<T> = {
-  serial: string | null;
-  ip: string | null;
+  // Stores the caller's `HandlerKey` object itself, not a copy of its fields — a device opened
+  // via Sideload Relay auto-connect registers with `serial: null` (no serial known yet), and the
+  // caller mutates that same object's `.serial` in place once a later health check learns the
+  // real one. Reading through this reference (see upsertEntry/pickHandler below) means every
+  // future lookup sees the live value without needing to re-register anything.
+  key: HandlerKey;
   handler: T;
 };
 
@@ -219,15 +223,14 @@ function upsertEntry<T>(
   const ip = key.ip || null;
   // Replace any existing entry with the same serial/ip.
   for (let i = 0; i < list.length; i++) {
-    if (
-      (serial && list[i].serial === serial) ||
-      (!serial && ip && list[i].ip === ip && !list[i].serial)
-    ) {
-      list[i] = { serial, ip, handler };
+    const es = list[i].key.serial || null;
+    const eip = list[i].key.ip || null;
+    if ((serial && es === serial) || (!serial && ip && eip === ip && !es)) {
+      list[i] = { key, handler };
       return list[i];
     }
   }
-  const entry = { serial, ip, handler };
+  const entry = { key, handler };
   list.push(entry);
   return entry;
 }
@@ -245,21 +248,21 @@ function pickHandler<T>(
   const ti = target?.targetIp || null;
 
   if (ts) {
-    const hit = list.find((e) => e.serial === ts);
+    const hit = list.find((e) => (e.key.serial || null) === ts);
     if (hit) return hit.handler;
   }
   if (ti) {
-    const hit = list.find((e) => e.ip === ti);
+    const hit = list.find((e) => (e.key.ip || null) === ti);
     if (hit) return hit.handler;
   }
   // No explicit target: fall back to focused device.
   if (!ts && !ti) {
     if (focusedSerial) {
-      const hit = list.find((e) => e.serial === focusedSerial);
+      const hit = list.find((e) => (e.key.serial || null) === focusedSerial);
       if (hit) return hit.handler;
     }
     if (focusedIp) {
-      const hit = list.find((e) => e.ip === focusedIp);
+      const hit = list.find((e) => (e.key.ip || null) === focusedIp);
       if (hit) return hit.handler;
     }
     // Last resort: use the most-recently-registered handler. This preserves

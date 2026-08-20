@@ -18,7 +18,9 @@ import { deviceKey } from '@shared/platform/device-identity.js';
  * @param {HTMLElement} panel - Device panel
  * @param {Object} api - API adapter
  * @param {Object} elements - UI elements
- * @param {string} serialNumber - Device serial number
+ * @param {Function} getSerialNumber - Live device serial number getter (see setupPasswordAuth's
+ *   doc comment for why this is a getter and not a plain string — same Sideload Relay
+ *   auto-connect staleness issue applies here).
  * @param {Function} getPassword - Function to get current password
  * @param {Function} checkSideloadedApp - Function to check sideloaded app
  * @param {Function} [scheduleAutoScreenshot] - (delayMs?) => void. Called after a
@@ -30,7 +32,7 @@ export function setupSideloading(
   panel: DevicePanelRoot,
   api: DevAppApi,
   elements: SideloadElements,
-  serialNumber: string | undefined,
+  getSerialNumber: () => string | undefined,
   getPassword: () => string,
   checkSideloadedApp: () => void | Promise<void>,
   scheduleAutoScreenshot?: (delayMs?: number) => void
@@ -61,7 +63,9 @@ export function setupSideloading(
   const DEBUG_SIDELOAD_KEY = 'sideload-debug-ips';
   const debugCheckbox = panel.querySelector('.sideload-debug-checkbox') as HTMLInputElement | null;
   const deviceIp = panel.dataset.ip || '';
-  const deviceKeyForIp = deviceKey({ serial: serialNumber, ip: deviceIp });
+  // Live — see getSerialNumber's doc comment. Recomputed at each use rather than once at setup,
+  // so a serial that becomes known after a Sideload Relay auto-connect isn't missed.
+  const getDeviceKeyForIp = (): string => deviceKey({ serial: getSerialNumber(), ip: deviceIp });
   if (debugCheckbox && api.isRemote && api.debuggerSupported === false) {
     debugCheckbox.disabled = true;
     debugCheckbox.title = S.debugger.unsupportedByServerTitle;
@@ -71,16 +75,31 @@ export function setupSideloading(
       const res = await window.roku.getSetting(DEBUG_SIDELOAD_KEY);
       return res && res.success && Array.isArray(res.value) ? (res.value as string[]) : [];
     };
-    void (async () => {
+    // If the persisted preference was saved under the serial key from a prior session, but this
+    // panel's serial isn't known yet (Sideload Relay auto-connect), the initial read below would
+    // show unchecked even though a matching serial-keyed entry exists — re-read once the serial
+    // actually resolves (`device-info-refreshed`), not just on the checkbox's own change handler.
+    const loadCheckedState = async (): Promise<void> => {
       try {
         const ips = await readIps();
+        const deviceKeyForIp = getDeviceKeyForIp();
         debugCheckbox.checked = ips.includes(deviceKeyForIp) || ips.includes(deviceIp);
       } catch { /* default unchecked */ }
-    })();
+    };
+    void loadCheckedState();
+    let resolvedSerialForCheckboxLoad = getSerialNumber();
+    panel.addEventListener('device-info-refreshed', (e: Event) => {
+      const ce = e as CustomEvent<{ device?: { serialNumber?: string } }>;
+      const nextSerial = ce.detail?.device?.serialNumber;
+      if (!nextSerial || nextSerial === resolvedSerialForCheckboxLoad) return;
+      resolvedSerialForCheckboxLoad = nextSerial;
+      void loadCheckedState();
+    });
     debugCheckbox.addEventListener('change', () => {
       void (async () => {
         try {
           const ips = new Set(await readIps());
+          const deviceKeyForIp = getDeviceKeyForIp();
           if (debugCheckbox.checked) {
             ips.add(deviceKeyForIp);
             if (deviceKeyForIp !== deviceIp) ips.delete(deviceIp);
@@ -211,6 +230,7 @@ export function setupSideloading(
     const filePath = selectedFilePath || (filePathInput ? filePathInput.value.trim() : '');
     const password = getPassword();
     const withDebug = !!(debugCheckbox && debugCheckbox.checked);
+    const serialNumber = getSerialNumber();
 
     if (!filePath || !password) {
       showStatusMessage(statusDiv, S.devApp.selectFileAndPassword, 'warning');
@@ -293,6 +313,7 @@ export function setupSideloading(
     const delStatus = deleteStatusDiv;
     deleteBtn.addEventListener('click', async () => {
       const password = getPassword();
+      const serialNumber = getSerialNumber();
       if (!password) {
         showStatusMessage(delStatus, S.devApp.pleaseEnterDeveloperPassword, 'warning');
         return;

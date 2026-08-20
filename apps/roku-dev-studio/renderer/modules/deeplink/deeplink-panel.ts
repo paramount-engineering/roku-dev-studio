@@ -3,6 +3,7 @@
  */
 import { showStatusMessage } from '../utils/ui.js';
 import { rendererError } from '../utils/logger.js';
+import { makeAppIdDropTarget } from '../utils/app-id-drag-drop.js';
 import { populateMediaTypeSelect, wireDeepLinkMediaTypeManageBtn } from './deeplink-media-types.js';
 import {
   applyPresetToPanel,
@@ -307,11 +308,15 @@ export function setupDeepLinkPanel(panel: HTMLElement, api: DeeplinkApi): void {
   const mediaTypeSelect = panel.querySelector('.deeplink-media-type') as HTMLSelectElement | null;
   const savedSelect = panel.querySelector('.deeplink-saved-select') as HTMLSelectElement | null;
   const savedRow = panel.querySelector('.deeplink-saved-row') as HTMLElement | null;
+  const appIdInput = panel.querySelector('.deeplink-app-id') as HTMLInputElement | null;
 
   if (!statusDiv || !mediaTypeSelect) {
     rendererError('Deep link elements not found');
     return;
   }
+
+  // Accept a dropped app tile from the Installed Apps grid (see makeAppIdDragSource in app.ts).
+  if (appIdInput) makeAppIdDropTarget(appIdInput);
 
   populateMediaTypeSelect(mediaTypeSelect);
 

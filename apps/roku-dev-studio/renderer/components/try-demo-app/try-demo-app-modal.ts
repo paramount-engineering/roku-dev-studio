@@ -137,7 +137,9 @@ export function openTryDemoAppModal(opts: {
       });
       if (result && result.success) {
         settle();
-        showToast(S.tryDemoApp.toastSuccess, 'success');
+        // `onLaunched` (app.ts) shows the success toast itself, once the device's tab/panel
+        // actually exists to be its header — this modal only knows the sideload succeeded,
+        // not which tab that resolves to (may not even be open yet).
         opts.onLaunched?.(device);
       } else {
         const message = (result && result.error) || S.tryDemoApp.errSideloadFailed;

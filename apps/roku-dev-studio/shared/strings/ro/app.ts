@@ -312,13 +312,6 @@ MAC WiFi: ${d.wifiMac || 'N/A'}`,
   legendLimit: 'Limită',
 
   // Apps tab
-  customLaunch: 'Lansare personalizată',
-  customAppIdPlaceholder: 'ID aplicație (ex.: 12)',
-  tvInputsLabel: 'Intrări TV:',
-  hdmi1: 'HDMI 1',
-  hdmi2: 'HDMI 2',
-  hdmi3: 'HDMI 3',
-  hdmi4: 'HDMI 4',
   deepLink: 'Deep-Link',
   moreLaunchOptions: 'Mai multe opțiuni de lansare',
   saveAndLaunch: 'Salvează și lansează',

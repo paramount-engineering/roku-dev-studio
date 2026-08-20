@@ -309,13 +309,6 @@ WiFi MAC: ${d.wifiMac || 'N/D'}`,
   legendLimit: 'Limit',
 
   // Apps tab
-  customLaunch: 'Niestandardowe uruchomienie',
-  customAppIdPlaceholder: 'ID aplikacji (np. 12)',
-  tvInputsLabel: 'Wejścia TV:',
-  hdmi1: 'HDMI 1',
-  hdmi2: 'HDMI 2',
-  hdmi3: 'HDMI 3',
-  hdmi4: 'HDMI 4',
   deepLink: 'Deep-Link',
   moreLaunchOptions: 'Więcej opcji uruchamiania',
   saveAndLaunch: 'Zapisz i uruchom',
