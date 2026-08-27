@@ -170,6 +170,8 @@ export type ConsoleLogFileViewHandle = {
   remountVisible(): void;
   /** Forwarded to the virtualizer — see `ConsoleVirtualizerHandle.setUnmountSuspended`. */
   setUnmountSuspended(suspended: boolean): void;
+  /** Forwarded to the virtualizer — see `ConsoleVirtualizerHandle.applyRowFilter`. */
+  applyRowFilter(visibleIndices: number[] | null): void;
   /** Tear down the underlying virtualizer (detach scroll/resize observers
    *  and remove all mounted rows). The caller still owns `outputEl`. */
   dispose(): void;
@@ -367,6 +369,7 @@ export function mountConsoleLogFileView(
     getContainerEl: () => containerEl,
     remountVisible: () => virtualizer.remountVisible(),
     setUnmountSuspended: (suspended) => virtualizer.setUnmountSuspended(suspended),
+    applyRowFilter: (visibleIndices) => virtualizer.applyRowFilter(visibleIndices),
     dispose: () => virtualizer.dispose()
   };
 }

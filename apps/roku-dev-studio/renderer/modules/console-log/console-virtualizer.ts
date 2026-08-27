@@ -123,6 +123,19 @@ export type ConsoleVirtualizerHandle = {
    * indefinitely.
    */
   setUnmountSuspended: (suspended: boolean) => void;
+  /**
+   * Filter mode: pin every index NOT in `visibleIndices` to 0px in the
+   * virtualizer's size cache so it never mounts, measures, or triggers a
+   * resize-driven remount cascade. The alternative (mount every row via the
+   * normal path, then hide non-matches with CSS `display: none`) makes the
+   * virtualizer discover each hidden row's true (0) height only *after*
+   * building and measuring it — with a sparse match set (e.g. 35 matches in
+   * 23,000 lines), that forces it to walk nearly the whole buffer one row at
+   * a time to find enough matches to fill one viewport. Pre-seeding the size
+   * cache lets the virtualizer's binary search skip straight to the matches.
+   * Pass `null` to clear (restore normal per-row measurement for everyone).
+   */
+  applyRowFilter: (visibleIndices: number[] | null) => void;
   dispose: () => void;
 };
 
@@ -132,6 +145,12 @@ export function createConsoleVirtualizer(opts: ConsoleVirtualizerOpts): ConsoleV
   // Mounted rows by entry index. Single source of truth for both `getLineEl`
   // and the unmount diff in `sync()` below.
   const mounted = new Map<number, HTMLElement>();
+
+  /** Indices this wrapper has pinned to 0px for `applyRowFilter`. Tracked
+   *  separately from `itemSizeCache` so a later filter change (or clearing
+   *  the filter) can tell "forced to 0 by us" apart from "genuinely measured
+   *  as 0"; also lets trim/prepend renumber these alongside everything else. */
+  const forcedHiddenIndices = new Set<number>();
 
   /**
    * Newly-mounted rows queued for measurement. Two reasons for the defer:
@@ -223,6 +242,16 @@ export function createConsoleVirtualizer(opts: ConsoleVirtualizerOpts): ConsoleV
     // what the user sees on screen.
     let prevEl: HTMLElement | null = null;
     for (const item of items) {
+      // Filter mode: when the visible (matching) content is shorter than one
+      // viewport, the vendor virtualizer's computed range still spans every
+      // index up to the end of the list (it keeps walking forward looking for
+      // enough *pixels* to fill the viewport, and 0-height rows contribute
+      // none) — `items` can legitimately contain most of a 23,000-row buffer
+      // even though only ~35 of them have real height. Skip building/mounting
+      // the pinned-hidden ones entirely; they occupy zero visual space, so
+      // there's nothing to position. This is the actual cost-avoidance (not
+      // the loop itself, which is a cheap Set lookup either way).
+      if (forcedHiddenIndices.has(item.index)) continue;
       desired.add(item.index);
       let el = mounted.get(item.index);
       if (!el) {
@@ -382,6 +411,13 @@ export function createConsoleVirtualizer(opts: ConsoleVirtualizerOpts): ConsoleV
       }
       internals.itemSizeCache = newSizeCache;
       internals.measurementsCache = [];
+
+      const nextHidden = new Set<number>();
+      for (const idx of forcedHiddenIndices) {
+        if (idx >= headCount) nextHidden.add(idx - headCount);
+      }
+      forcedHiddenIndices.clear();
+      for (const idx of nextHidden) forcedHiddenIndices.add(idx);
     },
     shiftIndicesAfterPrepend(headCount) {
       if (headCount <= 0) return;
@@ -412,6 +448,11 @@ export function createConsoleVirtualizer(opts: ConsoleVirtualizerOpts): ConsoleV
       }
       internals.itemSizeCache = newSizeCache;
       internals.measurementsCache = [];
+
+      const nextHidden = new Set<number>();
+      for (const idx of forcedHiddenIndices) nextHidden.add(idx + headCount);
+      forcedHiddenIndices.clear();
+      for (const idx of nextHidden) forcedHiddenIndices.add(idx);
     },
     measure() {
       virt.measure();
@@ -435,6 +476,36 @@ export function createConsoleVirtualizer(opts: ConsoleVirtualizerOpts): ConsoleV
       // Resuming: catch up on every deferred unmount in one pass rather than waiting for the
       // next scroll-driven onChange (which may not fire at all if the view doesn't move again).
       if (!suspended) sync();
+    },
+    applyRowFilter(visibleIndices) {
+      // Same runtime-accessible-private-field hatch as `shiftIndicesAfterTrim` above.
+      const internals = virt as unknown as {
+        itemSizeCache: Map<number, number>;
+        itemSizeCacheVersion: number;
+      };
+      const cache = internals.itemSizeCache;
+      if (visibleIndices === null) {
+        for (const idx of forcedHiddenIndices) cache.delete(idx);
+        forcedHiddenIndices.clear();
+      } else {
+        const visible = new Set(visibleIndices);
+        // Un-hide anything that no longer matches the new filter.
+        for (const idx of forcedHiddenIndices) {
+          if (!visible.has(idx)) continue;
+          cache.delete(idx);
+          forcedHiddenIndices.delete(idx);
+        }
+        // Pin everything else to 0px so it's never mounted/measured.
+        const total = opts.getCount();
+        for (let i = 0; i < total; i++) {
+          if (visible.has(i) || forcedHiddenIndices.has(i)) continue;
+          cache.set(i, 0);
+          forcedHiddenIndices.add(i);
+        }
+      }
+      internals.itemSizeCacheVersion++;
+      virt._willUpdate();
+      sync();
     },
     dispose() {
       detach();
