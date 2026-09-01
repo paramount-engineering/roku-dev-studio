@@ -156,6 +156,21 @@ WiFi MAC: ${d.wifiMac || 'N/A'}`,
   // Log file
   couldNotOpenLogFile: (err: string): string => `Could not open log file: ${err}`,
 
+  // File drag & drop onto the main window (main-window-file-drop.ts)
+  fileDropOverlayReadyOne: (viewerLabel: string): string => `Drop to open in ${viewerLabel}`,
+  fileDropOverlayReadyMany: 'Drop to open',
+  fileDropOverlayUnsupported: 'Unsupported file type',
+  fileDropOverlayGeneric: 'Drop files to open',
+  fileDropLogViewerLabel: 'Log Viewer',
+  fileDropNetworkSessionViewerLabel: 'Network Session Viewer',
+  fileDropOpenedOne: (name: string, viewerLabel: string): string => `Opened "${name}" in ${viewerLabel}`,
+  fileDropOpenedMany: (count: number): string => `Opened ${count} files`,
+  fileDropOpenedWithSkipped: (openedCount: number, unsupportedCount: number): string =>
+    `Opened ${openedCount} file${openedCount === 1 ? '' : 's'}, skipped ${unsupportedCount} unsupported`,
+  fileDropUnsupportedOne: (name: string): string => `"${name}" is not a supported file type`,
+  fileDropUnsupportedMany: (count: number): string => `${count} unsupported files — nothing opened`,
+  fileDropFailed: 'Could not open the dropped file(s)',
+
   // Help modal
   searchHelpGuide: 'Search Help & Guide',
 

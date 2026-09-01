@@ -49,6 +49,14 @@ export type LogFileWindowModelConfig = {
   /** Reset the scroll container to the top (called on Filter enter/exit so the
    *  reshaped virtual list starts at row 0 rather than a clamped stale offset). */
   scrollToTop?: () => void;
+  /** Fires once, after the very first window load lands (real rows have replaced
+   *  placeholders). The caller uses this to know when it's safe to drop its own
+   *  "loading…" state — `prepareLogViewerFile` resolving only means the file was
+   *  *indexed*; for a file small enough that the whole thing fits in one window
+   *  (see TARGET_WINDOW_BYTES below — true for most single-session console-log
+   *  exports), the first window load parses the entire file and can take a
+   *  while, so indexed-done and content-visible are two different moments. */
+  onFirstWindowLoaded?: () => void;
 };
 
 export type LogFileWindowModel = {
@@ -96,6 +104,49 @@ function makePlaceholder(): ConsoleLogFileEntry {
   return { text: '', timestamp: null, type: 'log' };
 }
 
+/** Rows parsed per animation frame while building a window. `parseConsoleLine`
+ *  isn't free (timestamp/level detection per line), and a window can be the
+ *  *whole file* for anything under ~8MB (see TARGET_WINDOW_BYTES below) —
+ *  chunking keeps that off the main thread in one multi-second block, so the
+ *  renderer stays responsive (and whatever "loading" UI is showing keeps
+ *  animating) instead of looking frozen for the whole parse. */
+export const PARSE_CHUNK_SIZE = 2000;
+
+/**
+ * Parse `items` into `[fileLine, entry]` pairs, yielding to the event loop
+ * between chunks of `PARSE_CHUNK_SIZE`. Resolves `null` if `isSuperseded()`
+ * turns true mid-parse (a newer window load started) so the caller can
+ * discard stale work. Exported standalone (no closure over model state) so
+ * it's plain-Node testable — see scripts/verify-log-file-window-chunking.ts.
+ */
+export function buildEntriesChunked<T>(
+  items: T[],
+  toEntryPair: (item: T, index: number) => [number, ConsoleLogFileEntry],
+  isSuperseded: () => boolean
+): Promise<Map<number, ConsoleLogFileEntry> | null> {
+  return new Promise((resolve) => {
+    const built = new Map<number, ConsoleLogFileEntry>();
+    let i = 0;
+    function step(): void {
+      if (isSuperseded()) {
+        resolve(null);
+        return;
+      }
+      const end = Math.min(i + PARSE_CHUNK_SIZE, items.length);
+      for (; i < end; i++) {
+        const [fileLine, entry] = toEntryPair(items[i]!, i);
+        built.set(fileLine, entry);
+      }
+      if (i < items.length) {
+        requestAnimationFrame(step);
+      } else {
+        resolve(built);
+      }
+    }
+    step();
+  });
+}
+
 export function createLogFileWindowModel(cfg: LogFileWindowModelConfig): LogFileWindowModel {
   const avgLineBytes = cfg.lineCount > 0 ? cfg.fileSize / cfg.lineCount : 200;
   const windowLines = Math.max(
@@ -120,6 +171,7 @@ export function createLogFileWindowModel(cfg: LogFileWindowModelConfig): LogFile
   let pendingStart = 0;
   let pendingEnd = 0;
   let surface: WindowModelSurface | null = null;
+  let firstWindowLoaded = false;
 
   const viewCount = (): number => (mode === 'normal' ? cfg.lineCount : matchLines.length);
   const viewToFileLine = (viewIndex: number): number =>
@@ -147,20 +199,21 @@ export function createLogFileWindowModel(cfg: LogFileWindowModelConfig): LogFile
 
   async function loadWindow(newStart: number, newEnd: number): Promise<void> {
     const token = ++loadToken;
-    const built = new Map<number, ConsoleLogFileEntry>();
+    let built: Map<number, ConsoleLogFileEntry> | null;
 
     if (mode === 'normal') {
       const lines = await cfg.readRange(newStart, newEnd);
       if (token !== loadToken) return; // superseded by a newer load
       if (!lines) return;
-      for (let i = 0; i < lines.length; i++) built.set(newStart + i, toEntry(lines[i]!));
+      built = await buildEntriesChunked(lines, (text, i) => [newStart + i, toEntry(text)], () => token !== loadToken);
     } else {
       const fileLines = matchLines.slice(newStart, newEnd);
       const rows = await cfg.readLines(fileLines);
       if (token !== loadToken) return;
       if (!rows) return;
-      for (const { line, text } of rows) built.set(line, toEntry(text));
+      built = await buildEntriesChunked(rows, (row) => [row.line, toEntry(row.text)], () => token !== loadToken);
     }
+    if (!built) return; // superseded mid-parse
 
     // Swap the whole window (drop the previous one — that's what bounds memory).
     resident.clear();
@@ -168,6 +221,10 @@ export function createLogFileWindowModel(cfg: LogFileWindowModelConfig): LogFile
     residentStart = newStart;
     residentEnd = newEnd;
     surface?.remountVisible();
+    if (!firstWindowLoaded) {
+      firstWindowLoaded = true;
+      cfg.onFirstWindowLoaded?.();
+    }
   }
 
   function scheduleLoad(newStart: number, newEnd: number): void {

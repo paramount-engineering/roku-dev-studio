@@ -15,6 +15,10 @@
     "typecheck:renderer": "tsc --noEmit -p tsconfig.renderer.json",
     "verify:structured-pills": "tsx scripts/verify-structured-pills.ts",
     "verify:console-filter-perf": "tsx scripts/verify-console-filter-perf.ts",
+    "verify:log-file-index-yields": "tsx scripts/verify-log-file-index-yields.ts",
+    "verify:launch-file-argv": "tsx scripts/verify-launch-file-argv.ts",
+    "verify:main-window-file-drop": "cross-env TSX_TSCONFIG_PATH=./tsconfig.scripts.json tsx scripts/verify-main-window-file-drop.ts",
+    "verify:log-file-window-chunking": "tsx scripts/verify-log-file-window-chunking.ts",
     "verify:i18n": "tsx scripts/verify-i18n-keys.ts",
     "typecheck:scripts": "tsc --noEmit -p tsconfig.scripts.json",
     "dev:solid": "tsx scripts/build/index.ts && concurrently -k \"npm run renderer:solid:dev\" \"wait-on tcp:127.0.0.1:5173 && cross-env RDS_SOLID_RENDERER=1 tsx scripts/run-electron.ts\"",
@@ -129,6 +133,22 @@
       "leaf-cert.worker.js"
     ],
     "compression": "maximum",
+    "fileAssociations": [
+      {
+        "ext": ["log", "txt", "text", "out", "err", "trace"],
+        "name": "Log File",
+        "description": "Console / log text file",
+        "role": "Viewer",
+        "rank": "Alternate"
+      },
+      {
+        "ext": ["rds-network-inspector.json", "har", "pcap", "pcapng"],
+        "name": "Network Session",
+        "description": "Roku Dev Studio network capture session",
+        "role": "Viewer",
+        "rank": "Alternate"
+      }
+    ],
     "mac": {
       "category": "public.app-category.developer-tools",
       "files": [

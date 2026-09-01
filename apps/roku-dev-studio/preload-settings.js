@@ -488,7 +488,10 @@ var init_channels = __esm({
       /** Main → renderer: streamed stdout/stderr while a run is in progress. */
       StaticAnalysisProgress: "static-analysis:progress",
       /** Main → renderer: terminal outcome of a run (report JSON, or raw output + error). */
-      StaticAnalysisRunResult: "static-analysis:run-result"
+      StaticAnalysisRunResult: "static-analysis:run-result",
+      /** Files dropped onto the main window: open each in its associated viewer
+       *  (Log Viewer / Network Session Viewer), skipping unsupported ones. */
+      OpenDroppedFiles: "main-window:open-dropped-files"
     };
   }
 });

@@ -153,6 +153,50 @@ body {
   color: var(--text-muted);
 }
 
+/* Bigger, harder-to-miss loading state right where the log content itself will
+   render. Removed via `.remove()` (not a `hidden` toggle — sidesteps the
+   [hidden]-vs-class-display fight documented elsewhere in this file) once real
+   content mounts or an error replaces it. */
+.log-viewer-loading-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  height: 100%;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.log-viewer-loading-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: min(420px, 70%);
+}
+
+/* Shimmering bars standing in for the log lines about to render — reads as
+   "content is on its way" rather than a generic busy spinner. */
+.log-viewer-loading-skeleton-line {
+  display: block;
+  height: 10px;
+  border-radius: 4px;
+  background: linear-gradient(90deg, var(--accent-purple-dim) 25%, var(--accent-purple) 50%, var(--accent-purple-dim) 75%);
+  background-size: 200% 100%;
+  animation: logViewerSkeletonShimmer 1.4s ease-in-out infinite;
+}
+/* Staggered widths + delays so the rows read as independent lines loading in, not one uniform bar. */
+.log-viewer-loading-skeleton-line:nth-child(1) { width: 92%; animation-delay: 0ms; }
+.log-viewer-loading-skeleton-line:nth-child(2) { width: 78%; animation-delay: 120ms; }
+.log-viewer-loading-skeleton-line:nth-child(3) { width: 85%; animation-delay: 240ms; }
+.log-viewer-loading-skeleton-line:nth-child(4) { width: 65%; animation-delay: 360ms; }
+.log-viewer-loading-skeleton-line:nth-child(5) { width: 72%; animation-delay: 480ms; }
+
+@keyframes logViewerSkeletonShimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
 .log-viewer-status--error {
   color: #f87171;
 }

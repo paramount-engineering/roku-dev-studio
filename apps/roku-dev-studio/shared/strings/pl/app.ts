@@ -159,6 +159,21 @@ WiFi MAC: ${d.wifiMac || 'N/D'}`,
   // Log file
   couldNotOpenLogFile: (err: string): string => `Nie można otworzyć pliku dziennika: ${err}`,
 
+  // File drag & drop onto the main window
+  fileDropOverlayReadyOne: (viewerLabel: string): string => `Upuść, aby otworzyć w ${viewerLabel}`,
+  fileDropOverlayReadyMany: 'Upuść, aby otworzyć',
+  fileDropOverlayUnsupported: 'Nieobsługiwany typ pliku',
+  fileDropOverlayGeneric: 'Upuść pliki, aby otworzyć',
+  fileDropLogViewerLabel: 'Przeglądarka dzienników',
+  fileDropNetworkSessionViewerLabel: 'Przeglądarka sesji sieciowej',
+  fileDropOpenedOne: (name: string, viewerLabel: string): string => `Otworzono „${name}” w ${viewerLabel}`,
+  fileDropOpenedMany: (count: number): string => `Otworzono ${count} plików`,
+  fileDropOpenedWithSkipped: (openedCount: number, unsupportedCount: number): string =>
+    `Otworzono ${openedCount} plik(ów), pominięto ${unsupportedCount} nieobsługiwanych`,
+  fileDropUnsupportedOne: (name: string): string => `„${name}” nie jest obsługiwanym typem pliku`,
+  fileDropUnsupportedMany: (count: number): string => `${count} nieobsługiwanych plików — nic nie otworzono`,
+  fileDropFailed: 'Nie udało się otworzyć upuszczonych plików',
+
   // Help modal
   searchHelpGuide: 'Przeszukaj pomoc i przewodnik',
 

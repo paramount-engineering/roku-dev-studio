@@ -81,6 +81,7 @@ async function main() {
   const actionsEl = document.getElementById('logViewerActions');
   const copyBtn = actionsEl?.querySelector<HTMLButtonElement>('.log-viewer-copy-btn') ?? null;
   const monitorBtn = actionsEl?.querySelector<HTMLButtonElement>('.log-viewer-monitor-btn') ?? null;
+  const loadingPlaceholderEl = document.getElementById('logViewerLoadingPlaceholder');
 
   if (!(outputEl instanceof HTMLElement)) return;
 
@@ -121,10 +122,12 @@ async function main() {
   try {
     res = await rokuApi.prepareLogViewerFile();
   } catch (e: unknown) {
+    loadingPlaceholderEl?.remove();
     setStatus(e instanceof Error ? e.message : S.logFileViewer.couldNotLoadFile, true);
     return;
   }
   if (!res.success) {
+    loadingPlaceholderEl?.remove();
     setStatus(res.error || S.logFileViewer.couldNotLoadFile, true);
     return;
   }
@@ -149,6 +152,14 @@ async function main() {
     },
     scrollToTop: () => {
       outputEl.scrollTop = 0;
+    },
+    // The file being *indexed* doesn't mean content is visible yet — for anything
+    // under ~8MB (most single-session console-log exports), the first window load
+    // parses the whole file, which can take a few seconds. Keep the placeholder up
+    // through that too, or the UI looks frozen right when it's actually doing the
+    // bulk of the work.
+    onFirstWindowLoaded: () => {
+      loadingPlaceholderEl?.remove();
     }
   });
 
@@ -199,6 +210,13 @@ async function main() {
     findBarHost: headerEl,
     // Standalone window → per-window history (cleared when the window closes).
     historyStorage: inMemorySessionStore,
+    // Without this, `mountConsoleLogFileView` clears `outputEl` (wiping
+    // `#logViewerLoadingPlaceholder`) right here at mount time — i.e. immediately
+    // after indexing, well before the first window's lines have actually loaded
+    // and parsed. Same mechanism the live Console uses to protect its own
+    // "Connect to Roku…" placeholder; ours is removed explicitly in
+    // `onFirstWindowLoaded` above instead of on first flush.
+    preservePlaceholder: true,
     onRangeChange: (start, end) => model.ensureWindow(start, end),
     remoteSearch: async (query, options) => {
       const r = await rokuApi.searchLogViewerFile(query, options);

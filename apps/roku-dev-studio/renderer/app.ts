@@ -84,6 +84,7 @@ import {
 import { peekAppConnector } from './modules/app-connector/index.js';
 import { mountUpdateNotification } from './components/modals/update-notification.js';
 import { setupWelcomeFeatureModals } from './components/modals/welcome-feature-modal.js';
+import { setupMainWindowFileDropZone } from './modules/utils/main-window-file-drop.js';
 
 // Per-device-panel expando hooks set up by the responsive-header measurer and read on
 // live rename / tab-close teardown. Declared here so TypeScript recognizes them on the
@@ -6769,6 +6770,7 @@ function runInit() {
   ensureMcpAgentScreenshotBridge();
   mountUpdateNotification();
   setupWelcomeFeatureModals();
+  setupMainWindowFileDropZone();
   onMcpAgentAction((payload) => {
     if (!payload || typeof payload.summary !== 'string' || !payload.summary) return;
     const variant = payload.level === 'destructive' ? 'warning' : 'info';

@@ -16,6 +16,7 @@ import type { BrowserWindow as ElectronBrowserWindow, IpcMain, IpcMainInvokeEven
 import { IPC } from '../shared/ipc/channels';
 import { S } from '../shared/strings/index';
 import { setupZoomGuards } from './window-zoom';
+import { withResizeLocked } from './window-resize-lock';
 import { mainError } from './log.js';
 import {
   buildLineIndex,
@@ -87,42 +88,45 @@ export function registerLogViewerIpc(ipcMain: IpcMain): void {
       if ('error' in got) return { success: false, error: got.error };
       const { state } = got;
 
-      let stat: ReturnType<typeof fs.statSync>;
-      try {
-        stat = fs.statSync(state.filePath);
-      } catch (e) {
-        return { success: false, error: e instanceof Error ? e.message : String(e) };
-      }
-      if (!stat.isFile()) return { success: false, error: 'Not a file' };
-      if (stat.size > LOG_VIEWER_MAX_BYTES) {
-        return {
-          success: false,
-          error: S.logFileViewer.fileTooLargeError(
-            Math.round(stat.size / (1024 * 1024 * 1024)),
-            LOG_VIEWER_MAX_BYTES / (1024 * 1024 * 1024)
-          )
-        };
-      }
-
-      try {
-        state.index = buildLineIndex(state.filePath);
-      } catch (e) {
-        if (e instanceof Error && e.message === 'too-many-lines') {
+      const win = BrowserWindow.fromWebContents(event.sender);
+      return withResizeLocked(win, async () => {
+        let stat: ReturnType<typeof fs.statSync>;
+        try {
+          stat = fs.statSync(state.filePath);
+        } catch (e) {
+          return { success: false, error: e instanceof Error ? e.message : String(e) };
+        }
+        if (!stat.isFile()) return { success: false, error: 'Not a file' };
+        if (stat.size > LOG_VIEWER_MAX_BYTES) {
           return {
             success: false,
-            error: S.logFileViewer.tooManyLinesError(LOG_VIEWER_MAX_LINES.toLocaleString())
+            error: S.logFileViewer.fileTooLargeError(
+              Math.round(stat.size / (1024 * 1024 * 1024)),
+              LOG_VIEWER_MAX_BYTES / (1024 * 1024 * 1024)
+            )
           };
         }
-        return { success: false, error: e instanceof Error ? e.message : String(e) };
-      }
 
-      return {
-        success: true,
-        fileName: path.basename(state.filePath),
-        fileSize: state.index.fileSize,
-        lineCount: state.index.lineCount,
-        encoding: state.index.encoding
-      };
+        try {
+          state.index = await buildLineIndex(state.filePath);
+        } catch (e) {
+          if (e instanceof Error && e.message === 'too-many-lines') {
+            return {
+              success: false,
+              error: S.logFileViewer.tooManyLinesError(LOG_VIEWER_MAX_LINES.toLocaleString())
+            };
+          }
+          return { success: false, error: e instanceof Error ? e.message : String(e) };
+        }
+
+        return {
+          success: true,
+          fileName: path.basename(state.filePath),
+          fileSize: state.index.fileSize,
+          lineCount: state.index.lineCount,
+          encoding: state.index.encoding
+        };
+      });
     }
   );
 
@@ -240,7 +244,10 @@ export function registerLogViewerIpc(ipcMain: IpcMain): void {
   );
 }
 
-export function openLogFileViewerWindow(parent: ElectronBrowserWindow | undefined, filePath: string): void {
+export function openLogFileViewerWindow(
+  parent: ElectronBrowserWindow | undefined,
+  filePath: string
+): ElectronBrowserWindow | undefined {
   const resolved = path.resolve(filePath);
   if (!fs.existsSync(resolved) || !fs.statSync(resolved).isFile()) {
     const boxOpts = {
@@ -315,4 +322,6 @@ export function openLogFileViewerWindow(parent: ElectronBrowserWindow | undefine
     logViewerStateByWindowId.delete(child.id);
     if (!child.isDestroyed()) child.close();
   });
+
+  return child;
 }
