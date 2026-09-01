@@ -17,6 +17,7 @@ import {
 import { rendererWarn, rendererError } from '../../modules/utils/logger.js';
 import { S, applyI18n } from '@shared/strings/index.js';
 import { initLocaleForWindow } from '../../modules/utils/locale-live.js';
+import { installCrashCapture } from '../../modules/errors/install.js';
 
 export {};
 
@@ -111,6 +112,9 @@ interface FiddleBridge {
    * (defensive for older preload bundles). */
   getPrivacyMode?: () => Promise<{ enabled: boolean }>;
   onPrivacyModeChanged?: (cb: (enabled: boolean) => void) => () => void;
+  getSetting: (key: string) => Promise<{ success: boolean; value?: unknown }>;
+  getAppInfo: () => Promise<{ version: string; platform: string; osRelease: string }>;
+  openExternal: (url: string) => Promise<unknown>;
 }
 
 /** Placeholder shown for IPs in the device dropdown when Privacy Mode is on.
@@ -963,6 +967,14 @@ function bindPrivacyMode(ctx: FiddleCtx): void {
 }
 
 async function main(): Promise<void> {
+  const crashCaptureBridge = getWindowFiddle();
+  installCrashCapture({
+    windowName: 'fiddle',
+    getSetting: crashCaptureBridge.getSetting,
+    getAppInfo: crashCaptureBridge.getAppInfo,
+    openExternal: crashCaptureBridge.openExternal
+  });
+
   const els = {
     deviceSelect: qs<HTMLSelectElement>('fiddleDeviceSelect'),
     runBtn: qs<HTMLButtonElement>('fiddleRunBtn'),

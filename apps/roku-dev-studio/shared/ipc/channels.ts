@@ -328,6 +328,12 @@ export const IPC = {
    *  retranslates in place (no reload). Payload is the preference string. */
   LocaleChanged: 'locale-changed',
   DebugLoggingChanged: 'debug-logging-changed',
+  /** Main → main window: an uncaught exception/rejection fired in the main process. Payload is
+   *  `{ message, stack, timestamp }` — shown in the same crash-report modal renderer errors use. */
+  MainProcessError: 'main-process-error',
+  /** Any window → main: app version + OS platform/release, for the crash-report modal's
+   *  Environment section. */
+  GetAppInfo: 'get-app-info',
   /** Main → all renderers: a live op against this device IP just failed at the connection level
    *  (ECP request, Telnet socket, …) — a hint to re-check reachability *now* rather than wait for
    *  the next scheduled poll. NOT itself a verdict: the renderer must still run the real

@@ -47,6 +47,7 @@ import {
   openModalOverlayActiveFromOpener
 } from './modules/utils/modal-origin-motion.js';
 import { attachBackdropClickToClose, attachEscToClose } from './modules/utils/modal-backdrop-click.js';
+import { installCrashCapture } from './modules/errors/install.js';
 import { wireHelpSettingsLinks } from './modules/utils/help-settings-link.js';
 import { resolveRokuKeyFromEvent } from './modules/utils/keyboard-remote-keymap.js';
 import { setupTelnet } from './modules/telnet/telnet-console-panel.js';
@@ -5575,6 +5576,13 @@ async function init() {
   // Initialize privacy mode
   initPrivacyMode();
   initLocaleLiveSwitch(() => renderDeviceList());
+  installCrashCapture({
+    windowName: 'main',
+    getSetting: window.roku.getSetting,
+    getAppInfo: window.roku.getAppInfo,
+    openExternal: window.roku.openExternal,
+    onMainProcessError: window.roku.onMainProcessError
+  });
 
   devLog('Initializing Roku Dev Studio...');
   

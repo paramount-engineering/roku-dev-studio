@@ -20,6 +20,7 @@ import { attachBackdropClickToClose } from '../../modules/utils/modal-backdrop-c
 import { attachModalResize } from '../../modules/utils/modal-resize.js';
 import { renderStructuredInto, attachFoldToggle, structuredBodyText, detectStructuredKind } from '../../modules/ui/structured-body.js';
 import { resolveCertRequirementUrl } from './cert-requirements-map.js';
+import { installCrashCapture } from '../../modules/errors/install.js';
 
 export {};
 
@@ -58,6 +59,8 @@ interface StaticAnalysisBridge {
   run: (payload: { inputPath: string; severity?: string; categories?: string[] }) => Promise<{ success: boolean; runId?: string; error?: string }>;
   cancelRun: (payload: { runId: string }) => Promise<{ success: boolean }>;
   openExternal: (url: string) => Promise<{ success: boolean; error?: string }>;
+  getSetting: (key: string) => Promise<{ success: boolean; value?: unknown }>;
+  getAppInfo: () => Promise<{ version: string; platform: string; osRelease: string }>;
   saveTextFile: (opts: { content: string; defaultName?: string; dialogTitle?: string }) => Promise<{ success: boolean; filePath?: string; error?: string }>;
   onToolStatus: (cb: (status: ScaToolStatus) => void) => () => void;
   onProgress: (cb: (data: { runId: string; stream: 'stdout' | 'stderr'; text: string }) => void) => () => void;
@@ -77,6 +80,13 @@ function getBridge(): StaticAnalysisBridge {
   if (!bridge) throw new Error('window.staticAnalysis bridge is not available (preload failed).');
   return bridge;
 }
+
+installCrashCapture({
+  windowName: 'static-analysis',
+  getSetting: (key) => getBridge().getSetting(key),
+  getAppInfo: () => getBridge().getAppInfo(),
+  openExternal: (url) => getBridge().openExternal(url)
+});
 
 function q<T extends HTMLElement>(selector: string): T {
   const el = document.querySelector<T>(selector);

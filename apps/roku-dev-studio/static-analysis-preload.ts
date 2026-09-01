@@ -42,6 +42,10 @@ contextBridge.exposeInMainWorld('staticAnalysis', {
   // there's no `setWindowOpenHandler` anywhere in the app; every external link goes through this.
   openExternal: (url: string) => ipcRenderer.invoke(IPC.ShellOpenExternal, url) as Promise<{ success: boolean; error?: string }>,
 
+  // Crash-report modal: read the enable/disable setting + environment info.
+  getSetting: (key: string) => ipcRenderer.invoke(IPC.SettingsGet, key),
+  getAppInfo: () => ipcRenderer.invoke(IPC.GetAppInfo),
+
   // Reuses the app-wide "save text to file" handler (registered once at app-ready by
   // `system-handlers.ts`) — the same one Log Viewer / Network Session export already use.
   saveTextFile: (opts: { content: string; defaultName?: string; dialogTitle?: string }) =>

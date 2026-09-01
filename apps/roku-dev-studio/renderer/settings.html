@@ -96,6 +96,16 @@
               </div>
               <div class="settings-row-toggle">
                 <div class="settings-row-text">
+                  <strong data-i18n="settings.crashReportingToggle">Show Crash Reports</strong>
+                  <span class="settings-row-desc" data-i18n="settings.crashReportingToggleDesc">When On, an uncaught error shows a report modal with details you can file as a GitHub issue.</span>
+                </div>
+                <label class="settings-toggle-wrap" for="optCrashReporting">
+                  <input type="checkbox" id="optCrashReporting" class="settings-toggle-input" role="switch" aria-label="Show crash reports" aria-checked="true" data-i18n-aria-label="settings.crashReportingToggleAria" />
+                  <span class="settings-toggle-ui" aria-hidden="true"></span>
+                </label>
+              </div>
+              <div class="settings-row-toggle">
+                <div class="settings-row-text">
                   <strong data-i18n="settings.autoConnect">Auto Connect to Devices</strong>
                   <span class="settings-row-desc" data-i18n="settings.autoConnectDesc">When On, the app will automatically connect to devices that were stayed connected when closing the app in the previous session.</span>
                 </div>

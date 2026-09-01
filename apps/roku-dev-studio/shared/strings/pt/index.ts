@@ -28,6 +28,8 @@ import { staticAnalysis } from './static-analysis.js';
 import { debuggerStrings } from '../debugger.js';
 // Placeholder: reuse the English "Try Demo App" strings until a Portuguese translation exists.
 import { tryDemoApp } from '../try-demo-app.js';
+// Placeholder: reuse the English Crash Report strings until a translation exists.
+import { crashReport } from '../crashReport.js';
 
 export const pt = {
   common,
@@ -54,4 +56,5 @@ export const pt = {
   debugger: debuggerStrings,
   staticAnalysis,
   tryDemoApp,
+  crashReport,
 };

@@ -12,6 +12,7 @@ import { searchWidthKey } from '../../modules/ui/search-storage-keys.js';
 import { inMemorySessionStore } from '../../modules/ui/in-memory-storage.js';
 import { S, applyI18n } from '@shared/strings/index.js';
 import { initLocaleForWindow } from '../../modules/utils/locale-live.js';
+import { installCrashCapture } from '../../modules/errors/install.js';
 
 /**
  * Local typed view of `window.roku` for this renderer window. Declared as a
@@ -64,9 +65,18 @@ type LogViewerRokuApi = {
   }>;
   copyToClipboard: (text: string) => Promise<unknown>;
   openExternal: (url: string) => Promise<unknown>;
+  getSetting: (key: string) => Promise<{ success: boolean; value?: unknown }>;
+  getAppInfo: () => Promise<{ version: string; platform: string; osRelease: string }>;
 };
 
 const rokuApi = window.roku as unknown as LogViewerRokuApi;
+
+installCrashCapture({
+  windowName: 'log-file-viewer',
+  getSetting: rokuApi.getSetting,
+  getAppInfo: rokuApi.getAppInfo,
+  openExternal: rokuApi.openExternal
+});
 
 async function main() {
   // Localize the static log-file-viewer.html shell.

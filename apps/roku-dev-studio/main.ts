@@ -267,6 +267,18 @@ function safeSendToRendererWithFiddleMirror(channel: string, data: unknown) {
   return safeSendToRenderer(channel, data);
 }
 
+/** Forwards a main-process crash to the main window's crash-report modal (see
+ *  renderer/modules/errors/). No-op if the main window doesn't exist yet/anymore. */
+function reportMainProcessError(error: unknown): void {
+  if (!mainWindow || mainWindow.isDestroyed() || mainWindow.webContents.isDestroyed()) return;
+  const err = error instanceof Error ? error : new Error(String(error));
+  mainWindow.webContents.send(IPC.MainProcessError, {
+    message: err.message,
+    stack: err.stack || err.message,
+    timestamp: Date.now()
+  });
+}
+
 // Global error handlers to prevent crashes
 process.on('uncaughtException', (error) => {
   mainError('Uncaught Exception:', error);
@@ -276,10 +288,12 @@ process.on('uncaughtException', (error) => {
     mainLog('Network error caught globally, continuing...');
     return;
   }
+  reportMainProcessError(error);
 });
 
 process.on('unhandledRejection', (reason, promise) => {
   mainError('Unhandled Rejection at:', promise, 'reason:', reason);
+  reportMainProcessError(reason);
 });
 
 /** Sandboxed preload may only require('electron'); API code is inlined in preload.bundled.cjs */

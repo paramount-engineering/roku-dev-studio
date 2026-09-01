@@ -6,6 +6,12 @@ import type { IpcRendererEvent } from 'electron';
 const { IPC } = require('./shared/ipc/channels');
 
 contextBridge.exposeInMainWorld('settingsApi', {
+  // Crash-report modal: read the enable/disable setting + environment info, and open the
+  // prefilled GitHub issue URL when the user clicks "Report on GitHub".
+  getSetting: (key: string) => ipcRenderer.invoke(IPC.SettingsGet, key),
+  getAppInfo: () => ipcRenderer.invoke(IPC.GetAppInfo),
+  openExternal: (url: string) => ipcRenderer.invoke(IPC.ShellOpenExternal, url),
+
   // Privacy Mode — mirrors the main/Fiddle bridge so the Settings window can blur
   // IPs/serials (e.g. the Sideload Relay device table) in lockstep. Reads the
   // current state at open; the main process fans `IPC.PrivacyModeChanged` to every

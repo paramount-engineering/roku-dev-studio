@@ -61,6 +61,7 @@ import {
 import { applyFocusDecorations } from '../network-inspector/network-focus-decorations.js';
 import { S, applyI18n } from '@shared/strings/index.js';
 import { initLocaleForWindow } from '../../modules/utils/locale-live.js';
+import { installCrashCapture } from '../../modules/errors/install.js';
 
 type RokuApi = {
   loadNetworkSession: () => Promise<{
@@ -77,6 +78,8 @@ type RokuApi = {
   showContextMenu?: (items: unknown) => Promise<{ action?: string } | null>;
   getPrivacyMode?: () => Promise<{ enabled: boolean }>;
   onPrivacyModeChanged?: (cb: (enabled: boolean) => void) => () => void;
+  getSetting: (key: string) => Promise<{ success: boolean; value?: unknown }>;
+  getAppInfo: () => Promise<{ version: string; platform: string; osRelease: string }>;
 };
 
 /** Toggle the `privacy-mode` body class so the shared inspector CSS (device IPs,
@@ -95,6 +98,13 @@ function bindPrivacyMode(): void {
 }
 
 const api = (window as unknown as { roku: RokuApi }).roku;
+
+installCrashCapture({
+  windowName: 'network-session-viewer',
+  getSetting: api.getSetting,
+  getAppInfo: api.getAppInfo,
+  openExternal: api.openExternal
+});
 
 // The events + derived sessions + filter + selection live in the shared SessionStore (also used by
 // the live tab). Bodies are inlined in the parsed file, so this window just `setAll`s once — no

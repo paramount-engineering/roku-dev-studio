@@ -19,6 +19,9 @@ contextBridge.exposeInMainWorld('roku', {
     }>,
   copyToClipboard: (text: string) => ipcRenderer.invoke(IPC.ClipboardWrite, text),
   openExternal: (url: string) => ipcRenderer.invoke(IPC.ShellOpenExternal, url),
+  // Crash-report modal: read the enable/disable setting + environment info.
+  getSetting: (key: string) => ipcRenderer.invoke(IPC.SettingsGet, key),
+  getAppInfo: () => ipcRenderer.invoke(IPC.GetAppInfo),
   // Native right-click menu (used by the Focus-hosts feature). Same channel as the live tab.
   showContextMenu: (items: unknown) => ipcRenderer.invoke(IPC.ShowContextMenu, items),
   // Privacy Mode — this viewer reuses the live inspector's renderers (device IPs,

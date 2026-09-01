@@ -214,6 +214,11 @@ export const settings = {
   tryDemoAppToggleAria: 'Afișează butonul încearcă aplicația demo',
   tryDemoAppOpenBtn: 'Deschide Aplicația Demo',
   tryDemoAppOpenBtnAria: 'Deschide selectorul încearcă aplicația demo',
+  // Placeholder: reuse the English Crash Reporting toggle strings until a translation exists.
+  crashReportingToggle: 'Show Crash Reports',
+  crashReportingToggleDesc:
+    'When On, an uncaught error shows a report modal with details you can file as a GitHub issue.',
+  crashReportingToggleAria: 'Show crash reports',
   autoConnect: 'Conectare automată la dispozitive',
   autoConnectDesc:
     'Când este activat, aplicația se va conecta automat la dispozitivele care au rămas conectate la închiderea aplicației în sesiunea anterioară.',

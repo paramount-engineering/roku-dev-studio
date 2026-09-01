@@ -214,6 +214,11 @@ export const settings = {
   tryDemoAppToggleAria: 'Показувати кнопку спробувати демо-додаток',
   tryDemoAppOpenBtn: 'Відкрити Демо-Додаток',
   tryDemoAppOpenBtnAria: 'Відкрити вікно вибору спробувати демо-додаток',
+  // Placeholder: reuse the English Crash Reporting toggle strings until a translation exists.
+  crashReportingToggle: 'Show Crash Reports',
+  crashReportingToggleDesc:
+    'When On, an uncaught error shows a report modal with details you can file as a GitHub issue.',
+  crashReportingToggleAria: 'Show crash reports',
   autoConnect: 'Автопідключення до пристроїв',
   autoConnectDesc:
     'Коли ввімкнено, застосунок автоматично підключатиметься до пристроїв, які залишалися підключеними під час закриття застосунку в попередній сесії.',

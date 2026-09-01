@@ -697,6 +697,19 @@ contextBridge.exposeInMainWorld('roku', {
     return () => ipcRenderer.removeListener(IPC.DebugLoggingChanged, handler);
   },
 
+  // Listen for an uncaught main-process error (crash-report modal)
+  onMainProcessError: (
+    callback: (payload: { message: string; stack: string; timestamp: number }) => void
+  ) => {
+    const handler = (_event: IpcRendererEvent, payload: { message: string; stack: string; timestamp: number }) =>
+      callback(payload);
+    ipcRenderer.on(IPC.MainProcessError, handler);
+    return () => ipcRenderer.removeListener(IPC.MainProcessError, handler);
+  },
+
+  // App version + OS platform/release (crash-report modal Environment section)
+  getAppInfo: () => ipcRenderer.invoke(IPC.GetAppInfo),
+
   // Persisted app settings changed (Settings window save) — reload timing + connection poll
   onAppSettingsUpdated: (callback: (data: unknown) => void) => {
     const handler = (_event: IpcRendererEvent, data: unknown) => callback(data);

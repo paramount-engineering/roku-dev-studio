@@ -19,12 +19,20 @@ import { attachInstantTooltips } from '../../modules/utils/instant-tooltip.js';
 import { S, applyI18n, availableLocales, getLocale, matchLocale, localeLabel, setLocale, SYSTEM_LOCALE } from '@shared/strings/index.js';
 import { applyLocalePreference } from '../../modules/utils/locale-live.js';
 import { setLocaleFromPreference } from '../../modules/utils/locale-pref.js';
+import { installCrashCapture } from '../../modules/errors/install.js';
 
 const api = (window as any).settingsApi;
 if (!api) {
   document.body.innerHTML = '<p class="settings-fatal">' + S.settings.apiUnavailable + '</p>';
   throw new Error('Settings API unavailable');
 }
+
+installCrashCapture({
+  windowName: 'settings',
+  getSetting: api.getSetting,
+  getAppInfo: api.getAppInfo,
+  openExternal: api.openExternal
+});
 
 const INITIAL_SECTION = new URLSearchParams(window.location.search).get('section') || '';
 const INITIAL_HIGHLIGHT = new URLSearchParams(window.location.search).get('highlight') || '';
@@ -1099,6 +1107,7 @@ function buildPayload() {
     devicePerformanceRememberQuadPerDevice: boolFromToggle('optDevicePerfRememberQuad'),
     keyboardRemoteShortcutsEnabled: boolFromToggle('optKeyboardRemote'),
     tryDemoAppEnabled: boolFromToggle('optTryDemoApp'),
+    crashReportingEnabled: boolFromToggle('optCrashReporting'),
     autoConnectLastDeviceEnabled: boolFromToggle('optAutoConnectLast'),
     rememberSidebarToggle: boolFromToggle('optRememberSidebarToggle'),
     rememberPasswordsInKeychain: boolFromToggle('optRememberPasswordsInKeychain'),
@@ -1372,6 +1381,7 @@ api.getState().then(function (state: any) {
   setToggle('optKeyboardRemote', state.keyboardRemoteShortcutsEnabled === true);
   setToggle('optTryDemoApp', state.tryDemoAppEnabled !== false);
   syncTryDemoAppOpenBtnVisibility();
+  setToggle('optCrashReporting', state.crashReportingEnabled !== false);
   setToggle('optAutoConnectLast', state.autoConnectLastDeviceEnabled === true);
   setToggle('optRememberSidebarToggle', state.rememberSidebarToggle === true);
   setToggle('optRememberPasswordsInKeychain', state.rememberPasswordsInKeychain === true);

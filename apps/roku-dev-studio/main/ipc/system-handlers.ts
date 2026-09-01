@@ -128,6 +128,11 @@ function setupSystemHandlers(
     }
   });
 
+  // App version + OS platform/release, for the crash-report modal's Environment section.
+  ipcMain.handle(IPC.GetAppInfo, async () => {
+    return { version: app.getVersion(), platform: process.platform, osRelease: os.release() };
+  });
+
   // Save arbitrary text content (console logs, ECP / App Connector responses, …) to a file.
   ipcMain.handle(
     IPC.RokuSaveTextFile,

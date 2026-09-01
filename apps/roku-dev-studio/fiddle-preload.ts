@@ -75,5 +75,11 @@ contextBridge.exposeInMainWorld('fiddle', {
     const handler = (_event: IpcRendererEvent, pref: string) => callback(pref);
     ipcRenderer.on(IPC.LocaleChanged, handler);
     return () => ipcRenderer.removeListener(IPC.LocaleChanged, handler);
-  }
+  },
+
+  // Crash-report modal: read the enable/disable setting + environment info, and open the
+  // prefilled GitHub issue URL when the user clicks "Report on GitHub".
+  getSetting: (key: string) => ipcRenderer.invoke(IPC.SettingsGet, key),
+  getAppInfo: () => ipcRenderer.invoke(IPC.GetAppInfo),
+  openExternal: (url: string) => ipcRenderer.invoke(IPC.ShellOpenExternal, url)
 });
