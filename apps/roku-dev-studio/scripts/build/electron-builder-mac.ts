@@ -23,6 +23,12 @@
  * Every argument after the script name is passed straight through to electron-builder, so callers add
  * their own targets/config: `dmg:arm64 zip:arm64`, `-c.npmRebuild=false`, diagnostic `-c.*`, etc.
  * `--mac` is always supplied here — callers must NOT repeat it.
+ *
+ * `--publish never` is also always supplied: `package.json`'s `build.publish` config must stay
+ * present (it's what makes electron-builder emit `app-update.yml`/`latest-mac.yml` for
+ * `electron-updater` to read at runtime), but actually uploading to GitHub is the release
+ * workflow's `softprops/action-gh-release` step's job, not electron-builder's — this flag stops
+ * electron-builder from doing its own competing upload when it detects a CI environment + token.
  */
 
 import { spawn, spawnSync } from 'child_process';
@@ -66,7 +72,7 @@ function detachStaleVolumes(): void {
 /** Run `electron-builder --mac …` once, streaming output live while sniffing stderr for the flake. */
 function runElectronBuilderMac(): Promise<{ code: number; sawDetachError: boolean }> {
   return new Promise((resolve) => {
-    const child = spawn('npx', ['electron-builder', '--mac', ...passThrough], {
+    const child = spawn('npx', ['electron-builder', '--mac', '--publish', 'never', ...passThrough], {
       cwd: appDir,
       env: process.env,
       shell: process.platform === 'win32'

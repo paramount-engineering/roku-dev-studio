@@ -90,10 +90,13 @@ jobs:
 
       - name: Build desktop app
         # `build:mac|win|linux` chains build:bundle (transpile
-        # main/preload/renderer) -> clean:dist -> electron-builder.
-        # Publishing is disabled in `apps/roku-dev-studio/package.json`
-        # (`"build": { "publish": null }`) — `softprops/action-gh-release`
-        # in the `release` job below handles the GitHub Release.
+        # main/preload/renderer) -> clean:dist -> electron-builder. Each of those scripts passes
+        # `--publish never`, so electron-builder still emits the update-metadata YAML files
+        # (`app-update.yml`, `latest-mac.yml`, ...) from `apps/roku-dev-studio/package.json`'s
+        # `build.publish` config but never uploads them itself — `softprops/action-gh-release`
+        # in the `release` job below is the sole uploader. (Nulling out `build.publish` instead
+        # of using `--publish never` also suppresses those YAML files entirely, breaking
+        # electron-updater's runtime checkForUpdates() with an ENOENT — don't do that.)
         run: npm run ${{ matrix.build-cmd }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
