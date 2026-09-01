@@ -1,6 +1,6 @@
 {
   "name": "roku-dev-studio-remote-server",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Remote server for Roku Dev Studio - enables remote device control and telnet debug console streaming",
   "main": "roku-remote-server.js",
   "bin": {
@@ -42,7 +42,7 @@
     "node": ">=24.17.0"
   },
   "dependencies": {
-    "roku-dev-studio-api": "^1.0.0"
+    "roku-dev-studio-api": "^1.1.0"
   },
   "devDependencies": {
     "@types/node": "22.19.17",
