@@ -90,11 +90,7 @@
     "directories": {
       "output": "dist"
     },
-    "publish": {
-      "provider": "github",
-      "owner": "paramount-engineering",
-      "repo": "roku-dev-studio"
-    },
+    "publish": null,
     "afterSign": "./scripts/notarize.cjs",
     "afterAllArtifactBuild": "./scripts/build-hooks-entry.cjs",
     "files": [

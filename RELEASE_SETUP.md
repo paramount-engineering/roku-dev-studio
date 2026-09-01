@@ -203,7 +203,7 @@ Each release will include the artifacts listed in the **Downloads** table below.
 ### macOS app shows "damaged" on user's machine
 - The app is unsigned (no Apple Developer certificate)
 - Users need to right-click → Open on first launch
-- Or run: `xattr -cr /Applications/Roku\ App\ Connector.app`
+- Or run: `xattr -cr /Applications/Roku\ Dev\ Studio.app`
 
 ### Windows SmartScreen warning
 - The app is unsigned (no code signing certificate)
