@@ -3,12 +3,13 @@ name: Build and Release
 on:
   push:
     tags:
-      # Both prefixed (v1.2.3) and un-prefixed (1.2.3) semver tags trigger a release.
-      # Pre-release suffixes (-rc.1, -beta.2, etc.) are accepted on either form.
-      - 'v[0-9]+.[0-9]+.[0-9]+'
-      - 'v[0-9]+.[0-9]+.[0-9]+-*'
-      - '[0-9]+.[0-9]+.[0-9]+'
-      - '[0-9]+.[0-9]+.[0-9]+-*'
+      # GitHub uses glob matching here (NOT regex).
+      # Match both prefixed (v1.2.3) and un-prefixed (1.2.3) tags,
+      # including prerelease suffixes (e.g. -rc.1, -beta.2).
+      - 'v[0-9]*.[0-9]*.[0-9]*'
+      - 'v[0-9]*.[0-9]*.[0-9]*-*'
+      - '[0-9]*.[0-9]*.[0-9]*'
+      - '[0-9]*.[0-9]*.[0-9]*-*'
   workflow_dispatch:
     inputs:
       version:
@@ -132,8 +133,23 @@ jobs:
             # (it appears in artifact filenames in the release body).
             VERSION="${TAG_NAME#v}"
           fi
+
+          # Guardrails: only release valid semver (optionally prefixed with v,
+          # optionally with prerelease/build metadata after patch).
+          if ! printf '%s' "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$'; then
+            echo "Invalid version: '$VERSION'. Expected semver like 1.2.0 or 1.2.0-rc.1"
+            exit 1
+          fi
+
+          if printf '%s' "$VERSION" | grep -q '-'; then
+            IS_PRERELEASE=true
+          else
+            IS_PRERELEASE=false
+          fi
+
           echo "VERSION=$VERSION"   >> "$GITHUB_OUTPUT"
           echo "TAG_NAME=$TAG_NAME" >> "$GITHUB_OUTPUT"
+          echo "IS_PRERELEASE=$IS_PRERELEASE" >> "$GITHUB_OUTPUT"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@718ea10b132b3b2eba29c1007bb80653f286566b  # v3.0.1
@@ -184,7 +200,7 @@ jobs:
             - **Debian/Ubuntu:** Download the `.deb` file and install with `sudo dpkg -i filename.deb`
             - **Other distros:** Download the `.AppImage` file, make it executable (`chmod +x filename.AppImage`), and run it
           draft: false
-          prerelease: false
+          prerelease: ${{ steps.get_version.outputs.IS_PRERELEASE == 'true' }}
           files: |
             ./artifacts/mac-builds/**/*.dmg
             ./artifacts/mac-builds/**/*.zip
