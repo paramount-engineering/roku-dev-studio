@@ -84,8 +84,10 @@
     <a href="#app-launcher" data-feature="app-launcher" class="features-nav-link"><svg class="icon" width="16" height="16"><use href="assets/icons.svg#icon-app"></use></svg><span>App Launcher &amp; Management</span></a>
     <a href="#device-queries" data-feature="device-queries" class="features-nav-link"><svg class="icon" width="16" height="16"><use href="assets/icons.svg#icon-scan"></use></svg><span>Device Queries</span></a>
     <a href="#dev-app-management" data-feature="dev-app-management" class="features-nav-link"><svg class="icon" width="16" height="16"><use href="assets/icons.svg#icon-zap"></use></svg><span>Dev App Management</span></a>
+    <a href="#try-demo-app" data-feature="try-demo-app" class="features-nav-link"><svg class="icon" width="16" height="16"><use href="assets/icons.svg#icon-devices"></use></svg><span>Try Demo App</span></a>
     <a href="#sideload-relay" data-feature="sideload-relay" class="features-nav-link"><svg class="icon" width="16" height="16"><use href="assets/icons.svg#icon-send"></use></svg><span>Sideload Relay</span></a>
     <a href="#console-debugging" data-feature="console-debugging" class="features-nav-link"><svg class="icon" width="16" height="16"><use href="assets/icons.svg#icon-terminal"></use></svg><span>Console &amp; Debugging</span></a>
+    <a href="#console-monitor" data-feature="console-monitor" class="features-nav-link"><svg class="icon" width="16" height="16"><use href="assets/icons.svg#icon-check"></use></svg><span>Console Monitor</span></a>
     <a href="#brightscript-debugger" data-feature="brightscript-debugger" class="features-nav-link"><svg class="icon" width="16" height="16"><use href="assets/icons.svg#icon-debug-run"></use></svg><span>BrightScript Debugger</span></a>
     <a href="#app-connector" data-feature="app-connector" class="features-nav-link"><svg class="icon" width="16" height="16"><use href="assets/icons.svg#icon-plug"></use></svg><span>App Connector (using RALE)</span></a>
     <a href="#network-inspector" data-feature="network-inspector" class="features-nav-link"><svg class="icon" width="16" height="16"><use href="assets/icons.svg#icon-network"></use></svg><span>Network Inspector</span></a>
@@ -98,6 +100,8 @@
     <a href="#rds-cli" data-feature="rds-cli" class="features-nav-link"><svg class="icon" width="16" height="16"><use href="assets/icons.svg#icon-terminal"></use></svg><span>rds CLI (terminal)</span></a>
     <a href="#remote-server-support" data-feature="remote-server-support" class="features-nav-link"><svg class="icon" width="16" height="16"><use href="assets/icons.svg#icon-server"></use></svg><span>Remote Server Support</span></a>
     <a href="#settings" data-feature="settings" class="features-nav-link"><svg class="icon" width="16" height="16"><use href="assets/icons.svg#icon-settings"></use></svg><span>Settings</span></a>
+    <a href="#language-switching" data-feature="language-switching" class="features-nav-link"><svg class="icon" width="16" height="16"><use href="assets/icons.svg#icon-globe"></use></svg><span>Language Switching</span></a>
+    <a href="#crash-reporting" data-feature="crash-reporting" class="features-nav-link"><svg class="icon" width="16" height="16"><use href="assets/icons.svg#icon-x"></use></svg><span>Crash Reporting</span></a>
     <a href="#developer-features" data-feature="developer-features" class="features-nav-link"><svg class="icon" width="16" height="16"><use href="assets/icons.svg#icon-wrench"></use></svg><span>Developer Features</span></a>
   </nav>
 
@@ -182,10 +186,19 @@
   <img src="images/DEV_APP.png" alt="Dev App tab">
 </section>
 
+<section class="doc-section" id="try-demo-app" data-feature-panel>
+  <h2><svg class="icon" width="16" height="16"><use href="assets/icons.svg#icon-devices"></use></svg> Try Demo App</h2>
+  <ul>
+    <li><strong>No device of your own required:</strong> The bundled Roku Dev Studio Showcase channel exercises Remote Control, App Connector (real two-way function calls), Network Inspector traffic, Console Monitor findings, and MCP/AI-agent control, so you can explore the app without a channel of your own</li>
+    <li><strong>One-click sideload:</strong> Enable Show Try Demo App Button in Settings → General to add a title-bar button; pick a developer-mode device in the picker and RDS packages, sideloads, and launches it</li>
+    <li><strong>Guided callouts:</strong> A post-launch tips list points you at the exact App Connector functions (PlayContentById, SetProxy, TriggerConsoleFinding, and more) that light up each feature</li>
+  </ul>
+</section>
+
 <section class="doc-section" id="sideload-relay" data-feature-panel>
   <h2><svg class="icon" width="16" height="16"><use href="assets/icons.svg#icon-send"></use></svg> Sideload Relay</h2>
   <ul>
-    <li><strong>One build → many devices:</strong> With the relay on, Roku Dev Studio advertises itself as a Roku over SSDP; point your IDE (VS Code BrightScript / roku-deploy) or a browser at this machine, upload once, and RDS fans the build out (install → launch → console) to every targeted device — local or at a remote location</li>
+    <li><strong>One build → many devices:</strong> With the relay on, Roku Dev Studio advertises itself as a Roku over SSDP; point your IDE (VS Code BrightScript / Eclipse / roku-deploy) or a browser at this machine, upload once, and RDS fans the build out (install → launch → console) to every targeted device — local or at a remote location</li>
     <li><strong>Enable in Settings → Sideload Relay</strong> (off by default): set a Relay Dev Password and pick targets in Setup Devices</li>
     <li><strong>Browser upload page:</strong> A themed drag-and-drop .zip uploader is served at the relay address for sideloads without an IDE</li>
     <li><strong>Auto-connect:</strong> Each device that receives a build opens as a connected tab with its debug console attached; live fan-out progress streams on telnet 8085</li>
@@ -203,6 +216,15 @@
     <li><strong>Log Export:</strong> Save console logs to file</li>
   </ul>
   <img src="images/TELNET_CONSOLE.png" alt="Console tab">
+</section>
+
+<section class="doc-section" id="console-monitor" data-feature-panel>
+  <h2><svg class="icon" width="16" height="16"><use href="assets/icons.svg#icon-check"></use></svg> Console Monitor</h2>
+  <ul>
+    <li><strong>Automatic BrightScript issue detection:</strong> Scans console output for recognized crash / error patterns and lists them with What / Cause / Fix guidance and a link to Roku's docs</li>
+    <li><strong>Crashes &amp; Issues:</strong> Crashes show severity and full backtrace with a Copy Crash + Backtrace action; issues jump straight to the offending line in the log</li>
+    <li><strong>Works live and on saved logs:</strong> Available from both the Console tab and the Log File Viewer via the Monitor button</li>
+  </ul>
 </section>
 
 <section class="doc-section" id="brightscript-debugger" data-feature-panel>
@@ -342,7 +364,7 @@
   <h2><svg class="icon" width="16" height="16"><use href="assets/icons.svg#icon-settings"></use></svg> Settings</h2>
   <p class="doc-kicker">Ctrl/Cmd+, — seven sections</p>
   <ul>
-    <li><strong>General:</strong> Developer Mode, Privacy Mode (mask IPs/serials), Debug Logging to file, Roku Remote - Use Keyboard, Auto Connect to Devices, Auto Hide SideBar</li>
+    <li><strong>General:</strong> Developer Mode, Privacy Mode (mask IPs/serials), Debug Logging to file, Roku Remote - Use Keyboard, Auto Connect to Devices, Auto Hide SideBar, Language, Show Try Demo App Button, Show Crash Reports</li>
     <li><strong>Action Scripts:</strong> Default folder for run artifacts (screenshots, exported PDFs)</li>
     <li><strong>Device Performance:</strong> Chart sample interval, chart history window, "Remember Show Device Performance" per device</li>
     <li><strong>Timing &amp; Network:</strong> Connection / query / telnet timeouts and other knobs</li>
@@ -356,6 +378,23 @@
     <figure><img src="images/SETTINGS_DEVICE_PERFORMANCE.png" alt="Settings Device Performance"><figcaption>Device Performance</figcaption></figure>
     <figure><img src="images/SETTINGS_TIMING_NETWORK.png" alt="Settings Timing & Network"><figcaption>Timing &amp; Network</figcaption></figure>
   </div>
+</section>
+
+<section class="doc-section" id="language-switching" data-feature-panel>
+  <h2><svg class="icon" width="16" height="16"><use href="assets/icons.svg#icon-globe"></use></svg> Language Switching</h2>
+  <ul>
+    <li><strong>6 languages:</strong> English, Español, Українська, Polski, Română, Português — pick one from Settings → General → Language, or leave it on System Default to follow the OS</li>
+    <li><strong>No restart needed:</strong> Switching retranslates the whole app, including already-open windows, immediately</li>
+  </ul>
+</section>
+
+<section class="doc-section" id="crash-reporting" data-feature-panel>
+  <h2><svg class="icon" width="16" height="16"><use href="assets/icons.svg#icon-x"></use></svg> Crash Reporting</h2>
+  <ul>
+    <li><strong>Actionable failure reports:</strong> An uncaught error in the app itself (not your device) shows a report modal instead of failing silently, with a prefilled GitHub issue link</li>
+    <li><strong>Redacted by default:</strong> IPs and MAC addresses are stripped from the report before display, copy, or submission</li>
+    <li><strong>Toggle in Settings → General:</strong> Show Crash Reports is on by default; turn it off to suppress the modal</li>
+  </ul>
 </section>
 
 <section class="doc-section" id="developer-features" data-feature-panel>

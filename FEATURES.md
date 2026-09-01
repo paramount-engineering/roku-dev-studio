@@ -69,10 +69,17 @@
 - **Progress Tracking:** Real-time upload progress for sideloading
 ![Dev App](docs/images/DEV_APP.png)
 
+<a id="try-demo-app"></a>
+
+### 🎬 Try Demo App
+- **No device of your own required:** The bundled **Roku Dev Studio Showcase** channel exercises Remote Control, App Connector (real two-way function calls), Network Inspector traffic, Console Monitor findings, and MCP/AI-agent control, so you can explore the app without a channel of your own
+- **One-click sideload:** Enable **Show Try Demo App Button** in **Settings → General** to add a title-bar button; pick a developer-mode device in the picker and RDS packages, sideloads, and launches it
+- **Guided callouts:** A post-launch tips list points you at the exact App Connector functions (`PlayContentById`, `SetProxy`, `TriggerConsoleFinding`, and more) that light up each feature
+
 <a id="sideload-relay"></a>
 
 ### 📡 Sideload Relay
-- **One build → many devices:** With the relay on, Roku Dev Studio advertises itself as a Roku over SSDP; point your IDE (VS Code BrightScript / roku-deploy) or a browser at this machine, upload once, and RDS fans the build out (install → launch → console) to every targeted device — local or at a remote location
+- **One build → many devices:** With the relay on, Roku Dev Studio advertises itself as a Roku over SSDP; point your IDE (VS Code BrightScript / Eclipse / roku-deploy) or a browser at this machine, upload once, and RDS fans the build out (install → launch → console) to every targeted device — local or at a remote location
 - **Enable in Settings → Sideload Relay** (off by default): set a **Relay Dev Password** (how your IDE authenticates to RDS) and pick targets in **Setup Devices**
 - **Browser upload page:** A themed drag-and-drop `.zip` uploader is served at the relay address for sideloads without an IDE
 - **Auto-connect:** Each device that receives a build opens as a connected tab with its debug console attached; live fan-out progress streams on telnet `8085`
@@ -87,6 +94,13 @@
 - **System Commands:** Execute system commands via telnet (port 8080)
 - **Log Export:** Save console logs to file
 ![Console](docs/images/TELNET_CONSOLE.png)
+
+<a id="console-monitor"></a>
+
+### 🩺 Console Monitor
+- **Automatic BrightScript issue detection:** Scans console output for recognized crash / error patterns and lists them with **What / Cause / Fix** guidance and a link to Roku's docs
+- **Crashes & Issues:** Crashes show severity and full backtrace with a **Copy Crash + Backtrace** action; issues jump straight to the offending line in the log
+- **Works live and on saved logs:** Available from both the Console tab and the Log File Viewer via the **Monitor** button
 
 <a id="brightscript-debugger"></a>
 
@@ -207,7 +221,7 @@ Setup instructions (running the relay server, opening the port, connecting from 
 ### ⚙️ Settings
 Open with `Ctrl/Cmd+,` (or *Roku Dev Studio → Settings* on macOS, *File → Settings* on Windows / Linux). Seven sections:
 
-- **General:** Developer Mode, Privacy Mode (mask IPs / serials), Debug Logging to file, Roku Remote - Use Keyboard, Auto Connect to Devices, Auto Hide SideBar
+- **General:** Developer Mode, Privacy Mode (mask IPs / serials), Debug Logging to file, Roku Remote - Use Keyboard, Auto Connect to Devices, Auto Hide SideBar, Language, Show Try Demo App Button, Show Crash Reports
 - **Action Scripts:** Default folder for run artifacts (screenshots, exported PDFs)
 - **Device Performance:** Chart sample interval, chart history window, *Remember 'Show Device Performance'* per device
 - **Timing & Network:** Connection / query / telnet timeouts and other knobs (with *Reset to Defaults*)
@@ -220,6 +234,19 @@ Open with `Ctrl/Cmd+,` (or *Roku Dev Studio → Settings* on macOS, *File → Se
 | ![Settings → General](docs/images/SETTINGS_GENERAL.png) | ![Settings → Action Scripts](docs/images/SETTINGS_ACTION_SCRIPTS.png) |
 | **Device Performance** | **Timing & Network** |
 | ![Settings → Device Performance](docs/images/SETTINGS_DEVICE_PERFORMANCE.png) | ![Settings → Timing & Network](docs/images/SETTINGS_TIMING_NETWORK.png) |
+
+<a id="language-switching"></a>
+
+### 🌍 Language Switching
+- **6 languages:** English, Español, Українська, Polski, Română, Português — pick one from **Settings → General → Language**, or leave it on **System Default** to follow the OS
+- **No restart needed:** Switching retranslates the whole app, including already-open windows, immediately
+
+<a id="crash-reporting"></a>
+
+### 💥 Crash Reporting
+- **Actionable failure reports:** An uncaught error in the app itself (not your device) shows a report modal instead of failing silently, with a prefilled **GitHub issue** link
+- **Redacted by default:** IPs and MAC addresses are stripped from the report before display, copy, or submission
+- **Toggle in Settings → General:** **Show Crash Reports** is on by default; turn it off to suppress the modal
 
 <a id="developer-features"></a>
 
