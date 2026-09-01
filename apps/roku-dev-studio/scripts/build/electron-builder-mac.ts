@@ -72,12 +72,14 @@ function runElectronBuilderMac(): Promise<{ code: number; sawDetachError: boolea
       shell: process.platform === 'win32'
     });
     let sawDetachError = false;
-    child.stdout.on('data', (d: Buffer) => process.stdout.write(d));
-    child.stderr.on('data', (d: Buffer) => {
-      const s = d.toString();
-      if (DETACH_ERROR.test(s)) sawDetachError = true;
-      process.stderr.write(s);
-    });
+    // electron-builder logs this error to stdout in some versions, stderr in others — sniff both,
+    // then forward the chunk through unchanged.
+    const sniff = (write: (chunk: Buffer) => void) => (d: Buffer) => {
+      if (DETACH_ERROR.test(d.toString())) sawDetachError = true;
+      write(d);
+    };
+    child.stdout.on('data', sniff((d) => process.stdout.write(d)));
+    child.stderr.on('data', sniff((d) => process.stderr.write(d)));
     child.on('error', (err) => {
       console.error(`[build:mac] Failed to launch electron-builder: ${err.message}`);
       resolve({ code: 1, sawDetachError: false });
