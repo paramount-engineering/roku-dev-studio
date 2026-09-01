@@ -14,7 +14,7 @@ tags in [Releases](https://github.com/paramount-engineering/roku-dev-studio/rele
 - **Sideload Relay** — point your sideload tool (VS Code + BrightScript extension, Eclipse, or the `roku-deploy` CLI) or a browser at this machine instead of a single Roku; RDS accepts the build once, then installs, launches, and opens console on every enabled target. Sideloads from same machine proceed automatically; Sideload requests from another LAN device needs the Dev Password and an allow prompt.
 - **Console Monitor** — automatic BrightScript crash/error detection in the live Console and Log File Viewer, with a findings analytics modal.
 - **Network Inspector** — capture, inspect, and replay your device's network traffic, now with multi-keyword find, request replay/edit-resend, rewrite rules, whole-session HAR/native export, and a standalone Network Session Viewer for saved captures. HTTPS decrypts automatically via the built-in MITM proxy — no device-side certificate setup needed.
-- **Try Demo App** — a bundled demo channel so new users can explore Roku Dev Studio's features without a physical device.
+- **Try Demo App** — a bundled demo channel so users can explore all the features of Roku Dev Studio.
 - **Crash Reporting** — uncaught errors now surface as an actionable report (with a prefilled GitHub issue link) instead of failing silently; sensitive IPs/MACs are redacted, and it can be turned off in Settings.
 - **Remote Server** — network inspector and debugger streaming now available over the headless remote-server API, not just the desktop app.
 - **Language Switching** — the app now ships in 6 languages (English, Español, Українська, Polski, Română, Português).
