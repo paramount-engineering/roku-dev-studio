@@ -1,13 +1,15 @@
 #!/usr/bin/env node
-// Generates the channel icons/splash for the Roku Dev Studio Showcase demo
-// channel. No real artwork needed — every image is an SVG rasterized by
-// Sharp (already installed at the repo root via apps/roku-dev-studio's
-// devDependency), modeled on the pattern in
+// Generates channel icons/splash + poster art for the Roku Dev Studio
+// Showcase demo channel. No real artwork needed — every image is an SVG
+// rasterized by Sharp (already installed at the repo root via
+// apps/roku-dev-studio's devDependency), modeled on the pattern in
 // apps/roku-dev-studio/scripts/generate-icons.ts. The icon/splash treatment
 // (dark badge + glowing gradient wordmark) matches roku-components/fiddle/'s
 // existing art so the two bundled companion channels read as one family.
+// Poster art is read from docs/demo-catalog/catalog.json so titles never
+// drift out of sync.
 import sharp from 'sharp';
-import { mkdirSync } from 'fs';
+import { mkdirSync, readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 
@@ -15,6 +17,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = join(__dirname, '..', '..');
 
 const BG_COLOR = '#0a0a12';
+const PALETTE = ['#1e293b', '#312e81', '#164e63', '#3f3f1f', '#1f2937', '#4c1d3d', '#1a2e05', '#2d1b3d'];
 
 // Dark rounded "app icon" badge (Roku / Dev / Studio, 3 lines) plus a big
 // glowing gradient wordmark underneath — the same composition family as
@@ -66,6 +69,19 @@ function badgeAndWordmarkSvg(width, height, wordmark) {
   </svg>`;
 }
 
+function posterSvg(width, height, bg, title) {
+  const titleText = escapeXml(title);
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}">
+    <rect width="100%" height="100%" fill="${bg}" />
+    <rect x="2" y="2" width="${width - 4}" height="${height - 4}" fill="none" stroke="#ffffff22" stroke-width="4" />
+    <text x="24" y="${height - 24}" font-family="Helvetica, Arial, sans-serif" font-size="30" font-weight="700" fill="#f8fafc">${titleText}</text>
+  </svg>`;
+}
+
+function escapeXml(value) {
+  return String(value).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
 async function render(svg, outPath) {
   mkdirSync(dirname(outPath), { recursive: true });
   await sharp(Buffer.from(svg)).png().toFile(outPath);
@@ -80,6 +96,16 @@ async function main() {
   await render(badgeAndWordmarkSvg(540, 405, 'Showcase'), join(iconDir, 'channel_icon_fhd.png'));
   await render(badgeAndWordmarkSvg(320, 180, 'Showcase'), join(iconDir, 'channel_icon_wide.png'));
   await render(badgeAndWordmarkSvg(1920, 1080, 'Showcase'), join(iconDir, 'splash.png'));
+
+  console.log('\nCatalog posters:');
+  const catalogPath = join(repoRoot, 'docs', 'demo-catalog', 'catalog.json');
+  const catalog = JSON.parse(readFileSync(catalogPath, 'utf8'));
+  const postersDir = join(repoRoot, 'docs', 'demo-catalog', 'posters');
+  for (let i = 0; i < catalog.items.length; i++) {
+    const item = catalog.items[i];
+    const bg = PALETTE[i % PALETTE.length];
+    await render(posterSvg(400, 225, bg, item.title), join(postersDir, `${item.id}.png`));
+  }
 
   console.log('\nDone.');
 }

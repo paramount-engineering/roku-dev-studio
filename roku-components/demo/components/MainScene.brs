@@ -22,15 +22,6 @@ sub init()
     m.focusHighlight = m.top.findNode("focusHighlight")
     m.statusLabel = m.top.findNode("statusLabel")
 
-    m.connectorHintText = m.top.findNode("connectorHintText")
-    m.connectorHintTimer = m.top.findNode("connectorHintTimer")
-    m.connectorHintFadeOut = m.top.findNode("connectorHintFadeOut")
-    m.connectorHintFadeIn = m.top.findNode("connectorHintFadeIn")
-    m.connectorHintTimer.observeField("fire", "OnConnectorHintTimerFire")
-    m.connectorHintFadeOut.observeField("state", "OnConnectorFadeOutState")
-    m.connectorHints = []
-    m.connectorHintIndex = 0
-
     m.playerGroup = m.top.findNode("playerGroup")
     m.playerVideo = m.top.findNode("playerVideo")
     m.playerTitle = m.top.findNode("playerTitle")
@@ -46,10 +37,9 @@ sub init()
     m.currentItem = invalid
     m.playbackState = "stopped"
 
-    ' Debug network proxy (Charles/Fiddler/mitmproxy-style capture, port 8888 by
-    ' default) — see SetProxy()/ApplyProxy() below.
+    ' Debug network proxy (Charles/Fiddler/mitmproxy-style capture on port 8888) —
+    ' see SetProxy()/ApplyProxy() below.
     m.proxyHost = invalid
-    m.proxyPort = 8888
     m.proxyEnabled = false
     m.proxyVerified = false
 
@@ -72,7 +62,6 @@ function _rdsShowcase_start() as void
     LoadDefaultCatalog()
     RenderGrid()
     UpdateFocusHighlight()
-    StartConnectorHintCarousel()
 end function
 
 ' Routes HelperTask's `output` by operation — one Task instance handles both
@@ -229,51 +218,47 @@ end function
 function ApplyProxy(url as string) as string
     if url = invalid or url = "" then return url
     if not m.proxyEnabled or not m.proxyVerified or m.proxyHost = invalid or m.proxyHost = "" then return url
-    return "http://" + m.proxyHost + ":" + m.proxyPort.ToStr() + "/;" + url
+    return "http://" + m.proxyHost + ":8888/;" + url
 end function
 
 ' Same effective-state check as ApplyProxy() itself, as a human-readable
 ' string — so every network op's print/result can say plainly which path a
-' request actually took ("direct" vs "<host>:<port>") instead of leaving it
+' request actually took ("direct" vs "<host>:8888") instead of leaving it
 ' implicit.
 function ProxyDescription() as string
     if not m.proxyEnabled or not m.proxyVerified or m.proxyHost = invalid or m.proxyHost = "" then return "direct"
-    return m.proxyHost + ":" + m.proxyPort.ToStr()
+    return m.proxyHost + ":8888"
 end function
 
-' Sets (or clears) the debug proxy host/port. Enabling kicks off an async
+' Sets (or clears) the debug proxy host. Enabling kicks off an async
 ' reachability test before the proxy is actually used (ApplyProxy stays a
 ' no-op until m.proxyVerified flips true); disabling clears it immediately.
-' port defaults to 8888 (the Charles/Fiddler/mitmproxy-style capture tools'
-' usual default) when the caller doesn't pass one.
-function SetProxy(host as string, enable as boolean, port = 8888 as integer) as object
+function SetProxy(host as string, enable as boolean) as object
     if enable and (host = invalid or host = "") then
         return { success: false, error: "host is required to enable the proxy" }
     end if
-    if port = invalid or port <= 0 then port = 8888
 
     m.proxyHost = host
-    m.proxyPort = port
     m.proxyEnabled = enable
     m.proxyVerified = false
 
     if enable then
-        print "[SHOWCASE] Verifying proxy at " + host + ":" + port.ToStr() + "..."
-        m.statusLabel.text = "Verifying proxy at " + host + ":" + port.ToStr() + "..."
-        StartProxyTest(host, port)
+        print "[SHOWCASE] Verifying proxy at " + host + ":8888..."
+        m.statusLabel.text = "Verifying proxy at " + host + ":8888..."
+        StartProxyTest(host)
     else
         print "[SHOWCASE] Proxy disabled"
         m.statusLabel.text = ""
     end if
-    return { success: true, host: host, port: port, enabled: enable, verified: m.proxyVerified }
+    return { success: true, host: host, enabled: enable, verified: m.proxyVerified }
 end function
 
-' Starts an async reachability check of `host:port` by routing a lightweight
+' Starts an async reachability check of `host:8888` by routing a lightweight
 ' request (a well-known 204 endpoint) through it via HelperTask, the same
 ' way ApplyProxy() would route real traffic. The result lands on
 ' OnProxyTestResult() through OnHelperTaskOutput().
-sub StartProxyTest(host as string, port as integer)
-    testUrl = "http://" + host + ":" + port.ToStr() + "/;https://www.google.com/generate_204"
+sub StartProxyTest(host as string)
+    testUrl = "http://" + host + ":8888/;https://www.google.com/generate_204"
     m.helperTask.input = { operation: "TestReachable", url: testUrl }
 end sub
 
@@ -288,11 +273,11 @@ sub OnProxyTestResult(output as object)
 
     m.proxyVerified = (output.reachable = true)
     if m.proxyVerified then
-        print "[SHOWCASE] Proxy at " + m.proxyHost + ":" + m.proxyPort.ToStr() + " is reachable"
-        m.statusLabel.text = "Proxy enabled: " + m.proxyHost + ":" + m.proxyPort.ToStr()
+        print "[SHOWCASE] Proxy at " + m.proxyHost + ":8888 is reachable"
+        m.statusLabel.text = "Proxy enabled: " + m.proxyHost + ":8888"
     else
         m.proxyEnabled = false
-        print "[SHOWCASE] Proxy at " + m.proxyHost + ":" + m.proxyPort.ToStr() + " is unreachable — disabling"
+        print "[SHOWCASE] Proxy at " + m.proxyHost + ":8888 is unreachable — disabling"
         m.statusLabel.text = "Proxy unreachable — disabled"
     end if
 end sub
@@ -540,6 +525,8 @@ sub OpenPlayer(item as object)
     content.url = ApplyProxy(item.streamUrl)
     content.streamFormat = item.streamFormat
     content.title = item.title
+    content.HDPosterUrl = item.posterUrl
+    content.SDPosterUrl = item.posterUrl
 
     m.playerTitle.text = item.title
     m.playerDescription.text = item.description
@@ -645,52 +632,6 @@ function onKeyEvent(key as string, press as boolean) as boolean
     return false
 end function
 
-' ===== App Connector hint carousel =====
-' Cycles the header's top-right space through GetExternalControlFunctions()'s
-' own list (name + description), fading the label out/in on each swap — a
-' live read of the exact contract App Connector clients see, not a
-' hand-maintained duplicate that could drift as functions are added below.
-
-sub StartConnectorHintCarousel()
-    m.connectorHints = GetExternalControlFunctions()
-    if m.connectorHints.Count() = 0 then return
-    m.connectorHintIndex = 0
-    m.connectorHintText.text = FormatConnectorHint(m.connectorHints[0])
-    m.connectorHintTimer.control = "start"
-end sub
-
-sub OnConnectorHintTimerFire()
-    m.connectorHintFadeOut.control = "start"
-end sub
-
-sub OnConnectorFadeOutState()
-    if m.connectorHintFadeOut.state <> "stopped" then return
-    m.connectorHintIndex = (m.connectorHintIndex + 1) MOD m.connectorHints.Count()
-    m.connectorHintText.text = FormatConnectorHint(m.connectorHints[m.connectorHintIndex])
-    m.connectorHintFadeIn.control = "start"
-end sub
-
-' "FnName — first ~64 chars of its description…", cut at a word boundary
-' (not mid-word) when the description runs long.
-function FormatConnectorHint(fn as object) as string
-    maxDescLen = 64
-    desc = fn.description
-    if Len(desc) > maxDescLen then
-        cut = Left(desc, maxDescLen)
-        spaceIdx = LastIndexOfSpace(cut)
-        if spaceIdx > 1 then cut = Left(cut, spaceIdx - 1)
-        desc = cut + "…"
-    end if
-    return fn.name + " — " + desc
-end function
-
-function LastIndexOfSpace(s as string) as integer
-    for i = Len(s) to 1 step -1
-        if Mid(s, i, 1) = " " then return i
-    end for
-    return 0
-end function
-
 ' ===== App Connector / RALE contract =====
 ' See roku-components/README.md — these two functions are called via
 ' root.callFunc(...) from TrackerTask.xml's UIThread_getExternalControlFunctions
@@ -699,19 +640,19 @@ end function
 function GetExternalControlFunctions(args = invalid as dynamic) as object
     return [
         { name: "GetCatalog", description: "Returns the full content catalog.", params: [] }
-        { name: "SearchCatalog", description: "Returns catalog items whose title or description contains the query (case-insensitive).", params: [{ name: "query", type: "String", placeholder: "e.g. bunny" }] }
-        { name: "PlayContentById", description: "Opens the Details/Player screen for the given content id and starts playback.", params: [{ name: "contentId", type: "String", placeholder: "e.g. big-buck-bunny" }] }
-        { name: "SetPlaybackState", description: "Sets playback state on the currently open item. One of: play, pause, stop.", params: [{ name: "state", type: "String", placeholder: "play, pause, or stop" }] }
+        { name: "SearchCatalog", description: "Returns catalog items whose title or description contains the query (case-insensitive).", params: [{ name: "query", type: "String" }] }
+        { name: "PlayContentById", description: "Opens the Details/Player screen for the given content id and starts playback.", params: [{ name: "contentId", type: "String" }] }
+        { name: "SetPlaybackState", description: "Sets playback state on the currently open item. One of: play, pause, stop.", params: [{ name: "state", type: "String" }] }
         { name: "GetPlaybackState", description: "Returns the currently open item's id, title, playback state, and position/duration in seconds.", params: [] }
-        { name: "LoadCatalogFromUrl", description: "Starts fetching a new catalog from the given HTTPS URL (JSON shape: { items: [...] }), replacing the current catalog once it arrives.", params: [{ name: "url", type: "String", placeholder: "e.g. https://paramount-engineering.github.io/roku-dev-studio/demo-catalog/catalog.json" }] }
-        { name: "SetProxy", description: "Routes catalog/stream requests through a debug proxy (Charles/Fiddler/mitmproxy-style capture) at host:port, verifying it's reachable before use. Pass the proxy host IP, an enable boolean, and an optional port (default 8888).", params: [{ name: "host", type: "String", placeholder: "e.g. 192.168.1.50" }, { name: "enable", type: "Boolean" }, { name: "port", type: "Integer", placeholder: "Default: 8888" }] }
-        { name: "GetProxyStatus", description: "Returns the current debug proxy host, port, whether it's enabled, and whether it's been verified reachable.", params: [] }
+        { name: "LoadCatalogFromUrl", description: "Starts fetching a new catalog from the given HTTPS URL (JSON shape: { items: [...] }), replacing the current catalog once it arrives.", params: [{ name: "url", type: "String" }] }
+        { name: "SetProxy", description: "Routes catalog/stream requests through a debug proxy (Charles/Fiddler/mitmproxy-style capture) at host:8888, verifying it's reachable before use. Pass the proxy host IP and an enable boolean.", params: [{ name: "host", type: "String" }, { name: "enable", type: "Boolean" }] }
+        { name: "GetProxyStatus", description: "Returns the current debug proxy host, whether it's enabled, and whether it's been verified reachable.", params: [] }
         { name: "GetDeviceInfo", description: "Returns roDeviceInfo diagnostics: model, OS version, client id, IP addresses, connection type, display info, time zone, country code.", params: [] }
         { name: "GetMemoryInfo", description: "Returns roAppMemoryMonitor diagnostics: channel memory limits, available memory, usage percent, and the device's general memory level.", params: [] }
         { name: "PingHealthCheck", description: "Sends a plain HTTPS GET to postman-echo.com for a quick Network Inspector capture.", params: [] }
-        { name: "SubmitTelemetryEvent", description: "Sends an HTTPS POST with a JSON body to postman-echo.com — shows a request body in Network Inspector, not just headers.", params: [{ name: "eventName", type: "String", placeholder: "e.g. video_started" }] }
+        { name: "SubmitTelemetryEvent", description: "Sends an HTTPS POST with a JSON body to postman-echo.com — shows a request body in Network Inspector, not just headers.", params: [{ name: "eventName", type: "String" }] }
         { name: "SimulateNetworkError", description: "Sends an HTTPS GET that deliberately returns HTTP 500, so Network Inspector has a failed request to show.", params: [] }
-        { name: "TriggerConsoleFinding", description: "Deliberately trips a real, non-fatal BrightScript runtime error/warning so Console Monitor recognizes a finding. kind is optional (default: all, which trips every one) — one of: type-mismatch, for-each, dot-invalid, divide-zero, array-out-of-bounds, invalid-format-specifier, bad-throw, sg-field-type-mismatch, sg-nonexistent-field, sg-node-loop-detected, formatjson-nested, parsejson-failed, file-write-failed.", params: [{ name: "kind", type: "String", placeholder: "Default: all" }] }
+        { name: "TriggerConsoleFinding", description: "Deliberately trips a real, non-fatal BrightScript runtime error/warning so Console Monitor recognizes a finding. kind is optional (default: all, which trips every one) — one of: type-mismatch, for-each, dot-invalid, divide-zero, array-out-of-bounds, invalid-format-specifier, bad-throw, sg-field-type-mismatch, sg-nonexistent-field, sg-node-loop-detected, formatjson-nested, parsejson-failed, file-write-failed.", params: [{ name: "kind", type: "String" }] }
     ]
 end function
 
@@ -784,12 +725,10 @@ function ExecuteFunction(functionName as string, functionParams = invalid as dyn
         if functionParams <> invalid and functionParams.Count() > 0 then host = functionParams[0].ToStr()
         enable = false
         if functionParams <> invalid and functionParams.Count() > 1 then enable = (functionParams[1] = true)
-        port = 8888
-        if functionParams <> invalid and functionParams.Count() > 2 and functionParams[2] <> invalid then port = functionParams[2]
-        return SetProxy(host, enable, port)
+        return SetProxy(host, enable)
 
     else if functionName = "GetProxyStatus" then
-        return { success: true, host: m.proxyHost, port: m.proxyPort, enabled: m.proxyEnabled, verified: m.proxyVerified }
+        return { success: true, host: m.proxyHost, enabled: m.proxyEnabled, verified: m.proxyVerified }
 
     else if functionName = "GetDeviceInfo" then
         return GetDeviceInfo()
