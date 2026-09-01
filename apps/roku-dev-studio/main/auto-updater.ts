@@ -47,9 +47,14 @@ function isMissingMetadataUpdaterError(errorLike: unknown): boolean {
   const code = String(maybeObj?.code ?? '');
   return (
     code === 'ERR_UPDATER_CHANNEL_FILE_NOT_FOUND' ||
-    // Per-platform channel files: latest-mac.yml (macOS), latest.yml (Windows),
-    // latest-linux.yml (Linux). The generic phrases catch the rest cross-platform.
-    /latest(-mac|-linux)?\.yml|release artifacts|cannot find\s+latest/i.test(msg)
+    // Per-platform channel files hosted on the release: latest-mac.yml (macOS),
+    // latest.yml (Windows), latest-linux.yml (Linux). `app-update.yml` is the sibling
+    // metadata file bundled *inside* the app itself (Resources/app-update.yml) — both
+    // come from the same electron-builder `publish` config and go missing together
+    // (e.g. a build made with `publish: null`), surfacing as a plain ENOENT for
+    // whichever one electron-updater reaches for first. The generic phrases catch
+    // wording variants across electron-updater versions/platforms.
+    /latest(-mac|-linux)?\.yml|app-update\.yml|release artifacts|cannot find\s+latest/i.test(msg)
   );
 }
 
