@@ -72,7 +72,7 @@
 <a id="try-demo-app"></a>
 
 ### 🎬 Try Demo App
-- **No device of your own required:** The bundled **Roku Dev Studio Showcase** channel exercises Remote Control, App Connector (real two-way function calls), Network Inspector traffic, Console Monitor findings, and MCP/AI-agent control, so you can explore the app without a channel of your own
+- **No channel of your own required:** Sideload the bundled **Roku Dev Studio Showcase** channel to any Roku in Developer Mode. It exercises Remote Control, App Connector (real two-way function calls), Network Inspector traffic, Console Monitor findings, and MCP/AI-agent control, so you can explore RDS without building a channel of your own
 - **One-click sideload:** Enable **Show Try Demo App Button** in **Settings → General** to add a title-bar button; pick a developer-mode device in the picker and RDS packages, sideloads, and launches it
 - **Guided callouts:** A post-launch tips list points you at the exact App Connector functions (`PlayContentById`, `SetProxy`, `TriggerConsoleFinding`, and more) that light up each feature
 
