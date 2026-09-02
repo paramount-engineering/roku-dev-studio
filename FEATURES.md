@@ -98,8 +98,9 @@
 <a id="console-monitor"></a>
 
 ### 🩺 Console Monitor
-- **Automatic BrightScript issue detection:** Scans console output for recognized crash / error patterns and lists them with **What / Cause / Fix** guidance and a link to Roku's docs
-- **Crashes & Issues:** Crashes show severity and full backtrace with a **Copy Crash + Backtrace** action; issues jump straight to the offending line in the log
+- **Grouped issue modal:** Shows the matching findings in tabs by category, like the screenshot: Type/Runtime, SceneGraph/Component, JSON, and Other, with per-group counts at a glance
+- **Automatic BrightScript issue detection:** Scans console output for recognized crash / error patterns and expands each issue into **What / Cause / Fix** guidance plus occurrence lines
+- **Crashes & Issues:** Crashes show severity and full backtrace with a **Copy Crash + Backtrace** action; clicking an issue or an occurrence row jumps straight to the matching line in the log
 - **Works live and on saved logs:** Available from both the Console tab and the Log File Viewer via the **Monitor** button
 
 <a id="brightscript-debugger"></a>
