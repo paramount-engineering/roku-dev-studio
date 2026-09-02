@@ -102,6 +102,9 @@
 - **Automatic BrightScript issue detection:** Scans console output for recognized crash / error patterns and expands each issue into **What / Cause / Fix** guidance plus occurrence lines
 - **Crashes & Issues:** Crashes show severity and full backtrace with a **Copy Crash + Backtrace** action; clicking an issue or an occurrence row jumps straight to the matching line in the log
 - **Works live and on saved logs:** Available from both the Console tab and the Log File Viewer via the **Monitor** button
+![Console Monitor — grouped issues by category with per-group counts](docs/images/CONSOLE_MONITOR.png)
+![Console Monitor — expanded issue with What / Cause / Fix guidance and occurrences](docs/images/CONSOLE_MONITOR_ISSUE_DETAIL.png)
+![Console Monitor — clicking an occurrence jumps straight to that line in the log](docs/images/CONSOLE_MONITOR_JUMP_TO_LOG.png)
 
 <a id="brightscript-debugger"></a>
 
