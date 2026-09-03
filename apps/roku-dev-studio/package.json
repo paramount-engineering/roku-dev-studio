@@ -87,6 +87,7 @@
   "build": {
     "appId": "com.paramount.vtg.roku-dev-studio",
     "productName": "Roku Dev Studio",
+    "artifactName": "Roku-Dev-Studio-${version}-${arch}.${ext}",
     "directories": {
       "output": "dist"
     },
@@ -264,9 +265,6 @@
         "libuuid1"
       ],
       "packageCategory": "devel"
-    },
-    "appImage": {
-      "artifactName": "${productName}-${version}-${arch}.${ext}"
     }
   }
 }

@@ -708,6 +708,47 @@ function removeBanner(): void {
   });
 }
 
+/**
+ * "An update exists but we can't auto-download it" banner — shared by the `available` status
+ * (main process HEAD-checked the release asset up front and it 404s) and the `error` status
+ * (the download was actually attempted and failed, or the release has no update metadata at
+ * all). Points the user at the GitHub releases page instead of a doomed auto-download.
+ */
+function renderManualDownloadBanner(banner: HTMLElement, iconSvg: string, version?: string): void {
+  const bannerTitle = version ? S.modals.updateAvailableTitle(version) : S.modals.newUpdateAvailable;
+  banner.innerHTML = `
+    <div class="rds-banner-header">
+      <div class="rds-banner-icon">${iconSvg}</div>
+      <div class="rds-banner-text">
+        <div class="rds-banner-title">${bannerTitle}</div>
+        <div class="rds-banner-subtitle">${S.modals.pleaseDownloadLatest}</div>
+      </div>
+      <button class="rds-banner-dismiss" aria-label="${S.modals.dismiss}">×</button>
+    </div>
+    <div class="rds-banner-actions">
+      <button class="rds-banner-btn rds-banner-btn-ghost" id="rdsUpdateReleaseNotes">${S.modals.releaseNotes}</button>
+      <button class="rds-banner-btn rds-banner-btn-primary" id="rdsUpdateOpenLatest">${S.modals.download}</button>
+    </div>`;
+
+  document.body.appendChild(banner);
+  // Warm the release-notes cache now so the modal opens populated when clicked.
+  prefetchLatestReleaseInfo();
+  banner.querySelector('.rds-banner-dismiss')?.addEventListener('click', removeBanner);
+  banner.querySelector('#rdsUpdateReleaseNotes')?.addEventListener('click', () => {
+    // Release Notes "expands" the notification into the modal: capture the banner's rect,
+    // remove it instantly (so the dialog morphs out of it rather than sitting behind), then
+    // grow the modal from that rect. Closing the modal doesn't restore the banner.
+    const originRect = banner.getBoundingClientRect();
+    banner.remove();
+    showReleaseNotesModal({ originRect });
+  });
+  banner.querySelector('#rdsUpdateOpenLatest')?.addEventListener('click', () => {
+    // Open the downloads (release) page and dismiss the notification.
+    removeBanner();
+    (window as any).roku?.openExternal?.(LATEST_RELEASE_URL)?.catch?.(() => undefined);
+  });
+}
+
 function renderBanner(status: UpdaterStatus): void {
   removeBanner();
 
@@ -727,7 +768,14 @@ function renderBanner(status: UpdaterStatus): void {
     <line x1="12" y1="3" x2="12" y2="15"/>
   </svg>`;
 
-  if (status.type === 'available') {
+  if (status.type === 'available' && status.needsManualDownload) {
+    // The main process HEAD-checked the release asset before surfacing this status and it
+    // wasn't actually downloadable (e.g. a release published with mismatched manifest/asset
+    // filenames — see .discussion-docs/auto-updater-release-pipeline-gap.md) — skip straight to
+    // the manual-download fallback instead of offering a Download button doomed to 404.
+    renderManualDownloadBanner(banner, iconSvg, status.version);
+
+  } else if (status.type === 'available') {
     banner.innerHTML = `
       <div class="rds-banner-header">
         <div class="rds-banner-icon">${iconSvg}</div>
@@ -805,38 +853,7 @@ function renderBanner(status: UpdaterStatus): void {
   } else if (status.type === 'error') {
     const msg = status.message ?? S.modals.updateCheckFailed;
     if (status.needsManualDownload || isMissingReleaseMetadataError(msg)) {
-      const bannerTitle = status.version ? S.modals.updateAvailableTitle(status.version) : S.modals.newUpdateAvailable;
-      banner.innerHTML = `
-        <div class="rds-banner-header">
-          <div class="rds-banner-icon">${iconSvg}</div>
-          <div class="rds-banner-text">
-            <div class="rds-banner-title">${bannerTitle}</div>
-            <div class="rds-banner-subtitle">${S.modals.pleaseDownloadLatest}</div>
-          </div>
-          <button class="rds-banner-dismiss" aria-label="${S.modals.dismiss}">×</button>
-        </div>
-        <div class="rds-banner-actions">
-          <button class="rds-banner-btn rds-banner-btn-ghost" id="rdsUpdateReleaseNotes">${S.modals.releaseNotes}</button>
-          <button class="rds-banner-btn rds-banner-btn-primary" id="rdsUpdateOpenLatest">${S.modals.download}</button>
-        </div>`;
-
-      document.body.appendChild(banner);
-      // Warm the release-notes cache now so the modal opens populated when clicked.
-      prefetchLatestReleaseInfo();
-      banner.querySelector('.rds-banner-dismiss')?.addEventListener('click', removeBanner);
-      banner.querySelector('#rdsUpdateReleaseNotes')?.addEventListener('click', () => {
-        // Release Notes "expands" the notification into the modal: capture the banner's rect,
-        // remove it instantly (so the dialog morphs out of it rather than sitting behind), then
-        // grow the modal from that rect. Closing the modal doesn't restore the banner.
-        const originRect = banner.getBoundingClientRect();
-        banner.remove();
-        showReleaseNotesModal({ originRect });
-      });
-      banner.querySelector('#rdsUpdateOpenLatest')?.addEventListener('click', () => {
-        // Open the downloads (release) page and dismiss the notification.
-        removeBanner();
-        (window as any).roku?.openExternal?.(LATEST_RELEASE_URL)?.catch?.(() => undefined);
-      });
+      renderManualDownloadBanner(banner, iconSvg, status.version);
       return;
     }
 

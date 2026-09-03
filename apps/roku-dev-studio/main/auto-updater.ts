@@ -13,8 +13,32 @@ import { IPC } from '../shared/ipc/channels';
 import { mainError, mainWarn } from './log.js';
 
 const path = require('path');
-const LATEST_RELEASE_API_URL = 'https://api.github.com/repos/paramount-engineering/roku-dev-studio/releases/latest';
+const GITHUB_OWNER = 'paramount-engineering';
+const GITHUB_REPO = 'roku-dev-studio';
+const LATEST_RELEASE_API_URL = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/releases/latest`;
 const MANUAL_UPDATE_MESSAGE = 'New update is available. Please download the latest release to update.';
+
+/**
+ * HEAD-check that the release's primary update asset is actually reachable before surfacing an
+ * "available" status with an auto-download button — a release published with a manifest/asset
+ * filename mismatch (see .discussion-docs/auto-updater-release-pipeline-gap.md) would otherwise
+ * pass this exact check right up until the user clicks Download and hits a 404. Best-effort: a
+ * network hiccup here fails OPEN (treated as downloadable) rather than blocking the notification
+ * on this pre-check's own reachability — the real download would hit the same transient issue
+ * anyway, so failing closed here would only make things worse, not better.
+ */
+async function isUpdateAssetDownloadable(info: { version?: unknown; files?: Array<{ url?: unknown }> }): Promise<boolean> {
+  const fileUrl = info.files?.[0]?.url;
+  const version = normalizeVersion(info.version);
+  if (typeof fileUrl !== 'string' || !fileUrl || !version) return true;
+  try {
+    const url = `https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}/releases/download/v${version}/${encodeURIComponent(fileUrl)}`;
+    const response = await fetch(url, { method: 'HEAD', redirect: 'follow' });
+    return response.ok;
+  } catch {
+    return true;
+  }
+}
 
 export interface UpdaterStatus {
   type: 'idle' | 'checking' | 'available' | 'not-available' | 'downloading' | 'ready' | 'error';
@@ -149,7 +173,13 @@ export function setupAutoUpdater(
     // detected during local development. In production app.isPackaged is true and
     // electron-updater uses the real app version from package.json automatically.
     try {
-      const { parse } = require('semver');
+      // Use electron-updater's OWN bundled semver, not whatever "semver" happens to resolve to
+      // from this file (a root-hoisted, unrelated older major pulled in by other build tooling).
+      // electron-updater's internal comparisons (checkForUpdates' semver.eq/gt/lt) construct a
+      // `new SemVer(...)` from ITS copy and check `instanceof` against ITS `SemVer` class — a
+      // parsed object from a DIFFERENT copy of the package fails that check and throws "Invalid
+      // version. Must be a string. Got type \"object\"." (a classic dual-package-instance hazard).
+      const { parse } = require('electron-updater/node_modules/semver');
       (autoUpdater as any).currentVersion = parse('1.0.0');
     } catch {
       // semver not available — skip version override
@@ -225,7 +255,10 @@ export function setupAutoUpdater(
   autoUpdater.on('update-available', (info) => {
     // Update exists — the banner surfaces it, so no "no update" toast is needed.
     consumeUserInitiated();
-    applyStatus({ type: 'available', version: String(info.version) }, broadcast);
+    const version = String(info.version);
+    void isUpdateAssetDownloadable(info).then((downloadable) => {
+      applyStatus({ type: 'available', version, needsManualDownload: !downloadable }, broadcast);
+    });
   });
 
   autoUpdater.on('update-not-available', (info) => {
