@@ -364,7 +364,7 @@ function validateStep(
   errors: any[],
   counts: Record<string, number>,
   state: { preorderIndex: number; assignedRoots: Set<string>; scriptVersion: string },
-  options: { raleFunctions?: any[] }
+  options: { raleFunctions?: any[]; allowDevPassword?: boolean }
 ): void {
   if (!isObject(step)) {
     pushError(errors, {
@@ -406,7 +406,7 @@ function validateStep(
   }
 
   // Reject literal step.password (mirrors the script-root devPassword rule).
-  if (typeof step.password === 'string' && step.password.length > 0) {
+  if (!options.allowDevPassword && typeof step.password === 'string' && step.password.length > 0) {
     pushError(errors, {
       path: `${path}.password`,
       code: 'password_in_script',
@@ -605,7 +605,10 @@ function validateStep(
 // Public entry point
 // =============================================================================
 
-function validateScript(input: unknown, options?: { raleFunctions?: any[] }): any {
+function validateScript(
+  input: unknown,
+  options?: { raleFunctions?: any[]; allowDevPassword?: boolean }
+): any {
   const errors: any[] = [];
   const counts: Record<string, number> = {};
   const opts = options || {};
@@ -644,8 +647,10 @@ function validateScript(input: unknown, options?: { raleFunctions?: any[] }): an
     return { ok: false, errors, stepCounts: counts };
   }
 
-  // Reject literal devPassword in the JSON (per authoring rules).
-  if (typeof input.devPassword === 'string' && input.devPassword.length > 0) {
+  // Reject literal devPassword in the JSON (per authoring rules) — unless the
+  // caller is the local UI (Builder/Executor/Import), where a human-typed or
+  // remembered password is expected and never leaves the machine.
+  if (!opts.allowDevPassword && typeof input.devPassword === 'string' && input.devPassword.length > 0) {
     pushError(errors, {
       path: 'devPassword',
       code: 'password_in_script',

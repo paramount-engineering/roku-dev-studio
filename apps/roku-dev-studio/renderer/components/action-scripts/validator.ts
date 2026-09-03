@@ -52,7 +52,7 @@ export type RendererValidationResult = {
 function getValidator():
   | ((
       input: unknown,
-      options?: { raleFunctions?: ReadonlyArray<unknown> }
+      options?: { raleFunctions?: ReadonlyArray<unknown>; allowDevPassword?: boolean }
     ) => CanonicalResult)
   | null {
   if (typeof window === 'undefined') return null;
@@ -109,7 +109,14 @@ export function validateScript(
       ]
     };
   }
-  const canonical = validator(script, raleFunctions ? { raleFunctions: raleFunctions as ReadonlyArray<unknown> } : undefined);
+  // allowDevPassword: true — this validator instance is the local-UI seam only
+  // (Builder/Executor/Import); a human-typed or remembered password never
+  // leaves the machine here, unlike the MCP agent-authoring path, which keeps
+  // the strict default via packages/roku-dev-studio-mcp/src/validator.ts.
+  const canonical = validator(script, {
+    ...(raleFunctions ? { raleFunctions: raleFunctions as ReadonlyArray<unknown> } : {}),
+    allowDevPassword: true
+  });
   return adaptResult(canonical);
 }
 

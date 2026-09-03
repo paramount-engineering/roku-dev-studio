@@ -505,7 +505,6 @@ export function setupImportModal(container, device, api, context) {
                 })
               );
             }
-            parsed.devPassword = resolvedPassword;
             importValidateBtn.disabled = true;
             importValidateBtn.textContent = S.actionScripts.validating;
             setImportError('');
