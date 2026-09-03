@@ -21,7 +21,8 @@ const {
   inputText,
   deeplink,
   testConnection,
-  getIcon
+  getIcon,
+  getDeviceHardwareImage
 } = require('roku-dev-studio-api');
 
 type IpOnly = { ip: string };
@@ -81,6 +82,11 @@ function setupRokuCommands(_mainWindow: BrowserWindow | undefined, _getDeviceInf
 
   ipcMain.handle(IPC.RokuGetIcon, async (_event: IpcMainInvokeEvent, { ip, appId }: IpAppIdPayload) =>
     getIcon(ip, appId));
+
+  // Fetches through Node's http module in this process, not a renderer <img src> — see
+  // getDeviceHardwareImage's own doc comment for why the renderer can't do this directly.
+  ipcMain.handle(IPC.RokuGetDeviceHardwareImage, async (_event: IpcMainInvokeEvent, { ip }: IpOnly) =>
+    getDeviceHardwareImage(ip));
 }
 
 export { setupRokuCommands };

@@ -10,7 +10,7 @@ const {
   getDeviceInfo
 } = require('./lib/device-info');
 
-const { getDeviceImageUrl, fetchDeviceHardwareImage } = require('./lib/device-hardware-image');
+const { getDeviceImageUrl, fetchDeviceHardwareImage, getDeviceHardwareImage } = require('./lib/device-hardware-image');
 
 const { ssdpDiscover, subnetScan } = require('./lib/discovery');
 const { resolveDeviceIp } = require('./lib/device-registry');
@@ -79,6 +79,7 @@ module.exports = {
   getDeviceInfo,
   getDeviceImageUrl,
   fetchDeviceHardwareImage,
+  getDeviceHardwareImage,
   // Discovery
   ssdpDiscover,
   subnetScan,

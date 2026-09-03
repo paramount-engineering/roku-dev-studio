@@ -510,7 +510,7 @@ export const modals = {
     devicePerformanceHeading: 'Device Performance (Remote Section)',
     devicePerformanceIntroHtml: `Toggle <strong>Show Device Performance</strong> on the Remote Section to expand a quad with live charts:`,
     devicePerformanceListHtml: `
-            <li><strong>CPU usage</strong>, <strong>system memory</strong>, and <strong>BrightScript object</strong> charts (count or memory view where available)</li>
+            <li><strong>CPU usage</strong>, <strong>memory usage</strong> (System and Graphics), and <strong>BrightScript object</strong> charts (count or memory view where available)</li>
             <li>Charts reflect the running app — for representative readings, the device should have <strong>Developer Mode</strong> on and your <strong>sideloaded Dev channel</strong> in the foreground</li>
             <li><button type="button" class="help-settings-link" data-settings-section="device-performance" data-settings-highlight="devicePerfRows">Settings → Device Performance</button> tunes chart sample interval and history window; turn on <strong>Remember 'Show Device Performance'</strong> to restore the quad layout per device between sessions</li>
             <li>Inside Action Scripts, <strong>Device Performance</strong> steps capture chart cards into run results (and PDF export)</li>

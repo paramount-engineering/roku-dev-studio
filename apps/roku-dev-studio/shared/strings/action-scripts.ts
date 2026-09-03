@@ -77,7 +77,7 @@ export const actionScripts = {
   // Chart option labels (shared: Builder dropdown, list Details, Executor descriptions)
   chartObjects: 'BrightScript Objects',
   chartCpu: 'CPU Usage',
-  chartMemory: 'System Memory',
+  chartMemory: 'Memory Usage',
   chartAboveAll: 'Above All',
 
   // Condition / wait source labels (shared)
@@ -414,9 +414,9 @@ export const actionScripts = {
     </p>
     <h4>Chart</h4>
     <p>
-      <strong>BrightScript Objects</strong>, <strong>CPU Usage</strong>, <strong>System Memory</strong>, or
-      <strong>Above All</strong> (one combined result: CPU, then memory, then objects). CPU and memory are driven from the
-      same channel performance poll.
+      <strong>BrightScript Objects</strong>, <strong>CPU Usage</strong>, <strong>Memory Usage</strong> (captures both
+      System and Graphics), or <strong>Above All</strong> (one combined result: CPU, then memory, then objects). CPU and
+      memory are driven from the same channel performance poll.
     </p>
     <h4>Optional label</h4>
     <p>Shown in the results header, similar to the screenshot step.</p>

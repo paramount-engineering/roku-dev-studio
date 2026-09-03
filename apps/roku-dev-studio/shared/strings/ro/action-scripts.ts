@@ -78,7 +78,7 @@ export const actionScripts = {
   // Chart option labels (shared: Builder dropdown, list Details, Executor descriptions)
   chartObjects: 'Obiecte BrightScript',
   chartCpu: 'Utilizare CPU',
-  chartMemory: 'Memorie de sistem',
+  chartMemory: 'Utilizare memorie',
   chartAboveAll: 'Toate împreună',
 
   // Condition / wait source labels (shared)
@@ -423,9 +423,9 @@ export const actionScripts = {
     </p>
     <h4>Grafic</h4>
     <p>
-      <strong>Obiecte BrightScript</strong>, <strong>Utilizare CPU</strong>, <strong>Memorie de sistem</strong> sau
-      <strong>Toate împreună</strong> (un singur rezultat combinat: CPU, apoi memorie, apoi obiecte). CPU și memoria provin din
-      aceeași interogare de performanță a canalului.
+      <strong>Obiecte BrightScript</strong>, <strong>Utilizare CPU</strong>, <strong>Utilizare memorie</strong>
+      (capturează atât Sistem, cât și Grafică), sau <strong>Toate împreună</strong> (un singur rezultat combinat: CPU, apoi
+      memorie, apoi obiecte). CPU și memoria provin din aceeași interogare de performanță a canalului.
     </p>
     <h4>Etichetă opțională</h4>
     <p>Afișată în antetul rezultatelor, similar cu pasul de captură de ecran.</p>

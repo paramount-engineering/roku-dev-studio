@@ -68,6 +68,7 @@ var IPC = {
   RokuDeviceFound: "roku:device-found",
   RokuTestConnection: "roku:test-connection",
   RokuGetIcon: "roku:get-icon",
+  RokuGetDeviceHardwareImage: "roku:get-device-hardware-image",
   RokuKeypress: "roku:keypress",
   RokuLaunch: "roku:launch",
   RokuQuery: "roku:query",

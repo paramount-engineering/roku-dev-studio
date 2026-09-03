@@ -507,7 +507,7 @@ export const modals = {
     devicePerformanceHeading: 'Performanța dispozitivului (secțiunea telecomenzii)',
     devicePerformanceIntroHtml: `Comutați <strong>Afișează performanța dispozitivului</strong> în secțiunea telecomenzii pentru a extinde un cadru cvadruplu cu grafice în timp real:`,
     devicePerformanceListHtml: `
-            <li>Grafice pentru <strong>utilizarea CPU</strong>, <strong>memoria sistemului</strong> și <strong>obiectele BrightScript</strong> (vizualizare după număr sau memorie, unde este disponibilă)</li>
+            <li>Grafice pentru <strong>utilizarea CPU</strong>, <strong>utilizarea memoriei</strong> (Sistem și Grafică) și <strong>obiectele BrightScript</strong> (vizualizare după număr sau memorie, unde este disponibilă)</li>
             <li>Graficele reflectă aplicația în execuție — pentru citiri reprezentative, dispozitivul ar trebui să aibă <strong>Modul dezvoltator</strong> activat și <strong>canalul de dezvoltare încărcat (sideload)</strong> în prim-plan</li>
             <li><button type="button" class="help-settings-link" data-settings-section="device-performance" data-settings-highlight="devicePerfRows">Setări → Performanța dispozitivului</button> reglează intervalul de eșantionare al graficelor și fereastra de istoric; activați <strong>Reține „Afișează performanța dispozitivului”</strong> pentru a restaura aspectul cvadruplu pentru fiecare dispozitiv între sesiuni</li>
             <li>În Scripturi de acțiune, pașii <strong>Device Performance</strong> capturează carduri de grafice în rezultatele rulării (și în exportul PDF)</li>

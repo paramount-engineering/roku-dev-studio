@@ -3008,6 +3008,15 @@ async function checkDeviceConnection(
             isRemote: !!serverUrl,
             serverUrl: serverUrl || connection.serverUrl
           });
+          // Sidebar card thumbnail is otherwise set once at card-creation time and never
+          // revisited — without this, a device connected before its hardware image URL was
+          // known (the common case: the card exists immediately, the image URL only arrives
+          // once this health check's testConnection resolves) shows the generic glyph forever.
+          const sidebarThumb = document.querySelector(`.device-card[data-ip="${ip}"] .device-card-thumb`);
+          setDeviceCardThumbnail(sidebarThumb, connection.device, {
+            isRemote: !!serverUrl,
+            serverUrl: serverUrl || connection.serverUrl
+          });
           updateEcpWarnings(panel, connection.device);
           updateDevModeWarnings(panel, connection.device.developerEnabled === true);
           // Tab label + hover tooltip + panel header name: set once from whatever `device` had at
@@ -3270,21 +3279,61 @@ function applyCapabilities(panel, capabilities) {
 }
 
 /**
+ * Last successfully resolved hardware-image data URL per local device IP. The startup reconnect
+ * sequence (initial connect + immediate health-check + the 30s periodic check, sometimes firing
+ * in quick succession) calls setDeviceCardThumbnail/setDevicePanelIcon repeatedly for the same
+ * device — without this, each call would re-flash the fallback glyph and re-fetch over IPC even
+ * though a real photo was already showing, which is the "icons flickering at startup" symptom.
+ * Remote (relay) URLs aren't cached here — they're already a plain synchronous string, nothing to
+ * fetch or flicker on.
+ */
+const deviceHardwareImageCache = new Map<string, string>();
+
+/**
+ * Synchronous cache/URL check — use this to decide whether a render can show the image
+ * immediately (no fallback flash) versus needing the fallback-then-async-swap path below.
  * @param {object} device
  * @param {boolean} isRemote
  * @param {string | null} serverUrl
  * @returns {string | null}
  */
-function resolveDeviceHardwareImageSrc(device, isRemote, serverUrl) {
+function getCachedDeviceHardwareImageSrc(device, isRemote, serverUrl) {
   if (!device) return null;
   if (isRemote && serverUrl && device.ip) {
     const base = String(serverUrl).replace(/\/$/, '');
     return `${base}/device/${encodeURIComponent(device.ip)}/hardware-image`;
   }
-  if (device.deviceImageUrl && typeof device.deviceImageUrl === 'string') {
-    return device.deviceImageUrl;
+  return (device.ip && deviceHardwareImageCache.get(device.ip)) || null;
+}
+
+/**
+ * Resolve (and for local devices not already cached, fetch) the hardware photo. Remote devices go
+ * through the relay server's own HTTP endpoint — a normal request, safe for a plain `<img src>`.
+ * Local devices are fetched via IPC through the main process's Node http client instead of a
+ * direct renderer `<img src="http://<lan-ip>:8060/...">`: Chromium's sandboxed renderer can
+ * silently block that cross-process LAN request (net::ERR_ADDRESS_UNREACHABLE) in some
+ * environments even though the exact same host is reachable fine from the main process — which is
+ * how every other device operation (ECP, telnet, the debugger) already works, and why only this
+ * one thing failed.
+ * @param {object} device
+ * @param {boolean} isRemote
+ * @param {string | null} serverUrl
+ * @returns {Promise<string | null>}
+ */
+async function loadDeviceHardwareImageSrc(device, isRemote, serverUrl) {
+  const cached = getCachedDeviceHardwareImageSrc(device, isRemote, serverUrl);
+  if (cached) return cached;
+  if (!device || !device.ip) return null;
+  try {
+    const result = await window.roku.getDeviceHardwareImage(device.ip);
+    if (result && result.success && typeof result.dataUrl === 'string') {
+      deviceHardwareImageCache.set(device.ip, result.dataUrl);
+      return result.dataUrl;
+    }
+    return null;
+  } catch {
+    return null;
   }
-  return null;
 }
 
 /**
@@ -3323,11 +3372,16 @@ function getDeviceHardwareImageModalScreenSize(device) {
 }
 
 /**
- * Full-size hardware image in a lightbox (same URL as the panel thumbnail).
- * @param {string} imageSrc
+ * Full-size hardware image in a lightbox (fetched independently of whatever the panel thumbnail
+ * currently shows, so it's always current regardless of when the panel's own fetch resolved).
  * @param {object} device
+ * @param {{ isRemote?: boolean, serverUrl?: string | null }} [opts]
  */
-function openDeviceHardwareImageModal(imageSrc, device, opener?: HTMLElement | null) {
+function openDeviceHardwareImageModal(
+  device,
+  opts: { isRemote?: boolean; serverUrl?: string | null } = {},
+  opener?: HTMLElement | null
+) {
   document.querySelectorAll('.device-hardware-image-modal-overlay').forEach((el) => el.remove());
 
   const overlay = document.createElement('div');
@@ -3396,14 +3450,53 @@ function openDeviceHardwareImageModal(imageSrc, device, opener?: HTMLElement | n
   const body = document.createElement('div');
   body.className = 'device-hardware-image-modal-body';
 
-  const img = document.createElement('img');
-  img.className = 'device-hardware-image-modal-img';
-  img.src = imageSrc;
-  img.alt = '';
+  // No hardware photo resolved (fetch failed/timed out, or the device just hasn't been
+  // health-checked yet) — the modal is still worth opening for the model/software/actions below,
+  // so show the same TV/STB glyph used elsewhere instead of a broken <img>. Also used when a
+  // resolved imageSrc turns out not to actually load (e.g. a stale/guessed UPnP icon path).
+  const showPlaceholder = () => {
+    const isTv = device.isTv || (device.modelName && device.modelName.toLowerCase().includes('tv'));
+    setSafeHTML(
+      body,
+      `<div class="device-hardware-image-modal-placeholder">
+        <span class="icon icon-xl"><svg><use href="#icon-${isTv ? 'tv' : 'stb'}"/></svg></span>
+        <p class="device-hardware-image-modal-placeholder-text">${escapeHtml(S.app.deviceImageNotFetched)}</p>
+      </div>`
+    );
+  };
+
+  const showImage = (imageSrc: string) => {
+    const img = document.createElement('img');
+    img.className = 'device-hardware-image-modal-img';
+    img.src = imageSrc;
+    img.alt = '';
+    img.addEventListener(
+      'error',
+      () => {
+        devLog('[Device Hardware Image] modal image failed to load, falling back to placeholder:', imageSrc);
+        showPlaceholder();
+      },
+      { once: true }
+    );
+    setSafeHTML(body, '');
+    body.appendChild(img);
+  };
+
+  // Already resolved for this device this session (e.g. the panel icon already loaded it) —
+  // show it immediately instead of flashing the placeholder first.
+  const cachedSrc = getCachedDeviceHardwareImageSrc(device, !!opts.isRemote, opts.serverUrl || null);
+  if (cachedSrc) {
+    showImage(cachedSrc);
+  } else {
+    showPlaceholder();
+  }
+  void loadDeviceHardwareImageSrc(device, !!opts.isRemote, opts.serverUrl || null).then((imageSrc) => {
+    if (!imageSrc || !body.isConnected || cachedSrc) return;
+    showImage(imageSrc);
+  });
 
   header.appendChild(titleGroup);
   header.appendChild(closeBtn);
-  body.appendChild(img);
   modal.appendChild(header);
   modal.appendChild(body);
 
@@ -3576,7 +3669,6 @@ function setDeviceCardThumbnail(
   if (!thumbEl || !device || !(thumbEl instanceof HTMLElement)) return;
   const isRemote = !!opts.isRemote;
   const serverUrl = opts.serverUrl || null;
-  const hardwareSrc = resolveDeviceHardwareImageSrc(device, isRemote, serverUrl);
   const isTv = device.isTv || (device.modelName && device.modelName.toLowerCase().includes('tv'));
   const iconName = isTv ? 'tv' : 'stb';
   const fallbackHtml =
@@ -3584,31 +3676,42 @@ function setDeviceCardThumbnail(
     escapeHtml(iconName) +
     '"/></svg></span>';
 
-  thumbEl.classList.remove('device-card-thumb--hardware');
-  setSafeHTML(thumbEl, '');
-
-  if (!hardwareSrc) {
+  const showFallback = () => {
     thumbEl.className = 'device-card-thumb';
     setSafeHTML(thumbEl, fallbackHtml);
+  };
+  const showImage = (hardwareSrc: string) => {
+    const img = document.createElement('img');
+    img.className = 'device-card-thumb-img';
+    img.alt = '';
+    img.decoding = 'async';
+    img.src = hardwareSrc;
+    img.setAttribute('aria-hidden', 'true');
+    img.addEventListener(
+      'error',
+      () => {
+        devLog('[Device Hardware Image] sidebar thumbnail failed to load, falling back to glyph:', hardwareSrc);
+        showFallback();
+      },
+      { once: true }
+    );
+    thumbEl.className = 'device-card-thumb device-card-thumb--hardware';
+    setSafeHTML(thumbEl, '');
+    thumbEl.appendChild(img);
+  };
+
+  // Already resolved for this device this session — show it immediately, no fallback flash.
+  const cachedSrc = getCachedDeviceHardwareImageSrc(device, isRemote, serverUrl);
+  if (cachedSrc) {
+    showImage(cachedSrc);
     return;
   }
 
-  thumbEl.className = 'device-card-thumb device-card-thumb--hardware';
-  const img = document.createElement('img');
-  img.className = 'device-card-thumb-img';
-  img.alt = '';
-  img.decoding = 'async';
-  img.src = hardwareSrc;
-  img.setAttribute('aria-hidden', 'true');
-  img.addEventListener(
-    'error',
-    () => {
-      thumbEl.classList.remove('device-card-thumb--hardware');
-      setSafeHTML(thumbEl, fallbackHtml);
-    },
-    { once: true }
-  );
-  thumbEl.appendChild(img);
+  showFallback();
+  void loadDeviceHardwareImageSrc(device, isRemote, serverUrl).then((hardwareSrc) => {
+    if (!hardwareSrc || !thumbEl.isConnected) return;
+    showImage(hardwareSrc);
+  });
 }
 
 /**
@@ -3625,7 +3728,6 @@ function setDevicePanelIcon(
   if (!iconEl || !device || !(iconEl instanceof HTMLElement)) return;
   const isRemote = !!opts.isRemote;
   const serverUrl = opts.serverUrl || null;
-  const hardwareSrc = resolveDeviceHardwareImageSrc(device, isRemote, serverUrl);
   const isTv = device.isTv || (device.modelName && device.modelName.toLowerCase().includes('tv'));
   const iconName = isTv ? 'tv' : 'stb';
   const fallbackHtml =
@@ -3633,14 +3735,9 @@ function setDevicePanelIcon(
     escapeHtml(iconName) +
     '"/></svg></span>';
 
-  if (!hardwareSrc) {
-    iconEl.classList.remove('device-panel-icon--hardware');
-    setSafeHTML(iconEl, fallbackHtml);
-    return;
-  }
-
-  iconEl.classList.add('device-panel-icon--hardware');
-  setSafeHTML(iconEl, '');
+  // The button opens the device-details modal (image + model/software/actions) regardless of
+  // whether a real hardware photo resolved — the modal is useful on its own merits (restart,
+  // check for updates, ...), not just as an image lightbox, so a missing photo shouldn't hide it.
   const btn = document.createElement('button');
   btn.type = 'button';
   btn.className = 'device-panel-hardware-btn';
@@ -3651,24 +3748,47 @@ function setDevicePanelIcon(
   btn.addEventListener('click', (e) => {
     e.stopPropagation();
     const opener = e.currentTarget instanceof HTMLElement ? e.currentTarget : null;
-    openDeviceHardwareImageModal(hardwareSrc, device, opener);
+    openDeviceHardwareImageModal(device, { isRemote, serverUrl }, opener);
   });
 
-  const img = document.createElement('img');
-  img.className = 'device-panel-hardware-img';
-  img.alt = '';
-  img.decoding = 'async';
-  img.src = hardwareSrc;
-  img.addEventListener(
-    'error',
-    () => {
-      iconEl.classList.remove('device-panel-icon--hardware');
-      setSafeHTML(iconEl, fallbackHtml);
-    },
-    { once: true }
-  );
-  btn.appendChild(img);
+  const showFallback = () => {
+    iconEl.classList.remove('device-panel-icon--hardware');
+    setSafeHTML(btn, fallbackHtml);
+  };
+  const showImage = (hardwareSrc: string) => {
+    const img = document.createElement('img');
+    img.className = 'device-panel-hardware-img';
+    img.alt = '';
+    img.decoding = 'async';
+    img.src = hardwareSrc;
+    img.addEventListener(
+      'error',
+      () => {
+        devLog('[Device Hardware Image] panel icon failed to load, falling back to glyph:', hardwareSrc);
+        showFallback();
+      },
+      { once: true }
+    );
+    iconEl.classList.add('device-panel-icon--hardware');
+    setSafeHTML(btn, '');
+    btn.appendChild(img);
+  };
+
+  setSafeHTML(iconEl, '');
   iconEl.appendChild(btn);
+
+  // Already resolved for this device this session — show it immediately, no fallback flash.
+  const cachedSrc = getCachedDeviceHardwareImageSrc(device, isRemote, serverUrl);
+  if (cachedSrc) {
+    showImage(cachedSrc);
+    return;
+  }
+
+  showFallback();
+  void loadDeviceHardwareImageSrc(device, isRemote, serverUrl).then((hardwareSrc) => {
+    if (!hardwareSrc || !iconEl.isConnected) return;
+    showImage(hardwareSrc);
+  });
 }
 
 /**

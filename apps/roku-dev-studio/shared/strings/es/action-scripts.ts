@@ -78,7 +78,7 @@ export const actionScripts = {
   // Chart option labels (shared: Builder dropdown, list Details, Executor descriptions)
   chartObjects: 'Objetos BrightScript',
   chartCpu: 'Uso de CPU',
-  chartMemory: 'Memoria del sistema',
+  chartMemory: 'Uso de memoria',
   chartAboveAll: 'Todo combinado',
 
   // Condition / wait source labels (shared)
@@ -415,9 +415,9 @@ export const actionScripts = {
     </p>
     <h4>Gráfico</h4>
     <p>
-      <strong>Objetos BrightScript</strong>, <strong>Uso de CPU</strong>, <strong>Memoria del sistema</strong>, o
-      <strong>Todo combinado</strong> (un resultado combinado: CPU, luego memoria, luego objetos). La CPU y la memoria provienen del
-      mismo sondeo de rendimiento del canal.
+      <strong>Objetos BrightScript</strong>, <strong>Uso de CPU</strong>, <strong>Uso de memoria</strong> (captura tanto
+      Sistema como Gráficos), o <strong>Todo combinado</strong> (un resultado combinado: CPU, luego memoria, luego objetos).
+      La CPU y la memoria provienen del mismo sondeo de rendimiento del canal.
     </p>
     <h4>Etiqueta opcional</h4>
     <p>Se muestra en el encabezado de resultados, similar al paso de captura de pantalla.</p>

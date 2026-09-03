@@ -507,7 +507,7 @@ export const modals = {
     devicePerformanceHeading: 'Продуктивність пристрою (розділ пульта)',
     devicePerformanceIntroHtml: `Увімкніть <strong>Показувати продуктивність пристрою</strong> в розділі пульта, щоб розгорнути квадрант із живими графіками:`,
     devicePerformanceListHtml: `
-            <li>Графіки <strong>використання CPU</strong>, <strong>системної пам’яті</strong> та <strong>об’єктів BrightScript</strong> (перегляд кількості або пам’яті, де доступно)</li>
+            <li>Графіки <strong>використання CPU</strong>, <strong>використання пам’яті</strong> (Система і Графіка) та <strong>об’єктів BrightScript</strong> (перегляд кількості або пам’яті, де доступно)</li>
             <li>Графіки відображають запущений додаток — для репрезентативних показників на пристрої має бути ввімкнено <strong>Режим розробника</strong>, а ваш <strong>завантажений через sideload dev-канал</strong> — на передньому плані</li>
             <li><button type="button" class="help-settings-link" data-settings-section="device-performance" data-settings-highlight="devicePerfRows">Налаштування → Продуктивність пристрою</button> налаштовує інтервал дискретизації графіка та вікно історії; увімкніть <strong>Запам’ятати «Показувати продуктивність пристрою»</strong>, щоб відновлювати макет-квадрант для кожного пристрою між сесіями</li>
             <li>У Action Scripts кроки <strong>Продуктивності пристрою</strong> захоплюють картки графіків у результати запуску (та експорт PDF)</li>

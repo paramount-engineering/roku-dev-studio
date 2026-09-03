@@ -31,8 +31,12 @@ type PerformanceCaptureItem = {
   objectsMode?: 'count' | 'memory';
   /** When set, CPU % / Process UI is synced before this capture (Process requires proc-stat available). */
   cpuMode?: 'percent' | 'process';
+  /** When set, System/Graphics UI is synced before this capture (Graphics requires r2d2-bitmaps available). */
+  memMode?: 'system' | 'graphics';
   /** When true, this item is silently skipped if `procStat` is unavailable on the current device. */
   skipIfNoProcStat?: boolean;
+  /** When true, this item is silently skipped if `r2d2-bitmaps` is unavailable on the current device. */
+  skipIfNoGraphics?: boolean;
 };
 
 /**
@@ -53,7 +57,15 @@ function performanceCapturePlan(chart: DevicePerformanceChartId): PerformanceCap
         }
       ];
     case 'memory':
-      return [{ sel: SEL_MEM, caption: S.devApp.captionSystemMemory }];
+      return [
+        { sel: SEL_MEM, caption: S.devApp.captionSystemMemory, memMode: 'system' },
+        {
+          sel: SEL_MEM,
+          caption: S.devApp.captionGraphicsMemory,
+          memMode: 'graphics',
+          skipIfNoGraphics: true
+        }
+      ];
     case 'objects':
       return [
         { sel: SEL_OBJ, caption: S.devApp.captionObjectsCount, objectsMode: 'count' },
@@ -68,7 +80,13 @@ function performanceCapturePlan(chart: DevicePerformanceChartId): PerformanceCap
           cpuMode: 'process',
           skipIfNoProcStat: true
         },
-        { sel: SEL_MEM, caption: S.devApp.captionSystemMemory },
+        { sel: SEL_MEM, caption: S.devApp.captionSystemMemory, memMode: 'system' },
+        {
+          sel: SEL_MEM,
+          caption: S.devApp.captionGraphicsMemory,
+          memMode: 'graphics',
+          skipIfNoGraphics: true
+        },
         { sel: SEL_OBJ, caption: S.devApp.captionObjectsCount, objectsMode: 'count' },
         { sel: SEL_OBJ, caption: S.devApp.captionObjectsMemory, objectsMode: 'memory' }
       ];
@@ -90,6 +108,8 @@ export type MetricsRingSnapshot = {
   ringMemRes: Array<number | null>;
   ringMemAnon: Array<number | null>;
   ringMemShared: Array<number | null>;
+  ringGfxTexture: Array<number | null>;
+  ringGfxSystem: Array<number | null>;
   ringObjTotal: Array<number | null>;
   /** Minor / major page-fault rates derived from successive `<proc-stat>` samples. */
   ringFaultsMinorPerSec: Array<number | null>;
@@ -102,6 +122,8 @@ export type MetricsRingSnapshot = {
   chartSessionStartMs: number | null;
   /** Latched true once chanperf has carried a `<proc-stat>` block (Roku OS 15.2+). */
   procStatSeen: boolean;
+  /** Latched true once a `r2d2-bitmaps` query has succeeded. */
+  graphicsSeen: boolean;
   lastProcStat: ProcStatParsed | null;
 };
 
@@ -165,9 +187,32 @@ function setCpuModeUi(wrap: HTMLElement, mode: 'percent' | 'process'): void {
   });
 }
 
+function getMemModeFromWrap(wrap: HTMLElement): 'system' | 'graphics' {
+  const raw = wrap.querySelector('.remote-mem-mode-btn.is-active')?.getAttribute('data-mem-mode');
+  return raw === 'graphics' ? 'graphics' : 'system';
+}
+
+function setMemModeUi(wrap: HTMLElement, mode: 'system' | 'graphics'): void {
+  wrap.querySelectorAll('[data-mem-mode]').forEach((b) => {
+    if (!(b instanceof HTMLElement)) return;
+    const m = b.getAttribute('data-mem-mode');
+    if (m !== 'system' && m !== 'graphics') return;
+    const active = m === mode;
+    b.classList.toggle('is-active', active);
+    b.setAttribute('aria-selected', active ? 'true' : 'false');
+  });
+}
+
 /** True when the device has produced at least one `<proc-stat>` block this session (mode-switch visible). */
 function wrapHasProcStat(wrap: HTMLElement): boolean {
   const sw = wrap.querySelector('[data-cpu-mode-switch-wrap]');
+  if (!(sw instanceof HTMLElement)) return false;
+  return !sw.hidden;
+}
+
+/** True when the device has produced at least one `r2d2-bitmaps` sample this session (mode-switch visible). */
+function wrapHasGraphics(wrap: HTMLElement): boolean {
+  const sw = wrap.querySelector('[data-mem-mode-switch-wrap]');
   if (!(sw instanceof HTMLElement)) return false;
   return !sw.hidden;
 }
@@ -438,9 +483,14 @@ export async function runDevicePerformanceCaptureStep(
 
   const planRaw = performanceCapturePlan(chart);
   const procStatAvailable = wrapHasProcStat(wrap);
+  const graphicsAvailable = wrapHasGraphics(wrap);
   const plan = planRaw.filter((p) => {
     if (p.skipIfNoProcStat && !procStatAvailable) {
       logNotes.push(S.devApp.skippedNoProcStat(p.caption));
+      return false;
+    }
+    if (p.skipIfNoGraphics && !graphicsAvailable) {
+      logNotes.push(S.devApp.skippedNoGraphics(p.caption));
       return false;
     }
     return true;
@@ -449,6 +499,8 @@ export async function runDevicePerformanceCaptureStep(
   const previousObjectsMode = restoreObjectsMode ? getObjectsModeFromWrap(wrap) : null;
   const restoreCpuMode = plan.some((p) => p.cpuMode != null);
   const previousCpuMode = restoreCpuMode ? getCpuModeFromWrap(wrap) : null;
+  const restoreMemMode = plan.some((p) => p.memMode != null);
+  const previousMemMode = restoreMemMode ? getMemModeFromWrap(wrap) : null;
 
   let any = false;
   try {
@@ -460,6 +512,11 @@ export async function runDevicePerformanceCaptureStep(
       }
       if (item.cpuMode) {
         setCpuModeUi(wrap, item.cpuMode);
+        await forceLiveSample();
+        await rafTwice();
+      }
+      if (item.memMode) {
+        setMemModeUi(wrap, item.memMode);
         await forceLiveSample();
         await rafTwice();
       }
@@ -475,6 +532,11 @@ export async function runDevicePerformanceCaptureStep(
     }
     if (previousCpuMode !== null) {
       setCpuModeUi(wrap, previousCpuMode);
+      await forceLiveSample();
+      await rafTwice();
+    }
+    if (previousMemMode !== null) {
+      setMemModeUi(wrap, previousMemMode);
       await forceLiveSample();
       await rafTwice();
     }

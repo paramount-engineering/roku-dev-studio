@@ -22,11 +22,13 @@ import {
   parseActiveAppId,
   extractChanperfFailureMessage,
   isChanperfChannelNotRunning,
+  parseR2d2BitmapsFull,
   drawTimeseriesChart,
   drawSparklineTimeseries,
   memChartYAxisMaxBytes,
   type ObjectCountRow,
-  type ProcStatParsed
+  type ProcStatParsed,
+  type R2d2Bitmap
 } from './remote-metrics-charts.js';
 import type { DevicePerformanceChartId } from '../action-scripts/action-registry.js';
 import {
@@ -34,7 +36,9 @@ import {
   isDevicePerformanceChartId,
   type MetricsRingSnapshot
 } from './device-metrics-performance-step.js';
+import { openBitmapsModal, type BitmapsModalHandle } from './bitmaps-modal.js';
 import { pollDevAppForegroundAfterLaunch } from './dev-app-foreground-sync.js';
+import { attachInstantTooltips } from '../../modules/utils/instant-tooltip.js';
 import { rendererWarn } from '../../modules/utils/logger.js';
 import { devLog } from '../../modules/utils/dev-log.js';
 import { registerPanelRetranslate } from '../../modules/ui/retranslate-registry.js';
@@ -57,8 +61,11 @@ const COL_MEM_ANON = '#c084fc';
 const COL_MEM_SHARED = '#fb923c';
 const COL_FAULTS_MINOR = '#60a5fa';
 const COL_FAULTS_MAJOR = '#f87171';
+const COL_GFX_TEXTURE = '#2dd4bf';
+const COL_GFX_SYSTEM = '#f472b6';
 
 type CpuMode = 'percent' | 'process';
+type MemMode = 'system' | 'graphics';
 
 /** Linux process-state letter → dot color class (see `proc_pid_stat(5)`). */
 function stateToClass(state: string): 'green' | 'amber' | 'red' | 'neutral' {
@@ -491,6 +498,7 @@ export function setupRemoteTabMetrics(
 
   const cpuSvg = wrap.querySelector('svg[data-chart="cpu"]');
   const memSvg = wrap.querySelector('svg[data-chart="mem"]');
+  const gfxSvg = wrap.querySelector('svg[data-chart="gfx"]');
   const objTotalSvg = wrap.querySelector('svg[data-chart="objects-total"]');
   const objRm = wrap.querySelector('[data-objects-rm]');
   const objFooterRaw = wrap.querySelector('[data-objects-footer]');
@@ -502,6 +510,10 @@ export function setupRemoteTabMetrics(
     return;
   }
   if (!(memSvg instanceof SVGSVGElement)) {
+    rendererWarn('[Remote metrics] Chart template elements missing');
+    return;
+  }
+  if (!(gfxSvg instanceof SVGSVGElement)) {
     rendererWarn('[Remote metrics] Chart template elements missing');
     return;
   }
@@ -520,6 +532,7 @@ export function setupRemoteTabMetrics(
 
   const chartCpu = cpuSvg;
   const chartMem = memSvg;
+  const chartGfx = gfxSvg;
   const chartObjTotal = objTotalSvg;
   const elObjRm = objRm;
   const elObjFooter = objFooterRaw instanceof HTMLElement ? objFooterRaw : null;
@@ -532,6 +545,8 @@ export function setupRemoteTabMetrics(
   let ringMemRes = makeRing(ringSlotCount());
   let ringMemAnon = makeRing(ringSlotCount());
   let ringMemShared = makeRing(ringSlotCount());
+  let ringGfxTexture = makeRing(ringSlotCount());
+  let ringGfxSystem = makeRing(ringSlotCount());
   let ringObjTotal = makeRing(ringSlotCount());
   /** Roku OS 15.2+ proc-stat-derived rates (faults per second between samples). */
   let ringFaultsMinorPerSec = makeRing(ringSlotCount());
@@ -547,6 +562,8 @@ export function setupRemoteTabMetrics(
     ringMemRes = resizeRingPreserve(ringMemRes, n);
     ringMemAnon = resizeRingPreserve(ringMemAnon, n);
     ringMemShared = resizeRingPreserve(ringMemShared, n);
+    ringGfxTexture = resizeRingPreserve(ringGfxTexture, n);
+    ringGfxSystem = resizeRingPreserve(ringGfxSystem, n);
     ringObjTotal = resizeRingPreserve(ringObjTotal, n);
     ringFaultsMinorPerSec = resizeRingPreserve(ringFaultsMinorPerSec, n);
     ringFaultsMajorPerSec = resizeRingPreserve(ringFaultsMajorPerSec, n);
@@ -558,6 +575,14 @@ export function setupRemoteTabMetrics(
   let lastChanperfMemUsed = 0;
   /** Last chanperf-reported plugin memory cap (`total` / `limit`); keeps axis scale stable between polls. */
   let lastChanperfMemLimitBytes: number | null = null;
+  /** Latched: once a single r2d2-bitmaps query succeeds, reveal the Memory mode-switch and never re-hide it. */
+  let graphicsSeen = false;
+  /** Most recent r2d2-bitmaps inventory (Bitmaps modal); kept across a transient poll gap rather
+   *  than cleared, so a modal left open doesn't flash empty on a single failed sample. */
+  let lastBitmaps: R2d2Bitmap[] = [];
+  /** Wall ms of the poll that produced `lastBitmaps` — drives the modal's "Updated Xs ago" label. */
+  let lastBitmapsUpdatedAt: number | null = null;
+  let bitmapsModalHandle: BitmapsModalHandle | null = null;
 
   /** Latched: once a single chanperf carries `<proc-stat>`, reveal the CPU mode-switch and never re-hide it. */
   let procStatSeen = false;
@@ -771,7 +796,11 @@ export function setupRemoteTabMetrics(
           : lastU != null || lastS != null
             ? Math.min(100, (lastU ?? 0) + (lastS ?? 0))
             : null;
-      const lastUsed = lastNonNull(ringMemUsed);
+      const memModeRaw = wrap
+        .querySelector('.remote-mem-mode-btn.is-active')
+        ?.getAttribute('data-mem-mode');
+      const memMode: MemMode = graphicsSeen && memModeRaw === 'graphics' ? 'graphics' : 'system';
+      const lastUsed = memMode === 'graphics' ? lastNonNull(ringGfxTexture) : lastNonNull(ringMemUsed);
 
       const totalLast = lastNonNull(ringObjTotal);
       const modeRaw = wrap
@@ -813,14 +842,9 @@ export function setupRemoteTabMetrics(
         });
       }
 
-      const peakMemH = maxFiniteAcross(ringMemUsed, ringMemRes, ringMemAnon, ringMemShared);
-      const memYMaxH = memChartYAxisMaxBytes({
-        peakSampleBytes: peakMemH,
-        chanperfLimitBytes: lastChanperfMemLimitBytes
-      });
-      const memSeriesForSpark = [
-        { id: 'used', color: COL_MEM_USED, values: ringMemUsed },
-        ...(lastChanperfMemLimitBytes != null &&
+      const memLimitLineForSpark =
+        memMode === 'system' &&
+        lastChanperfMemLimitBytes != null &&
         Number.isFinite(lastChanperfMemLimitBytes) &&
         lastChanperfMemLimitBytes > 0
           ? [
@@ -831,8 +855,19 @@ export function setupRemoteTabMetrics(
                 yConstant: lastChanperfMemLimitBytes
               }
             ]
-          : [])
-      ];
+          : [];
+      const peakMemH =
+        memMode === 'graphics'
+          ? maxFiniteAcross(ringGfxTexture, ringGfxSystem)
+          : maxFiniteAcross(ringMemUsed, ringMemRes, ringMemAnon, ringMemShared);
+      const memYMaxH = memChartYAxisMaxBytes({
+        peakSampleBytes: peakMemH,
+        chanperfLimitBytes: memMode === 'system' ? lastChanperfMemLimitBytes : null
+      });
+      const memSeriesForSpark =
+        memMode === 'graphics'
+          ? [{ id: 'texture', color: COL_GFX_TEXTURE, values: ringGfxTexture }, ...memLimitLineForSpark]
+          : [{ id: 'used', color: COL_MEM_USED, values: ringMemUsed }, ...memLimitLineForSpark];
       if (sparkMem instanceof SVGSVGElement) {
         drawSparklineTimeseries(sparkMem, {
           series: memSeriesForSpark,
@@ -1153,70 +1188,124 @@ export function setupRemoteTabMetrics(
       renderCpuPercentChart(root, { nowMs, historyMs, maxSampleGapMs });
     }
 
-    const lastUsed = lastNonNull(ringMemUsed);
-    const lastRes = lastNonNull(ringMemRes);
-    const lastAnon = lastNonNull(ringMemAnon);
-    const lastShared = lastNonNull(ringMemShared);
-    setLegendMetric(root, '[data-legend="mem"]', 'mem-used', lastUsed != null ? fmtMb(lastUsed) : '—');
-    setLegendMetric(root, '[data-legend="mem"]', 'mem-res', lastRes != null ? fmtMb(lastRes) : '—');
-    setLegendMetric(root, '[data-legend="mem"]', 'mem-anon', lastAnon != null ? fmtMb(lastAnon) : '—');
-    setLegendMetric(root, '[data-legend="mem"]', 'mem-shared', lastShared != null ? fmtMb(lastShared) : '—');
+    /* Memory mode-switch visibility tracks `graphicsSeen` — never hides once revealed. */
+    const memModeWrap = root.querySelector('[data-mem-mode-switch-wrap]');
+    if (memModeWrap instanceof HTMLElement) {
+      memModeWrap.hidden = !graphicsSeen;
+    }
+    /* Read mem mode from the DOM (single source of truth), same rule as CPU/Objects. */
+    const memModeRaw = root
+      .querySelector('.remote-mem-mode-btn.is-active')
+      ?.getAttribute('data-mem-mode');
+    const requestedMemMode: MemMode = memModeRaw === 'graphics' ? 'graphics' : 'system';
+    const effectiveMemMode: MemMode = graphicsSeen ? requestedMemMode : 'system';
+    const memChartWrap = root.querySelector('[data-mem-chart-wrap]');
+    const gfxChartWrap = root.querySelector('[data-gfx-chart-wrap]');
+    const memLegend = root.querySelector('[data-legend="mem"]');
+    const gfxLegend = root.querySelector('[data-legend="gfx"]');
+    const bitmapsBtnEl = root.querySelector('[data-mem-bitmaps-btn]');
+    if (memChartWrap instanceof HTMLElement) memChartWrap.hidden = effectiveMemMode !== 'system';
+    if (gfxChartWrap instanceof HTMLElement) gfxChartWrap.hidden = effectiveMemMode !== 'graphics';
+    if (memLegend instanceof HTMLElement) memLegend.hidden = effectiveMemMode !== 'system';
+    if (gfxLegend instanceof HTMLElement) gfxLegend.hidden = effectiveMemMode !== 'graphics';
+    /* Bitmaps only exist in Graphics mode — show the button only while that tab is active
+     * (unlike the mode switch itself, this one CAN re-hide). */
+    if (bitmapsBtnEl instanceof HTMLElement) bitmapsBtnEl.hidden = effectiveMemMode !== 'graphics';
 
-    const peakMem = maxFiniteAcross(ringMemUsed, ringMemRes, ringMemAnon, ringMemShared);
-    const memYMax = memChartYAxisMaxBytes({
-      peakSampleBytes: peakMem,
-      chanperfLimitBytes: lastChanperfMemLimitBytes
-    });
-    const memLimitBytes =
-      lastChanperfMemLimitBytes != null &&
-      Number.isFinite(lastChanperfMemLimitBytes) &&
-      lastChanperfMemLimitBytes > 0
-        ? lastChanperfMemLimitBytes
-        : null;
-    setLegendMetric(
-      root,
-      '[data-legend="mem"]',
-      'mem-limit',
-      memLimitBytes != null ? fmtMb(memLimitBytes) : '—'
-    );
-    const memSeriesBase = [
-      { id: 'used', color: COL_MEM_USED, values: ringMemUsed },
-      { id: 'res', color: COL_MEM_RES, values: ringMemRes },
-      { id: 'anon', color: COL_MEM_ANON, values: ringMemAnon },
-      { id: 'sh', color: COL_MEM_SHARED, values: ringMemShared }
-    ];
-    const memSeriesForChart =
-      memLimitBytes != null
-        ? [
-            ...memSeriesBase,
-            {
-              id: 'lim',
-              color: 'rgba(226, 232, 240, 0.82)',
-              values: [] as Array<number | null>,
-              yConstant: memLimitBytes
-            }
-          ]
-        : memSeriesBase;
-    drawTimeseriesChart(chartMem, {
-      series: memSeriesForChart,
-      yMin: 0,
-      yMax: memYMax,
-      yTickCount: 5,
-      yFormat: (n) => `${(n / (1024 * 1024)).toFixed(0)}`,
-      sampleAt: ringSampleAt,
-      historyMs,
-      nowMs,
-      maxSampleGapMs,
-      hover: {
-        seriesLabels: {
-          used: S.devApp.hoverUsed,
-          res: S.devApp.hoverResident,
-          anon: S.devApp.hoverAnonymous,
-          sh: S.devApp.hoverShared,
-          lim: S.devApp.hoverLimit
+    if (effectiveMemMode === 'system') {
+      const lastUsed = lastNonNull(ringMemUsed);
+      const lastRes = lastNonNull(ringMemRes);
+      const lastAnon = lastNonNull(ringMemAnon);
+      const lastShared = lastNonNull(ringMemShared);
+      setLegendMetric(root, '[data-legend="mem"]', 'mem-used', lastUsed != null ? fmtMb(lastUsed) : '—');
+      setLegendMetric(root, '[data-legend="mem"]', 'mem-res', lastRes != null ? fmtMb(lastRes) : '—');
+      setLegendMetric(root, '[data-legend="mem"]', 'mem-anon', lastAnon != null ? fmtMb(lastAnon) : '—');
+      setLegendMetric(root, '[data-legend="mem"]', 'mem-shared', lastShared != null ? fmtMb(lastShared) : '—');
+
+      const peakMem = maxFiniteAcross(ringMemUsed, ringMemRes, ringMemAnon, ringMemShared);
+      const memYMax = memChartYAxisMaxBytes({
+        peakSampleBytes: peakMem,
+        chanperfLimitBytes: lastChanperfMemLimitBytes
+      });
+      const memLimitBytes =
+        lastChanperfMemLimitBytes != null &&
+        Number.isFinite(lastChanperfMemLimitBytes) &&
+        lastChanperfMemLimitBytes > 0
+          ? lastChanperfMemLimitBytes
+          : null;
+      setLegendMetric(
+        root,
+        '[data-legend="mem"]',
+        'mem-limit',
+        memLimitBytes != null ? fmtMb(memLimitBytes) : '—'
+      );
+      const memSeriesBase = [
+        { id: 'used', color: COL_MEM_USED, values: ringMemUsed },
+        { id: 'res', color: COL_MEM_RES, values: ringMemRes },
+        { id: 'anon', color: COL_MEM_ANON, values: ringMemAnon },
+        { id: 'sh', color: COL_MEM_SHARED, values: ringMemShared }
+      ];
+      const memSeriesForChart =
+        memLimitBytes != null
+          ? [
+              ...memSeriesBase,
+              {
+                id: 'lim',
+                color: 'rgba(226, 232, 240, 0.82)',
+                values: [] as Array<number | null>,
+                yConstant: memLimitBytes
+              }
+            ]
+          : memSeriesBase;
+      drawTimeseriesChart(chartMem, {
+        series: memSeriesForChart,
+        yMin: 0,
+        yMax: memYMax,
+        yTickCount: 5,
+        yFormat: (n) => `${(n / (1024 * 1024)).toFixed(0)}`,
+        sampleAt: ringSampleAt,
+        historyMs,
+        nowMs,
+        maxSampleGapMs,
+        hover: {
+          seriesLabels: {
+            used: S.devApp.hoverUsed,
+            res: S.devApp.hoverResident,
+            anon: S.devApp.hoverAnonymous,
+            sh: S.devApp.hoverShared,
+            lim: S.devApp.hoverLimit
+          }
         }
-      }
-    });
+      });
+    } else {
+      const lastTexture = lastNonNull(ringGfxTexture);
+      const lastGfxSystem = lastNonNull(ringGfxSystem);
+      setLegendMetric(root, '[data-legend="gfx"]', 'gfx-texture', lastTexture != null ? fmtMb(lastTexture) : '—');
+      setLegendMetric(root, '[data-legend="gfx"]', 'gfx-system', lastGfxSystem != null ? fmtMb(lastGfxSystem) : '—');
+
+      const peakGfx = maxFiniteAcross(ringGfxTexture, ringGfxSystem);
+      const gfxYMax = memChartYAxisMaxBytes({ peakSampleBytes: peakGfx, chanperfLimitBytes: null });
+      drawTimeseriesChart(chartGfx, {
+        series: [
+          { id: 'texture', color: COL_GFX_TEXTURE, values: ringGfxTexture },
+          { id: 'system', color: COL_GFX_SYSTEM, values: ringGfxSystem }
+        ],
+        yMin: 0,
+        yMax: gfxYMax,
+        yTickCount: 5,
+        yFormat: (n) => `${(n / (1024 * 1024)).toFixed(0)}`,
+        sampleAt: ringSampleAt,
+        historyMs,
+        nowMs,
+        maxSampleGapMs,
+        hover: {
+          seriesLabels: {
+            texture: S.devApp.hoverTexture,
+            system: S.devApp.hoverGfxSystem
+          }
+        }
+      });
+    }
 
     const totalLast = lastNonNull(ringObjTotal);
 
@@ -1302,9 +1391,10 @@ export function setupRemoteTabMetrics(
    */
   async function fetchAndApplyMetrics(): Promise<boolean> {
     try {
-      const [cp, aa] = await Promise.all([
+      const [cp, aa, gb] = await Promise.all([
         api.query('/query/chanperf'),
-        api.query(QUERY_ENDPOINTS.ACTIVE_APP)
+        api.query(QUERY_ENDPOINTS.ACTIVE_APP),
+        api.query('/query/r2d2-bitmaps')
       ]);
 
       const chanperfXml = cp.success && typeof cp.data === 'string' ? cp.data : '';
@@ -1320,6 +1410,11 @@ export function setupRemoteTabMetrics(
           ? null
           : extractChanperfFailureMessage(chanperfXml) || S.devApp.couldNotParseChanperf;
       }
+
+      /* r2d2-bitmaps unsupported/failed is not surfaced as an error — same silent-degrade UX as
+       * CPU process mode pre-15.2 (the mode-switch just never appears). */
+      const gfxXml = gb.success && typeof gb.data === 'string' ? gb.data : '';
+      const gfxParsed = gfxXml ? parseR2d2BitmapsFull(gfxXml) : null;
 
       // Only fall back to the dev-package id when the active-app query genuinely succeeded with
       // no id — NOT when it failed outright (e.g. the device just went unreachable). Silently
@@ -1372,6 +1467,18 @@ export function setupRemoteTabMetrics(
         /* Keep lastChanperfMemLimitBytes so axis scale stays stable during chanperf gaps. */
         pushRing(ringFaultsMinorPerSec, null);
         pushRing(ringFaultsMajorPerSec, null);
+      }
+
+      if (gfxParsed) {
+        pushRing(ringGfxTexture, gfxParsed.textureUsedBytes);
+        pushRing(ringGfxSystem, gfxParsed.systemUsedBytes);
+        graphicsSeen = true;
+        lastBitmaps = gfxParsed.bitmaps;
+        lastBitmapsUpdatedAt = nowMs;
+        bitmapsModalHandle?.refresh();
+      } else {
+        pushRing(ringGfxTexture, null);
+        pushRing(ringGfxSystem, null);
       }
 
       const ocErr = oc.success ? null : oc.error || S.devApp.objectCountsFailed;
@@ -1467,6 +1574,8 @@ export function setupRemoteTabMetrics(
 
   let unsubSettings: (() => void) | null = null;
 
+  const detachTooltips = attachInstantTooltips(wrap);
+
   const wrapUiAc = new AbortController();
 
   const perfHeaderBtn = panel.querySelector('[data-device-panel-perf-btn]');
@@ -1530,6 +1639,34 @@ export function setupRemoteTabMetrics(
         if (m === 'process' && !procStatSeen) return;
         wrap.querySelectorAll('[data-cpu-mode]').forEach((b) => {
           const active = b === cpuBtn;
+          b.classList.toggle('is-active', active);
+          b.setAttribute('aria-selected', active ? 'true' : 'false');
+        });
+        renderCharts(wrap);
+        return;
+      }
+
+      const bitmapsBtn = t.closest('[data-mem-bitmaps-btn]');
+      if (bitmapsBtn instanceof HTMLButtonElement && wrap.contains(bitmapsBtn) && !bitmapsBtn.hidden) {
+        bitmapsModalHandle?.close();
+        bitmapsModalHandle = openBitmapsModal(
+          () => lastBitmaps,
+          () => lastBitmapsUpdatedAt,
+          () => {
+            bitmapsModalHandle = null;
+          },
+          bitmapsBtn
+        );
+        return;
+      }
+
+      const memBtn = t.closest('[data-mem-mode]');
+      if (memBtn instanceof HTMLButtonElement && wrap.contains(memBtn)) {
+        const m = memBtn.getAttribute('data-mem-mode');
+        if (m !== 'system' && m !== 'graphics') return;
+        if (m === 'graphics' && !graphicsSeen) return;
+        wrap.querySelectorAll('[data-mem-mode]').forEach((b) => {
+          const active = b === memBtn;
           b.classList.toggle('is-active', active);
           b.setAttribute('aria-selected', active ? 'true' : 'false');
         });
@@ -1788,6 +1925,8 @@ export function setupRemoteTabMetrics(
       ringMemRes: c(ringMemRes),
       ringMemAnon: c(ringMemAnon),
       ringMemShared: c(ringMemShared),
+      ringGfxTexture: c(ringGfxTexture),
+      ringGfxSystem: c(ringGfxSystem),
       ringObjTotal: c(ringObjTotal),
       ringFaultsMinorPerSec: c(ringFaultsMinorPerSec),
       ringFaultsMajorPerSec: c(ringFaultsMajorPerSec),
@@ -1796,6 +1935,7 @@ export function setupRemoteTabMetrics(
       lastObjectTotalBytes,
       lastChanperfMemUsed,
       lastChanperfMemLimitBytes,
+      graphicsSeen,
       chartSessionStartMs,
       procStatSeen,
       lastProcStat: lastProcStat ? { ...lastProcStat } : null
@@ -1834,6 +1974,9 @@ export function setupRemoteTabMetrics(
     wrapUiAc.abort();
     document.removeEventListener('visibilitychange', vis);
     mo.disconnect();
+    detachTooltips();
+    bitmapsModalHandle?.close();
+    bitmapsModalHandle = null;
     if (unsubSettings) unsubSettings();
     delete (
       panel as DevicePanelRoot & { rokuDevicePerformanceCapture?: typeof runDevicePerformanceCaptureStep }

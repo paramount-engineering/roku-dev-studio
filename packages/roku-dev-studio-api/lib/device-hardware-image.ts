@@ -216,8 +216,34 @@ async function fetchDeviceHardwareImage(
   }
 }
 
+/**
+ * Fetch the hardware image and return it as a data: URL — for the desktop app's own renderer.
+ * The renderer can't fetch `http://<lan-ip>:8060/...` directly with a plain <img src>: that's a
+ * cross-process request from Chromium's sandboxed renderer to an arbitrary LAN address, which can
+ * be silently blocked (net::ERR_ADDRESS_UNREACHABLE) in some environments even though the exact
+ * same host is reachable fine from Node's http module in the main process (which is how every
+ * other device operation — ECP, telnet, the debugger — already works). Routing the fetch through
+ * here and handing the renderer a data: URL sidesteps that entirely, matching `getIcon`'s
+ * existing convention in ecp.ts.
+ * @param {string} ip
+ * @param {{ port?: number, rootTimeout?: number, imageTimeout?: number }} [opts]
+ * @returns {Promise<{ success: true, dataUrl: string } | { success: false, error: string, statusCode?: number }>}
+ */
+async function getDeviceHardwareImage(
+  ip: string,
+  opts: { port?: number; rootTimeout?: number; imageTimeout?: number } = {}
+) {
+  const result = await fetchDeviceHardwareImage(ip, opts);
+  if (!result.success || !result.buffer) {
+    return { success: false, error: (result as { error?: string }).error || 'Failed to fetch device image' };
+  }
+  const dataUrl = `data:${result.contentType || 'image/png'};base64,${result.buffer.toString('base64')}`;
+  return { success: true, dataUrl };
+}
+
 module.exports = {
   parseUpnpDeviceImagePath,
   getDeviceImageUrl,
-  fetchDeviceHardwareImage
+  fetchDeviceHardwareImage,
+  getDeviceHardwareImage
 };

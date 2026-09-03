@@ -52,7 +52,8 @@ export const devApp = {
   // ── Device Performance Action Script capture (device-metrics-performance-step.ts) ──
   captionCpuGraph: 'Uso da CPU (gráfico)',
   captionCpuProcess: 'Uso da CPU (processo)',
-  captionSystemMemory: 'Memória do sistema',
+  captionSystemMemory: 'Uso de memória (Sistema)',
+  captionGraphicsMemory: 'Uso de memória (Gráficos)',
   captionObjectsCount: 'Objetos BrightScript (contagem)',
   captionObjectsMemory: 'Objetos BrightScript (memória)',
   invalidChartType: 'Tipo de gráfico de Desempenho do dispositivo inválido.',
@@ -75,6 +76,8 @@ export const devApp = {
     'Mostrar Desempenho do dispositivo (layout quad) foi ativado automaticamente para esta etapa.',
   skippedNoProcStat: (caption: string): string =>
     `Captura de "${caption}" ignorada — o dispositivo ainda não produziu <proc-stat> (requer Roku OS 15.2+).`,
+  skippedNoGraphics: (caption: string): string =>
+    `Captura de "${caption}" ignorada — o dispositivo não retornou dados de r2d2-bitmaps.`,
 
   // ── Device metrics: process-state labels (device-metrics.ts) ──────────────
   stateRunning: 'Em execução',
@@ -121,6 +124,24 @@ export const devApp = {
   hoverAnonymous: 'Anônima',
   hoverShared: 'Compartilhada',
   hoverLimit: 'Limite',
+  hoverTexture: 'Textura',
+  hoverGfxSystem: 'Sistema',
+
+  // ── Bitmaps modal (bitmaps-modal.ts) ───────────────────────────────────────
+  bitmapsModalTitle: 'Bitmaps Gráficos',
+  bitmapsFooterTotal: 'Total',
+  bitmapsFooterCount: (count: number): string => `${count} bitmap${count === 1 ? '' : 's'}`,
+  bitmapsModalEmpty: 'Ainda não há dados de bitmaps.',
+  bitmapsColName: 'Nome',
+  bitmapsColDimensions: 'Dimensões',
+  bitmapsColBpp: 'BPP',
+  bitmapsBppTooltip: 'Bits por pixel',
+  bitmapsUpdatedAt: (timeStr: string, ago: string): string => `Atualizado ${timeStr} (${ago})`,
+  bitmapsUpdatedAtPlain: (timeStr: string): string => `Atualizado ${timeStr}`,
+  bitmapsUpdatedNever: 'Ainda não atualizado',
+  bitmapsAgoSeconds: (s: number): string => `há ${s}s`,
+  bitmapsAgoMinutes: (m: number): string => `há ${m}m`,
+  bitmapsColSize: 'Tamanho',
 
   // ── Device metrics: error toasts ──────────────────────────────────────────
   chanperfRequestFailed: 'falha na solicitação de chanperf',

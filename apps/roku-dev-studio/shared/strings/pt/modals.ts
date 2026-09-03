@@ -511,7 +511,7 @@ export const modals = {
     devicePerformanceHeading: 'Desempenho do dispositivo (seção do controle remoto)',
     devicePerformanceIntroHtml: `Ative <strong>Mostrar desempenho do dispositivo</strong> na seção do controle remoto para expandir um quadrante com gráficos ao vivo:`,
     devicePerformanceListHtml: `
-            <li>Gráficos de <strong>uso de CPU</strong>, <strong>memória do sistema</strong> e <strong>objetos BrightScript</strong> (contagem ou visualização de memória quando disponível)</li>
+            <li>Gráficos de <strong>uso de CPU</strong>, <strong>uso de memória</strong> (Sistema e Gráficos) e <strong>objetos BrightScript</strong> (contagem ou visualização de memória quando disponível)</li>
             <li>Os gráficos refletem o app em execução — para leituras representativas, o dispositivo deve estar com o <strong>modo de desenvolvedor</strong> ativado e seu <strong>canal de desenvolvedor carregado por sideload</strong> em primeiro plano</li>
             <li><button type="button" class="help-settings-link" data-settings-section="device-performance" data-settings-highlight="devicePerfRows">Configurações → Desempenho do dispositivo</button> ajusta o intervalo de amostragem e a janela de histórico dos gráficos; ative <strong>Lembrar 'Mostrar desempenho do dispositivo'</strong> para restaurar o layout em quadrante por dispositivo entre as sessões</li>
             <li>Dentro dos Action Scripts, as etapas de <strong>Desempenho do dispositivo</strong> capturam cartões de gráfico nos resultados da execução (e na exportação em PDF)</li>

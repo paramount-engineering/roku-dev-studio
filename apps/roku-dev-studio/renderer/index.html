@@ -3395,12 +3395,6 @@
       font-weight: 700;
       letter-spacing: 0.05em;
     }
-    .remote-quad-mem-header {
-      display: flex;
-      flex-direction: column;
-      align-items: flex-start;
-      gap: 3px;
-    }
     .remote-quad-mem-title {
       text-transform: uppercase;
     }
@@ -3481,6 +3475,12 @@
       line-height: 1.25;
       overflow: visible;
     }
+    /* Author `display:flex` above (and in `.remote-chart-quad-footer .remote-chart-legend`) must
+     * not defeat the HTML `hidden` attribute — same gotcha as `.rale-update-label[hidden]` /
+     * `.device-panel-perf-live[hidden]` elsewhere in this file. Needed once a card has more than
+     * one `.remote-chart-legend` sibling toggled by mode (CPU legend vs. process table; Memory's
+     * System vs. Graphics legends). */
+    .remote-chart-legend[hidden] { display: none !important; }
     .remote-legend-row {
       display: inline-flex;
       flex-direction: row;
@@ -3578,15 +3578,18 @@
       background: rgba(251, 146, 60, 0.12);
       box-shadow: inset 0 -2px 0 0 #fb923c;
     }
-    /* CPU quad header: title left, mode-switch centered (hidden until <proc-stat> seen).
-     * Mirrors `.remote-quad-objects-header`'s 3-column grid so the toggle sits in the middle. */
-    .remote-quad-cpu-header {
+    /* CPU / Memory quad headers: title left, mode-switch centered (hidden until the capability is
+     * seen live — <proc-stat> for CPU, r2d2-bitmaps for Memory). Mirrors `.remote-quad-objects-header`'s
+     * 3-column grid so the toggle sits in the middle. */
+    .remote-quad-cpu-header,
+    .remote-quad-mem-header {
       display: grid;
       grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
       align-items: center;
       gap: 8px;
     }
-    .remote-quad-cpu-header-title {
+    .remote-quad-cpu-header-title,
+    .remote-quad-mem-header-title {
       justify-self: start;
       min-width: 0;
       font-size: 13px;
@@ -3598,11 +3601,40 @@
       text-overflow: ellipsis;
       white-space: nowrap;
     }
-    .remote-cpu-mode-switch-wrap {
+    .remote-cpu-mode-switch-wrap,
+    .remote-mem-mode-switch-wrap {
       justify-self: center;
     }
-    .remote-cpu-mode-switch-wrap[hidden] { display: none !important; }
-    .remote-cpu-mode-switch {
+    .remote-cpu-mode-switch-wrap[hidden],
+    .remote-mem-mode-switch-wrap[hidden] { display: none !important; }
+    /* Third grid column of the Memory Usage header — mirrors `.remote-objects-top-label`'s
+     * `justify-self: end` slot in the analogous Objects header. Sized to match
+     * `.keyboard-remote-help-btn` (Remote card header) exactly, not `.btn`/`.btn-icon` — those are
+     * noticeably taller and were stretching this card's whole header row above the other three. */
+    .remote-mem-bitmaps-btn {
+      justify-self: end;
+      display: inline-flex;
+      flex-shrink: 0;
+      align-items: center;
+      justify-content: center;
+      padding: 2px 5px;
+      min-width: 22px;
+      min-height: 22px;
+      border-radius: 4px;
+      border: 1px solid var(--border);
+      background: var(--bg-tertiary);
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: background 0.15s, color 0.15s, border-color 0.15s;
+    }
+    .remote-mem-bitmaps-btn:hover {
+      background: var(--bg-hover);
+      color: var(--text-primary);
+      border-color: var(--accent-purple);
+    }
+    .remote-mem-bitmaps-btn[hidden] { display: none !important; }
+    .remote-cpu-mode-switch,
+    .remote-mem-mode-switch {
       display: inline-flex;
       flex-direction: row;
       align-items: stretch;
@@ -3611,7 +3643,8 @@
       overflow: hidden;
       background: var(--bg-tertiary);
     }
-    .remote-cpu-mode-btn {
+    .remote-cpu-mode-btn,
+    .remote-mem-mode-btn {
       margin: 0;
       padding: 3px 10px;
       font-size: 10px;
@@ -3622,7 +3655,8 @@
       cursor: pointer;
       font-family: inherit;
     }
-    .remote-cpu-mode-btn:hover { color: var(--text-secondary); }
+    .remote-cpu-mode-btn:hover,
+    .remote-mem-mode-btn:hover { color: var(--text-secondary); }
     .remote-cpu-mode-btn[data-cpu-mode="percent"].is-active {
       color: var(--text-primary);
       background: rgba(248, 113, 113, 0.16);
@@ -3632,6 +3666,16 @@
       color: var(--text-primary);
       background: rgba(96, 165, 250, 0.16);
       box-shadow: inset 0 -2px 0 0 #60a5fa;
+    }
+    .remote-mem-mode-btn[data-mem-mode="system"].is-active {
+      color: var(--text-primary);
+      background: rgba(248, 113, 113, 0.16);
+      box-shadow: inset 0 -2px 0 0 #f87171;
+    }
+    .remote-mem-mode-btn[data-mem-mode="graphics"].is-active {
+      color: var(--text-primary);
+      background: rgba(45, 212, 191, 0.16);
+      box-shadow: inset 0 -2px 0 0 #2dd4bf;
     }
     /* CPU process-mode panel — replaces the chart svg-wrap when active.
      *
@@ -7690,6 +7734,11 @@
       background: var(--bg-secondary);
       border: 1px solid var(--border);
       border-radius: 16px;
+      /* No explicit width — the modal shrinks to fit its widest content. A real hardware photo
+         easily clears this floor on its own; without it, the no-photo placeholder (a small icon +
+         one line of text) is the widest thing left and the whole modal collapses down with it,
+         squishing the header/footer rows meant for a normal-width card. */
+      min-width: min(420px, 90vw);
       max-width: min(960px, 94vw);
       max-height: 90vh;
       display: flex;
@@ -7758,6 +7807,38 @@
       height: auto;
       object-fit: contain;
       border-radius: 8px;
+    }
+    /* No hardware photo resolved — same purple-gradient glyph treatment as .device-panel-icon
+       (plain .icon-accent reads as near-invisible purple-on-near-black against this modal's dark
+       body), plus a caption explaining why. */
+    .device-hardware-image-modal-placeholder {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+      padding: 24px;
+    }
+    .device-hardware-image-modal-placeholder .icon {
+      width: 64px;
+      height: 64px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 16px;
+      background: linear-gradient(135deg, var(--accent-purple) 0%, #7c3aed 100%);
+      color: #ffffff;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+    }
+    .device-hardware-image-modal-placeholder .icon svg {
+      width: 30px;
+      height: 30px;
+      filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.35));
+    }
+    .device-hardware-image-modal-placeholder-text {
+      margin: 0;
+      font-size: 12px;
+      color: var(--text-muted);
+      text-align: center;
     }
     .device-hardware-image-modal-footer {
       padding: 12px 18px 16px;
@@ -12890,6 +12971,129 @@
       flex: 1;
     }
 
+    /* Graphics Bitmaps modal (programmatic; bitmaps-modal.ts) — content-only, refreshed in place
+     * on every successful r2d2-bitmaps poll while open (see `BitmapsModalHandle.refresh`). */
+    .bitmaps-modal { width: min(760px, 92vw); max-width: 760px; }
+    /* Absolutely centered on the header itself (not "whatever space is left" between the title
+     * and close button, which biases off-center toward whichever sibling is wider). */
+    .bitmaps-modal-header { position: relative; }
+    .bitmaps-modal-updated {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      white-space: nowrap;
+      font-size: 12px;
+      font-weight: 400;
+      color: var(--text-muted);
+      font-variant-numeric: tabular-nums;
+    }
+    .bitmaps-modal-body {
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      /* No vertical overflow of its own — `.bitmaps-modal-table-wrap` below owns the scroll, so
+       * its sticky thead/tfoot can sit flush against *its* edges instead of `.modal-body`'s. */
+      overflow: visible;
+      padding: 18px 20px 20px;
+    }
+    /* Three stacked pieces (see bitmaps-modal.ts) so the scrollbar track only ever spans
+     * `.bitmaps-modal-scroll-area`'s own height (the data rows) — not the fixed head/foot bands. */
+    .bitmaps-modal-table-wrap {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: var(--bg-secondary);
+      overflow: hidden;
+    }
+    .bitmaps-modal-scroll-area {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+    }
+    .bitmaps-modal-table-head,
+    .bitmaps-modal-table-foot {
+      flex-shrink: 0;
+    }
+    .bitmaps-modal-empty {
+      margin: 0;
+      padding: 28px 0;
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 13px;
+    }
+    .bitmaps-modal-table {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+      font-size: 12px;
+    }
+    .bitmaps-modal-table th {
+      background: var(--bg-tertiary);
+      text-align: left;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--text-secondary);
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border);
+    }
+    .bitmaps-modal-table th.bitmaps-modal-col-bpp,
+    .bitmaps-modal-table th.bitmaps-modal-col-size {
+      text-align: right;
+    }
+    .bitmaps-modal-table td {
+      padding: 9px 14px;
+      border-bottom: 1px solid var(--border);
+      color: var(--text-primary);
+    }
+    /* Zebra striping for the scrolling body rows. */
+    .bitmaps-modal-table tbody tr:nth-child(even) td {
+      background: rgba(255, 255, 255, 0.03);
+    }
+    .bitmaps-modal-table tbody tr:hover td {
+      background: rgba(255, 255, 255, 0.06);
+    }
+    .bitmaps-modal-table tbody tr:last-child td { border-bottom: none; }
+    .bitmaps-modal-table-foot td {
+      background: var(--bg-tertiary);
+      color: var(--text-primary);
+      font-weight: 700;
+      padding: 10px 14px;
+      border-top: 1px solid var(--border);
+      border-bottom: none;
+    }
+    .bitmaps-modal-footer-label {
+      text-transform: uppercase;
+      font-size: 11px;
+      letter-spacing: 0.04em;
+      color: var(--text-secondary);
+    }
+    .bitmaps-modal-footer-count {
+      color: var(--text-primary);
+      font-variant-numeric: tabular-nums;
+    }
+    .bitmaps-modal-col-name {
+      width: 48%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .bitmaps-modal-col-dims { width: 22%; }
+    .bitmaps-modal-col-bpp,
+    .bitmaps-modal-col-size {
+      width: 15%;
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+    /* Not `[title]`-guarded: the instant tooltip util moves `title` to `data-tip` on first
+     * hover (see attachInstantTooltips), so a `[title]` selector would stop matching after that. */
+    .bitmaps-modal-table th.bitmaps-modal-col-bpp { cursor: help; }
+
     /* Save Action Script modal (programmatic; save-script-modal.ts) */
     .action-scripts-save-modal { width: min(460px, 92vw); max-width: 460px; }
     .action-scripts-save-modal .modal-body { display: flex; flex-direction: column; gap: 18px; }
@@ -15660,19 +15864,37 @@
               </div>
             </section>
             <section class="remote-quad remote-quad-mem" aria-label="Memory Usage" data-i18n-aria-label="app.sectionMemoryUsage">
-              <div class="remote-quad-header remote-quad-chart-title" data-i18n="app.systemMemory">System Memory</div>
+              <div class="remote-quad-header remote-quad-mem-header">
+                <span class="remote-quad-mem-header-title" data-i18n="app.sectionMemoryUsage">Memory Usage</span>
+                <div class="remote-mem-mode-switch-wrap" data-mem-mode-switch-wrap hidden>
+                  <div class="remote-mem-mode-switch" role="tablist" aria-label="Memory Metrics Mode" data-i18n-aria-label="app.memMetricsMode">
+                    <button type="button" class="remote-mem-mode-btn is-active" role="tab" aria-selected="true" data-mem-mode="system" data-i18n="app.memModeSystem">System</button>
+                    <button type="button" class="remote-mem-mode-btn" role="tab" aria-selected="false" data-mem-mode="graphics" data-i18n="app.memModeGraphics">Graphics</button>
+                  </div>
+                </div>
+                <button type="button" class="remote-mem-bitmaps-btn" data-mem-bitmaps-btn hidden title="View Graphics Bitmaps" data-i18n-title="app.viewBitmapsTitle" aria-label="View Graphics Bitmaps" data-i18n-aria-label="app.viewBitmapsAria">
+                  <span class="icon icon-xs"><svg><use href="#icon-image"/></svg></span>
+                </button>
+              </div>
               <div class="remote-quad-chart-layout">
-                <div class="remote-chart-svg-wrap">
+                <div class="remote-chart-svg-wrap" data-mem-chart-wrap>
                   <svg class="remote-chart-svg" data-chart="mem" viewBox="0 0 420 200" preserveAspectRatio="xMidYMid meet" aria-hidden="true"></svg>
                 </div>
+                <div class="remote-chart-svg-wrap" data-gfx-chart-wrap hidden>
+                  <svg class="remote-chart-svg" data-chart="gfx" viewBox="0 0 420 200" preserveAspectRatio="xMidYMid meet" aria-hidden="true"></svg>
+                </div>
               </div>
-              <div class="remote-quad-card-footer remote-chart-quad-footer">
+              <div class="remote-quad-card-footer remote-chart-quad-footer" data-mem-quad-footer>
                 <aside class="remote-chart-legend" data-legend="mem">
                   <div class="remote-legend-row" data-series="mem-used"><span class="remote-legend-swatch" style="background:#f87171"></span><span class="remote-legend-label" data-i18n="app.legendUsed">Used</span><span class="remote-legend-val">—</span></div>
                   <div class="remote-legend-row" data-series="mem-res"><span class="remote-legend-swatch" style="background:#60a5fa"></span><span class="remote-legend-label" data-i18n="app.legendResident">Resident</span><span class="remote-legend-val">—</span></div>
                   <div class="remote-legend-row" data-series="mem-anon"><span class="remote-legend-swatch" style="background:#c084fc"></span><span class="remote-legend-label" data-i18n="app.legendAnonymous">Anonymous</span><span class="remote-legend-val">—</span></div>
                   <div class="remote-legend-row" data-series="mem-shared"><span class="remote-legend-swatch" style="background:#fb923c"></span><span class="remote-legend-label" data-i18n="app.legendShared">Shared</span><span class="remote-legend-val">—</span></div>
                   <div class="remote-legend-row" data-series="mem-limit"><span class="remote-legend-swatch remote-legend-swatch--mem-limit" aria-hidden="true"></span><span class="remote-legend-label" data-i18n="app.legendLimit">Limit</span><span class="remote-legend-val">—</span></div>
+                </aside>
+                <aside class="remote-chart-legend" data-legend="gfx" hidden>
+                  <div class="remote-legend-row" data-series="gfx-texture"><span class="remote-legend-swatch" style="background:#2dd4bf"></span><span class="remote-legend-label" data-i18n="app.legendTexture">Texture</span><span class="remote-legend-val">—</span></div>
+                  <div class="remote-legend-row" data-series="gfx-system"><span class="remote-legend-swatch" style="background:#f472b6"></span><span class="remote-legend-label" data-i18n="app.legendSystem">System</span><span class="remote-legend-val">—</span></div>
                 </aside>
               </div>
             </section>

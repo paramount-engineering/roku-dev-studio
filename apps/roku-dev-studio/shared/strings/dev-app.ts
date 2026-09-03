@@ -52,7 +52,8 @@ export const devApp = {
   // ── Device Performance Action Script capture (device-metrics-performance-step.ts) ──
   captionCpuGraph: 'CPU Usage (Graph)',
   captionCpuProcess: 'CPU Usage (Process)',
-  captionSystemMemory: 'System Memory',
+  captionSystemMemory: 'Memory Usage (System)',
+  captionGraphicsMemory: 'Memory Usage (Graphics)',
   captionObjectsCount: 'BrightScript Objects (Count)',
   captionObjectsMemory: 'BrightScript Objects (Memory)',
   invalidChartType: 'Invalid Device Performance chart type.',
@@ -75,6 +76,8 @@ export const devApp = {
     'Show Device Performance (quad layout) was turned on automatically for this step.',
   skippedNoProcStat: (caption: string): string =>
     `Skipped "${caption}" capture — device has not produced <proc-stat> yet (requires Roku OS 15.2+).`,
+  skippedNoGraphics: (caption: string): string =>
+    `Skipped "${caption}" capture — device did not return r2d2-bitmaps data.`,
 
   // ── Device metrics: process-state labels (device-metrics.ts) ──────────────
   stateRunning: 'Running',
@@ -121,6 +124,24 @@ export const devApp = {
   hoverAnonymous: 'Anonymous',
   hoverShared: 'Shared',
   hoverLimit: 'Limit',
+  hoverTexture: 'Texture',
+  hoverGfxSystem: 'System',
+
+  // ── Bitmaps modal (bitmaps-modal.ts) ───────────────────────────────────────
+  bitmapsModalTitle: 'Graphics Bitmaps',
+  bitmapsFooterTotal: 'Total',
+  bitmapsFooterCount: (count: number): string => `${count} bitmap${count === 1 ? '' : 's'}`,
+  bitmapsModalEmpty: 'No bitmap data yet.',
+  bitmapsColName: 'Name',
+  bitmapsColDimensions: 'Dimensions',
+  bitmapsColBpp: 'BPP',
+  bitmapsBppTooltip: 'Bits per pixel',
+  bitmapsUpdatedAt: (timeStr: string, ago: string): string => `Updated ${timeStr} (${ago})`,
+  bitmapsUpdatedAtPlain: (timeStr: string): string => `Updated ${timeStr}`,
+  bitmapsUpdatedNever: 'Not yet updated',
+  bitmapsAgoSeconds: (s: number): string => `${s}s ago`,
+  bitmapsAgoMinutes: (m: number): string => `${m}m ago`,
+  bitmapsColSize: 'Size',
 
   // ── Device metrics: error toasts ──────────────────────────────────────────
   chanperfRequestFailed: 'chanperf request failed',

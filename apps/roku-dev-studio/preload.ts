@@ -63,6 +63,10 @@ contextBridge.exposeInMainWorld('roku', {
   
   // Get app icon as data URL
   getIcon: (ip: string, appId: string) => ipcRenderer.invoke(IPC.RokuGetIcon, { ip, appId }),
+
+  // Get device hardware photo as a data URL — fetched via Node in the main process, not a
+  // renderer <img src>, since a direct renderer request to a LAN device can be silently blocked.
+  getDeviceHardwareImage: (ip: string) => ipcRenderer.invoke(IPC.RokuGetDeviceHardwareImage, { ip }),
   
   // ============================================
   // ECP Commands

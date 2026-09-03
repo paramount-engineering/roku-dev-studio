@@ -56,7 +56,8 @@ export const devApp = {
   // ── Device Performance Action Script capture (device-metrics-performance-step.ts) ──
   captionCpuGraph: 'Utilizare CPU (grafic)',
   captionCpuProcess: 'Utilizare CPU (proces)',
-  captionSystemMemory: 'Memorie sistem',
+  captionSystemMemory: 'Utilizare memorie (Sistem)',
+  captionGraphicsMemory: 'Utilizare memorie (Grafică)',
   captionObjectsCount: 'Obiecte BrightScript (număr)',
   captionObjectsMemory: 'Obiecte BrightScript (memorie)',
   invalidChartType: 'Tip de grafic nevalid pentru performanța dispozitivului.',
@@ -79,6 +80,8 @@ export const devApp = {
     'Afișarea performanței dispozitivului (aspect cvadruplu) a fost activată automat pentru acest pas.',
   skippedNoProcStat: (caption: string): string =>
     `Captura „${caption}” a fost omisă — dispozitivul nu a produs încă <proc-stat> (necesită Roku OS 15.2+).`,
+  skippedNoGraphics: (caption: string): string =>
+    `Captura „${caption}” a fost omisă — dispozitivul nu a returnat date r2d2-bitmaps.`,
 
   // ── Device metrics: process-state labels (device-metrics.ts) ──────────────
   stateRunning: 'În execuție',
@@ -125,6 +128,24 @@ export const devApp = {
   hoverAnonymous: 'Anonimă',
   hoverShared: 'Partajată',
   hoverLimit: 'Limită',
+  hoverTexture: 'Textură',
+  hoverGfxSystem: 'Sistem',
+
+  // ── Bitmaps modal (bitmaps-modal.ts) ───────────────────────────────────────
+  bitmapsModalTitle: 'Bitmapuri grafice',
+  bitmapsFooterTotal: 'Total',
+  bitmapsFooterCount: (count: number): string => `${count} bitmap-uri`,
+  bitmapsModalEmpty: 'Încă nu există date despre bitmap-uri.',
+  bitmapsColName: 'Nume',
+  bitmapsColDimensions: 'Dimensiuni',
+  bitmapsColBpp: 'BPP',
+  bitmapsBppTooltip: 'Biți pe pixel',
+  bitmapsUpdatedAt: (timeStr: string, ago: string): string => `Actualizat ${timeStr} (${ago})`,
+  bitmapsUpdatedAtPlain: (timeStr: string): string => `Actualizat ${timeStr}`,
+  bitmapsUpdatedNever: 'Încă neactualizat',
+  bitmapsAgoSeconds: (s: number): string => `acum ${s}s`,
+  bitmapsAgoMinutes: (m: number): string => `acum ${m}m`,
+  bitmapsColSize: 'Dimensiune',
 
   // ── Device metrics: error toasts ──────────────────────────────────────────
   chanperfRequestFailed: 'Cererea chanperf a eșuat',

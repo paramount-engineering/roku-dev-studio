@@ -136,6 +136,74 @@ export function parseChanperfFull(xml: string): ChanperfParsed | null {
   };
 }
 
+export type R2d2Bitmap = {
+  name: string;
+  width: number;
+  height: number;
+  bpp: number;
+  /** Bytes, per Roku's `<size>` field. */
+  size: number;
+};
+
+export type R2d2BitmapsParsed = {
+  textureUsedBytes: number;
+  systemUsedBytes: number;
+  /** Every `<bitmap>` entry across all `<rographics>` instances, in wire order. */
+  bitmaps: R2d2Bitmap[];
+};
+
+/** Parse every `<bitmap>` block in the payload (Roku's per-texture inventory used by its own
+ *  Resource Monitor's "Bitmaps details" dialog). Skips a block only if a required field is
+ *  missing/unparseable — never throws. */
+function parseBitmapEntries(xml: string): R2d2Bitmap[] {
+  const blocks = xml.match(/<bitmap>[\s\S]*?<\/bitmap>/gi);
+  if (!blocks) return [];
+  const out: R2d2Bitmap[] = [];
+  for (const block of blocks) {
+    const nameMatch = block.match(/<name>([^<]*)<\/name>/i);
+    const width = firstMatchInt(block, 'width');
+    const height = firstMatchInt(block, 'height');
+    const bpp = firstMatchInt(block, 'bpp');
+    const size = firstMatchInt(block, 'size');
+    if (!nameMatch || width == null || height == null || bpp == null || size == null) continue;
+    out.push({ name: nameMatch[1].trim(), width, height, bpp, size });
+  }
+  return out;
+}
+
+/**
+ * Full `r2d2-bitmaps` parse: sums texture (GPU-domain) and system-domain bitmap memory
+ * across every `<rographics>` instance in the payload — a device can report more than one
+ * graphics plane, and some are all-zero placeholders. Returns `null` (never throws) when the
+ * query wasn't r2d2-bitmaps or carried no `<rographics>` block, matching `parseChanperfFull`'s
+ * contract so callers can push a null ring sample without special-casing failure.
+ *
+ * Deliberately does not track `available`/`max` — Roku's own Resource Monitor's Graphics Memory
+ * Usage chart only ever plots Texture and System, with no ceiling line, and per-instance `max`
+ * pools aren't meaningfully summable across planes (an idle placeholder plane's pool would dilute
+ * the real one's).
+ */
+export function parseR2d2BitmapsFull(xml: string): R2d2BitmapsParsed | null {
+  if (!xml || !xml.includes('r2d2-bitmaps')) return null;
+  const blocks = xml.match(/<rographics>[\s\S]*?<\/rographics>/gi);
+  if (!blocks || blocks.length === 0) return null;
+
+  let textureUsedBytes = 0;
+  let systemUsedBytes = 0;
+
+  for (const block of blocks) {
+    /* Note: `<sytem-memory>` is Roku's own wire-format spelling, not a typo of ours to fix. */
+    const sysMatch = block.match(/<sytem-memory>[\s\S]*?<\/sytem-memory>/i);
+    const texMatch = block.match(/<texture-memory>[\s\S]*?<\/texture-memory>/i);
+    if (sysMatch) systemUsedBytes += firstMatchInt(sysMatch[0], 'used') ?? 0;
+    if (texMatch) {
+      textureUsedBytes += firstMatchInt(texMatch[0], 'used') ?? 0;
+    }
+  }
+
+  return { textureUsedBytes, systemUsedBytes, bitmaps: parseBitmapEntries(xml) };
+}
+
 /**
  * When chanperf returns no `<plugin>` / `<used>` (e.g. status FAILED), surface `<error>` text
  * so the UI can explain why CPU/system-memory lines are missing.

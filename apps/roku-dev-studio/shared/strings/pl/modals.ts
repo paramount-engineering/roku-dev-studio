@@ -507,7 +507,7 @@ export const modals = {
     devicePerformanceHeading: 'Wydajność urządzenia (sekcja pilota)',
     devicePerformanceIntroHtml: `Przełącz <strong>Pokaż wydajność urządzenia</strong> w sekcji pilota, aby rozwinąć poczwórny układ z wykresami na żywo:`,
     devicePerformanceListHtml: `
-            <li>Wykresy <strong>użycia CPU</strong>, <strong>pamięci systemowej</strong> i <strong>obiektów BrightScript</strong> (widok liczby lub pamięci, gdy dostępny)</li>
+            <li>Wykresy <strong>użycia CPU</strong>, <strong>użycia pamięci</strong> (System i Grafika) i <strong>obiektów BrightScript</strong> (widok liczby lub pamięci, gdy dostępny)</li>
             <li>Wykresy odzwierciedlają działającą aplikację — aby uzyskać reprezentatywne odczyty, urządzenie powinno mieć włączony <strong>Tryb programisty</strong>, a Twój <strong>wgrany kanał deweloperski</strong> na pierwszym planie</li>
             <li><button type="button" class="help-settings-link" data-settings-section="device-performance" data-settings-highlight="devicePerfRows">Ustawienia → Wydajność urządzenia</button> dostraja interwał próbkowania wykresu i okno historii; włącz <strong>Zapamiętaj „Pokaż wydajność urządzenia”</strong>, aby przywracać układ poczwórny dla każdego urządzenia między sesjami</li>
             <li>Wewnątrz Skryptów akcji kroki <strong>Wydajność urządzenia</strong> przechwytują karty wykresów do wyników uruchomienia (i eksportu PDF)</li>

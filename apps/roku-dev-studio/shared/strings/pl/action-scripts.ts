@@ -78,7 +78,7 @@ export const actionScripts = {
   // Chart option labels (shared: Builder dropdown, list Details, Executor descriptions)
   chartObjects: 'Obiekty BrightScript',
   chartCpu: 'Użycie CPU',
-  chartMemory: 'Pamięć systemowa',
+  chartMemory: 'Użycie pamięci',
   chartAboveAll: 'Wszystko razem',
 
   // Condition / wait source labels (shared)
@@ -424,9 +424,9 @@ export const actionScripts = {
     </p>
     <h4>Wykres</h4>
     <p>
-      <strong>Obiekty BrightScript</strong>, <strong>Użycie CPU</strong>, <strong>Pamięć systemowa</strong> lub
-      <strong>Wszystko razem</strong> (jeden połączony wynik: CPU, potem pamięć, potem obiekty). CPU i pamięć pochodzą z
-      tego samego odpytywania wydajności kanału.
+      <strong>Obiekty BrightScript</strong>, <strong>Użycie CPU</strong>, <strong>Użycie pamięci</strong> (przechwytuje
+      zarówno System, jak i Grafikę), lub <strong>Wszystko razem</strong> (jeden połączony wynik: CPU, potem pamięć, potem
+      obiekty). CPU i pamięć pochodzą z tego samego odpytywania wydajności kanału.
     </p>
     <h4>Opcjonalna etykieta</h4>
     <p>Pokazywana w nagłówku wyników, podobnie jak w kroku zrzutu ekranu.</p>

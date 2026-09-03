@@ -56,7 +56,8 @@ export const devApp = {
   // ── Device Performance Action Script capture (device-metrics-performance-step.ts) ──
   captionCpuGraph: 'Використання CPU (графік)',
   captionCpuProcess: 'Використання CPU (процес)',
-  captionSystemMemory: 'Системна памʼять',
+  captionSystemMemory: 'Використання памʼяті (Система)',
+  captionGraphicsMemory: 'Використання памʼяті (Графіка)',
   captionObjectsCount: 'Обʼєкти BrightScript (кількість)',
   captionObjectsMemory: 'Обʼєкти BrightScript (памʼять)',
   invalidChartType: 'Недійсний тип графіка продуктивності пристрою.',
@@ -79,6 +80,8 @@ export const devApp = {
     '«Показувати продуктивність пристрою» (чотиричастинний макет) було ввімкнено автоматично для цього кроку.',
   skippedNoProcStat: (caption: string): string =>
     `Пропущено захоплення "${caption}" — пристрій ще не створив <proc-stat> (потрібен Roku OS 15.2+).`,
+  skippedNoGraphics: (caption: string): string =>
+    `Пропущено захоплення "${caption}" — пристрій не повернув дані r2d2-bitmaps.`,
 
   // ── Device metrics: process-state labels (device-metrics.ts) ──────────────
   stateRunning: 'Виконується',
@@ -125,6 +128,24 @@ export const devApp = {
   hoverAnonymous: 'Анонімна',
   hoverShared: 'Спільна',
   hoverLimit: 'Ліміт',
+  hoverTexture: 'Текстура',
+  hoverGfxSystem: 'Система',
+
+  // ── Bitmaps modal (bitmaps-modal.ts) ───────────────────────────────────────
+  bitmapsModalTitle: 'Бітмапи графіки',
+  bitmapsFooterTotal: 'Усього',
+  bitmapsFooterCount: (count: number): string => `${count} бітмапів`,
+  bitmapsModalEmpty: 'Дані про бітмапи ще відсутні.',
+  bitmapsColName: 'Назва',
+  bitmapsColDimensions: 'Розміри',
+  bitmapsColBpp: 'BPP',
+  bitmapsBppTooltip: 'Бітів на піксель',
+  bitmapsUpdatedAt: (timeStr: string, ago: string): string => `Оновлено ${timeStr} (${ago})`,
+  bitmapsUpdatedAtPlain: (timeStr: string): string => `Оновлено ${timeStr}`,
+  bitmapsUpdatedNever: 'Ще не оновлено',
+  bitmapsAgoSeconds: (s: number): string => `${s}с тому`,
+  bitmapsAgoMinutes: (m: number): string => `${m}хв тому`,
+  bitmapsColSize: 'Розмір',
 
   // ── Device metrics: error toasts ──────────────────────────────────────────
   chanperfRequestFailed: 'Запит chanperf не вдався',

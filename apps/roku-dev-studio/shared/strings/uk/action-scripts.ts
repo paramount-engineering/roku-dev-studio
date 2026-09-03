@@ -78,7 +78,7 @@ export const actionScripts = {
   // Chart option labels (shared: Builder dropdown, list Details, Executor descriptions)
   chartObjects: 'Об’єкти BrightScript',
   chartCpu: 'Використання CPU',
-  chartMemory: 'Системна пам’ять',
+  chartMemory: 'Використання пам’яті',
   chartAboveAll: 'Усе разом',
 
   // Condition / wait source labels (shared)
@@ -424,9 +424,9 @@ export const actionScripts = {
     </p>
     <h4>Діаграма</h4>
     <p>
-      <strong>Об’єкти BrightScript</strong>, <strong>Використання CPU</strong>, <strong>Системна пам’ять</strong> або
-      <strong>Усе разом</strong> (один об’єднаний результат: CPU, потім пам’ять, потім об’єкти). CPU та пам’ять надходять із
-      того самого опитування продуктивності каналу.
+      <strong>Об’єкти BrightScript</strong>, <strong>Використання CPU</strong>, <strong>Використання пам’яті</strong>
+      (захоплює і Систему, і Графіку), або <strong>Усе разом</strong> (один об’єднаний результат: CPU, потім пам’ять, потім
+      об’єкти). CPU та пам’ять надходять із того самого опитування продуктивності каналу.
     </p>
     <h4>Необов’язкова мітка</h4>
     <p>Показується в заголовку результатів, подібно до кроку знімка екрана.</p>
