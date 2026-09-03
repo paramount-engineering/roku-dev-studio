@@ -207,7 +207,12 @@
       <div class="settings-panel" data-section="mcp-server" id="panel-mcp-server" role="tabpanel" aria-labelledby="nav-mcp-server" aria-hidden="true">
         <div class="settings-panel-fill">
           <div class="settings-panel-scroll">
-            <p class="help-blurb" data-i18n-html="settings.mcpServerBlurbHtml">Expose Roku Dev Studio to AI agents via the <a href="https://modelcontextprotocol.io" target="_blank" rel="noopener noreferrer" class="mcp-link">Model Context Protocol</a>. Toggle a client to add or remove its <code class="mcp-inline-code">roku-dev-studio</code> MCP server entry; other entries are left untouched.</p>
+            <div class="mcp-server-topbar">
+              <p class="help-blurb mcp-server-blurb" data-i18n-html="settings.mcpServerBlurbHtml">Expose Roku Dev Studio to AI agents via the <a href="https://modelcontextprotocol.io" target="_blank" rel="noopener noreferrer" class="mcp-link">Model Context Protocol</a>. Toggle a client to add or remove its <code class="mcp-inline-code">roku-dev-studio</code> MCP server entry; other entries are left untouched.</p>
+              <div class="mcp-server-topbar-action">
+                <button type="button" class="btn btn-secondary btn-sm" id="btnViewMcpTools" data-i18n="settings.mcpToolsButton">View MCP Tools</button>
+              </div>
+            </div>
             <div class="settings-section">
               <div id="mcpClientsList" class="mcp-clients-list" aria-live="polite"></div>
             </div>

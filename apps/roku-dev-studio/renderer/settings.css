@@ -267,6 +267,68 @@ ul.help-blurb li {
 }
 /* Sideload Relay intro list — a little breathing room before the settings card. */
 .sr-intro { margin-bottom: 20px; }
+/* MCP Server panel top row: blurb capped to 75% width, "View MCP Tools" button in the remaining 25%. */
+.mcp-server-topbar {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+.mcp-server-topbar .mcp-server-blurb {
+  flex: 0 1 75%;
+  min-width: 0;
+  margin-bottom: 0;
+}
+.mcp-server-topbar-action {
+  flex: 0 0 25%;
+  display: flex;
+  justify-content: flex-end;
+}
+@media (max-width: 560px) {
+  .mcp-server-topbar { flex-wrap: wrap; }
+  .mcp-server-topbar .mcp-server-blurb,
+  .mcp-server-topbar-action { flex: 1 1 100%; }
+  .mcp-server-topbar-action { justify-content: flex-start; }
+}
+/* "View MCP Tools" reference modal (mcp-tools-modal.ts). This window has no shared modal-overlay
+   base class (see .sr-modal-overlay / .ni-modal-overlay above) — each modal here is self-contained. */
+.mcp-tools-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(6, 6, 12, 0.6);
+  backdrop-filter: blur(3px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 5000;
+}
+.mcp-tools-modal {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  width: min(720px, 94vw);
+  max-height: 84vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+.mcp-tools-header { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; border-bottom: 1px solid var(--border); background: linear-gradient(180deg, rgba(139, 92, 246, 0.05), transparent); }
+.mcp-tools-header h3 { margin: 0; font-size: 15px; font-weight: 600; color: var(--text-primary); }
+.mcp-tools-body { padding: 16px 18px; overflow-y: auto; display: flex; flex-direction: column; gap: 16px; }
+.mcp-tools-body::-webkit-scrollbar { width: 8px; }
+.mcp-tools-body::-webkit-scrollbar-track { background: var(--bg-primary); border-radius: 4px; }
+.mcp-tools-body::-webkit-scrollbar-thumb { background: var(--bg-elevated); border-radius: 4px; border: 1px solid var(--border); }
+.mcp-tools-intro { margin: 0; font-size: 12px; line-height: 1.55; color: var(--text-secondary); }
+.mcp-tools-groups { display: flex; flex-direction: column; gap: 14px; }
+.mcp-tools-group { border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+.mcp-tools-group-title { display: flex; align-items: center; gap: 8px; margin: 0; padding: 8px 12px; font-size: 12px; font-weight: 600; color: var(--text-primary); background: var(--bg-tertiary); border-bottom: 1px solid var(--border); }
+.mcp-tools-group-count { font-weight: 500; color: var(--text-muted); font-size: 11px; }
+.mcp-tools-list { display: flex; flex-direction: column; }
+.mcp-tools-row { display: flex; align-items: baseline; gap: 12px; padding: 7px 12px; border-top: 1px solid var(--border); }
+.mcp-tools-list .mcp-tools-row:first-child { border-top: none; }
+.mcp-tools-name { flex: 0 0 auto; font-family: ui-monospace, monospace; font-size: 11.5px; color: var(--accent-cyan); white-space: nowrap; }
+.mcp-tools-desc { flex: 1 1 auto; min-width: 0; font-size: 12px; color: var(--text-secondary); line-height: 1.45; }
 .timing-row {
   display: flex;
   align-items: center;

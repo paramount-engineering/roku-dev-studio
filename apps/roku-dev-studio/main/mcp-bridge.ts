@@ -55,6 +55,7 @@ import {
   type NetworkEventQuery,
   type ParsedNetworkEvent
 } from './network-inspector/index';
+import { sanitizeFindOptions } from 'roku-dev-studio-network-inspector/input-sanitize';
 import { getDebugSessionController } from './ipc/debugger-handlers';
 import type { DebugSessionController } from 'roku-dev-studio-api/lib/debugger/debug-session-controller';
 
@@ -915,6 +916,34 @@ function resolveNetworkInspectorDeviceIp(deviceArg: unknown): string | undefined
   return s.includes('.') ? s : undefined;
 }
 
+/** A single value or an array of them, from JSON body input — used for the OR-within-a-field
+ *  filters (`status`, `statusClass`, `contentType`) on network_inspector_list_events/analyze. */
+function parseFilterValues<T>(value: unknown, coerce: (v: unknown) => T | undefined): T | T[] | undefined {
+  if (Array.isArray(value)) {
+    const list = value.map(coerce).filter((v): v is T => v !== undefined);
+    return list.length > 0 ? list : undefined;
+  }
+  return coerce(value);
+}
+const toStatusCode = (v: unknown): number | undefined =>
+  typeof v === 'number' && Number.isFinite(v) ? Math.floor(v) : undefined;
+const toNonEmptyString = (v: unknown): string | undefined => (typeof v === 'string' && v.trim() ? v.trim() : undefined);
+
+/** Build the shared `NetworkEventQuery` filter fields from a request body — used by both
+ *  `/network-inspector/events` and `/network-inspector/analyze` so the two stay in lockstep. */
+function networkEventQueryFilters(body: Record<string, unknown>): Omit<NetworkEventQuery, 'deviceIp' | 'limit'> {
+  return {
+    host: typeof body.host === 'string' ? body.host : undefined,
+    method: typeof body.method === 'string' ? body.method : undefined,
+    type: typeof body.type === 'string' ? (body.type as NetworkEventQuery['type']) : undefined,
+    status: parseFilterValues(body.status, toStatusCode),
+    statusClass: parseFilterValues(body.statusClass, toNonEmptyString),
+    contentType: parseFilterValues(body.contentType, toNonEmptyString),
+    errorsOnly: body.errorsOnly === true,
+    mitmOnly: body.mitmOnly === true
+  };
+}
+
 /**
  * Gate every Network Inspector read on the feature being enabled. When disabled we return a
  * structured 409 with copy-pasteable remediation (per the permission-remediation UX rule) so the
@@ -953,7 +982,7 @@ function networkInspectorReadiness(svc: NetworkInspectorService): {
       remediation: prereq?.remediation
     };
   }
-  if (!status.captureActive) {
+  if (!status.captureActive && !status.mitmActive) {
     return {
       ready: false,
       notice:
@@ -1861,11 +1890,7 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
     const deviceIp = resolveNetworkInspectorDeviceIp(body.device);
     const query: NetworkEventQuery = {
       deviceIp,
-      host: typeof body.host === 'string' ? body.host : undefined,
-      method: typeof body.method === 'string' ? body.method : undefined,
-      type: typeof body.type === 'string' ? (body.type as NetworkEventQuery['type']) : undefined,
-      errorsOnly: body.errorsOnly === true,
-      mitmOnly: body.mitmOnly === true,
+      ...networkEventQueryFilters(body),
       limit: typeof body.limit === 'number' ? body.limit : undefined
     };
     const events = svc.queryEventSummaries(query);
@@ -1907,17 +1932,57 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
     const body = await readJsonLoose(req);
     if (!send400IfJsonErr(res, body)) return;
     const deviceIp = resolveNetworkInspectorDeviceIp(body.device);
-    const analysis = svc.analyzeEvents({
-      deviceIp,
-      host: typeof body.host === 'string' ? body.host : undefined,
-      method: typeof body.method === 'string' ? body.method : undefined,
-      type: typeof body.type === 'string' ? (body.type as NetworkEventQuery['type']) : undefined,
-      errorsOnly: body.errorsOnly === true,
-      mitmOnly: body.mitmOnly === true
-    });
+    const analysis = svc.analyzeEvents({ deviceIp, ...networkEventQueryFilters(body) });
     const readiness = networkInspectorReadiness(svc);
     const payload: Record<string, unknown> = { analysis, deviceIp: deviceIp ?? null };
     if (analysis.totalMatched === 0 && !readiness.ready) {
+      payload.notice = readiness.notice;
+      payload.remediation = readiness.remediation;
+    }
+    sendJson(res, 200, payload);
+    return;
+  }
+
+  if (method === 'POST' && pathname === '/network-inspector/find') {
+    const svc = networkInspectorGate(res);
+    if (!svc) return;
+    const body = await readJsonLoose(req);
+    if (!send400IfJsonErr(res, body)) return;
+    const deviceIp = resolveNetworkInspectorDeviceIp(body.device);
+    const query = typeof body.query === 'string' ? body.query : '';
+    if (!query.trim()) {
+      sendJson(res, 400, { error: 'Missing required `query` (the text or regex to search for).' });
+      return;
+    }
+    const options = sanitizeFindOptions({
+      terms: [
+        {
+          id: 'q1',
+          query,
+          scopes: Array.isArray(body.scopes) ? body.scopes : undefined,
+          caseSensitive: body.caseSensitive === true,
+          regex: body.regex === true
+        }
+      ]
+    });
+    const limit =
+      typeof body.limit === 'number' && body.limit > 0 ? Math.min(Math.floor(body.limit), 500) : 50;
+    // Find only returns {id, total, scopes} — cross-reference against the summary buffer so the
+    // agent gets host/url/method/status back in one call instead of a get_event_detail per hit.
+    const summaries = svc.queryEventSummaries({ deviceIp, limit: 2000 });
+    const byId = new Map(summaries.map((e) => [e.id, e]));
+    // Unlike queryEventSummaries/analyzeEvents, searchEvents takes one EXACT deviceIp — no "all
+    // devices" mode. Fan out over every distinct device already present in `summaries` (or just the
+    // requested one) so an omitted `device` still searches everything with captured traffic.
+    const targetIps = deviceIp ? [deviceIp] : Array.from(new Set(summaries.map((e) => e.deviceIp)));
+    const perDevice = options ? await Promise.all(targetIps.map((ip) => svc.searchEvents(ip, options, limit))) : [];
+    const enriched = perDevice
+      .flat()
+      .map((m) => ({ ...m, event: byId.get(m.id) ?? null }))
+      .slice(0, limit);
+    const readiness = networkInspectorReadiness(svc);
+    const payload: Record<string, unknown> = { matches: enriched, count: enriched.length, deviceIp: deviceIp ?? null };
+    if (enriched.length === 0 && !readiness.ready) {
       payload.notice = readiness.notice;
       payload.remediation = readiness.remediation;
     }

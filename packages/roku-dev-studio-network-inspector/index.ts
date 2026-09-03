@@ -203,8 +203,11 @@ function summarizeEvent(ev: ParsedNetworkEvent, detailAvailable: boolean): Parse
 
 /**
  * Read-only filter for the agent/MCP query surface over the captured summary buffer. Every field is
- * optional and AND-combined. `host` is a case-insensitive substring matched against hostname / SNI /
- * request URL; `method` and `type` are exact; `errorsOnly` keeps responses with status >= 400;
+ * optional and AND-combined across fields; a field given an array matches if ANY value in it matches
+ * (OR within that field). `host` is a case-insensitive substring matched against hostname / SNI /
+ * request URL; `method` and `type` are exact; `status` is an exact response status code; `statusClass`
+ * is `'2xx'|'3xx'|'4xx'|'5xx'`; `contentType` is a case-insensitive substring against the response
+ * Content-Type (falling back to the request's); `errorsOnly` keeps responses with status >= 400;
  * `mitmOnly` keeps decrypted-HTTPS transactions; `deviceIp` scopes to a single Roku's hotspot lease.
  */
 export type NetworkEventQuery = {
@@ -212,6 +215,9 @@ export type NetworkEventQuery = {
   host?: string;
   method?: string;
   type?: ParsedNetworkEvent['type'];
+  status?: number | number[];
+  statusClass?: string | string[];
+  contentType?: string | string[];
   errorsOnly?: boolean;
   mitmOnly?: boolean;
   limit?: number;
@@ -283,6 +289,23 @@ function eventMatchesQuery(ev: ParsedNetworkEvent, q: NetworkEventQuery): boolea
       .join(' ')
       .toLowerCase();
     if (!hay.includes(needle)) return false;
+  }
+  if (q.status !== undefined) {
+    const status = ev.httpResponse?.statusCode;
+    if (typeof status !== 'number') return false;
+    const wanted = Array.isArray(q.status) ? q.status : [q.status];
+    if (!wanted.includes(status)) return false;
+  }
+  if (q.statusClass !== undefined) {
+    const status = ev.httpResponse?.statusCode;
+    if (typeof status !== 'number') return false;
+    const wanted = (Array.isArray(q.statusClass) ? q.statusClass : [q.statusClass]).map((c) => c.toLowerCase());
+    if (!wanted.includes(statusClass(status))) return false;
+  }
+  if (q.contentType) {
+    const ct = (ev.httpResponse?.contentType || ev.httpRequest?.contentType || '').toLowerCase();
+    const wanted = Array.isArray(q.contentType) ? q.contentType : [q.contentType];
+    if (!wanted.some((c) => ct.includes(c.toLowerCase()))) return false;
   }
   return true;
 }

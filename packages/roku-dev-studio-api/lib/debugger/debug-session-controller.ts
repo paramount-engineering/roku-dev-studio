@@ -78,6 +78,11 @@ interface DebugSession {
    *  polling caller — e.g. the MCP bridge's wait-for-stop — can read it without the event.
    *  Cleared on resume. */
   lastStop?: Record<string, unknown>;
+  /** Bumped every time we transition to `stopped`. A continue/step call snapshots this
+   *  before sending its command; if it changes before the command's ack comes back, a
+   *  stop already raced in ahead of it (device ack + AllThreadsStopped landing in the
+   *  same TCP read) and must win — see markResumed(). */
+  resumeGeneration: number;
 }
 
 type Emit = (event: DebuggerEventKind, payload: unknown) => void;
@@ -90,6 +95,7 @@ export class DebugSessionController {
   private setState(session: DebugSession, state: SessionState, extra?: Record<string, unknown>): void {
     session.state = state;
     if (state === 'running') session.lastStop = undefined; // the retained snapshot is stale once we resume
+    if (state === 'stopped') session.resumeGeneration++;
     this.emit(DEBUGGER_EVENTS.State, { ip: session.ip, state, protocolVersion: session.protocolVersion, ...extra });
   }
 
@@ -105,13 +111,22 @@ export class DebugSessionController {
   }
 
   /**
-   * Open a debug-protocol session to `ip:8081`. Tears down any existing session
-   * for that IP first (the control port is single-client). Resolves once the
-   * handshake completes or rejects with an actionable message.
+   * Open a debug-protocol session to `ip:8081`. No-ops if a healthy session for
+   * that IP is already up. Otherwise tears down any existing (stale/errored)
+   * session first (the control port is single-client) and reconnects. Resolves
+   * once the handshake completes or rejects with an actionable message.
    */
   async attach(ip: string): Promise<{ ok: boolean; error?: string }> {
     const clean = (ip || '').trim();
     if (!clean) return { ok: false, error: 'A device IP is required to attach.' };
+
+    const existing = this.sessions.get(clean);
+    if (existing && (existing.state === 'attached' || existing.state === 'stopped' || existing.state === 'running')) {
+      // Already attached and healthy — don't tear down a good session just to
+      // no-op reattach (the control port is single-client, so a doomed
+      // reconnect here would kill a working session for nothing).
+      return { ok: true };
+    }
 
     await this.detach(clean); // single-client control port — never stack sessions
 
@@ -137,7 +152,14 @@ export class DebugSessionController {
       } catch (e) {
         return { ok: false, error: e instanceof Error ? e.message : String(e) };
       }
-      const session: DebugSession = { ip: clean, client, state: 'connecting', entryHandled: false, breakpoints: new Map() };
+      const session: DebugSession = {
+        ip: clean,
+        client,
+        state: 'connecting',
+        entryHandled: false,
+        breakpoints: new Map(),
+        resumeGeneration: 0
+      };
       this.wireEvents(session);
       try {
         await withTimeout(client.connect(true), PER_ATTEMPT_MS, 'handshake-timeout');
@@ -205,21 +227,41 @@ export class DebugSessionController {
   }
 
   async continue(ip: string): Promise<void> {
+    const gen = this.sessions.get(ip)?.resumeGeneration;
     await this.require(ip).continue();
-    this.markResumed(ip);
+    this.markResumed(ip, gen);
   }
   async pause(ip: string): Promise<void> { await this.require(ip).pause(); }
   // A step RESUMES execution until the next suspend, so — like continue() — mark running
   // (which clears the retained `lastStop` snapshot). Otherwise a wait-for-stop poller
   // reading getStop() would return the pre-step stack/variables before the step lands.
-  async stepOver(ip: string, threadIndex?: number): Promise<void> { await this.require(ip).stepOver(threadIndex); this.markResumed(ip); }
-  async stepIn(ip: string, threadIndex?: number): Promise<void> { await this.require(ip).stepIn(threadIndex); this.markResumed(ip); }
-  async stepOut(ip: string, threadIndex?: number): Promise<void> { await this.require(ip).stepOut(threadIndex); this.markResumed(ip); }
+  async stepOver(ip: string, threadIndex?: number): Promise<void> {
+    const gen = this.sessions.get(ip)?.resumeGeneration;
+    await this.require(ip).stepOver(threadIndex);
+    this.markResumed(ip, gen);
+  }
+  async stepIn(ip: string, threadIndex?: number): Promise<void> {
+    const gen = this.sessions.get(ip)?.resumeGeneration;
+    await this.require(ip).stepIn(threadIndex);
+    this.markResumed(ip, gen);
+  }
+  async stepOut(ip: string, threadIndex?: number): Promise<void> {
+    const gen = this.sessions.get(ip)?.resumeGeneration;
+    await this.require(ip).stepOut(threadIndex);
+    this.markResumed(ip, gen);
+  }
 
-  /** After a continue/step resumes the device, flip to `running` (which nulls `lastStop`). */
-  private markResumed(ip: string): void {
+  /**
+   * After a continue/step resumes the device, flip to `running` (which nulls `lastStop`)
+   * — UNLESS a stop already raced in ahead of us. The command's ack and the device's
+   * next `AllThreadsStopped` can land in the same TCP read (e.g. stepping a fast line);
+   * `onData` drains both synchronously, so `setState('stopped')` runs before this
+   * function's caller even gets to await. Skipping the clobber when the generation has
+   * moved on leaves that fresher `stopped` state (and its snapshot) intact.
+   */
+  private markResumed(ip: string, expectedGeneration: number | undefined): void {
     const s = this.sessions.get(ip);
-    if (s) this.setState(s, 'running');
+    if (s && s.resumeGeneration === expectedGeneration) this.setState(s, 'running');
   }
 
   async stackTrace(ip: string, threadIndex?: number): Promise<unknown> {

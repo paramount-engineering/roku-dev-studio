@@ -1,4 +1,29 @@
 const { app, BrowserWindow, ipcMain, Menu, clipboard, dialog, shell } = require('electron');
+const pkg = require('./package.json');
+const {
+  isDiagnosticBuild,
+  applyDiagnosticCommandLineSwitches,
+  registerDiagnosticWebContents,
+  startDiagnosticTelemetry,
+  registerDiagnosticIpc
+} = require('./main/diagnostic-build');
+// Align Electron app name with productName so Hide/Quit match the bundle title (not package "name"),
+// and so app.getPath('userData') resolves to the right folder. MUST run before
+// requestSingleInstanceLock() below (before anything touches app.getPath/app.getName at all) —
+// Electron resolves and caches the userData directory from app.name on first access, so setting the
+// name even a few lines "too late" leaves settings/secrets/the MCP bridge descriptor silently
+// writing to the wrong, already-cached folder for the rest of the process's life. Confirmed live: a
+// packaged build with this call placed after requestSingleInstanceLock() still wrote its userData to
+// the lowercase package-name folder despite computing the right string.
+// electron-builder strips the "build" block from package.json when packaging (only "name" survives
+// inside app.asar), so pkg.build is undefined in a packaged build — the literal fallback must match
+// build.productName below. Diagnostic builds (scripts/build-diagnostic.ts) set productName via an
+// electron-builder CLI override that never reaches package.json either, so without this branch a
+// diagnostic install's userData would collide with the regular production install's.
+app.setName(
+  (pkg.build && pkg.build.productName) ||
+    (isDiagnosticBuild() ? 'Roku Dev Studio Diagnostic' : 'Roku Dev Studio')
+);
 
 // Single instance: a second launch (e.g. double-clicking / "Open With"-ing a log
 // file while the app is already open) hands its launch args to THIS instance via
@@ -11,9 +36,6 @@ if (!app.requestSingleInstanceLock()) {
 }
 
 const { IPC } = require('./shared/ipc/channels');
-const pkg = require('./package.json');
-// Align Electron app name with productName so Hide/Quit match the bundle title (not package "name").
-app.setName((pkg.build && pkg.build.productName) || pkg.name);
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
@@ -203,13 +225,6 @@ let privacyModeEnabled = false;
 const { zoomIn, zoomOut, resetZoom, setupZoomGuards } = require('./main/window-zoom');
 const { registerHamburgerMenuIpc } = require('./main/hamburger-menu');
 const { registerStripAuxWindowMenus } = require('./main/strip-aux-window-menu');
-const {
-  isDiagnosticBuild,
-  applyDiagnosticCommandLineSwitches,
-  registerDiagnosticWebContents,
-  startDiagnosticTelemetry,
-  registerDiagnosticIpc
-} = require('./main/diagnostic-build');
 
 if (isDiagnosticBuild()) {
   applyDiagnosticCommandLineSwitches(app, app.getPath('userData'));

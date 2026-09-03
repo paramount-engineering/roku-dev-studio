@@ -14,6 +14,7 @@ import {
   type NiSetupGuideStrings,
 } from '@shared/network-inspector/setup-guide.js';
 import { initSideloadRelaySection } from './sideload-relay-section.js';
+import { openMcpToolsModal } from './mcp-tools-modal.js';
 import { attachBackdropClickToClose } from '../../modules/utils/modal-backdrop-click.js';
 import { attachInstantTooltips } from '../../modules/utils/instant-tooltip.js';
 import { S, applyI18n, availableLocales, getLocale, matchLocale, localeLabel, setLocale, SYSTEM_LOCALE } from '@shared/strings/index.js';
@@ -1451,6 +1452,12 @@ var btnResetActionScripts = el('btnResetActionScripts');
 if (btnResetActionScripts) {
   btnResetActionScripts.addEventListener('click', function () {
     setFolderDisplay('');
+  });
+}
+var btnViewMcpTools = el('btnViewMcpTools');
+if (btnViewMcpTools) {
+  btnViewMcpTools.addEventListener('click', function () {
+    openMcpToolsModal();
   });
 }
 var btnResetMcpServer = el('btnResetMcpServer');

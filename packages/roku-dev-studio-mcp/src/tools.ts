@@ -556,11 +556,26 @@ async function networkInspectorAnalyzeTool(args: Record<string, unknown>): Promi
   return jsonResult(res.body);
 }
 
+async function networkInspectorFindTool(args: Record<string, unknown>): Promise<ToolResult> {
+  const query = String(args.query || '').trim();
+  if (!query) {
+    return errorResult('Missing required argument "query" (the text or regex to search for).', {
+      code: 'missing_query',
+      argument: 'query'
+    });
+  }
+  const res = await bridgeRequest({ method: 'POST', pathname: '/network-inspector/find', body: args });
+  if (!res.ok) return bridgeToolFailure('network_inspector_find', res);
+  return jsonResult(res.body);
+}
+
 async function networkInspectorGetCaInfoTool(): Promise<ToolResult> {
   const res = await bridgeRequest({ method: 'GET', pathname: '/network-inspector/ca-info' });
   if (!res.ok) return bridgeToolFailure('network_inspector_get_ca_info', res);
   return jsonResult(res.body);
 }
+
+const NETWORK_FIND_SCOPES = ['url', 'reqHeaders', 'reqBody', 'respHeaders', 'respBody'] as const;
 
 const NETWORK_EVENT_TYPES = [
   'dns-query',
@@ -570,6 +585,16 @@ const NETWORK_EVENT_TYPES = [
   'udp-datagram',
   'http-transaction'
 ] as const;
+
+const NETWORK_STATUS_CLASSES = ['2xx', '3xx', '4xx', '5xx'] as const;
+
+/** Shared schema fragment: an array of values, OR'd together. Deliberately NOT a scalar-or-array
+ *  `oneOf` — that shape is ambiguous for JSON-Schema-to-tool-call serialization (a client can send
+ *  a single value as a bare string instead of a one-element array, which the backend then silently
+ *  treats as "no filter"). An array is unambiguous; the backend still tolerates a bare scalar too. */
+function orArray(itemSchema: Record<string, unknown>): Record<string, unknown> {
+  return { type: 'array', items: itemSchema, description: 'One or more values to match (OR).' };
+}
 
 const NETWORK_INSPECTOR_TOOLS: Tool[] = [
   {
@@ -585,7 +610,7 @@ const NETWORK_INSPECTOR_TOOLS: Tool[] = [
     name: 'network_inspector_list_events',
     title: 'Network Inspector: List Events',
     description:
-      'List captured network events as lightweight summaries (no full headers/body — drill down with network_inspector_get_event_detail using an event `id`). Summary-first by design to protect context. All filters optional and AND-combined: `device` (IP or serial; omit for all Rokus on the hotspot), `host` (case-insensitive substring of hostname/SNI/URL), `method` (GET/POST/…), `type` (one of the network event types), `errorsOnly` (HTTP status >= 400), `mitmOnly` (decrypted-HTTPS transactions only), `limit` (default 200, max 2000). Returns most-recent events. Requires Network Inspector enabled (see network_inspector_status).',
+      'List captured network events as lightweight summaries (no full headers/body — drill down with network_inspector_get_event_detail using an event `id`). Summary-first by design to protect context. All filters optional and AND-combined across fields; give a field an array to OR within it (e.g. `status: [404, 500]`): `device` (IP or serial; omit for all Rokus on the hotspot), `host` (case-insensitive substring of hostname/SNI/URL), `method` (GET/POST/…), `type` (one of the network event types), `status` (exact HTTP response status code(s)), `statusClass` (\'2xx\'|\'3xx\'|\'4xx\'|\'5xx\'), `contentType` (case-insensitive substring against the response Content-Type, e.g. "json"), `errorsOnly` (HTTP status >= 400 — a shortcut for statusClass 4xx+5xx), `mitmOnly` (decrypted-HTTPS transactions only), `limit` (default 200, max 2000). Returns most-recent events. Requires Network Inspector enabled (see network_inspector_status).',
     inputSchema: {
       type: 'object',
       properties: {
@@ -593,6 +618,9 @@ const NETWORK_INSPECTOR_TOOLS: Tool[] = [
         host: { type: 'string', description: 'Optional case-insensitive substring matched against hostname, TLS SNI, or request URL.' },
         method: { type: 'string', description: 'Optional HTTP method filter (e.g. "GET", "POST").' },
         type: { type: 'string', description: 'Optional event type filter.', enum: NETWORK_EVENT_TYPES as unknown as string[] },
+        status: orArray({ type: 'number', description: 'Exact HTTP response status code, e.g. 404.' }),
+        statusClass: orArray({ type: 'string', description: 'Response status class.', enum: NETWORK_STATUS_CLASSES as unknown as string[] }),
+        contentType: orArray({ type: 'string', description: 'Case-insensitive substring against the response Content-Type (falls back to the request\'s), e.g. "json" or "image".' }),
         errorsOnly: { type: 'boolean', description: 'Only HTTP transactions with a response status >= 400.' },
         mitmOnly: { type: 'boolean', description: 'Only decrypted-HTTPS transactions captured via the MITM proxy.' },
         limit: { type: 'number', description: 'Max events to return (default 200, max 2000).' }
@@ -624,7 +652,7 @@ const NETWORK_INSPECTOR_TOOLS: Tool[] = [
     name: 'network_inspector_analyze',
     title: 'Network Inspector: Analyze',
     description:
-      'Aggregate the captured buffer into hotspots and rollups in one call — counts by event type, by HTTP status class (2xx/3xx/4xx/5xx), top hosts (with error counts), top content types, total HTTP/MITM transactions, error count, and the largest responses. Use this to orient on a session before drilling into individual events. Accepts the same optional filters as network_inspector_list_events (`device`, `host`, `method`, `type`, `errorsOnly`, `mitmOnly`). Requires Network Inspector enabled.',
+      'Aggregate the captured buffer into hotspots and rollups in one call — counts by event type, by HTTP status class (2xx/3xx/4xx/5xx), top hosts (with error counts), top content types, total HTTP/MITM transactions, error count, and the largest responses. Use this to orient on a session before drilling into individual events. Accepts the same optional filters as network_inspector_list_events (`device`, `host`, `method`, `type`, `status`, `statusClass`, `contentType`, `errorsOnly`, `mitmOnly`). Requires Network Inspector enabled.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -632,6 +660,9 @@ const NETWORK_INSPECTOR_TOOLS: Tool[] = [
         host: { type: 'string', description: 'Optional case-insensitive substring matched against hostname, TLS SNI, or request URL.' },
         method: { type: 'string', description: 'Optional HTTP method filter.' },
         type: { type: 'string', description: 'Optional event type filter.', enum: NETWORK_EVENT_TYPES as unknown as string[] },
+        status: orArray({ type: 'number', description: 'Exact HTTP response status code, e.g. 404.' }),
+        statusClass: orArray({ type: 'string', description: 'Response status class.', enum: NETWORK_STATUS_CLASSES as unknown as string[] }),
+        contentType: orArray({ type: 'string', description: 'Case-insensitive substring against the response Content-Type (falls back to the request\'s), e.g. "json" or "image".' }),
         errorsOnly: { type: 'boolean', description: 'Only count HTTP transactions with a response status >= 400.' },
         mitmOnly: { type: 'boolean', description: 'Only count decrypted-HTTPS transactions.' }
       },
@@ -639,6 +670,31 @@ const NETWORK_INSPECTOR_TOOLS: Tool[] = [
     },
     annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
     handler: async (args) => networkInspectorAnalyzeTool(args)
+  },
+  {
+    name: 'network_inspector_find',
+    title: 'Network Inspector: Find in Content',
+    description:
+      'Search the FULL content of captured transactions — request/response URL, headers, and bodies — for `query`, unlike network_inspector_list_events\' `host` filter which only matches hostname/SNI/URL. This is the tool for "which request(s) contain X" (a session id, an error string, a specific JSON field/value) across the whole buffer, without paging through every event with get_event_detail. Each result carries `total` (match count), `scopes` (per-scope breakdown: url/reqHeaders/reqBody/respHeaders/respBody), and the matching event\'s summary (host/url/method/status) inline. `query` is required; `scopes` optionally narrows which parts are searched (omit for all); `caseSensitive` (default false); `regex` treats `query` as a JS regex (a dangerous/over-long pattern safely degrades to a literal search rather than erroring). `device` optional — omit to search every Roku with captured traffic. `limit` caps results (default 50, max 500). Requires Network Inspector enabled (see network_inspector_status).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        device: { type: 'string', description: 'Optional Roku IP or serial. Omit to search every Roku with captured traffic.' },
+        query: { type: 'string', description: 'Required. Text (or regex, with `regex: true`) to search for.' },
+        scopes: {
+          type: 'array',
+          items: { type: 'string', enum: NETWORK_FIND_SCOPES as unknown as string[] },
+          description: 'Optional. Which parts to search: url, reqHeaders, reqBody, respHeaders, respBody. Omit for all.'
+        },
+        caseSensitive: { type: 'boolean', description: 'Case-sensitive match (default false).' },
+        regex: { type: 'boolean', description: 'Treat `query` as a JS regular expression (default false).' },
+        limit: { type: 'number', description: 'Max matching events to return (default 50, max 500).' }
+      },
+      required: ['query'],
+      additionalProperties: false
+    },
+    annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
+    handler: async (args) => networkInspectorFindTool(args)
   },
   {
     name: 'network_inspector_get_ca_info',
@@ -680,7 +736,7 @@ const DEBUGGER_TOOLS: Tool[] = [
     name: 'debugger_attach',
     title: 'Debugger: Attach',
     description:
-      'Open a BrightScript debug session to the Roku on control port 8081. REQUIRED FIRST — every other debugger_* tool needs an attached session. The port is only open when the channel was launched with debugging (sideload "with Debugging", or a STOP in the source auto-enables it); a plain sideload/relaunch does NOT open it, and attach returns an actionable error explaining that. Idempotent: re-attaching replaces the prior session (the port is single-client). On success returns `{ ip, state }`.',
+      'Open a BrightScript debug session to the Roku on control port 8081. REQUIRED FIRST — every other debugger_* tool needs an attached session. Prefer calling the read-only `debugger_status` before this one: if it already reports `attached`/`running`/`stopped`, skip this call entirely and go straight to the debugger_* operation you need. The port is only open when the channel was launched with debugging (sideload "with Debugging", or a STOP in the source auto-enables it); a plain sideload/relaunch does NOT open it, and attach returns an actionable error explaining that. Safe to call anyway even when already attached: if a healthy session for this device already exists (e.g. the user attached via the app\'s own debugger UI), this is a no-op that returns success without touching it — it only tears down and reconnects when there is no session, or the existing one is stale/errored (the control port is single-client, so a doomed reconnect would otherwise kill a working session for nothing). On success returns `{ ip, state }`.',
     inputSchema: { type: 'object', properties: { ...DEVICE_PROP }, additionalProperties: false },
     annotations: { readOnlyHint: false, idempotentHint: true, openWorldHint: true },
     handler: async (args) => debuggerCall('attach', 'debugger_attach', args)
@@ -697,7 +753,7 @@ const DEBUGGER_TOOLS: Tool[] = [
     name: 'debugger_status',
     title: 'Debugger: Status',
     description:
-      'Return the session `state` for a device WITHOUT blocking: one of `disconnected` (not attached), `connecting`, `attached`, `running`, `stopped` (HALTED — safe to inspect), or `error`. Poll this to decide whether inspection tools will work; to block until the next halt use debugger_wait_for_stop instead.',
+      'Return the session `state` for a device WITHOUT blocking: one of `disconnected` (not attached), `connecting`, `attached`, `running`, `stopped` (HALTED — safe to inspect), or `error`. Call this before `debugger_attach` — if it already reports `attached`/`running`/`stopped`, a session is already up (maybe from the app\'s own debugger UI) and you can skip straight to the operation you need. Also poll this to decide whether inspection tools will work; to block until the next halt use debugger_wait_for_stop instead.',
     inputSchema: { type: 'object', properties: { ...DEVICE_PROP }, additionalProperties: false },
     annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
     handler: async (args) => debuggerCall('status', 'debugger_status', args)
