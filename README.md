@@ -9,6 +9,7 @@
 ![Electron](https://img.shields.io/github/package-json/dependency-version/paramount-engineering/roku-dev-studio/dev/electron?filename=apps%2Froku-dev-studio%2Fpackage.json&color=green)
 ![License](https://img.shields.io/badge/license-MIT-lightgrey)
 [![roku-dev-studio MCP server](https://glama.ai/mcp/servers/paramount-engineering/roku-dev-studio/badges/score.svg)](https://glama.ai/mcp/servers/paramount-engineering/roku-dev-studio)
+![dev.to](https://dev.to/hdonapati/beyond-sideloads-and-telnet-killing-the-friction-in-roku-development-why-i-built-roku-dev-studio-eij)
 
 **Roku Developer Tools** for macOS, Windows, and Linux — Remote Control, App Side-loading, ECP automation, RALE / App Connector, Network Inspector, Action Scripts, MCP server for AI agents (Cursor, Claude, VS Code), and a `rds` CLI. Supports both local network and internet-bridged devices.
 
