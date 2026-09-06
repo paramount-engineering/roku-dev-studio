@@ -10,9 +10,6 @@
 ![License](https://img.shields.io/badge/license-MIT-lightgrey)
 [![roku-dev-studio MCP server](https://glama.ai/mcp/servers/paramount-engineering/roku-dev-studio/badges/score.svg)](https://glama.ai/mcp/servers/paramount-engineering/roku-dev-studio)
 
-
-[dev.to](https://dev.to/hdonapati/beyond-sideloads-and-telnet-killing-the-friction-in-roku-development-why-i-built-roku-dev-studio-eij)
-
 **Roku Developer Tools** for macOS, Windows, and Linux — Remote Control, App Side-loading, ECP automation, RALE / App Connector, Network Inspector, Action Scripts, MCP server for AI agents (Cursor, Claude, VS Code), and a `rds` CLI. Supports both local network and internet-bridged devices.
 
 A comprehensive cross-platform desktop application for controlling and developing on Roku devices over your local network or via remote server using the External Control Protocol (ECP).
@@ -33,6 +30,8 @@ Roku development is normally split across a pile of separate, single-purpose off
 | Remote locations / labs | Physical presence required — ECP only works on the local network | A bundled remote server bridges ECP over the internet |
 | Repeatable testing | Hand-rolled scripts around ECP and RALE | **Action Scripts** — build a flow (keypresses, queries, conditionals, waits) from a GUI, or run it headless via `rds` |
 | AI-agent access | Nothing official | A bundled **MCP server** lets Cursor, Claude Desktop, or VS Code drive a real device |
+
+[Why have I built Roku Dev Studio?](https://dev.to/hdonapati/beyond-sideloads-and-telnet-killing-the-friction-in-roku-development-why-i-built-roku-dev-studio-eij)
 
 This repository is an **npm workspace** monorepo. Run **`npm install`** and **`npm start`** from the **repository root** so workspaces link correctly. Installing runs a `postinstall` (`npm run build:libs`) that compiles the shared `roku-dev-studio-platform` and `roku-dev-studio-api` packages to their `dist/` outputs, which the app and remote server import. Use **`npm run typecheck`** for a full TypeScript check across every workspace and **`npm test`** to run unit tests. CI runs these plus per-package build/syntax smoke checks on each push and pull request. Setup, scripts, and distributable builds are documented in **[INSTALLATION.md](INSTALLATION.md)**.
 
