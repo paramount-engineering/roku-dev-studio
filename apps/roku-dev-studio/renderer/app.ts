@@ -47,6 +47,7 @@ import {
   openModalOverlayActiveFromOpener
 } from './modules/utils/modal-origin-motion.js';
 import { attachBackdropClickToClose, attachEscToClose } from './modules/utils/modal-backdrop-click.js';
+import { installCrashCapture } from './modules/errors/install.js';
 import { wireHelpSettingsLinks } from './modules/utils/help-settings-link.js';
 import { resolveRokuKeyFromEvent } from './modules/utils/keyboard-remote-keymap.js';
 import { setupTelnet } from './modules/telnet/telnet-console-panel.js';
@@ -84,6 +85,7 @@ import {
 import { peekAppConnector } from './modules/app-connector/index.js';
 import { mountUpdateNotification } from './components/modals/update-notification.js';
 import { setupWelcomeFeatureModals } from './components/modals/welcome-feature-modal.js';
+import { setupMainWindowFileDropZone } from './modules/utils/main-window-file-drop.js';
 
 // Per-device-panel expando hooks set up by the responsive-header measurer and read on
 // live rename / tab-close teardown. Declared here so TypeScript recognizes them on the
@@ -5574,6 +5576,13 @@ async function init() {
   // Initialize privacy mode
   initPrivacyMode();
   initLocaleLiveSwitch(() => renderDeviceList());
+  installCrashCapture({
+    windowName: 'main',
+    getSetting: window.roku.getSetting,
+    getAppInfo: window.roku.getAppInfo,
+    openExternal: window.roku.openExternal,
+    onMainProcessError: window.roku.onMainProcessError
+  });
 
   devLog('Initializing Roku Dev Studio...');
   
@@ -6769,6 +6778,7 @@ function runInit() {
   ensureMcpAgentScreenshotBridge();
   mountUpdateNotification();
   setupWelcomeFeatureModals();
+  setupMainWindowFileDropZone();
   onMcpAgentAction((payload) => {
     if (!payload || typeof payload.summary !== 'string' || !payload.summary) return;
     const variant = payload.level === 'destructive' ? 'warning' : 'info';

@@ -94,6 +94,20 @@ contextBridge.exposeInMainWorld('roku', {
       return Promise.resolve({ success: false, error: message || 'Could not read the dropped file path' });
     }
   },
+  /** Files dropped onto the main window (see `renderer/modules/utils/main-window-file-drop.ts`).
+   *  Same `webUtils.getPathForFile` pattern as `resolveDroppedSideloadFile` above — resolves each
+   *  File to a real path here in preload, then hands the paths to main to open. */
+  openDroppedAssociatedFiles: (files: File[]) => {
+    const filePaths: string[] = [];
+    for (const file of files) {
+      try {
+        filePaths.push(webUtils.getPathForFile(file));
+      } catch {
+        /* not a real, readable file — main will just never see it */
+      }
+    }
+    return ipcRenderer.invoke(IPC.OpenDroppedFiles, { filePaths });
+  },
   sideload: (ip: string, filePath: string, password: string | undefined, remoteDebug?: boolean, serial?: string) =>
     ipcRenderer.invoke(IPC.RokuSideload, { ip, filePath, password, remoteDebug, serial }),
   deleteSideload: (ip: string, password: string | undefined) =>
@@ -682,6 +696,19 @@ contextBridge.exposeInMainWorld('roku', {
     ipcRenderer.on(IPC.DebugLoggingChanged, handler);
     return () => ipcRenderer.removeListener(IPC.DebugLoggingChanged, handler);
   },
+
+  // Listen for an uncaught main-process error (crash-report modal)
+  onMainProcessError: (
+    callback: (payload: { message: string; stack: string; timestamp: number }) => void
+  ) => {
+    const handler = (_event: IpcRendererEvent, payload: { message: string; stack: string; timestamp: number }) =>
+      callback(payload);
+    ipcRenderer.on(IPC.MainProcessError, handler);
+    return () => ipcRenderer.removeListener(IPC.MainProcessError, handler);
+  },
+
+  // App version + OS platform/release (crash-report modal Environment section)
+  getAppInfo: () => ipcRenderer.invoke(IPC.GetAppInfo),
 
   // Persisted app settings changed (Settings window save) — reload timing + connection poll
   onAppSettingsUpdated: (callback: (data: unknown) => void) => {

@@ -247,6 +247,21 @@ export function attachConsoleFindBar(opts: AttachConsoleFindBarOpts): ConsoleFin
   let remoteTruncated = false;
 
   /**
+   * Local (in-memory) Filter-mode scan state — used when `onFilterLinesChange`
+   * is present without `remoteSearch` (the live Console: unlike the windowed
+   * Log Viewer, it already holds every entry resident, so filtering doesn't
+   * need a backend round trip). `localFilterMatches` is the accumulated set of
+   * matching raw line indices reported to `onFilterLinesChange`;
+   * `localFilterScannedUpTo` is how far the scan has progressed, so streaming
+   * appends only need to scan their own tail, not the whole buffer.
+   * `remoteSearchSeq` (bumped on reset/mode-change) also guards this scan's
+   * chunked RAF loop against a superseded query.
+   */
+  let localFilterMatches: number[] = [];
+  let localFilterScannedUpTo = 0;
+  let localFilterScanInFlight = false;
+
+  /**
    * The hit the user most recently asked to navigate to (Next/Prev/typing).
    * `tryScrollPendingHitIntoView` consumes (and clears) it once the line is
    * mounted and the actual match Range can be positioned in the viewport.
@@ -767,6 +782,89 @@ export function attachConsoleFindBar(opts: AttachConsoleFindBarOpts): ConsoleFin
     );
   }
 
+  /**
+   * Filter mode against the resident in-memory model (no backend). Scans
+   * `model.getEntryText` directly — for the live Console `model` is never
+   * filter-collapsed (raw index == raw line, always), so this is always the
+   * ground truth, same as `remoteSearch` is for the windowed Log Viewer.
+   * Chunked via RAF (mirrors `startScanFromCursor`) so a 23K+ line scan
+   * doesn't block a frame; reports the accumulated match set to
+   * `onFilterLinesChange` once fully scanned. `onLinesAppended` extends this
+   * incrementally via `appendLocalFilterTail` instead of re-running the whole
+   * scan on every streaming batch.
+   */
+  function performLocalFilter(): void {
+    localFilterMatches = [];
+    localFilterScannedUpTo = 0;
+    remoteTruncated = false;
+    const seq = ++remoteSearchSeq;
+
+    if (!currentQuery) {
+      localFilterScanInFlight = false;
+      opts.onFilterLinesChange!(null);
+      findCountEl.textContent = '';
+      findBarEl.classList.remove('no-results');
+      return;
+    }
+
+    localFilterScanInFlight = true;
+    const CHUNK_SIZE = 5000;
+
+    function step(): void {
+      if (seq !== remoteSearchSeq) return; // superseded by a newer query
+      const total = model.getEntryCount();
+      if (localFilterScannedUpTo === 0 && total > 5000) {
+        findCountEl.textContent = S.consoleLog.filteringRemote;
+      }
+      const end = Math.min(localFilterScannedUpTo + CHUNK_SIZE, total);
+      for (let i = localFilterScannedUpTo; i < end; i++) {
+        const text = model.getEntryText(i) ?? '';
+        if (consoleFindMatchesQuery(text, currentQuery, findOptions)) localFilterMatches.push(i);
+      }
+      localFilterScannedUpTo = end;
+
+      if (localFilterScannedUpTo < model.getEntryCount()) {
+        requestAnimationFrame(step);
+        return;
+      }
+      localFilterScanInFlight = false;
+      opts.onFilterLinesChange!(localFilterMatches.slice());
+      if (localFilterMatches.length === 0) {
+        findCountEl.textContent = S.consoleLog.noResults;
+        findBarEl.classList.add('no-results');
+      } else {
+        findCountEl.textContent = S.consoleLog.linesMatched(localFilterMatches.length, false);
+        findBarEl.classList.remove('no-results');
+      }
+    }
+    step();
+  }
+
+  /**
+   * Extend a completed local filter scan over newly-appended lines only —
+   * called from `onLinesAppended` while streaming. No-op while an initial/
+   * query-change scan (`performLocalFilter`) is still chunking; that scan
+   * re-reads `model.getEntryCount()` every chunk so it already picks up
+   * lines appended during its own run.
+   */
+  function appendLocalFilterTail(): void {
+    const total = model.getEntryCount();
+    if (localFilterScannedUpTo >= total) return;
+    for (let i = localFilterScannedUpTo; i < total; i++) {
+      const text = model.getEntryText(i) ?? '';
+      if (consoleFindMatchesQuery(text, currentQuery, findOptions)) localFilterMatches.push(i);
+    }
+    localFilterScannedUpTo = total;
+    opts.onFilterLinesChange!(localFilterMatches.slice());
+    if (localFilterMatches.length === 0) {
+      findCountEl.textContent = S.consoleLog.noResults;
+      findBarEl.classList.add('no-results');
+    } else {
+      findCountEl.textContent = S.consoleLog.linesMatched(localFilterMatches.length, false);
+      findBarEl.classList.remove('no-results');
+    }
+  }
+
   function performSearch(): void {
     if (opts.remoteSearch) {
       performRemoteSearch();
@@ -854,6 +952,9 @@ export function attachConsoleFindBar(opts: AttachConsoleFindBarOpts): ConsoleFin
         // Whole-file filter: the consumer collapses its virtual list to the
         // matching line set (see `performRemoteFilter`).
         performRemoteFilter();
+      } else if (opts.onFilterLinesChange) {
+        // Resident-model filter (live Console): scan in-memory, no backend.
+        performLocalFilter();
       } else {
         applyFilter();
         findCountEl.textContent = '';
@@ -861,6 +962,13 @@ export function attachConsoleFindBar(opts: AttachConsoleFindBarOpts): ConsoleFin
       }
     } else {
       // Find mode: ensure no rows are filtered, then compute hits + paint.
+      // Bumping the generation counter here invalidates a still-chunking
+      // `performLocalFilter` RAF scan from before this switch — without it,
+      // a stale chunk can land after we've already restored the unfiltered
+      // view and silently re-pin most rows to 0px again, which then breaks
+      // Next/Prev (the target row can never mount to be scrolled to).
+      remoteSearchSeq++;
+      localFilterScanInFlight = false;
       if (opts.onFilterLinesChange) {
         // Windowed consumer: restore the un-collapsed full-file view (idempotent
         // when already un-collapsed). No `filtered-out` classes are ever set in
@@ -984,6 +1092,9 @@ export function attachConsoleFindBar(opts: AttachConsoleFindBarOpts): ConsoleFin
     currentEntry = null;
     pendingScrollHit = null;
     cache.clear();
+    localFilterMatches = [];
+    localFilterScannedUpTo = 0;
+    localFilterScanInFlight = false;
     clearAllHighlights();
     findCountEl.textContent = '';
     findBarEl.classList.remove('no-results');
@@ -1016,10 +1127,18 @@ export function attachConsoleFindBar(opts: AttachConsoleFindBarOpts): ConsoleFin
     // `scannedUpTo` and pick up the new tail lazily on the next time the user
     // re-selects them. Extending all of them would do useless O(N) per append.
     if (currentMode === 'filter') {
-      // Filter mode: re-evaluate filter classes for newly-appended lines. The
-      // Console panel already does this at line-creation time, so this branch
-      // is mostly defensive (full filter re-application).
-      if (currentQuery) applyFilter();
+      if (!currentQuery) return;
+      if (opts.onFilterLinesChange) {
+        // Resident-model filter: extend the scan over just the new tail
+        // (no-op if the initial/query-change scan is still chunking — it
+        // already re-checks the model's current count on every chunk).
+        if (!localFilterScanInFlight) appendLocalFilterTail();
+      } else {
+        // Filter mode: re-evaluate filter classes for newly-appended lines. The
+        // Console panel already does this at line-creation time, so this branch
+        // is mostly defensive (full filter re-application).
+        applyFilter();
+      }
       return;
     }
     if (!currentEntry || !currentQuery) return;
@@ -1049,6 +1168,20 @@ export function attachConsoleFindBar(opts: AttachConsoleFindBarOpts): ConsoleFin
       for (const h of entry.hits) h.lineIndex -= count;
       entry.scannedUpTo = Math.max(0, entry.scannedUpTo - count);
     }
+
+    // Local-filter bookkeeping shifts independently of the Find-mode cache
+    // above — a filter-only session never touches `currentEntry`, so this
+    // must not be gated behind the `!currentEntry` guard below.
+    if (localFilterMatches.length > 0 || localFilterScannedUpTo > 0) {
+      let droppedAtHead = 0;
+      while (droppedAtHead < localFilterMatches.length && localFilterMatches[droppedAtHead]! < count) {
+        droppedAtHead++;
+      }
+      if (droppedAtHead > 0) localFilterMatches.splice(0, droppedAtHead);
+      for (let k = 0; k < localFilterMatches.length; k++) localFilterMatches[k]! -= count;
+      localFilterScannedUpTo = Math.max(0, localFilterScannedUpTo - count);
+    }
+
     if (!currentEntry || !currentQuery) return;
 
     // The active query's `flatHits` aliased the entry's hits, so it already

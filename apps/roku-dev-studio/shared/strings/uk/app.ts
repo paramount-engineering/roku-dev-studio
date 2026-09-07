@@ -175,6 +175,21 @@ WiFi MAC: ${d.wifiMac || 'Н/Д'}`,
   // Log file
   couldNotOpenLogFile: (err: string): string => `Не вдалося відкрити файл журналу: ${err}`,
 
+  // File drag & drop onto the main window
+  fileDropOverlayReadyOne: (viewerLabel: string): string => `Відпустіть, щоб відкрити у ${viewerLabel}`,
+  fileDropOverlayReadyMany: 'Відпустіть, щоб відкрити',
+  fileDropOverlayUnsupported: 'Непідтримуваний тип файлу',
+  fileDropOverlayGeneric: 'Відпустіть файли, щоб відкрити',
+  fileDropLogViewerLabel: 'Переглядач журналів',
+  fileDropNetworkSessionViewerLabel: 'Переглядач мережевих сесій',
+  fileDropOpenedOne: (name: string, viewerLabel: string): string => `Відкрито «${name}» у ${viewerLabel}`,
+  fileDropOpenedMany: (count: number): string => `Відкрито ${count} файлів`,
+  fileDropOpenedWithSkipped: (openedCount: number, unsupportedCount: number): string =>
+    `Відкрито ${openedCount} файл(ів), пропущено ${unsupportedCount} непідтримуваних`,
+  fileDropUnsupportedOne: (name: string): string => `«${name}» — непідтримуваний тип файлу`,
+  fileDropUnsupportedMany: (count: number): string => `${count} непідтримуваних файлів — нічого не відкрито`,
+  fileDropFailed: 'Не вдалося відкрити перекинуті файли',
+
   // Help modal
   searchHelpGuide: 'Пошук у довідці та посібнику',
 

@@ -268,10 +268,18 @@ function transpileSharedForRenderer(appDir: string, rendererDist: string): void 
   //    `shared/strings/*` is the pure UI-string catalog (per-area namespaces composed
   //    in index.ts + the tiny i18n helper); walking it means new area files are
   //    emitted automatically as the migration adds them.
+  //
+  //    Loose top-level files directly under `shared/` (e.g. `file-associations.ts`) are picked
+  //    up automatically too — NOT recursed into subdirectories, since a *new* subdirectory might
+  //    need bundling (external deps) rather than a plain transpile; see bucket 2 below. A file
+  //    dropped straight into `shared/` with no home yet is exactly the "simple, no external deps"
+  //    case this bucket is for. This is what silently 404s if forgotten (see PR history) — the
+  //    whole point of auto-discovery here is that forgetting is no longer possible for this case.
   const consoleSharedDir = path.join(sharedRoot, 'console');
   const stringsSharedDir = path.join(sharedRoot, 'strings');
   const plainEntries = [
     path.join(sharedRoot, 'ipc', 'debug-telnet-connection-id.ts'),
+    ...topLevelTsFiles(sharedRoot),
     ...(fs.existsSync(consoleSharedDir) ? walkTsFiles(consoleSharedDir) : []),
     ...(fs.existsSync(stringsSharedDir) ? walkTsFiles(stringsSharedDir) : []),
   ].filter((p) => fs.existsSync(p));
@@ -325,6 +333,8 @@ function verifyRendererDist(appDir: string, rendererDist: string): void {
     path.join(rendererDist, 'shared', 'logging', 'logger.js'),
     // Shared BrightScript catalog — imported by the Console panel + Log Viewer (Console Monitor).
     path.join(rendererDist, 'shared', 'console', 'brightscript-error-catalog.js'),
+    // File-association extension matcher — imported by the main-window drag-drop module.
+    path.join(rendererDist, 'shared', 'file-associations.js'),
   ];
   const missing = required.filter((p) => !fs.existsSync(p));
   if (missing.length > 0) {
@@ -343,6 +353,16 @@ function walkTsFiles(dir: string, acc: string[] = []): string[] {
     else if (name.endsWith('.ts') && !name.endsWith('.d.ts')) acc.push(p);
   }
   return acc;
+}
+
+/** Non-recursive: just the `.ts` files sitting directly in `dir`, not in a subdirectory.
+ *  Used for `shared/`'s root — see the plain-entries comment in transpileSharedForRenderer. */
+function topLevelTsFiles(dir: string): string[] {
+  if (!fs.existsSync(dir)) return [];
+  return fs
+    .readdirSync(dir)
+    .map((name) => path.join(dir, name))
+    .filter((p) => p.endsWith('.ts') && !p.endsWith('.d.ts') && fs.statSync(p).isFile());
 }
 
 function walkJsFiles(dir: string, acc: string[] = []): string[] {

@@ -214,6 +214,11 @@ export const settings = {
   tryDemoAppToggleAria: 'Pokaż przycisk wypróbuj aplikację demo',
   tryDemoAppOpenBtn: 'Otwórz Aplikację Demo',
   tryDemoAppOpenBtnAria: 'Otwórz selektor wypróbuj aplikację demo',
+  // Placeholder: reuse the English Crash Reporting toggle strings until a translation exists.
+  crashReportingToggle: 'Show Crash Reports',
+  crashReportingToggleDesc:
+    'When On, an uncaught error shows a report modal with details you can file as a GitHub issue.',
+  crashReportingToggleAria: 'Show crash reports',
   autoConnect: 'Automatycznie łącz z urządzeniami',
   autoConnectDesc:
     'Gdy włączone, aplikacja automatycznie połączy się z urządzeniami, które pozostały połączone przy zamykaniu aplikacji w poprzedniej sesji.',

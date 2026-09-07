@@ -9216,6 +9216,34 @@
       color: var(--text-muted);
       font-size: 12px;
     }
+    /* Cold-start "Loading…" placeholder inside .ni-sidebar-list (Network Session Viewer) —
+       replaced wholesale by renderList()'s innerHTML once the file loads or fails, so no JS
+       show/hide is needed. Shimmering rows stand in for the request rows about to render —
+       same visual language as the Log Viewer's loading skeleton. */
+    .ni-session-loading-skeleton {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin: 4px 0 16px;
+    }
+    .ni-session-loading-row {
+      display: block;
+      height: 12px;
+      border-radius: 4px;
+      background: linear-gradient(90deg, var(--accent-purple-dim) 25%, var(--accent-purple) 50%, var(--accent-purple-dim) 75%);
+      background-size: 200% 100%;
+      animation: niSessionSkeletonShimmer 1.4s ease-in-out infinite;
+    }
+    .ni-session-loading-row:nth-child(1) { width: 88%; animation-delay: 0ms; }
+    .ni-session-loading-row:nth-child(2) { width: 68%; animation-delay: 120ms; }
+    .ni-session-loading-row:nth-child(3) { width: 78%; animation-delay: 240ms; }
+    .ni-session-loading-row:nth-child(4) { width: 60%; animation-delay: 360ms; }
+    .ni-session-loading-row:nth-child(5) { width: 72%; animation-delay: 480ms; }
+    .ni-session-loading-row:nth-child(6) { width: 64%; animation-delay: 600ms; }
+    @keyframes niSessionSkeletonShimmer {
+      0% { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
     .ni-detail-workspace {
       flex: 1;
       min-height: 0;
@@ -14335,6 +14363,66 @@
     .floating-remote-shell[data-ecp-mode="Disabled"] .devapp-text-section {
       pointer-events: none;
       opacity: 0.65;
+    }
+
+    /* Drag a log/network-session file onto the main window — see
+       renderer/modules/utils/main-window-file-drop.ts. */
+    .file-drop-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 5000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(14, 14, 20, 0.82);
+      backdrop-filter: blur(3px);
+      /* HTML5 drag events target whatever's under the cursor — an overlay that
+         intercepts pointer events would immediately fire its own dragleave and
+         flicker itself closed. The window-level listeners (not this overlay)
+         own drag tracking, so this only ever needs to be seen, not hovered. */
+      pointer-events: none;
+      animation: fileDropOverlayFadeIn 0.15s ease;
+    }
+    /* `display: flex` above is the same specificity as the UA `[hidden]` rule and comes later
+       in the cascade, so without this it wins and the overlay never actually hides once shown
+       — same gotcha already documented elsewhere in this file for `[hidden]` + an inline
+       display override. This compound selector out-specifies both. */
+    .file-drop-overlay[hidden] {
+      display: none;
+    }
+    @keyframes fileDropOverlayFadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+    .file-drop-overlay-inner {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 14px;
+      padding: 48px 64px;
+      border-radius: 16px;
+      border: 2px dashed var(--accent-purple);
+      background: var(--bg-secondary);
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+      animation: fileDropZonePulse 1.4s ease-in-out infinite;
+    }
+    .file-drop-overlay--supported .file-drop-overlay-inner { border-color: var(--accent-green); }
+    .file-drop-overlay--unsupported .file-drop-overlay-inner { border-color: var(--accent-red); }
+    .file-drop-overlay--mixed .file-drop-overlay-inner { border-color: var(--accent-amber); }
+    @keyframes fileDropZonePulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.03); }
+    }
+    .file-drop-overlay-icon .icon {
+      width: 1em;
+      height: 1em;
+    }
+    .file-drop-overlay-text {
+      margin: 0;
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--text-primary);
+      text-align: center;
     }
   </style>
 </head>

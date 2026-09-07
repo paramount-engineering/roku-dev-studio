@@ -1,6 +1,6 @@
 {
   "name": "roku-dev-studio-api",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Roku Dev Studio API — discovery, ECP, device info, sideload, screenshot (Node.js)",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

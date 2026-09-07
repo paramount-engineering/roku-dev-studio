@@ -266,6 +266,14 @@ export function setupTelnet(
       }
       virt.scrollToIndex(idx, { align: 'center' });
     },
+    // Filter mode: the find bar scans the resident buffer itself (no
+    // `remoteSearch` backend — everything's already in memory) and reports
+    // matching raw line indices here. Routing straight to the virtualizer's
+    // size-cache pin (`applyRowFilter`) instead of the CSS `filtered-out`
+    // class keeps a sparse filter (e.g. 35 matches in 23,000 lines) from
+    // forcing a mount-and-measure walk over the whole buffer to fill one
+    // viewport — see `console-virtualizer.ts` for why that cascade happened.
+    onFilterLinesChange: (matchLines) => virt.applyRowFilter(matchLines),
     onSelectAll: () => {
       // Cmd+A selects (it does NOT copy) — leaving the actual Cmd+C to the
       // user, like a normal text region. We scope the native selection to the
@@ -1143,6 +1151,12 @@ export function setupTelnet(
           // `clearConsoleLocal`), so reassigning would orphan the virtualizer.
           logLines.length = 0;
           recognizedIssueCount = 0;
+          // Drop any filter-mode size-cache pins from the previous session before
+          // resetting the count — `onLinesCleared()` below only re-arms the filter
+          // when a query is still typed in the box, so a fresh reconnect with an
+          // empty find input would otherwise leave stale pinned indices behind
+          // (wrongly hiding whichever fresh lines land on those same indices).
+          virt.applyRowFilter(null);
           virt.setCount(0);
           // Keep any active query armed against the fresh session (see clearConsoleLocal).
           findBarHandle?.onLinesCleared();
@@ -1469,7 +1483,9 @@ export function setupTelnet(
     // then mount rows into the orphaned container and the user would see
     // nothing — exactly the "logs aren't streaming after Clear" symptom.
     // setCount(0) walks the mounted map and runs `onUnmount` per row, then
-    // recomputes layout against the now-empty model.
+    // recomputes layout against the now-empty model. Drop any filter-mode
+    // size-cache pins first — see the identical reset in `connectTelnet`.
+    virt.applyRowFilter(null);
     virt.setCount(0);
     // Not resetFindState(): keep the query active and re-arm its scan against the cleared buffer, so the
     // find count auto-repopulates as new matching lines stream in (it doesn't die until retyped).

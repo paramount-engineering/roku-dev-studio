@@ -217,6 +217,10 @@ export const settings = {
   tryDemoAppToggleAria: 'Show Try Demo App button',
   tryDemoAppOpenBtn: 'Open Demo App',
   tryDemoAppOpenBtnAria: 'Open the Try Demo App picker',
+  crashReportingToggle: 'Show Crash Reports',
+  crashReportingToggleDesc:
+    'When On, an uncaught error shows a report modal with details you can file as a GitHub issue.',
+  crashReportingToggleAria: 'Show crash reports',
   autoConnect: 'Auto Connect to Devices',
   autoConnectDesc:
     'When On, the app will automatically connect to devices that were stayed connected when closing the app in the previous session.',

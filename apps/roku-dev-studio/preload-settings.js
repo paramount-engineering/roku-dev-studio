@@ -360,6 +360,12 @@ var init_channels = __esm({
        *  retranslates in place (no reload). Payload is the preference string. */
       LocaleChanged: "locale-changed",
       DebugLoggingChanged: "debug-logging-changed",
+      /** Main → main window: an uncaught exception/rejection fired in the main process. Payload is
+       *  `{ message, stack, timestamp }` — shown in the same crash-report modal renderer errors use. */
+      MainProcessError: "main-process-error",
+      /** Any window → main: app version + OS platform/release, for the crash-report modal's
+       *  Environment section. */
+      GetAppInfo: "get-app-info",
       /** Main → all renderers: a live op against this device IP just failed at the connection level
        *  (ECP request, Telnet socket, …) — a hint to re-check reachability *now* rather than wait for
        *  the next scheduled poll. NOT itself a verdict: the renderer must still run the real
@@ -488,7 +494,10 @@ var init_channels = __esm({
       /** Main → renderer: streamed stdout/stderr while a run is in progress. */
       StaticAnalysisProgress: "static-analysis:progress",
       /** Main → renderer: terminal outcome of a run (report JSON, or raw output + error). */
-      StaticAnalysisRunResult: "static-analysis:run-result"
+      StaticAnalysisRunResult: "static-analysis:run-result",
+      /** Files dropped onto the main window: open each in its associated viewer
+       *  (Log Viewer / Network Session Viewer), skipping unsupported ones. */
+      OpenDroppedFiles: "main-window:open-dropped-files"
     };
   }
 });
@@ -497,6 +506,11 @@ var init_channels = __esm({
 var { contextBridge, ipcRenderer } = require("electron");
 var { IPC: IPC2 } = (init_channels(), __toCommonJS(channels_exports));
 contextBridge.exposeInMainWorld("settingsApi", {
+  // Crash-report modal: read the enable/disable setting + environment info, and open the
+  // prefilled GitHub issue URL when the user clicks "Report on GitHub".
+  getSetting: (key) => ipcRenderer.invoke(IPC2.SettingsGet, key),
+  getAppInfo: () => ipcRenderer.invoke(IPC2.GetAppInfo),
+  openExternal: (url) => ipcRenderer.invoke(IPC2.ShellOpenExternal, url),
   // Privacy Mode — mirrors the main/Fiddle bridge so the Settings window can blur
   // IPs/serials (e.g. the Sideload Relay device table) in lockstep. Reads the
   // current state at open; the main process fans `IPC.PrivacyModeChanged` to every

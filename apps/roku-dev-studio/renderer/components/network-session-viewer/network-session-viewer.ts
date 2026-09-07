@@ -61,6 +61,7 @@ import {
 import { applyFocusDecorations } from '../network-inspector/network-focus-decorations.js';
 import { S, applyI18n } from '@shared/strings/index.js';
 import { initLocaleForWindow } from '../../modules/utils/locale-live.js';
+import { installCrashCapture } from '../../modules/errors/install.js';
 
 type RokuApi = {
   loadNetworkSession: () => Promise<{
@@ -77,6 +78,8 @@ type RokuApi = {
   showContextMenu?: (items: unknown) => Promise<{ action?: string } | null>;
   getPrivacyMode?: () => Promise<{ enabled: boolean }>;
   onPrivacyModeChanged?: (cb: (enabled: boolean) => void) => () => void;
+  getSetting: (key: string) => Promise<{ success: boolean; value?: unknown }>;
+  getAppInfo: () => Promise<{ version: string; platform: string; osRelease: string }>;
 };
 
 /** Toggle the `privacy-mode` body class so the shared inspector CSS (device IPs,
@@ -96,10 +99,26 @@ function bindPrivacyMode(): void {
 
 const api = (window as unknown as { roku: RokuApi }).roku;
 
+installCrashCapture({
+  windowName: 'network-session-viewer',
+  getSetting: api.getSetting,
+  getAppInfo: api.getAppInfo,
+  openExternal: api.openExternal
+});
+
 // The events + derived sessions + filter + selection live in the shared SessionStore (also used by
 // the live tab). Bodies are inlined in the parsed file, so this window just `setAll`s once — no
 // streaming ingest, no lazy detail fetch.
 const store = new SessionStore();
+
+// `initLocaleForWindow`'s initial locale-apply (below) resolves as soon as the locale preference
+// IPC round-trip completes — typically well under the time a large file takes to load+parse (a
+// 250MB capture can take 2+ seconds). Without this guard, its `extra` re-render callback fires on
+// the still-empty store first, replacing the cold-start loading placeholder with the SAME "No
+// matching sessions." markup a genuinely empty file would show — and nothing ever puts the
+// placeholder back, so the loading state is invisible for the entire load. Set once real events
+// are in the store (success or failure) so a later, genuine live locale switch still re-renders.
+let sessionDataSettled = false;
 
 const state = {
   viewMode: 'sequence' as 'sequence' | 'structure',
@@ -707,6 +726,7 @@ async function main(): Promise<void> {
   // are rendered imperatively from S.*, so re-render them (from the store, selection preserved) after
   // applyI18n handles the static shell + the data-i18n detail-pane labels.
   void initLocaleForWindow(window.roku as unknown as Parameters<typeof initLocaleForWindow>[0], () => {
+    if (!sessionDataSettled) return;
     renderList();
     renderDetail();
   });
@@ -715,11 +735,13 @@ async function main(): Promise<void> {
   setupBodyFind();
   const res = await api.loadNetworkSession();
   if (!res?.success || !res.events) {
+    sessionDataSettled = true;
     if (sessionListEl instanceof HTMLElement) {
       sessionListEl.innerHTML = `<div class="ni-session-empty">${escapeText(res?.error || S.networkSessionViewer.failedToLoadSession)}</div>`;
     }
     return;
   }
+  sessionDataSettled = true;
   store.setAll(res.events);
   document.title = res.fileName ? S.networkSessionViewer.windowTitleWithFile(res.fileName) : S.networkSessionViewer.networkSession;
   if (res.notice && noticeEl instanceof HTMLElement) {
