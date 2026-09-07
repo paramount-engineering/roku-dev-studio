@@ -1154,6 +1154,63 @@ const CONSOLE_MONITOR_FINDINGS: RokuOp<{ device?: string }, unknown> = {
   execute: rendererOnlyExecute('console_monitor_findings')
 };
 
+const DEVICE_PERFORMANCE_METRICS: RokuOp<
+  { device?: string; charts?: string[]; windowSec?: number; maxSamples?: number },
+  unknown
+> = {
+  id: 'device_performance_metrics',
+  title: 'Device Performance Metrics (CPU / Memory / Objects)',
+  description:
+    'Time-series Device Performance metrics — the same chanperf/r2d2-bitmaps/app-object-counts data the Remote tab\'s CPU/Memory/BrightScript Objects quad charts poll and plot, returned as compact per-timestamp entries with a decoding `legend`. ' +
+    'Requires "Show Device Performance" (quad layout) to have been turned on for this device tab at some point this session, with the sideloaded Dev channel as the foreground app — if it never was, `devicePerformanceEnabled` is false and `samples` is empty (never an error). ' +
+    '`charts` selects which of cpu/memory/objects to include (default: all three) — each requested type appears as its own key per sample (`c`=cpu, `m`=memory, `o`=objects; see `legend` for field meanings). ' +
+    '`windowSec` (default 60) sets how far back from now to report; if the device\'s retained history is shorter, `actualWindowSec`/`sampleCount` reflect what was actually available. ' +
+    'A window whose natural sample count exceeds `maxSamples` (default 120, max 500) is evenly downsampled across the window (not truncated from one end) and `downsampled` is set true. ' +
+    '`cpuProcessSnapshot` (only present when `cpu` is requested) is a single latest-value object (process state, channel uptime, CPU time, cumulative fault counts) — Roku\'s `<proc-stat>` block has no historical series of its own, only the fault-rate numbers inside each cpu sample do. Read-only.',
+  runIn: 'renderer',
+  destructive: false,
+  readOnly: true,
+  inputSchema: {
+    type: 'object',
+    properties: {
+      device: { type: 'string', description: 'Optional target device (IP or serial). Omit to use the focused tab.' },
+      charts: {
+        type: 'array',
+        items: { type: 'string', enum: ['cpu', 'memory', 'objects'] },
+        description: 'Which chart types to include. Omit (or pass an empty array) for all three.'
+      },
+      windowSec: {
+        type: 'number',
+        description:
+          'How far back from now to report, in seconds (e.g. 60 for the last minute, 3600 for the last hour). Default 60.'
+      },
+      maxSamples: {
+        type: 'number',
+        description:
+          'Cap on returned samples; the window is evenly downsampled if it would exceed this. Default 120, hard cap 500.'
+      }
+    },
+    additionalProperties: false
+  },
+  outputSchema: {
+    type: 'object',
+    properties: {
+      charts: { type: 'array' },
+      devicePerformanceEnabled: { type: 'boolean' },
+      requestedWindowSec: { type: 'number' },
+      actualWindowSec: { type: 'number' },
+      sampleCount: { type: 'number' },
+      downsampled: { type: 'boolean' },
+      units: { type: 'object' },
+      legend: { type: 'object' },
+      samples: { type: 'object' },
+      cpuProcessSnapshot: { type: 'object' }
+    },
+    additionalProperties: true
+  },
+  execute: rendererOnlyExecute('device_performance_metrics')
+};
+
 // =============================================================================
 // Registries
 // =============================================================================
@@ -1179,7 +1236,8 @@ const ALL_OPS: ReadonlyArray<RokuOp<Record<string, unknown>, unknown>> = Object.
   GET_TELNET_LOG,
   TELNET_CONNECT,
   TELNET_DISCONNECT,
-  CONSOLE_MONITOR_FINDINGS
+  CONSOLE_MONITOR_FINDINGS,
+  DEVICE_PERFORMANCE_METRICS
 ] as unknown as ReadonlyArray<RokuOp<Record<string, unknown>, unknown>>);
 
 /** Convenience filters. */

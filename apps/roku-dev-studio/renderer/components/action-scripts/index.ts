@@ -540,6 +540,25 @@ export function setupActionScripts(panel: DevicePanelRoot, device, api) {
   );
 
   registerMcpTool(
+    'device_performance_metrics',
+    handlerKey,
+    async (rawArgs: unknown) => {
+      const metricsPanel = panel as unknown as {
+        rokuGetDevicePerformanceMetrics?: (
+          args: unknown
+        ) => Promise<{ ok: boolean; data?: unknown; error?: string }>;
+      };
+      if (typeof metricsPanel.rokuGetDevicePerformanceMetrics !== 'function') {
+        return {
+          ok: false,
+          error: 'Device Performance metrics are not initialised on this device tab. Open the Remote tab in Dev Studio first.'
+        };
+      }
+      return metricsPanel.rokuGetDevicePerformanceMetrics(rawArgs);
+    }
+  );
+
+  registerMcpTool(
     'telnet_connect',
     handlerKey,
     async () => {

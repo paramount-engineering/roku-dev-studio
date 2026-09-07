@@ -31,7 +31,17 @@ const MCP_TOOL_GROUPS: McpToolGroup[] = [
   },
   {
     categoryKey: 'remote',
-    toolNames: ['keypress', 'input_text', 'launch_app', 'deep_link', 'ecp_query', 'ecp_post', 'screenshot', 'get_app_icon']
+    toolNames: [
+      'keypress',
+      'input_text',
+      'launch_app',
+      'deep_link',
+      'ecp_query',
+      'ecp_post',
+      'screenshot',
+      'get_app_icon',
+      'device_performance_metrics'
+    ]
   },
   {
     categoryKey: 'sideload',
