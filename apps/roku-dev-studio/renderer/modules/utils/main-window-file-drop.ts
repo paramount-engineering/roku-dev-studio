@@ -86,37 +86,41 @@ function showResultToast(result: OpenDroppedFilesResult | undefined): void {
 export function setupMainWindowFileDropZone(): void {
   if (typeof window.roku?.openDroppedAssociatedFiles !== 'function') return;
   const overlay = buildOverlay();
-  let depth = 0;
+  let hideTimer: number | null = null;
+
+  // A drag that's cancelled mid-air (dropped outside the window, interrupted by the OS, the
+  // window losing focus mid-drag, …) doesn't reliably deliver a matching dragleave — an
+  // enter/leave depth counter can then get stuck open forever with no way to dismiss it.
+  // `dragover`, in contrast, only keeps firing while a drag is genuinely still live over the
+  // window, so a short "gone quiet → hide" timeout self-heals no matter how the drag ended.
+  const hide = (): void => {
+    if (hideTimer != null) {
+      window.clearTimeout(hideTimer);
+      hideTimer = null;
+    }
+    overlay.hidden = true;
+  };
 
   // Always prevent default on dragover regardless of drag type — Electron's
   // default action for an unhandled drop is to navigate the window to the
   // dropped item, which would blank the whole app.
   window.addEventListener('dragover', (e: DragEvent) => {
     e.preventDefault();
-    if (isFileDrag(e) && e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
-  });
-
-  window.addEventListener('dragenter', (e: DragEvent) => {
     if (!isFileDrag(e)) return;
-    e.preventDefault();
-    depth++;
-    if (depth > 1) return; // already showing; a nested enter doesn't change the verdict
-    const names = e.dataTransfer ? draggedFileNames(e.dataTransfer.items) : [];
-    overlay.hidden = false;
-    paintOverlay(overlay, classifyDragNames(names), names);
-  });
-
-  window.addEventListener('dragleave', (e: DragEvent) => {
-    if (!isFileDrag(e)) return;
-    depth = Math.max(0, depth - 1);
-    if (depth === 0) overlay.hidden = true;
+    if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
+    if (overlay.hidden) {
+      const names = e.dataTransfer ? draggedFileNames(e.dataTransfer.items) : [];
+      overlay.hidden = false;
+      paintOverlay(overlay, classifyDragNames(names), names);
+    }
+    if (hideTimer != null) window.clearTimeout(hideTimer);
+    hideTimer = window.setTimeout(hide, 400);
   });
 
   window.addEventListener('drop', (e: DragEvent) => {
     if (!isFileDrag(e)) return;
     e.preventDefault();
-    depth = 0;
-    overlay.hidden = true;
+    hide();
     const files = Array.from(e.dataTransfer?.files ?? []);
     if (files.length === 0) return;
     void window.roku.openDroppedAssociatedFiles(files).then(showResultToast, () => {

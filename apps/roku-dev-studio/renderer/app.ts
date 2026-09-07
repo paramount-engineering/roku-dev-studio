@@ -4831,6 +4831,8 @@ function shouldSuppressGlobalRemoteShortcuts(): boolean {
   if (document.querySelector('.add-location-modal.active')) return true;
   // Server info lightbox uses flex without `.active`; treat connected overlay as open.
   if (document.querySelector('.server-info-overlay')) return true;
+  // File-drop overlay uses `hidden` (no `.active`); a live drag shouldn't also send Home.
+  if (document.querySelector('#mainWindowFileDropOverlay:not([hidden])')) return true;
   // Title-bar hamburger (app) menu open — its own Escape handler closes it, so
   // don't also map Escape → Home (or any keymap key) to the device. This guard
   // runs in the global handler that fires *before* the menu's own listener.
