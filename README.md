@@ -31,6 +31,8 @@ Roku development is normally split across a pile of separate, single-purpose off
 | Repeatable testing | Hand-rolled scripts around ECP and RALE | **Action Scripts** — build a flow (keypresses, queries, conditionals, waits) from a GUI, or run it headless via `rds` |
 | AI-agent access | Nothing official | A bundled **MCP server** lets Cursor, Claude Desktop, or VS Code drive a real device |
 
+[Why have I built Roku Dev Studio?](https://dev.to/hdonapati/beyond-sideloads-and-telnet-killing-the-friction-in-roku-development-why-i-built-roku-dev-studio-eij)
+
 This repository is an **npm workspace** monorepo. Run **`npm install`** and **`npm start`** from the **repository root** so workspaces link correctly. Installing runs a `postinstall` (`npm run build:libs`) that compiles the shared `roku-dev-studio-platform` and `roku-dev-studio-api` packages to their `dist/` outputs, which the app and remote server import. Use **`npm run typecheck`** for a full TypeScript check across every workspace and **`npm test`** to run unit tests. CI runs these plus per-package build/syntax smoke checks on each push and pull request. Setup, scripts, and distributable builds are documented in **[INSTALLATION.md](INSTALLATION.md)**.
 
 ## Repository layout
