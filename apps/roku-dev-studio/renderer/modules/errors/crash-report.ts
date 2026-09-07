@@ -22,9 +22,17 @@ export type AppInfo = {
 
 const shownSignatures = new Set<string>();
 
+/** Browser-internal warnings delivered via window.onerror that never indicate an actual bug —
+ *  Chromium's ResizeObserver notification batching, not a real infinite loop or crash. */
+const BENIGN_MESSAGES = new Set<string>([
+  'ResizeObserver loop completed with undelivered notifications.',
+  'ResizeObserver loop limit exceeded'
+]);
+
 /** True the first time this exact message+stack is seen this session; marks it seen either way.
  *  Keeps a looping error from reopening the modal on every occurrence. */
 export function shouldShowModalFor(err: CapturedError): boolean {
+  if (BENIGN_MESSAGES.has(err.message)) return false;
   const signature = `${err.message}::${err.stack}`;
   if (shownSignatures.has(signature)) return false;
   shownSignatures.add(signature);
