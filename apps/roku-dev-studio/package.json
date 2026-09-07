@@ -1,6 +1,6 @@
 {
   "name": "roku-dev-studio",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Roku Dev Studio - Control your Roku device over the local network",
   "homepage": "https://github.com/paramount-engineering/roku-dev-studio",
   "main": "main.bundled.cjs",
@@ -14,6 +14,11 @@
     "pretypecheck:renderer": "tsx scripts/build/ensure-modern-screenshot-vendor.ts && tsx scripts/build/ensure-tanstack-virtual-vendor.ts",
     "typecheck:renderer": "tsc --noEmit -p tsconfig.renderer.json",
     "verify:structured-pills": "tsx scripts/verify-structured-pills.ts",
+    "verify:console-filter-perf": "tsx scripts/verify-console-filter-perf.ts",
+    "verify:log-file-index-yields": "tsx scripts/verify-log-file-index-yields.ts",
+    "verify:launch-file-argv": "tsx scripts/verify-launch-file-argv.ts",
+    "verify:main-window-file-drop": "cross-env TSX_TSCONFIG_PATH=./tsconfig.scripts.json tsx scripts/verify-main-window-file-drop.ts",
+    "verify:log-file-window-chunking": "tsx scripts/verify-log-file-window-chunking.ts",
     "verify:i18n": "tsx scripts/verify-i18n-keys.ts",
     "typecheck:scripts": "tsc --noEmit -p tsconfig.scripts.json",
     "dev:solid": "tsx scripts/build/index.ts && concurrently -k \"npm run renderer:solid:dev\" \"wait-on tcp:127.0.0.1:5173 && cross-env RDS_SOLID_RENDERER=1 tsx scripts/run-electron.ts\"",
@@ -22,16 +27,16 @@
     "build:bundle": "tsx scripts/build/index.ts",
     "prepare": "node -e \"if (process.env.CI) process.exit(0); require('child_process').execSync('npm run build:bundle', { stdio: 'inherit' })\"",
     "clean:dist": "tsx scripts/cleanup-old-builds.ts",
-    "build": "npm run build:bundle && npm run clean:dist && electron-builder",
+    "build": "npm run build:bundle && npm run clean:dist && electron-builder --publish never",
     "build:mac": "npm run build:bundle && npm run clean:dist && tsx scripts/build/electron-builder-mac.ts",
     "build:mac:intel": "npm run build:bundle && npm run clean:dist && tsx scripts/build/electron-builder-mac.ts dmg:x64 zip:x64",
-    "build:win": "npm run build:bundle && npm run clean:dist && electron-builder --win",
+    "build:win": "npm run build:bundle && npm run clean:dist && electron-builder --win --publish never",
     "build:win:diagnostic": "tsx scripts/build-diagnostic.ts win",
     "build:mac:diagnostic": "tsx scripts/build-diagnostic.ts mac",
     "build:linux:diagnostic": "tsx scripts/build-diagnostic.ts linux",
     "build:all:diagnostic": "tsx scripts/build-diagnostic.ts all",
-    "build:linux": "npm run build:bundle && npm run clean:dist && electron-builder --linux",
-    "build:all": "npm run build:bundle && npm run clean:dist && concurrently --names mac,linux,win --prefix-colors cyan,green,magenta \"tsx scripts/build/electron-builder-mac.ts -c.npmRebuild=false\" \"electron-builder --linux -c.npmRebuild=false\" \"electron-builder --win -c.npmRebuild=false\""
+    "build:linux": "npm run build:bundle && npm run clean:dist && electron-builder --linux --publish never",
+    "build:all": "npm run build:bundle && npm run clean:dist && concurrently --names mac,linux,win --prefix-colors cyan,green,magenta \"tsx scripts/build/electron-builder-mac.ts -c.npmRebuild=false\" \"electron-builder --linux -c.npmRebuild=false --publish never\" \"electron-builder --win -c.npmRebuild=false --publish never\""
   },
   "author": {
     "name": "Hareendra Donapati",
@@ -123,9 +128,27 @@
       "!apps/**"
     ],
     "asarUnpack": [
-      "**/node_modules/cap/**"
+      "**/node_modules/cap/**",
+      "network-session-parse.worker.js",
+      "leaf-cert.worker.js"
     ],
     "compression": "maximum",
+    "fileAssociations": [
+      {
+        "ext": ["log", "txt", "text", "out", "err", "trace"],
+        "name": "Log File",
+        "description": "Console / log text file",
+        "role": "Viewer",
+        "rank": "Alternate"
+      },
+      {
+        "ext": ["rds-network-inspector.json", "har", "pcap", "pcapng"],
+        "name": "Network Session",
+        "description": "Roku Dev Studio network capture session",
+        "role": "Viewer",
+        "rank": "Alternate"
+      }
+    ],
     "mac": {
       "category": "public.app-category.developer-tools",
       "files": [

@@ -159,6 +159,21 @@ WiFi MAC: ${d.wifiMac || 'N/D'}`,
   // Log file
   couldNotOpenLogFile: (err: string): string => `Nie można otworzyć pliku dziennika: ${err}`,
 
+  // File drag & drop onto the main window
+  fileDropOverlayReadyOne: (viewerLabel: string): string => `Upuść, aby otworzyć w ${viewerLabel}`,
+  fileDropOverlayReadyMany: 'Upuść, aby otworzyć',
+  fileDropOverlayUnsupported: 'Nieobsługiwany typ pliku',
+  fileDropOverlayGeneric: 'Upuść pliki, aby otworzyć',
+  fileDropLogViewerLabel: 'Przeglądarka dzienników',
+  fileDropNetworkSessionViewerLabel: 'Przeglądarka sesji sieciowej',
+  fileDropOpenedOne: (name: string, viewerLabel: string): string => `Otworzono „${name}” w ${viewerLabel}`,
+  fileDropOpenedMany: (count: number): string => `Otworzono ${count} plików`,
+  fileDropOpenedWithSkipped: (openedCount: number, unsupportedCount: number): string =>
+    `Otworzono ${openedCount} plik(ów), pominięto ${unsupportedCount} nieobsługiwanych`,
+  fileDropUnsupportedOne: (name: string): string => `„${name}” nie jest obsługiwanym typem pliku`,
+  fileDropUnsupportedMany: (count: number): string => `${count} nieobsługiwanych plików — nic nie otworzono`,
+  fileDropFailed: 'Nie udało się otworzyć upuszczonych plików',
+
   // Help modal
   searchHelpGuide: 'Przeszukaj pomoc i przewodnik',
 
@@ -198,6 +213,9 @@ WiFi MAC: ${d.wifiMac || 'N/D'}`,
   floatingRemoteToggleTitle: 'Przełącz pływający pilot, który towarzyszy Ci poza kartami Pilot i Dev App',
   floatingRemoteToggleAria: 'Przełącz pływający pilot',
   floatingRemote: 'Pływający pilot',
+  tryDemoAppTitle: 'Wypróbuj dołączony kanał demonstracyjny Roku Dev Studio Showcase',
+  tryDemoAppAria: 'Wypróbuj aplikację demo',
+  tryDemoApp: 'Wypróbuj Aplikację Demo',
   appMenu: 'Menu aplikacji',
   zoomOut: 'Pomniejsz',
   zoomIn: 'Powiększ',
@@ -306,13 +324,6 @@ WiFi MAC: ${d.wifiMac || 'N/D'}`,
   legendLimit: 'Limit',
 
   // Apps tab
-  customLaunch: 'Niestandardowe uruchomienie',
-  customAppIdPlaceholder: 'ID aplikacji (np. 12)',
-  tvInputsLabel: 'Wejścia TV:',
-  hdmi1: 'HDMI 1',
-  hdmi2: 'HDMI 2',
-  hdmi3: 'HDMI 3',
-  hdmi4: 'HDMI 4',
   deepLink: 'Deep-Link',
   moreLaunchOptions: 'Więcej opcji uruchamiania',
   saveAndLaunch: 'Zapisz i uruchom',

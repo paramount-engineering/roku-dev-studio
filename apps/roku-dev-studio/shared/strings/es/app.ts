@@ -158,6 +158,21 @@ MAC de WiFi: ${d.wifiMac || 'N/D'}`,
   // Log file
   couldNotOpenLogFile: (err: string): string => `No se pudo abrir el archivo de registro: ${err}`,
 
+  // File drag & drop onto the main window
+  fileDropOverlayReadyOne: (viewerLabel: string): string => `Suelta para abrir en ${viewerLabel}`,
+  fileDropOverlayReadyMany: 'Suelta para abrir',
+  fileDropOverlayUnsupported: 'Tipo de archivo no compatible',
+  fileDropOverlayGeneric: 'Suelta archivos para abrir',
+  fileDropLogViewerLabel: 'Visor de registros',
+  fileDropNetworkSessionViewerLabel: 'Visor de Sesión de Red',
+  fileDropOpenedOne: (name: string, viewerLabel: string): string => `Se abrió "${name}" en ${viewerLabel}`,
+  fileDropOpenedMany: (count: number): string => `Se abrieron ${count} archivos`,
+  fileDropOpenedWithSkipped: (openedCount: number, unsupportedCount: number): string =>
+    `Se ${openedCount === 1 ? 'abrió' : 'abrieron'} ${openedCount} archivo${openedCount === 1 ? '' : 's'}, se omitieron ${unsupportedCount} no compatibles`,
+  fileDropUnsupportedOne: (name: string): string => `"${name}" no es un tipo de archivo compatible`,
+  fileDropUnsupportedMany: (count: number): string => `${count} archivos no compatibles — no se abrió nada`,
+  fileDropFailed: 'No se pudo abrir el o los archivo(s) soltado(s)',
+
   // Help modal
   searchHelpGuide: 'Buscar en ayuda y guía',
 
@@ -197,6 +212,9 @@ MAC de WiFi: ${d.wifiMac || 'N/D'}`,
   floatingRemoteToggleTitle: 'Alternar un control remoto flotante que lo sigue fuera de las pestañas Remoto y Dev App',
   floatingRemoteToggleAria: 'Alternar control remoto flotante',
   floatingRemote: 'Control remoto flotante',
+  tryDemoAppTitle: 'Probar el canal de demostración incluido de Roku Dev Studio Showcase',
+  tryDemoAppAria: 'Probar App de Demostración',
+  tryDemoApp: 'Probar App de Demostración',
   appMenu: 'Menú de la app',
   zoomOut: 'Alejar',
   zoomIn: 'Acercar',
@@ -305,13 +323,6 @@ MAC de WiFi: ${d.wifiMac || 'N/D'}`,
   legendLimit: 'Límite',
 
   // Apps tab
-  customLaunch: 'Inicio personalizado',
-  customAppIdPlaceholder: 'ID de app (p. ej., 12)',
-  tvInputsLabel: 'Entradas de TV:',
-  hdmi1: 'HDMI 1',
-  hdmi2: 'HDMI 2',
-  hdmi3: 'HDMI 3',
-  hdmi4: 'HDMI 4',
   deepLink: 'Deep-Link',
   moreLaunchOptions: 'Más opciones de inicio',
   saveAndLaunch: 'Guardar e iniciar',

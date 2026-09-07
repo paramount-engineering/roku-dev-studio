@@ -307,7 +307,7 @@ export const modals = {
     actionMute: 'Wycisz',
     actionPower: 'Zasilanie',
     footnote:
-      'Wyłącz Pilot klawiaturowy w Ustawieniach, jeśli nie chcesz, aby klawisze strzałek i inne przypisane klawisze wysyłały naciśnięcia do Roku.',
+      'Wyłącz Pilot klawiaturowy w <button type="button" class="help-settings-link" data-settings-section="general" data-settings-highlight="keyboardRemoteSettingsRow">Ustawieniach</button>, jeśli nie chcesz, aby klawisze strzałek i inne przypisane klawisze wysyłały naciśnięcia do Roku.',
   },
 
   secretScreens: {
@@ -402,7 +402,7 @@ export const modals = {
       'Możesz też połączyć się ręcznie, wpisując adres IP w sekcji „Połączenie ręczne” na dole paska bocznego.',
 
     remoteControlHeading: 'Zdalne sterowanie',
-    remoteControlIntroHtml: `Użyj wirtualnego pilota, aby sterować swoim Roku. Opcjonalne skróty klawiszowe są dostępne po włączeniu <strong>Ustawienia → Ogólne → Pilot Roku - używaj klawiatury </strong> (domyślnie wyłączone). Działają na karcie <strong>Pilot</strong> (samodzielnie lub w układzie poczwórnym wydajności urządzenia) albo na karcie <strong>Dev App</strong>, tylko dla otwartej karty urządzenia — nie w innych sekcjach, polach tekstowych ani oknach modalnych.`,
+    remoteControlIntroHtml: `Użyj wirtualnego pilota, aby sterować swoim Roku. Opcjonalne skróty klawiszowe są dostępne po włączeniu <button type="button" class="help-settings-link" data-settings-section="general" data-settings-highlight="keyboardRemoteSettingsRow">Ustawienia → Ogólne → Pilot Roku - używaj klawiatury </button> (domyślnie wyłączone). Działają na karcie <strong>Pilot</strong> (samodzielnie lub w układzie poczwórnym wydajności urządzenia) albo na karcie <strong>Dev App</strong>, tylko dla otwartej karty urządzenia — nie w innych sekcjach, polach tekstowych ani oknach modalnych.`,
     remoteControlTabHtml: `Na karcie <strong>Pilot</strong> lub <strong>Dev App</strong> naciśnij <span class="help-kbd">Tab</span> z poziomu przycisków pilota (nie z zakładek sekcji ani innego pola tekstowego), aby przejść do pola <strong>Wyślij tekst</strong>. <span class="help-kbd">Enter</span> wysyła z tego pola.`,
     remoteControlMediaHtml: `Elementy sterowania multimediami (Przewiń do tyłu, Odtwórz/Wstrzymaj, Przewiń do przodu) oraz przyciski głośności są także dostępne na wirtualnym pilocie. Użyj pola <strong>Wyślij tekst</strong> na dole, aby wpisywać tekst bezpośrednio w aktywne pole tekstowe urządzenia.`,
     scNavigation: 'Nawigacja',
@@ -499,7 +499,7 @@ export const modals = {
             <li><strong>Połącz z konsolą</strong> - Opcjonalnie automatycznie łącz się z konsolą debugowania podczas uruchomień</li>
           `,
     actionScriptsDevPasswordHtml: `<strong>Hasło programisty</strong> - Akcje takie jak Zrzut ekranu, Wgraj (sideload) i Usuń wgrany kanał wymagają hasła programisty. Hasło jest ustalane w kolejności: na poziomie akcji <code>"password"</code> → na poziomie skryptu <code>"devPassword"</code> → hasło z sekcji uwierzytelniania Dev App. Jeśli żadnego nie znaleziono, zostaniesz o nie poproszony podczas weryfikacji.`,
-    actionScriptsSaveFolderHtml: `<strong>Folder zapisu</strong> - Domyślny folder zapisu znajduje się w <strong>Ustawienia → Action Scripts → Domyślny folder</strong>. Na każde uruchomienie możesz wybrać inny folder. Artefakty (zrzuty ekranu, pliki PNG wykresów wydajności, wyeksportowane pliki PDF) trafiają do podfolderu ze znacznikiem czasu, tworzonego tylko wtedy, gdy coś rzeczywiście powstanie.`,
+    actionScriptsSaveFolderHtml: `<strong>Folder zapisu</strong> - Domyślny folder zapisu znajduje się w <button type="button" class="help-settings-link" data-settings-section="action-scripts" data-settings-highlight="actionScriptsDefaultFolderSettingsRow">Ustawienia → Action Scripts → Domyślny folder</button>. Na każde uruchomienie możesz wybrać inny folder. Artefakty (zrzuty ekranu, pliki PNG wykresów wydajności, wyeksportowane pliki PDF) trafiają do podfolderu ze znacznikiem czasu, tworzonego tylko wtedy, gdy coś rzeczywiście powstanie.`,
     actionScriptsAiAgentsHtml: `<strong>Agenci SI</strong> - Skrypty akcji tworzone w Kreatorze mogą być również tworzone przez agentów SI za pośrednictwem serwera MCP (zobacz sekcję <em>Agenci SI (MCP)</em> poniżej); skrypt agenta zawsze trafia do Kreatora do przeglądu przez człowieka przed uruchomieniem.`,
     actionScriptsIntro:
       'Automatyzuj sekwencje akcji urządzenia za pomocą skryptów opartych na JSON. Dostępne są dwa widoki:',
@@ -509,7 +509,7 @@ export const modals = {
     devicePerformanceListHtml: `
             <li>Wykresy <strong>użycia CPU</strong>, <strong>pamięci systemowej</strong> i <strong>obiektów BrightScript</strong> (widok liczby lub pamięci, gdy dostępny)</li>
             <li>Wykresy odzwierciedlają działającą aplikację — aby uzyskać reprezentatywne odczyty, urządzenie powinno mieć włączony <strong>Tryb programisty</strong>, a Twój <strong>wgrany kanał deweloperski</strong> na pierwszym planie</li>
-            <li><strong>Ustawienia → Wydajność urządzenia</strong> dostraja interwał próbkowania wykresu i okno historii; włącz <strong>Zapamiętaj „Pokaż wydajność urządzenia”</strong>, aby przywracać układ poczwórny dla każdego urządzenia między sesjami</li>
+            <li><button type="button" class="help-settings-link" data-settings-section="device-performance" data-settings-highlight="devicePerfRows">Ustawienia → Wydajność urządzenia</button> dostraja interwał próbkowania wykresu i okno historii; włącz <strong>Zapamiętaj „Pokaż wydajność urządzenia”</strong>, aby przywracać układ poczwórny dla każdego urządzenia między sesjami</li>
             <li>Wewnątrz Skryptów akcji kroki <strong>Wydajność urządzenia</strong> przechwytują karty wykresów do wyników uruchomienia (i eksportu PDF)</li>
           `,
 
@@ -517,8 +517,8 @@ export const modals = {
     networkInspectorIntroHtml: `Analizuj ruch HTTP(S) generowany przez Twój kanał deweloperski. Roku Dev Studio uruchamia lokalny <strong>proxy MITM</strong>, który odszyfrowuje ruch HTTPS kanału deweloperskiego kierowany przez niego, dzięki czemu widzisz pełne nagłówki i treści żądań/odpowiedzi.`,
     networkInspectorGettingStartedHtml: `<strong>Pierwsze kroki</strong>`,
     networkInspectorGettingStartedListHtml: `
-            <li>Włącz <strong>proxy MITM</strong> w <strong>Ustawienia → Inspektor sieci</strong>, a następnie skieruj żądania swojego kanału deweloperskiego przez pokazany adres proxy — użyj <code>host:port</code> (np. <code>192.168.1.50:8888</code>). Sposób zastosowania tego proxy przez kanał zależy od kodu sieciowego Twojej aplikacji.</li>
-            <li>Opcjonalne <strong>Przechwytywanie hotspotu</strong> rejestruje metadane SNI/DNS dla całego ruchu urządzenia; wymaga dostępu do przechwytywania pakietów systemu operacyjnego (macOS BPF, Windows Npcap). Ustawienia → Inspektor sieci przeprowadza przez konfigurację dla poszczególnych platform.</li>
+            <li>Włącz <strong>proxy MITM</strong> w <button type="button" class="help-settings-link" data-settings-section="network-inspector" data-settings-highlight="networkInspectorEnableSettingsRow">Ustawienia → Inspektor sieci</button>, a następnie skieruj żądania swojego kanału deweloperskiego przez pokazany adres proxy — użyj <code>host:port</code> (np. <code>192.168.1.50:8888</code>). Sposób zastosowania tego proxy przez kanał zależy od kodu sieciowego Twojej aplikacji.</li>
+            <li>Opcjonalne <strong>Przechwytywanie hotspotu</strong> rejestruje metadane SNI/DNS dla całego ruchu urządzenia; wymaga dostępu do przechwytywania pakietów systemu operacyjnego (macOS BPF, Windows Npcap). <button type="button" class="help-settings-link" data-settings-section="network-inspector" data-settings-highlight="niSetupRow">Ustawienia → Inspektor sieci</button> przeprowadza przez konfigurację dla poszczególnych platform.</li>
           `,
     networkInspectorToolbarHtml: `<strong>Pasek narzędzi</strong> (w prawym górnym rogu panelu): <strong>Rozpocznij/Zatrzymaj przechwytywanie</strong>, <strong>Układ paneli</strong> (stos lub obok siebie żądanie/odpowiedź) oraz <strong>Konfiguruj reguły ruchu</strong>.`,
     networkInspectorToolbarListHtml: `
@@ -541,7 +541,7 @@ export const modals = {
     aiAgentsHeading: 'Agenci SI (MCP)',
     aiAgentsIntroHtml: `Roku Dev Studio zawiera serwer <strong>MCP (Model Context Protocol)</strong>, dzięki czemu agenci SI w Cursor, Claude Desktop lub VS Code mogą sterować prawdziwym urządzeniem za pośrednictwem tej aplikacji:`,
     aiAgentsListHtml: `
-            <li><strong>Ustawienia → Serwer MCP</strong> - Przełącz klienta, aby dodać lub usunąć jego wpis MCP <code>roku-dev-studio</code>; inne wpisy w konfiguracji MCP tego klienta pozostają nietknięte</li>
+            <li><button type="button" class="help-settings-link" data-settings-section="mcp-server">Ustawienia → Serwer MCP</button> - Przełącz klienta, aby dodać lub usunąć jego wpis MCP <code>roku-dev-studio</code>; inne wpisy w konfiguracji MCP tego klienta pozostają nietknięte</li>
             <li><strong>Dwie powierzchnie</strong> - Bezpośrednie operacje na urządzeniu dla jednorazowych akcji (<code>keypress</code>, <code>launch_app</code>, <code>screenshot</code>, <code>app_function</code>, <code>rale_command</code>, telnet …) oraz <strong>Skrypty akcji</strong> dla przepływów wielokrokowych / warunkowych, które trafiają do Kreatora w celu przeglądu</li>
             <li><strong>Powiadomienia Toast</strong> - Destrukcyjne akcje agenta (uruchomienie, wgranie, usunięcie wgrania, zrzut ekranu, destrukcyjne polecenia RALE) pokazują nieblokujące powiadomienie Toast w aplikacji, dzięki czemu zawsze widzisz, co zrobił agent</li>
             <li><strong>Hasła pozostają lokalne</strong> - Wgrywanie / zrzut ekranu / usuwanie wgrania używają ponownie hasła zapamiętanego przez panel urządzenia; agent nigdy nie musi go wysyłać</li>
@@ -588,7 +588,7 @@ export const modals = {
 
     sideloadRelayHeading: 'Sideload Relay',
     sideloadRelayIntroHtml: `Wgraj jedną kompilację na <strong>wiele urządzeń jednocześnie</strong>. Gdy przekaźnik jest włączony, Roku Dev Studio rozgłasza się jako Roku w Twojej sieci: skieruj swoje IDE (VS Code BrightScript / roku-deploy / Eclipse) lub przeglądarkę na ten komputer, prześlij raz, a RDS rozprowadza kompilację — <em>instalacja → uruchomienie → konsola</em> — na każde docelowe urządzenie, lokalne lub w lokalizacji zdalnej.`,
-    sideloadRelayEnableHtml: `<strong>Włącz to</strong> w <strong>Ustawienia → Sideload Relay</strong> (domyślnie wyłączone). Przełącznik jest chroniony dwoma wymaganiami wstępnymi:`,
+    sideloadRelayEnableHtml: `<strong>Włącz to</strong> w <button type="button" class="help-settings-link" data-settings-section="sideload-relay" data-settings-highlight="optSideloadRelay-row">Ustawienia → Sideload Relay</button> (domyślnie wyłączone). Przełącznik jest chroniony dwoma wymaganiami wstępnymi:`,
     sideloadRelayEnableListHtml: `
             <li><strong>Hasło programisty Relay</strong> - Hasło, którym Twoje IDE uwierzytelnia się w RDS (użytkownik <code>rokudev</code>), dokładnie jak hasło programisty prawdziwego Roku. Jest ono odrębne od własnego hasła programisty każdego urządzenia docelowego.</li>
             <li><strong>Konfiguracja urządzeń</strong> - Otwórz okno modalne konfiguracji urządzeń i włącz co najmniej jedno osiągalne urządzenie z włączonym Trybem programisty. Wyświetla ono urządzenia lokalne i zdalne (z lokalizacji przekaźnika); włącz te, które mają otrzymywać każdą kompilację. Urządzenia bez zapisanego hasła programisty pokazują <strong>🔒 Ustaw hasło</strong>, aby zweryfikować je bezpośrednio. Wcześniej wybrane urządzenia, które przechodzą w tryb offline, pozostają na liście (wyłączone) i dołączają ponownie automatycznie, gdy znów będą osiągalne.</li>

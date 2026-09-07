@@ -17,7 +17,7 @@ import {
   type PacketParseContext
 } from 'roku-dev-studio-network-inspector/packet-parser';
 import { resetHttpStreams } from 'roku-dev-studio-network-inspector/http-stream-parser';
-import { isPrivateClientIp } from './network-inspector/index';
+import { isPrivateClientIp } from 'roku-dev-studio-network-inspector';
 
 export type NetworkSessionFormat = 'bundle' | 'har' | 'pcap';
 

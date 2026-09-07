@@ -13,8 +13,15 @@ apps/roku-dev-studio/fiddle-preload.bundled.cjs
 apps/roku-dev-studio/log-viewer-preload.bundled.cjs
 apps/roku-dev-studio/network-session-viewer-preload.bundled.cjs
 
+# worker_threads entries (see transpile-main-process.ts) — each needs its own standalone bundle,
+# same as the preloads above, rebuilt the same way.
+apps/roku-dev-studio/network-session-parse.worker.js
+apps/roku-dev-studio/leaf-cert.worker.js
+
 # Remote relay server: built from roku-remote-server.ts (see packages/roku-dev-studio-remote-server/build.mjs)
 packages/roku-dev-studio-remote-server/roku-remote-server.js
+# Same MITM leaf-cert worker_threads entry as the desktop app above, built separately for this process.
+packages/roku-dev-studio-remote-server/leaf-cert.worker.js
 
 # Legacy renderer: all emitted ESM lives under renderer/dist/ (see build-legacy-renderer-modules.js)
 apps/roku-dev-studio/renderer/dist/

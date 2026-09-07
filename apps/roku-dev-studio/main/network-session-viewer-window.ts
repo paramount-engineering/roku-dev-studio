@@ -13,12 +13,29 @@ import type { BrowserWindow as ElectronBrowserWindow, IpcMain, IpcMainInvokeEven
 import { IPC } from '../shared/ipc/channels';
 import { S } from '../shared/strings/index';
 import { setupZoomGuards } from './window-zoom';
+import { withResizeLocked } from './window-resize-lock';
 import { mainError } from './log.js';
-import { parseSessionBuffer } from './network-session-parse';
+import { createWorkerPool, type WorkerPool } from 'roku-dev-studio-platform/worker-pool';
+import type { ParsedSession } from './network-session-parse';
+import type { SessionParseInput } from './network-session-parse.worker';
 
 const fs = require('fs');
 const path = require('path');
 const { BrowserWindow, dialog, screen } = require('electron') as typeof import('electron');
+
+/** Lazy singleton — spawned on first import so a session viewer that's never opened never pays for
+ *  idle worker threads. Parsing is pure/stateless, so a small fungible pool (not one worker per
+ *  window) is the right shape; imports aren't frequent or concurrent enough to need more than 2. */
+let sessionParsePool: WorkerPool<SessionParseInput, ParsedSession> | null = null;
+function getSessionParsePool(): WorkerPool<SessionParseInput, ParsedSession> {
+  if (!sessionParsePool) {
+    sessionParsePool = createWorkerPool<SessionParseInput, ParsedSession>({
+      workerFile: path.join(__dirname, 'network-session-parse.worker.js'),
+      poolSize: 2
+    });
+  }
+  return sessionParsePool;
+}
 
 /** Sanity ceiling. Network captures are tiny next to logs; a multi-hundred-MB pcap is almost
  *  certainly a mistaken target, and parsing it fully into memory would be wasteful. */
@@ -40,30 +57,38 @@ export function registerNetworkSessionViewerIpc(ipcMain: IpcMain): void {
       const win = BrowserWindow.fromWebContents(event.sender);
       const state = win ? stateByWindowId.get(win.id) : undefined;
       if (!state) return { success: false, error: 'No file is associated with this window.' };
-      try {
-        // Async I/O: the file can be up to MAX_SESSION_BYTES (512 MB); a sync stat/read
-        // would freeze the main process (and every window) while it loads.
-        const stat = await fs.promises.stat(state.filePath);
-        if (!stat.isFile()) return { success: false, error: 'Not a file.' };
-        if (stat.size > MAX_SESSION_BYTES) {
+      return withResizeLocked(win, async () => {
+        try {
+          // Async I/O: the file can be up to MAX_SESSION_BYTES (512 MB); a sync stat/read
+          // would freeze the main process (and every window) while it loads.
+          const stat = await fs.promises.stat(state.filePath);
+          if (!stat.isFile()) return { success: false, error: 'Not a file.' };
+          if (stat.size > MAX_SESSION_BYTES) {
+            return {
+              success: false,
+              error: `File is too large (${Math.round(stat.size / (1024 * 1024))} MB). Maximum is ${MAX_SESSION_BYTES / (1024 * 1024)} MB.`
+            };
+          }
+          const buf = (await fs.promises.readFile(state.filePath)) as Buffer;
+          // Off the main thread: a multi-hundred-MB capture parses synchronously (PCAP/HAR decode),
+          // which would freeze every window for the duration if run here. Deliberately NOT transferring
+          // `buf.buffer` — small Buffers (below Node's ~4KB pool threshold) share a backing ArrayBuffer
+          // with unrelated allocations, and transferring a shared/pooled buffer throws `DataCloneError:
+          // Cannot transfer object of unsupported type` (confirmed empirically). A structured-clone copy
+          // is a fast memory copy either way, negligible next to the parse it's avoiding on this thread.
+          const parsed = await getSessionParsePool().run({ filePath: state.filePath, buf });
           return {
-            success: false,
-            error: `File is too large (${Math.round(stat.size / (1024 * 1024))} MB). Maximum is ${MAX_SESSION_BYTES / (1024 * 1024)} MB.`
+            success: true,
+            fileName: path.basename(state.filePath),
+            format: parsed.format,
+            events: parsed.events,
+            deviceIps: parsed.deviceIps,
+            notice: parsed.notice
           };
+        } catch (e) {
+          return { success: false, error: e instanceof Error ? e.message : String(e) };
         }
-        const buf = (await fs.promises.readFile(state.filePath)) as Buffer;
-        const parsed = parseSessionBuffer(state.filePath, buf);
-        return {
-          success: true,
-          fileName: path.basename(state.filePath),
-          format: parsed.format,
-          events: parsed.events,
-          deviceIps: parsed.deviceIps,
-          notice: parsed.notice
-        };
-      } catch (e) {
-        return { success: false, error: e instanceof Error ? e.message : String(e) };
-      }
+      });
     }
   );
 }
@@ -71,7 +96,7 @@ export function registerNetworkSessionViewerIpc(ipcMain: IpcMain): void {
 export function openNetworkSessionViewerWindow(
   parent: ElectronBrowserWindow | undefined,
   filePath: string
-): void {
+): ElectronBrowserWindow | undefined {
   const resolved = path.resolve(filePath);
   if (!fs.existsSync(resolved) || !fs.statSync(resolved).isFile()) {
     const boxOpts = {
@@ -139,4 +164,6 @@ export function openNetworkSessionViewerWindow(
     stateByWindowId.delete(child.id);
     if (!child.isDestroyed()) child.close();
   });
+
+  return child;
 }

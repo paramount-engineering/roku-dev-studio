@@ -68,7 +68,18 @@
   </header>
   <main class="log-viewer-main">
     <div class="telnet-output-container log-viewer-output-wrap">
-      <div id="logViewerOutput" class="telnet-output"></div>
+      <div id="logViewerOutput" class="telnet-output">
+        <div id="logViewerLoadingPlaceholder" class="log-viewer-loading-placeholder">
+          <div class="log-viewer-loading-skeleton">
+            <span class="log-viewer-loading-skeleton-line"></span>
+            <span class="log-viewer-loading-skeleton-line"></span>
+            <span class="log-viewer-loading-skeleton-line"></span>
+            <span class="log-viewer-loading-skeleton-line"></span>
+            <span class="log-viewer-loading-skeleton-line"></span>
+          </div>
+          <p data-i18n="logFileViewer.indexing">Indexing…</p>
+        </div>
+      </div>
     </div>
   </main>
   <script type="module" src="./dist/components/log-file-viewer/log-file-viewer.js"></script>

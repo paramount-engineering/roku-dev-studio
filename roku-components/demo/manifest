@@ -1,0 +1,15 @@
+# Roku Dev Studio Showcase — fictitious demo channel for capturing
+# Roku Dev Studio screenshots/GIFs (Remote Control, App Connector,
+# Network Inspector, Console). Not a real product; all content is placeholder.
+title=Roku Dev Studio Showcase
+major_version=1
+minor_version=0
+build_version=0
+ui_resolutions=fhd
+mm_icon_focus_hd=pkg:/images/channel_icon_hd.png
+mm_icon_focus_sd=pkg:/images/channel_icon_hd.png
+mm_icon_focus_fhd=pkg:/images/channel_icon_fhd.png
+splash_screen_hd=pkg:/images/splash.png
+splash_screen_fhd=pkg:/images/splash.png
+splash_color=#0a0a12
+run_as_process=1

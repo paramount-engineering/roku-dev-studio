@@ -73,7 +73,7 @@ Create `entitlements.mac.plist` in the root folder (if not exists):
 
 ### Method 1: Using Git Tags (Recommended)
 
-The release workflow accepts **either** an un-prefixed semver tag (`1.1.0`) **or** a v-prefixed one (`v1.1.0`). Pre-release suffixes (e.g. `1.1.0-rc.1`, `v1.1.0-beta.2`) are also accepted. Pick one convention per repo and stick with it; this repo uses un-prefixed (`1.0.0`, `1.1.0`, …).
+The release workflow accepts **either** an un-prefixed semver tag (`1.1.0`) **or** a v-prefixed one (`v1.1.0`). Pre-release suffixes (e.g. `1.1.0-rc.1`, `v1.1.0-beta.2`) are also accepted and are automatically marked as prereleases on GitHub. Pick one convention per repo and stick with it; this repo uses un-prefixed (`1.0.0`, `1.1.0`, …).
 
 ```bash
 # 1. Update the desktop app's version
@@ -114,7 +114,7 @@ Manual dispatch always creates a `v`-prefixed tag on the release (e.g. `v1.1.0`)
 ## Workflow Files
 
 ### `.github/workflows/release.yml`
-Main release workflow — triggers on version tags or manual dispatch. All three
+Main release workflow — triggers on version tags or manual dispatch. Tag matching here uses **GitHub glob patterns** (not regex), and a semver guard step validates manual input before publishing. All three
 platforms build via a single matrix job; artifacts are aggregated into one
 GitHub Release by a follow-on `release` job.
 
@@ -203,7 +203,7 @@ Each release will include the artifacts listed in the **Downloads** table below.
 ### macOS app shows "damaged" on user's machine
 - The app is unsigned (no Apple Developer certificate)
 - Users need to right-click → Open on first launch
-- Or run: `xattr -cr /Applications/Roku\ App\ Connector.app`
+- Or run: `xattr -cr /Applications/Roku\ Dev\ Studio.app`
 
 ### Windows SmartScreen warning
 - The app is unsigned (no code signing certificate)

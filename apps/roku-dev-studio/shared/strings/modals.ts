@@ -310,7 +310,7 @@ export const modals = {
     actionMute: 'Mute',
     actionPower: 'Power',
     footnote:
-      'Turn Keyboard Remote off in Settings if you do not want arrow keys and other mapped keys to send Roku keypresses.',
+      'Turn Keyboard Remote off in <button type="button" class="help-settings-link" data-settings-section="general" data-settings-highlight="keyboardRemoteSettingsRow">Settings</button> if you do not want arrow keys and other mapped keys to send Roku keypresses.',
   },
 
   secretScreens: {
@@ -405,7 +405,7 @@ export const modals = {
       'You can also manually connect by entering an IP address in the "Manual Connect" section at the bottom of the sidebar.',
 
     remoteControlHeading: 'Remote Control',
-    remoteControlIntroHtml: `Use the virtual remote to control your Roku. Optional keyboard shortcuts are available when you turn on <strong>Settings → General → Roku Remote - Use Keyboard </strong> (off by default). They apply on the <strong>Remote</strong> tab (solo or device-performance quad layout) or the <strong>Dev App</strong> tab, only for the device tab you have open — not in other sections, text fields, or modals.`,
+    remoteControlIntroHtml: `Use the virtual remote to control your Roku. Optional keyboard shortcuts are available when you turn on <button type="button" class="help-settings-link" data-settings-section="general" data-settings-highlight="keyboardRemoteSettingsRow">Settings → General → Roku Remote - Use Keyboard </button> (off by default). They apply on the <strong>Remote</strong> tab (solo or device-performance quad layout) or the <strong>Dev App</strong> tab, only for the device tab you have open — not in other sections, text fields, or modals.`,
     remoteControlTabHtml: `On the <strong>Remote</strong> or <strong>Dev App</strong> tab, press <span class="help-kbd">Tab</span> from the remote controls (not from the section tabs or another text field) to jump to the <strong>Send Text</strong> field. <span class="help-kbd">Enter</span> sends from that field.`,
     remoteControlMediaHtml: `Media controls (Rewind, Play/Pause, Forward) and volume buttons are also available on the virtual remote. Use <strong>Send Text</strong> at the bottom to type text directly into the device's active text field.`,
     scNavigation: 'Navigation',
@@ -502,7 +502,7 @@ export const modals = {
             <li><strong>Connect to Console</strong> - Optionally auto-connect to the debug console during runs</li>
           `,
     actionScriptsDevPasswordHtml: `<strong>Developer Password</strong> - Actions like Screenshot, Sideload, and Delete Sideload require a developer password. The password is resolved in order: action-level <code>"password"</code> → script-level <code>"devPassword"</code> → password from the Dev App Auth section. If none is found, you'll be prompted during validation.`,
-    actionScriptsSaveFolderHtml: `<strong>Save Folder</strong> - The default save folder lives under <strong>Settings → Action Scripts → Default folder</strong>. Per run you can pick another folder. Artifacts (screenshots, performance chart PNGs, exported PDFs) land in a timestamped subfolder, created only when something is actually produced.`,
+    actionScriptsSaveFolderHtml: `<strong>Save Folder</strong> - The default save folder lives under <button type="button" class="help-settings-link" data-settings-section="action-scripts" data-settings-highlight="actionScriptsDefaultFolderSettingsRow">Settings → Action Scripts → Default folder</button>. Per run you can pick another folder. Artifacts (screenshots, performance chart PNGs, exported PDFs) land in a timestamped subfolder, created only when something is actually produced.`,
     actionScriptsAiAgentsHtml: `<strong>AI Agents</strong> - Action Scripts you build in the Builder can also be authored by AI agents through the MCP server (see the <em>AI Agents (MCP)</em> section below); the agent's script always lands in the Builder for human review before running.`,
     actionScriptsIntro:
       'Automate sequences of device actions using JSON-based scripts. Two views are available:',
@@ -512,7 +512,7 @@ export const modals = {
     devicePerformanceListHtml: `
             <li><strong>CPU usage</strong>, <strong>system memory</strong>, and <strong>BrightScript object</strong> charts (count or memory view where available)</li>
             <li>Charts reflect the running app — for representative readings, the device should have <strong>Developer Mode</strong> on and your <strong>sideloaded Dev channel</strong> in the foreground</li>
-            <li><strong>Settings → Device Performance</strong> tunes chart sample interval and history window; turn on <strong>Remember 'Show Device Performance'</strong> to restore the quad layout per device between sessions</li>
+            <li><button type="button" class="help-settings-link" data-settings-section="device-performance" data-settings-highlight="devicePerfRows">Settings → Device Performance</button> tunes chart sample interval and history window; turn on <strong>Remember 'Show Device Performance'</strong> to restore the quad layout per device between sessions</li>
             <li>Inside Action Scripts, <strong>Device Performance</strong> steps capture chart cards into run results (and PDF export)</li>
           `,
 
@@ -520,8 +520,8 @@ export const modals = {
     networkInspectorIntroHtml: `Inspect the HTTP(S) traffic your Dev channel makes. Roku Dev Studio runs a local <strong>MITM proxy</strong> that decrypts dev-channel HTTPS routed through it, so you can see full request/response headers and bodies.`,
     networkInspectorGettingStartedHtml: `<strong>Getting started</strong>`,
     networkInspectorGettingStartedListHtml: `
-            <li>Enable the <strong>MITM proxy</strong> in <strong>Settings → Network Inspector</strong>, then have your dev channel route its requests through the proxy address shown — use <code>host:port</code> (e.g. <code>192.168.1.50:8888</code>). How the channel applies that proxy is up to your app's networking code.</li>
-            <li>Optional <strong>Hotspot Capture</strong> records SNI/DNS metadata for all of the device's traffic; it needs OS packet-capture access (macOS BPF, Windows Npcap). Settings → Network Inspector walks through the per-platform setup.</li>
+            <li>Enable the <strong>MITM proxy</strong> in <button type="button" class="help-settings-link" data-settings-section="network-inspector" data-settings-highlight="networkInspectorEnableSettingsRow">Settings → Network Inspector</button>, then have your dev channel route its requests through the proxy address shown — use <code>host:port</code> (e.g. <code>192.168.1.50:8888</code>). How the channel applies that proxy is up to your app's networking code.</li>
+            <li>Optional <strong>Hotspot Capture</strong> records SNI/DNS metadata for all of the device's traffic; it needs OS packet-capture access (macOS BPF, Windows Npcap). <button type="button" class="help-settings-link" data-settings-section="network-inspector" data-settings-highlight="niSetupRow">Settings → Network Inspector</button> walks through the per-platform setup.</li>
           `,
     networkInspectorToolbarHtml: `<strong>Toolbar</strong> (top-right of the panel): <strong>Start/Stop Capture</strong>, <strong>Panes Layout</strong> (stack vs. side-by-side request/response), and <strong>Configure Traffic Rules</strong>.`,
     networkInspectorToolbarListHtml: `
@@ -544,7 +544,7 @@ export const modals = {
     aiAgentsHeading: 'AI Agents (MCP)',
     aiAgentsIntroHtml: `Roku Dev Studio ships an <strong>MCP (Model Context Protocol)</strong> server so AI agents in Cursor, Claude Desktop, or VS Code can drive a real device through this app:`,
     aiAgentsListHtml: `
-            <li><strong>Settings → MCP Server</strong> - Toggle a client to add or remove its <code>roku-dev-studio</code> MCP entry; other entries in that client's MCP config are left untouched</li>
+            <li><button type="button" class="help-settings-link" data-settings-section="mcp-server">Settings → MCP Server</button> - Toggle a client to add or remove its <code>roku-dev-studio</code> MCP entry; other entries in that client's MCP config are left untouched</li>
             <li><strong>Two surfaces</strong> - Direct device ops for one-shot actions (<code>keypress</code>, <code>launch_app</code>, <code>screenshot</code>, <code>app_function</code>, <code>rale_command</code>, telnet …) and <strong>Action Scripts</strong> for multi-step / conditional flows that drop into the Builder for review</li>
             <li><strong>Toasts</strong> - Destructive agent actions (launch, sideload, delete sideload, screenshot, destructive RALE commands) show a non-blocking toast in the app so you always see what the agent did</li>
             <li><strong>Passwords stay local</strong> - Sideload / screenshot / delete-sideload reuse the password the device panel remembered; the agent never has to send one</li>
@@ -591,7 +591,7 @@ export const modals = {
 
     sideloadRelayHeading: 'Sideload Relay',
     sideloadRelayIntroHtml: `Sideload one build to <strong>many devices at once</strong>. When the relay is on, Roku Dev Studio advertises itself as a Roku on your network: point your IDE (VS Code BrightScript / roku-deploy / Eclipse) or a browser at this machine, upload once, and RDS fans the build out — <em>install → launch → console</em> — to every targeted device, local or at a remote location.`,
-    sideloadRelayEnableHtml: `<strong>Enable it</strong> in <strong>Settings → Sideload Relay</strong> (off by default). Two prerequisites gate the toggle:`,
+    sideloadRelayEnableHtml: `<strong>Enable it</strong> in <button type="button" class="help-settings-link" data-settings-section="sideload-relay" data-settings-highlight="optSideloadRelay-row">Settings → Sideload Relay</button> (off by default). Two prerequisites gate the toggle:`,
     sideloadRelayEnableListHtml: `
             <li><strong>Relay Dev Password</strong> - The password your IDE authenticates to RDS with (user <code>rokudev</code>), exactly like a real Roku's developer password. This is separate from each target device's own dev password.</li>
             <li><strong>Setup Devices</strong> - Open the device-setup modal and enable at least one reachable, Developer Mode-enabled device. It lists local and remote (relay-location) devices; enable the ones that should receive every build. Devices without a saved dev password show <strong>🔒 Set Password</strong> to validate one inline. Previously-targeted devices that go offline stay listed (disabled) and rejoin automatically when reachable again.</li>

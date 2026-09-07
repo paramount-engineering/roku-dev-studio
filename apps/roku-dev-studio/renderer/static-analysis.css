@@ -567,7 +567,7 @@ html, body {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  z-index: 5000;
 }
 .modal {
   background: var(--bg-secondary);
@@ -618,11 +618,11 @@ html, body {
   padding: 0;
   border: none;
   border-radius: 6px;
-  background: transparent;
+  background: var(--bg-tertiary);
   color: var(--text-muted);
   cursor: pointer;
 }
-.modal-close:hover { background: var(--bg-hover); color: var(--text-primary); }
+.modal-close:hover { background: var(--accent-red-dim); color: var(--accent-red); }
 .modal-body { padding: 16px 18px; overflow-y: auto; }
 .sca-json-modal { max-width: 920px; width: 92vw; }
 .sca-json-modal-actions { display: flex; align-items: center; gap: 8px; }

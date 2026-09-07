@@ -1,5 +1,6 @@
 import { S, applyI18n } from '@shared/strings/index.js';
 import { initLocaleForWindow } from '../../modules/utils/locale-live.js';
+import { installCrashCapture } from '../../modules/errors/install.js';
 
 type AboutInfo = {
   appVersion: string;
@@ -20,6 +21,8 @@ const api = (window as any).aboutApi as {
   getInfo: () => Promise<AboutInfo>;
   copy: (text: string) => Promise<void>;
   openExternal: (url: string) => Promise<void>;
+  getSetting: (key: string) => Promise<{ success: boolean; value?: unknown }>;
+  getAppInfo: () => Promise<{ version: string; platform: string; osRelease: string }>;
 } | undefined;
 
 function setText(id: string, text: string): void {
@@ -52,6 +55,15 @@ function copyVersionInfo(info: AboutInfo): void {
 applyI18n(document);
 // Apply the active locale on open + retranslate live on change.
 void initLocaleForWindow(api as unknown as Parameters<typeof initLocaleForWindow>[0]);
+
+if (api) {
+  installCrashCapture({
+    windowName: 'about',
+    getSetting: api.getSetting,
+    getAppInfo: api.getAppInfo,
+    openExternal: api.openExternal
+  });
+}
 
 if (!api?.getInfo) {
   document.body.innerHTML = '<p style="color:#e0e0e0;padding:16px">' + S.about.apiUnavailable + '</p>';

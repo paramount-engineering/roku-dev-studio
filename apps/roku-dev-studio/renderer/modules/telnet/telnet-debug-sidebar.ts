@@ -1486,16 +1486,19 @@ export function setupTelnetDebugSidebar(panel: HTMLElement, ip: string, opts: Si
   });
 
   // --- auto-start when debugging is enabled ----------------------------------
-  // On panel/console open we connect the 8085 console but do NOT speculatively
-  // attach 8081: the channel running right now is often NOT a debug launch (its
-  // 8081 is closed), so a probe here just fails and spams the log with a misleading
-  // "attach gave up" every time the console opens. The real attach fires on the
-  // post-sideload reattach (below) — exactly when 8081 is freshly open — or when the
-  // user clicks Attach. If a debug session already exists, reflect it; else idle.
+  // On panel/console open we do NOT connect the console or speculatively attach
+  // 8081: the channel running right now is often NOT a debug launch (its 8081 is
+  // closed), so a probe here just fails and spams the log with a misleading
+  // "attach gave up" every time the console opens. Debugging should start when an
+  // app is actually sideloaded, not merely when the device connects — the real
+  // console-connect + attach fire on the post-sideload reattach (onDebuggerReattach,
+  // above) — exactly when 8081 is freshly open — or when the user clicks Attach.
+  // This only reflects an ALREADY-existing debug session (if any) in the sidebar's
+  // status, so reopening a tab mid-debug-session shows the right state; it doesn't
+  // start anything on its own.
   const maybeAutoStart = async (): Promise<void> => {
     if (didAutoStart || !prefEnabled) return;
     didAutoStart = true;
-    opts.autoConnectConsole?.();
     try {
       const st = await debugApi.debuggerStatus(ip);
       const cur = st?.data?.state;

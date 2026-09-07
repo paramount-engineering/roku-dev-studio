@@ -300,12 +300,10 @@ function setupSaveModalOnce(): void {
   saveModalInitialized = true;
 
   const nameInput = document.getElementById('deeplinkSavePresetName') as HTMLInputElement | null;
-  const cancelBtn = document.getElementById('deeplinkSavePresetCancel');
   const confirmBtn = document.getElementById('deeplinkSavePresetConfirm');
   const closeBtn = modal.querySelector('.deeplink-save-preset-modal-close');
 
   closeBtn?.addEventListener('click', () => closeSavePresetModal(modal));
-  cancelBtn?.addEventListener('click', () => closeSavePresetModal(modal));
   attachBackdropClickToClose(modal, () => closeSavePresetModal(modal));
 
   document.addEventListener('keydown', (e) => {

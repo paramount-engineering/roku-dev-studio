@@ -94,10 +94,32 @@ contextBridge.exposeInMainWorld('roku', {
       return Promise.resolve({ success: false, error: message || 'Could not read the dropped file path' });
     }
   },
+  /** Files dropped onto the main window (see `renderer/modules/utils/main-window-file-drop.ts`).
+   *  Same `webUtils.getPathForFile` pattern as `resolveDroppedSideloadFile` above — resolves each
+   *  File to a real path here in preload, then hands the paths to main to open. */
+  openDroppedAssociatedFiles: (files: File[]) => {
+    const filePaths: string[] = [];
+    for (const file of files) {
+      try {
+        filePaths.push(webUtils.getPathForFile(file));
+      } catch {
+        /* not a real, readable file — main will just never see it */
+      }
+    }
+    return ipcRenderer.invoke(IPC.OpenDroppedFiles, { filePaths });
+  },
   sideload: (ip: string, filePath: string, password: string | undefined, remoteDebug?: boolean, serial?: string) =>
     ipcRenderer.invoke(IPC.RokuSideload, { ip, filePath, password, remoteDebug, serial }),
   deleteSideload: (ip: string, password: string | undefined) =>
     ipcRenderer.invoke(IPC.RokuDeleteSideload, { ip, password }),
+  launchDemoApp: (payload: { ip: string; isRemote?: boolean; serverUrl?: string | null; password: string }) =>
+    ipcRenderer.invoke(IPC.DemoAppLaunch, payload),
+  /** The Settings window's "Demo App" button asked main to open the picker here. */
+  onDemoAppOpenRequested: (callback: () => void) => {
+    const handler = () => callback();
+    ipcRenderer.on(IPC.DemoAppOpenOnMain, handler);
+    return () => ipcRenderer.removeListener(IPC.DemoAppOpenOnMain, handler);
+  },
 
   // Device dev-portal operations (require the developer password)
   reboot: (ip: string, password: string | undefined) =>
@@ -675,6 +697,19 @@ contextBridge.exposeInMainWorld('roku', {
     return () => ipcRenderer.removeListener(IPC.DebugLoggingChanged, handler);
   },
 
+  // Listen for an uncaught main-process error (crash-report modal)
+  onMainProcessError: (
+    callback: (payload: { message: string; stack: string; timestamp: number }) => void
+  ) => {
+    const handler = (_event: IpcRendererEvent, payload: { message: string; stack: string; timestamp: number }) =>
+      callback(payload);
+    ipcRenderer.on(IPC.MainProcessError, handler);
+    return () => ipcRenderer.removeListener(IPC.MainProcessError, handler);
+  },
+
+  // App version + OS platform/release (crash-report modal Environment section)
+  getAppInfo: () => ipcRenderer.invoke(IPC.GetAppInfo),
+
   // Persisted app settings changed (Settings window save) — reload timing + connection poll
   onAppSettingsUpdated: (callback: (data: unknown) => void) => {
     const handler = (_event: IpcRendererEvent, data: unknown) => callback(data);
@@ -706,7 +741,7 @@ contextBridge.exposeInMainWorld('roku', {
   networkInspectorInstallBpfAccess: () => ipcRenderer.invoke(IPC.NetworkInspectorInstallBpfAccess),
   networkInspectorGetTrafficRules: () => ipcRenderer.invoke(IPC.NetworkInspectorGetTrafficRules),
   /** Open the Settings window, optionally navigated to a section (e.g. 'network-inspector'). */
-  openSettings: (section?: string) => ipcRenderer.send(IPC.SettingsOpen, { section }),
+  openSettings: (section?: string, highlightId?: string) => ipcRenderer.send(IPC.SettingsOpen, { section, highlightId }),
   networkInspectorSetDeviceTrafficRules: (deviceIp: string, rules: unknown) =>
     ipcRenderer.invoke(IPC.NetworkInspectorSetDeviceTrafficRules, { deviceIp, rules }),
   /** Replay / Edit & Resend — re-issue a captured request from the host; result arrives as a new

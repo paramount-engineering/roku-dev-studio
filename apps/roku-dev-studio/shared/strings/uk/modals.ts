@@ -307,7 +307,7 @@ export const modals = {
     actionMute: 'Вимкнення звуку',
     actionPower: 'Живлення',
     footnote:
-      'Вимкніть Пульт із клавіатури в Налаштуваннях, якщо не хочете, щоб клавіші зі стрілками та інші зіставлені клавіші надсилали натискання на Roku.',
+      'Вимкніть Пульт із клавіатури в <button type="button" class="help-settings-link" data-settings-section="general" data-settings-highlight="keyboardRemoteSettingsRow">Налаштуваннях</button>, якщо не хочете, щоб клавіші зі стрілками та інші зіставлені клавіші надсилали натискання на Roku.',
   },
 
   secretScreens: {
@@ -402,7 +402,7 @@ export const modals = {
       'Ви також можете підключитися вручну, ввівши IP-адресу в розділі «Ручне підключення» внизу бічної панелі.',
 
     remoteControlHeading: 'Дистанційне керування',
-    remoteControlIntroHtml: `Використовуйте віртуальний пульт для керування Roku. Додаткові комбінації клавіш доступні, коли ви вмикаєте <strong>Налаштування → Загальні → Пульт Roku - використовувати клавіатуру </strong> (вимкнено за замовчуванням). Вони діють на вкладці <strong>Пульт</strong> (окремо або в макеті-квадранті продуктивності пристрою) чи на вкладці <strong>Dev App</strong>, лише для відкритої вкладки пристрою — не в інших розділах, текстових полях чи модальних вікнах.`,
+    remoteControlIntroHtml: `Використовуйте віртуальний пульт для керування Roku. Додаткові комбінації клавіш доступні, коли ви вмикаєте <button type="button" class="help-settings-link" data-settings-section="general" data-settings-highlight="keyboardRemoteSettingsRow">Налаштування → Загальні → Пульт Roku - використовувати клавіатуру </button> (вимкнено за замовчуванням). Вони діють на вкладці <strong>Пульт</strong> (окремо або в макеті-квадранті продуктивності пристрою) чи на вкладці <strong>Dev App</strong>, лише для відкритої вкладки пристрою — не в інших розділах, текстових полях чи модальних вікнах.`,
     remoteControlTabHtml: `На вкладці <strong>Пульт</strong> або <strong>Dev App</strong> натисніть <span class="help-kbd">Tab</span> з елементів керування пультом (не з вкладок розділів чи іншого текстового поля), щоб перейти до поля <strong>Надіслати текст</strong>. <span class="help-kbd">Enter</span> надсилає з цього поля.`,
     remoteControlMediaHtml: `Елементи керування медіа (перемотка назад, відтворення/пауза, перемотка вперед) і кнопки гучності також доступні на віртуальному пульті. Використовуйте <strong>Надіслати текст</strong> внизу, щоб уводити текст безпосередньо в активне текстове поле пристрою.`,
     scNavigation: 'Навігація',
@@ -499,7 +499,7 @@ export const modals = {
             <li><strong>Підключитися до консолі</strong> - За бажанням автоматично підключайтеся до консолі налагодження під час запусків</li>
           `,
     actionScriptsDevPasswordHtml: `<strong>Пароль розробника</strong> - Дії, як-от знімок екрана, Sideload і видалення sideload, потребують пароля розробника. Пароль визначається в такому порядку: рівень дії <code>"password"</code> → рівень скрипту <code>"devPassword"</code> → пароль із розділу автентифікації Dev App. Якщо жодного не знайдено, вас запитають під час перевірки.`,
-    actionScriptsSaveFolderHtml: `<strong>Папка збереження</strong> - Типова папка збереження розташована в <strong>Налаштування → Action Scripts → Типова папка</strong>. Для кожного запуску можна вибрати іншу папку. Артефакти (знімки екрана, PNG-графіки продуктивності, експортовані PDF) потрапляють у підпапку з позначкою часу, яка створюється лише тоді, коли щось справді згенеровано.`,
+    actionScriptsSaveFolderHtml: `<strong>Папка збереження</strong> - Типова папка збереження розташована в <button type="button" class="help-settings-link" data-settings-section="action-scripts" data-settings-highlight="actionScriptsDefaultFolderSettingsRow">Налаштування → Action Scripts → Типова папка</button>. Для кожного запуску можна вибрати іншу папку. Артефакти (знімки екрана, PNG-графіки продуктивності, експортовані PDF) потрапляють у підпапку з позначкою часу, яка створюється лише тоді, коли щось справді згенеровано.`,
     actionScriptsAiAgentsHtml: `<strong>Агенти ШІ</strong> - Action Scripts, які ви створюєте в Builder, також можуть створюватися агентами ШІ через сервер MCP (див. розділ <em>Агенти ШІ (MCP)</em> нижче); скрипт агента завжди потрапляє в Builder для перегляду людиною перед запуском.`,
     actionScriptsIntro:
       'Автоматизуйте послідовності дій пристрою за допомогою скриптів на основі JSON. Доступні два подання:',
@@ -509,7 +509,7 @@ export const modals = {
     devicePerformanceListHtml: `
             <li>Графіки <strong>використання CPU</strong>, <strong>системної пам’яті</strong> та <strong>об’єктів BrightScript</strong> (перегляд кількості або пам’яті, де доступно)</li>
             <li>Графіки відображають запущений додаток — для репрезентативних показників на пристрої має бути ввімкнено <strong>Режим розробника</strong>, а ваш <strong>завантажений через sideload dev-канал</strong> — на передньому плані</li>
-            <li><strong>Налаштування → Продуктивність пристрою</strong> налаштовує інтервал дискретизації графіка та вікно історії; увімкніть <strong>Запам’ятати «Показувати продуктивність пристрою»</strong>, щоб відновлювати макет-квадрант для кожного пристрою між сесіями</li>
+            <li><button type="button" class="help-settings-link" data-settings-section="device-performance" data-settings-highlight="devicePerfRows">Налаштування → Продуктивність пристрою</button> налаштовує інтервал дискретизації графіка та вікно історії; увімкніть <strong>Запам’ятати «Показувати продуктивність пристрою»</strong>, щоб відновлювати макет-квадрант для кожного пристрою між сесіями</li>
             <li>У Action Scripts кроки <strong>Продуктивності пристрою</strong> захоплюють картки графіків у результати запуску (та експорт PDF)</li>
           `,
 
@@ -517,8 +517,8 @@ export const modals = {
     networkInspectorIntroHtml: `Інспектуйте трафік HTTP(S), який створює ваш dev-канал. Roku Dev Studio запускає локальний <strong>проксі MITM</strong>, який розшифровує HTTPS dev-каналу, спрямований через нього, тож ви можете бачити повні заголовки й тіла запитів/відповідей.`,
     networkInspectorGettingStartedHtml: `<strong>Початок роботи</strong>`,
     networkInspectorGettingStartedListHtml: `
-            <li>Увімкніть <strong>проксі MITM</strong> у <strong>Налаштування → Інспектор мережі</strong>, потім налаштуйте свій dev-канал спрямовувати запити через показану адресу проксі — використовуйте <code>host:port</code> (напр., <code>192.168.1.50:8888</code>). Те, як канал застосовує цей проксі, залежить від мережевого коду вашого додатка.</li>
-            <li>Необов’язкове <strong>захоплення через точку доступу</strong> записує метадані SNI/DNS для всього трафіку пристрою; воно потребує доступу до захоплення пакетів ОС (macOS BPF, Windows Npcap). Налаштування → Інспектор мережі проведе вас через налаштування для кожної платформи.</li>
+            <li>Увімкніть <strong>проксі MITM</strong> у <button type="button" class="help-settings-link" data-settings-section="network-inspector" data-settings-highlight="networkInspectorEnableSettingsRow">Налаштування → Інспектор мережі</button>, потім налаштуйте свій dev-канал спрямовувати запити через показану адресу проксі — використовуйте <code>host:port</code> (напр., <code>192.168.1.50:8888</code>). Те, як канал застосовує цей проксі, залежить від мережевого коду вашого додатка.</li>
+            <li>Необов’язкове <strong>захоплення через точку доступу</strong> записує метадані SNI/DNS для всього трафіку пристрою; воно потребує доступу до захоплення пакетів ОС (macOS BPF, Windows Npcap). <button type="button" class="help-settings-link" data-settings-section="network-inspector" data-settings-highlight="niSetupRow">Налаштування → Інспектор мережі</button> проведе вас через налаштування для кожної платформи.</li>
           `,
     networkInspectorToolbarHtml: `<strong>Панель інструментів</strong> (угорі праворуч на панелі): <strong>Почати/зупинити захоплення</strong>, <strong>Макет панелей</strong> (стос чи запит/відповідь поруч) і <strong>Налаштувати правила трафіку</strong>.`,
     networkInspectorToolbarListHtml: `
@@ -541,7 +541,7 @@ export const modals = {
     aiAgentsHeading: 'Агенти ШІ (MCP)',
     aiAgentsIntroHtml: `Roku Dev Studio постачається із сервером <strong>MCP (Model Context Protocol)</strong>, щоб агенти ШІ в Cursor, Claude Desktop чи VS Code могли керувати реальним пристроєм через цей застосунок:`,
     aiAgentsListHtml: `
-            <li><strong>Налаштування → Сервер MCP</strong> - Перемкніть клієнта, щоб додати або видалити його запис MCP <code>roku-dev-studio</code>; інші записи в конфігурації MCP цього клієнта залишаються незмінними</li>
+            <li><button type="button" class="help-settings-link" data-settings-section="mcp-server">Налаштування → Сервер MCP</button> - Перемкніть клієнта, щоб додати або видалити його запис MCP <code>roku-dev-studio</code>; інші записи в конфігурації MCP цього клієнта залишаються незмінними</li>
             <li><strong>Дві поверхні</strong> - Прямі операції з пристроєм для одноразових дій (<code>keypress</code>, <code>launch_app</code>, <code>screenshot</code>, <code>app_function</code>, <code>rale_command</code>, telnet …) і <strong>Action Scripts</strong> для багатоетапних / умовних сценаріїв, що потрапляють у Builder на перегляд</li>
             <li><strong>Toasts</strong> - Деструктивні дії агента (запуск, sideload, видалення sideload, знімок екрана, деструктивні команди RALE) показують неблокувальний toast у застосунку, тож ви завжди бачите, що зробив агент</li>
             <li><strong>Паролі залишаються локальними</strong> - Sideload / знімок екрана / видалення sideload повторно використовують пароль, який запам’ятала панель пристрою; агенту ніколи не потрібно надсилати його</li>
@@ -588,7 +588,7 @@ export const modals = {
 
     sideloadRelayHeading: 'Sideload Relay',
     sideloadRelayIntroHtml: `Виконуйте sideload однієї збірки на <strong>багато пристроїв одразу</strong>. Коли ретранслятор увімкнено, Roku Dev Studio оголошує себе як Roku у вашій мережі: спрямуйте свій IDE (VS Code BrightScript / roku-deploy / Eclipse) або браузер на цей комп’ютер, завантажте один раз, і RDS роздає збірку — <em>встановлення → запуск → консоль</em> — на кожен цільовий пристрій, локальний чи у віддаленому розташуванні.`,
-    sideloadRelayEnableHtml: `<strong>Увімкніть його</strong> в <strong>Налаштування → Sideload Relay</strong> (вимкнено за замовчуванням). Перемикач залежить від двох передумов:`,
+    sideloadRelayEnableHtml: `<strong>Увімкніть його</strong> в <button type="button" class="help-settings-link" data-settings-section="sideload-relay" data-settings-highlight="optSideloadRelay-row">Налаштування → Sideload Relay</button> (вимкнено за замовчуванням). Перемикач залежить від двох передумов:`,
     sideloadRelayEnableListHtml: `
             <li><strong>Пароль розробника ретранслятора</strong> - Пароль, за яким ваш IDE автентифікується в RDS (користувач <code>rokudev</code>), точнісінько як пароль розробника справжнього Roku. Він окремий від власного пароля розробника кожного цільового пристрою.</li>
             <li><strong>Налаштувати пристрої</strong> - Відкрийте модальне вікно налаштування пристроїв і ввімкніть принаймні один доступний пристрій з увімкненим Режимом розробника. Воно перелічує локальні та віддалені пристрої (у розташуванні ретранслятора); увімкніть ті, які мають отримувати кожну збірку. Пристрої без збереженого пароля розробника показують <strong>🔒 Установити пароль</strong>, щоб перевірити його на місці. Раніше націлені пристрої, які переходять офлайн, залишаються в списку (вимкнені) й автоматично повертаються, коли знову стають доступними.</li>

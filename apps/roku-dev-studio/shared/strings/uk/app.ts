@@ -175,6 +175,21 @@ WiFi MAC: ${d.wifiMac || 'Н/Д'}`,
   // Log file
   couldNotOpenLogFile: (err: string): string => `Не вдалося відкрити файл журналу: ${err}`,
 
+  // File drag & drop onto the main window
+  fileDropOverlayReadyOne: (viewerLabel: string): string => `Відпустіть, щоб відкрити у ${viewerLabel}`,
+  fileDropOverlayReadyMany: 'Відпустіть, щоб відкрити',
+  fileDropOverlayUnsupported: 'Непідтримуваний тип файлу',
+  fileDropOverlayGeneric: 'Відпустіть файли, щоб відкрити',
+  fileDropLogViewerLabel: 'Переглядач журналів',
+  fileDropNetworkSessionViewerLabel: 'Переглядач мережевих сесій',
+  fileDropOpenedOne: (name: string, viewerLabel: string): string => `Відкрито «${name}» у ${viewerLabel}`,
+  fileDropOpenedMany: (count: number): string => `Відкрито ${count} файлів`,
+  fileDropOpenedWithSkipped: (openedCount: number, unsupportedCount: number): string =>
+    `Відкрито ${openedCount} файл(ів), пропущено ${unsupportedCount} непідтримуваних`,
+  fileDropUnsupportedOne: (name: string): string => `«${name}» — непідтримуваний тип файлу`,
+  fileDropUnsupportedMany: (count: number): string => `${count} непідтримуваних файлів — нічого не відкрито`,
+  fileDropFailed: 'Не вдалося відкрити перекинуті файли',
+
   // Help modal
   searchHelpGuide: 'Пошук у довідці та посібнику',
 
@@ -214,6 +229,9 @@ WiFi MAC: ${d.wifiMac || 'Н/Д'}`,
   floatingRemoteToggleTitle: 'Перемкнути плаваючий пульт, що супроводжує вас за межами вкладок Remote і Dev App',
   floatingRemoteToggleAria: 'Перемкнути плаваючий пульт',
   floatingRemote: 'Плаваючий пульт',
+  tryDemoAppTitle: 'Спробувати вбудований демонстраційний канал Roku Dev Studio Showcase',
+  tryDemoAppAria: 'Спробувати демо-додаток',
+  tryDemoApp: 'Спробувати Демо-Додаток',
   appMenu: 'Меню застосунку',
   zoomOut: 'Зменшити масштаб',
   zoomIn: 'Збільшити масштаб',
@@ -322,13 +340,6 @@ WiFi MAC: ${d.wifiMac || 'Н/Д'}`,
   legendLimit: 'Ліміт',
 
   // Apps tab
-  customLaunch: 'Власний запуск',
-  customAppIdPlaceholder: 'ID застосунку (напр., 12)',
-  tvInputsLabel: 'TV-входи:',
-  hdmi1: 'HDMI 1',
-  hdmi2: 'HDMI 2',
-  hdmi3: 'HDMI 3',
-  hdmi4: 'HDMI 4',
   deepLink: 'Deep-Link',
   moreLaunchOptions: 'Більше параметрів запуску',
   saveAndLaunch: 'Зберегти та запустити',

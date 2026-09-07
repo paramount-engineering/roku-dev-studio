@@ -139,3 +139,26 @@ function copyFiddleRokuAssets() {
   console.log('build.mjs: copied Fiddle Roku assets →', 'dist/roku-components/fiddle');
 }
 copyFiddleRokuAssets();
+
+/** Copy the static demo-channel assets (manifest, source/*, components/*,
+ * images/*, data/*) from the repo-root `roku-components/demo/` into
+ * `dist/roku-components/demo/` so the published package is self-contained.
+ * The demo zip builder reads these at runtime via `readDemoAssetText/Buffer`.
+ * Deliberately skips `generate-images.mjs`/`README.md`/`.DS_Store` — those
+ * aren't part of the channel package. */
+function copyDemoRokuAssets() {
+  const src = join(root, '..', '..', 'roku-components', 'demo');
+  if (!existsSync(src)) {
+    console.warn('build.mjs: roku-components/demo not found at', src, '— demo zip builder will fail at runtime.');
+    return;
+  }
+  const dest = join(dist, 'roku-components', 'demo');
+  const entries = ['manifest', 'source', 'components', 'images', 'data'];
+  for (const entry of entries) {
+    const entrySrc = join(src, entry);
+    if (!existsSync(entrySrc)) continue;
+    cpSync(entrySrc, join(dest, entry), { recursive: true });
+  }
+  console.log('build.mjs: copied demo channel Roku assets →', 'dist/roku-components/demo');
+}
+copyDemoRokuAssets();

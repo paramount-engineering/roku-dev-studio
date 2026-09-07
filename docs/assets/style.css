@@ -284,7 +284,13 @@ pre code { background: none; padding: 0; color: var(--text); }
 
 /* ---------- Hero ---------- */
 .hero {
-  padding: 72px 0 48px;
+  /* Longhand top/bottom only (not the `padding: 72px 0 48px` shorthand) — this class is always
+     combined directly onto the same element as `.container` (`class="hero container"`), and a
+     shorthand here would zero `.container`'s left/right padding outright on any cascade-order
+     tie, flushing the hero text against the screen edges on narrow viewports. See `.section`
+     below for the same fix, needed for the same reason. */
+  padding-top: 72px;
+  padding-bottom: 48px;
   text-align: center;
 }
 .hero-wordmark {
@@ -355,7 +361,12 @@ pre code { background: none; padding: 0; color: var(--text); }
 .btn-secondary:hover { border-color: var(--accent-purple); }
 
 /* ---------- Sections ---------- */
-.section { padding: 56px 0; }
+/* Longhand top/bottom only — `.section` is frequently combined directly onto the same element
+   as `.container` (`class="section container"`, used on every page's opening section and
+   several more), and the `padding: 56px 0` shorthand it used to be would zero out
+   `.container`'s `padding: 0 24px` left/right on any cascade-order tie between the two classes,
+   flushing that section's content against the screen edges with no side padding at all. */
+.section { padding-top: 56px; padding-bottom: 56px; }
 .section-title-eyebrow {
   text-transform: uppercase;
   letter-spacing: 0.08em;
@@ -440,8 +451,13 @@ pre code { background: none; padding: 0; color: var(--text); }
   animation: marquee-scroll 179s linear infinite;
 }
 /* Hovering or keyboard-focusing any card pauses the whole row — one still frame to read, not the
- * row sliding away under you while you read a card. */
-.marquee-wrap:hover .marquee-track,
+ * row sliding away under you while you read a card. `:hover` is scoped to actual hover-capable
+ * pointers: touchscreens report a tap as `:hover` too, but (unlike a mouse) there's no "move
+ * away" gesture to ever clear it, so on a touch device the very first tap anywhere on the row
+ * — even just to scroll past it — froze the marquee permanently instead of momentarily. */
+@media (hover: hover) {
+  .marquee-wrap:hover .marquee-track { animation-play-state: paused; }
+}
 .marquee-wrap:focus-within .marquee-track { animation-play-state: paused; }
 .marquee-track .feature-card {
   display: block;
@@ -617,6 +633,46 @@ table { width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 0.93e
 th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--border); }
 th { color: var(--text-muted); text-transform: uppercase; font-size: 0.78em; letter-spacing: 0.04em; }
 
+/* Below ~640px, the browser's normal per-column auto-sizing squeezes every column down to fit
+ * the viewport — on a 2-3 column table that means each cell's text re-wraps into a tall stack of
+ * near-single-word lines, which reads as "too small" even though the font-size hasn't actually
+ * changed. Restacking each row as a block (name/first cell as a heading, the rest as plain text
+ * below it — the same shape as .feature-card, just without a border per item) keeps every cell
+ * at full viewport width instead, so prose reads as normal paragraphs again. */
+@media (max-width: 640px) {
+  table {
+    display: block;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+  }
+  table thead { display: none; }
+  table tbody { display: block; }
+  table tr { display: block; padding: 12px 14px; border-bottom: 1px solid var(--border); }
+  table tr:last-child { border-bottom: none; }
+  table td { display: block; padding: 3px 0; border: none; }
+  table td:first-child { font-weight: 700; color: var(--text); }
+  table td:not(:first-child) { color: var(--text-secondary); margin-top: 2px; }
+
+  /* .compare-table (the 3-column "without/with Roku Dev Studio" table) still needs its 2nd/3rd
+   * columns distinguishable once restacked — unlike a plain 2-column tool/description table,
+   * collapsing straight to "bold first cell, plain text after" would lose which column is which.
+   * The label text is fixed (not per-row), so a `::before` pseudo-element covers it with no
+   * markup changes needed. */
+  .compare-table td:not(:first-child)::before {
+    display: block;
+    font-size: 0.72em;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-muted);
+    font-weight: 700;
+    margin: 8px 0 3px;
+  }
+  .compare-table td:nth-child(2)::before { content: "Without Roku Dev Studio"; }
+  .compare-table td:nth-child(3)::before { content: "With Roku Dev Studio"; }
+  .compare-table td:nth-child(2) { margin-top: 4px; }
+}
+
 /* ---------- Platform strip ---------- */
 .platform-strip {
   display: flex;
@@ -656,6 +712,17 @@ th { color: var(--text-muted); text-transform: uppercase; font-size: 0.78em; let
 }
 .arch-box.highlight { border-color: var(--accent-purple); background: var(--accent-purple-dim); color: var(--accent-purple); }
 .arch-arrow { font-size: 1.4em; color: var(--text-muted); }
+
+/* Below ~560px, none of the (up to 3) boxes fit side by side, so flex-wrap drops each one to
+ * its own line — but a horizontal "↔" arrow flanked above/below by boxes it's no longer
+ * *between* reads as broken, not just cramped. Switching to a column stack and rotating the
+ * same glyph 90° turns it into a "↕"-style down arrow, matching the new vertical flow exactly —
+ * no HTML change needed since it's the same character, just reoriented. */
+@media (max-width: 560px) {
+  .arch-row { flex-direction: column; }
+  .arch-box { width: 100%; max-width: 320px; }
+  .arch-arrow { transform: rotate(90deg); }
+}
 
 /* ---------- Footer ---------- */
 .site-footer {

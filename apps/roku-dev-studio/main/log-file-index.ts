@@ -35,6 +35,12 @@ import {
 
 const fs = require('fs');
 
+/** Give the main-process event loop a chance to run (other IPC calls, timers)
+ *  between chunks of a long synchronous-feeling scan. */
+function yieldToEventLoop(): Promise<void> {
+  return new Promise((resolve) => setImmediate(resolve));
+}
+
 /** Encoding label + BOM length, mirroring the sniffer in the streaming path. */
 export type LogFileEncoding = {
   encoding: 'utf-8' | 'utf-16le' | 'utf-16be';
@@ -129,8 +135,13 @@ class OffsetBuilder {
  * and "a" is 1 line. An empty file is 0 lines.
  *
  * Throws `Error('too-many-lines')` if the file would exceed `LOG_VIEWER_MAX_LINES`.
+ *
+ * Yields to the event loop between chunks (same discipline as `streamFileLines`)
+ * so indexing a large file doesn't freeze the main process for the whole scan —
+ * every other IPC call (including already-connected device/console panels) would
+ * otherwise stall for as long as this takes.
  */
-export function buildLineIndex(filePath: string): LogFileIndex {
+export async function buildLineIndex(filePath: string): Promise<LogFileIndex> {
   const stat = fs.statSync(filePath);
   const fileSize: number = stat.size;
 
@@ -200,6 +211,9 @@ export function buildLineIndex(filePath: string): LogFileIndex {
       }
 
       filePos += bytesRead;
+      // Yield between chunks so the main-process event loop stays responsive —
+      // see `streamFileLines` below, which does the same for its scans.
+      await yieldToEventLoop();
     }
 
     return {
@@ -416,7 +430,7 @@ async function streamFileLines(
       if (nlIdx < 0) {
         pending = combined;
         // Still allow the event loop to breathe on huge no-newline files.
-        await new Promise<void>((r) => setImmediate(r));
+        await yieldToEventLoop();
         continue;
       }
       const ready = combined.slice(0, nlIdx); // excludes the trailing '\n'
@@ -426,7 +440,7 @@ async function streamFileLines(
         onLine(text, lineNo++);
       }
       // Yield between chunks so the main-process event loop stays responsive.
-      await new Promise<void>((r) => setImmediate(r));
+      await yieldToEventLoop();
     }
     // Final partial line (file without a trailing newline).
     if (!aborted && !shouldAbort() && pending.length > 0) {

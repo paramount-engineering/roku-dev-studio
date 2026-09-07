@@ -52,7 +52,7 @@ function setupIpcHandlers(
   setupRemoteHandlers(mainWindow, safeSendToRenderer);
   setupSystemHandlers(mainWindow, dialog, Menu, clipboard, app, state);
   setupNetworkInspectorHandlers(mainWindow, safeSendToRenderer, dialog, app.getPath('userData'));
-  setupRelayHandlers(mainWindow, safeSendToRenderer);
+  setupRelayHandlers(mainWindow, safeSendToRenderer, state);
   setupDebuggerHandlers(mainWindow);
 }
 

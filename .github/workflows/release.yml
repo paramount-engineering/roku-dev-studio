@@ -3,12 +3,13 @@ name: Build and Release
 on:
   push:
     tags:
-      # Both prefixed (v1.2.3) and un-prefixed (1.2.3) semver tags trigger a release.
-      # Pre-release suffixes (-rc.1, -beta.2, etc.) are accepted on either form.
-      - 'v[0-9]+.[0-9]+.[0-9]+'
-      - 'v[0-9]+.[0-9]+.[0-9]+-*'
-      - '[0-9]+.[0-9]+.[0-9]+'
-      - '[0-9]+.[0-9]+.[0-9]+-*'
+      # GitHub uses glob matching here (NOT regex).
+      # Match both prefixed (v1.2.3) and un-prefixed (1.2.3) tags,
+      # including prerelease suffixes (e.g. -rc.1, -beta.2).
+      - 'v[0-9]*.[0-9]*.[0-9]*'
+      - 'v[0-9]*.[0-9]*.[0-9]*-*'
+      - '[0-9]*.[0-9]*.[0-9]*'
+      - '[0-9]*.[0-9]*.[0-9]*-*'
   workflow_dispatch:
     inputs:
       version:
@@ -89,10 +90,13 @@ jobs:
 
       - name: Build desktop app
         # `build:mac|win|linux` chains build:bundle (transpile
-        # main/preload/renderer) -> clean:dist -> electron-builder.
-        # Publishing is disabled in `apps/roku-dev-studio/package.json`
-        # (`"build": { "publish": null }`) — `softprops/action-gh-release`
-        # in the `release` job below handles the GitHub Release.
+        # main/preload/renderer) -> clean:dist -> electron-builder. Each of those scripts passes
+        # `--publish never`, so electron-builder still emits the update-metadata YAML files
+        # (`app-update.yml`, `latest-mac.yml`, ...) from `apps/roku-dev-studio/package.json`'s
+        # `build.publish` config but never uploads them itself — `softprops/action-gh-release`
+        # in the `release` job below is the sole uploader. (Nulling out `build.publish` instead
+        # of using `--publish never` also suppresses those YAML files entirely, breaking
+        # electron-updater's runtime checkForUpdates() with an ENOENT — don't do that.)
         run: npm run ${{ matrix.build-cmd }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -132,14 +136,33 @@ jobs:
             # (it appears in artifact filenames in the release body).
             VERSION="${TAG_NAME#v}"
           fi
+
+          # Guardrails: only release valid semver (optionally prefixed with v,
+          # optionally with prerelease/build metadata after patch).
+          if ! printf '%s' "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$'; then
+            echo "Invalid version: '$VERSION'. Expected semver like 1.2.0 or 1.2.0-rc.1"
+            exit 1
+          fi
+
+          if printf '%s' "$VERSION" | grep -q '-'; then
+            IS_PRERELEASE=true
+          else
+            IS_PRERELEASE=false
+          fi
+
           echo "VERSION=$VERSION"   >> "$GITHUB_OUTPUT"
           echo "TAG_NAME=$TAG_NAME" >> "$GITHUB_OUTPUT"
+          echo "IS_PRERELEASE=$IS_PRERELEASE" >> "$GITHUB_OUTPUT"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@718ea10b132b3b2eba29c1007bb80653f286566b  # v3.0.1
         with:
           tag_name: ${{ steps.get_version.outputs.TAG_NAME }}
           name: Roku Dev Studio v${{ steps.get_version.outputs.VERSION }}
+          # Appends GitHub's own auto-compiled "What's Changed" (commits/PRs since the last
+          # tag) after the body below — supplements the curated CHANGELOG.md entry rather than
+          # replacing the templated downloads/install instructions.
+          generate_release_notes: true
           body: |
             ## Roku Dev Studio v${{ steps.get_version.outputs.VERSION }}
 
@@ -152,7 +175,7 @@ jobs:
             | **Linux** | roku-dev-studio_${{ steps.get_version.outputs.VERSION }}_amd64.deb, Roku Dev Studio-${{ steps.get_version.outputs.VERSION }}-x86_64.AppImage | roku-dev-studio_${{ steps.get_version.outputs.VERSION }}_arm64.deb, Roku Dev Studio-${{ steps.get_version.outputs.VERSION }}-arm64.AppImage |
 
             ### What's New
-            - See commit history for changes
+            See [CHANGELOG.md](https://github.com/paramount-engineering/roku-dev-studio/blob/main/CHANGELOG.md) for a curated summary, or "What's Changed" below for the full commit list.
 
             ### Installation
 
@@ -180,7 +203,7 @@ jobs:
             - **Debian/Ubuntu:** Download the `.deb` file and install with `sudo dpkg -i filename.deb`
             - **Other distros:** Download the `.AppImage` file, make it executable (`chmod +x filename.AppImage`), and run it
           draft: false
-          prerelease: false
+          prerelease: ${{ steps.get_version.outputs.IS_PRERELEASE == 'true' }}
           files: |
             ./artifacts/mac-builds/**/*.dmg
             ./artifacts/mac-builds/**/*.zip

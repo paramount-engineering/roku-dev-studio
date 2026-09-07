@@ -328,6 +328,12 @@ export const IPC = {
    *  retranslates in place (no reload). Payload is the preference string. */
   LocaleChanged: 'locale-changed',
   DebugLoggingChanged: 'debug-logging-changed',
+  /** Main → main window: an uncaught exception/rejection fired in the main process. Payload is
+   *  `{ message, stack, timestamp }` — shown in the same crash-report modal renderer errors use. */
+  MainProcessError: 'main-process-error',
+  /** Any window → main: app version + OS platform/release, for the crash-report modal's
+   *  Environment section. */
+  GetAppInfo: 'get-app-info',
   /** Main → all renderers: a live op against this device IP just failed at the connection level
    *  (ECP request, Telnet socket, …) — a hint to re-check reachability *now* rather than wait for
    *  the next scheduled poll. NOT itself a verdict: the renderer must still run the real
@@ -378,6 +384,13 @@ export const IPC = {
   FiddleClearPasswordRequest: 'fiddle:clear-password-request',
   /** Main renderer pushes scan status (spinner state) to open Fiddle windows. */
   FiddleScanStatus: 'fiddle:scan-status',
+  /** "Try Demo App" — sideload the bundled Roku Dev Studio Showcase channel
+   * to a device chosen in the main window's own modal (no separate window). */
+  DemoAppLaunch: 'demo-app:launch',
+  /** Settings window's "Demo App" button (shown when the titlebar button is off) asks main to
+   * open the picker in the main window; main relays it over `DemoAppOpenOnMain`. */
+  DemoAppRequestOpen: 'demo-app:request-open',
+  DemoAppOpenOnMain: 'demo-app:open-on-main',
   /** Network Inspector — hotspot traffic capture (local devices). */
   NetworkInspectorGetStatus: 'network-inspector:get-status',
   NetworkInspectorGetEvents: 'network-inspector:get-events',
@@ -450,7 +463,11 @@ export const IPC = {
   /** Main → renderer: streamed stdout/stderr while a run is in progress. */
   StaticAnalysisProgress: 'static-analysis:progress',
   /** Main → renderer: terminal outcome of a run (report JSON, or raw output + error). */
-  StaticAnalysisRunResult: 'static-analysis:run-result'
+  StaticAnalysisRunResult: 'static-analysis:run-result',
+
+  /** Files dropped onto the main window: open each in its associated viewer
+   *  (Log Viewer / Network Session Viewer), skipping unsupported ones. */
+  OpenDroppedFiles: 'main-window:open-dropped-files'
 } as const;
 
 export type IpcChannel = (typeof IPC)[keyof typeof IPC];

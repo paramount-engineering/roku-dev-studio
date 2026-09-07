@@ -19,19 +19,19 @@ let settingsWindowRef: (BrowserWindow & { __rdsDestroying?: boolean }) | null = 
  * opens navigated to that section (e.g. 'network-inspector'); if Settings is already open it's
  * focused and navigated instead of opening a duplicate.
  */
-function showSettingsDialog(mainWindow: BrowserWindow, initialSection?: string) {
+function showSettingsDialog(mainWindow: BrowserWindow, initialSection?: string, highlightId?: string) {
   if (!mainWindow) {
     mainError('Main window not available');
     return;
   }
 
-  // Already open: focus it and (optionally) navigate to the requested section.
+  // Already open: focus it and (optionally) navigate to the requested section / flash a row.
   if (settingsWindowRef && !settingsWindowRef.isDestroyed()) {
     settingsWindowRef.focus();
-    if (initialSection) {
+    if (initialSection || highlightId) {
       settingsWindowRef.webContents
         .executeJavaScript(
-          `window.rdsNavigateSettingsSection && window.rdsNavigateSettingsSection(${JSON.stringify(initialSection)})`
+          `window.rdsNavigateSettingsSection && window.rdsNavigateSettingsSection(${JSON.stringify(initialSection || '')}, ${JSON.stringify(highlightId || '')})`
         )
         .catch(() => undefined);
     }
@@ -104,6 +104,7 @@ function showSettingsDialog(mainWindow: BrowserWindow, initialSection?: string) 
     // first paint (avoids the English → locale re-render flash on open).
     const q: Record<string, string> = { locale: getLocale() };
     if (initialSection) q.section = initialSection;
+    if (highlightId) q.highlight = highlightId;
     settingsWindow.loadFile(path.join(__dirname, 'renderer', 'settings.html'), { query: q });
   } catch (error) {
     mainError('Error loading Settings dialog:', error);

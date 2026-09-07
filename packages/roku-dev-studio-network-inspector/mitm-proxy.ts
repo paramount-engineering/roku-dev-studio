@@ -3,9 +3,11 @@ import * as fs from 'fs';
 import * as http from 'http';
 import * as https from 'https';
 import * as net from 'net';
+import * as path from 'path';
 import * as tls from 'tls';
 import * as zlib from 'zlib';
-import { createLeafCert, type CaMaterial } from './ca-store';
+import { createWorkerPool, type WorkerPool } from 'roku-dev-studio-platform/worker-pool';
+import { type CaMaterial } from './ca-store';
 import { parseRokuProxyTarget, normalizeProxyHostPort } from './roku-proxy-url';
 import type {
   MockResponse,
@@ -616,6 +618,8 @@ export class RokuMitmProxy {
   private running = false;
   private lastError: string | undefined;
   private readonly opts: MitmProxyOptions;
+  // Lazy: only spawned once the first not-yet-cached hostname is actually seen, not at construction.
+  private leafCertPool: WorkerPool<string, { certPem: string; keyPem: string }> | null = null;
 
   constructor(opts: MitmProxyOptions) {
     this.opts = opts;
@@ -676,6 +680,10 @@ export class RokuMitmProxy {
     this.running = false;
     // Release per-host leaf certs so a stop/start cycle doesn't leak them for the process lifetime.
     this.leafCache.clear();
+    // Terminate the signing thread rather than leave it idle for the process lifetime; re-spawned
+    // lazily on the next cache miss after a restart.
+    void this.leafCertPool?.destroy();
+    this.leafCertPool = null;
     srv.close();
   }
 
@@ -1172,7 +1180,20 @@ export class RokuMitmProxy {
     });
   }
 
-  private getLeaf(hostname: string): { certPem: string; keyPem: string } {
+  /** One thread is enough — this only runs on a cache miss (once per unique hostname up to
+   *  `MAX_LEAF_CACHE`), never per-request, so call volume is inherently low. */
+  private getLeafCertPool(): WorkerPool<string, { certPem: string; keyPem: string }> {
+    if (!this.leafCertPool) {
+      this.leafCertPool = createWorkerPool<string, { certPem: string; keyPem: string }>({
+        workerFile: path.join(__dirname, 'leaf-cert.worker.js'),
+        workerData: this.opts.ca,
+        poolSize: 1
+      });
+    }
+    return this.leafCertPool;
+  }
+
+  private async getLeafAsync(hostname: string): Promise<{ certPem: string; keyPem: string }> {
     const existing = this.leafCache.get(hostname);
     if (existing) {
       // Refresh recency: re-insert so this host becomes most-recently-used (Map keeps insert order).
@@ -1180,7 +1201,10 @@ export class RokuMitmProxy {
       this.leafCache.set(hostname, existing);
       return existing;
     }
-    const leaf = createLeafCert(hostname, this.opts.ca);
+    // Note: two connections to the same brand-new hostname arriving before either resolves will
+    // both miss the cache and both sign a cert for it — harmless (each is independently valid; the
+    // second write just wins), not worth coalescing for what's already a rare, low-volume path.
+    const leaf = await this.getLeafCertPool().run(hostname);
     this.leafCache.set(hostname, leaf);
     // Evict the least-recently-used entry once the cache grows past its cap.
     if (this.leafCache.size > MAX_LEAF_CACHE) {
@@ -1210,7 +1234,7 @@ export class RokuMitmProxy {
     }
     const { host: hostname, port } = parsedTarget;
 
-    const leaf = this.getLeaf(hostname);
+    const leaf = await this.getLeafAsync(hostname);
     clientSocket.write('HTTP/1.1 200 Connection Established\r\n\r\n');
 
     const secureSocket = new tls.TLSSocket(clientSocket, {
@@ -1222,9 +1246,14 @@ export class RokuMitmProxy {
         // CONNECT-target leaf. With the hotspot-client gate on CONNECT above, this keeps the proxy
         // from being coaxed into signing certificates for arbitrary names and bounds cache churn.
         const target = isValidSniHostname(servername) ? servername : hostname;
-        const snLeaf = this.getLeaf(target);
-        const ctx = tls.createSecureContext({ key: snLeaf.keyPem, cert: snLeaf.certPem });
-        cb(null, ctx);
+        // Node's SNICallback explicitly tolerates calling `cb` asynchronously (not same-tick).
+        this.getLeafAsync(target)
+          .then((snLeaf) => {
+            cb(null, tls.createSecureContext({ key: snLeaf.keyPem, cert: snLeaf.certPem }));
+          })
+          .catch((err) => {
+            cb(err instanceof Error ? err : new Error(String(err)));
+          });
       }
     });
 

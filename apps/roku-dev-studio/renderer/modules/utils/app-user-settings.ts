@@ -42,6 +42,9 @@ export const SETTINGS_KEY_REMEMBER_SIDEBAR_TOGGLE = 'rememberSidebarToggle';
 /** When true, Network Inspector watches hotspot traffic for local devices. */
 export const SETTINGS_KEY_NETWORK_INSPECTOR_ENABLED = 'networkInspectorEnabled';
 
+/** When true, a "Try Demo App" button appears in the title bar (see Settings → General). Default on. */
+export const SETTINGS_KEY_TRY_DEMO_APP_ENABLED = 'tryDemoAppEnabled';
+
 /**
  * When true, a draggable Floating Remote is shown over the current device
  * panel whenever the active inner tab is not `remote` or `devapp`. Toggled
@@ -59,6 +62,8 @@ export const SETTINGS_KEY_FLOATING_REMOTE_POSITION = 'floating-remote.position';
 export let REMEMBER_DEVICE_PERFORMANCE_QUAD_PER_DEVICE = false;
 
 export let KEYBOARD_REMOTE_SHORTCUTS_ENABLED = false;
+
+export let TRY_DEMO_APP_ENABLED = true;
 
 export let AUTO_CONNECT_LAST_DEVICE_ENABLED = false;
 
@@ -182,6 +187,13 @@ export async function loadPersistedAppSettings(): Promise<void> {
       KEYBOARD_REMOTE_SHORTCUTS_ENABLED = kbRemoteRes.value;
     } else {
       KEYBOARD_REMOTE_SHORTCUTS_ENABLED = false;
+    }
+
+    const tryDemoAppRes = await window.roku.getSetting(SETTINGS_KEY_TRY_DEMO_APP_ENABLED);
+    if (tryDemoAppRes && tryDemoAppRes.success && typeof tryDemoAppRes.value === 'boolean') {
+      TRY_DEMO_APP_ENABLED = tryDemoAppRes.value;
+    } else {
+      TRY_DEMO_APP_ENABLED = true;
     }
 
     const autoConnRes = await window.roku.getSetting(SETTINGS_KEY_AUTO_CONNECT_LAST_DEVICE);

@@ -4,6 +4,8 @@ Shared host-platform helpers for Roku Dev Studio — OS identity, human labels, 
 (renderer-safe), plus node-only filesystem helpers. Used by the desktop app and other packages so
 platform logic lives in one place instead of being re-implemented per consumer.
 
+> Part of [Roku Dev Studio](https://paramount-engineering.github.io/roku-dev-studio/) — see the [main repo](https://github.com/paramount-engineering/roku-dev-studio) for the desktop app, MCP server, and other packages.
+
 ## Requirements
 
 - Node.js 24.17 or higher

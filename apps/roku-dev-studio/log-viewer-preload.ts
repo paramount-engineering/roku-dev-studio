@@ -62,6 +62,9 @@ contextBridge.exposeInMainWorld('roku', {
     }>,
   copyToClipboard: (text: string) => ipcRenderer.invoke(IPC.ClipboardWrite, text),
   openExternal: (url: string) => ipcRenderer.invoke(IPC.ShellOpenExternal, url),
+  // Crash-report modal: read the enable/disable setting + environment info.
+  getSetting: (key: string) => ipcRenderer.invoke(IPC.SettingsGet, key),
+  getAppInfo: () => ipcRenderer.invoke(IPC.GetAppInfo),
   // Live locale: apply the current preference on open + retranslate on change.
   getLocale: () => ipcRenderer.invoke(IPC.GetLocale) as Promise<string>,
   onLocaleChanged: (callback: (pref: string) => void) => {

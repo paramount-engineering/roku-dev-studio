@@ -22,7 +22,10 @@ import type {
  * @param {Object} api - API adapter
  */
 export function setupDevApp(panel: DevicePanelRoot, device: DevAppDevice, api: DevAppApi) {
-  const serialNumber = device.serialNumber;
+  // Live, not a one-time snapshot: `device` is the same object `checkDeviceConnection`
+  // (renderer/app.ts) mutates in place on every health check, so a device opened via Sideload
+  // Relay auto-connect (no serial yet) picks up the real serial once that check fetches it.
+  const getSerialNumber = (): string | undefined => device.serialNumber;
 
   const passwordInput = panel.querySelector('.dev-password');
   const verifyPasswordBtn = panel.querySelector('.verify-password-btn');
@@ -82,7 +85,7 @@ export function setupDevApp(panel: DevicePanelRoot, device: DevAppDevice, api: D
       authStatus: authStatus instanceof HTMLElement ? authStatus : null,
       rememberCheckbox: rememberCheckbox instanceof HTMLInputElement ? rememberCheckbox : null
     },
-    serialNumber
+    getSerialNumber
   );
 
   const { scheduleAutoScreenshot, setDevAppAllowsCapture } = setupScreenshots(
@@ -136,7 +139,7 @@ export function setupDevApp(panel: DevicePanelRoot, device: DevAppDevice, api: D
       selectedFileInfo: selectedFileInfo instanceof HTMLElement ? selectedFileInfo : null,
       clearFileBtn: clearFileBtn instanceof HTMLButtonElement ? clearFileBtn : null
     },
-    serialNumber,
+    getSerialNumber,
     passwordAuth.getPassword,
     sideloadedApp.checkSideloadedApp,
     // Same scheduler the Launch button uses — gated on auto-screenshot

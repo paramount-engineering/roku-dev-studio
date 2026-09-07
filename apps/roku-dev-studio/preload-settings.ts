@@ -6,6 +6,12 @@ import type { IpcRendererEvent } from 'electron';
 const { IPC } = require('./shared/ipc/channels');
 
 contextBridge.exposeInMainWorld('settingsApi', {
+  // Crash-report modal: read the enable/disable setting + environment info, and open the
+  // prefilled GitHub issue URL when the user clicks "Report on GitHub".
+  getSetting: (key: string) => ipcRenderer.invoke(IPC.SettingsGet, key),
+  getAppInfo: () => ipcRenderer.invoke(IPC.GetAppInfo),
+  openExternal: (url: string) => ipcRenderer.invoke(IPC.ShellOpenExternal, url),
+
   // Privacy Mode — mirrors the main/Fiddle bridge so the Settings window can blur
   // IPs/serials (e.g. the Sideload Relay device table) in lockstep. Reads the
   // current state at open; the main process fans `IPC.PrivacyModeChanged` to every
@@ -34,6 +40,9 @@ contextBridge.exposeInMainWorld('settingsApi', {
   pickFolder: () => ipcRenderer.invoke(IPC.SettingsWindowPickFolder),
   openMcpConfig: (id: string) => ipcRenderer.invoke(IPC.SettingsWindowOpenMcpConfig, { id }),
   closeWindow: () => ipcRenderer.send(IPC.SettingsWindowClose),
+  // "Demo App" button shown next to the "Show Try Demo App Button" toggle when it's off — asks
+  // main to bring the main window forward and open the same picker modal there.
+  requestOpenTryDemoApp: () => ipcRenderer.invoke(IPC.DemoAppRequestOpen) as Promise<{ success: boolean }>,
   getNetworkInspectorStatus: () => ipcRenderer.invoke(IPC.NetworkInspectorGetStatus),
   installBpfAccess: () => ipcRenderer.invoke(IPC.NetworkInspectorInstallBpfAccess),
   // Certificate Authority (read-only CA card in the Network Inspector tab). The handlers are

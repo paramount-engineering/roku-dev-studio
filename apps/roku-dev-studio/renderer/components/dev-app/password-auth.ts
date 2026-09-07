@@ -11,14 +11,19 @@ import { S } from '@shared/strings/index.js';
  * @param {HTMLElement} panel - Device panel
  * @param {Object} api - API adapter
  * @param {Object} elements - UI elements
- * @param {string} serialNumber - Device serial number
+ * @param {Function} getSerialNumber - Live device serial number getter. A device opened via
+ *   Sideload Relay auto-connect starts with no serial at all (a minimal fallback object) even
+ *   though a later health check fetches the real one — a plain `string | undefined` parameter
+ *   would freeze that "no serial yet" snapshot for the panel's whole lifetime, so this reads
+ *   fresh at every use instead. The initial "load stored password" check re-runs (once) via the
+ *   `device-info-refreshed` listener below when the serial actually becomes known.
  * @returns {Object} Authentication state and functions
  */
 export function setupPasswordAuth(
   panel: DevicePanelRoot,
   api: DevAppApi,
   elements: PasswordAuthElements,
-  serialNumber: string | undefined
+  getSerialNumber: () => string | undefined
 ) {
   const {
     passwordInput,
@@ -56,6 +61,7 @@ export function setupPasswordAuth(
       }
     }
 
+    const serialNumber = getSerialNumber();
     if (authenticated && rememberCheckbox && rememberCheckbox.checked && serialNumber) {
       savePassword(serialNumber, passwordInput.value.trim());
     } else if (!rememberCheckbox?.checked && serialNumber) {
@@ -115,6 +121,7 @@ export function setupPasswordAuth(
       // a known-bad credential next time. A manually-typed password that
       // doesn't match the stored one is left alone — the stored copy might
       // still be correct.
+      const serialNumber = getSerialNumber();
       if (!authOk && result.authFailed && serialNumber) {
         const stored = getStoredPassword(serialNumber);
         if (stored && stored === password) {
@@ -149,8 +156,15 @@ export function setupPasswordAuth(
     verifyPasswordBtn.addEventListener('click', verifyPassword);
   }
   
-  // Load stored password
-  if (serialNumber) {
+  // Load stored password, once we actually have a serial to look one up under. Called both
+  // immediately (if the serial is already known) and from the `device-info-refreshed` listener
+  // below (if it wasn't yet — e.g. a Sideload Relay auto-connected device).
+  let triedStoredPasswordLoad = false;
+  function tryAutoloadStoredPassword(): void {
+    if (triedStoredPasswordLoad) return;
+    const serialNumber = getSerialNumber();
+    if (!serialNumber) return;
+    triedStoredPasswordLoad = true;
     const storedPassword = getStoredPassword(serialNumber);
     if (storedPassword) {
       passwordInput.value = storedPassword;
@@ -158,10 +172,13 @@ export function setupPasswordAuth(
       setTimeout(() => verifyPassword(), 500);
     }
   }
-  
+  tryAutoloadStoredPassword();
+  panel.addEventListener('device-info-refreshed', () => tryAutoloadStoredPassword());
+
   // Handle remember checkbox changes
   if (rememberCheckbox) {
     rememberCheckbox.addEventListener('change', () => {
+      const serialNumber = getSerialNumber();
       if (rememberCheckbox.checked && isAuthenticated && serialNumber) {
         savePassword(serialNumber, passwordInput.value.trim());
       } else if (!rememberCheckbox.checked && serialNumber) {

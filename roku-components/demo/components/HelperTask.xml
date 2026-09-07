@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!--
+    Generic async worker: write an { operation, ... } assocarray to `input`
+    and get an { operation, ... } assocarray back on `output` once the work
+    completes. Runs on its own thread so network calls never block the
+    render thread. Handles one request at a time — see HelperTask.brs.
+-->
+<component name="HelperTask" extends="Task">
+    <interface>
+        <field id="input" type="assocarray" alwaysNotify="true" />
+        <field id="output" type="assocarray" alwaysNotify="true" />
+    </interface>
+    <script type="text/brightscript" uri="pkg:/components/HelperTask.brs" />
+</component>

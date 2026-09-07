@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<component name="MainScene" extends="Scene">
+    <interface>
+        <!-- App Connector / RALE contract — see roku-components/README.md -->
+        <function name="GetExternalControlFunctions" />
+        <function name="ExecuteFunction" />
+        <!-- Called from source/main.brs -->
+        <function name="_rdsShowcase_start" />
+    </interface>
+    <script type="text/brightscript" uri="pkg:/components/MainScene.brs" />
+    <children>
+        <Rectangle width="1920" height="1080" color="0x0a0a12ff" />
+
+        <Poster uri="pkg:/images/channel_icon_wide.png" width="120" height="68"
+                translation="[60, 30]" loadDisplayMode="scaleToFit" />
+        <Label text="Roku Dev Studio Showcase" translation="[200, 50]"
+               color="0xf1f5f9ff" font="font:MediumBoldSystemFont" />
+        <Rectangle translation="[60, 140]" width="1800" height="2" color="0x8b5cf6cc" />
+
+        <Rectangle id="focusHighlight" translation="[52, 164]" width="1816" height="98" color="0x8b5cf633" />
+
+        <Label id="tileLabel0" translation="[84, 186]" width="1740" text="" color="0xf1f5f9ff" font="font:MediumBoldSystemFont" />
+        <Label id="tileDesc0" translation="[84, 222]" width="1740" text="" color="0x94a3b8ff" font="font:SmallestSystemFont" />
+
+        <Label id="tileLabel1" translation="[84, 292]" width="1740" text="" color="0xf1f5f9ff" font="font:MediumBoldSystemFont" />
+        <Label id="tileDesc1" translation="[84, 328]" width="1740" text="" color="0x94a3b8ff" font="font:SmallestSystemFont" />
+
+        <Label id="tileLabel2" translation="[84, 398]" width="1740" text="" color="0xf1f5f9ff" font="font:MediumBoldSystemFont" />
+        <Label id="tileDesc2" translation="[84, 434]" width="1740" text="" color="0x94a3b8ff" font="font:SmallestSystemFont" />
+
+        <Label id="tileLabel3" translation="[84, 504]" width="1740" text="" color="0xf1f5f9ff" font="font:MediumBoldSystemFont" />
+        <Label id="tileDesc3" translation="[84, 540]" width="1740" text="" color="0x94a3b8ff" font="font:SmallestSystemFont" />
+
+        <Label id="tileLabel4" translation="[84, 610]" width="1740" text="" color="0xf1f5f9ff" font="font:MediumBoldSystemFont" />
+        <Label id="tileDesc4" translation="[84, 646]" width="1740" text="" color="0x94a3b8ff" font="font:SmallestSystemFont" />
+
+        <Label id="tileLabel5" translation="[84, 716]" width="1740" text="" color="0xf1f5f9ff" font="font:MediumBoldSystemFont" />
+        <Label id="tileDesc5" translation="[84, 752]" width="1740" text="" color="0x94a3b8ff" font="font:SmallestSystemFont" />
+
+        <Label id="tileLabel6" translation="[84, 822]" width="1740" text="" color="0xf1f5f9ff" font="font:MediumBoldSystemFont" />
+        <Label id="tileDesc6" translation="[84, 858]" width="1740" text="" color="0x94a3b8ff" font="font:SmallestSystemFont" />
+
+        <Label id="tileLabel7" translation="[84, 928]" width="1740" text="" color="0xf1f5f9ff" font="font:MediumBoldSystemFont" />
+        <Label id="tileDesc7" translation="[84, 964]" width="1740" text="" color="0x94a3b8ff" font="font:SmallestSystemFont" />
+
+        <Label id="statusLabel" translation="[60, 1020]" width="1800" text=""
+               color="0x64748bff" font="font:SmallestSystemFont" />
+
+        <Group id="playerGroup" visible="false">
+            <Video id="playerVideo" translation="[0, 0]" width="1920" height="1080" />
+
+            <Rectangle translation="[0, 824]" width="1920" height="256" color="0x000000cc" />
+
+            <Label id="playerTitle" translation="[80, 848]" width="1600" text=""
+                   color="0xf1f5f9ff" font="font:LargeBoldSystemFont" />
+            <Label id="playerDescription" translation="[80, 902]" width="1600" height="56"
+                   wrap="true" text="" color="0xcbd5e1ff" font="font:MediumSystemFont" />
+
+            <Rectangle translation="[80, 964]" width="1760" height="6" color="0x334155ff" />
+            <Rectangle id="playerProgressFill" translation="[80, 964]" width="0" height="6" color="0x8b5cf6ff" />
+
+            <Label id="playerState" translation="[80, 982]" width="300" text=""
+                   color="0x8b5cf6ff" font="font:MediumBoldSystemFont" />
+            <Label id="playerTime" translation="[1560, 982]" width="280" text=""
+                   color="0x94a3b8ff" font="font:SmallestSystemFont" horizAlign="right" />
+
+            <Label translation="[80, 1024]" width="1760"
+                   text="Play/Pause toggles playback   ·   Rewind / Fast Forward seek 10s   ·   Back returns to the grid"
+                   color="0x64748bff" font="font:SmallestSystemFont" />
+        </Group>
+    </children>
+</component>

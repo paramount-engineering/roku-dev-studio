@@ -301,6 +301,16 @@ export function setupNetworkTab(
     requestBodyWrap: true,
     responseBodyWrap: true
   };
+  // `state.deviceSerial` above is a one-time snapshot — a device opened via Sideload Relay
+  // auto-connect has no serial yet (minimal fallback object), so this starts empty even when the
+  // device genuinely has one. Keep it live once a health check (renderer/app.ts) fetches the real
+  // value: the hotspot-client serial match (below) and the Traffic Rules modal title both read
+  // `state.deviceSerial` fresh at use time, so updating it in place here is enough.
+  panel.addEventListener('device-info-refreshed', (e: Event) => {
+    const ce = e as CustomEvent<{ device?: { serialNumber?: string } }>;
+    const next = ce.detail?.device?.serialNumber;
+    if (typeof next === 'string' && next.trim()) state.deviceSerial = next.trim();
+  });
   let pollTimer: ReturnType<typeof setInterval> | null = null;
   let lastBufferedPollAt = 0;
   // Per-watch-IP cursor for delta polling: the main process returns only events added/updated
@@ -2209,6 +2219,12 @@ export function setupNetworkTab(
     if (shouldPollEvents()) startPolling();
     else stopPolling();
     updateCaptureButton();
+    // The empty-state hint (and its proxy address / MITM state) is painted synchronously by
+    // setVisible()'s render() before this async status ever lands — without this, the very
+    // first status fetch after opening the tab would leave the placeholder host address
+    // (`S.networkInspector.proxyAddrFallback`, "machine-ip:8888") on screen indefinitely, since
+    // nothing else repaints an empty session list once its zero-events guidance is up.
+    if (state.events.length === 0) scheduleSessionListPaint({ force: true });
   }
 
   async function refreshNetworkCaptureStatus(): Promise<void> {

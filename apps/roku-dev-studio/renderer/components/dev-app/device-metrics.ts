@@ -36,6 +36,7 @@ import {
 } from './device-metrics-performance-step.js';
 import { pollDevAppForegroundAfterLaunch } from './dev-app-foreground-sync.js';
 import { rendererWarn } from '../../modules/utils/logger.js';
+import { devLog } from '../../modules/utils/dev-log.js';
 import { registerPanelRetranslate } from '../../modules/ui/retranslate-registry.js';
 import { S } from '@shared/strings/index.js';
 
@@ -478,7 +479,15 @@ export function setupRemoteTabMetrics(
   const wrapRaw = panel.querySelector('.remote-tab-metrics-root');
   if (!(wrapRaw instanceof HTMLElement)) return;
   const wrap: HTMLElement = wrapRaw;
-  const { developerEnabled, deviceKey } = ctx;
+  const { deviceKey } = ctx;
+  /** Snapshotted at panel-creation time, but a device connected via Sideload Relay auto-connect
+   *  (or any path that opens the tab from a minimal fallback device object before its real
+   *  device-info has been fetched) starts with this `false` even when the device genuinely has
+   *  Developer Mode on — `checkDeviceConnection` (renderer/app.ts) only learns the real value on
+   *  its next periodic health check, well after this module has already captured the stale one.
+   *  Kept live via the `device-info-refreshed` listener below, mirroring how `devAppForeground`
+   *  stays live via `dev-app-active-polled`. */
+  let developerEnabled = ctx.developerEnabled;
 
   const cpuSvg = wrap.querySelector('svg[data-chart="cpu"]');
   const memSvg = wrap.querySelector('svg[data-chart="mem"]');
@@ -672,7 +681,7 @@ export function setupRemoteTabMetrics(
     const normalized = normalizeMetricsErrorForDedupe(msg);
     if (normalized !== lastMetricsErrorToast) {
       lastMetricsErrorToast = normalized;
-      showToast(msg, 'error');
+      showToast(msg, 'error', undefined, panel);
     }
   }
 
@@ -1490,7 +1499,7 @@ export function setupRemoteTabMetrics(
             await api.launch('dev');
             await pollDevAppForegroundAfterLaunch(panel, api);
           } catch (e: unknown) {
-            showToast(errMessage(e) || S.devApp.launchFailed, 'error');
+            showToast(errMessage(e) || S.devApp.launchFailed, 'error', undefined, panel);
           } finally {
             launchBtn.disabled = false;
             if (prevLabel != null) launchBtn.textContent = prevLabel;
@@ -1673,10 +1682,7 @@ export function setupRemoteTabMetrics(
     applyPerformanceUiState();
     const ok = wrap.getAttribute('data-remote-layout') === 'quad';
     if (ok && panel.classList.contains('active') && document.visibilityState === 'visible') {
-      showToast(
-        S.devApp.showDevicePerfAutoOnToast,
-        'info'
-      );
+      showToast(S.devApp.showDevicePerfAutoOnToast, 'info', undefined, panel);
     }
     return ok;
   }
@@ -1745,6 +1751,29 @@ export function setupRemoteTabMetrics(
       // or flip the Launch banner to "paused".
       if (ce.detail.ok === false) return;
       devAppForeground = ce.detail.active;
+      devLog('[Remote metrics] dev-app-active-polled received', {
+        deviceKey,
+        active: ce.detail.active,
+        developerEnabled,
+        isQuadLayout: isQuadLayout(),
+        isDeviceKnownOffline: isDeviceKnownOffline(),
+        shouldPoll: shouldPoll()
+      });
+      applyPerformanceUiState();
+    },
+    { signal: wrapUiAc.signal }
+  );
+
+  /** Dispatched by `checkDeviceConnection` (renderer/app.ts) whenever it refreshes this device's
+   *  info from a health check — the only way this module learns a Developer Mode flag it didn't
+   *  have at setup time (see the `developerEnabled` comment above). */
+  panel.addEventListener(
+    'device-info-refreshed',
+    (e: Event) => {
+      const ce = e as CustomEvent<{ device?: { developerEnabled?: boolean } }>;
+      const next = ce.detail?.device?.developerEnabled === true;
+      if (next === developerEnabled) return;
+      developerEnabled = next;
       applyPerformanceUiState();
     },
     { signal: wrapUiAc.signal }

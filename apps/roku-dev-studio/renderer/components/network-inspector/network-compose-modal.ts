@@ -260,7 +260,6 @@ export async function openComposeModal(opts: {
           <input type="checkbox" data-compose-apply-rules /> ${S.networkInspector.composeApplyRules}
         </label>
         <span class="ni-rules-status ni-compose-status" data-compose-status aria-live="polite"></span>
-        <button type="button" class="btn btn-secondary" data-compose-cancel>${S.common.cancel}</button>
         <button type="button" class="btn btn-primary ni-compose-send" data-compose-send>
           <span class="icon icon-xs"><svg><use href="#icon-send"/></svg></span>${S.networkInspector.composeSend}
         </button>
@@ -286,7 +285,6 @@ export async function openComposeModal(opts: {
   document.addEventListener('keydown', onKey);
   attachBackdropClickToClose(overlay, close);
   overlay.querySelector('.ni-compose-close')?.addEventListener('click', close);
-  overlay.querySelector('[data-compose-cancel]')?.addEventListener('click', close);
 
   const urlEl = overlay.querySelector('[data-compose-url]') as HTMLInputElement | null;
   const paramsRows = overlay.querySelector('[data-compose-params-rows]') as HTMLElement | null;

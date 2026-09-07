@@ -2601,7 +2601,7 @@
     .welcome-detail-overlay {
       position: fixed;
       inset: 0;
-      z-index: 100000;
+      z-index: 5000;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -2639,12 +2639,12 @@
       position: absolute;
       top: 14px;
       right: 14px;
-      width: 30px;
-      height: 30px;
+      width: 28px;
+      height: 28px;
       border: none;
-      background: var(--bg-elevated);
+      background: var(--bg-tertiary);
       color: var(--text-muted);
-      border-radius: 8px;
+      border-radius: 6px;
       cursor: pointer;
       display: flex;
       align-items: center;
@@ -2652,9 +2652,8 @@
       transition: background 0.15s, color 0.15s;
     }
     .welcome-detail-close:hover {
-      background: var(--bg-elevated);
-      color: var(--text-primary);
-      border: 1px solid var(--border-hover, rgba(139, 92, 246, 0.25));
+      background: var(--accent-red-dim);
+      color: var(--accent-red);
     }
 
     .welcome-detail-hero {
@@ -7468,7 +7467,15 @@
       border-color: var(--accent-purple);
       background: var(--accent-purple-dim);
     }
-    
+
+    /* Dragging an Installed Apps tile over an App ID field (see app-id-drag-drop.ts). */
+    .app-id-drop-target--dragover {
+      border-color: var(--accent-purple) !important;
+      background: var(--accent-purple-dim) !important;
+      outline: 2px solid var(--accent-purple);
+      outline-offset: -1px;
+    }
+
     .drop-zone-icon {
       font-size: 32px;
       margin-bottom: 8px;
@@ -8798,8 +8805,8 @@
     /* Color popover — portaled to <body> (position:fixed) so its expandable inline picker isn't
        clipped by the modal's overflow. Presets are squares; the custom-picker toggle is a ringed
        rainbow CIRCLE so it's obviously "pick anything" and not another preset. */
-    /* Above the modal overlay (z-index 1000) so the picker isn't hidden behind the blocking backdrop. */
-    .ni-find-pop { position: fixed; z-index: 1100; background: var(--bg-secondary); border: 1px solid var(--border-hover); border-radius: 8px; padding: 8px; box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5); }
+    /* Above the modal overlay (z-index 5000) so the picker isn't hidden behind the blocking backdrop. */
+    .ni-find-pop { position: fixed; z-index: 5100; background: var(--bg-secondary); border: 1px solid var(--border-hover); border-radius: 8px; padding: 8px; box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5); }
     .ni-find-color-pop { display: flex; flex-direction: column; gap: 8px; }
     .ni-find-color-swatches { display: flex; align-items: center; gap: 8px; }
     .ni-find-color-swatch { width: 22px; height: 22px; border-radius: 5px; border: 2px solid transparent; cursor: pointer; padding: 0; }
@@ -8931,7 +8938,7 @@
     .ni-bw-caret { position: absolute; right: 1px; top: 1px; bottom: 1px; width: 26px; display: inline-flex; align-items: center; justify-content: center; background: transparent; border: none; color: var(--text-muted); cursor: pointer; border-radius: 0 6px 6px 0; }
     .ni-bw-caret:hover { color: var(--text-secondary); }
     .ni-bw-combo:has(.ni-rules-bw:disabled) .ni-bw-caret { opacity: 0.4; pointer-events: none; }
-    .ni-bw-menu { position: fixed; z-index: 1100; max-height: 240px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; padding: 4px; background: var(--bg-elevated); border: 1px solid var(--border-hover); border-radius: 8px; box-shadow: 0 14px 34px rgba(0, 0, 0, 0.55); }
+    .ni-bw-menu { position: fixed; z-index: 5100; max-height: 240px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; padding: 4px; background: var(--bg-elevated); border: 1px solid var(--border-hover); border-radius: 8px; box-shadow: 0 14px 34px rgba(0, 0, 0, 0.55); }
     .ni-bw-menu[hidden] { display: none; }
     .ni-bw-opt { text-align: left; background: transparent; border: none; color: var(--text-primary); font: inherit; font-size: 12px; padding: 7px 10px; border-radius: 6px; cursor: pointer; white-space: nowrap; }
     .ni-bw-opt:hover { background: var(--accent-purple-dim); }
@@ -9208,6 +9215,34 @@
       text-align: center;
       color: var(--text-muted);
       font-size: 12px;
+    }
+    /* Cold-start "Loading…" placeholder inside .ni-sidebar-list (Network Session Viewer) —
+       replaced wholesale by renderList()'s innerHTML once the file loads or fails, so no JS
+       show/hide is needed. Shimmering rows stand in for the request rows about to render —
+       same visual language as the Log Viewer's loading skeleton. */
+    .ni-session-loading-skeleton {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin: 4px 0 16px;
+    }
+    .ni-session-loading-row {
+      display: block;
+      height: 12px;
+      border-radius: 4px;
+      background: linear-gradient(90deg, var(--accent-purple-dim) 25%, var(--accent-purple) 50%, var(--accent-purple-dim) 75%);
+      background-size: 200% 100%;
+      animation: niSessionSkeletonShimmer 1.4s ease-in-out infinite;
+    }
+    .ni-session-loading-row:nth-child(1) { width: 88%; animation-delay: 0ms; }
+    .ni-session-loading-row:nth-child(2) { width: 68%; animation-delay: 120ms; }
+    .ni-session-loading-row:nth-child(3) { width: 78%; animation-delay: 240ms; }
+    .ni-session-loading-row:nth-child(4) { width: 60%; animation-delay: 360ms; }
+    .ni-session-loading-row:nth-child(5) { width: 72%; animation-delay: 480ms; }
+    .ni-session-loading-row:nth-child(6) { width: 64%; animation-delay: 600ms; }
+    @keyframes niSessionSkeletonShimmer {
+      0% { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
     }
     .ni-detail-workspace {
       flex: 1;
@@ -12758,7 +12793,13 @@
       opacity: 0.65;
     }
 
-    /* Help Modal */
+    /* Help Modal
+       Stacking tiers (app-wide): normal UI < toast/notification (z-index 2000) < modal (z-index
+       5000). Every modal shares this SAME z-index value — a modal opened from within an already-open
+       modal (e.g. Deep Link's "Delete Media Type" confirm from inside "Manage Media Types", or the
+       Network Inspector's Port Conflict modal appearing over another open NI modal) is appended to the
+       DOM after its parent, and same-z-index siblings stack in DOM order, so the child always renders
+       on top without needing its own bumped value. */
     .modal-overlay {
       position: fixed;
       top: 0;
@@ -12769,7 +12810,7 @@
       display: none;
       align-items: center;
       justify-content: center;
-      z-index: 1000;
+      z-index: 5000;
       backdrop-filter: blur(4px);
     }
     
@@ -12836,10 +12877,11 @@
       justify-content: center;
       transition: all 0.15s;
     }
-    
+
+    /* Matches the tab-close (×) button's existing red-on-hover convention. */
     .modal-close:hover {
-      background: var(--bg-hover);
-      color: var(--text-primary);
+      background: var(--accent-red-dim);
+      color: var(--accent-red);
     }
     
     .modal-body {
@@ -12888,6 +12930,40 @@
     }
     .apply-to-device-select:focus { outline: none; border-color: var(--accent-purple); }
     .apply-to-device-footer { display: flex; justify-content: flex-end; gap: 8px; padding: 16px 24px; border-top: 1px solid var(--border); }
+
+    /* Try Demo App picker modal (try-demo-app-modal.ts) */
+    .try-demo-app-modal { width: min(600px, 92vw); max-width: 600px; }
+    .try-demo-app-explainer { margin: 0 0 18px; color: var(--text-secondary); font-size: 13px; line-height: 1.55; }
+    .try-demo-app-tips { margin: 0 0 18px; padding: 14px 18px; border-radius: 10px; background: var(--bg-tertiary); border: 1px solid var(--border); }
+    .try-demo-app-tips-heading { margin: 0 0 10px; color: var(--text-primary); font-size: 12.5px; font-weight: 600; }
+    .try-demo-app-tips-list { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 10px; }
+    .try-demo-app-tips-list li { color: var(--text-secondary); font-size: 13px; line-height: 1.5; }
+    .try-demo-app-tips-list li strong { color: var(--text-primary); font-weight: 600; }
+    .try-demo-app-tips-list li code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 11.5px;
+      color: #c4b5fd;
+      background: rgba(139, 92, 246, 0.14);
+      border: 1px solid rgba(139, 92, 246, 0.32);
+      border-radius: 5px;
+      padding: 1px 6px;
+      white-space: nowrap;
+    }
+    .try-demo-app-row { display: flex; align-items: center; gap: 10px; }
+    .try-demo-app-select-label { flex: 0 0 auto; font-size: 13px; color: var(--text-secondary); }
+    .try-demo-app-select {
+      flex: 1 1 auto; min-width: 0; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border);
+      background: var(--bg-tertiary); color: var(--text-primary); font-family: inherit; font-size: 13px; cursor: pointer;
+    }
+    .try-demo-app-select:focus { outline: none; border-color: var(--accent-purple); }
+    .try-demo-app-error { margin: 12px 0 0; color: var(--accent-red, #ef4444); font-size: 12.5px; }
+    .try-demo-app-footer { display: flex; align-items: center; justify-content: flex-end; gap: 8px; padding: 16px 24px; border-top: 1px solid var(--border); }
+    .try-demo-app-settings-link {
+      margin-right: auto; background: none; border: none; padding: 0; cursor: pointer;
+      color: var(--text-secondary); font-size: 12.5px; text-decoration: underline; text-decoration-color: transparent;
+      transition: text-decoration-color 0.15s ease, color 0.15s ease;
+    }
+    .try-demo-app-settings-link:hover { color: var(--text-primary); text-decoration-color: currentColor; }
 
     /* Import Action Script modal */
     .action-scripts-import-modal .action-scripts-import-modal-box { max-width: 720px; width: 90vw; max-height: 85vh; display: flex; flex-direction: column; }
@@ -13147,9 +13223,18 @@
     
     .help-section ul {
       margin-left: 20px;
+      margin-bottom: 12px;
       font-size: 13px;
       color: var(--text-secondary);
       line-height: 1.8;
+    }
+    /* Bullet items had no gap of their own — only line-height, which spaces lines *within* an
+       item, not the items apart — so a multi-line bullet ran straight into the next one. */
+    .help-section li {
+      margin-bottom: 8px;
+    }
+    .help-section li:last-child {
+      margin-bottom: 0;
     }
     /* Network Inspector help: clear separation between its subsections (Getting started, Toolbar,
        Traffic Rules, …) so a heading never hugs the previous list. */
@@ -13200,6 +13285,17 @@
       font-family: 'JetBrains Mono', monospace;
       color: var(--text-primary);
     }
+
+    /* Inline "jump to Settings" link embedded in help/info modal prose (see
+       modules/utils/help-settings-link.ts) — reads like the bold text it replaces, but
+       clickable, so it needs no separate icon/affordance to signal that. */
+    .help-settings-link {
+      background: none; border: none; padding: 0; margin: 0; cursor: pointer;
+      font: inherit; font-weight: 600; color: var(--text-primary);
+      text-decoration: underline; text-decoration-color: transparent;
+      transition: text-decoration-color 0.15s ease, color 0.15s ease;
+    }
+    .help-settings-link:hover { color: var(--accent-purple); text-decoration-color: currentColor; }
 
     .keyboard-remote-help-btn {
       display: none;
@@ -13397,7 +13493,7 @@
       display: none;
       align-items: center;
       justify-content: center;
-      z-index: 1000;
+      z-index: 5000;
       backdrop-filter: blur(4px);
     }
     
@@ -13508,7 +13604,8 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      z-index: 10000;
+      /* z-index intentionally omitted — inherits the shared .modal-overlay tier (5000) above
+         so every modal, this one included, stacks consistently. */
       backdrop-filter: blur(4px);
     }
     
@@ -13753,7 +13850,7 @@
       padding: 0 calc(10px * var(--titlebar-content-scale));
       border: 1px solid var(--border);
       border-radius: calc(6px * var(--titlebar-content-scale));
-      background: transparent;
+      background: var(--bg-tertiary);
       color: var(--text-secondary);
       font-size: calc(12px * var(--titlebar-content-scale));
       font-weight: 500;
@@ -13784,6 +13881,38 @@
      * isn't a dead control on the Home view.
      */
     .floating-remote-toggle-btn[hidden] {
+      display: none !important;
+    }
+
+    /*
+     * "Try Demo App" — a one-shot action button (no on/off state, unlike
+     * Floating Remote), so it reuses the same base look/hover/sizing without
+     * the `--on` modifier. Hidden via the `hidden` attribute by app.ts
+     * whenever the Settings → General toggle is off or no dev-mode-enabled
+     * device is known.
+     */
+    .titlebar-try-demo-app-btn {
+      -webkit-app-region: no-drag;
+      display: inline-flex;
+      align-items: center;
+      gap: calc(5px * var(--titlebar-content-scale));
+      height: calc(28px * var(--titlebar-content-scale));
+      padding: 0 calc(10px * var(--titlebar-content-scale));
+      border: 1px solid var(--border);
+      border-radius: calc(6px * var(--titlebar-content-scale));
+      background: var(--bg-tertiary);
+      color: var(--text-secondary);
+      font-size: calc(12px * var(--titlebar-content-scale));
+      font-weight: 500;
+      cursor: pointer;
+      transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+    }
+    .titlebar-try-demo-app-btn:hover {
+      color: var(--text-primary);
+      border-color: var(--accent-purple);
+      background: rgba(124, 58, 237, 0.08);
+    }
+    .titlebar-try-demo-app-btn[hidden] {
       display: none !important;
     }
 
@@ -14235,6 +14364,66 @@
       pointer-events: none;
       opacity: 0.65;
     }
+
+    /* Drag a log/network-session file onto the main window — see
+       renderer/modules/utils/main-window-file-drop.ts. */
+    .file-drop-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 5000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(14, 14, 20, 0.82);
+      backdrop-filter: blur(3px);
+      /* HTML5 drag events target whatever's under the cursor — an overlay that
+         intercepts pointer events would immediately fire its own dragleave and
+         flicker itself closed. The window-level listeners (not this overlay)
+         own drag tracking, so this only ever needs to be seen, not hovered. */
+      pointer-events: none;
+      animation: fileDropOverlayFadeIn 0.15s ease;
+    }
+    /* `display: flex` above is the same specificity as the UA `[hidden]` rule and comes later
+       in the cascade, so without this it wins and the overlay never actually hides once shown
+       — same gotcha already documented elsewhere in this file for `[hidden]` + an inline
+       display override. This compound selector out-specifies both. */
+    .file-drop-overlay[hidden] {
+      display: none;
+    }
+    @keyframes fileDropOverlayFadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+    .file-drop-overlay-inner {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 14px;
+      padding: 48px 64px;
+      border-radius: 16px;
+      border: 2px dashed var(--accent-purple);
+      background: var(--bg-secondary);
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+      animation: fileDropZonePulse 1.4s ease-in-out infinite;
+    }
+    .file-drop-overlay--supported .file-drop-overlay-inner { border-color: var(--accent-green); }
+    .file-drop-overlay--unsupported .file-drop-overlay-inner { border-color: var(--accent-red); }
+    .file-drop-overlay--mixed .file-drop-overlay-inner { border-color: var(--accent-amber); }
+    @keyframes fileDropZonePulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.03); }
+    }
+    .file-drop-overlay-icon .icon {
+      width: 1em;
+      height: 1em;
+    }
+    .file-drop-overlay-text {
+      margin: 0;
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--text-primary);
+      text-align: center;
+    }
   </style>
 </head>
 <body>
@@ -14316,6 +14505,19 @@
       >
         <span class="icon icon-sm" aria-hidden="true"><svg><use href="#icon-gamepad"/></svg></span>
         <span class="titlebar-floating-remote-btn-label" data-i18n="app.floatingRemote">Floating Remote</span>
+      </button>
+      <button
+        type="button"
+        class="titlebar-try-demo-app-btn"
+        id="titlebarTryDemoAppBtn"
+        title="Try the bundled Roku Dev Studio Showcase demo channel"
+        data-i18n-title="app.tryDemoAppTitle"
+        aria-label="Try Demo App"
+        data-i18n-aria-label="app.tryDemoAppAria"
+        hidden
+      >
+        <span class="icon icon-sm" aria-hidden="true"><svg><use href="#icon-play"/></svg></span>
+        <span class="titlebar-try-demo-app-btn-label" data-i18n="app.tryDemoApp">Try Demo App</span>
       </button>
       <button
         type="button"
@@ -15483,28 +15685,7 @@
         <div class="apps-tab-layout">
           <!-- Left Column (30%) -->
           <div class="apps-tab-layout-col-left">
-            <!-- Custom Launch (Row 1) -->
-            <div class="card" style="flex: 0 0 auto;">
-              <div class="card-header" style="padding: 4px 12px;">
-                <span class="card-icon"><span class="icon icon-sm"><svg><use href="#icon-zap"/></svg></span></span>
-                <span class="card-title" data-i18n="app.customLaunch">Custom Launch</span>
-                <div class="card-header-actions">
-                  <button class="btn btn-success launch-custom-btn" style="padding: 4px 12px; font-size: 11px;" data-i18n="app.launch">Launch</button>
-                </div>
-              </div>
-              <div class="card-body" style="display: flex; flex-direction: column; gap: 12px;">
-                <input type="text" class="custom-app-id" placeholder="App ID (e.g., 12)" data-i18n-placeholder="app.customAppIdPlaceholder" style="width: 100%; padding: 10px 14px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-primary); color: var(--text-primary); font-family: 'JetBrains Mono', monospace; font-size: 13px; box-sizing: border-box;">
-                <div class="tv-inputs-row" style="display: none; gap: 6px; flex-wrap: wrap; align-items: center; margin-top: 8px;">
-                  <span style="font-size: 11px; color: var(--text-muted);" data-i18n="app.tvInputsLabel">TV Inputs:</span>
-                  <button class="btn btn-secondary hdmi-btn" data-app="tvinput.hdmi1" style="padding: 4px 8px; font-size: 10px;" data-i18n="app.hdmi1">HDMI 1</button>
-                  <button class="btn btn-secondary hdmi-btn" data-app="tvinput.hdmi2" style="padding: 4px 8px; font-size: 10px;" data-i18n="app.hdmi2">HDMI 2</button>
-                  <button class="btn btn-secondary hdmi-btn" data-app="tvinput.hdmi3" style="padding: 4px 8px; font-size: 10px;" data-i18n="app.hdmi3">HDMI 3</button>
-                  <button class="btn btn-secondary hdmi-btn" data-app="tvinput.hdmi4" style="padding: 4px 8px; font-size: 10px;" data-i18n="app.hdmi4">HDMI 4</button>
-                </div>
-              </div>
-            </div>
-            
-            <!-- Deep Link (Row 2) -->
+            <!-- Deep Link (Row 1) -->
             <div class="card" style="flex: 0 0 auto;">
               <div class="card-header" style="padding: 4px 12px;">
                 <span class="card-icon"><span class="icon icon-sm"><svg><use href="#icon-link"/></svg></span></span>

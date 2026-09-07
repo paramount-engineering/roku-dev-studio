@@ -166,7 +166,17 @@
               </div>
             </div>
             <div class="ni-sidebar-list" data-ni-session-list>
-              <div class="ni-session-empty" data-i18n="common.loading">Loading…</div>
+              <div class="ni-session-empty">
+                <div class="ni-session-loading-skeleton">
+                  <span class="ni-session-loading-row"></span>
+                  <span class="ni-session-loading-row"></span>
+                  <span class="ni-session-loading-row"></span>
+                  <span class="ni-session-loading-row"></span>
+                  <span class="ni-session-loading-row"></span>
+                  <span class="ni-session-loading-row"></span>
+                </div>
+                <span data-i18n="common.loading">Loading…</span>
+              </div>
             </div>
           </aside>
           <!-- Detail pane markup injected at runtime from network-detail-view.ts (DETAIL_PANE_HTML), shared with the live Network Inspector. -->

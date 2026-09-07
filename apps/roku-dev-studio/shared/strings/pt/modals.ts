@@ -311,7 +311,7 @@ export const modals = {
     actionMute: 'Mudo',
     actionPower: 'Liga/Desliga',
     footnote:
-      'Desative o controle por teclado nas Configurações se você não quiser que as teclas de seta e outras teclas mapeadas enviem pressionamentos ao Roku.',
+      'Desative o controle por teclado nas <button type="button" class="help-settings-link" data-settings-section="general" data-settings-highlight="keyboardRemoteSettingsRow">Configurações</button> se você não quiser que as teclas de seta e outras teclas mapeadas enviem pressionamentos ao Roku.',
   },
 
   secretScreens: {
@@ -406,7 +406,7 @@ export const modals = {
       'Você também pode conectar manualmente inserindo um endereço IP na seção "Conexão manual" na parte inferior da barra lateral.',
 
     remoteControlHeading: 'Controle remoto',
-    remoteControlIntroHtml: `Use o controle remoto virtual para controlar seu Roku. Atalhos de teclado opcionais ficam disponíveis quando você ativa <strong>Configurações → Geral → Controle remoto do Roku - Usar o teclado </strong> (desativado por padrão). Eles se aplicam na aba <strong>Controle remoto</strong> (sozinha ou no layout em quadrante de desempenho do dispositivo) ou na aba <strong>Dev App</strong>, apenas para a aba de dispositivo que você tem aberta — não em outras seções, campos de texto ou modais.`,
+    remoteControlIntroHtml: `Use o controle remoto virtual para controlar seu Roku. Atalhos de teclado opcionais ficam disponíveis quando você ativa <button type="button" class="help-settings-link" data-settings-section="general" data-settings-highlight="keyboardRemoteSettingsRow">Configurações → Geral → Controle remoto do Roku - Usar o teclado </button> (desativado por padrão). Eles se aplicam na aba <strong>Controle remoto</strong> (sozinha ou no layout em quadrante de desempenho do dispositivo) ou na aba <strong>Dev App</strong>, apenas para a aba de dispositivo que você tem aberta — não em outras seções, campos de texto ou modais.`,
     remoteControlTabHtml: `Na aba <strong>Controle remoto</strong> ou <strong>Dev App</strong>, pressione <span class="help-kbd">Tab</span> a partir dos controles remotos (não das abas de seção ou de outro campo de texto) para saltar para o campo <strong>Enviar texto</strong>. <span class="help-kbd">Enter</span> envia a partir desse campo.`,
     remoteControlMediaHtml: `Os controles de mídia (Retroceder, Reproduzir/Pausar, Avançar) e os botões de volume também estão disponíveis no controle remoto virtual. Use <strong>Enviar texto</strong> na parte inferior para digitar texto diretamente no campo de texto ativo do dispositivo.`,
     scNavigation: 'Navegação',
@@ -503,7 +503,7 @@ export const modals = {
             <li><strong>Conectar ao Console</strong> - Opcionalmente, conecte-se automaticamente ao console de depuração durante as execuções</li>
           `,
     actionScriptsDevPasswordHtml: `<strong>Senha de desenvolvedor</strong> - Ações como Captura de tela, Sideload e Excluir sideload exigem uma senha de desenvolvedor. A senha é resolvida nesta ordem: <code>"password"</code> no nível da ação → <code>"devPassword"</code> no nível do script → senha da seção Autenticação do Dev App. Se nenhuma for encontrada, você será solicitado durante a validação.`,
-    actionScriptsSaveFolderHtml: `<strong>Pasta de salvamento</strong> - A pasta de salvamento padrão fica em <strong>Configurações → Action Scripts → Pasta padrão</strong>. A cada execução, você pode escolher outra pasta. Os artefatos (capturas de tela, PNGs de gráficos de desempenho, PDFs exportados) vão para uma subpasta com carimbo de data/hora, criada apenas quando algo é de fato produzido.`,
+    actionScriptsSaveFolderHtml: `<strong>Pasta de salvamento</strong> - A pasta de salvamento padrão fica em <button type="button" class="help-settings-link" data-settings-section="action-scripts" data-settings-highlight="actionScriptsDefaultFolderSettingsRow">Configurações → Action Scripts → Pasta padrão</button>. A cada execução, você pode escolher outra pasta. Os artefatos (capturas de tela, PNGs de gráficos de desempenho, PDFs exportados) vão para uma subpasta com carimbo de data/hora, criada apenas quando algo é de fato produzido.`,
     actionScriptsAiAgentsHtml: `<strong>Agentes de IA</strong> - Os Action Scripts que você cria no Construtor também podem ser criados por agentes de IA por meio do servidor MCP (veja a seção <em>Agentes de IA (MCP)</em> abaixo); o script do agente sempre vai para o Construtor para revisão humana antes de executar.`,
     actionScriptsIntro:
       'Automatize sequências de ações do dispositivo usando scripts baseados em JSON. Duas visualizações estão disponíveis:',
@@ -513,7 +513,7 @@ export const modals = {
     devicePerformanceListHtml: `
             <li>Gráficos de <strong>uso de CPU</strong>, <strong>memória do sistema</strong> e <strong>objetos BrightScript</strong> (contagem ou visualização de memória quando disponível)</li>
             <li>Os gráficos refletem o app em execução — para leituras representativas, o dispositivo deve estar com o <strong>modo de desenvolvedor</strong> ativado e seu <strong>canal de desenvolvedor carregado por sideload</strong> em primeiro plano</li>
-            <li><strong>Configurações → Desempenho do dispositivo</strong> ajusta o intervalo de amostragem e a janela de histórico dos gráficos; ative <strong>Lembrar 'Mostrar desempenho do dispositivo'</strong> para restaurar o layout em quadrante por dispositivo entre as sessões</li>
+            <li><button type="button" class="help-settings-link" data-settings-section="device-performance" data-settings-highlight="devicePerfRows">Configurações → Desempenho do dispositivo</button> ajusta o intervalo de amostragem e a janela de histórico dos gráficos; ative <strong>Lembrar 'Mostrar desempenho do dispositivo'</strong> para restaurar o layout em quadrante por dispositivo entre as sessões</li>
             <li>Dentro dos Action Scripts, as etapas de <strong>Desempenho do dispositivo</strong> capturam cartões de gráfico nos resultados da execução (e na exportação em PDF)</li>
           `,
 
@@ -521,8 +521,8 @@ export const modals = {
     networkInspectorIntroHtml: `Inspecione o tráfego HTTP(S) que o seu canal de desenvolvedor faz. O Roku Dev Studio executa um <strong>proxy MITM</strong> local que descriptografa o HTTPS do canal de desenvolvedor roteado por ele, para que você possa ver os cabeçalhos e corpos completos de requisição/resposta.`,
     networkInspectorGettingStartedHtml: `<strong>Primeiros passos</strong>`,
     networkInspectorGettingStartedListHtml: `
-            <li>Ative o <strong>proxy MITM</strong> em <strong>Configurações → Inspetor de rede</strong> e, em seguida, faça seu canal de desenvolvedor rotear as requisições pelo endereço de proxy mostrado — use <code>host:port</code> (ex.: <code>192.168.1.50:8888</code>). A forma como o canal aplica esse proxy depende do código de rede do seu app.</li>
-            <li>A <strong>Captura de hotspot</strong> opcional registra metadados de SNI/DNS de todo o tráfego do dispositivo; ela precisa de acesso à captura de pacotes do SO (macOS BPF, Windows Npcap). Configurações → Inspetor de rede orienta a configuração por plataforma.</li>
+            <li>Ative o <strong>proxy MITM</strong> em <button type="button" class="help-settings-link" data-settings-section="network-inspector" data-settings-highlight="networkInspectorEnableSettingsRow">Configurações → Inspetor de rede</button> e, em seguida, faça seu canal de desenvolvedor rotear as requisições pelo endereço de proxy mostrado — use <code>host:port</code> (ex.: <code>192.168.1.50:8888</code>). A forma como o canal aplica esse proxy depende do código de rede do seu app.</li>
+            <li>A <strong>Captura de hotspot</strong> opcional registra metadados de SNI/DNS de todo o tráfego do dispositivo; ela precisa de acesso à captura de pacotes do SO (macOS BPF, Windows Npcap). <button type="button" class="help-settings-link" data-settings-section="network-inspector" data-settings-highlight="niSetupRow">Configurações → Inspetor de rede</button> orienta a configuração por plataforma.</li>
           `,
     networkInspectorToolbarHtml: `<strong>Barra de ferramentas</strong> (canto superior direito do painel): <strong>Iniciar/Parar captura</strong>, <strong>Layout dos painéis</strong> (empilhado vs. requisição/resposta lado a lado) e <strong>Configurar regras de tráfego</strong>.`,
     networkInspectorToolbarListHtml: `
@@ -545,7 +545,7 @@ export const modals = {
     aiAgentsHeading: 'Agentes de IA (MCP)',
     aiAgentsIntroHtml: `O Roku Dev Studio inclui um servidor <strong>MCP (Model Context Protocol)</strong> para que agentes de IA no Cursor, Claude Desktop ou VS Code possam controlar um dispositivo real por meio deste app:`,
     aiAgentsListHtml: `
-            <li><strong>Configurações → Servidor MCP</strong> - Alterne um cliente para adicionar ou remover sua entrada MCP <code>roku-dev-studio</code>; as outras entradas na configuração MCP desse cliente não são alteradas</li>
+            <li><button type="button" class="help-settings-link" data-settings-section="mcp-server">Configurações → Servidor MCP</button> - Alterne um cliente para adicionar ou remover sua entrada MCP <code>roku-dev-studio</code>; as outras entradas na configuração MCP desse cliente não são alteradas</li>
             <li><strong>Duas superfícies</strong> - Operações diretas no dispositivo para ações pontuais (<code>keypress</code>, <code>launch_app</code>, <code>screenshot</code>, <code>app_function</code>, <code>rale_command</code>, telnet …) e <strong>Action Scripts</strong> para fluxos de várias etapas / condicionais que vão para o Construtor para revisão</li>
             <li><strong>Toasts</strong> - Ações destrutivas do agente (iniciar, sideload, excluir sideload, captura de tela, comandos RALE destrutivos) mostram um toast não bloqueante no app para que você sempre veja o que o agente fez</li>
             <li><strong>As senhas permanecem locais</strong> - Sideload / captura de tela / exclusão de sideload reutilizam a senha que o painel do dispositivo lembrou; o agente nunca precisa enviar uma</li>
@@ -592,7 +592,7 @@ export const modals = {
 
     sideloadRelayHeading: 'Sideload Relay',
     sideloadRelayIntroHtml: `Faça sideload de um build para <strong>muitos dispositivos de uma vez</strong>. Quando a retransmissão está ativada, o Roku Dev Studio se anuncia como um Roku na sua rede: aponte seu IDE (VS Code BrightScript / roku-deploy / Eclipse) ou um navegador para esta máquina, faça o upload uma vez, e o RDS distribui o build — <em>instalar → iniciar → console</em> — para cada dispositivo de destino, local ou em uma localização remota.`,
-    sideloadRelayEnableHtml: `<strong>Ative-a</strong> em <strong>Configurações → Sideload Relay</strong> (desativada por padrão). Dois pré-requisitos controlam a opção:`,
+    sideloadRelayEnableHtml: `<strong>Ative-a</strong> em <button type="button" class="help-settings-link" data-settings-section="sideload-relay" data-settings-highlight="optSideloadRelay-row">Configurações → Sideload Relay</button> (desativada por padrão). Dois pré-requisitos controlam a opção:`,
     sideloadRelayEnableListHtml: `
             <li><strong>Senha de desenvolvedor da retransmissão</strong> - A senha com que o seu IDE se autentica no RDS (usuário <code>rokudev</code>), exatamente como a senha de desenvolvedor de um Roku real. Ela é separada da senha de desenvolvedor de cada dispositivo de destino.</li>
             <li><strong>Configurar dispositivos</strong> - Abra o modal de configuração de dispositivos e ative pelo menos um dispositivo acessível e com o modo de desenvolvedor ativado. Ele lista dispositivos locais e remotos (de localização de retransmissão); ative os que devem receber cada build. Dispositivos sem uma senha de desenvolvedor salva mostram <strong>🔒 Definir senha</strong> para validar uma na interface. Dispositivos definidos anteriormente que ficam offline permanecem na lista (desativados) e reingressam automaticamente quando ficam acessíveis novamente.</li>

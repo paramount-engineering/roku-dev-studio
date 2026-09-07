@@ -19,6 +19,7 @@ import { attachInstantTooltips } from '../../modules/utils/instant-tooltip.js';
 import { S, applyI18n, availableLocales, getLocale, matchLocale, localeLabel, setLocale, SYSTEM_LOCALE } from '@shared/strings/index.js';
 import { applyLocalePreference } from '../../modules/utils/locale-live.js';
 import { setLocaleFromPreference } from '../../modules/utils/locale-pref.js';
+import { installCrashCapture } from '../../modules/errors/install.js';
 
 const api = (window as any).settingsApi;
 if (!api) {
@@ -26,7 +27,15 @@ if (!api) {
   throw new Error('Settings API unavailable');
 }
 
+installCrashCapture({
+  windowName: 'settings',
+  getSetting: api.getSetting,
+  getAppInfo: api.getAppInfo,
+  openExternal: api.openExternal
+});
+
 const INITIAL_SECTION = new URLSearchParams(window.location.search).get('section') || '';
+const INITIAL_HIGHLIGHT = new URLSearchParams(window.location.search).get('highlight') || '';
 
 // The main process passes the already-resolved effective locale in the query so we
 // can apply it SYNCHRONOUSLY here — before the first `applyI18n(document)` below —
@@ -1097,6 +1106,8 @@ function buildPayload() {
     actionScriptDefaultSaveFolder: folderPath,
     devicePerformanceRememberQuadPerDevice: boolFromToggle('optDevicePerfRememberQuad'),
     keyboardRemoteShortcutsEnabled: boolFromToggle('optKeyboardRemote'),
+    tryDemoAppEnabled: boolFromToggle('optTryDemoApp'),
+    crashReportingEnabled: boolFromToggle('optCrashReporting'),
     autoConnectLastDeviceEnabled: boolFromToggle('optAutoConnectLast'),
     rememberSidebarToggle: boolFromToggle('optRememberSidebarToggle'),
     rememberPasswordsInKeychain: boolFromToggle('optRememberPasswordsInKeychain'),
@@ -1368,6 +1379,9 @@ api.getState().then(function (state: any) {
   applyPrivacyMode(!!state.privacyModeEnabled);
   setToggle('optDebugLog', !!state.debugLoggingEnabled);
   setToggle('optKeyboardRemote', state.keyboardRemoteShortcutsEnabled === true);
+  setToggle('optTryDemoApp', state.tryDemoAppEnabled !== false);
+  syncTryDemoAppOpenBtnVisibility();
+  setToggle('optCrashReporting', state.crashReportingEnabled !== false);
   setToggle('optAutoConnectLast', state.autoConnectLastDeviceEnabled === true);
   setToggle('optRememberSidebarToggle', state.rememberSidebarToggle === true);
   setToggle('optRememberPasswordsInKeychain', state.rememberPasswordsInKeychain === true);
@@ -1514,6 +1528,29 @@ if (optPrivacy) {
   });
 }
 wireToggleAria('optKeyboardRemote');
+// "Open Demo App" button next to the toggle: only useful once the titlebar button itself is
+// hidden (toggle off), since it's otherwise redundant with that always-visible button.
+var optTryDemoApp = el('optTryDemoApp') as HTMLInputElement | null;
+var tryDemoAppOpenBtn = el('tryDemoAppOpenBtn') as HTMLButtonElement | null;
+function syncTryDemoAppOpenBtnVisibility() {
+  if (tryDemoAppOpenBtn) tryDemoAppOpenBtn.hidden = !!(optTryDemoApp && optTryDemoApp.checked);
+}
+if (optTryDemoApp) {
+  optTryDemoApp.addEventListener('change', syncTryDemoAppOpenBtnVisibility);
+}
+if (tryDemoAppOpenBtn) {
+  tryDemoAppOpenBtn.addEventListener('click', function () {
+    tryDemoAppOpenBtn!.disabled = true;
+    api
+      .requestOpenTryDemoApp()
+      .then(function () {
+        requestCloseSettingsWindow();
+      })
+      .catch(function () {
+        tryDemoAppOpenBtn!.disabled = false;
+      });
+  });
+}
 wireToggleAria('optAutoConnectLast');
 wireToggleAria('optRememberSidebarToggle');
 wireToggleAria('optRememberPasswordsInKeychain');
@@ -1715,9 +1752,23 @@ setInterval(function () {
   if (panel && panel.classList.contains('active')) refreshNiPortConflict();
 }, 5000);
 
+// Scrolls a settings row into view and flashes it, so a deep link from elsewhere in the app
+// (e.g. the Try Demo App modal's "Turn this off in Settings" link) lands the user right on the
+// relevant toggle instead of a bare section switch they'd have to scan for.
+function highlightSettingsRow(rowId: string): void {
+  var row = document.getElementById(rowId);
+  if (!row) return;
+  row.scrollIntoView({ behavior: prefersReducedMotion() ? 'auto' : 'smooth', block: 'center' });
+  row.classList.remove('settings-row-highlight');
+  void row.offsetWidth; // reflow so a repeat highlight restarts the animation
+  row.classList.add('settings-row-highlight');
+  setTimeout(function () { row!.classList.remove('settings-row-highlight'); }, 3000);
+}
+
 (window as any).requestCloseSettingsWindow = requestCloseSettingsWindow;
-(window as any).rdsNavigateSettingsSection = function (id: string) {
+(window as any).rdsNavigateSettingsSection = function (id: string, highlightId?: string) {
   if (id) { try { selectSection(id); } catch (e) {} }
+  if (highlightId) { setTimeout(function () { highlightSettingsRow(highlightId); }, 80); }
 };
 
 try { initSideloadRelaySection(); } catch (e) {}
@@ -1726,3 +1777,6 @@ if (INITIAL_SECTION) {
   try { selectSection(INITIAL_SECTION); } catch (e) {}
 }
 animateOpen();
+if (INITIAL_HIGHLIGHT) {
+  setTimeout(function () { highlightSettingsRow(INITIAL_HIGHLIGHT); }, MOTION_FALLBACK_MS);
+}

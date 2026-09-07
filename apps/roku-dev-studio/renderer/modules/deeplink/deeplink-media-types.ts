@@ -158,12 +158,10 @@ function setupDeleteMediaTypeModalOnce(): void {
   if (!(modal instanceof HTMLElement) || deleteMediaTypeModalInitialized) return;
   deleteMediaTypeModalInitialized = true;
 
-  const cancelBtn = document.getElementById('deeplinkDeleteMediaTypeCancel');
   const confirmBtn = document.getElementById('deeplinkDeleteMediaTypeConfirm');
   const closeBtn = modal.querySelector('.deeplink-delete-media-type-modal-close');
 
   closeBtn?.addEventListener('click', () => closeDeleteMediaTypeModal(modal));
-  cancelBtn?.addEventListener('click', () => closeDeleteMediaTypeModal(modal));
   attachBackdropClickToClose(modal, () => closeDeleteMediaTypeModal(modal));
 
   document.addEventListener('keydown', (e) => {

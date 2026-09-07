@@ -6,6 +6,8 @@ sideloaded dev channel that routes through it). Transport-agnostic by design —
 drives both **Roku Dev Studio** (via Electron IPC) and **`roku-dev-studio-remote-server`** (via
 HTTP/SSE), so capture logic, traffic rules, and replay behavior can't drift between the two.
 
+> Part of [Roku Dev Studio](https://paramount-engineering.github.io/roku-dev-studio/) — see the [main repo](https://github.com/paramount-engineering/roku-dev-studio) for the desktop app, MCP server, and other packages.
+
 ## Requirements
 
 - Node.js 24.17 or higher

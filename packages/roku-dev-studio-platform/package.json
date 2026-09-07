@@ -64,6 +64,10 @@
     "./text-match": {
       "types": "./dist/text-match.d.ts",
       "default": "./dist/text-match.js"
+    },
+    "./worker-pool": {
+      "types": "./dist/worker-pool.d.ts",
+      "default": "./dist/worker-pool.js"
     }
   }
 }

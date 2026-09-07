@@ -65,18 +65,27 @@ async function authorizeRemoteSideload(info: { ip: string }): Promise<boolean> {
 
 let singleton: SideloadRelayService | null = null;
 
-export function getSideloadRelayService(safeSend: SafeSendFn): SideloadRelayService {
+export function getSideloadRelayService(
+  safeSend: SafeSendFn,
+  isPrivacyModeEnabled?: () => boolean
+): SideloadRelayService {
   if (!singleton) {
-    singleton = new SideloadRelayService(createRelayIpcListener(safeSend), authorizeRemoteSideload, remoteFanoutOps);
+    singleton = new SideloadRelayService(
+      createRelayIpcListener(safeSend),
+      authorizeRemoteSideload,
+      remoteFanoutOps,
+      isPrivacyModeEnabled
+    );
   }
   return singleton;
 }
 
 export function initSideloadRelayFromSettings(
   safeSend: SafeSendFn,
-  config: RelayBootConfig
+  config: RelayBootConfig,
+  isPrivacyModeEnabled?: () => boolean
 ): SideloadRelayService {
-  const svc = getSideloadRelayService(safeSend);
+  const svc = getSideloadRelayService(safeSend, isPrivacyModeEnabled);
   void svc.setConfig(config);
   return svc;
 }

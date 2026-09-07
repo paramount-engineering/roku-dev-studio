@@ -105,6 +105,10 @@ export type SettingsWindowSavePayload = {
   devicePerformanceRememberQuadPerDevice: boolean;
   /** When true, keyboard drives the Roku only on Remote / Dev App inner tabs for the active device tab. */
   keyboardRemoteShortcutsEnabled: boolean;
+  /** When true, a "Try Demo App" button appears in the title bar. Default on. */
+  tryDemoAppEnabled: boolean;
+  /** When true, an uncaught error shows the crash-report modal. Default on. */
+  crashReportingEnabled: boolean;
   /** When true, after discovery on launch, reconnect if the last-used device is present. */
   autoConnectLastDeviceEnabled: boolean;
   /** When true, persist primary sidebar collapsed state (localStorage). Default off. */
@@ -362,6 +366,10 @@ function registerSettingsWindowIpc(
       typeof rememberRaw === 'boolean' ? rememberRaw : false;
     const kbRaw = settings['keyboardRemoteShortcutsEnabled'];
     const keyboardRemoteShortcutsEnabled = typeof kbRaw === 'boolean' ? kbRaw : false;
+    const tryDemoAppRaw = settings['tryDemoAppEnabled'];
+    const tryDemoAppEnabled = typeof tryDemoAppRaw === 'boolean' ? tryDemoAppRaw : true;
+    const crashReportingRaw = settings['crashReportingEnabled'];
+    const crashReportingEnabled = typeof crashReportingRaw === 'boolean' ? crashReportingRaw : true;
     const autoConnRaw = settings['autoConnectLastDeviceEnabled'];
     const autoConnectLastDeviceEnabled = typeof autoConnRaw === 'boolean' ? autoConnRaw : false;
     const languageRaw = settings['language'];
@@ -419,6 +427,8 @@ function registerSettingsWindowIpc(
       actionScriptDefaultSaveFolder,
       devicePerformanceRememberQuadPerDevice,
       keyboardRemoteShortcutsEnabled,
+      tryDemoAppEnabled,
+      crashReportingEnabled,
       autoConnectLastDeviceEnabled,
       language,
       rememberSidebarToggle,
@@ -488,6 +498,8 @@ function registerSettingsWindowIpc(
         }
         settings['devicePerformanceRememberQuadPerDevice'] = !!payload.devicePerformanceRememberQuadPerDevice;
         settings['keyboardRemoteShortcutsEnabled'] = !!payload.keyboardRemoteShortcutsEnabled;
+        settings['tryDemoAppEnabled'] = payload.tryDemoAppEnabled !== false;
+        settings['crashReportingEnabled'] = payload.crashReportingEnabled !== false;
         settings['autoConnectLastDeviceEnabled'] = !!payload.autoConnectLastDeviceEnabled;
         settings['language'] =
           typeof payload.language === 'string' && payload.language.trim() ? payload.language.trim() : 'system';

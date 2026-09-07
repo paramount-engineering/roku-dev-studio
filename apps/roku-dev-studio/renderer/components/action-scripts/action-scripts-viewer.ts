@@ -19,6 +19,7 @@ import {
 import { promptSaveScriptName } from './save-script-modal.js';
 import { openApplyToDeviceModal, type ApplyDeviceOption } from './apply-to-device-modal.js';
 import { showToast } from '../../modules/utils/ui.js';
+import { installCrashCapture } from '../../modules/errors/install.js';
 
 type ViewerBridge = {
   onLocaleChanged?: (cb: (pref: string) => void) => unknown;
@@ -41,6 +42,13 @@ async function main(): Promise<void> {
   const localePref = new URLSearchParams(location.search).get('locale');
   if (localePref) setLocale(effectiveLocale(localePref, navigator.language));
   applyI18n(document);
+
+  installCrashCapture({
+    windowName: 'action-scripts-viewer',
+    getSetting: window.roku.getSetting,
+    getAppInfo: window.roku.getAppInfo,
+    openExternal: window.roku.openExternal
+  });
 
   const roku = (window as unknown as { roku?: ViewerBridge }).roku;
 

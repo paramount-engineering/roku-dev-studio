@@ -208,6 +208,17 @@ export const settings = {
   useKeyboardRemoteDesc:
     'Gdy włączone, możesz sterować Roku za pomocą klawiatury. Skróty klawiszowe są wymienione w oknie pomocy pilota.',
   useKeyboardRemoteAria: 'Pilot Roku - używaj klawiatury ',
+  tryDemoAppToggle: 'Pokaż Przycisk Wypróbuj Aplikację Demo',
+  tryDemoAppToggleDesc:
+    'Gdy włączone, na pasku tytułu pojawia się przycisk Wypróbuj Aplikację Demo do wgrania dołączonego kanału demonstracyjnego Roku Dev Studio Showcase na urządzenie.',
+  tryDemoAppToggleAria: 'Pokaż przycisk wypróbuj aplikację demo',
+  tryDemoAppOpenBtn: 'Otwórz Aplikację Demo',
+  tryDemoAppOpenBtnAria: 'Otwórz selektor wypróbuj aplikację demo',
+  // Placeholder: reuse the English Crash Reporting toggle strings until a translation exists.
+  crashReportingToggle: 'Show Crash Reports',
+  crashReportingToggleDesc:
+    'When On, an uncaught error shows a report modal with details you can file as a GitHub issue.',
+  crashReportingToggleAria: 'Show crash reports',
   autoConnect: 'Automatycznie łącz z urządzeniami',
   autoConnectDesc:
     'Gdy włączone, aplikacja automatycznie połączy się z urządzeniami, które pozostały połączone przy zamykaniu aplikacji w poprzedniej sesji.',

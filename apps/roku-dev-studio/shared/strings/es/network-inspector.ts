@@ -306,17 +306,19 @@ export const networkInspector = {
     `El proxy MITM no puede usar el puerto ${port} — ${who} lo está usando. Haga clic en <strong>Puerto del proxy no disponible</strong> arriba para cerrarlo o cambiar el puerto.`,
   mitmFailedLine: (err: string): string => `El proxy MITM no pudo iniciarse: ${err}.`,
   mitmStarting: 'El proxy MITM se está iniciando — reinicie Roku Dev Studio si esto persiste.',
-  enableMitmSettings: 'Habilite el <strong>proxy MITM</strong> en Configuración → Inspector de red.',
+  enableMitmSettings:
+    'Habilite el <strong>proxy MITM</strong> en <button type="button" class="help-settings-link" data-settings-section="network-inspector" data-settings-highlight="networkInspectorEnableSettingsRow">Configuración → Inspector de red</button>.',
   hotspotBlockedMitmLine: (addr: string): string =>
     `La captura por hotspot está bloqueada, pero el proxy MITM en <strong>${addr}</strong> aún puede registrar las solicitudes con proxy. Use <code>host:port</code> solo en BrightScript (p. ej. <code>192.168.2.1:8888</code>), no la IP del dispositivo ni <code>http://</code>.`,
   mitmActiveNoCaptureLine: (addr: string): string =>
     `El proxy MITM está activo en <code class="ni-hint-code">${addr}</code>. Enrute su canal dev a través de él para capturar las solicitudes de red.`,
   mitmDecryptingHint: (addr: string): string =>
     ` El proxy MITM está descifrando el HTTPS del canal dev enrutado a través de Roku Dev Studio en <code class="ni-hint-code">${addr}</code>.`,
-  hotspotEncryptedHint: ' Los cuerpos HTTPS están cifrados en el modo de captura por hotspot — habilite MITM en Configuración para los canales Dev.',
+  hotspotEncryptedHint:
+    ' Los cuerpos HTTPS están cifrados en el modo de captura por hotspot — habilite MITM en <button type="button" class="help-settings-link" data-settings-section="network-inspector" data-settings-highlight="networkInspectorEnableSettingsRow">Configuración</button> para los canales Dev.',
   capturingOnHotspot: 'Capturando en el hotspot. Navegue o reproduzca contenido en el Roku.',
   connectWifiHint: (addr: string): string =>
-    `Conecte el Roku a la misma red Wi‑Fi (o al hotspot de su máquina), luego habilite el <strong>proxy MITM</strong> en Configuración → Inspector de red para capturar el HTTPS del canal dev — escuchará en <code class="ni-hint-code">${addr}</code>.`,
+    `Conecte el Roku a la misma red Wi‑Fi (o al hotspot de su máquina), luego habilite el <strong>proxy MITM</strong> en <button type="button" class="help-settings-link" data-settings-section="network-inspector" data-settings-highlight="networkInspectorEnableSettingsRow">Configuración → Inspector de red</button> para capturar el HTTPS del canal dev — escuchará en <code class="ni-hint-code">${addr}</code>.`,
   sessionListAria: 'Lista de sesiones de red. Use las teclas de flecha para navegar.',
   // Layout toggle.
   layoutToggleTitle: (stacked: boolean): string =>

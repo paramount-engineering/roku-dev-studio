@@ -162,6 +162,21 @@ MAC WiFi: ${d.wifiMac || 'N/A'}`,
   // Log file
   couldNotOpenLogFile: (err: string): string => `Nu s-a putut deschide fișierul jurnal: ${err}`,
 
+  // File drag & drop onto the main window
+  fileDropOverlayReadyOne: (viewerLabel: string): string => `Plasați pentru a deschide în ${viewerLabel}`,
+  fileDropOverlayReadyMany: 'Plasați pentru a deschide',
+  fileDropOverlayUnsupported: 'Tip de fișier neacceptat',
+  fileDropOverlayGeneric: 'Plasați fișiere pentru a deschide',
+  fileDropLogViewerLabel: 'Vizualizator jurnale',
+  fileDropNetworkSessionViewerLabel: 'Vizualizator sesiune de rețea',
+  fileDropOpenedOne: (name: string, viewerLabel: string): string => `S-a deschis „${name}” în ${viewerLabel}`,
+  fileDropOpenedMany: (count: number): string => `S-au deschis ${count} fișiere`,
+  fileDropOpenedWithSkipped: (openedCount: number, unsupportedCount: number): string =>
+    `S-au deschis ${openedCount} fișiere, s-au omis ${unsupportedCount} neacceptate`,
+  fileDropUnsupportedOne: (name: string): string => `„${name}” nu este un tip de fișier acceptat`,
+  fileDropUnsupportedMany: (count: number): string => `${count} fișiere neacceptate — nu s-a deschis nimic`,
+  fileDropFailed: 'Fișierul (fișierele) plasat(e) nu au putut fi deschise',
+
   // Help modal
   searchHelpGuide: 'Caută în ajutor și ghid',
 
@@ -201,6 +216,9 @@ MAC WiFi: ${d.wifiMac || 'N/A'}`,
   floatingRemoteToggleTitle: 'Comută o telecomandă flotantă care te urmează în afara filelor Telecomandă și Dev App',
   floatingRemoteToggleAria: 'Comută telecomanda flotantă',
   floatingRemote: 'Telecomandă flotantă',
+  tryDemoAppTitle: 'Încearcă canalul demonstrativ inclus Roku Dev Studio Showcase',
+  tryDemoAppAria: 'Încearcă aplicația demo',
+  tryDemoApp: 'Încearcă Aplicația Demo',
   appMenu: 'Meniul aplicației',
   zoomOut: 'Micșorează',
   zoomIn: 'Mărește',
@@ -309,13 +327,6 @@ MAC WiFi: ${d.wifiMac || 'N/A'}`,
   legendLimit: 'Limită',
 
   // Apps tab
-  customLaunch: 'Lansare personalizată',
-  customAppIdPlaceholder: 'ID aplicație (ex.: 12)',
-  tvInputsLabel: 'Intrări TV:',
-  hdmi1: 'HDMI 1',
-  hdmi2: 'HDMI 2',
-  hdmi3: 'HDMI 3',
-  hdmi4: 'HDMI 4',
   deepLink: 'Deep-Link',
   moreLaunchOptions: 'Mai multe opțiuni de lansare',
   saveAndLaunch: 'Salvează și lansează',

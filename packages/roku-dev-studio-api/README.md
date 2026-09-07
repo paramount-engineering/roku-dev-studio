@@ -2,6 +2,8 @@
 
 Node.js package for Roku **discovery** (SSDP / subnet scan), **ECP** (keypress, launch, query, …), **device info**, **developer sideload**, and **screenshots**. Used by **Roku Dev Studio** (Electron main process) and **`roku-dev-studio-remote-server`**.
 
+> Part of [Roku Dev Studio](https://paramount-engineering.github.io/roku-dev-studio/) — a cross-platform desktop app for Roku development, sideloading, and AI-agent (MCP) control. See the [main repo](https://github.com/paramount-engineering/roku-dev-studio) for the desktop app, the `rds` CLI this package ships, and the other packages in the monorepo.
+
 | Mode | When to use |
 |------|-------------|
 | **Direct** | This process is on the same LAN as the Roku (or has route to it). You call functions with the device **IPv4**. |

@@ -1,4 +1,15 @@
 const { app, BrowserWindow, ipcMain, Menu, clipboard, dialog, shell } = require('electron');
+
+// Single instance: a second launch (e.g. double-clicking / "Open With"-ing a log
+// file while the app is already open) hands its launch args to THIS instance via
+// 'second-instance' below instead of starting a redundant second app — which would
+// also mean two copies competing for the same device-connection ports. Nothing has
+// been set up yet at this point, so a hard exit is safe.
+if (!app.requestSingleInstanceLock()) {
+  console.error('[Main] Another instance of Roku Dev Studio is already running. Exiting.');
+  process.exit(0);
+}
+
 const { IPC } = require('./shared/ipc/channels');
 const pkg = require('./package.json');
 // Align Electron app name with productName so Hide/Quit match the bundle title (not package "name").
@@ -15,6 +26,72 @@ const {
   registerNetworkSessionViewerIpc,
   openNetworkSessionViewerWindow
 } = require('./main/network-session-viewer-window');
+// Pure argv-parsing helpers (no Electron dependency, so they're plain-Node
+// testable — see scripts/verify-launch-file-argv.ts) shared by the cold-start
+// check below and the 'second-instance' handler.
+const {
+  extractFilePathFromArgv,
+  classifyAssociatedFile,
+  LOG_VIEWER_ASSOCIATED_EXTENSIONS,
+  NETWORK_SESSION_ASSOCIATED_EXTENSIONS
+} = require('./main/launch-file-argv');
+
+/** Route a launch-associated file to whichever viewer its extension belongs
+ *  to. Returns the created window (or `undefined` if the path didn't resolve
+ *  to a known file type, or on a load error the viewer already surfaced). */
+function openAssociatedFile(
+  parent: import('electron').BrowserWindow | undefined,
+  filePath: string
+): import('electron').BrowserWindow | undefined {
+  const kind = classifyAssociatedFile(filePath);
+  if (kind === 'log') return openLogFileViewerWindow(parent, filePath);
+  if (kind === 'network-session') return openNetworkSessionViewerWindow(parent, filePath);
+  return undefined;
+}
+
+function extractAssociatedFilePathFromArgv(argv: string[]): string | null {
+  return (
+    extractFilePathFromArgv(argv, LOG_VIEWER_ASSOCIATED_EXTENSIONS) ??
+    extractFilePathFromArgv(argv, NETWORK_SESSION_ASSOCIATED_EXTENSIONS)
+  );
+}
+
+/** Set by the 'open-file' handler below when macOS launches us fresh via "Open
+ *  With" — that event can fire before `app.whenReady()` resolves, so the path is
+ *  queued here and consumed once startup reaches the point where opening a window
+ *  is possible (see `app.whenReady()` below). */
+let pendingAssociatedOpenPath: string | null = null;
+
+// macOS "Open With" / double-click a registered file: fires on a fresh launch
+// (queued until ready) AND on an already-running instance (opened immediately).
+// Windows/Linux get the file path via argv instead (handled at cold start and via
+// 'second-instance' below) — this event doesn't fire there.
+app.on('open-file', (event: { preventDefault: () => void }, filePath: string) => {
+  event.preventDefault();
+  if (app.isReady()) {
+    openAssociatedFile(mainWindow, filePath);
+  } else {
+    pendingAssociatedOpenPath = filePath;
+  }
+});
+
+// Windows/Linux "Open With" while already running: the OS starts a new process
+// with the file in its argv, which immediately loses the single-instance-lock
+// race above and exits — but first Electron relays its argv to us here.
+app.on('second-instance', (_event: unknown, argv: string[]) => {
+  const filePath = extractAssociatedFilePathFromArgv(argv);
+  if (filePath) {
+    openAssociatedFile(mainWindow, filePath);
+    return;
+  }
+  // Plain relaunch with no file — surface the existing window instead of doing
+  // nothing (the user's second click otherwise appears to have done nothing).
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    if (!mainWindow.isVisible()) mainWindow.show();
+    mainWindow.focus();
+  }
+});
 const { registerConsoleSpillIpc } = require('./main/console-spill');
 const {
   registerFiddleIpc,
@@ -26,6 +103,7 @@ const { broadcastPrivacyModeToAllWindows } = require('./main/privacy-broadcast')
 const { S, setLocale, getLocale, effectiveLocale } = require('@shared/strings/index.js');
 const { broadcastLocaleToAllWindows } = require('./main/locale-broadcast');
 const { registerBsFiddleIpc } = require('./main/ipc/bs-fiddle-handlers');
+const { registerDemoAppIpc } = require('./main/ipc/demo-app-handlers');
 const { openStaticAnalysisWindow } = require('./main/static-analysis-window');
 const { registerStaticAnalysisIpc } = require('./main/ipc/static-analysis-handlers');
 const { killAllScaRuns } = require('./main/static-analysis/sca-runner');
@@ -189,6 +267,18 @@ function safeSendToRendererWithFiddleMirror(channel: string, data: unknown) {
   return safeSendToRenderer(channel, data);
 }
 
+/** Forwards a main-process crash to the main window's crash-report modal (see
+ *  renderer/modules/errors/). No-op if the main window doesn't exist yet/anymore. */
+function reportMainProcessError(error: unknown): void {
+  if (!mainWindow || mainWindow.isDestroyed() || mainWindow.webContents.isDestroyed()) return;
+  const err = error instanceof Error ? error : new Error(String(error));
+  mainWindow.webContents.send(IPC.MainProcessError, {
+    message: err.message,
+    stack: err.stack || err.message,
+    timestamp: Date.now()
+  });
+}
+
 // Global error handlers to prevent crashes
 process.on('uncaughtException', (error) => {
   mainError('Uncaught Exception:', error);
@@ -198,10 +288,12 @@ process.on('uncaughtException', (error) => {
     mainLog('Network error caught globally, continuing...');
     return;
   }
+  reportMainProcessError(error);
 });
 
 process.on('unhandledRejection', (reason, promise) => {
   mainError('Unhandled Rejection at:', promise, 'reason:', reason);
+  reportMainProcessError(reason);
 });
 
 /** Sandboxed preload may only require('electron'); API code is inlined in preload.bundled.cjs */
@@ -254,7 +346,7 @@ type AppWindowState = {
   logFile: string | null;
 };
 
-function createWindow(appState: AppWindowState) {
+function createWindow(appState: AppWindowState, opts: { startHidden?: boolean } = {}) {
   ensurePreloadBundle();
   const preloadPath = path.resolve(__dirname, 'preload.bundled.cjs');
   const isMac = process.platform === 'darwin';
@@ -302,7 +394,15 @@ function createWindow(appState: AppWindowState) {
   // Show window as soon as it's ready (before content fully loads). Maximize
   // first so it comes up filling the screen from startup (the 1400x900 above is
   // the restored/unmaximized size the user gets when they un-maximize).
+  //
+  // `startHidden`: launched via "Open With" a log file with the app not already
+  // running — the user asked to see just the log file, so this window stays
+  // created-but-invisible (everything it wires up — menu, IPC handlers — still
+  // needs to exist) until something explicitly shows it (see the 'second-instance'
+  // relaunch-with-no-file fallback above, and the matching close-triggered quit in
+  // `app.whenReady()` below).
   win.once('ready-to-show', () => {
+    if (opts.startHidden) return;
     win.maximize();
     win.show();
   });
@@ -710,6 +810,7 @@ app.whenReady().then(() => {
   registerSecretsIpc(ipcMain);
   registerFiddleIpc(ipcMain, () => (mainWindow && !mainWindow.isDestroyed() ? mainWindow.webContents : null));
   registerBsFiddleIpc(ipcMain);
+  registerDemoAppIpc(ipcMain);
   registerStaticAnalysisIpc(ipcMain, app);
 
   // Current language preference, so a window opened while a non-default locale is active can
@@ -740,14 +841,19 @@ app.whenReady().then(() => {
     return { success: true, pref };
   });
 
-  // Main renderer (e.g. the Network Inspector port-conflict modal) asks to open Settings, optionally
-  // navigated straight to a section.
-  ipcMain.on(IPC.SettingsOpen, (event: import('electron').IpcMainEvent, payload: { section?: unknown }) => {
-    const parent = BrowserWindow.fromWebContents(event.sender) || mainWindow;
-    if (!parent) return;
-    const section = typeof payload?.section === 'string' ? payload.section : undefined;
-    showSettingsDialog(parent, section);
-  });
+  // Main renderer (e.g. the Network Inspector port-conflict modal, the Try Demo App modal's
+  // "Turn this off in Settings" link) asks to open Settings, optionally navigated straight to a
+  // section and/or with a specific row scrolled-to and highlighted.
+  ipcMain.on(
+    IPC.SettingsOpen,
+    (event: import('electron').IpcMainEvent, payload: { section?: unknown; highlightId?: unknown }) => {
+      const parent = BrowserWindow.fromWebContents(event.sender) || mainWindow;
+      if (!parent) return;
+      const section = typeof payload?.section === 'string' ? payload.section : undefined;
+      const highlightId = typeof payload?.highlightId === 'string' ? payload.highlightId : undefined;
+      showSettingsDialog(parent, section, highlightId);
+    }
+  );
 
   // Renderer replies to the "Open Fiddle" menu click with the device snapshot.
   ipcMain.on(IPC.FiddleOpen, (event: import('electron').IpcMainEvent, payload: { devices?: unknown; initialDeviceId?: string | null }) => {
@@ -756,6 +862,35 @@ app.whenReady().then(() => {
     const initialId = payload?.initialDeviceId ?? null;
     openFiddleWindow(parent || undefined, devices, initialId);
   });
+
+  // Files dropped onto the main window (renderer/modules/utils/main-window-file-drop.ts already
+  // resolved each dropped File to a real path via webUtils.getPathForFile in preload). Open every
+  // recognized one in its associated viewer, skip the rest, and report back what happened so the
+  // renderer can toast a summary.
+  ipcMain.handle(
+    IPC.OpenDroppedFiles,
+    (
+      event: import('electron').IpcMainInvokeEvent,
+      payload: { filePaths?: unknown }
+    ): { opened: Array<{ name: string; kind: 'log' | 'network-session' }>; unsupported: string[] } => {
+      const filePaths = Array.isArray(payload?.filePaths)
+        ? payload.filePaths.filter((p): p is string => typeof p === 'string')
+        : [];
+      const parent = BrowserWindow.fromWebContents(event.sender) || mainWindow;
+      const opened: Array<{ name: string; kind: 'log' | 'network-session' }> = [];
+      const unsupported: string[] = [];
+      for (const filePath of filePaths) {
+        const kind = classifyAssociatedFile(filePath);
+        if (!kind) {
+          unsupported.push(path.basename(filePath));
+          continue;
+        }
+        openAssociatedFile(parent || undefined, filePath);
+        opened.push({ name: path.basename(filePath), kind });
+      }
+      return { opened, unsupported };
+    }
+  );
 
   // "View and Manage Action Scripts" window shows its OWN device picker but owns no device state.
   // Relay its list request to the main window's renderer (which does), optionally running a scan,
@@ -807,6 +942,18 @@ app.whenReady().then(() => {
     return { success: false };
   });
 
+  // Settings window's "Demo App" button (shown when the titlebar button is toggled off): bring
+  // the main window forward and have it open the same picker modal the titlebar button opens.
+  ipcMain.handle(IPC.DemoAppRequestOpen, () => {
+    if (mainWindow && !mainWindow.isDestroyed() && mainWindow.webContents && !mainWindow.webContents.isDestroyed()) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.focus();
+      mainWindow.webContents.send(IPC.DemoAppOpenOnMain);
+      return { success: true };
+    }
+    return { success: false };
+  });
+
   // Title-bar zoom indicator (`-` / `+` buttons in the renderer): route the
   // direction through the same `zoomIn`/`zoomOut`/`resetZoom` helpers as the
   // View menu so clamp + `AppZoomChanged` broadcast stay in one place.
@@ -840,7 +987,28 @@ app.whenReady().then(() => {
     debugLoggingEnabled,
     logFile
   };
-  createWindow(appState);
+
+  // Cold-launch "Open With" a log file or network session: macOS queued a path via
+  // 'open-file' before we were ready (see the top-level handler), or we were
+  // launched directly with a file argument (Windows/Linux). In that case, show
+  // only the relevant viewer — the main window still gets fully created and wired
+  // (menus, IPC, etc. all assume it exists), it just stays hidden until the user
+  // explicitly asks for it.
+  const coldStartFilePath = pendingAssociatedOpenPath ?? extractAssociatedFilePathFromArgv(process.argv);
+  pendingAssociatedOpenPath = null;
+  createWindow(appState, { startHidden: !!coldStartFilePath });
+  if (coldStartFilePath) {
+    const viewer = openAssociatedFile(undefined, coldStartFilePath);
+    // If closing this window leaves nothing visible (the main window was never
+    // shown, and no other viewer window from a follow-up Open-With is still
+    // open), quit. `window-all-closed` doesn't cover this on its own since the
+    // hidden main window still technically exists — without this, closing the
+    // only visible window would leave an invisible, unquittable process behind.
+    viewer?.once('closed', () => {
+      const anyVisible = BrowserWindow.getAllWindows().some((w: import('electron').BrowserWindow) => w.isVisible());
+      if (!anyVisible) app.quit();
+    });
+  }
 
   registerHamburgerMenuIpc(ipcMain, {
     dialog,

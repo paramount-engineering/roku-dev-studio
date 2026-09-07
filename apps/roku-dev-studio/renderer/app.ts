@@ -23,13 +23,19 @@ import {
   AUTO_CONNECT_LAST_DEVICE_ENABLED,
   REMEMBER_SIDEBAR_TOGGLE,
   NETWORK_INSPECTOR_ENABLED,
+  TRY_DEMO_APP_ENABLED,
   QUERY_ENDPOINTS
 } from './modules/index.js';
+import {
+  openTryDemoAppModal,
+  type TryDemoAppDeviceOption
+} from './components/try-demo-app/try-demo-app-modal.js';
 import { errMessage } from '@shared/platform/err-util.js';
 import { deviceKey } from '@shared/platform/device-identity.js';
 import { S, applyI18n, setLocale } from '@shared/strings/index.js';
 import { applyLocalePreference } from './modules/utils/locale-live.js';
 import { devLog } from './modules/utils/dev-log.js';
+import { makeAppIdDragSource } from './modules/utils/app-id-drag-drop.js';
 import { rendererWarn, rendererError } from './modules/utils/logger.js';
 import { initDeeplinkMediaTypes } from './modules/deeplink/deeplink-media-types.js';
 import { initDeeplinkPresets } from './modules/deeplink/deeplink-presets.js';
@@ -41,6 +47,8 @@ import {
   openModalOverlayActiveFromOpener
 } from './modules/utils/modal-origin-motion.js';
 import { attachBackdropClickToClose, attachEscToClose } from './modules/utils/modal-backdrop-click.js';
+import { installCrashCapture } from './modules/errors/install.js';
+import { wireHelpSettingsLinks } from './modules/utils/help-settings-link.js';
 import { resolveRokuKeyFromEvent } from './modules/utils/keyboard-remote-keymap.js';
 import { setupTelnet } from './modules/telnet/telnet-console-panel.js';
 import { buildFindBarElement, createFindBar, bindFindShortcut } from './modules/ui/find-bar.js';
@@ -77,6 +85,7 @@ import {
 import { peekAppConnector } from './modules/app-connector/index.js';
 import { mountUpdateNotification } from './components/modals/update-notification.js';
 import { setupWelcomeFeatureModals } from './components/modals/welcome-feature-modal.js';
+import { setupMainWindowFileDropZone } from './modules/utils/main-window-file-drop.js';
 
 // Per-device-panel expando hooks set up by the responsive-header measurer and read on
 // live rename / tab-close teardown. Declared here so TypeScript recognizes them on the
@@ -698,11 +707,90 @@ function registerMcpConnectFlow(): void {
 }
 
 /**
- * Auto-connect Sideload Relay targets in the UI. When the relay fans a build out
- * to a device, open that device as a connected tab here (if it isn't already)
- * and connect its console — so a device that wasn't open in RDS shows up
- * connected right after sideloading. `connectDevice`/`connectRemoteDevice` are
- * idempotent (they just activate the existing tab when already connected).
+ * Ensure a device's tab is open and its Console is connected after a successful sideload —
+ * shared by Sideload Relay's auto-connect and "Try Demo App" (both fire this once a build has
+ * landed on a device that may or may not already be open in RDS).
+ *
+ * `connectDevice`/`connectRemoteDevice` are idempotent (an already-connected device just
+ * re-activates its existing tab), but that re-activation calls `activateTab()`, which
+ * unconditionally strips + re-applies the tab/device-card `active` class and re-runs
+ * `checkDeviceConnection()` — for an ALREADY-open, already-connected tab this visibly replayed
+ * a "connecting" flicker for no reason, so this only calls them when the tab isn't open yet.
+ * The Console connect stays unconditional either way: `connectTelnet()` is a clean no-op when
+ * already connected (`if (isConnected) return`), so a dropped/never-opened console still comes
+ * up, no matter the device tab's prior state.
+ *
+ * `opts.activate` additionally brings the tab into view — off by default because Sideload
+ * Relay's auto-connect can land on several devices in a fan-out and must not yank the user's
+ * view to whichever one happens to finish last. "Try Demo App" is the opposite: one explicit,
+ * single-device action, where landing on the connected-but-not-currently-active-tab case (this
+ * function's whole early-return branch below) without ever switching to it would leave the
+ * launch looking like it silently did nothing.
+ */
+function ensureDeviceConnectedWithConsole(
+  ip: string,
+  opts: { isRemote?: boolean; locationId?: string; fallbackDevice?: Record<string, unknown>; activate?: boolean } = {}
+): string {
+  const { isRemote, locationId, fallbackDevice, activate } = opts;
+  let tabId: string;
+
+  if (isRemote && locationId) {
+    const connKey = `${locationId}:${ip}`;
+    const existing = state.connectedDevices.get(connKey) as { tabId?: string } | undefined;
+    if (existing?.tabId) {
+      tabId = existing.tabId;
+    } else {
+      // Remote target — route through connectRemoteDevice (keyed by `${locationId}:${ip}`,
+      // wired for the remote transport) instead of the local-only connectDevice, which would
+      // open a direct-IP tab for a device this machine can't actually reach. Prefer a full
+      // device object from the scan cache; fall back to the caller's hint (or a minimal one).
+      let liveDevice: Record<string, unknown> | undefined;
+      const location = state.remoteLocations.get(locationId) as
+        | { devices?: Map<string, unknown>; serverUrl?: string }
+        | undefined;
+      for (const dev of location?.devices?.values() || []) {
+        if ((dev as { ip?: string }).ip === ip) {
+          liveDevice = dev as Record<string, unknown>;
+          break;
+        }
+      }
+      if (!liveDevice) {
+        liveDevice = fallbackDevice || { ip, deviceName: ip, modelName: 'Roku', serverUrl: location?.serverUrl };
+      }
+      connectRemoteDevice(liveDevice, locationId);
+      tabId = `tab-remote-${locationId}-${ip.replace(/\./g, '-')}`;
+    }
+  } else {
+    const existing = state.connectedDevices.get(ip) as { tabId?: string } | undefined;
+    if (existing?.tabId) {
+      tabId = existing.tabId;
+    } else {
+      // Prefer a full device object from the scan cache; fall back to the caller's hint (or a
+      // minimal one — enough for the tab/panel + passwordless ECP/telnet).
+      let liveDevice: Record<string, unknown> | undefined;
+      for (const dev of state.devices.values()) {
+        if ((dev as { ip?: string }).ip === ip) {
+          liveDevice = dev as Record<string, unknown>;
+          break;
+        }
+      }
+      if (!liveDevice) liveDevice = fallbackDevice || { ip, deviceName: ip, modelName: 'Roku' };
+      connectDevice(liveDevice);
+      tabId = `tab-${ip.replace(/\./g, '-')}`;
+    }
+  }
+
+  if (activate) activateTab(tabId);
+  const panel = document.getElementById(tabId) as (HTMLElement & { connectTelnet?: () => Promise<void> }) | null;
+  if (panel?.connectTelnet) {
+    void panel.connectTelnet().catch((e: unknown) => rendererWarn('[auto console connect] failed', e));
+  }
+  return tabId;
+}
+
+/**
+ * Auto-connect Sideload Relay targets in the UI. When the relay fans a build out to a device,
+ * open that device as a connected tab (if it isn't already) and connect its console.
  */
 function registerRelayAutoConnect(): void {
   const roku = (window as any).roku;
@@ -721,59 +809,13 @@ function registerRelayAutoConnect(): void {
     if (!r || !r.ip || r.done !== true || r.install?.state !== 'ok') return;
     const ip = r.ip;
     try {
-      let connKey: string;
-      if (r.remote && r.locationId) {
-        // Remote target — route through connectRemoteDevice (keyed by `${locationId}:${ip}`,
-        // wired for the remote transport) instead of the local-only connectDevice, which would
-        // open a direct-IP tab for a device this machine can't actually reach and re-open a new
-        // one on every subsequent sideload since it never matches the real remote connection.
-        let device: Record<string, unknown> | undefined;
-        const location = state.remoteLocations.get(r.locationId) as { devices?: Map<string, unknown> } | undefined;
-        for (const dev of location?.devices?.values() || []) {
-          if ((dev as { ip?: string }).ip === ip) {
-            device = dev as Record<string, unknown>;
-            break;
-          }
-        }
-        if (!device) device = { ip, deviceName: r.name || ip, modelName: r.name || 'Roku', serverUrl: r.serverUrl };
-        connectRemoteDevice(device, r.locationId);
-        connKey = `${r.locationId}:${ip}`;
-      } else {
-        // Prefer a full device object from the scan cache; fall back to a minimal
-        // one built from the relay target (enough for the tab/panel + passwordless
-        // ECP/telnet).
-        let device: Record<string, unknown> | undefined;
-        for (const dev of state.devices.values()) {
-          if ((dev as { ip?: string }).ip === ip) {
-            device = dev as Record<string, unknown>;
-            break;
-          }
-        }
-        if (!device) device = { ip, deviceName: r.name || ip, modelName: r.name || 'Roku' };
-
-        // connectDevice is idempotent — a brand-new device opens a tab; an
-        // already-connected one just re-activates its existing tab.
-        connectDevice(device);
-        connKey = ip;
-      }
-
-      // Always bring the console up on a successful relay — no matter the prior
-      // state (device fresh or already-connected, console dropped, never up, or
-      // even auto-console off for this run). `connectTelnet` is idempotent
-      // (`if (isConnected) return`), so a healthy console is a no-op — no bounce;
-      // a dropped/never-connected one gets (re)connected. Defer a tick so a
-      // freshly-created panel finishes wiring.
-      const conn = state.connectedDevices.get(connKey) as { tabId?: string } | undefined;
-      const panel = conn?.tabId ? (document.getElementById(conn.tabId) as { connectTelnet?: () => Promise<void> } | null) : null;
-      if (panel?.connectTelnet) {
-        setTimeout(() => {
-          try {
-            void panel.connectTelnet!();
-          } catch (e) {
-            rendererWarn('[SideloadRelay] auto console connect failed', e);
-          }
-        }, 0);
-      }
+      ensureDeviceConnectedWithConsole(ip, {
+        isRemote: !!r.remote,
+        locationId: r.locationId,
+        fallbackDevice: r.remote
+          ? { ip, deviceName: r.name || ip, modelName: r.name || 'Roku', serverUrl: r.serverUrl }
+          : { ip, deviceName: r.name || ip, modelName: r.name || 'Roku' }
+      });
     } catch (e) {
       rendererError('[SideloadRelay] auto-connect failed', e);
     }
@@ -1720,7 +1762,7 @@ interface AppDomElements {
   locationName: HTMLInputElement | null;
   locationHost: HTMLInputElement | null;
   locationPort: HTMLInputElement | null;
-  cancelAddLocation: HTMLButtonElement | null;
+  addLocationClose: HTMLButtonElement | null;
   confirmAddLocation: HTMLButtonElement | null;
   remoteLocationsContainer: HTMLElement | null;
   localDevicesSection: HTMLElement | null;
@@ -2806,6 +2848,7 @@ function updateTabBarVisibility() {
   const noDevices = state.connectedDevices.size === 0;
   elements.tabBar.classList.toggle('hidden', onHome && noDevices);
   updateTitlebarFloatingRemoteVisibility();
+  updateTryDemoAppButtonVisibility();
 }
 
 /**
@@ -2827,6 +2870,35 @@ function updateTitlebarFloatingRemoteVisibility() {
 }
 
 /**
+ * "Try Demo App" is hidden unless the Settings → General toggle is on AND at
+ * least one known device has `developerEnabled === true` — same predicate
+ * `buildFiddleDeviceSnapshot()` (defined inside `init()`) filters on, since
+ * sideloading requires it regardless of whether the device is currently
+ * "connected" in the ECP sense (unlike Floating Remote, which needs a live
+ * connected device). Duplicated here as a lightweight existence check
+ * (no password lookups) so this module-top-level function doesn't need
+ * access to `init()`'s local closure.
+ */
+function hasAnyDevModeDevice(): boolean {
+  for (const device of state.devices.values()) {
+    if (device.developerEnabled === true) return true;
+  }
+  for (const location of state.remoteLocations.values()) {
+    if (!location || !location.devices) continue;
+    for (const device of location.devices.values()) {
+      if (device.developerEnabled === true) return true;
+    }
+  }
+  return false;
+}
+
+function updateTryDemoAppButtonVisibility() {
+  const btn = document.getElementById('titlebarTryDemoAppBtn');
+  if (!(btn instanceof HTMLElement)) return;
+  btn.hidden = !TRY_DEMO_APP_ENABLED || !hasAnyDevModeDevice();
+}
+
+/**
  * After device-info health check, query /query/active-app so Dev App tab stays in sync
  * (Launch vs foreground, screenshot gating) when the user leaves the dev channel on device.
  */
@@ -2845,8 +2917,22 @@ async function pollDevAppForegroundAfterHealthCheck(
     if (activeRes && activeRes.success && typeof activeRes.data === 'string') {
       const panel = document.getElementById(tabId);
       if (panel) {
+        devLog('[Device Active Check] dispatching dev-app-active-polled', {
+          tabId,
+          isRemote: !!serverUrl,
+          activeAppXml: activeRes.data
+        });
         dispatchDevAppForegroundFromActiveAppXml(panel, activeRes.data);
+      } else {
+        devLog('[Device Active Check] active-app poll: no panel found for tabId', tabId);
       }
+    } else {
+      devLog('[Device Active Check] active-app poll: query did not return usable data', {
+        tabId,
+        isRemote: !!serverUrl,
+        success: activeRes?.success,
+        dataType: typeof activeRes?.data
+      });
     }
   } catch (e) {
     devLog('[Device Active Check] active-app poll failed:', errMessage(e));
@@ -2924,6 +3010,36 @@ async function checkDeviceConnection(
           });
           updateEcpWarnings(panel, connection.device);
           updateDevModeWarnings(panel, connection.device.developerEnabled === true);
+          // Tab label + hover tooltip + panel header name: set once from whatever `device` had at
+          // panel-creation time (the relay auto-connect fallback's `r.name || ip`/`"Roku"`) and
+          // never revisited since. Re-applying here — same pattern already used a few lines up in
+          // the local-discovery "replace placeholder" path — keeps them in sync with the real
+          // name/model this health check just fetched. Idempotent (a no-op once it's already
+          // correct), so unconditional is fine.
+          const tabEl = document.querySelector(`.tab-item[data-tab-id="${connection.tabId}"]`);
+          if (tabEl) {
+            const nameEl = tabEl.querySelector('.tab-name');
+            if (nameEl) nameEl.textContent = connection.device.deviceName || connection.device.modelName || S.app.unknownRoku;
+            if (tabEl instanceof HTMLElement) {
+              tabEl.dataset.deviceName = connection.device.deviceName || connection.device.modelName || S.app.unknownRoku;
+              if (connection.device.modelName) tabEl.dataset.modelName = connection.device.modelName;
+              if (connection.device.modelNumber) tabEl.dataset.modelNumber = connection.device.modelNumber;
+            }
+          }
+          const nameText = panel.querySelector('.panel-device-name-text');
+          setDynamicText(nameText, connection.device.deviceName || connection.device.modelName || S.app.unknownRoku);
+          // Several panel modules (Device Performance, password-auth, sideloading, the Network
+          // tab, Action Scripts) snapshot a field off `device` into a closure at panel-creation
+          // time. That's `false`/generic/empty for a device opened from a minimal fallback object
+          // (e.g. Sideload Relay auto-connect, before this health check ever ran) even when the
+          // device genuinely has richer info. One generic event, carrying the just-merged live
+          // object, lets every one of those listen instead of each needing its own bespoke
+          // single-field event.
+          panel.dispatchEvent(
+            new CustomEvent('device-info-refreshed', {
+              detail: { device: connection.device }
+            })
+          );
         }
       }
       if (connection && connection.tabId) {
@@ -4063,9 +4179,12 @@ function setupRemoteTabInputs(
   scheduleAutoScreenshot: (delayMs?: number) => void
 ): void {
   const inputsPanel = panel.querySelector<HTMLElement>('.remote-inputs-panel');
-  const grid = panel.querySelector<HTMLElement>('.remote-inputs-grid');
+  const maybeGrid = panel.querySelector<HTMLElement>('.remote-inputs-grid');
   const body = panel.querySelector<HTMLElement>('.remote-quad-remote-body');
-  if (!inputsPanel || !grid) return;
+  if (!inputsPanel || !maybeGrid) return;
+  // Re-bind to a non-nullable alias — the narrowing above doesn't flow into the nested
+  // `loadTvInputs` function declaration below (only linear control flow in the same scope).
+  const grid: HTMLElement = maybeGrid;
 
   // Reveal/hide the panel and toggle the cluster-shrink class in one place.
   const setInputsVisible = (visible: boolean): void => {
@@ -4073,59 +4192,73 @@ function setupRemoteTabInputs(
     body?.classList.toggle('has-tv-inputs', visible);
   };
 
-  // Non-TV devices: leave the panel hidden — the Remote card is unchanged.
-  if (device.isTv !== true) {
-    setInputsVisible(false);
-    return;
+  let tvInputsLoaded = false;
+  function loadTvInputs(): void {
+    if (tvInputsLoaded) return;
+    tvInputsLoaded = true;
+    void (async () => {
+      try {
+        const result = await api.query('/query/apps');
+        if (!result?.success || typeof result.data !== 'string') return;
+        const inputs = [...result.data.matchAll(/<app id="(tvinput\.[^"]+)"[^>]*>([^<]+)<\/app>/g)].map(
+          (m) => ({ id: m[1], label: decodeHtmlEntities(m[2]).trim() })
+        );
+        if (inputs.length === 0) {
+          setInputsVisible(false);
+          return;
+        }
+
+        // Stable order regardless of how the device lists them: sort by input id (e.g.
+        // tvinput.cvbs, tvinput.dtv, tvinput.hdmi1…hdmi4 → AV, Live TV, Roku, HDMI 2, …).
+        inputs.sort((a, b) => a.id.localeCompare(b.id));
+
+        // Layout is CSS-driven (centered flex-wrap): up to ~6 fit on one row, wrapping when
+        // there are more or the space is narrower. No fixed column count needed here.
+        grid.innerHTML = ''; // clears any prior buttons + their listeners
+
+        for (const inp of inputs) {
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'remote-input-btn';
+          btn.dataset.launch = inp.id;
+          const displayName = inp.label || inp.id.replace(/^tvinput\./, '');
+          btn.textContent = displayName;
+          btn.title = S.app.switchToInput(displayName);
+          btn.addEventListener('click', async () => {
+            btn.classList.add('pressed');
+            try {
+              await api.launch(inp.id);
+              scheduleAutoScreenshot();
+            } catch (error) {
+              rendererError('TV input launch error:', error);
+            }
+            setTimeout(() => btn.classList.remove('pressed'), 150);
+          });
+          grid.appendChild(btn);
+        }
+
+        setInputsVisible(true);
+      } catch (error) {
+        rendererError('Failed to load TV inputs for remote:', error);
+        setInputsVisible(false);
+      }
+    })();
   }
 
-  void (async () => {
-    try {
-      const result = await api.query('/query/apps');
-      if (!result?.success || typeof result.data !== 'string') return;
-      const inputs = [...result.data.matchAll(/<app id="(tvinput\.[^"]+)"[^>]*>([^<]+)<\/app>/g)].map(
-        (m) => ({ id: m[1], label: decodeHtmlEntities(m[2]).trim() })
-      );
-      if (inputs.length === 0) {
-        setInputsVisible(false);
-        return;
-      }
+  // Non-TV devices: leave the panel hidden — the Remote card is unchanged. A device opened via
+  // Sideload Relay auto-connect starts from a minimal fallback object with no `isTv` at all
+  // (evaluates false here even on an actual Roku TV); if a later health check confirms it really
+  // is a TV, the listener below loads the input-switcher then instead of never.
+  if (device.isTv === true) {
+    loadTvInputs();
+  } else {
+    setInputsVisible(false);
+  }
 
-      // Stable order regardless of how the device lists them: sort by input id (e.g.
-      // tvinput.cvbs, tvinput.dtv, tvinput.hdmi1…hdmi4 → AV, Live TV, Roku, HDMI 2, …).
-      inputs.sort((a, b) => a.id.localeCompare(b.id));
-
-      // Layout is CSS-driven (centered flex-wrap): up to ~6 fit on one row, wrapping when
-      // there are more or the space is narrower. No fixed column count needed here.
-      grid.innerHTML = ''; // clears any prior buttons + their listeners
-
-      for (const inp of inputs) {
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = 'remote-input-btn';
-        btn.dataset.launch = inp.id;
-        const displayName = inp.label || inp.id.replace(/^tvinput\./, '');
-        btn.textContent = displayName;
-        btn.title = S.app.switchToInput(displayName);
-        btn.addEventListener('click', async () => {
-          btn.classList.add('pressed');
-          try {
-            await api.launch(inp.id);
-            scheduleAutoScreenshot();
-          } catch (error) {
-            rendererError('TV input launch error:', error);
-          }
-          setTimeout(() => btn.classList.remove('pressed'), 150);
-        });
-        grid.appendChild(btn);
-      }
-
-      setInputsVisible(true);
-    } catch (error) {
-      rendererError('Failed to load TV inputs for remote:', error);
-      setInputsVisible(false);
-    }
-  })();
+  panel.addEventListener('device-info-refreshed', (e: Event) => {
+    const ce = e as CustomEvent<{ device?: { isTv?: boolean } }>;
+    if (ce.detail?.device?.isTv === true) loadTvInputs();
+  });
 }
 
 // ============================================
@@ -4133,15 +4266,12 @@ function setupRemoteTabInputs(
 // ============================================
 
 function setupApps(panel, device, api) {
-  const isTv = device.isTv === true;
-  
-  devLog('Setting up apps for:', api.ip, 'isTv:', isTv, api.isRemote ? '(via relay)' : '(direct)');
-  
+  devLog('Setting up apps for:', api.ip, api.isRemote ? '(via relay)' : '(direct)');
+
   const appsGrid = panel.querySelector('.installed-apps-grid');
   const appsLoading = panel.querySelector('.apps-loading');
   const appsEmpty = panel.querySelector('.apps-empty');
   const refreshBtn = panel.querySelector('.refresh-apps-btn');
-  const tvInputsRow = panel.querySelector('.tv-inputs-row');
   const inputsSection = panel.querySelector('.installed-inputs-section');
   const inputsGrid = panel.querySelector('.installed-inputs-grid');
   const appsTitle = panel.querySelector('.installed-apps-title');
@@ -4150,17 +4280,12 @@ function setupApps(panel, device, api) {
     if (appsTitle) appsTitle.textContent = hasInputs ? S.app.installedAppsAndTvInputs : S.app.installedApps;
     if (rawListTitle) rawListTitle.textContent = hasInputs ? S.app.appsAndInputsList : S.app.rawListOfApps;
   };
-  
+
   if (!appsGrid || !appsLoading || !appsEmpty || !refreshBtn) {
     rendererError('Apps elements not found:', { appsGrid, appsLoading, appsEmpty, refreshBtn });
     return;
   }
-  
-  // Show TV inputs only for TV devices
-  if (tvInputsRow) {
-    tvInputsRow.style.display = isTv ? 'flex' : 'none';
-  }
-  
+
   // TV inputs are exposed by /query/apps with ids prefixed "tvinput." (e.g. tvinput.hdmi1)
   const isTvInput = (appId) => appId.startsWith('tvinput.');
 
@@ -4186,10 +4311,18 @@ function setupApps(panel, device, api) {
     btn.className = 'app-btn-dynamic';
     btn.dataset.app = appId;
     btn.title = S.app.appTileTitle(appName, appId);
+    // Drag onto the Deep Link card's App ID field instead of typing it (see
+    // makeAppIdDropTarget in deeplink-panel.ts). Coexists with the click-to-launch handler
+    // below — dragstart only fires on an actual drag gesture, not a plain click.
+    // The `.app-icon` <img> below needs `draggable="false"`: <img> is draggable by default in
+    // browsers, and starting a drag directly over it lets the browser's own native image-drag
+    // take over instead of this button's — using a distorted default ghost of the raw <img> at
+    // its unconstrained aspect ratio (squished to the CSS box) rather than the button itself.
+    makeAppIdDragSource(btn, appId);
 
     setSafeHTML(btn, `
       <div class="app-icon-wrapper">
-        <img class="app-icon" alt="${escapeHtml(appName)}" style="display: none;">
+        <img class="app-icon" alt="${escapeHtml(appName)}" draggable="false" style="display: none;">
         <div class="app-icon-placeholder">${icon('tv', 'icon-lg', 'icon-muted icon-loading')}</div>
       </div>
       <div class="app-name-wrapper">
@@ -4318,40 +4451,7 @@ function setupApps(panel, device, api) {
   
   // Refresh button
   refreshBtn.addEventListener('click', loadInstalledApps);
-  
-  // HDMI input buttons
-  panel.querySelectorAll('.hdmi-btn').forEach(btn => {
-    btn.addEventListener('click', async () => {
-      const appId = btn.dataset.app;
-      btn.style.opacity = '0.5';
-      await api.launch(appId);
-      setTimeout(() => {
-        btn.style.opacity = '1';
-      }, 200);
-    });
-  });
-  
-  // Custom app launch
-  const customAppIdInput = panel.querySelector('.custom-app-id');
-  const launchCustomBtn = panel.querySelector('.launch-custom-btn');
-  
-  launchCustomBtn.addEventListener('click', async () => {
-    const appId = customAppIdInput.value.trim();
-    if (!appId) return;
-    
-    launchCustomBtn.style.opacity = '0.5';
-    await api.launch(appId);
-    setTimeout(() => {
-      launchCustomBtn.style.opacity = '1';
-    }, 200);
-  });
-  
-  customAppIdInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') {
-      launchCustomBtn.click();
-    }
-  });
-  
+
   // List installed apps (raw)
   const listAppsBtn = panel.querySelector('.list-apps-btn');
   const appsOutput = panel.querySelector('.installed-apps-output');
@@ -4853,13 +4953,12 @@ async function manualConnect() {
 function setupRemoteLocationModal() {
   const modal = elements.addLocationModal;
   const addBtn = elements.addLocationBtn;
-  const cancelBtn = elements.cancelAddLocation;
   const confirmBtn = elements.confirmAddLocation;
   const nameInput = elements.locationName;
   const hostInput = elements.locationHost;
   const portInput = elements.locationPort;
-  
-  if (!modal || !addBtn || !cancelBtn || !confirmBtn || !nameInput || !hostInput || !portInput) {
+
+  if (!modal || !addBtn || !confirmBtn || !nameInput || !hostInput || !portInput) {
     devLog('Remote location modal elements not found');
     return;
   }
@@ -4885,8 +4984,8 @@ function setupRemoteLocationModal() {
     });
   }
   
-  cancelBtn.addEventListener('click', closeModal);
-  
+  elements.addLocationClose?.addEventListener('click', closeModal);
+
   // Close on backdrop click, guarded so a drag that starts inside and releases
   // on the backdrop doesn't dismiss the modal (see modal-backdrop-click.ts).
   attachBackdropClickToClose(locationModal, closeModal);
@@ -5459,6 +5558,11 @@ async function init() {
   // Localize the static index.html shell + the just-injected modal fragments in one
   // pass (elements carry data-i18n* attributes; inline English is the fallback).
   applyI18n(document);
+  // One delegated listener on `document` covers every `.help-settings-link` anywhere —
+  // the modals just mounted above (Help & Guide, Remote Help, …) and the Network
+  // Inspector tab's own dynamically-rendered hints — with no per-container wiring needed
+  // as new links are added.
+  wireHelpSettingsLinks(document);
   // The local device-count badge is parametrized (S.app.deviceCount), so it can't carry
   // a data-i18n attribute; seed its initial "0 devices" label from the catalog. Later
   // renderDeviceList() calls keep it in sync as devices connect/disconnect.
@@ -5472,6 +5576,13 @@ async function init() {
   // Initialize privacy mode
   initPrivacyMode();
   initLocaleLiveSwitch(() => renderDeviceList());
+  installCrashCapture({
+    windowName: 'main',
+    getSetting: window.roku.getSetting,
+    getAppInfo: window.roku.getAppInfo,
+    openExternal: window.roku.openExternal,
+    onMainProcessError: window.roku.onMainProcessError
+  });
 
   devLog('Initializing Roku Dev Studio...');
   
@@ -5493,7 +5604,7 @@ async function init() {
     locationName: document.getElementById('locationName') as HTMLInputElement | null,
     locationHost: document.getElementById('locationHost') as HTMLInputElement | null,
     locationPort: document.getElementById('locationPort') as HTMLInputElement | null,
-    cancelAddLocation: document.getElementById('cancelAddLocation') as HTMLButtonElement | null,
+    addLocationClose: document.getElementById('addLocationClose') as HTMLButtonElement | null,
     confirmAddLocation: document.getElementById('confirmAddLocation') as HTMLButtonElement | null,
     remoteLocationsContainer: document.getElementById('remoteLocationsContainer'),
     // Local devices section
@@ -5543,6 +5654,7 @@ async function init() {
     cachedRememberedDeviceList = undefined;
     cancelPostStartupSidebarGraceTimer();
     refreshAllNetworkTabVisibility();
+    updateTryDemoAppButtonVisibility();
     if (!REMEMBER_SIDEBAR_TOGGLE) {
       postStartupSidebarDecisionComplete = true;
       sidebarSessionKeepExpandedOverride = false;
@@ -5603,6 +5715,29 @@ async function init() {
     // buttons, so this button scans everything: local + every remote location.
     elements.titlebarScanBtn.addEventListener('click', () => {
       void runFullUserScan();
+    });
+  }
+  const tryDemoAppBtn = document.getElementById('titlebarTryDemoAppBtn');
+  if (tryDemoAppBtn) {
+    tryDemoAppBtn.addEventListener('click', () => {
+      openTryDemoAppModal({
+        initialDevices: buildTryDemoAppDeviceOptions(),
+        rescan: buildTryDemoAppDeviceOptions,
+        onLaunched: (device) => connectAndOpenConsoleForTryDemoAppDevice(device.id),
+        opener: tryDemoAppBtn
+      });
+    });
+  }
+  // Settings window's "Demo App" button (shown when the titlebar button is toggled off) relays
+  // through main to open the same picker here — the titlebar button itself may be hidden, so
+  // this is the only way to reach it in that state.
+  if (typeof window.roku.onDemoAppOpenRequested === 'function') {
+    window.roku.onDemoAppOpenRequested(() => {
+      openTryDemoAppModal({
+        initialDevices: buildTryDemoAppDeviceOptions(),
+        rescan: buildTryDemoAppDeviceOptions,
+        onLaunched: (device) => connectAndOpenConsoleForTryDemoAppDevice(device.id)
+      });
     });
   }
   if (elements.manualConnectBtn) {
@@ -5702,6 +5837,55 @@ async function init() {
     }
 
     return out;
+  }
+
+  // "Try Demo App" (titlebar button): same underlying device snapshot as
+  // Fiddle, reshaped into the modal's {id, label} + sideload-descriptor shape.
+  function buildTryDemoAppDeviceOptions(): TryDemoAppDeviceOption[] {
+    return buildFiddleDeviceSnapshot().map((d) => ({
+      id: d.id,
+      label: d.modelName ? `${d.name} (${d.modelName})` : d.name,
+      ip: d.ip,
+      isRemote: d.isRemote,
+      serverUrl: d.serverUrl,
+      password: d.password
+    }));
+  }
+
+  // "Try Demo App": after a successful sideload, bring the target device's tab up (opening
+  // one if it wasn't already), switch to it, and connect its Console — same idempotent
+  // connectDevice/connectRemoteDevice + panel.connectTelnet() pattern as
+  // registerRelayAutoConnect() and applyScriptToDevice(), so a device that wasn't open in RDS
+  // shows up connected with its console live right after the demo channel launches. Unlike the
+  // relay's silent background auto-connect, this one action is explicit and single-device, so
+  // `activate: true` brings the tab into view — otherwise a device whose tab was already open
+  // but not the active one would launch the demo with no visible result at all. The success
+  // toast fires from here (not try-demo-app-modal.ts) so it can carry that now-active panel as
+  // its device header — the modal itself only knows the launch succeeded, not which tab/panel
+  // that resolves to.
+  function connectAndOpenConsoleForTryDemoAppDevice(id: string): void {
+    for (const device of state.devices.values()) {
+      if (getDeviceId(device) === id) {
+        const tabId = ensureDeviceConnectedWithConsole(device.ip, { fallbackDevice: device, activate: true });
+        showToast(S.tryDemoApp.toastSuccess, 'success', undefined, document.getElementById(tabId));
+        return;
+      }
+    }
+    for (const [locationId, location] of state.remoteLocations) {
+      if (!location || !location.devices) continue;
+      for (const device of location.devices.values()) {
+        if (getDeviceId(device) === id) {
+          const tabId = ensureDeviceConnectedWithConsole(device.ip, {
+            isRemote: true,
+            locationId,
+            fallbackDevice: device,
+            activate: true
+          });
+          showToast(S.tryDemoApp.toastSuccess, 'success', undefined, document.getElementById(tabId));
+          return;
+        }
+      }
+    }
   }
 
   // "Apply to Device" (from the View & Manage Action Scripts window): show a device picker, then
@@ -6577,7 +6761,7 @@ function registerDebugStopAlerts(): void {
     markTabDebugStop(tab, loc);
     consoleBtn?.classList.add('inner-tab--attn');
     const msg = isError ? S.debugger.stoppedAlertError(name, loc) : S.debugger.stoppedAlert(name, loc);
-    showToast(msg, isError ? 'error' : 'warning', tabId ? () => focusDeviceConsole(tabId) : undefined);
+    showToast(msg, isError ? 'error' : 'warning', tabId ? () => focusDeviceConsole(tabId) : undefined, panel);
   });
 }
 
@@ -6594,6 +6778,7 @@ function runInit() {
   ensureMcpAgentScreenshotBridge();
   mountUpdateNotification();
   setupWelcomeFeatureModals();
+  setupMainWindowFileDropZone();
   onMcpAgentAction((payload) => {
     if (!payload || typeof payload.summary !== 'string' || !payload.summary) return;
     const variant = payload.level === 'destructive' ? 'warning' : 'info';
