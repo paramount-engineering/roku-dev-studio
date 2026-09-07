@@ -328,6 +328,10 @@ MAC de WiFi: ${d.wifiMac || 'N/D'}`,
   legendLimit: 'Límite',
   legendTexture: 'Textura',
   legendSystem: 'Sistema',
+  chartInfoTitle: 'Información del Gráfico',
+  chartInfoAria: 'Información del Gráfico',
+  chartExportTitle: 'Exportar Datos del Gráfico',
+  chartExportAria: 'Exportar Datos del Gráfico',
 
   // Apps tab
   deepLink: 'Deep-Link',

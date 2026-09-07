@@ -5214,6 +5214,71 @@ function setupKeyboardRemoteHelpModal(): void {
   });
 }
 
+let chartInfoModalWired = false;
+
+/** Per-chart "what does this legend mean" modal for the Remote Section's Device Performance quad
+ *  (CPU / Memory / BrightScript Objects footers). One shared modal with three content panes
+ *  toggled via `data-chart-info-pane`/`data-chart-info-title`, opened from any
+ *  `[data-chart-info-btn]` in any device panel (each device tab has its own Remote Section). */
+function setupChartInfoModal(): void {
+  if (chartInfoModalWired) return;
+  const modal = document.getElementById('chartInfoModal');
+  const closeBtn = document.getElementById('chartInfoModalClose');
+  if (!(modal instanceof HTMLElement) || !(closeBtn instanceof HTMLElement)) return;
+  chartInfoModalWired = true;
+
+  const closeChartInfoModal = () => {
+    if (!modal.classList.contains('active')) return;
+    closeModalWithOriginMotion(modal, () => {
+      modal.classList.remove('active');
+      modal.setAttribute('aria-hidden', 'true');
+    });
+  };
+
+  closeBtn.addEventListener('click', closeChartInfoModal);
+  attachBackdropClickToClose(modal, closeChartInfoModal);
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && modal.classList.contains('active')) {
+      closeChartInfoModal();
+    }
+  });
+
+  // Docs links (one "Learn more" plus one "Data source" per pane) open in the system browser —
+  // target="_blank" alone pops an in-app Electron window here (no setWindowOpenHandler is
+  // registered anywhere in this app). Delegated so every current and future
+  // `.chart-info-learn-more-link` anchor is covered, not just the first one in the DOM.
+  modal.addEventListener('click', (e) => {
+    const t = e.target;
+    if (!(t instanceof Element)) return;
+    const link = t.closest('a.chart-info-learn-more-link');
+    if (!(link instanceof HTMLAnchorElement)) return;
+    e.preventDefault();
+    void window.roku.openExternal(link.href);
+  });
+
+  document.addEventListener('click', (e) => {
+    const t = e.target;
+    if (!(t instanceof Element)) return;
+    const btn = t.closest('[data-chart-info-btn]');
+    if (!btn) return;
+    const chart = btn.getAttribute('data-chart-info-btn');
+    if (chart !== 'cpu' && chart !== 'memory' && chart !== 'objects') return;
+    e.preventDefault();
+    modal.querySelectorAll('[data-chart-info-title]').forEach((el) => {
+      el.toggleAttribute('hidden', el.getAttribute('data-chart-info-title') !== chart);
+    });
+    modal.querySelectorAll('[data-chart-info-pane]').forEach((el) => {
+      el.toggleAttribute('hidden', el.getAttribute('data-chart-info-pane') !== chart);
+    });
+    modal.querySelectorAll('[data-chart-info-footer]').forEach((el) => {
+      el.toggleAttribute('hidden', el.getAttribute('data-chart-info-footer') !== chart);
+    });
+    const opener = btn instanceof HTMLElement ? btn : null;
+    modal.setAttribute('aria-hidden', 'false');
+    openModalOverlayActiveFromOpener(modal, opener);
+  });
+}
+
 /** Custom title bar: platform class + window controls (Windows / Linux; macOS uses traffic lights). */
 function setupFramelessTitlebar(): void {
   const shell = window.rdsShell;
@@ -5691,6 +5756,7 @@ async function init() {
   await initDeeplinkMediaTypes();
   await initDeeplinkPresets();
   setupKeyboardRemoteHelpModal();
+  setupChartInfoModal();
 
   // Developer-mode logging self-initializes in the shared dev-log module on import.
   // Initialize privacy mode

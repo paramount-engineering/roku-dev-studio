@@ -80,6 +80,7 @@ export const settings = {
     ecp_post: 'Wykonaj POST na dowolny punkt końcowy ECP (ze skutkami).',
     screenshot: 'Przechwyć aktualny ekran urządzenia, zwrócony w treści jako obraz.',
     get_app_icon: 'Pobierz ikonę aplikacji kanału.',
+    device_performance_metrics: 'Dane szeregów czasowych CPU / Pamięci / Obiektów BrightScript w żądanym okresie, z legendą dekodującą.',
     sideload: 'Wgraj i zainstaluj pakiet .zip kanału, zastępując bieżącą Dev App.',
     delete_sideload: 'Usuń aktualnie wgraną (sideload) Dev App.',
     telnet_connect: 'Otwórz konsolę debugowania BrightScript (port 8085).',

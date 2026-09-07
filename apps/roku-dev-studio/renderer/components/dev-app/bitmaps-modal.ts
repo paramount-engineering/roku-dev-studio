@@ -14,6 +14,7 @@ import {
 } from '../../modules/utils/modal-origin-motion.js';
 import { attachBackdropClickToClose, attachEscToClose } from '../../modules/utils/modal-backdrop-click.js';
 import { attachInstantTooltips } from '../../modules/utils/instant-tooltip.js';
+import { rendererWarn } from '../../modules/utils/logger.js';
 import { S } from '@shared/strings/index.js';
 
 export interface BitmapsModalHandle {
@@ -44,13 +45,28 @@ function fmtUpdatedLabel(ts: number | null): string {
   return S.devApp.bitmapsUpdatedAt(timeStr, ago);
 }
 
+/**
+ * Teardown for whichever `.bitmaps-modal-overlay` is currently live, keyed by its own overlay
+ * element. A rapid re-click of the header's "View Graphics Bitmaps" button (or React-less
+ * double-invocation) used to just `el.remove()` the stale overlay here while its close-animation
+ * timers (`closeModalWithOriginMotion`'s `transitionend` listener + fallback `setTimeout`) kept
+ * running against an already-detached node — harmless in itself, but its eventual fallback fire
+ * called the STALE `onClose`, nulling the caller's `bitmapsModalHandle` out from under the new
+ * modal that had since opened, and left the old `setInterval(renderUpdatedLabel)` ticking forever.
+ * Running that instance's real teardown before dropping it fixes both.
+ */
+const activeTeardowns = new WeakMap<HTMLElement, () => void>();
+
 export function openBitmapsModal(
   getSnapshot: () => R2d2Bitmap[],
   getUpdatedAt: () => number | null,
   onClose?: () => void,
   opener?: HTMLElement | null
 ): BitmapsModalHandle {
-  document.querySelectorAll('.bitmaps-modal-overlay').forEach((el) => el.remove());
+  document.querySelectorAll<HTMLElement>('.bitmaps-modal-overlay').forEach((el) => {
+    activeTeardowns.get(el)?.();
+    el.remove();
+  });
 
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay bitmaps-modal-overlay';
@@ -123,7 +139,7 @@ export function openBitmapsModal(
 
   let closed = false;
 
-  function render(): void {
+  function renderUnsafe(): void {
     renderUpdatedLabel();
     const bitmaps = getSnapshot();
     const scrollTop = scrollArea.scrollTop;
@@ -185,7 +201,22 @@ export function openBitmapsModal(
     );
   }
 
-  render();
+  /**
+   * A bad/unexpected bitmap entry (malformed device response, future firmware field change, …)
+   * must never block the modal from appearing at all — that's the "nothing happens when I click
+   * View Graphics Bitmaps" failure mode. Swallow and log instead of letting a data-shape bug
+   * abort `openBitmapsModal` before the overlay is even attached to the document.
+   */
+  function render(): void {
+    try {
+      renderUnsafe();
+    } catch (e) {
+      rendererWarn('[bitmaps-modal] render failed', e);
+      headTable.hidden = true;
+      footTable.hidden = true;
+      setSafeHTML(scrollArea, `<p class="bitmaps-modal-empty">${escapeHtml(S.devApp.bitmapsModalEmpty)}</p>`);
+    }
+  }
 
   tableWrap.appendChild(headTable);
   tableWrap.appendChild(scrollArea);
@@ -201,15 +232,23 @@ export function openBitmapsModal(
   overlay.classList.add('modal-motion-enabled');
   playModalOpenMotion(overlay);
 
+  // Runs after the overlay is already attached + active, so a render-time exception (bad bitmap
+  // data) can only ever leave the modal showing its empty-state fallback — never prevent it from
+  // opening at all.
+  render();
+
   let detachEsc = () => {};
   const teardown = () => {
+    if (closed) return;
     closed = true;
+    activeTeardowns.delete(overlay);
     clearInterval(updatedTimer);
     detachTooltips();
     overlay.remove();
     detachEsc();
     onClose && onClose();
   };
+  activeTeardowns.set(overlay, teardown);
 
   const requestClose = () => {
     closeModalWithOriginMotion(overlay, teardown);

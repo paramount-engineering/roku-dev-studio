@@ -19,6 +19,7 @@ export async function ensureGlobalModalsMounted() {
     'add-location-modal',
     'help-modal',
     'keyboard-remote-help-modal',
+    'chart-info-modal',
     'dev-mode-modal',
     'ecp-mode-modal',
     'integration-guide-modal',

@@ -24,6 +24,13 @@ const SEL_CPU = 'section.remote-quad.remote-quad-cpu';
 const SEL_MEM = 'section.remote-quad.remote-quad-mem';
 const SEL_OBJ = 'section.remote-quad.remote-quad-objects';
 
+/** Quad-card selectors, keyed the same way as the chart-info / export button `data-chart-*` attributes. */
+export const PERFORMANCE_CARD_SELECTORS = {
+  cpu: SEL_CPU,
+  memory: SEL_MEM,
+  objects: SEL_OBJ
+} as const;
+
 type PerformanceCaptureItem = {
   sel: string;
   caption: string;
@@ -111,6 +118,13 @@ export type MetricsRingSnapshot = {
   ringGfxTexture: Array<number | null>;
   ringGfxSystem: Array<number | null>;
   ringObjTotal: Array<number | null>;
+  /** Full Top-10 breakdown per poll, aligned with `ringSampleAt` — every object type's trend over
+   *  time, not just the latest snapshot (`lastObjectRows`). */
+  ringObjectRows: Array<ObjectCountRow[] | null>;
+  /** Plugin memory cap (chanperf) per poll — carried forward like `lastChanperfMemLimitBytes`. */
+  ringMemLimit: Array<number | null>;
+  /** Estimated total BrightScript object memory across ALL types (not just the Top-10) per poll. */
+  ringObjTotalBytes: Array<number | null>;
   /** Minor / major page-fault rates derived from successive `<proc-stat>` samples. */
   ringFaultsMinorPerSec: Array<number | null>;
   ringFaultsMajorPerSec: Array<number | null>;
@@ -125,6 +139,9 @@ export type MetricsRingSnapshot = {
   /** Latched true once a `r2d2-bitmaps` query has succeeded. */
   graphicsSeen: boolean;
   lastProcStat: ProcStatParsed | null;
+  /** Wall ms `lastProcStat`'s pid was first observed (resets on a channel respawn) — pairs with
+   *  `lastProcStat` to derive "Channel Uptime" at any later wall time (e.g. export time). */
+  procStatUptimeAnchorMs: number | null;
 };
 
 function snapHasChanperf(snap: MetricsRingSnapshot): boolean {
@@ -362,6 +379,18 @@ async function captureQuadCardDomPng(getWrap: () => HTMLElement | null, selector
     /* One more frame: domToPng can yield before layout settles. */
     requestAnimationFrame(() => restoreScrollSnaps(scrollSnaps));
   }
+}
+
+/** Single-shot "Export as Image" capture — the card exactly as currently displayed (whichever
+ *  mode is toggled), no mode-cycling. Shares rasterization + upscaling with the Action Script
+ *  devicePerformance step (`captureQuadCardDomPng` / `ensureMinChartExportWidth`) rather than a
+ *  second image-capture mechanism. */
+export async function capturePerformanceCardPngForExport(
+  getWrap: () => HTMLElement | null,
+  selector: string
+): Promise<string> {
+  const raw = await captureQuadCardDomPng(getWrap, selector);
+  return ensureMinChartExportWidth(raw, MIN_PERFORMANCE_CHART_EXPORT_WIDTH_PX);
 }
 
 export type RunDevicePerformanceCaptureArgs = {

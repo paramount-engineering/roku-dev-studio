@@ -310,6 +310,35 @@ export const modals = {
       'Wyłącz Pilot klawiaturowy w <button type="button" class="help-settings-link" data-settings-section="general" data-settings-highlight="keyboardRemoteSettingsRow">Ustawieniach</button>, jeśli nie chcesz, aby klawisze strzałek i inne przypisane klawisze wysyłały naciśnięcia do Roku.',
   },
 
+  chartInfo: {
+    cpuTitle: 'Użycie CPU — Informacje o Wykresie',
+    cpuIntro: 'Procent CPU zużywany przez uruchomioną aplikację, zgodnie z Monitorem zasobów Roku.',
+    cpuTotalDesc: 'Suma użycia User i Kernel.',
+    cpuUserDesc: 'Czas CPU zużyty przez własny kod aplikacji (przestrzeń użytkownika).',
+    cpuKernelDesc: 'Czas CPU zużyty w przestrzeni jądra w imieniu aplikacji (wywołania systemowe, We/Wy itd.).',
+
+    memoryTitle: 'Użycie pamięci — Informacje o Wykresie',
+    memoryIntro: 'Widok System — pamięć systemowa zużywana przez uruchomioną aplikację.',
+    memoryUsedDesc: 'Całkowita pamięć używana przez proces aplikacji — suma Resident i Swap.',
+    memoryResidentDesc: 'Pamięć zmapowana w przestrzeni adresowej aplikacji: pamięć anonimowa, wspierana plikami i współdzielona łącznie.',
+    memoryAnonymousDesc: 'Pamięć taka jak stos i sterta; obejmuje też alokację demux podczas odtwarzania mediów.',
+    memorySharedDesc: 'Pamięć współdzielona używana przez proces aplikacji, np. bufory odtwarzacza multimedialnego i kanały IPC.',
+    memoryLimitDesc: 'Limit pamięci pierwszego planu urządzenia — przekroczenie go, gdy aplikacja jest na pierwszym planie, może spowodować jej zamknięcie.',
+    graphicsIntro: 'Widok Graphics — pamięć zasobów graficznych w domenie GPU.',
+    graphicsTextureDesc: 'Pamięć zasobów graficznych (r2d2) już wykorzystana przez GPU.',
+    graphicsSystemDesc: 'Pamięć zasobów graficznych (r2d2) jeszcze niewykorzystana przez GPU — potencjalnie zmarnowana pamięć.',
+
+    objectsTitle: 'Obiekty BrightScript — Informacje o Wykresie',
+    objectsIntro: 'Aktywne instancje obiektów BrightScript w uruchomionej aplikacji, pogrupowane według typu (pokazano 10 najczęstszych).',
+    objectsCountDesc: 'Liczba aktywnych instancji każdego typu obiektu.',
+    objectsMemoryDesc: 'Przybliżona pamięć, w MB, zużywana przez każdy typ obiektu.',
+
+    dataSource: 'Źródło danych:',
+    systemNote: '(System)',
+    graphicsNote: '(Grafika)',
+    learnMore: 'Dowiedz się więcej w dokumentacji Monitora zasobów Roku',
+  },
+
   secretScreens: {
     title: 'Sekretne ekrany Roku',
     introHtml: `

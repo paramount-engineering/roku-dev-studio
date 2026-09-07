@@ -314,6 +314,35 @@ export const modals = {
       'Desative o controle por teclado nas <button type="button" class="help-settings-link" data-settings-section="general" data-settings-highlight="keyboardRemoteSettingsRow">Configurações</button> se você não quiser que as teclas de seta e outras teclas mapeadas enviem pressionamentos ao Roku.',
   },
 
+  chartInfo: {
+    cpuTitle: 'Uso de CPU — Informações do Gráfico',
+    cpuIntro: 'Porcentagem de CPU consumida pelo app em execução, conforme o Monitor de Recursos da Roku.',
+    cpuTotalDesc: 'A soma do uso de User e Kernel.',
+    cpuUserDesc: 'Tempo de CPU gasto no próprio código do app (espaço do usuário).',
+    cpuKernelDesc: 'Tempo de CPU gasto no espaço do kernel em nome do app (chamadas de sistema, E/S etc.).',
+
+    memoryTitle: 'Uso de Memória — Informações do Gráfico',
+    memoryIntro: 'Visão System — memória do sistema consumida pelo app em execução.',
+    memoryUsedDesc: 'Memória total usada pelo processo do app — a soma de Resident e Swap.',
+    memoryResidentDesc: 'Memória mapeada no espaço de endereços do app: memória anônima, baseada em arquivo e compartilhada combinadas.',
+    memoryAnonymousDesc: 'Memória como pilha e heap; também inclui a alocação de demux durante a reprodução de mídia.',
+    memorySharedDesc: 'Memória compartilhada usada pelo processo do app, por exemplo buffers do player de mídia e canais IPC.',
+    memoryLimitDesc: 'O limite de memória em primeiro plano do dispositivo — excedê-lo enquanto o app está em primeiro plano pode encerrar o app.',
+    graphicsIntro: 'Visão Graphics — memória de recursos gráficos no domínio da GPU.',
+    graphicsTextureDesc: 'Memória de recursos gráficos (r2d2) já usada pela GPU.',
+    graphicsSystemDesc: 'Memória de recursos gráficos (r2d2) ainda não usada pela GPU — memória potencialmente desperdiçada.',
+
+    objectsTitle: 'Objetos BrightScript — Informações do Gráfico',
+    objectsIntro: 'Instâncias ativas de objetos BrightScript no app em execução, agrupadas por tipo (top 10 exibidos).',
+    objectsCountDesc: 'Número de instâncias ativas de cada tipo de objeto.',
+    objectsMemoryDesc: 'Memória aproximada, em MB, consumida por cada tipo de objeto.',
+
+    dataSource: 'Fonte de dados:',
+    systemNote: '(Sistema)',
+    graphicsNote: '(Gráficos)',
+    learnMore: 'Saiba mais na documentação do Monitor de Recursos da Roku',
+  },
+
   secretScreens: {
     title: 'Telas secretas do Roku',
     introHtml: `

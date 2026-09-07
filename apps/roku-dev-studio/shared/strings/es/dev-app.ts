@@ -83,6 +83,17 @@ export const devApp = {
   skippedNoGraphics: (caption: string): string =>
     `Se omitió la captura de "${caption}" — el dispositivo no devolvió datos de r2d2-bitmaps.`,
 
+  // ── Device metrics: chart export button (device-metrics.ts) ───────────────
+  exportAsJson: 'Exportar como JSON',
+  exportAsCsv: 'Exportar como CSV',
+  exportAsImage: 'Exportar como Imagen',
+  exportCpuDialogTitle: 'Exportar Datos de Uso de CPU',
+  exportMemoryDialogTitle: 'Exportar Datos de Uso de Memoria',
+  exportObjectsDialogTitle: 'Exportar Datos de Objetos BrightScript',
+  nothingToExportYet: 'Aún no hay nada que exportar',
+  exportedTo: (filePath: string): string => `✓ Exportado a: ${filePath}`,
+  exportFailed: (detail: string): string => `Error al exportar: ${detail}`,
+
   // ── Device metrics: process-state labels (device-metrics.ts) ──────────────
   stateRunning: 'En ejecución',
   stateSleeping: 'En reposo',

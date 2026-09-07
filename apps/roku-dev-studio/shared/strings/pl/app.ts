@@ -329,6 +329,10 @@ WiFi MAC: ${d.wifiMac || 'N/D'}`,
   legendLimit: 'Limit',
   legendTexture: 'Tekstura',
   legendSystem: 'System',
+  chartInfoTitle: 'Informacje o Wykresie',
+  chartInfoAria: 'Informacje o Wykresie',
+  chartExportTitle: 'Eksportuj Dane Wykresu',
+  chartExportAria: 'Eksportuj Dane Wykresu',
 
   // Apps tab
   deepLink: 'Deep-Link',

@@ -80,6 +80,7 @@ export const settings = {
     ecp_post: 'Trimite un POST către un endpoint ECP arbitrar (cu efecte secundare).',
     screenshot: 'Capturează ecranul curent al dispozitivului, returnat direct ca imagine.',
     get_app_icon: 'Obține pictograma unui canal.',
+    device_performance_metrics: 'Date de serii temporale CPU / Memorie / Obiecte BrightScript pentru intervalul solicitat, cu o legendă de decodare.',
     sideload: 'Încarcă și instalează un pachet .zip al canalului, înlocuind Dev App-ul curent.',
     delete_sideload: 'Elimină Dev App-ul instalat momentan prin sideload.',
     telnet_connect: 'Deschide consola de depanare BrightScript (portul 8085).',

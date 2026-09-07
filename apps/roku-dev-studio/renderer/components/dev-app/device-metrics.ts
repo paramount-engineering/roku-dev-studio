@@ -34,6 +34,8 @@ import type { DevicePerformanceChartId } from '../action-scripts/action-registry
 import {
   runDevicePerformanceCaptureStep,
   isDevicePerformanceChartId,
+  capturePerformanceCardPngForExport,
+  PERFORMANCE_CARD_SELECTORS,
   type MetricsRingSnapshot
 } from './device-metrics-performance-step.js';
 import { openBitmapsModal, type BitmapsModalHandle } from './bitmaps-modal.js';
@@ -179,12 +181,14 @@ function maxFiniteAcross(...rings: Array<Array<number | null>>): number {
   return max;
 }
 
-function makeRing(len: number): Array<number | null> {
+/** Generic over `T` so the same ring machinery covers numeric metric rings and the per-poll
+ *  object-breakdown ring (`Array<ObjectCountRow[] | null>`) below. */
+function makeRing<T>(len: number): Array<T | null> {
   return Array.from({ length: len }, () => null);
 }
 
-function resizeRingPreserve(old: Array<number | null>, newLen: number): Array<number | null> {
-  const next = makeRing(newLen);
+function resizeRingPreserve<T>(old: Array<T | null>, newLen: number): Array<T | null> {
+  const next = makeRing<T>(newLen);
   const take = Math.min(old.length, newLen);
   const srcStart = old.length - take;
   const dstStart = newLen - take;
@@ -194,7 +198,7 @@ function resizeRingPreserve(old: Array<number | null>, newLen: number): Array<nu
   return next;
 }
 
-function pushRing(ring: Array<number | null>, value: number | null): void {
+function pushRing<T>(ring: Array<T | null>, value: T | null): void {
   ring.shift();
   ring.push(value);
 }
@@ -539,20 +543,31 @@ export function setupRemoteTabMetrics(
   const elObjMemHint = objMemHint instanceof HTMLElement ? objMemHint : null;
   const elObjFallback = objFallbackWrap;
 
-  let ringCpuUser = makeRing(ringSlotCount());
-  let ringCpuSys = makeRing(ringSlotCount());
-  let ringMemUsed = makeRing(ringSlotCount());
-  let ringMemRes = makeRing(ringSlotCount());
-  let ringMemAnon = makeRing(ringSlotCount());
-  let ringMemShared = makeRing(ringSlotCount());
-  let ringGfxTexture = makeRing(ringSlotCount());
-  let ringGfxSystem = makeRing(ringSlotCount());
-  let ringObjTotal = makeRing(ringSlotCount());
+  let ringCpuUser: Array<number | null> = makeRing(ringSlotCount());
+  let ringCpuSys: Array<number | null> = makeRing(ringSlotCount());
+  let ringMemUsed: Array<number | null> = makeRing(ringSlotCount());
+  let ringMemRes: Array<number | null> = makeRing(ringSlotCount());
+  let ringMemAnon: Array<number | null> = makeRing(ringSlotCount());
+  let ringMemShared: Array<number | null> = makeRing(ringSlotCount());
+  let ringGfxTexture: Array<number | null> = makeRing(ringSlotCount());
+  let ringGfxSystem: Array<number | null> = makeRing(ringSlotCount());
+  let ringObjTotal: Array<number | null> = makeRing(ringSlotCount());
   /** Roku OS 15.2+ proc-stat-derived rates (faults per second between samples). */
-  let ringFaultsMinorPerSec = makeRing(ringSlotCount());
-  let ringFaultsMajorPerSec = makeRing(ringSlotCount());
+  let ringFaultsMinorPerSec: Array<number | null> = makeRing(ringSlotCount());
+  let ringFaultsMajorPerSec: Array<number | null> = makeRing(ringSlotCount());
   /** Wall ms aligned with each chanperf tick (same length as metric rings). */
-  let ringSampleAt = makeRing(ringSlotCount());
+  let ringSampleAt: Array<number | null> = makeRing(ringSlotCount());
+  /** Full Top-10 breakdown per poll (same length/alignment as `ringSampleAt`) — lets "Export as
+   *  JSON/CSV" report every object type's trend over time, not just the latest snapshot. */
+  let ringObjectRows: Array<ObjectCountRow[] | null> = makeRing(ringSlotCount());
+  /** Plugin memory cap (chanperf `memLimitBytes`) per poll — mirrors the carried-forward
+   *  `lastChanperfMemLimitBytes` (same value the chart's reference line plots), not raw per-tick
+   *  chanperf output, so a transient chanperf gap doesn't punch a null into the exported series. */
+  let ringMemLimit: Array<number | null> = makeRing(ringSlotCount());
+  /** Estimated total BrightScript object memory (chanperf/app-object-counts `totalBytes`, summed
+   *  across ALL object types, not just the Top-10 in `ringObjectRows`) — a distinct figure from
+   *  `ringObjTotal` (total object COUNT). */
+  let ringObjTotalBytes: Array<number | null> = makeRing(ringSlotCount());
 
   function rebuildMetricRings(): void {
     const n = ringSlotCount();
@@ -568,6 +583,9 @@ export function setupRemoteTabMetrics(
     ringFaultsMinorPerSec = resizeRingPreserve(ringFaultsMinorPerSec, n);
     ringFaultsMajorPerSec = resizeRingPreserve(ringFaultsMajorPerSec, n);
     ringSampleAt = resizeRingPreserve(ringSampleAt, n);
+    ringObjectRows = resizeRingPreserve(ringObjectRows, n);
+    ringMemLimit = resizeRingPreserve(ringMemLimit, n);
+    ringObjTotalBytes = resizeRingPreserve(ringObjTotalBytes, n);
   }
 
   let lastObjectRows: ObjectCountRow[] = [];
@@ -1104,22 +1122,9 @@ export function setupRemoteTabMetrics(
   }
 
   function renderCpuPercentChart(
-    root: HTMLElement,
     frame: { nowMs: number; historyMs: number; maxSampleGapMs: number }
   ): void {
     const { nowMs, historyMs, maxSampleGapMs } = frame;
-    const lastU = lastNonNull(ringCpuUser);
-    const lastS = lastNonNull(ringCpuSys);
-    const lastT =
-      lastU != null && lastS != null
-        ? Math.min(100, lastU + lastS)
-        : lastU != null || lastS != null
-          ? Math.min(100, (lastU ?? 0) + (lastS ?? 0))
-          : null;
-    setLegendMetric(root, '[data-legend="cpu"]', 'cpu-total', lastT != null ? `${lastT.toFixed(1)}%` : '—');
-    setLegendMetric(root, '[data-legend="cpu"]', 'cpu-user', lastU != null ? `${lastU.toFixed(1)}%` : '—');
-    setLegendMetric(root, '[data-legend="cpu"]', 'cpu-sys', lastS != null ? `${lastS.toFixed(1)}%` : '—');
-
     const cpuTotalRing = ringCpuUser.map((u, i) => {
       const s = ringCpuSys[i];
       if (u == null || s == null) return null;
@@ -1176,16 +1181,28 @@ export function setupRemoteTabMetrics(
     if (cpuProcessTable instanceof HTMLElement) {
       cpuProcessTable.hidden = effectiveCpuMode !== 'process';
     }
-    /* Legend stays hidden in process mode; the surrounding `.remote-quad-card-footer` keeps
-     * its `min-height: 34px` so the footer band height stays consistent with other cards. */
+
+    /* Total/User/Kernel % legend reflects the same `ringCpuUser`/`ringCpuSys` samples the poll
+     * loop keeps updating regardless of UI mode, so it stays visible (and current) in both the
+     * percent-chart and process-table views — not just recomputed inside renderCpuPercentChart. */
     if (cpuLegend instanceof HTMLElement) {
-      cpuLegend.hidden = effectiveCpuMode !== 'percent';
+      const lastU = lastNonNull(ringCpuUser);
+      const lastS = lastNonNull(ringCpuSys);
+      const lastT =
+        lastU != null && lastS != null
+          ? Math.min(100, lastU + lastS)
+          : lastU != null || lastS != null
+            ? Math.min(100, (lastU ?? 0) + (lastS ?? 0))
+            : null;
+      setLegendMetric(root, '[data-legend="cpu"]', 'cpu-total', lastT != null ? `${lastT.toFixed(1)}%` : '—');
+      setLegendMetric(root, '[data-legend="cpu"]', 'cpu-user', lastU != null ? `${lastU.toFixed(1)}%` : '—');
+      setLegendMetric(root, '[data-legend="cpu"]', 'cpu-sys', lastS != null ? `${lastS.toFixed(1)}%` : '—');
     }
 
     if (effectiveCpuMode === 'process' && cpuProcessTable instanceof HTMLElement) {
       renderCpuProcessTable(cpuProcessTable, { nowMs, historyMs, maxSampleGapMs });
     } else {
-      renderCpuPercentChart(root, { nowMs, historyMs, maxSampleGapMs });
+      renderCpuPercentChart({ nowMs, historyMs, maxSampleGapMs });
     }
 
     /* Memory mode-switch visibility tracks `graphicsSeen` — never hides once revealed. */
@@ -1434,11 +1451,15 @@ export function setupRemoteTabMetrics(
         lastObjectRows = bd.rows;
         lastObjectTotalBytes = bd.totalBytes;
         pushRing(ringObjTotal, bd.total >= 0 ? bd.total : null);
+        pushRing(ringObjectRows, bd.rows);
+        pushRing(ringObjTotalBytes, bd.totalBytes);
         objectOk = true;
       } else {
         lastObjectRows = [];
         lastObjectTotalBytes = null;
         pushRing(ringObjTotal, null);
+        pushRing(ringObjectRows, null);
+        pushRing(ringObjTotalBytes, null);
       }
 
       const nowMs = Date.now();
@@ -1468,6 +1489,9 @@ export function setupRemoteTabMetrics(
         pushRing(ringFaultsMinorPerSec, null);
         pushRing(ringFaultsMajorPerSec, null);
       }
+      // Outside the branch above (mirrors `lastChanperfMemLimitBytes`'s own carry-forward): a
+      // chanperf gap keeps reporting the last known cap rather than punching a null into the series.
+      pushRing(ringMemLimit, lastChanperfMemLimitBytes);
 
       if (gfxParsed) {
         pushRing(ringGfxTexture, gfxParsed.textureUsedBytes);
@@ -1626,11 +1650,478 @@ export function setupRemoteTabMetrics(
     { signal: wrapUiAc.signal }
   );
 
+  type ChartExportKind = 'cpu' | 'memory' | 'objects';
+
+  function exportIsoTs(ms: number): string {
+    return new Date(ms).toISOString();
+  }
+
+  function exportBytesToMb(v: number | null): number | null {
+    return v == null || !Number.isFinite(v) ? null : Math.round((v / (1024 * 1024)) * 100) / 100;
+  }
+
+  function csvCell(v: unknown): string {
+    if (v == null) return '';
+    const s = String(v);
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  }
+
+  function rowsToCsv(headers: string[], rows: unknown[][]): string {
+    const lines = [headers.map(csvCell).join(',')];
+    for (const row of rows) lines.push(row.map(csvCell).join(','));
+    return lines.join('\n');
+  }
+
+  /** Pivots the Top-10 breakdown so rank (1-10) is the row axis and each poll's timestamp becomes
+   *  a 3-column group (Object Type, Count, Memory) — easier to scan a single object type's trend
+   *  across a wide session than the long/tidy [timestamp, rank, …] row-per-observation form. */
+  /** One table: Rank 1-10 rows plus a final "Total" row, rather than the Top-10 breakdown and the
+   *  totals living in two separately-shaped tables — "Total" is just one more row in the same grid. */
+  function objectsBreakdownPivotCsv(
+    totalRows: Array<[string, number | null, number | null]>,
+    breakdownRows: Array<[string, number, string, number, number | null]>
+  ): string {
+    const timestamps: string[] = [];
+    const byTs = new Map<string, Map<number, [string, number, number | null]>>();
+    let maxRank = 0;
+    for (const [ts, rank, label, count, bytes] of breakdownRows) {
+      let byRank = byTs.get(ts);
+      if (!byRank) {
+        byRank = new Map();
+        byTs.set(ts, byRank);
+        timestamps.push(ts);
+      }
+      byRank.set(rank, [label, count, bytes]);
+      if (rank > maxRank) maxRank = rank;
+    }
+    const totalByTs = new Map<string, [number | null, number | null]>();
+    for (const [ts, totalObjects, totalBytes] of totalRows) {
+      totalByTs.set(ts, [totalObjects, totalBytes]);
+    }
+
+    // Plain CSV has no merged-cell/colspan concept, so each timestamp label is repeated across its
+    // full 3-column span (not left blank after the first) — unambiguous in any CSV viewer.
+    const headerGroups = ['Rank', ...timestamps.flatMap((ts) => [ts, ts, ts])];
+    const headerCols = ['', ...timestamps.flatMap(() => ['Object Type', 'Count', 'Memory (bytes)'])];
+    const lines = [headerGroups.map(csvCell).join(','), headerCols.map(csvCell).join(',')];
+    for (let rank = 1; rank <= maxRank; rank++) {
+      const row: unknown[] = [rank];
+      for (const ts of timestamps) {
+        const entry = byTs.get(ts)?.get(rank);
+        row.push(entry?.[0] ?? '', entry?.[1] ?? '', entry?.[2] ?? '');
+      }
+      lines.push(row.map(csvCell).join(','));
+    }
+    const totalRow: unknown[] = ['Total'];
+    for (const ts of timestamps) {
+      const t = totalByTs.get(ts);
+      totalRow.push('', t?.[0] ?? '', t?.[1] ?? '');
+    }
+    lines.push(totalRow.map(csvCell).join(','));
+    return lines.join('\n');
+  }
+
+  /** [timestamp, total %, user %, kernel %, minor faults/s, major faults/s] per sampled ring slot
+   *  (unfilled slots skipped). Fault rates are only non-null once the device has produced a
+   *  `<proc-stat>` block (Roku OS 15.2+) — same gate as the Process-mode UI toggle. */
+  function buildCpuExportRows(
+    snap: MetricsRingSnapshot
+  ): Array<[string, number | null, number | null, number | null, number | null, number | null]> {
+    const rows: Array<
+      [string, number | null, number | null, number | null, number | null, number | null]
+    > = [];
+    for (let i = 0; i < snap.ringSampleAt.length; i++) {
+      const ts = snap.ringSampleAt[i];
+      if (ts == null) continue;
+      const u = snap.ringCpuUser[i];
+      const k = snap.ringCpuSys[i];
+      const total = u != null && k != null ? Math.round((u + k) * 100) / 100 : null;
+      rows.push([exportIsoTs(ts), total, u, k, snap.ringFaultsMinorPerSec[i], snap.ringFaultsMajorPerSec[i]]);
+    }
+    return rows;
+  }
+
+  /** Latest `<proc-stat>` snapshot (state, uptime, CPU time, cumulative fault counts) — no ring
+   *  history exists for these (they're monotonic counters since process start, not rates), so this
+   *  is a single dated snapshot, same pattern as Objects' Top-10 breakdown snapshot. `null` when the
+   *  device has never produced a `<proc-stat>` block. */
+  function buildCpuProcessSnapshot(snap: MetricsRingSnapshot): {
+    asOf: string;
+    state: string;
+    channelUptimeSec: number | null;
+    userCpuTimeSec: number;
+    kernelCpuTimeSec: number;
+    childUserCpuTimeSec: number;
+    childKernelCpuTimeSec: number;
+    minorFaults: number;
+    majorFaults: number;
+    childMinorFaults: number;
+    childMajorFaults: number;
+  } | null {
+    const ps = snap.lastProcStat;
+    if (!snap.procStatSeen || !ps) return null;
+    const clk = ps.clkTck > 0 ? ps.clkTck : 100;
+    const lastTs = lastNonNull(snap.ringSampleAt);
+    const channelUptimeSec =
+      snap.procStatUptimeAnchorMs != null ? Math.max(0, (Date.now() - snap.procStatUptimeAnchorMs) / 1000) : null;
+    return {
+      asOf: exportIsoTs(lastTs ?? Date.now()),
+      state: ps.state,
+      channelUptimeSec,
+      userCpuTimeSec: Math.round((ps.utime / clk) * 100) / 100,
+      kernelCpuTimeSec: Math.round((ps.stime / clk) * 100) / 100,
+      childUserCpuTimeSec: Math.round((ps.cutime / clk) * 100) / 100,
+      childKernelCpuTimeSec: Math.round((ps.cstime / clk) * 100) / 100,
+      minorFaults: ps.minflt,
+      majorFaults: ps.majflt,
+      childMinorFaults: ps.cminflt,
+      childMajorFaults: ps.cmajflt
+    };
+  }
+
+  /** [timestamp, used, resident, anonymous, shared, texture, system] MB — System + Graphics rings
+   *  are both always collected regardless of which mode is toggled on screen, so one export covers both. */
+  function buildMemExportRows(snap: MetricsRingSnapshot): Array<
+    [
+      string,
+      number | null,
+      number | null,
+      number | null,
+      number | null,
+      number | null,
+      number | null,
+      number | null
+    ]
+  > {
+    const rows: Array<
+      [
+        string,
+        number | null,
+        number | null,
+        number | null,
+        number | null,
+        number | null,
+        number | null,
+        number | null
+      ]
+    > = [];
+    for (let i = 0; i < snap.ringSampleAt.length; i++) {
+      const ts = snap.ringSampleAt[i];
+      if (ts == null) continue;
+      rows.push([
+        exportIsoTs(ts),
+        exportBytesToMb(snap.ringMemUsed[i]),
+        exportBytesToMb(snap.ringMemRes[i]),
+        exportBytesToMb(snap.ringMemAnon[i]),
+        exportBytesToMb(snap.ringMemShared[i]),
+        exportBytesToMb(snap.ringMemLimit[i]),
+        exportBytesToMb(snap.ringGfxTexture[i]),
+        exportBytesToMb(snap.ringGfxSystem[i])
+      ]);
+    }
+    return rows;
+  }
+
+  /** Total-objects ring as a time series, plus the full Top-10 breakdown for every poll that
+   *  produced one — i.e. every object type's own trend over time, not just the latest snapshot. */
+  function buildObjectsExportData(snap: MetricsRingSnapshot): {
+    totalRows: Array<[string, number | null, number | null]>;
+    breakdownRows: Array<[string, number, string, number, number | null]>;
+  } {
+    const totalRows: Array<[string, number | null, number | null]> = [];
+    const breakdownRows: Array<[string, number, string, number, number | null]> = [];
+    for (let i = 0; i < snap.ringSampleAt.length; i++) {
+      const ts = snap.ringSampleAt[i];
+      if (ts == null) continue;
+      // `ringObjTotalBytes` sums ALL object types (from the device's own total), not just the
+      // Top-10 in `ringObjectRows` — a distinct figure, not derivable by summing the breakdown.
+      totalRows.push([exportIsoTs(ts), snap.ringObjTotal[i], snap.ringObjTotalBytes[i]]);
+      const rows = snap.ringObjectRows[i];
+      if (!rows) continue;
+      const isoTs = exportIsoTs(ts);
+      rows.forEach((r, rank) => {
+        breakdownRows.push([isoTs, rank + 1, r.label, r.count, r.bytes ?? null]);
+      });
+    }
+    return { totalRows, breakdownRows };
+  }
+
+  function chartExportHasData(kind: ChartExportKind, snap: MetricsRingSnapshot): boolean {
+    if (kind === 'cpu') return snap.ringCpuUser.some((v) => v != null) || snap.ringCpuSys.some((v) => v != null);
+    if (kind === 'memory') {
+      return (
+        snap.ringMemUsed.some((v) => v != null) ||
+        snap.ringMemRes.some((v) => v != null) ||
+        snap.ringMemAnon.some((v) => v != null) ||
+        snap.ringMemShared.some((v) => v != null) ||
+        snap.ringGfxTexture.some((v) => v != null) ||
+        snap.ringGfxSystem.some((v) => v != null)
+      );
+    }
+    return snap.ringObjectRows.some((v) => v != null) || snap.ringObjTotal.some((v) => v != null);
+  }
+
+  function chartExportFileStem(kind: ChartExportKind): string {
+    const safeKey = deviceKey.replace(/[^a-zA-Z0-9-_]/g, '-');
+    return `roku-${kind}-${safeKey}-${Date.now()}`;
+  }
+
+  function chartExportDialogTitle(kind: ChartExportKind): string {
+    if (kind === 'cpu') return S.devApp.exportCpuDialogTitle;
+    if (kind === 'memory') return S.devApp.exportMemoryDialogTitle;
+    return S.devApp.exportObjectsDialogTitle;
+  }
+
+  async function exportChartAsText(kind: ChartExportKind, format: 'json' | 'csv'): Promise<void> {
+    const snap = cloneMetricsSnapshotForActionScript();
+    if (!chartExportHasData(kind, snap)) {
+      showToast(S.devApp.nothingToExportYet, 'warning', undefined, panel);
+      return;
+    }
+
+    let content: string;
+    if (kind === 'cpu') {
+      const rows = buildCpuExportRows(snap);
+      const processSnapshot = buildCpuProcessSnapshot(snap);
+      if (format === 'csv') {
+        const percentCsv = rowsToCsv(
+          ['Timestamp', 'Total %', 'User %', 'Kernel %', 'Minor Faults/s', 'Major Faults/s'],
+          rows
+        );
+        const processCsv = processSnapshot
+          ? rowsToCsv(
+              ['Field', 'Value'],
+              [
+                ['State', processSnapshot.state],
+                ['Channel Uptime (s)', processSnapshot.channelUptimeSec],
+                ['User CPU Time (s)', processSnapshot.userCpuTimeSec],
+                ['Kernel CPU Time (s)', processSnapshot.kernelCpuTimeSec],
+                ['Child User CPU Time (s)', processSnapshot.childUserCpuTimeSec],
+                ['Child Kernel CPU Time (s)', processSnapshot.childKernelCpuTimeSec],
+                ['Minor Faults (cumulative)', processSnapshot.minorFaults],
+                ['Major Faults (cumulative)', processSnapshot.majorFaults],
+                ['Child Minor Faults (cumulative)', processSnapshot.childMinorFaults],
+                ['Child Major Faults (cumulative)', processSnapshot.childMajorFaults]
+              ]
+            )
+          : '';
+        content = `CPU Usage Over Time\n${percentCsv}`;
+        if (processSnapshot) {
+          content += `\n\nProcess Snapshot (as of ${processSnapshot.asOf})\n${processCsv}`;
+        }
+      } else {
+        // Keyed by timestamp at the top level — one object per poll with every observation from
+        // that poll nested under it, rather than parallel arrays that repeat the timestamp per field.
+        const byTs: Record<string, unknown> = { processSnapshot };
+        for (const [ts, total, user, kernel, minorRate, majorRate] of rows) {
+          byTs[ts] = {
+            totalPct: total,
+            userPct: user,
+            kernelPct: kernel,
+            minorFaultsPerSec: minorRate,
+            majorFaultsPerSec: majorRate
+          };
+        }
+        content = JSON.stringify(byTs, null, 2);
+      }
+    } else if (kind === 'memory') {
+      const rows = buildMemExportRows(snap);
+      if (format === 'csv') {
+        // One table, two-row grouped header (System | Graphics spanning their own columns below),
+        // matching the JSON's `system`/`graphics` grouping — rather than two separate stacked tables.
+        // Plain CSV has no merged-cell/colspan concept, so the group label is repeated across every
+        // column in its span (not left blank after the first) — unambiguous in any CSV viewer.
+        const headerGroups = ['Timestamp', 'System', 'System', 'System', 'System', 'System', 'Graphics', 'Graphics'];
+        const headerCols = [
+          '',
+          'Used (MB)',
+          'Resident (MB)',
+          'Anonymous (MB)',
+          'Shared (MB)',
+          'Limit (MB)',
+          'Texture (MB)',
+          'System (MB)'
+        ];
+        const lines = [headerGroups.map(csvCell).join(','), headerCols.map(csvCell).join(',')];
+        for (const row of rows) lines.push(row.map(csvCell).join(','));
+        content = lines.join('\n');
+      } else {
+        // `system` (chanperf: Used/Resident/Anonymous/Shared/Limit) and `graphics` (r2d2-bitmaps:
+        // Texture/System) grouped separately, mirroring the card's own System/Graphics view
+        // toggle — rather than same-level fields from two unrelated ECP queries.
+        const byTs: Record<string, unknown> = {};
+        for (const [ts, used, resident, anonymous, shared, limit, texture, system] of rows) {
+          byTs[ts] = {
+            units: 'MB',
+            system: { used, resident, anonymous, shared, limit },
+            graphics: { texture, system }
+          };
+        }
+        content = JSON.stringify(byTs, null, 2);
+      }
+    } else {
+      const { totalRows, breakdownRows } = buildObjectsExportData(snap);
+      if (format === 'csv') {
+        content = `Objects by Snapshot\n${objectsBreakdownPivotCsv(totalRows, breakdownRows)}`;
+      } else {
+        const byTs: Record<string, { totalObjects: number | null; totalBytes: number | null; topObjects: unknown[] }> =
+          {};
+        for (const [ts, total, totalBytes] of totalRows) {
+          byTs[ts] = { totalObjects: total, totalBytes, topObjects: [] };
+        }
+        for (const [ts, rank, label, count, bytes] of breakdownRows) {
+          (byTs[ts] ??= { totalObjects: null, totalBytes: null, topObjects: [] }).topObjects.push({
+            rank,
+            label,
+            count,
+            bytes
+          });
+        }
+        content = JSON.stringify(byTs, null, 2);
+      }
+    }
+
+    try {
+      const res = await window.roku?.saveTextFile?.({
+        content,
+        defaultName: `${chartExportFileStem(kind)}.${format}`,
+        dialogTitle: chartExportDialogTitle(kind)
+      });
+      if (res?.success) {
+        showToast(S.devApp.exportedTo(res.filePath), 'success', undefined, panel);
+      } else if (res?.error && res.error !== 'Save cancelled') {
+        showToast(S.devApp.exportFailed(res.error), 'error', undefined, panel);
+      }
+    } catch (e) {
+      showToast(S.devApp.exportFailed(errMessage(e)), 'error', undefined, panel);
+    }
+  }
+
+  async function exportChartAsImage(kind: ChartExportKind): Promise<void> {
+    try {
+      const dataUrl = await capturePerformanceCardPngForExport(() => wrap, PERFORMANCE_CARD_SELECTORS[kind]);
+      const base64 = dataUrl.split(',')[1] || '';
+      const res = await window.roku?.saveBinaryFile?.({
+        base64,
+        defaultName: `${chartExportFileStem(kind)}.png`,
+        dialogTitle: chartExportDialogTitle(kind)
+      });
+      if (res?.success) {
+        showToast(S.devApp.exportedTo(res.filePath), 'success', undefined, panel);
+      } else if (res?.error && res.error !== 'Save cancelled') {
+        showToast(S.devApp.exportFailed(res.error), 'error', undefined, panel);
+      }
+    } catch (e) {
+      showToast(S.devApp.exportFailed(errMessage(e)), 'error', undefined, panel);
+    }
+  }
+
+  /** In-app popup (not the OS native context menu — that renders with the platform's own menu
+   *  chrome, which clashes with the app's own dark theme). Appended straight to `document.body`
+   *  rather than positioned inside the quad card, which sidesteps `.remote-quad`'s `overflow:
+   *  hidden` (needed elsewhere for the full-height header/footer button corner-clipping trick). */
+  let activeExportMenu: { el: HTMLElement; opener: HTMLElement; cleanup: () => void } | null = null;
+
+  function closeExportMenu(): void {
+    if (!activeExportMenu) return;
+    activeExportMenu.opener.setAttribute('aria-expanded', 'false');
+    activeExportMenu.cleanup();
+    activeExportMenu.el.remove();
+    activeExportMenu = null;
+  }
+
+  function showExportMenu(opener: HTMLElement, kind: ChartExportKind): void {
+    if (activeExportMenu?.opener === opener) {
+      closeExportMenu();
+      return;
+    }
+    closeExportMenu();
+
+    const menu = document.createElement('div');
+    menu.className = 'chart-export-menu';
+    menu.setAttribute('role', 'menu');
+
+    const items: Array<{ label: string; action: 'json' | 'csv' | 'image' }> = [
+      { label: S.devApp.exportAsJson, action: 'json' },
+      { label: S.devApp.exportAsCsv, action: 'csv' },
+      { label: S.devApp.exportAsImage, action: 'image' }
+    ];
+    for (const item of items) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'chart-export-menu-item';
+      btn.setAttribute('role', 'menuitem');
+      btn.textContent = item.label;
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        closeExportMenu();
+        if (item.action === 'image') void exportChartAsImage(kind);
+        else void exportChartAsText(kind, item.action);
+      });
+      menu.appendChild(btn);
+    }
+
+    document.body.appendChild(menu);
+
+    const gap = 4;
+    const openerRect = opener.getBoundingClientRect();
+    const menuRect = menu.getBoundingClientRect();
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    let left = openerRect.right - menuRect.width;
+    let top = openerRect.bottom + gap;
+    left = Math.min(Math.max(gap, left), vw - gap - menuRect.width);
+    if (top + menuRect.height > vh - gap) top = openerRect.top - gap - menuRect.height;
+    top = Math.max(gap, top);
+    menu.style.left = `${Math.round(left)}px`;
+    menu.style.top = `${Math.round(top)}px`;
+    opener.setAttribute('aria-expanded', 'true');
+
+    const onOutsideMousedown = (e: MouseEvent) => {
+      const t = e.target;
+      if (t instanceof Node && (menu.contains(t) || opener.contains(t))) return;
+      closeExportMenu();
+    };
+    const onKeydown = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      closeExportMenu();
+      opener.focus();
+    };
+    document.addEventListener('mousedown', onOutsideMousedown, { capture: true });
+    document.addEventListener('keydown', onKeydown);
+
+    activeExportMenu = {
+      el: menu,
+      opener,
+      cleanup: () => {
+        document.removeEventListener('mousedown', onOutsideMousedown, { capture: true });
+        document.removeEventListener('keydown', onKeydown);
+      }
+    };
+
+    const first = menu.querySelector('button');
+    if (first instanceof HTMLElement) first.focus();
+  }
+
   wrap.addEventListener(
     'click',
     (ev) => {
       const t = ev.target;
-      if (!(t instanceof HTMLElement)) return;
+      // `Element`, not `HTMLElement`: these icon-only buttons render an inline `<svg><use>`
+      // glyph filling nearly their whole hit area, so a click that lands on the icon itself
+      // targets an SVGElement — which is not an HTMLElement (separate interface hierarchy) —
+      // and would silently bail out here before any of the branches below ever ran. `closest()`
+      // is defined on `Element` and works identically for both.
+      if (!(t instanceof Element)) return;
+
+      const exportBtn = t.closest('[data-chart-export-btn]');
+      if (exportBtn instanceof HTMLButtonElement && wrap.contains(exportBtn)) {
+        const kind = exportBtn.getAttribute('data-chart-export-btn');
+        if (kind === 'cpu' || kind === 'memory' || kind === 'objects') {
+          showExportMenu(exportBtn, kind);
+        }
+        return;
+      }
 
       const cpuBtn = t.closest('[data-cpu-mode]');
       if (cpuBtn instanceof HTMLButtonElement && wrap.contains(cpuBtn)) {
@@ -1648,15 +2139,19 @@ export function setupRemoteTabMetrics(
 
       const bitmapsBtn = t.closest('[data-mem-bitmaps-btn]');
       if (bitmapsBtn instanceof HTMLButtonElement && wrap.contains(bitmapsBtn) && !bitmapsBtn.hidden) {
-        bitmapsModalHandle?.close();
-        bitmapsModalHandle = openBitmapsModal(
-          () => lastBitmaps,
-          () => lastBitmapsUpdatedAt,
-          () => {
-            bitmapsModalHandle = null;
-          },
-          bitmapsBtn
-        );
+        try {
+          bitmapsModalHandle?.close();
+          bitmapsModalHandle = openBitmapsModal(
+            () => lastBitmaps,
+            () => lastBitmapsUpdatedAt,
+            () => {
+              bitmapsModalHandle = null;
+            },
+            bitmapsBtn
+          );
+        } catch (e) {
+          rendererWarn('[Remote metrics] Failed to open Graphics Bitmaps modal', e);
+        }
         return;
       }
 
@@ -1918,6 +2413,7 @@ export function setupRemoteTabMetrics(
 
   function cloneMetricsSnapshotForActionScript(): MetricsRingSnapshot {
     const c = (r: Array<number | null>) => [...r];
+    const cRows = (r: Array<ObjectCountRow[] | null>) => r.map((slot) => slot?.map((row) => ({ ...row })) ?? null);
     return {
       ringCpuUser: c(ringCpuUser),
       ringCpuSys: c(ringCpuSys),
@@ -1928,6 +2424,9 @@ export function setupRemoteTabMetrics(
       ringGfxTexture: c(ringGfxTexture),
       ringGfxSystem: c(ringGfxSystem),
       ringObjTotal: c(ringObjTotal),
+      ringObjectRows: cRows(ringObjectRows),
+      ringMemLimit: c(ringMemLimit),
+      ringObjTotalBytes: c(ringObjTotalBytes),
       ringFaultsMinorPerSec: c(ringFaultsMinorPerSec),
       ringFaultsMajorPerSec: c(ringFaultsMajorPerSec),
       ringSampleAt: c(ringSampleAt),
@@ -1938,9 +2437,178 @@ export function setupRemoteTabMetrics(
       graphicsSeen,
       chartSessionStartMs,
       procStatSeen,
-      lastProcStat: lastProcStat ? { ...lastProcStat } : null
+      lastProcStat: lastProcStat ? { ...lastProcStat } : null,
+      procStatUptimeAnchorMs
     };
   }
+
+  // ── `device_performance_metrics` MCP tool (packages/roku-dev-studio-api/lib/operations.ts) ──
+  const MCP_METRICS_DEFAULT_WINDOW_SEC = 60;
+  const MCP_METRICS_DEFAULT_MAX_SAMPLES = 120;
+  const MCP_METRICS_HARD_MAX_SAMPLES = 500;
+
+  type McpDevicePerformanceMetricsArgs = {
+    charts?: unknown;
+    windowSec?: unknown;
+    maxSamples?: unknown;
+  };
+
+  function normalizeMcpMetricsCharts(raw: unknown): Array<'cpu' | 'memory' | 'objects'> {
+    const all: Array<'cpu' | 'memory' | 'objects'> = ['cpu', 'memory', 'objects'];
+    if (!Array.isArray(raw) || raw.length === 0) return all;
+    const picked = raw.filter(
+      (v): v is 'cpu' | 'memory' | 'objects' => v === 'cpu' || v === 'memory' || v === 'objects'
+    );
+    return picked.length > 0 ? Array.from(new Set(picked)) : all;
+  }
+
+  /** Builds the `device_performance_metrics` MCP tool response: a time-sliced, optionally
+   *  downsampled, compactly-keyed view of the same rings the quad charts plot from (see the
+   *  matching short-key convention already used by the chart-export feature above). */
+  function buildMcpDevicePerformanceMetrics(args: McpDevicePerformanceMetricsArgs): Record<string, unknown> {
+    const snap = cloneMetricsSnapshotForActionScript();
+    const charts = normalizeMcpMetricsCharts(args?.charts);
+    const wantCpu = charts.includes('cpu');
+    const wantMemory = charts.includes('memory');
+    const wantObjects = charts.includes('objects');
+
+    const rawWindowSec =
+      typeof args?.windowSec === 'number' && Number.isFinite(args.windowSec)
+        ? args.windowSec
+        : MCP_METRICS_DEFAULT_WINDOW_SEC;
+    const windowSec = Math.max(1, rawWindowSec);
+    const rawMaxSamples =
+      typeof args?.maxSamples === 'number' && Number.isFinite(args.maxSamples)
+        ? Math.round(args.maxSamples)
+        : MCP_METRICS_DEFAULT_MAX_SAMPLES;
+    const maxSamples = Math.min(MCP_METRICS_HARD_MAX_SAMPLES, Math.max(1, rawMaxSamples));
+
+    const cutoffMs = Date.now() - windowSec * 1000;
+    const qualifying: number[] = [];
+    for (let i = 0; i < snap.ringSampleAt.length; i++) {
+      const ts = snap.ringSampleAt[i];
+      if (ts != null && ts >= cutoffMs) qualifying.push(i);
+    }
+
+    // Evenly-spaced pick across the qualifying range (not a truncated tail) so a long window
+    // still shows its overall shape rather than just its most recent slice.
+    let selected = qualifying;
+    let downsampled = false;
+    if (qualifying.length > maxSamples) {
+      downsampled = true;
+      const step = (qualifying.length - 1) / (maxSamples - 1);
+      const thinned: number[] = [];
+      for (let k = 0; k < maxSamples; k++) thinned.push(qualifying[Math.round(k * step)]);
+      selected = Array.from(new Set(thinned));
+    }
+
+    const samples: Record<string, unknown> = {};
+    for (const i of selected) {
+      const ts = snap.ringSampleAt[i];
+      if (ts == null) continue;
+      const entry: Record<string, unknown> = {};
+      if (wantCpu) {
+        const u = snap.ringCpuUser[i];
+        const k = snap.ringCpuSys[i];
+        entry.c = {
+          t: u != null && k != null ? Math.round((u + k) * 100) / 100 : null,
+          u,
+          k,
+          mnf: snap.ringFaultsMinorPerSec[i],
+          mjf: snap.ringFaultsMajorPerSec[i]
+        };
+      }
+      if (wantMemory) {
+        entry.m = {
+          sys: {
+            u: exportBytesToMb(snap.ringMemUsed[i]),
+            r: exportBytesToMb(snap.ringMemRes[i]),
+            a: exportBytesToMb(snap.ringMemAnon[i]),
+            sh: exportBytesToMb(snap.ringMemShared[i]),
+            l: exportBytesToMb(snap.ringMemLimit[i])
+          },
+          gfx: {
+            tx: exportBytesToMb(snap.ringGfxTexture[i]),
+            gs: exportBytesToMb(snap.ringGfxSystem[i])
+          }
+        };
+      }
+      if (wantObjects) {
+        const rows = snap.ringObjectRows[i];
+        entry.o = {
+          to: snap.ringObjTotal[i],
+          tb: snap.ringObjTotalBytes[i],
+          top: rows ? rows.map((r, rank) => ({ r: rank + 1, l: r.label, c: r.count, b: r.bytes ?? null })) : []
+        };
+      }
+      samples[exportIsoTs(ts)] = entry;
+    }
+
+    const legend: Record<string, unknown> = {};
+    if (wantCpu) {
+      legend.c = {
+        name: 'cpu',
+        t: 'Total CPU %',
+        u: 'User CPU %',
+        k: 'Kernel CPU %',
+        mnf: 'Minor faults/sec',
+        mjf: 'Major faults/sec'
+      };
+    }
+    if (wantMemory) {
+      legend.m = {
+        name: 'memory',
+        sys: 'System-domain memory (chanperf)',
+        gfx: 'Graphics-domain memory (r2d2-bitmaps)',
+        'sys.u': 'Used',
+        'sys.r': 'Resident',
+        'sys.a': 'Anonymous',
+        'sys.sh': 'Shared',
+        'sys.l': 'Limit (cap)',
+        'gfx.tx': 'Texture',
+        'gfx.gs': 'System (graphics-domain memory)'
+      };
+    }
+    if (wantObjects) {
+      legend.o = {
+        name: 'objects',
+        to: 'Total object count (all types)',
+        tb: 'Total object memory in bytes (all types)',
+        top: 'Top-10 object types this poll: [{r:rank, l:label, c:count, b:bytes}]'
+      };
+    }
+
+    const firstTs = selected.length > 0 ? snap.ringSampleAt[selected[0]] : null;
+    const lastTs = selected.length > 0 ? snap.ringSampleAt[selected[selected.length - 1]] : null;
+    const actualWindowSec = firstTs != null && lastTs != null ? Math.max(0, (lastTs - firstTs) / 1000) : 0;
+
+    const data: Record<string, unknown> = {
+      charts,
+      devicePerformanceEnabled: snap.ringSampleAt.some((v) => v != null),
+      requestedWindowSec: windowSec,
+      actualWindowSec: Math.round(actualWindowSec * 10) / 10,
+      sampleCount: selected.length,
+      downsampled,
+      ...(wantMemory ? { units: { memory: 'MB' } } : {}),
+      legend,
+      samples
+    };
+    if (wantCpu) data.cpuProcessSnapshot = buildCpuProcessSnapshot(snap);
+    return data;
+  }
+
+  (
+    panel as DevicePanelRoot & {
+      rokuGetDevicePerformanceMetrics?: (args: unknown) => Promise<{ ok: boolean; data?: unknown; error?: string }>;
+    }
+  ).rokuGetDevicePerformanceMetrics = async (args: unknown) => {
+    try {
+      const a = args && typeof args === 'object' && !Array.isArray(args) ? (args as McpDevicePerformanceMetricsArgs) : {};
+      return { ok: true, data: buildMcpDevicePerformanceMetrics(a) };
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : String(e) };
+    }
+  };
 
   type PerfCaptureOpts = { shouldStop?: () => boolean; onWaiting?: (show: boolean) => void };
 
@@ -1977,10 +2645,13 @@ export function setupRemoteTabMetrics(
     detachTooltips();
     bitmapsModalHandle?.close();
     bitmapsModalHandle = null;
+    closeExportMenu();
     if (unsubSettings) unsubSettings();
     delete (
       panel as DevicePanelRoot & { rokuDevicePerformanceCapture?: typeof runDevicePerformanceCaptureStep }
     ).rokuDevicePerformanceCapture;
+    delete (panel as DevicePanelRoot & { rokuGetDevicePerformanceMetrics?: unknown })
+      .rokuGetDevicePerformanceMetrics;
   };
 
   (panel as DevicePanelRoot & { _deviceMetricsCleanup?: () => void })._deviceMetricsCleanup = destroy;

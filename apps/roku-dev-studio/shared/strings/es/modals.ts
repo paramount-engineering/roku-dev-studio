@@ -310,6 +310,35 @@ export const modals = {
       'Desactive el Control remoto por teclado en <button type="button" class="help-settings-link" data-settings-section="general" data-settings-highlight="keyboardRemoteSettingsRow">Configuración</button> si no desea que las teclas de flecha y otras teclas asignadas envíen pulsaciones a Roku.',
   },
 
+  chartInfo: {
+    cpuTitle: 'Uso de CPU — Información del Gráfico',
+    cpuIntro: 'Porcentaje de CPU consumido por la app en ejecución, según el Monitor de recursos de Roku.',
+    cpuTotalDesc: 'La suma del uso de Usuario y Núcleo.',
+    cpuUserDesc: 'Tiempo de CPU usado por el código propio de la app (espacio de usuario).',
+    cpuKernelDesc: 'Tiempo de CPU usado en el espacio de núcleo en nombre de la app (llamadas al sistema, E/S, etc.).',
+
+    memoryTitle: 'Uso de memoria — Información del Gráfico',
+    memoryIntro: 'Vista Sistema — Memoria del sistema consumida por la app en ejecución.',
+    memoryUsedDesc: 'Memoria total usada por el proceso de la app — la suma de Residente y Swap.',
+    memoryResidentDesc: 'Memoria asignada en el espacio de direcciones de la app: memoria anónima, respaldada por archivos y compartida combinadas.',
+    memoryAnonymousDesc: 'Memoria como la pila y el heap; también incluye la asignación de demux durante la reproducción de medios.',
+    memorySharedDesc: 'Memoria compartida usada por el proceso de la app, p. ej. búferes del reproductor multimedia y canales IPC.',
+    memoryLimitDesc: 'El límite de memoria en primer plano del dispositivo — superarlo mientras la app está en primer plano puede provocar su cierre.',
+    graphicsIntro: 'Vista Gráficos — Memoria de recursos gráficos en el dominio de la GPU.',
+    graphicsTextureDesc: 'Memoria de recursos gráficos (r2d2) ya utilizada por la GPU.',
+    graphicsSystemDesc: 'Memoria de recursos gráficos (r2d2) aún no utilizada por la GPU — memoria potencialmente desperdiciada.',
+
+    objectsTitle: 'Objetos de BrightScript — Información del Gráfico',
+    objectsIntro: 'Instancias activas de objetos de BrightScript en la app en ejecución, agrupadas por tipo (se muestran los 10 principales).',
+    objectsCountDesc: 'Número de instancias activas de cada tipo de objeto.',
+    objectsMemoryDesc: 'Memoria aproximada, en MB, consumida por cada tipo de objeto.',
+
+    dataSource: 'Fuente de datos:',
+    systemNote: '(Sistema)',
+    graphicsNote: '(Gráficos)',
+    learnMore: 'Más información en la documentación del Monitor de recursos de Roku',
+  },
+
   secretScreens: {
     title: 'Pantallas secretas de Roku',
     introHtml: `

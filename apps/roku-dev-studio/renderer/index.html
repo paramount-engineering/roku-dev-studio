@@ -3185,8 +3185,10 @@
       min-height: 0;
       gap: var(--device-layout-gap);
     }
+    /* Flush strip on the right edge of .remote-quad-remote-header, same idiom as
+     * .remote-chart-export-btn / .remote-mem-bitmaps-btn / .remote-chart-info-btn. */
     .remote-performance-toggle {
-      display: inline-flex;
+      display: flex;
       flex-direction: row;
       align-items: center;
       gap: 8px;
@@ -3195,9 +3197,14 @@
       font-size: 11px;
       font-weight: 500;
       color: var(--text-secondary);
+      text-transform: none;
+      letter-spacing: normal;
       flex-shrink: 0;
-      text-align: right;
+      padding: 0 12px;
+      border-left: 1px solid var(--border);
+      background: var(--bg-tertiary);
     }
+    .remote-performance-toggle[hidden] { display: none !important; }
     .remote-performance-toggle:hover {
       color: var(--text-primary);
     }
@@ -3310,6 +3317,34 @@
       flex-direction: column;
       overflow: hidden;
     }
+    /* Info button (chart-info-modal.ts wiring in app.ts) — a full-height strip flush against the
+     * left edge of the footer, legend/axis content filling the rest of the row. A normal flex
+     * item (not absolutely positioned), so it never overlaps the legend values or axis-tick
+     * labels next to it, and automatically matches whatever height the footer row ends up being
+     * in both solo and quad layouts. */
+    .remote-chart-info-btn {
+      flex-shrink: 0;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 28px;
+      padding: 0;
+      border: none;
+      border-right: 1px solid var(--border);
+      background: var(--bg-tertiary);
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: background 0.15s, color 0.15s;
+    }
+    /* Purple wash + bold icon stroke, matching `.connection-card-footer-btn:hover` (Roku Secret
+     * Screens) — the app's established "this footer/header action is hoverable" language. */
+    .remote-chart-info-btn:hover {
+      background: rgba(139, 92, 246, 0.18);
+      color: var(--accent-purple);
+    }
+    .remote-chart-info-btn svg {
+      stroke-width: 2.5;
+    }
     .remote-quad-header {
       flex-shrink: 0;
       padding: 10px 12px;
@@ -3329,37 +3364,53 @@
       border-top-right-radius: 7px;
     }
     /*
-     * Quad: header strip matches each card’s footer band (min-height + insets).
-     * — CPU/Memory: same padding as .remote-chart-quad-footer .remote-chart-legend (8px 10px 9px).
-     * — Objects: same as .remote-objects-quad-footer (8px 6px 9px) to line up with object body grid.
-     * — Remote: same horizontal inset as quad secret-screens button (10px) and legend vertical rhythm.
+     * Quad: header strip matches each card’s footer band (min-height), all four sharing the same
+     * 8px 10px 9px inset so every card's title starts at the same x-position. Objects' own
+     * body/footer grid below keeps its separate (narrower) padding — only the header is unified.
      */
     .remote-tab-metrics-root[data-remote-layout="quad"] .remote-quad-header {
       min-height: 34px;
       box-sizing: border-box;
     }
-    .remote-tab-metrics-root[data-remote-layout="quad"] .remote-quad-remote .remote-quad-header {
-      padding: 8px 10px 9px;
-    }
-    .remote-tab-metrics-root[data-remote-layout="quad"] .remote-quad-objects .remote-quad-header {
-      padding: 8px 6px 9px;
-    }
-    .remote-tab-metrics-root[data-remote-layout="quad"] .remote-quad-cpu .remote-quad-header,
-    .remote-tab-metrics-root[data-remote-layout="quad"] .remote-quad-mem .remote-quad-header {
-      padding: 8px 10px 9px;
-    }
     .remote-tab-metrics-root[data-remote-layout="quad"] .remote-quad-header.remote-quad-chart-title {
       display: flex;
       align-items: center;
     }
-    .remote-quad-objects-header {
+    /* Objects/CPU/Memory headers are flex rows: a padded title/mode-switch grid (the `-content` div,
+     * below) plus one or more full-height action-button strips (Export, and Memory's Bitmaps button)
+     * flush against the right edge — same idiom as `.remote-chart-info-btn` in the footer. Padding
+     * moves off the header itself and onto `-content` so the buttons span the header's full height. */
+    .remote-quad-objects-header,
+    .remote-quad-cpu-header,
+    .remote-quad-mem-header {
+      display: flex;
+      align-items: stretch;
+      padding: 0;
+      /* Containing block for the absolutely-centered mode-switch below — centering it on this
+         (the full header) rather than on the `-content` div means it doesn't shift when a
+         conditionally-shown action button (e.g. Memory's Bitmaps button) changes how much of the
+         header's width `-content` actually gets. */
+      position: relative;
+    }
+    .remote-quad-objects-header-content,
+    .remote-quad-cpu-header-content,
+    .remote-quad-mem-header-content {
+      flex: 1;
+      min-width: 0;
       display: grid;
       grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
       align-items: center;
       gap: 8px;
+      padding: 8px 10px 9px;
+    }
+    .remote-quad-objects-header-left {
+      justify-self: start;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
     }
     .remote-quad-objects-header-title {
-      justify-self: start;
       min-width: 0;
       font-size: 13px;
       font-weight: 700;
@@ -3370,16 +3421,33 @@
       text-overflow: ellipsis;
       white-space: nowrap;
     }
+    /* Absolutely centered on `.remote-quad-objects-header` (the full header), not on this grid's
+       own track — so it stays put regardless of how wide the left/right grid columns end up being. */
     .remote-objects-header-center {
-      justify-self: center;
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
     }
+    /* Same split idiom as the Objects/CPU/Memory headers: padding moves off the header itself
+     * and onto `-content`, so the performance-toggle can sit as its own full-height, bordered
+     * strip flush against the right edge (like .remote-chart-export-btn) instead of wrapping
+     * onto its own line when the title area gets tight. */
     .remote-quad-remote-header {
       display: flex;
-      flex-direction: row;
+      align-items: stretch;
+      padding: 0;
+    }
+    .remote-quad-remote-header-content {
+      flex: 1;
+      min-width: 0;
+      display: flex;
       align-items: center;
-      justify-content: space-between;
       gap: 8px;
-      flex-wrap: wrap;
+      padding: 10px 12px;
+    }
+    .remote-tab-metrics-root[data-remote-layout="quad"] .remote-quad-remote-header-content {
+      padding: 8px 10px 9px;
     }
     .remote-quad-remote-header-title {
       font-size: 13px;
@@ -3425,16 +3493,21 @@
       padding: 0;
       gap: 0;
     }
-    /* Full-width strip under chart (matches Remote secret-screens footer look). */
+    /* Full-width strip under chart (matches Remote secret-screens footer look). Flex row so the
+     * .remote-chart-info-btn (first child, full-height) and the legend/axis content next to it
+     * share the band rather than the button floating on top of it. */
     .remote-quad > .remote-quad-card-footer {
       flex-shrink: 0;
       margin-top: auto;
+      display: flex;
+      align-items: stretch;
       border-top: 1px solid var(--border);
       background: var(--bg-tertiary);
       border-radius: 0 0 7px 7px;
     }
     .remote-chart-quad-footer .remote-chart-legend {
-      width: 100%;
+      flex: 1;
+      min-width: 0;
       max-width: none;
       display: flex;
       flex-direction: row;
@@ -3556,8 +3629,8 @@
     }
     .remote-objects-mode-btn {
       margin: 0;
-      padding: 3px 10px;
-      font-size: 10px;
+      padding: 4px 12px;
+      font-size: 11px;
       font-weight: 600;
       color: var(--text-muted);
       background: transparent;
@@ -3580,14 +3653,8 @@
     }
     /* CPU / Memory quad headers: title left, mode-switch centered (hidden until the capability is
      * seen live — <proc-stat> for CPU, r2d2-bitmaps for Memory). Mirrors `.remote-quad-objects-header`'s
-     * 3-column grid so the toggle sits in the middle. */
-    .remote-quad-cpu-header,
-    .remote-quad-mem-header {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-      align-items: center;
-      gap: 8px;
-    }
+     * 3-column grid so the toggle sits in the middle. (Flex-row + `-content` grid split defined
+     * above, shared with the Objects header.) */
     .remote-quad-cpu-header-title,
     .remote-quad-mem-header-title {
       justify-self: start;
@@ -3601,38 +3668,97 @@
       text-overflow: ellipsis;
       white-space: nowrap;
     }
+    /* Absolutely centered on `.remote-quad-cpu-header` / `.remote-quad-mem-header` (the full
+       header), not on the `-content` grid — so it doesn't shift when a conditionally-shown action
+       button (e.g. Memory's Bitmaps button) changes how much of the header's width `-content` gets. */
     .remote-cpu-mode-switch-wrap,
     .remote-mem-mode-switch-wrap {
-      justify-self: center;
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
     }
     .remote-cpu-mode-switch-wrap[hidden],
     .remote-mem-mode-switch-wrap[hidden] { display: none !important; }
-    /* Third grid column of the Memory Usage header — mirrors `.remote-objects-top-label`'s
-     * `justify-self: end` slot in the analogous Objects header. Sized to match
-     * `.keyboard-remote-help-btn` (Remote card header) exactly, not `.btn`/`.btn-icon` — those are
-     * noticeably taller and were stretching this card's whole header row above the other three. */
-    .remote-mem-bitmaps-btn {
-      justify-self: end;
-      display: inline-flex;
+    /* Full-height strips on the right edge of the Objects/CPU/Memory headers, next to (not inside)
+     * the padded title/mode-switch content — same flex-child idiom as `.remote-chart-info-btn`.
+     * Memory can show two side by side (Bitmaps + Export); order in the DOM sets left-to-right order. */
+    .remote-mem-bitmaps-btn,
+    .remote-chart-export-btn {
       flex-shrink: 0;
+      display: inline-flex;
       align-items: center;
       justify-content: center;
-      padding: 2px 5px;
-      min-width: 22px;
-      min-height: 22px;
-      border-radius: 4px;
-      border: 1px solid var(--border);
+      width: 28px;
+      padding: 0;
+      border: none;
+      border-left: 1px solid var(--border);
       background: var(--bg-tertiary);
       color: var(--text-muted);
       cursor: pointer;
-      transition: background 0.15s, color 0.15s, border-color 0.15s;
+      transition: background 0.15s, color 0.15s;
     }
-    .remote-mem-bitmaps-btn:hover {
-      background: var(--bg-hover);
-      color: var(--text-primary);
-      border-color: var(--accent-purple);
+    .remote-mem-bitmaps-btn svg,
+    .remote-chart-export-btn svg {
+      stroke-width: 2.5;
+    }
+    /* Purple wash + bold icon stroke, matching `.connection-card-footer-btn:hover` (Roku Secret
+     * Screens) — the app's established "this footer/header action is hoverable" language. */
+    .remote-mem-bitmaps-btn:hover,
+    .remote-chart-export-btn:hover {
+      background: rgba(139, 92, 246, 0.18);
+      color: var(--accent-purple);
     }
     .remote-mem-bitmaps-btn[hidden] { display: none !important; }
+    /* Chart-export popup (device-metrics.ts `showExportMenu`) — an in-app menu, not the OS native
+     * context menu, so it matches the app's own dark theme. Fixed-position and appended to
+     * `document.body` (not the quad card) so it isn't clipped by `.remote-quad`'s `overflow: hidden`.
+     * Same visual language as `.action-scripts-save-dropdown` / `.ni-copy-dropdown`. */
+    .chart-export-menu {
+      position: fixed;
+      z-index: 500;
+      min-width: 170px;
+      width: max-content;
+      padding: 4px;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      box-shadow: 0 10px 28px rgba(0, 0, 0, 0.42);
+      box-sizing: border-box;
+    }
+    .chart-export-menu-item {
+      display: inline-flex;
+      align-items: center;
+      width: 100%;
+      margin: 0;
+      padding: 7px 12px;
+      border: none;
+      border-radius: 4px;
+      background: transparent;
+      color: var(--text-primary);
+      font-family: inherit;
+      font-size: 12px;
+      line-height: 1.2;
+      text-align: left;
+      white-space: nowrap;
+      cursor: pointer;
+      transition: background 0.12s ease;
+      box-sizing: border-box;
+    }
+    /* `--bg-hover` is undefined in this window (only defined in some *other* windows' separate
+     * stylesheets) — an explicit color, not that variable, so the hover/press states actually render. */
+    .chart-export-menu-item:hover,
+    .chart-export-menu-item:focus-visible {
+      background: rgba(139, 92, 246, 0.18);
+      color: var(--accent-purple);
+      outline: none;
+    }
+    .chart-export-menu-item:active {
+      background: rgba(139, 92, 246, 0.3);
+    }
     .remote-cpu-mode-switch,
     .remote-mem-mode-switch {
       display: inline-flex;
@@ -3646,8 +3772,8 @@
     .remote-cpu-mode-btn,
     .remote-mem-mode-btn {
       margin: 0;
-      padding: 3px 10px;
-      font-size: 10px;
+      padding: 4px 12px;
+      font-size: 11px;
       font-weight: 600;
       color: var(--text-muted);
       background: transparent;
@@ -3891,11 +4017,20 @@
       color: var(--text-muted);
       margin-left: 8px;
     }
-    .remote-objects-top-label {
-      justify-self: end;
-      font-size: 10px;
-      color: var(--text-muted);
+    .remote-objects-top-badge {
+      display: inline-flex;
+      align-items: center;
+      flex-shrink: 0;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
       white-space: nowrap;
+      color: var(--accent-purple);
+      background: rgba(139, 92, 246, 0.15);
+      border: 1px solid rgba(139, 92, 246, 0.35);
     }
     .remote-objects-mem-hint {
       font-size: 9px;
@@ -3908,17 +4043,26 @@
       margin: 0;
       padding: 0;
       text-align: left;
-      font-size: 10px;
+      font-size: 11px;
       font-weight: 500;
       letter-spacing: 0.02em;
       color: var(--text-muted);
       flex-shrink: 0;
     }
-    /* Same grid as .remote-objects-rm-row so axis ticks line up with bar tracks (col 3). */
-    .remote-objects-quad-footer {
+    /* .remote-objects-quad-footer is the outer band (.remote-chart-info-btn + the content div
+     * below); .remote-objects-footer-content is the inner div device-metrics.ts actually
+     * populates (`data-objects-footer`) — split so the button, a plain flex sibling, never gets
+     * wiped by the content div's innerHTML rebuilds. */
+    .remote-objects-footer-content {
+      flex: 1;
+      min-width: 0;
       padding: 8px 6px 9px;
       box-sizing: border-box;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
     }
+    /* Same grid as .remote-objects-rm-row so axis ticks line up with bar tracks (col 3). */
     .remote-objects-footer-grid {
       display: grid;
       grid-template-columns: 18px minmax(0, 1fr) minmax(52px, 1.15fr);
@@ -4026,7 +4170,7 @@
       flex-direction: row;
       justify-content: space-between;
       padding-top: 0;
-      font-size: 9px;
+      font-size: 10px;
       font-family: 'JetBrains Mono', ui-monospace, monospace;
       color: var(--text-muted);
       font-variant-numeric: tabular-nums;
@@ -12971,6 +13115,14 @@
       flex: 1;
     }
 
+    /* Generic footer band, same border/padding convention as .modal-header — a modal-specific
+     * class (e.g. .chart-info-modal-footer) adds its own internal layout on top of this. */
+    .modal-footer {
+      flex-shrink: 0;
+      padding: 14px 24px;
+      border-top: 1px solid var(--border);
+    }
+
     /* Graphics Bitmaps modal (programmatic; bitmaps-modal.ts) — content-only, refreshed in place
      * on every successful r2d2-bitmaps poll while open (see `BitmapsModalHandle.refresh`). */
     .bitmaps-modal { width: min(760px, 92vw); max-width: 760px; }
@@ -13540,6 +13692,91 @@
       width: 90vw;
     }
 
+    .chart-info-modal {
+      max-width: 560px;
+      width: 90vw;
+    }
+    .chart-info-modal-body p {
+      margin: 0 0 10px;
+      line-height: 1.5;
+    }
+    /* Extra breathing room + a divider above the Memory pane's second group (Graphics, after
+     * System) so the two legends read as distinct sections rather than one run-on list. */
+    .chart-info-modal-body p.chart-info-subsection {
+      margin-top: 20px;
+      padding-top: 16px;
+      border-top: 1px solid var(--border);
+    }
+    /* Term/description table, one per legend (same shape as .ni-filter-help-table). */
+    .chart-info-legend-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 0 0 12px;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+    .chart-info-legend-table th,
+    .chart-info-legend-table td {
+      padding: 8px 8px;
+      border-top: 1px solid var(--border);
+      vertical-align: top;
+      text-align: left;
+      font-weight: 400;
+    }
+    .chart-info-legend-table tr:first-child th,
+    .chart-info-legend-table tr:first-child td {
+      border-top: none;
+    }
+    .chart-info-legend-table th {
+      white-space: nowrap;
+    }
+    .chart-info-term {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-weight: 600;
+    }
+    .chart-info-legend-table .remote-legend-swatch {
+      flex-shrink: 0;
+    }
+    /* Footer groups the per-chart "Data source" line(s) — swapped per pane, same idea as the
+     * title — with the shared "Learn more" link, out of the scrolling body so neither one ever
+     * reads as cramped against whatever body content happens to end just above it. */
+    .chart-info-modal-footer {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .chart-info-source {
+      margin: 0;
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+    .chart-info-source code {
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-size: 11px;
+    }
+    .chart-info-source-note {
+      color: var(--text-muted);
+    }
+    .chart-info-modal-learn-more {
+      margin: 4px 0 0;
+      font-size: 13px;
+    }
+    /* Same "reads like text, clickable" convention as .help-settings-link — default anchor blue
+     * clashes hard against this modal's dark palette. */
+    .chart-info-learn-more-link {
+      color: var(--text-primary);
+      font-weight: 600;
+      text-decoration: underline;
+      text-decoration-color: transparent;
+      transition: text-decoration-color 0.15s ease, color 0.15s ease;
+    }
+    .chart-info-learn-more-link:hover {
+      color: var(--accent-purple);
+      text-decoration-color: currentColor;
+    }
+
     .keyboard-remote-help-table-caption {
       position: absolute;
       width: 1px;
@@ -13714,10 +13951,19 @@
       max-width: 90%;
     }
     
+    .add-location-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding-bottom: 16px;
+      margin-bottom: 16px;
+      border-bottom: 1px solid var(--border);
+    }
+
     .add-location-form h3 {
       font-size: 18px;
       font-weight: 600;
-      margin-bottom: 16px;
+      margin: 0;
       display: flex;
       align-items: center;
       gap: 10px;
@@ -15744,11 +15990,13 @@
           <div class="remote-quadrant-grid">
             <section class="remote-quad remote-quad-remote" aria-label="Remote Control" data-i18n-aria-label="app.sectionRemoteControl">
               <div class="remote-quad-header remote-quad-remote-header">
-                <div class="remote-quad-remote-header-left">
-                  <span class="remote-quad-remote-header-title" data-i18n="app.tabRemote">Remote</span>
-                  <button type="button" class="keyboard-remote-help-btn" title="Keyboard Shortcuts for this Remote" data-i18n-title="app.keyboardShortcutsRemoteTitle" aria-label="Keyboard Remote Shortcuts Help" data-i18n-aria-label="app.keyboardRemoteHelpAria">
-                    <span class="icon icon-xs"><svg><use href="#icon-keyboard"/></svg></span>
-                  </button>
+                <div class="remote-quad-remote-header-content">
+                  <div class="remote-quad-remote-header-left">
+                    <span class="remote-quad-remote-header-title" data-i18n="app.tabRemote">Remote</span>
+                    <button type="button" class="keyboard-remote-help-btn" title="Keyboard Shortcuts for this Remote" data-i18n-title="app.keyboardShortcutsRemoteTitle" aria-label="Keyboard Remote Shortcuts Help" data-i18n-aria-label="app.keyboardRemoteHelpAria">
+                      <span class="icon icon-xs"><svg><use href="#icon-keyboard"/></svg></span>
+                    </button>
+                  </div>
                 </div>
                 <label class="remote-performance-toggle" data-remote-performance-wrap hidden>
                   <input type="checkbox" class="remote-performance-checkbox" data-remote-performance-toggle autocomplete="off" />
@@ -15821,14 +16069,21 @@
             </section>
             <section class="remote-quad remote-quad-objects" aria-label="BrightScript Object Counts (Dev)" data-i18n-aria-label="app.sectionObjectCounts">
               <div class="remote-quad-header remote-quad-objects-header">
-                <span class="remote-quad-objects-header-title" data-i18n="app.brightScriptObjects">BrightScript Objects</span>
-                <div class="remote-objects-header-center">
-                  <div class="remote-objects-mode-switch" role="tablist" aria-label="Object Metrics Mode" data-i18n-aria-label="app.objectMetricsMode">
-                    <button type="button" class="remote-objects-mode-btn is-active" role="tab" aria-selected="true" data-objects-mode="count" data-i18n="app.objectsModeCount">Count</button>
-                    <button type="button" class="remote-objects-mode-btn" role="tab" aria-selected="false" data-objects-mode="memory" data-i18n="app.objectsModeMemory">Memory</button>
+                <div class="remote-quad-objects-header-content">
+                  <div class="remote-quad-objects-header-left">
+                    <span class="remote-quad-objects-header-title" data-i18n="app.brightScriptObjects">BrightScript Objects</span>
+                    <span class="remote-objects-top-badge" data-i18n="app.objectsTop10">Top 10</span>
+                  </div>
+                  <div class="remote-objects-header-center">
+                    <div class="remote-objects-mode-switch" role="tablist" aria-label="Object Metrics Mode" data-i18n-aria-label="app.objectMetricsMode">
+                      <button type="button" class="remote-objects-mode-btn is-active" role="tab" aria-selected="true" data-objects-mode="count" data-i18n="app.objectsModeCount">Count</button>
+                      <button type="button" class="remote-objects-mode-btn" role="tab" aria-selected="false" data-objects-mode="memory" data-i18n="app.objectsModeMemory">Memory</button>
+                    </div>
                   </div>
                 </div>
-                <span class="remote-objects-top-label" data-i18n="app.objectsTop10">Top 10</span>
+                <button type="button" class="remote-chart-export-btn" data-chart-export-btn="objects" aria-haspopup="menu" aria-expanded="false" title="Export Chart Data" data-i18n-title="app.chartExportTitle" aria-label="Export Chart Data" data-i18n-aria-label="app.chartExportAria">
+                  <span class="icon icon-xs"><svg><use href="#icon-download"/></svg></span>
+                </button>
               </div>
               <div class="remote-objects-body">
                 <p class="remote-objects-mem-hint" data-objects-mem-hint hidden></p>
@@ -15837,17 +16092,27 @@
                   <svg class="remote-chart-svg" data-chart="objects-total" viewBox="0 0 420 200" preserveAspectRatio="xMidYMid meet" aria-hidden="true"></svg>
                 </div>
               </div>
-              <div class="remote-quad-card-footer remote-objects-quad-footer" data-objects-footer hidden></div>
+              <div class="remote-quad-card-footer remote-objects-quad-footer">
+                <button type="button" class="remote-chart-info-btn" data-chart-info-btn="objects" title="Chart Info" data-i18n-title="app.chartInfoTitle" aria-label="Chart Info" data-i18n-aria-label="app.chartInfoAria">
+                  <span class="icon icon-xs"><svg><use href="#icon-info"/></svg></span>
+                </button>
+                <div class="remote-objects-footer-content" data-objects-footer hidden></div>
+              </div>
             </section>
             <section class="remote-quad remote-quad-cpu" aria-label="CPU Usage" data-i18n-aria-label="app.cpuUsage">
               <div class="remote-quad-header remote-quad-cpu-header">
-                <span class="remote-quad-cpu-header-title" data-i18n="app.cpuUsage">CPU Usage</span>
-                <div class="remote-cpu-mode-switch-wrap" data-cpu-mode-switch-wrap hidden>
-                  <div class="remote-cpu-mode-switch" role="tablist" aria-label="CPU Metrics Mode" data-i18n-aria-label="app.cpuMetricsMode">
-                    <button type="button" class="remote-cpu-mode-btn is-active" role="tab" aria-selected="true" data-cpu-mode="percent" data-i18n="app.cpuModePercent">CPU %</button>
-                    <button type="button" class="remote-cpu-mode-btn" role="tab" aria-selected="false" data-cpu-mode="process" data-i18n="app.cpuModeProcess">Process</button>
+                <div class="remote-quad-cpu-header-content">
+                  <span class="remote-quad-cpu-header-title" data-i18n="app.cpuUsage">CPU Usage</span>
+                  <div class="remote-cpu-mode-switch-wrap" data-cpu-mode-switch-wrap hidden>
+                    <div class="remote-cpu-mode-switch" role="tablist" aria-label="CPU Metrics Mode" data-i18n-aria-label="app.cpuMetricsMode">
+                      <button type="button" class="remote-cpu-mode-btn is-active" role="tab" aria-selected="true" data-cpu-mode="percent" data-i18n="app.cpuModePercent">CPU %</button>
+                      <button type="button" class="remote-cpu-mode-btn" role="tab" aria-selected="false" data-cpu-mode="process" data-i18n="app.cpuModeProcess">Process</button>
+                    </div>
                   </div>
                 </div>
+                <button type="button" class="remote-chart-export-btn" data-chart-export-btn="cpu" aria-haspopup="menu" aria-expanded="false" title="Export Chart Data" data-i18n-title="app.chartExportTitle" aria-label="Export Chart Data" data-i18n-aria-label="app.chartExportAria">
+                  <span class="icon icon-xs"><svg><use href="#icon-download"/></svg></span>
+                </button>
               </div>
               <div class="remote-quad-chart-layout">
                 <div class="remote-chart-svg-wrap" data-cpu-chart-wrap>
@@ -15856,6 +16121,9 @@
                 <div class="remote-cpu-process-table" data-cpu-process-table hidden></div>
               </div>
               <div class="remote-quad-card-footer remote-chart-quad-footer" data-cpu-quad-footer>
+                <button type="button" class="remote-chart-info-btn" data-chart-info-btn="cpu" title="Chart Info" data-i18n-title="app.chartInfoTitle" aria-label="Chart Info" data-i18n-aria-label="app.chartInfoAria">
+                  <span class="icon icon-xs"><svg><use href="#icon-info"/></svg></span>
+                </button>
                 <aside class="remote-chart-legend" data-legend="cpu">
                   <div class="remote-legend-row" data-series="cpu-total"><span class="remote-legend-swatch" style="background:#f87171"></span><span class="remote-legend-label" data-i18n="app.legendTotal">Total</span><span class="remote-legend-val">—</span></div>
                   <div class="remote-legend-row" data-series="cpu-user"><span class="remote-legend-swatch" style="background:#60a5fa"></span><span class="remote-legend-label" data-i18n="app.legendUser">User</span><span class="remote-legend-val">—</span></div>
@@ -15865,15 +16133,20 @@
             </section>
             <section class="remote-quad remote-quad-mem" aria-label="Memory Usage" data-i18n-aria-label="app.sectionMemoryUsage">
               <div class="remote-quad-header remote-quad-mem-header">
-                <span class="remote-quad-mem-header-title" data-i18n="app.sectionMemoryUsage">Memory Usage</span>
-                <div class="remote-mem-mode-switch-wrap" data-mem-mode-switch-wrap hidden>
-                  <div class="remote-mem-mode-switch" role="tablist" aria-label="Memory Metrics Mode" data-i18n-aria-label="app.memMetricsMode">
-                    <button type="button" class="remote-mem-mode-btn is-active" role="tab" aria-selected="true" data-mem-mode="system" data-i18n="app.memModeSystem">System</button>
-                    <button type="button" class="remote-mem-mode-btn" role="tab" aria-selected="false" data-mem-mode="graphics" data-i18n="app.memModeGraphics">Graphics</button>
+                <div class="remote-quad-mem-header-content">
+                  <span class="remote-quad-mem-header-title" data-i18n="app.sectionMemoryUsage">Memory Usage</span>
+                  <div class="remote-mem-mode-switch-wrap" data-mem-mode-switch-wrap hidden>
+                    <div class="remote-mem-mode-switch" role="tablist" aria-label="Memory Metrics Mode" data-i18n-aria-label="app.memMetricsMode">
+                      <button type="button" class="remote-mem-mode-btn is-active" role="tab" aria-selected="true" data-mem-mode="system" data-i18n="app.memModeSystem">System</button>
+                      <button type="button" class="remote-mem-mode-btn" role="tab" aria-selected="false" data-mem-mode="graphics" data-i18n="app.memModeGraphics">Graphics</button>
+                    </div>
                   </div>
                 </div>
                 <button type="button" class="remote-mem-bitmaps-btn" data-mem-bitmaps-btn hidden title="View Graphics Bitmaps" data-i18n-title="app.viewBitmapsTitle" aria-label="View Graphics Bitmaps" data-i18n-aria-label="app.viewBitmapsAria">
                   <span class="icon icon-xs"><svg><use href="#icon-image"/></svg></span>
+                </button>
+                <button type="button" class="remote-chart-export-btn" data-chart-export-btn="memory" aria-haspopup="menu" aria-expanded="false" title="Export Chart Data" data-i18n-title="app.chartExportTitle" aria-label="Export Chart Data" data-i18n-aria-label="app.chartExportAria">
+                  <span class="icon icon-xs"><svg><use href="#icon-download"/></svg></span>
                 </button>
               </div>
               <div class="remote-quad-chart-layout">
@@ -15885,6 +16158,9 @@
                 </div>
               </div>
               <div class="remote-quad-card-footer remote-chart-quad-footer" data-mem-quad-footer>
+                <button type="button" class="remote-chart-info-btn" data-chart-info-btn="memory" title="Chart Info" data-i18n-title="app.chartInfoTitle" aria-label="Chart Info" data-i18n-aria-label="app.chartInfoAria">
+                  <span class="icon icon-xs"><svg><use href="#icon-info"/></svg></span>
+                </button>
                 <aside class="remote-chart-legend" data-legend="mem">
                   <div class="remote-legend-row" data-series="mem-used"><span class="remote-legend-swatch" style="background:#f87171"></span><span class="remote-legend-label" data-i18n="app.legendUsed">Used</span><span class="remote-legend-val">—</span></div>
                   <div class="remote-legend-row" data-series="mem-res"><span class="remote-legend-swatch" style="background:#60a5fa"></span><span class="remote-legend-label" data-i18n="app.legendResident">Resident</span><span class="remote-legend-val">—</span></div>

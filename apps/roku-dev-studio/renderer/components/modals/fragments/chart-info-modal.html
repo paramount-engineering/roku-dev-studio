@@ -1,0 +1,66 @@
+<div class="modal-overlay" id="chartInfoModal" aria-hidden="true">
+  <div class="modal chart-info-modal" role="dialog" aria-modal="true" aria-labelledby="chartInfoModalTitle">
+    <div class="modal-header">
+      <span class="modal-title" id="chartInfoModalTitle">
+        <span class="icon icon-md icon-accent"><svg><use href="#icon-info"/></svg></span>
+        <span data-chart-info-title="cpu" data-i18n="modals.chartInfo.cpuTitle">CPU Usage — Chart Info</span>
+        <span data-chart-info-title="memory" data-i18n="modals.chartInfo.memoryTitle" hidden>Memory Usage — Chart Info</span>
+        <span data-chart-info-title="objects" data-i18n="modals.chartInfo.objectsTitle" hidden>BrightScript Objects — Chart Info</span>
+      </span>
+      <button type="button" class="modal-close" id="chartInfoModalClose" aria-label="Close" data-i18n-aria-label="common.close"><span class="icon icon-sm"><svg><use href="#icon-x"/></svg></span></button>
+    </div>
+    <div class="modal-body chart-info-modal-body">
+      <div data-chart-info-pane="cpu">
+        <p data-i18n="modals.chartInfo.cpuIntro">Percentage of the CPU consumed by the running app, sampled from the Roku Resource Monitor.</p>
+        <table class="chart-info-legend-table">
+          <tbody>
+            <tr><th><span class="chart-info-term"><span class="remote-legend-swatch" style="background:#f87171"></span><span data-i18n="app.legendTotal">Total</span></span></th><td data-i18n="modals.chartInfo.cpuTotalDesc">The sum of User and Kernel usage.</td></tr>
+            <tr><th><span class="chart-info-term"><span class="remote-legend-swatch" style="background:#60a5fa"></span><span data-i18n="app.legendUser">User</span></span></th><td data-i18n="modals.chartInfo.cpuUserDesc">CPU time spent in the app’s own code (user space).</td></tr>
+            <tr><th><span class="chart-info-term"><span class="remote-legend-swatch" style="background:#4ade80"></span><span data-i18n="app.legendKernel">Kernel</span></span></th><td data-i18n="modals.chartInfo.cpuKernelDesc">CPU time spent in kernel space on behalf of the app (system calls, I/O, etc.).</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div data-chart-info-pane="memory" hidden>
+        <p data-i18n="modals.chartInfo.memoryIntro">System view — System memory consumed by the running app.</p>
+        <table class="chart-info-legend-table">
+          <tbody>
+            <tr><th><span class="chart-info-term"><span class="remote-legend-swatch" style="background:#f87171"></span><span data-i18n="app.legendUsed">Used</span></span></th><td data-i18n="modals.chartInfo.memoryUsedDesc">Total memory used by the app process — the sum of Resident and Swap.</td></tr>
+            <tr><th><span class="chart-info-term"><span class="remote-legend-swatch" style="background:#60a5fa"></span><span data-i18n="app.legendResident">Resident</span></span></th><td data-i18n="modals.chartInfo.memoryResidentDesc">Memory mapped into the app’s address space: anonymous, file-backed, and shared memory combined.</td></tr>
+            <tr><th><span class="chart-info-term"><span class="remote-legend-swatch" style="background:#c084fc"></span><span data-i18n="app.legendAnonymous">Anonymous</span></span></th><td data-i18n="modals.chartInfo.memoryAnonymousDesc">Memory such as the stack and heap; also includes the demux allocation during media playback.</td></tr>
+            <tr><th><span class="chart-info-term"><span class="remote-legend-swatch" style="background:#fb923c"></span><span data-i18n="app.legendShared">Shared</span></span></th><td data-i18n="modals.chartInfo.memorySharedDesc">Shared memory used by the app process, e.g. media player buffers and IPC channels.</td></tr>
+            <tr><th><span class="chart-info-term"><span class="remote-legend-swatch remote-legend-swatch--mem-limit"></span><span data-i18n="app.legendLimit">Limit</span></span></th><td data-i18n="modals.chartInfo.memoryLimitDesc">The device’s foreground memory limit — exceeding it while the app is in the foreground can get the app terminated.</td></tr>
+          </tbody>
+        </table>
+        <p class="chart-info-subsection" data-i18n="modals.chartInfo.graphicsIntro">Graphics view — Graphical assets memory in the GPU domain.</p>
+        <table class="chart-info-legend-table">
+          <tbody>
+            <tr><th><span class="chart-info-term"><span class="remote-legend-swatch" style="background:#2dd4bf"></span><span data-i18n="app.legendTexture">Texture</span></span></th><td data-i18n="modals.chartInfo.graphicsTextureDesc">Graphical asset (r2d2) memory already used by the GPU.</td></tr>
+            <tr><th><span class="chart-info-term"><span class="remote-legend-swatch" style="background:#f472b6"></span><span data-i18n="app.legendSystem">System</span></span></th><td data-i18n="modals.chartInfo.graphicsSystemDesc">Graphical asset (r2d2) memory not yet used by the GPU — potentially wasted memory.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div data-chart-info-pane="objects" hidden>
+        <p data-i18n="modals.chartInfo.objectsIntro">Live BrightScript object instances in the running app, grouped by type (Top 10 shown).</p>
+        <table class="chart-info-legend-table">
+          <tbody>
+            <tr><th><span class="chart-info-term"><span class="remote-legend-swatch" style="background:#a78bfa"></span><span data-i18n="app.objectsModeCount">Count</span></span></th><td data-i18n="modals.chartInfo.objectsCountDesc">Number of live instances of each object type.</td></tr>
+            <tr><th><span class="chart-info-term"><span class="remote-legend-swatch" style="background:#fb923c"></span><span data-i18n="app.objectsModeMemory">Memory</span></span></th><td data-i18n="modals.chartInfo.objectsMemoryDesc">Approximate memory, in MB, consumed by each object type.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="modal-footer chart-info-modal-footer">
+      <div data-chart-info-footer="cpu">
+        <p class="chart-info-source"><span data-i18n="modals.chartInfo.dataSource">Data source:</span> <a href="https://developer.roku.com/dev/docs/external-control-api" class="chart-info-learn-more-link" rel="noopener noreferrer"><code>GET /query/chanperf</code></a></p>
+      </div>
+      <div data-chart-info-footer="memory" hidden>
+        <p class="chart-info-source"><span data-i18n="modals.chartInfo.dataSource">Data source:</span> <a href="https://developer.roku.com/dev/docs/external-control-api" class="chart-info-learn-more-link" rel="noopener noreferrer"><code>GET /query/chanperf</code></a> <span class="chart-info-source-note" data-i18n="modals.chartInfo.systemNote">(System)</span></p>
+        <p class="chart-info-source"><span data-i18n="modals.chartInfo.dataSource">Data source:</span> <a href="https://developer.roku.com/dev/docs/external-control-api" class="chart-info-learn-more-link" rel="noopener noreferrer"><code>GET /query/r2d2-bitmaps</code></a> <span class="chart-info-source-note" data-i18n="modals.chartInfo.graphicsNote">(Graphics)</span></p>
+      </div>
+      <div data-chart-info-footer="objects" hidden>
+        <p class="chart-info-source"><span data-i18n="modals.chartInfo.dataSource">Data source:</span> <a href="https://developer.roku.com/dev/docs/external-control-api" class="chart-info-learn-more-link" rel="noopener noreferrer"><code>GET /query/app-object-counts/&lt;app-id&gt;</code></a></p>
+      </div>
+      <p class="chart-info-modal-learn-more"><a href="https://developer.roku.com/dev/docs/resource-monitor" class="chart-info-learn-more-link" rel="noopener noreferrer" data-i18n="modals.chartInfo.learnMore">Learn more in Roku’s Resource Monitor docs</a></p>
+    </div>
+  </div>
+</div>

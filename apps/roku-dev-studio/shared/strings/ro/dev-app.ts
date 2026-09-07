@@ -83,6 +83,17 @@ export const devApp = {
   skippedNoGraphics: (caption: string): string =>
     `Captura „${caption}” a fost omisă — dispozitivul nu a returnat date r2d2-bitmaps.`,
 
+  // ── Device metrics: chart export button (device-metrics.ts) ───────────────
+  exportAsJson: 'Exportă ca JSON',
+  exportAsCsv: 'Exportă ca CSV',
+  exportAsImage: 'Exportă ca Imagine',
+  exportCpuDialogTitle: 'Exportă Datele de Utilizare CPU',
+  exportMemoryDialogTitle: 'Exportă Datele de Utilizare a Memoriei',
+  exportObjectsDialogTitle: 'Exportă Datele Obiectelor BrightScript',
+  nothingToExportYet: 'Nimic de exportat încă',
+  exportedTo: (filePath: string): string => `✓ Exportat în: ${filePath}`,
+  exportFailed: (detail: string): string => `Exportul a eșuat: ${detail}`,
+
   // ── Device metrics: process-state labels (device-metrics.ts) ──────────────
   stateRunning: 'În execuție',
   stateSleeping: 'În repaus',

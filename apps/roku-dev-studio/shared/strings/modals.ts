@@ -313,6 +313,35 @@ export const modals = {
       'Turn Keyboard Remote off in <button type="button" class="help-settings-link" data-settings-section="general" data-settings-highlight="keyboardRemoteSettingsRow">Settings</button> if you do not want arrow keys and other mapped keys to send Roku keypresses.',
   },
 
+  chartInfo: {
+    cpuTitle: 'CPU Usage — Chart Info',
+    cpuIntro: 'Percentage of the CPU consumed by the running app, sampled from the Roku Resource Monitor.',
+    cpuTotalDesc: 'The sum of User and Kernel usage.',
+    cpuUserDesc: 'CPU time spent in the app’s own code (user space).',
+    cpuKernelDesc: 'CPU time spent in kernel space on behalf of the app (system calls, I/O, etc.).',
+
+    memoryTitle: 'Memory Usage — Chart Info',
+    memoryIntro: 'System view — System memory consumed by the running app.',
+    memoryUsedDesc: 'Total memory used by the app process — the sum of Resident and Swap.',
+    memoryResidentDesc: 'Memory mapped into the app’s address space: anonymous, file-backed, and shared memory combined.',
+    memoryAnonymousDesc: 'Memory such as the stack and heap; also includes the demux allocation during media playback.',
+    memorySharedDesc: 'Shared memory used by the app process, e.g. media player buffers and IPC channels.',
+    memoryLimitDesc: 'The device’s foreground memory limit — exceeding it while the app is in the foreground can get the app terminated.',
+    graphicsIntro: 'Graphics view — Graphical assets memory in the GPU domain.',
+    graphicsTextureDesc: 'Graphical asset (r2d2) memory already used by the GPU.',
+    graphicsSystemDesc: 'Graphical asset (r2d2) memory not yet used by the GPU — potentially wasted memory.',
+
+    objectsTitle: 'BrightScript Objects — Chart Info',
+    objectsIntro: 'Live BrightScript object instances in the running app, grouped by type (Top 10 shown).',
+    objectsCountDesc: 'Number of live instances of each object type.',
+    objectsMemoryDesc: 'Approximate memory, in MB, consumed by each object type.',
+
+    dataSource: 'Data source:',
+    systemNote: '(System)',
+    graphicsNote: '(Graphics)',
+    learnMore: 'Learn more in Roku’s Resource Monitor docs',
+  },
+
   secretScreens: {
     title: 'Roku Secret Screens',
     introHtml: `

@@ -310,6 +310,35 @@ export const modals = {
       'Dezactivați Telecomanda de la tastatură din <button type="button" class="help-settings-link" data-settings-section="general" data-settings-highlight="keyboardRemoteSettingsRow">Setări</button> dacă nu doriți ca tastele săgeți și alte taste mapate să trimită apăsări de taste către Roku.',
   },
 
+  chartInfo: {
+    cpuTitle: 'Utilizare CPU — Informații despre Grafic',
+    cpuIntro: 'Procentul de CPU consumat de aplicația în execuție, conform Monitorului de resurse Roku.',
+    cpuTotalDesc: 'Suma utilizării User și Kernel.',
+    cpuUserDesc: 'Timp de CPU consumat de codul propriu al aplicației (spațiul utilizatorului).',
+    cpuKernelDesc: 'Timp de CPU consumat în spațiul kernel în numele aplicației (apeluri de sistem, I/O etc.).',
+
+    memoryTitle: 'Utilizare memorie — Informații despre Grafic',
+    memoryIntro: 'Vizualizarea System — memoria de sistem consumată de aplicația în execuție.',
+    memoryUsedDesc: 'Memoria totală utilizată de procesul aplicației — suma dintre Resident și Swap.',
+    memoryResidentDesc: 'Memorie mapată în spațiul de adrese al aplicației: memorie anonimă, susținută de fișiere și partajată, combinate.',
+    memoryAnonymousDesc: 'Memorie precum stiva și heap-ul; include și alocarea demux în timpul redării media.',
+    memorySharedDesc: 'Memorie partajată utilizată de procesul aplicației, de ex. buffere ale playerului media și canale IPC.',
+    memoryLimitDesc: 'Limita de memorie pentru prim-plan a dispozitivului — depășirea ei cât timp aplicația este în prim-plan poate duce la închiderea aplicației.',
+    graphicsIntro: 'Vizualizarea Graphics — memoria resurselor grafice în domeniul GPU.',
+    graphicsTextureDesc: 'Memorie de resurse grafice (r2d2) deja utilizată de GPU.',
+    graphicsSystemDesc: 'Memorie de resurse grafice (r2d2) neutilizată încă de GPU — memorie posibil irosită.',
+
+    objectsTitle: 'Obiecte BrightScript — Informații despre Grafic',
+    objectsIntro: 'Instanțe active de obiecte BrightScript în aplicația în execuție, grupate pe tip (se afișează top 10).',
+    objectsCountDesc: 'Numărul de instanțe active pentru fiecare tip de obiect.',
+    objectsMemoryDesc: 'Memoria aproximativă, în MB, consumată de fiecare tip de obiect.',
+
+    dataSource: 'Sursa datelor:',
+    systemNote: '(Sistem)',
+    graphicsNote: '(Grafică)',
+    learnMore: 'Aflați mai multe în documentația Monitorului de resurse Roku',
+  },
+
   secretScreens: {
     title: 'Ecrane secrete Roku',
     introHtml: `
