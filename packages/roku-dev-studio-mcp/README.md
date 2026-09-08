@@ -116,11 +116,36 @@ esbuild's `text` loader inlines every `.md` import at build time — the dist is
 | `rale_get_node_by_id` | live | Read-only SceneGraph lookup (wraps `rale_command`'s `getNodeById`). |
 | `send_script_to_builder` | live | Pushes a validated Action Script into the Builder UI for human review. |
 
+### Network Inspector (hand-written)
+
+| Tool | Live? | Notes |
+| --- | --- | --- |
+| `network_inspector_status` | live | Report capture / MITM state and setup prerequisites. **Call first** — reads return nothing useful until `ready` is true. |
+| `network_inspector_list_events` | live | List captured network events as filterable, lightweight summaries. |
+| `network_inspector_get_event_detail` | live | Fetch full headers and body for one captured event. |
+| `network_inspector_find` | live | Full-text search across captured URLs, headers, and bodies. |
+| `network_inspector_analyze` | live | Aggregate the buffer into hotspots and rollups — status, hosts, content types. |
+| `network_inspector_get_ca_info` | live | Return the MITM CA fingerprint and proxy info for HTTPS decryption. |
+
+### BrightScript Debugger (hand-written)
+
+Stateful and event-driven (control port 8081) — attach first, then most verbs only work while the target is halted: `debugger_attach` → set breakpoints → `debugger_wait_for_stop` → inspect → step / continue.
+
+| Tool | Live? | Notes |
+| --- | --- | --- |
+| `debugger_attach`, `debugger_detach` | live | Open / close a debug session (the channel must be launched with debugging). |
+| `debugger_status` | live | Return the session state without blocking. |
+| `debugger_wait_for_stop` | live | Block until the next halt, returning a full stop snapshot. |
+| `debugger_continue`, `debugger_pause`, `debugger_step` | live | Resume, request a halt, or single-step the halted thread (over / in / out). |
+| `debugger_get_callstack`, `debugger_get_variables` | live | Return call-stack frames / in-scope variables for the halted thread. |
+| `debugger_evaluate` | live | Run a BrightScript expression in the halted frame (REPL). |
+| `debugger_set_breakpoints`, `debugger_remove_breakpoints`, `debugger_list_breakpoints` | live | Add, remove, or list tracked breakpoints and their verified / queued state. |
+
 ### Auto-generated from `roku-dev-studio-api/lib/operations.ALL_OPS`
 
 Every entry in `ALL_OPS` is wired into the MCP catalog by `opToMcpTool` in `tools.ts`. Today that produces these tools, each with `annotations` set from the op descriptor:
 
-`keypress`, `launch_app`, `input_text`, `deep_link`, `ecp_query`, `ecp_post`, `test_connection`, `get_app_icon`, `sideload`, `delete_sideload`, `screenshot`, `scan_devices`, `rale_command`, `app_connector_connect`, `app_connector_disconnect`, `app_function`, `get_telnet_log`, `telnet_connect`, `telnet_disconnect`.
+`keypress`, `launch_app`, `input_text`, `deep_link`, `ecp_query`, `ecp_post`, `test_connection`, `get_app_icon`, `sideload`, `delete_sideload`, `screenshot`, `scan_devices`, `rale_command`, `app_connector_connect`, `app_connector_disconnect`, `app_function`, `get_telnet_log`, `telnet_connect`, `telnet_disconnect`, `console_monitor_findings`, `device_performance_metrics`.
 
 The `ip` field on the op's input schema is rewritten into an agent-friendly `device: <IP or serial>` field by `agentFacingSchema`; the bridge resolves `device` back to `ip` server-side.
 
@@ -285,7 +310,7 @@ Cursor caches the tool / resource / prompt list at `~/.cursor/projects/<project>
 1. **Cursor → Settings → MCP** → toggle `user-roku-dev-studio` off, then on. Cursor respawns the child process and re-runs discovery.
 2. *Or* `rm -rf ~/.cursor/projects/<project>/mcps/user-roku-dev-studio` and restart Cursor.
 
-After refresh you should see 30 tools (11 bespoke + 19 op-backed), 4 resources, and 3 prompts in the descriptor folder. To re-derive these counts after edits, `rg "^\s*name: '" src/tools.ts | wc -l` for bespoke tools, and `rg "^\s*id:\s*'" ../../packages/roku-dev-studio-api/lib/operations.ts | wc -l` for op-backed tools.
+After refresh you should see 51 tools (30 bespoke + 21 op-backed), 4 resources, and 3 prompts in the descriptor folder. To re-derive these counts after edits, `rg "^\s*name: '" src/tools.ts | wc -l` for bespoke tools, and `rg "^\s*id:\s*'" ../../packages/roku-dev-studio-api/lib/operations.ts | wc -l` for op-backed tools.
 
 ## Design background
 
