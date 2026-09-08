@@ -106,6 +106,9 @@
 ![Console Monitor — expanded issue with What / Cause / Fix guidance and occurrences](docs/images/CONSOLE_MONITOR_ISSUE_DETAIL.png)
 ![Console Monitor — clicking an occurrence jumps straight to that line in the log](docs/images/CONSOLE_MONITOR_JUMP_TO_LOG.png)
 
+| ![Console Monitor — grouped issues by category with per-group counts](docs/images/CONSOLE_MONITOR.png) |
+
+| ![Console Monitor — expanded issue with What / Cause / Fix guidance and occurrences](docs/images/CONSOLE_MONITOR_ISSUE_DETAIL.png) | ![Console Monitor — clicking an occurrence jumps straight to that line in the log](docs/images/CONSOLE_MONITOR_JUMP_TO_LOG.png) |
 <a id="brightscript-debugger"></a>
 
 ### 🐞 BrightScript Debugger
