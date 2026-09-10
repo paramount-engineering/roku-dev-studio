@@ -162,6 +162,20 @@ export const consoleLog = {
     return `+${n.toLocaleString()} ${phrase}`;
   },
 
+  sectionPerformance: 'Wydajność',
+  beaconFlows: {
+    appLaunch: 'Uruchomienie aplikacji',
+    appDialog: 'Uruchomienie okna dialogowego',
+    epgLaunch: 'Uruchomienie EPG',
+    vodStart: 'Start wideo',
+    liveStart: 'Start na żywo',
+    liveChannelChange: 'Zmiana kanału',
+    appCompile: 'Kompilacja aplikacji',
+    appExit: 'Zamknięcie kanału',
+  },
+  beaconAdjustedNote: (ms: number): string => `bez okna dialogowego: ${ms.toLocaleString()} ms`,
+  beaconCertWindowNote: 'poza 5-sekundowym oknem certyfikacji EPG',
+
   // ── BrightScript error catalog (brightscript-error-catalog.ts) ────────────────────────
   // Localizable copy for each catalog entry, keyed by the entry `id`. Prose translated to
   // Polish; BrightScript/Roku technical tokens, code literals, and message signatures are

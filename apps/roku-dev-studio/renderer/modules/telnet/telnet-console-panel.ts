@@ -38,6 +38,7 @@ import {
   detectBrsCrashes,
   type ConsoleFindings
 } from '@shared/console/brightscript-error-catalog.js';
+import { detectBeaconTimings } from '@shared/console/roku-beacons.js';
 import {
   debugTelnetIpcTargetsDevice,
   type DebugTelnetIpcPayload
@@ -1571,9 +1572,10 @@ export function setupTelnet(
         last = e.timestamp;
       }
     }
+    const texts = logLines.map((e) => e.text);
     return {
       // Crashes need the whole ordered buffer (multi-line Micro Debugger dumps), not just issue lines.
-      findings: computeConsoleFindings(logLines, detectBrsCrashes(logLines.map((e) => e.text))),
+      findings: computeConsoleFindings(logLines, detectBrsCrashes(texts), detectBeaconTimings(texts)),
       scannedLines: logLines.length,
       timeSpan: { first, last },
       meta: {
@@ -1699,11 +1701,12 @@ export function setupTelnet(
   };
   panel.getConsoleMonitorFindings = async function () {
     await flushTelnetPendingLines();
+    const texts = logLines.map((e) => e.text);
     return {
       connected: isConnected,
       scannedLines: logLines.length,
       totalCaptured: spilledEntryCount + logLines.length,
-      ...computeConsoleFindings(logLines, detectBrsCrashes(logLines.map((e) => e.text)))
+      ...computeConsoleFindings(logLines, detectBrsCrashes(texts), detectBeaconTimings(texts))
     };
   };
   panel.connectTelnet = connectTelnet;

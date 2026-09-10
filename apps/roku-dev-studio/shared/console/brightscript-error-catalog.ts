@@ -16,6 +16,9 @@
  * Every `docsUrl` points to an OFFICIAL `developer.roku.com` page, deep-linked to the relevant section
  * anchor where one exists (verified 2026-07-16). No third-party repos or forum threads.
  *
+ * `ConsoleFindings.beacons` is a separate concern — performance-beacon Initiate/Complete pairing lives
+ * in the sibling `roku-beacons.ts` module; this file only re-exports its type into the aggregate result.
+ *
  * IMPORTANT — matching is MESSAGE-TEXT ONLY. Roku prints errors to the telnet console as messages, e.g.
  * `BRIGHTSCRIPT: ERROR: Runtime: FOR EACH value is not an object: pkg:/…brs(971)` — a message + a
  * `pkg:/…brs(<line>)` location, with NO `(runtime error &hXX)` hex code (that's only reachable via
@@ -23,6 +26,9 @@
  * real-device telnet + RDS Fiddle. So {@link matchBrsError} matches signature substrings only; the
  * `codes` field is retained as reference metadata (the verified ERR_* → &hXX mapping) and is NOT matched.
  */
+
+import type { BeaconTiming } from './roku-beacons.js';
+export type { BeaconTiming } from './roku-beacons.js';
 
 export type BrsErrorCategory =
   | 'Type/Runtime'
@@ -1001,6 +1007,8 @@ export interface ConsoleFindings {
   /** Recognized crashes (Micro Debugger dumps), most-frequent first. Separate from `findings` because a
    *  crash is a multi-line block with a backtrace, not a single diagnostic line. */
   crashes: BrsCrash[];
+  /** Recognized performance-beacon Initiate/Complete durations, in scan order. See `roku-beacons.ts`. */
+  beacons: BeaconTiming[];
 }
 
 // ── Crash (Micro Debugger dump) detection ────────────────────────────────────────────────────────
@@ -1243,7 +1251,8 @@ export const OCCURRENCE_POSITION_CAP = 200;
  */
 export function computeConsoleFindings(
   entries: readonly { text: string; hasIssue?: boolean; index?: number }[],
-  crashes: readonly BrsCrash[] = []
+  crashes: readonly BrsCrash[] = [],
+  beacons: readonly BeaconTiming[] = []
 ): ConsoleFindings {
   const agg = new Map<
     string,
@@ -1324,5 +1333,5 @@ export function computeConsoleFindings(
     count: catCount.get(category) ?? 0
   })).filter((c) => c.count > 0);
 
-  return { totalIssues, issueTypeCount: agg.size, byCategory, findings, crashes: [...crashes] };
+  return { totalIssues, issueTypeCount: agg.size, byCategory, findings, crashes: [...crashes], beacons: [...beacons] };
 }

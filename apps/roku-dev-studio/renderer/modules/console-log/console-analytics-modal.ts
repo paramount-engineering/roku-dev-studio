@@ -21,7 +21,8 @@ import { S } from '@shared/strings/index.js';
 import type {
   ConsoleFindings,
   ConsoleFinding,
-  BrsCrash
+  BrsCrash,
+  BeaconTiming
 } from '@shared/console/brightscript-error-catalog.js';
 
 export interface ConsoleAnalyticsMeta {
@@ -91,9 +92,13 @@ function ensureConsoleAnalyticsStyles(): void {
     .telnet-an-issue:last-child { margin-bottom: 0; }
     .telnet-an-issue[open] { border-color: var(--border-hover); }
     /* Header row: [count]  message  [copy]  ————  [severity] */
-    .telnet-an-issue > summary { display: flex; align-items: center; gap: 10px; padding: 11px 14px; cursor: pointer; list-style: none; transition: background 0.15s ease; }
+    .telnet-an-issue > summary { display: flex; align-items: center; gap: 10px; padding: 11px 14px; cursor: pointer; list-style: none; outline: none; transition: background 0.15s ease; }
     .telnet-an-issue > summary::-webkit-details-marker { display: none; }
     .telnet-an-issue > summary:hover { background: var(--bg-secondary); }
+    /* Chromium shows its native focus ring on <summary> for an ordinary mouse click (not just keyboard
+       nav), so a plain :focus-visible override isn't enough — outline: none above suppresses that, this
+       restores a proper themed ring for real keyboard focus only. */
+    .telnet-an-issue > summary:focus-visible { outline: 1px solid var(--accent-purple); outline-offset: -2px; }
     /* When expanded, make the header read as a distinct title bar: a divider + a subtle lighter tint
        (theme-independent; kept off --bg-deep so the count badge, which IS --bg-deep, stays distinct). */
     .telnet-an-issue[open] > summary { background: rgba(255, 255, 255, 0.035); border-bottom: 1px solid var(--border); }
@@ -149,6 +154,9 @@ function ensureConsoleAnalyticsStyles(): void {
     .telnet-an-issue-docs { color: var(--accent-purple); text-decoration: none; white-space: nowrap; }
     .telnet-an-issue-docs:hover { text-decoration: underline; }
     .telnet-an-occ-head { margin: 16px 0 7px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); }
+    /* The beacon card has no meta block (What/Cause/Fix) above this like an issue card does, so its own
+       16px margin-top would stack on the card body's padding for no reason — collapse it there. */
+    .telnet-an-issue-body > .telnet-an-occ-head:first-child { margin-top: 0; }
     .telnet-an-logs { max-height: 168px; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-deep); }
     .telnet-an-log { display: flex; align-items: flex-start; gap: 10px; padding: 7px 10px; border-bottom: 1px solid var(--border); }
     .telnet-an-log:last-child { border-bottom: none; }
@@ -162,7 +170,22 @@ function ensureConsoleAnalyticsStyles(): void {
     .telnet-an-log code { flex: 1 1 auto; min-width: 0; font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 11px; line-height: 1.5; color: var(--text-secondary); white-space: pre-wrap; word-break: break-word; }
     .telnet-an-log-loc { flex: 0 0 auto; align-self: flex-start; margin-top: 1px; font-size: 10px; color: var(--text-muted); font-family: var(--font-mono, ui-monospace, monospace); white-space: nowrap; }
     .telnet-an-log-count { flex: 0 0 auto; align-self: flex-start; min-width: 20px; text-align: center; margin-top: 1px; font-size: 10px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--text-secondary); background: var(--bg-tertiary); border-radius: 999px; padding: 1px 6px; }
-    .telnet-an-more { margin: 8px 0 0; font-size: 11px; color: var(--text-muted); }`;
+    .telnet-an-more { margin: 8px 0 0; font-size: 11px; color: var(--text-muted); }
+    .telnet-an-beacon-avg { flex: 0 0 auto; margin-left: auto; font-size: 12px; font-variant-numeric: tabular-nums; color: var(--text-secondary); font-family: var(--font-mono, ui-monospace, monospace); }
+    /* Beacon occurrences: Opening/Closing log lines stacked in a left column, a time cell spanning both
+       on the right (no <table>/rowspan — a flex row with align-items: stretch gives the same visual span
+       against a variable number of stacked rows on the left, matching every other row in this modal). */
+    .telnet-an-beacon-logs { background: transparent; border: none; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+    /* flex-shrink: 0 is load-bearing, not decoration: overflow: hidden below (for the rounded corners)
+       zeroes this item's automatic min-height per the flexbox spec, so once 3+ occurrences push the
+       column past .telnet-an-logs's 168px max-height, the flex algorithm is otherwise free to shrink
+       EVERY row below its natural content height to fit — visually clipping the Closing log line. */
+    /* border-hover (not the plain --border used elsewhere in this file) — at --border's 0.12 alpha each
+       block read as borderless against the equally-dark .telnet-an-beacon-logs background. */
+    .telnet-an-beacon-occ { display: flex; align-items: stretch; flex-shrink: 0; border: 1px solid var(--border-hover); border-radius: 8px; background: var(--bg-deep); overflow: hidden; }
+    .telnet-an-beacon-occ-logs { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
+    .telnet-an-beacon-occ-time { flex: 0 0 auto; display: flex; flex-direction: column; align-items: flex-end; justify-content: center; gap: 4px; padding: 8px 12px; border-left: 1px solid var(--border); background: var(--bg-tertiary); }
+    .telnet-an-beacon-occ-note { font-size: 10px; color: var(--text-muted); text-align: right; max-width: 200px; }`;
   document.head.appendChild(style);
 }
 
@@ -365,6 +388,96 @@ function crashesList(crashes: BrsCrash[], navigable: boolean): string {
     .join('');
 }
 
+/** Beacon timings grouped by flow (e.g. every `AppCompile` pairing together), most-occurrences first —
+ *  the same shape as an issue's catalog-id grouping, so the group renders as the same card. */
+interface BeaconGroup {
+  flow: string;
+  label: string;
+  timings: BeaconTiming[];
+}
+
+function groupBeaconTimings(beacons: readonly BeaconTiming[]): BeaconGroup[] {
+  const order: string[] = [];
+  const byFlow = new Map<string, BeaconTiming[]>();
+  for (const b of beacons) {
+    if (!byFlow.has(b.flow)) {
+      byFlow.set(b.flow, []);
+      order.push(b.flow);
+    }
+    byFlow.get(b.flow)!.push(b);
+  }
+  return order
+    .map((flow) => ({ flow, label: byFlow.get(flow)![0]!.label, timings: byFlow.get(flow)! }))
+    .sort((a, b) => b.timings.length - a.timings.length);
+}
+
+/** One raw beacon line (Opening or Closing) as its own clickable row — same look as an issue occurrence
+ *  row (growing `<code>`, reveal-on-hover jump arrow), just without the trailing count/duration pill
+ *  (that lives once in the shared time cell alongside it, not per line). */
+function beaconLogLine(raw: string, index: number | undefined, navigable: boolean): string {
+  const canJump = navigable && index !== undefined;
+  const navAttrs = canJump
+    ? ` class="telnet-an-log is-navigable" role="button" tabindex="0" data-nav-index="${index}" title="${S.consoleLog.goToLineTitle}"`
+    : ' class="telnet-an-log"';
+  const go = canJump ? `<span class="telnet-an-log-go" aria-hidden="true">→</span>` : '';
+  return `<div${navAttrs}><code>${escapeHtml(raw)}</code>${go}</div>`;
+}
+
+/**
+ * One occurrence: the Opening (Initiate) and Closing (Complete) log lines stacked in a left column, each
+ * independently clickable, with the computed elapsed time — plus any dialog-excluded / cert-window note
+ * — in a side cell that spans the full height of both lines (an Opening row is omitted when its Initiate
+ * wasn't captured in this scan; the Closing line + duration still show).
+ */
+function beaconOccurrence(t: BeaconTiming, navigable: boolean): string {
+  const opening = t.openingRaw !== undefined ? beaconLogLine(t.openingRaw, t.openingIndex, navigable) : '';
+  const closing = beaconLogLine(t.raw, t.index, navigable);
+  const note = [
+    t.adjustedMs !== undefined ? S.consoleLog.beaconAdjustedNote(t.adjustedMs) : '',
+    t.withinCertWindow === false ? S.consoleLog.beaconCertWindowNote : ''
+  ]
+    .filter(Boolean)
+    .join(' · ');
+  const noteHtml = note ? `<span class="telnet-an-beacon-occ-note">${escapeHtml(note)}</span>` : '';
+  return (
+    `<div class="telnet-an-beacon-occ">` +
+    `<div class="telnet-an-beacon-occ-logs">${opening}${closing}</div>` +
+    `<div class="telnet-an-beacon-occ-time"><span class="telnet-an-log-count">${num(t.durationMs)} ms</span>${noteHtml}</div>` +
+    `</div>`
+  );
+}
+
+/** One flow's card — same `<details>` shell as an issue card (badge + title + a right-aligned AVERAGE
+ *  duration in the collapsed summary; expand for every occurrence's Opening/Closing log pair). */
+function beaconsList(f: ConsoleFindings, navigable: boolean): string {
+  return groupBeaconTimings(f.beacons)
+    .map((g) => {
+      const label = (S.consoleLog.beaconFlows as Record<string, string>)[g.flow] ?? g.label;
+      const domId = `beacon:${g.flow}`;
+      const rows = g.timings.map((t) => beaconOccurrence(t, navigable)).join('');
+      const avgMs = Math.round(g.timings.reduce((sum, t) => sum + t.durationMs, 0) / g.timings.length);
+      return (
+        `<details class="telnet-an-issue" data-issue-id="${escapeHtml(domId)}">` +
+        `<summary>` +
+        `<span class="telnet-an-issue-badge">${num(g.timings.length)}</span>` +
+        `<span class="telnet-an-issue-title">${escapeHtml(label)}</span>` +
+        `<span class="telnet-an-beacon-avg">${num(avgMs)} ms</span>` +
+        `</summary>` +
+        `<div class="telnet-an-issue-body">` +
+        `<div class="telnet-an-occ-head">${S.consoleLog.occurrences(g.timings.length)}</div>` +
+        `<div class="telnet-an-logs telnet-an-beacon-logs" data-issue-id="${escapeHtml(domId)}">${rows}</div>` +
+        `</div>` +
+        `</details>`
+      );
+    })
+    .join('');
+}
+
+function beaconsSection(f: ConsoleFindings, navigable: boolean): string {
+  if (f.beacons.length === 0) return '';
+  return `<section class="telnet-an-section"><h4>${S.consoleLog.sectionPerformance}</h4>${beaconsList(f, navigable)}</section>`;
+}
+
 function bodyHtml(f: ConsoleFindings, navigable: boolean): string {
   // Crashes lead — they're the most severe thing in the buffer.
   const crashes =
@@ -373,6 +486,7 @@ function bodyHtml(f: ConsoleFindings, navigable: boolean): string {
       : '';
   return (
     crashes +
+    beaconsSection(f, navigable) +
     `<section class="telnet-an-section">` +
     `<div class="telnet-an-cats">${categoryChips(f)}</div>` +
     `</section>` +
