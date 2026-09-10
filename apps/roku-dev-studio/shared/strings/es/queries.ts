@@ -44,4 +44,5 @@ export const queries = {
   channelInfo: 'Información del canal',
   network: 'Red',
   reboot: 'Reiniciar',
+  issueReportTracker: 'Registro de incidencias',
 };

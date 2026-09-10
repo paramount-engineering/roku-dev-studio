@@ -77,6 +77,15 @@ interface FiddleDiagnosticsPayload {
   diagnostics: FiddleDiagnostic[];
 }
 
+/** A `function`/`sub` declaration found in the last channel sideloaded to a device. */
+interface FiddleSymbolEntry {
+  name: string;
+  kind: 'function' | 'sub';
+  params: string[];
+  path: string;
+  line: number;
+}
+
 interface FiddleRunResultPayload {
   success: boolean;
   error?: string;
@@ -99,6 +108,7 @@ interface FiddleBridge {
   ready: () => void;
   refreshDevices: () => void;
   lint: (code: string) => Promise<FiddleDiagnosticsPayload | { error?: string }>;
+  getSymbols: (payload: { deviceId: string }) => Promise<{ symbols: FiddleSymbolEntry[] }>;
   run: (payload: { deviceId: string; code: string; password?: string }) => Promise<FiddleRunResultPayload>;
   stop: (payload: { deviceId: string; password?: string }) => Promise<{ success: boolean; error?: string; authFailed?: boolean }>;
   onInit: (cb: (data: FiddleInitPayload) => void) => () => void;
@@ -200,6 +210,9 @@ interface FiddleCtx {
   model: import('monaco-editor').editor.ITextModel;
   devices: FiddleDeviceEntry[];
   selectedDeviceId: string | null;
+  /** `function`/`sub` names from the selected device's last sideloaded channel,
+   * feeding the completion provider. Refreshed on device change, not per keystroke. */
+  symbolCache: FiddleSymbolEntry[];
   currentRun: RunSession | null;
   hasErrors: boolean;
   isRunning: boolean;
@@ -306,6 +319,44 @@ function registerBrightScriptLanguage(monaco: MonacoNamespace): void {
       { open: '"', close: '"' }
     ]
   });
+}
+
+/** Completions sourced from `ctx.symbolCache` (kept in sync by `refreshSymbols`) — reads the
+ * cache synchronously so typing never waits on an IPC round trip. */
+function registerBrightScriptCompletions(monaco: MonacoNamespace, ctx: FiddleCtx): void {
+  monaco.languages.registerCompletionItemProvider('brightscript', {
+    provideCompletionItems(model, position) {
+      const word = model.getWordUntilPosition(position);
+      const range = new monaco.Range(position.lineNumber, word.startColumn, position.lineNumber, word.endColumn);
+      const suggestions = ctx.symbolCache.map((sym) => {
+        const snippetParams = sym.params.map((p, i) => `\${${i + 1}:${p}}`).join(', ');
+        return {
+          label: sym.name,
+          kind: monaco.languages.CompletionItemKind.Function,
+          detail: `${sym.kind} ${sym.name}(${sym.params.join(', ')})`,
+          insertText: `${sym.name}(${snippetParams})`,
+          insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+          range
+        };
+      });
+      return { suggestions };
+    }
+  });
+}
+
+/** Fetch the selected device's last-sideloaded-channel symbols for completions.
+ * Called on device change / init, not per keystroke — completions read the cache. */
+async function refreshSymbols(ctx: FiddleCtx): Promise<void> {
+  if (!ctx.selectedDeviceId) {
+    ctx.symbolCache = [];
+    return;
+  }
+  try {
+    const result = await getWindowFiddle().getSymbols({ deviceId: ctx.selectedDeviceId });
+    ctx.symbolCache = Array.isArray(result?.symbols) ? result.symbols : [];
+  } catch {
+    ctx.symbolCache = [];
+  }
 }
 
 function fmtLineText(text: string): string {
@@ -519,6 +570,7 @@ function renderDeviceOptions(
     ctx.selectedDeviceId = null;
   }
   updateRunButton(ctx);
+  void refreshSymbols(ctx);
 }
 
 function applyDiagnostics(ctx: FiddleCtx, diagnostics: FiddleDiagnostic[]): void {
@@ -819,6 +871,7 @@ function bindEvents(ctx: FiddleCtx): void {
   ctx.els.deviceSelect.addEventListener('change', () => {
     ctx.selectedDeviceId = ctx.els.deviceSelect.value || null;
     updateRunButton(ctx);
+    void refreshSymbols(ctx);
   });
   ctx.els.runBtn.addEventListener('click', () => {
     void handleRun(ctx);
@@ -1037,6 +1090,7 @@ async function main(): Promise<void> {
     model,
     devices: [],
     selectedDeviceId: null,
+    symbolCache: [],
     currentRun: null,
     hasErrors: false,
     isRunning: false,
@@ -1052,6 +1106,7 @@ async function main(): Promise<void> {
 
   bindEvents(ctx);
   bindPrivacyMode(ctx);
+  registerBrightScriptCompletions(monaco, ctx);
   // Localize the static fiddle.html shell (toolbar labels, tooltips, placeholder).
   applyI18n(document);
   // Apply the active locale on open + retranslate live on change. The device `<select>` is rebuilt

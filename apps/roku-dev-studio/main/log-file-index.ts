@@ -32,6 +32,7 @@ import {
   createCrashScanner,
   type ConsoleFindings
 } from '../shared/console/brightscript-error-catalog';
+import { createBeaconScanner } from '../shared/console/roku-beacons';
 
 const fs = require('fs');
 
@@ -469,6 +470,9 @@ export async function scanFileFindings(
   // Crashes are multi-line Micro Debugger dumps, so a per-line issue filter can't see them — feed EVERY
   // line through the streaming crash scanner (bounded: it only buffers the current candidate block).
   const crashScanner = createCrashScanner();
+  // Same reasoning for performance beacons: an Initiate/Complete pair is never itself a BrightScript
+  // issue line, so it needs its own full-line pass rather than riding along with `issueLines`.
+  const beaconScanner = createBeaconScanner();
   let scannedLines = 0;
   const onLine = (raw: string, lineNo: number): void => {
     // Match the *display* text (ANSI-stripped, trailing \r absorbed) — the same 1:1 contract the find
@@ -476,12 +480,13 @@ export async function scanFileFindings(
     const text = consoleDisplayText(raw.endsWith('\r') ? raw.slice(0, -1) : raw);
     scannedLines++;
     crashScanner.push(text, lineNo);
+    beaconScanner.push(text, lineNo);
     if (recognizeBrsIssue(text)) issueLines.push({ text, index: lineNo });
   };
   const { aborted } = await streamFileLines(index, onLine, shouldAbort);
   // `computeConsoleFindings` drops any issueLine that a crash block already consumed (by file-line index).
   return {
-    findings: computeConsoleFindings(issueLines, crashScanner.finish()),
+    findings: computeConsoleFindings(issueLines, crashScanner.finish(), beaconScanner.finish()),
     scannedLines,
     truncated: aborted
   };

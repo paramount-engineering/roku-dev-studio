@@ -45,4 +45,5 @@ export const queries = {
   channelInfo: 'Informações do canal',
   network: 'Rede',
   reboot: 'Reiniciar',
+  issueReportTracker: 'Rastreador de relatórios de problemas',
 };

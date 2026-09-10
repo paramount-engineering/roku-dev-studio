@@ -43,4 +43,5 @@ export const queries = {
   channelInfo: 'Інформація про канал',
   network: 'Мережа',
   reboot: 'Перезавантажити',
+  issueReportTracker: 'Трекер звітів про проблеми',
 };

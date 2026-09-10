@@ -3208,6 +3208,32 @@
     .remote-performance-toggle:hover {
       color: var(--text-primary);
     }
+    /* Same flush-strip idiom as .remote-performance-toggle, but a real button (fire-and-forget
+     * action, not a state checkbox — there's no way to read fps_display's on/off state back from
+     * the device, so a checkbox would imply a state we don't actually know). */
+    .remote-fps-toggle-btn {
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--text-secondary);
+      flex-shrink: 0;
+      padding: 0 12px;
+      border: none;
+      border-left: 1px solid var(--border);
+      background: var(--bg-tertiary);
+    }
+    .remote-fps-toggle-btn:hover {
+      background: rgba(139, 92, 246, 0.18);
+      color: var(--accent-purple);
+    }
+    .remote-fps-toggle-btn:disabled {
+      cursor: not-allowed;
+      color: var(--text-muted);
+    }
     .remote-performance-checkbox {
       width: 17px;
       height: 17px;
@@ -3992,6 +4018,15 @@
       align-items: center;
       gap: 8px;
       min-width: 0;
+    }
+    /* Keep multi-word labels ("Kernel CPU Time") on one line — without this, a narrow label
+     * column wraps to two lines, which grows the row and shoves the single-line value (and its
+     * "· N%" secondary text) down so it visually reads as sitting on its own line below the label. */
+    .remote-cpu-process-label-text {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
     .remote-cpu-process-state-dot {
       width: 9px;
@@ -15998,6 +16033,10 @@
                     </button>
                   </div>
                 </div>
+                <button type="button" class="remote-fps-toggle-btn" data-fps-display-toggle data-requires-connection title="Toggle On-Screen FPS meter" data-i18n-title="app.fpsToggleTitle">
+                  <span class="icon icon-xs"><svg><use href="#icon-eye"/></svg></span>
+                  <span data-i18n="app.toggleFps">Toggle FPS</span>
+                </button>
                 <label class="remote-performance-toggle" data-remote-performance-wrap hidden>
                   <input type="checkbox" class="remote-performance-checkbox" data-remote-performance-toggle autocomplete="off" />
                   <span data-i18n="app.showDevicePerformance">Show Device Performance</span>

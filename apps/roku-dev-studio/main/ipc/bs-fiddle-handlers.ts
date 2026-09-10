@@ -475,6 +475,25 @@ export function registerBsFiddleIpc(ipcMain: IpcMain): void {
     return lintCode(code);
   });
 
+  ipcMain.handle(IPC.FiddleGetSymbols, async (event: IpcMainInvokeEvent, payload: { deviceId: string }) => {
+    const senderWin = BrowserWindow.fromWebContents(event.sender);
+    if (!senderWin || senderWin.isDestroyed()) return { symbols: [] };
+    const state = getFiddleStateByWindow(senderWin.id);
+    const device = resolveDevice(String(payload?.deviceId || ''), state);
+    if (!device?.ip) return { symbols: [] };
+    try {
+      const scanSymbols = require('roku-dev-studio-api/lib/debugger/scan-symbols') as {
+        getAnyRememberedZip: (ip: string) => string | undefined;
+        scanZipForSymbols: (p: string) => unknown[];
+      };
+      const zipPath = scanSymbols.getAnyRememberedZip(device.ip);
+      if (!zipPath || !fs.existsSync(zipPath)) return { symbols: [] };
+      return { symbols: scanSymbols.scanZipForSymbols(zipPath) };
+    } catch {
+      return { symbols: [] };
+    }
+  });
+
   ipcMain.handle(IPC.FiddleRun, async (event: IpcMainInvokeEvent, payload: { deviceId: string; code: string; password?: string }) => {
     const senderWin = BrowserWindow.fromWebContents(event.sender);
     if (!senderWin || senderWin.isDestroyed()) {

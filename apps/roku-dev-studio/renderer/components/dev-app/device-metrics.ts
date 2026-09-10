@@ -990,6 +990,7 @@ export function setupRemoteTabMetrics(
         lab.appendChild(dot);
       }
       const text = document.createElement('span');
+      text.className = 'remote-cpu-process-label-text';
       text.textContent = label;
       lab.appendChild(text);
 

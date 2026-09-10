@@ -404,6 +404,7 @@ var init_channels = __esm({
       FiddleReady: "fiddle:ready",
       FiddleInit: "fiddle:init",
       FiddleLint: "fiddle:lint",
+      FiddleGetSymbols: "fiddle:get-symbols",
       FiddleRun: "fiddle:run",
       FiddleStop: "fiddle:stop",
       FiddleRunResult: "fiddle:run-result",

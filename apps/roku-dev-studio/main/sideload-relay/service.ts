@@ -460,6 +460,16 @@ export class SideloadRelayService {
     } else {
       this.proxy.status('  (no enabled + reachable target devices — nothing to install to)');
     }
+    // Remember this build for every fan-out target (not just debug ones) so Fiddle's
+    // symbol-completion scan has a zip to read, regardless of remotedebug.
+    if (targets.length) {
+      try {
+        const scanSymbols = require('roku-dev-studio-api/lib/debugger/scan-symbols') as { rememberAnySideloadZip: (ip: string, p: string) => void };
+        for (const t of targets) scanSymbols.rememberAnySideloadZip(t.ip, upload.filePath);
+      } catch {
+        /* best-effort */
+      }
+    }
     const consoleDone = new Set<string>();
     // Debug-enabled targets get their debugger reattached once their install lands.
     const debugTargets = targets.filter((t) => t.remoteDebug);

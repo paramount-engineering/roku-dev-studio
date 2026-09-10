@@ -45,4 +45,5 @@ export const queries = {
   channelInfo: 'Channel Info',
   network: 'Network',
   reboot: 'Reboot',
+  issueReportTracker: 'Issue Report Tracker',
 } as const;

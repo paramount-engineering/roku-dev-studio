@@ -43,4 +43,5 @@ export const queries = {
   channelInfo: 'Informații canal',
   network: 'Rețea',
   reboot: 'Repornire',
+  issueReportTracker: 'Registru de probleme',
 };
