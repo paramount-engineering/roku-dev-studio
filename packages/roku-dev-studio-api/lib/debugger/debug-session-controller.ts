@@ -200,13 +200,28 @@ export class DebugSessionController {
     return { ok: false, error: detail };
   }
 
-  /** Close and forget the session for `ip` (idempotent). */
+  /**
+   * Close and forget the session for `ip` (idempotent). Releases any halted thread and asks
+   * the device to exit cleanly before closing the socket — a hard kill (the previous
+   * `destroy(true)`) skips both, so a thread paused at a breakpoint/STOP stayed halted
+   * forever once the only debugger that could resume it was gone, freezing the channel
+   * on-device (e.g. pressing the sidebar's Stop/Detach while stopped at a breakpoint).
+   */
   async detach(ip: string): Promise<void> {
     const s = this.sessions.get(ip);
     if (!s) return;
     this.sessions.delete(ip);
     try {
-      await s.client.destroy(true);
+      // continue() itself no-ops when nothing is halted; bounded so an unresponsive device
+      // can't hang detach() indefinitely. Best-effort — destroy() below still runs either way.
+      await withTimeout(s.client.continue(), 1500, 'continue-timeout');
+    } catch {
+      /* best-effort */
+    }
+    try {
+      // destroy(false) sends the protocol's ExitChannel command and waits briefly for it,
+      // instead of the previous immediate hard socket kill with no handshake at all.
+      await s.client.destroy(false);
     } catch (e) {
       apiError('[debugger] destroy error:', ip, e instanceof Error ? e.message : String(e));
     }

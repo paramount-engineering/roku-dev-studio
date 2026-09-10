@@ -88,7 +88,7 @@ function lineHasStopStatement(raw: string): boolean {
 }
 
 /** Blank out `"…"` string contents and cut at the first unquoted `'` (comment). */
-function stripStringsAndComment(line: string): string {
+export function stripStringsAndComment(line: string): string {
   let inStr = false;
   let res = '';
   for (let i = 0; i < line.length; i++) {
