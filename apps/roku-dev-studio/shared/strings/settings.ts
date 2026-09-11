@@ -313,11 +313,11 @@ export const settings = {
   chooseFolder: 'Choose Folder…',
 
   // Device Performance section
-  devicePerfIntroHtml: `Applies while <strong>Show Device Performance</strong> is on, the Roku has Developer Mode, and the Dev App is in the foreground. When <strong>Remember 'Show Device Performance'</strong> is on below, the Remote Section restores the quad layout per device.`,
-  rememberDevicePerf: "Remember 'Show Device Performance'",
-  rememberDevicePerfAria: 'Remember Device Performance show or hide per device',
+  devicePerfIntroHtml: `Applies while <strong>Device Performance</strong> is showing, the Roku has Developer Mode, and the Dev App is in the foreground. When <strong>Remember Device Performance</strong> is on below, the Remote Section restores the quad layout per device.`,
+  rememberDevicePerf: 'Remember Device Performance',
+  rememberDevicePerfAria: 'Remember whether Device Performance is showing, per device',
   // Row description — contains <strong>, rendered via data-i18n-html.
-  rememberDevicePerfDescHtml: `Restore whether <strong>Show Device Performance</strong> was on for each device. Turn off to always start with just the Remote Section until you enable it again.`,
+  rememberDevicePerfDescHtml: `Restore whether <strong>Device Performance</strong> was showing for each device. Turn off to always start with just the Remote Section until you show it again.`,
 
   // Network Inspector section — place selector + field labels
   location: 'Location',

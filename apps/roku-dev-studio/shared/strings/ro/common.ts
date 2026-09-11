@@ -7,6 +7,7 @@
  */
 export const common = {
   save: 'Salvează',
+  open: 'Deschide',
   cancel: 'Anulează',
   close: 'Închide',
   ok: 'OK',
