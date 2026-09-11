@@ -1,6 +1,7 @@
 // UI utility functions
 import { escapeHtml, setSafeHTML } from './dom.js';
 import { STATUS_MESSAGE_DURATION, TOAST_DISPLAY_DURATION } from './constants.js';
+import { S } from '@shared/strings/index.js';
 
 type StatusType = 'info' | 'success' | 'error' | 'warning';
 
@@ -63,12 +64,16 @@ export function showStatusMessage(
  * Pass `devicePanel` (a `.device-panel` element) when the toast is *about* one specific device
  * — with several devices connected, a bare message is otherwise ambiguous about which one it
  * concerns. Adds a small header row with that device's icon + name, mirroring its panel header.
+ * Pass `openFilePath` (the absolute path just written to disk) to add an "Open" button that
+ * launches it with the OS default app via `window.roku.openFile` — a separate button from
+ * `onClick`'s whole-toast click (some callers already use that for unrelated navigation).
  */
 export function showToast(
   message: string,
   type: StatusType | string = 'info',
   onClick?: () => void,
-  devicePanel?: Element | null
+  devicePanel?: Element | null,
+  openFilePath?: string
 ): void {
   let container = document.getElementById('toastContainer');
   if (!container) {
@@ -159,9 +164,17 @@ export function showToast(
     header.appendChild(nameEl);
     toast.appendChild(header);
   }
+  // Plain row when there's no Open button (unchanged layout); a flex row with the message on the
+  // left and the button pinned to the right when there is one.
+  const row = openFilePath ? document.createElement('div') : toast;
+  if (openFilePath) {
+    row.style.cssText = 'display: flex; align-items: center; gap: 12px;';
+    toast.appendChild(row);
+  }
   const body = document.createElement('div');
   body.textContent = message;
-  toast.appendChild(body);
+  if (openFilePath) body.style.cssText = 'flex: 1; min-width: 0;';
+  row.appendChild(body);
   const dismiss = (): void => {
     toast.style.animation = 'fadeOut 0.3s ease';
     setTimeout(() => toast.remove(), 300);
@@ -172,6 +185,31 @@ export function showToast(
       try { onClick(); } catch { /* navigation is best-effort */ }
       dismiss();
     });
+  }
+  if (openFilePath) {
+    const openBtn = document.createElement('button');
+    openBtn.type = 'button';
+    openBtn.textContent = S.common.open;
+    openBtn.style.cssText = `
+      flex: none;
+      padding: 4px 10px;
+      font-size: 12px;
+      font-weight: 600;
+      font-family: inherit;
+      color: white;
+      background: rgba(255,255,255,0.18);
+      border: 1px solid rgba(255,255,255,0.4);
+      border-radius: 5px;
+      cursor: pointer;
+    `;
+    openBtn.addEventListener('click', (e) => {
+      e.stopPropagation(); // don't also fire the whole-toast onClick above
+      void (window.roku as unknown as { openFile?: (p: string) => Promise<unknown> })
+        .openFile?.(openFilePath)
+        .catch(() => {}); // best-effort — the OS shows its own error if the path is gone
+      dismiss();
+    });
+    row.appendChild(openBtn);
   }
   container.appendChild(toast);
 
