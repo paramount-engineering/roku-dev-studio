@@ -103,4 +103,16 @@ export const sideloadRelay = {
   errValidationFailed: 'Validation failed.',
   errCouldNotReadPassword: 'Could not read the saved password.',
   errCouldNotWriteSettings: 'Could not write settings file.',
+
+  // ── Device Info modal row (renderer/app.ts openDeviceHardwareImageModal) — the
+  // Setup Devices modal's per-device toggle, shortcut'd onto the modal you open by
+  // clicking a device's image so you don't have to leave the Device tab. ──
+  deviceRowLabel: 'Sideload Relay',
+  deviceRowToggleAriaLabel: (name: string): string => `Sideload Relay for ${name}`,
+  deviceRowDisabledHint: 'Enable Sideload Relay in Settings first.',
+  deviceRowManageLinkText: 'Manage in Settings → Sideload Relay',
+  deviceRowToggleFailed: 'Could not update Sideload Relay target.',
+
+  // ── Auto-removal toast (main.ts's SecretsDeletePassword handler → renderer/app.ts) ──
+  deviceRemovedToast: (name: string): string => `${name} removed from Sideload Relay — its dev password is no longer verified.`,
 } as const;

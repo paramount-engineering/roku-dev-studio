@@ -114,4 +114,13 @@ export const sideloadRelay = {
   errValidationFailed: 'Weryfikacja nie powiodła się.',
   errCouldNotReadPassword: 'Nie udało się odczytać zapisanego hasła.',
   errCouldNotWriteSettings: 'Nie udało się zapisać pliku ustawień.',
+
+  // ── Wiersz w oknie informacji o urządzeniu (renderer/app.ts openDeviceHardwareImageModal) ──
+  deviceRowLabel: 'Sideload Relay',
+  deviceRowToggleAriaLabel: (name: string): string => `Sideload Relay dla ${name}`,
+  deviceRowDisabledHint: 'Najpierw włącz Sideload Relay w Ustawieniach.',
+  deviceRowManageLinkText: 'Zarządzaj w Ustawienia → Sideload Relay',
+  deviceRowToggleFailed: 'Nie można zaktualizować celu Sideload Relay.',
+  deviceRemovedToast: (name: string): string =>
+    `${name} usunięto z Sideload Relay — hasło programisty nie jest już zweryfikowane.`,
 };
