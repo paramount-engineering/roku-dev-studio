@@ -197,6 +197,9 @@ contextBridge.exposeInMainWorld('roku', {
   // Open debug log file (only works if debug enabled)
   openLogFile: () => ipcRenderer.invoke(IPC.OpenLogFile),
 
+  // Open an arbitrary previously-saved file with the OS default app (toast "Open" button).
+  openFile: (filePath: string) => ipcRenderer.invoke(IPC.OpenFile, { filePath }),
+
   isDiagnosticBuild: () => ipcRenderer.invoke(IPC.IsDiagnosticBuild),
   openDiagnosticLogFolder: () => ipcRenderer.invoke(IPC.OpenDiagnosticLogFolder),
   

@@ -128,6 +128,8 @@ var init_channels = __esm({
       ShellOpenExternal: "shell:open-external",
       IsDebugEnabled: "is-debug-enabled",
       OpenLogFile: "open-log-file",
+      /** Opens an arbitrary previously-saved file with the OS default app (toast "Open" button). */
+      OpenFile: "open-file",
       /** Diagnostic build only — opens the userData folder containing all log files. */
       IsDiagnosticBuild: "is-diagnostic-build",
       OpenDiagnosticLogFolder: "open-diagnostic-log-folder",

@@ -51,9 +51,13 @@ function readDebugSideloadIps(settings: Record<string, unknown>): string[] {
   const v = settings['sideload-debug-ips'];
   return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [];
 }
-const { subscribeDebugTelnetData } = require('../ipc/telnet-handlers') as {
+const { subscribeDebugTelnetData, createTelnetMarkerWatcher } = require('../ipc/telnet-handlers') as {
   subscribeDebugTelnetData: (ip: string, cb: (text: string) => void) => () => void;
+  createTelnetMarkerWatcher: (pattern: RegExp, carryLen?: number) => { feed: (text: string) => boolean };
 };
+
+/** The real "app fully launched" beacon `watchForLaunchComplete` watches for — see its doc comment. */
+const LAUNCH_COMPLETE_RE = /\[beacon\.signal\]\s*\|AppLaunchChainComplete|\[scrpt\.ctx\.run\.enter\]/i;
 
 function defaultConfig(): RelayBootConfig {
   return {
@@ -91,6 +95,8 @@ export class SideloadRelayService {
   /** Active tap forwarding a representative device's console to the IDE (compile errors + logs). */
   private deviceTapUnsub: (() => void) | null = null;
   private deviceTapTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Chunk-boundary-safe matcher for the current tap's launch-complete marker; (re)created per tap. */
+  private launchCompleteWatcher: { feed: (text: string) => boolean } | null = null;
   /** Session-end orchestration: fires once the real device signals it's up, or a cap. */
   private endArmed = false;
   private endGraceTimer: ReturnType<typeof setTimeout> | null = null;
@@ -324,6 +330,7 @@ export class SideloadRelayService {
     const rep = targets.find((t) => !t.remote && !!t.ip);
     if (!rep) return;
     try {
+      this.launchCompleteWatcher = createTelnetMarkerWatcher(LAUNCH_COMPLETE_RE);
       this.deviceTapUnsub = subscribeDebugTelnetData(rep.ip, (text) => {
         this.proxy.relayDeviceOutput(text);
         this.watchForLaunchComplete(text);
@@ -359,10 +366,9 @@ export class SideloadRelayService {
    */
   private watchForLaunchComplete(text: string): void {
     if (this.endArmed) return;
-    if (/\[beacon\.signal\] \|AppLaunchChainComplete/i.test(text) || /\[scrpt\.ctx\.run\.enter\]/i.test(text)) {
-      this.endArmed = true;
-      this.scheduleEnd(1200);
-    }
+    if (!this.launchCompleteWatcher?.feed(text)) return;
+    this.endArmed = true;
+    this.scheduleEnd(1200);
   }
 
   /** Clear any pending end/cap/emit timers and reset the arm flag (per-run reset). */

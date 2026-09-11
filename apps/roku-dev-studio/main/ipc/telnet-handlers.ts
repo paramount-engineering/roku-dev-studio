@@ -87,6 +87,30 @@ function notifyTelnetDataSubscribers(ip: string, text: string): void {
 }
 
 /**
+ * Regex-watch raw (unbuffered, not line-aligned) telnet chunks for `pattern`. Carries a short
+ * tail across chunks so a match spanning a chunk boundary can't be missed — shared by every
+ * main-process "watch the live 8085 feed for a one-shot marker" consumer (debugger reconnect
+ * detection here, the Sideload Relay's launch-complete detection in sideload-relay/service.ts)
+ * so both get the same chunk-boundary safety instead of each hand-rolling (or forgetting) it.
+ * Feed it consecutive chunks via `feed()`; a match clears the carry so the same physical
+ * occurrence can't re-fire on the next unrelated chunk.
+ */
+export function createTelnetMarkerWatcher(pattern: RegExp, carryLen = 120): { feed: (text: string) => boolean } {
+  let carry = '';
+  return {
+    feed(text: string): boolean {
+      const combined = carry + text;
+      if (pattern.test(combined)) {
+        carry = '';
+        return true;
+      }
+      carry = combined.slice(-carryLen);
+      return false;
+    }
+  };
+}
+
+/**
  * Auto-reattach the debugger the moment a relaunched channel starts waiting for one on 8081, instead of
  * silently falling back to Roku's local debugger after its ~10s timeout. Real on-device signature:
  *   `[plg.dbg.conn.wait] Waiting for debugging connection`
@@ -131,30 +155,15 @@ function watchForDebuggerWaiting(ip: string): void {
   debuggerWaitConnectedAt.set(ip, Date.now()); // reset the settle window on every (re)connect
   if (debuggerWaitWatchedIps.has(ip)) return; // the regex-match subscription itself only needs one registration
   debuggerWaitWatchedIps.add(ip);
-  // Raw TCP chunks, not buffered lines — carry a short tail across calls so the marker can't be missed
-  // if a chunk boundary splits it (the same accepted tradeoff sideload-relay's watchForLaunchComplete
-  // already makes on this identical raw-data feed).
-  let carry = '';
-  const MAX_CARRY = 120;
+  const watcher = createTelnetMarkerWatcher(DEBUGGER_WAITING_RE);
   subscribeDebugTelnetData(ip, (text) => {
-    const combined = carry + text;
-    if (DEBUGGER_WAITING_RE.test(combined)) {
-      // Consumed — clear rather than retaining a tail. Leaving the matched text in `carry` would
-      // re-match against the NEXT unrelated chunk too (same marker text, now stale), firing a second
-      // notifyDebuggerReattach a few ms later for the exact same occurrence. Roku's 8081 control port
-      // is single-client, so that second reattach races its own attach() against the first's — one
-      // wins the port, the other burns its full ~20s retry budget logging misleading "port closed"
-      // failures against a session that's actually fine.
-      carry = '';
-      const connectedAt = debuggerWaitConnectedAt.get(ip) ?? 0;
-      if (Date.now() - connectedAt < DEBUGGER_WAIT_SETTLE_MS) return; // likely replayed backlog, not live
-      if (isDebuggerAutoAttachEnabled(ip) && !getDebugSessionController().isAttached(ip)) {
-        mainLog('[Telnet] device', ip, 'is waiting for a debugger on 8081 — reattaching automatically');
-        notifyDebuggerReattach(ip);
-      }
-      return;
+    if (!watcher.feed(text)) return;
+    const connectedAt = debuggerWaitConnectedAt.get(ip) ?? 0;
+    if (Date.now() - connectedAt < DEBUGGER_WAIT_SETTLE_MS) return; // likely replayed backlog, not live
+    if (isDebuggerAutoAttachEnabled(ip) && !getDebugSessionController().isAttached(ip)) {
+      mainLog('[Telnet] device', ip, 'is waiting for a debugger on 8081 — reattaching automatically');
+      notifyDebuggerReattach(ip);
     }
-    carry = combined.slice(-MAX_CARRY);
   });
 }
 

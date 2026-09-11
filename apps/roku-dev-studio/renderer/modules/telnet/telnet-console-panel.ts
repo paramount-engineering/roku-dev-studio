@@ -1607,7 +1607,8 @@ export function setupTelnet(
         analyticsHandle = null;
         clearTimeout(analyticsRefreshTimer);
       },
-      revealBufferLine
+      revealBufferLine,
+      dashboardBtn
     );
   });
 

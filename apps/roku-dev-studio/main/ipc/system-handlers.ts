@@ -853,6 +853,24 @@ function setupSystemHandlers(
       return { success: false, error: errMsg(error) };
     }
   });
+
+  // Open a previously-saved file with the OS default app — backs the "Open" button on a
+  // save-success toast. Falls back to revealing it in the OS file browser if there's no default
+  // app registered for it (same fallback `settings-window-ipc.ts` uses for MCP config files).
+  ipcMain.handle(IPC.OpenFile, async (_event: IpcMainInvokeEvent, { filePath }: { filePath?: unknown }) => {
+    const target = typeof filePath === 'string' ? filePath.trim() : '';
+    if (!target) return { success: false, error: 'No file path provided' };
+    try {
+      const openErr = await shell.openPath(target);
+      if (openErr) {
+        shell.showItemInFolder(target);
+        return { success: true, revealed: true, error: openErr };
+      }
+      return { success: true, opened: true };
+    } catch (error) {
+      return { success: false, error: errMsg(error) };
+    }
+  });
 }
 
 export { setupSystemHandlers };
