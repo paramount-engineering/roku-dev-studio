@@ -17,6 +17,7 @@
 
 import { escapeHtml } from '../utils/dom.js';
 import { attachBackdropClickToClose } from '../utils/modal-backdrop-click.js';
+import { openModalOverlayActiveFromOpener, closeModalWithOriginMotion } from '../utils/modal-origin-motion.js';
 import { S } from '@shared/strings/index.js';
 import type {
   ConsoleFindings,
@@ -507,11 +508,12 @@ function bodyHtml(f: ConsoleFindings, navigable: boolean): string {
 export function openConsoleAnalyticsModal(
   getSnapshot: () => ConsoleAnalyticsSnapshot,
   onClose?: () => void,
-  onNavigate?: (index: number) => void
+  onNavigate?: (index: number) => void,
+  opener?: HTMLElement | null
 ): ConsoleAnalyticsHandle {
   ensureConsoleAnalyticsStyles();
   const overlay = document.createElement('div');
-  overlay.className = 'modal-overlay telnet-an-overlay active';
+  overlay.className = 'modal-overlay telnet-an-overlay';
   overlay.innerHTML = `
     <div class="telnet-an-modal" role="dialog" aria-modal="true" aria-label="${S.consoleLog.monitorTitle}">
       <div class="telnet-an-header">
@@ -609,15 +611,20 @@ export function openConsoleAnalyticsModal(
   });
 
   document.body.appendChild(overlay);
-  render();
+  // `render()` runs as the `afterActive` hook — after `.active` makes the overlay visible but
+  // before the motion measures the surface's layout box, so the animation sizes against the real
+  // (populated) content instead of the empty shell.
+  openModalOverlayActiveFromOpener(overlay, opener ?? null, render);
 
   let closed = false;
   const close = (): void => {
     if (closed) return;
     closed = true;
-    overlay.remove();
-    document.removeEventListener('keydown', onKey);
-    onClose?.();
+    closeModalWithOriginMotion(overlay, () => {
+      overlay.remove();
+      document.removeEventListener('keydown', onKey);
+      onClose?.();
+    });
   };
   const onKey = (e: KeyboardEvent): void => {
     if (e.key === 'Escape') close();

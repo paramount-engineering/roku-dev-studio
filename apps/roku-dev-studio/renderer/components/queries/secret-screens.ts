@@ -41,6 +41,14 @@ const secretScreensOrdered = (): SecretScreenDef[] => [
     ]
   },
   {
+    id: 'issueReportTracker',
+    title: S.queries.issueReportTracker,
+    segments: [
+      { label: 'Home×5', keys: repeatKeys('Home', 5) },
+      { label: 'Back×5', keys: repeatKeys('Back', 5) }
+    ]
+  },
+  {
     id: 'secretScreen',
     title: S.queries.secretScreen,
     segments: [
@@ -120,14 +128,6 @@ const secretScreensOrdered = (): SecretScreenDef[] => [
       { label: 'Up', keys: ['Up'] },
       { label: 'Rev×2', keys: repeatKeys('Rev', 2) },
       { label: 'Fwd×2', keys: repeatKeys('Fwd', 2) }
-    ]
-  },
-  {
-    id: 'issueReportTracker',
-    title: S.queries.issueReportTracker,
-    segments: [
-      { label: 'Home×5', keys: repeatKeys('Home', 5) },
-      { label: 'Back×5', keys: repeatKeys('Back', 5) }
     ]
   }
 ];

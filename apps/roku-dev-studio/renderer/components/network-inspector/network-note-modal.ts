@@ -11,6 +11,7 @@
  */
 import { escapeHtml } from '../../modules/utils/dom.js';
 import { attachBackdropClickToClose } from '../../modules/utils/modal-backdrop-click.js';
+import { openModalOverlayActiveFromOpener, closeModalWithOriginMotion } from '../../modules/utils/modal-origin-motion.js';
 import { S } from '@shared/strings/index.js';
 
 /**
@@ -24,6 +25,8 @@ export function openNoteModal(opts: {
   note: string;
   subtitle?: string;
   onSave: (id: string, note: string) => void;
+  /** Button that triggered the open — the modal grows out of it and shrinks back on close. */
+  opener?: HTMLElement | null;
 }): void {
   const subtitleLine = opts.subtitle
     ? `<div class="ni-note-subtitle">${escapeHtml(opts.subtitle)}</div>`
@@ -31,7 +34,7 @@ export function openNoteModal(opts: {
 
   const overlay = document.createElement('div');
   // `.modal-overlay` is display:none until `.active` is added.
-  overlay.className = 'modal-overlay ni-note-overlay active';
+  overlay.className = 'modal-overlay ni-note-overlay';
   overlay.innerHTML = `
     <div class="ni-rules-modal ni-note-modal" role="dialog" aria-modal="true" aria-label="${S.networkInspector.secNote}">
       <div class="ni-rules-header">
@@ -53,13 +56,16 @@ export function openNoteModal(opts: {
     </div>`;
 
   document.body.appendChild(overlay);
+  openModalOverlayActiveFromOpener(overlay, opts.opener ?? null);
 
   const textarea = overlay.querySelector('[data-ni-note]') as HTMLTextAreaElement | null;
 
   // Close WITHOUT saving — the header ×, Escape, and a backdrop click all discard edits.
   const close = (): void => {
-    overlay.remove();
-    document.removeEventListener('keydown', onKey);
+    closeModalWithOriginMotion(overlay, () => {
+      overlay.remove();
+      document.removeEventListener('keydown', onKey);
+    });
   };
   const onKey = (e: KeyboardEvent): void => {
     if (e.key === 'Escape') close();

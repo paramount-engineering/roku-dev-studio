@@ -27,6 +27,7 @@ import type {
   NetworkFindScope
 } from '@shared/network-inspector/content-search';
 import { isLikelyRedos, looksLikeRegex, MAX_REGEX_PATTERN_LENGTH } from '@shared/platform/text-match.js';
+import { openModalOverlayActiveFromOpener, closeModalWithOriginMotion } from '../../modules/utils/modal-origin-motion.js';
 import { S } from '@shared/strings/index.js';
 
 /** The four user-facing scope chips, mapped to the engine's granular scopes. */
@@ -148,7 +149,7 @@ export type FindModalCallbacks = {
 };
 
 export type FindModalHandle = {
-  open: () => void;
+  open: (opener?: HTMLElement | null) => void;
   close: () => void;
   isOpen: () => boolean;
   /** Whether a search is currently active (results may be showing even with the modal closed). */
@@ -726,7 +727,7 @@ export function createNetworkFindModal(cb: FindModalCallbacks): FindModalHandle 
 
   function buildOverlay(): HTMLElement {
     const el = document.createElement('div');
-    el.className = 'modal-overlay ni-find-overlay active';
+    el.className = 'modal-overlay ni-find-overlay';
     el.innerHTML = `
       <div class="ni-find-modal" role="dialog" aria-modal="true" aria-label="${S.networkInspector.findAriaLabel}">
         <div class="ni-find-header">
@@ -761,13 +762,14 @@ export function createNetworkFindModal(cb: FindModalCallbacks): FindModalHandle 
     });
   }
 
-  function open(): void {
+  function open(opener?: HTMLElement | null): void {
     if (overlay) {
       (overlay.querySelector('[data-term-input]') as HTMLInputElement | null)?.focus();
       return;
     }
     overlay = buildOverlay();
     document.body.appendChild(overlay);
+    openModalOverlayActiveFromOpener(overlay, opener ?? null);
     wire(overlay);
     syncAddButton();
     cb.onOpen?.();
@@ -786,8 +788,11 @@ export function createNetworkFindModal(cb: FindModalCallbacks): FindModalHandle 
     }
     closePopover();
     const wasOpen = !!overlay;
-    overlay?.remove();
+    // `isOpen()`/`wasOpen` must reflect "closed" immediately (a re-open right away shouldn't reuse
+    // the overlay mid shrink-animation) — only the actual DOM detach is deferred to let it play.
+    const el = overlay;
     overlay = null;
+    if (el) closeModalWithOriginMotion(el, () => el.remove());
     // Matches + the last selection stay put so the user keeps their place; reopening restores state.
     if (wasOpen) cb.onClose?.();
   }

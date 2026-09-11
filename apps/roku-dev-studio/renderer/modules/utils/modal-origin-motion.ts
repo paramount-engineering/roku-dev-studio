@@ -63,7 +63,16 @@ function getModalDialogSurface(overlay: HTMLElement): HTMLElement | null {
     ':scope > .modal',
     ':scope > .add-location-form',
     ':scope > .server-info-modal',
-    ':scope > .device-hardware-image-modal'
+    ':scope > .device-hardware-image-modal',
+    ':scope > .telnet-an-modal',
+    ':scope > .ni-rules-modal',
+    ':scope > .ni-find-modal',
+    ':scope > .ni-filter-help-modal',
+    ':scope > .mcp-tools-modal',
+    ':scope > .ni-modal',
+    ':scope > .sr-modal',
+    ':scope > .telnet-debug-why-modal',
+    ':scope > .rds-release-notes-dialog'
   ];
   for (const sel of selectors) {
     const el = overlay.querySelector(sel);
@@ -299,4 +308,109 @@ export function openModalOverlayActiveFromOpener(
   overlay.classList.add('active');
   afterActive?.();
   playModalOpenMotion(overlay);
+}
+
+function elementOrigin(
+  el: HTMLElement,
+  opener: HTMLElement | null | undefined
+): { ox: number; oy: number; minScale: number } | null {
+  if (!opener || !document.contains(opener)) return null;
+  const or = opener.getBoundingClientRect();
+  if (or.width < 1 && or.height < 1) return null;
+  const rect = el.getBoundingClientRect();
+  return {
+    ox: or.left + or.width / 2 - rect.left,
+    oy: or.top + or.height / 2 - rect.top,
+    minScale: openerMinScale(rect, Math.max(or.width, 8), Math.max(or.height, 8))
+  };
+}
+
+/**
+ * Scale `el` up from `opener`'s on-screen position to `el`'s own final
+ * layout box, in place — no overlay/backdrop. For non-modal floating panels
+ * that must stay non-dimming and interactive (e.g. the floating remote),
+ * where the "dialog surface" IS the whole element, not a child of one.
+ */
+export function playElementOpenMotion(el: HTMLElement, opener: HTMLElement | null | undefined): void {
+  if (reducedMotion()) return;
+
+  const origin = elementOrigin(el, opener);
+  resetSurfaceInline(el);
+  el.style.transformOrigin = origin ? `${origin.ox}px ${origin.oy}px` : '50% 50%';
+  el.style.transform = `scale(${origin ? origin.minScale : 0.94})`;
+  el.style.opacity = origin ? '0' : '0.88';
+
+  void el.offsetHeight;
+
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      el.style.transition = MOTION_TRANSITION;
+      el.style.transform = 'scale(1)';
+      el.style.opacity = '1';
+
+      let cleaned = false;
+      const cleanup = () => {
+        if (cleaned) return;
+        cleaned = true;
+        el.removeEventListener('transitionend', onEnd);
+        el.style.removeProperty('transition');
+        el.style.removeProperty('transform');
+        el.style.removeProperty('transform-origin');
+        el.style.removeProperty('opacity');
+      };
+      const onEnd = (e: TransitionEvent) => {
+        if (e.target !== el || e.propertyName !== 'transform') return;
+        cleanup();
+      };
+      el.addEventListener('transitionend', onEnd);
+      window.setTimeout(cleanup, MOTION_FALLBACK_MS);
+    });
+  });
+}
+
+/** Reverse of {@link playElementOpenMotion}: scale/fade `el` back toward `opener`, then run `finalize`. */
+export function closeElementWithOriginMotion(
+  el: HTMLElement,
+  opener: HTMLElement | null | undefined,
+  finalize: () => void
+): void {
+  if (reducedMotion()) {
+    finalize();
+    return;
+  }
+
+  const origin = elementOrigin(el, opener);
+  resetSurfaceInline(el);
+  el.style.transformOrigin = origin ? `${origin.ox}px ${origin.oy}px` : '50% 50%';
+  el.style.transform = 'scale(1)';
+  el.style.opacity = '1';
+
+  void el.offsetHeight;
+
+  let finished = false;
+  const done = () => {
+    if (finished) return;
+    finished = true;
+    el.removeEventListener('transitionend', onEnd);
+    el.style.removeProperty('transition');
+    el.style.removeProperty('transform');
+    el.style.removeProperty('transform-origin');
+    el.style.removeProperty('opacity');
+    finalize();
+  };
+  const onEnd = (e: TransitionEvent) => {
+    if (e.target !== el || e.propertyName !== 'transform') return;
+    done();
+  };
+  el.addEventListener('transitionend', onEnd);
+
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      el.style.transition = MOTION_TRANSITION;
+      el.style.transform = `scale(${origin ? origin.minScale : 0.94})`;
+      el.style.opacity = origin ? '0' : '0.92';
+    });
+  });
+
+  window.setTimeout(done, MOTION_FALLBACK_MS);
 }

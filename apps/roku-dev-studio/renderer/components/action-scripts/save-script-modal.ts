@@ -13,11 +13,14 @@
  */
 import { escapeHtml, setSafeHTML } from '../../modules/utils/index.js';
 import { attachBackdropClickToClose } from '../../modules/utils/modal-backdrop-click.js';
+import { openModalOverlayActiveFromOpener, closeModalWithOriginMotion } from '../../modules/utils/modal-origin-motion.js';
 import { S } from '@shared/strings/index.js';
 
 export function promptSaveScriptName(opts: {
   defaultName?: string;
   savedNames: string[];
+  /** Button that triggered the open — the modal grows out of it and shrinks back on close. */
+  opener?: HTMLElement | null;
 }): Promise<string | null> {
   return new Promise((resolve) => {
     const savedNames = opts.savedNames.slice();
@@ -36,7 +39,7 @@ export function promptSaveScriptName(opts: {
       : `<div class="action-scripts-save-modal-empty">${escapeHtml(S.actionScripts.saveModalNoSavedScripts)}</div>`;
 
     const overlay = document.createElement('div');
-    overlay.className = 'modal-overlay active action-scripts-save-modal-overlay';
+    overlay.className = 'modal-overlay action-scripts-save-modal-overlay';
     setSafeHTML(
       overlay,
       `<div class="modal action-scripts-save-modal" role="dialog" aria-modal="true" aria-label="${escapeHtml(S.actionScripts.saveActionScriptBtn)}">
@@ -67,9 +70,11 @@ export function promptSaveScriptName(opts: {
     const listEl = overlay.querySelector('.action-scripts-save-modal-list') as HTMLElement;
 
     const settle = (value: string | null): void => {
-      document.removeEventListener('keydown', onKey);
-      overlay.remove();
-      resolve(value);
+      closeModalWithOriginMotion(overlay, () => {
+        document.removeEventListener('keydown', onKey);
+        overlay.remove();
+        resolve(value);
+      });
     };
     const onKey = (e: KeyboardEvent): void => {
       if (e.key === 'Escape') settle(null);
@@ -123,6 +128,7 @@ export function promptSaveScriptName(opts: {
     document.addEventListener('keydown', onKey);
 
     document.body.appendChild(overlay);
+    openModalOverlayActiveFromOpener(overlay, opts.opener ?? null);
     if (opts.defaultName) input.value = opts.defaultName;
     syncDuplicateState();
     input.focus();

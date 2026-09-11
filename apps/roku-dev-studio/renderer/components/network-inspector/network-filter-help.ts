@@ -6,6 +6,7 @@
  */
 import { escapeHtml } from '../../modules/utils/dom.js';
 import { attachBackdropClickToClose } from '../../modules/utils/modal-backdrop-click.js';
+import { openModalOverlayActiveFromOpener, closeModalWithOriginMotion } from '../../modules/utils/modal-origin-motion.js';
 import { attachSearchHistory } from '../../modules/ui/search-history.js';
 import { S } from '@shared/strings/index.js';
 
@@ -78,7 +79,7 @@ export function wireNetworkFilterControls(opts: NetworkFilterControlsOpts): Netw
         filterInput.value = current ? `${current}, ${term}` : term;
         onApply();
         filterInput.focus();
-      });
+      }, filterHelpBtn);
     },
     listenerOptions
   );
@@ -90,10 +91,10 @@ export function wireNetworkFilterControls(opts: NetworkFilterControlsOpts): Netw
  * Open the filtering help modal. Clicking an example chip calls `onPick(term)` (typically appends it
  * to the filter box, comma-OR) and closes the modal.
  */
-export function openFilterHelpModal(onPick: (term: string) => void): void {
+export function openFilterHelpModal(onPick: (term: string) => void, opener?: HTMLElement | null): void {
   const overlay = document.createElement('div');
   // `.modal-overlay` is display:none until `.active` is added (shared backdrop + centering).
-  overlay.className = 'modal-overlay ni-filter-help-overlay active';
+  overlay.className = 'modal-overlay ni-filter-help-overlay';
   const rows = filterHelpFields().map((f) => {
     const chips = f.examples
       .map(
@@ -119,10 +120,13 @@ export function openFilterHelpModal(onPick: (term: string) => void): void {
       </div>
     </div>`;
   document.body.appendChild(overlay);
+  openModalOverlayActiveFromOpener(overlay, opener ?? null);
 
   const close = (): void => {
-    overlay.remove();
-    document.removeEventListener('keydown', onKey);
+    closeModalWithOriginMotion(overlay, () => {
+      overlay.remove();
+      document.removeEventListener('keydown', onKey);
+    });
   };
   const onKey = (e: KeyboardEvent): void => {
     if (e.key === 'Escape') close();

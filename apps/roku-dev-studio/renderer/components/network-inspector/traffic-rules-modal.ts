@@ -12,6 +12,7 @@ import type {
 } from '@shared/network-inspector/types.js';
 import { escapeHtml } from '../../modules/utils/dom.js';
 import { attachBackdropClickToClose } from '../../modules/utils/modal-backdrop-click.js';
+import { openModalOverlayActiveFromOpener, closeModalWithOriginMotion } from '../../modules/utils/modal-origin-motion.js';
 import { S } from '@shared/strings/index.js';
 
 type RokuApi = {
@@ -352,6 +353,8 @@ export async function openTrafficRulesModal(opts: {
    *  yet and stays local-only regardless. */
   isRemote?: boolean;
   serverUrl?: string | null;
+  /** Button that triggered the open — the modal grows out of it and shrinks back on close. */
+  opener?: HTMLElement | null;
 }): Promise<void> {
   const api = (window as unknown as { roku?: RokuApi }).roku;
   const isRemote = !!(opts.isRemote && opts.serverUrl);
@@ -388,7 +391,7 @@ export async function openTrafficRulesModal(opts: {
 
   const overlay = document.createElement('div');
   // `.modal-overlay` is display:none until `.active` is added.
-  overlay.className = 'modal-overlay ni-rules-overlay active';
+  overlay.className = 'modal-overlay ni-rules-overlay';
   overlay.innerHTML = `
     <div class="ni-rules-modal" role="dialog" aria-modal="true" aria-label="${S.networkInspector.trafficRules}">
       <div class="ni-rules-header">
@@ -468,6 +471,7 @@ export async function openTrafficRulesModal(opts: {
     </div>`;
 
   document.body.appendChild(overlay);
+  openModalOverlayActiveFromOpener(overlay, opts.opener ?? null);
 
   // Floating bandwidth-preset menu — appended to the overlay (never inside the scrolling rule list)
   // so it can't be clipped, and positioned under whichever combo input is active.
@@ -535,8 +539,10 @@ export async function openTrafficRulesModal(opts: {
   overlay.addEventListener('scroll', () => { if (!bwMenu.hidden && bwActiveInput) positionBwMenu(bwActiveInput); }, true);
 
   const close = (): void => {
-    overlay.remove();
-    document.removeEventListener('keydown', onKey);
+    closeModalWithOriginMotion(overlay, () => {
+      overlay.remove();
+      document.removeEventListener('keydown', onKey);
+    });
   };
   const onKey = (e: KeyboardEvent): void => {
     if (e.key !== 'Escape') return;

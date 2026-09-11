@@ -149,12 +149,14 @@ export type DetailInteractionHandlers = {
   /** One-click Replay (primary button) — re-issue the selected request from the host, rules bypassed.
    *  Optional: the offline Session Viewer supplies none, so its (hidden) replay menu is inert. */
   onReplay?: () => void;
-  /** Open the Compose (Edit & Resend) modal for the selected request. */
-  onCompose?: () => void;
+  /** Open the Compose (Edit & Resend) modal for the selected request. `btn` (the clicked replay-menu
+   *  item) is the opener the modal grows out of / shrinks back into. */
+  onCompose?: (btn: HTMLElement) => void;
   /** Toggle the replay split-menu dropdown (Replay Now / Edit & Resend…). */
   onReplayMenuToggle?: () => void;
-  /** Open the per-request Note modal for the selected event (all event kinds — not export-gated). */
-  onNote?: () => void;
+  /** Open the per-request Note modal for the selected event (all event kinds — not export-gated).
+   *  `btn` (the clicked Notes button) is the opener the modal grows out of / shrinks back into. */
+  onNote?: (btn: HTMLElement) => void;
 };
 
 /**
@@ -210,7 +212,7 @@ export function wireDetailInteractions(
       }
       const replayItem = target?.closest('[data-ni-replay-item]') as HTMLElement | null;
       if (replayItem?.dataset.niReplayItem) {
-        if (replayItem.dataset.niReplayItem === 'compose') h.onCompose?.();
+        if (replayItem.dataset.niReplayItem === 'compose') h.onCompose?.(replayItem);
         else h.onReplay?.();
         return;
       }
@@ -221,7 +223,7 @@ export function wireDetailInteractions(
       }
       const noteBtn = target?.closest('[data-ni-note-open]') as HTMLElement | null;
       if (noteBtn) {
-        h.onNote?.();
+        h.onNote?.(noteBtn);
         return;
       }
       const wrapBtn = target?.closest('[data-ni-wrap-toggle]') as HTMLElement | null;
