@@ -480,6 +480,16 @@ var init_channels = __esm({
       SideloadRelayValidatePassword: "sideload-relay:validate-password",
       /** Reveal the saved Relay Dev Password (for the settings "show password" eye toggle). */
       SideloadRelayRevealPassword: "sideload-relay:reveal-password",
+      /** Add or remove a single device from the relay's target list (the Device Info modal's shortcut — Settings' Setup Devices modal uses ApplySettings instead). */
+      SideloadRelayToggleDevice: "sideload-relay:toggle-device",
+      /** Main → renderer, broadcast to every window: config (targets/flags) changed, from
+       *  either save path (Settings' Setup Devices modal, or the Device Info modal's toggle) —
+       *  so whichever surface is open picks it up live instead of only on next open. */
+      SideloadRelayConfigChanged: "sideload-relay:config-changed",
+      /** Main → renderer, broadcast: a device was dropped from the relay's target list because
+       *  its dev password was just deleted (from ANY surface — Dev App, sideloading, Action
+       *  Scripts import, …), not just an explicit relay action. The main window toasts this. */
+      SideloadRelayDeviceRemoved: "sideload-relay:device-removed",
       /** Main → renderer: relay bind/lifecycle status changed. */
       SideloadRelayStatus: "sideload-relay:status",
       /** Main → renderer: a new upload was accepted and fan-out started. */
@@ -572,6 +582,11 @@ contextBridge.exposeInMainWorld("settingsApi", {
     const handler = (_e, status) => callback(status);
     ipcRenderer.on(IPC2.SideloadRelayStatus, handler);
     return () => ipcRenderer.removeListener(IPC2.SideloadRelayStatus, handler);
+  },
+  onSideloadRelayConfigChanged: (callback) => {
+    const handler = (_e, config) => callback(config);
+    ipcRenderer.on(IPC2.SideloadRelayConfigChanged, handler);
+    return () => ipcRenderer.removeListener(IPC2.SideloadRelayConfigChanged, handler);
   },
   onSideloadRelayRunStarted: (callback) => {
     const handler = (_e, run) => callback(run);

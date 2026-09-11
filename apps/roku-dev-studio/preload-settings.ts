@@ -85,6 +85,11 @@ contextBridge.exposeInMainWorld('settingsApi', {
     ipcRenderer.on(IPC.SideloadRelayStatus, handler);
     return () => ipcRenderer.removeListener(IPC.SideloadRelayStatus, handler);
   },
+  onSideloadRelayConfigChanged: (callback: (config: unknown) => void) => {
+    const handler = (_e: IpcRendererEvent, config: unknown) => callback(config);
+    ipcRenderer.on(IPC.SideloadRelayConfigChanged, handler);
+    return () => ipcRenderer.removeListener(IPC.SideloadRelayConfigChanged, handler);
+  },
   onSideloadRelayRunStarted: (callback: (run: unknown) => void) => {
     const handler = (_e: IpcRendererEvent, run: unknown) => callback(run);
     ipcRenderer.on(IPC.SideloadRelayRunStarted, handler);

@@ -140,6 +140,7 @@ const { showSettingsDialog } = require('./main/settings-dialog');
 const { registerSettingsWindowIpc } = require('./main/settings-window-ipc');
 const { initSettings, loadSettings, saveSettings, registerSettingsIpc } = require('./main/settings');
 const secretStore = require('./main/secret-store') as typeof import('./main/secret-store');
+const { dropRelayTargetIfPasswordRemoved } = require('./main/ipc/relay-handlers') as typeof import('./main/ipc/relay-handlers');
 const { startMcpBridge } = require('./main/mcp-bridge');
 const { getDeviceInfo, getDeviceId } = require('roku-dev-studio-api');
 const { mainLog, mainWarn, mainError } = require('./main/log');
@@ -770,6 +771,11 @@ function registerSecretsIpc(ipc: typeof ipcMain) {
     if (!serial) return { success: false, error: 'Missing serial' };
     try {
       secretStore.deletePassword(serial);
+      // Every "password removed" path (Dev App, sideloading, Action Scripts import, …)
+      // funnels through this one handler — a relay target with no password on file can't
+      // authenticate, so drop it here if it's currently targeted, rather than needing every
+      // caller of removePassword() to know about the relay.
+      dropRelayTargetIfPasswordRemoved(serial, undefined);
       return { success: true };
     } catch (e) {
       return { success: false, error: e instanceof Error ? e.message : String(e) };

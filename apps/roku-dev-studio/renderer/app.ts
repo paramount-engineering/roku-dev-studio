@@ -58,6 +58,7 @@ import { setupTelnet } from './modules/telnet/telnet-console-panel.js';
 import { buildFindBarElement, createFindBar, bindFindShortcut } from './modules/ui/find-bar.js';
 import { makeCenteredSearchResizable } from './modules/ui/header-search-resize.js';
 import { searchWidthKey } from './modules/ui/search-storage-keys.js';
+import { notifyPanelsPasswordUpdated } from './modules/ui/password-update-registry.js';
 import { setupQueries as setupQueriesComponent } from './components/queries/index.js';
 import { setupInspector as setupInspectorComponent } from './components/inspector/index.js';
 import { setupDevApp as setupDevAppComponent } from './components/dev-app/index.js';
@@ -3376,6 +3377,193 @@ function getDeviceHardwareImageModalScreenSize(device) {
 }
 
 /**
+ * The one currently-open Device Info modal's relay-row refresh function, if any (opening a
+ * new modal always closes the previous one — see the `.remove()` at the top of
+ * `openDeviceHardwareImageModal` — so at most one of these is ever live). Applied whenever
+ * `onSideloadRelayConfigChanged` fires, so a change made from Settings' Setup Devices modal
+ * reflects here immediately instead of only on next open.
+ */
+let activeRelayModalRefresh: ((cfg: any) => void) | null = null;
+
+/**
+ * Render the Sideload Relay toggle for the Device Info modal's relay row. A plain on/off
+ * switch when this device already has a validated dev password on file (the same shared
+ * credential Restart/Check for Updates use — the relay just adds it as a fan-out target);
+ * turning it on without one swaps in `renderRelayPasswordPrompt` instead of just failing.
+ */
+function renderRelayToggle(
+  container: HTMLElement,
+  device: any,
+  serial: string,
+  ip: string,
+  initialEnabled: boolean,
+  gateDisabled = false,
+  errorRow?: HTMLElement | null
+): void {
+  container.textContent = '';
+  const name = device.deviceName || device.modelName || ip;
+
+  const toggle = document.createElement('input');
+  toggle.type = 'checkbox';
+  toggle.className = 'device-hardware-image-modal-relay-toggle-input';
+  toggle.setAttribute('role', 'switch');
+  toggle.setAttribute('aria-label', S.sideloadRelay.deviceRowToggleAriaLabel(name));
+  toggle.checked = initialEnabled;
+  toggle.setAttribute('aria-checked', String(initialEnabled));
+  if (gateDisabled) {
+    toggle.disabled = true;
+    toggle.title = S.sideloadRelay.deviceRowDisabledHint;
+  }
+
+  const wrap = document.createElement('label');
+  wrap.className = 'device-hardware-image-modal-relay-toggle-wrap';
+  const ui = document.createElement('span');
+  ui.className = 'device-hardware-image-modal-relay-toggle-ui';
+  ui.setAttribute('aria-hidden', 'true');
+  wrap.appendChild(toggle);
+  wrap.appendChild(ui);
+  container.appendChild(wrap);
+
+  const persist = async (enabled: boolean) => {
+    toggle.disabled = true;
+    try {
+      const res = await window.roku.sideloadRelayToggleDevice({ ip, serial: serial || undefined, name, enabled });
+      if (!res || !res.success) {
+        toggle.checked = !enabled; // revert on failure
+        showToast((res && res.error) || S.sideloadRelay.deviceRowToggleFailed, 'error');
+      }
+    } catch {
+      toggle.checked = !enabled;
+      showToast(S.sideloadRelay.deviceRowToggleFailed, 'error');
+    } finally {
+      toggle.disabled = false;
+      toggle.setAttribute('aria-checked', String(toggle.checked));
+    }
+  };
+
+  toggle.addEventListener('change', () => {
+    const wantsOn = toggle.checked;
+    // `getStoredPassword('')` safely returns '' for a serial-less device, so this
+    // still routes through the password prompt below rather than silently enabling
+    // an unvalidated target.
+    if (wantsOn && !getStoredPassword(serial)) {
+      toggle.checked = false; // hold off until the password below is validated
+      renderRelayPasswordPrompt(container, device, serial, ip, errorRow);
+      return;
+    }
+    toggle.setAttribute('aria-checked', String(wantsOn));
+    void persist(wantsOn);
+  });
+}
+
+/**
+ * Inline dev-password entry for the Device Info modal's relay row — same validate flow as
+ * Settings' Setup Devices modal (`sideloadRelayValidatePassword`), just swapped in here so
+ * enabling a never-before-targeted device doesn't require a trip to Settings.
+ */
+/** How long a failed-validation message stays visible below the row before clearing itself. */
+const RELAY_PW_ERROR_AUTOHIDE_MS = 4000;
+
+function renderRelayPasswordPrompt(
+  container: HTMLElement,
+  device: any,
+  serial: string,
+  ip: string,
+  errorRow?: HTMLElement | null
+): void {
+  container.textContent = '';
+  const name = device.deviceName || device.modelName || ip;
+  let errorHideTimer: ReturnType<typeof setTimeout> | undefined;
+  const clearError = () => {
+    if (errorHideTimer) clearTimeout(errorHideTimer);
+    if (errorRow) errorRow.textContent = '';
+  };
+
+  const input = document.createElement('input');
+  input.type = 'password';
+  input.className = 'device-hardware-image-modal-relay-pw-input';
+  input.placeholder = S.sideloadRelay.pwInputPlaceholder;
+  input.setAttribute('aria-label', S.sideloadRelay.pwInputAriaLabel(name));
+  input.autocomplete = 'off';
+
+  const validateBtn = document.createElement('button');
+  validateBtn.type = 'button';
+  validateBtn.className = 'device-hardware-image-modal-relay-pw-validate';
+  validateBtn.title = S.sideloadRelay.pwValidateTitle(name);
+  validateBtn.setAttribute('aria-label', S.sideloadRelay.pwValidateAriaLabel);
+  validateBtn.textContent = S.sideloadRelay.pwValidateChar;
+
+  const cancelBtn = document.createElement('button');
+  cancelBtn.type = 'button';
+  cancelBtn.className = 'device-hardware-image-modal-relay-pw-cancel';
+  cancelBtn.title = S.common.cancel;
+  cancelBtn.setAttribute('aria-label', S.common.cancel);
+  setSafeHTML(cancelBtn, icon('x', 'icon-xs'));
+
+  const field = document.createElement('div');
+  field.className = 'device-hardware-image-modal-relay-pw-field';
+  field.appendChild(input);
+  field.appendChild(validateBtn);
+  field.appendChild(cancelBtn);
+  container.appendChild(field);
+
+  const fail = (msg: string) => {
+    if (errorRow) {
+      errorRow.textContent = msg;
+      if (errorHideTimer) clearTimeout(errorHideTimer);
+      errorHideTimer = setTimeout(() => {
+        if (errorRow) errorRow.textContent = '';
+      }, RELAY_PW_ERROR_AUTOHIDE_MS);
+    }
+    input.value = '';
+    validateBtn.disabled = false;
+    input.focus();
+  };
+
+  const run = async () => {
+    const password = input.value;
+    if (!password) {
+      fail(S.sideloadRelay.pwEnterPassword);
+      return;
+    }
+    validateBtn.disabled = true;
+    clearError();
+    try {
+      const res = await window.roku.sideloadRelayValidatePassword({ ip, serial: serial || undefined, password });
+      if (!res || !res.success) {
+        fail((res && res.error) || S.sideloadRelay.pwWrong);
+        return;
+      }
+      const toggleRes = await window.roku.sideloadRelayToggleDevice({
+        ip,
+        serial: serial || undefined,
+        name,
+        enabled: true
+      });
+      if (!toggleRes || !toggleRes.success) {
+        fail((toggleRes && toggleRes.error) || S.sideloadRelay.deviceRowToggleFailed);
+        return;
+      }
+      clearError();
+      renderRelayToggle(container, device, serial, ip, true, false, errorRow);
+    } catch {
+      fail(S.sideloadRelay.pwUnreachable);
+    }
+  };
+
+  input.addEventListener('keydown', (e) => {
+    if ((e as KeyboardEvent).key === 'Enter') void run();
+  });
+  validateBtn.addEventListener('click', () => void run());
+  cancelBtn.addEventListener('click', () => {
+    clearError();
+    renderRelayToggle(container, device, serial, ip, false, false, errorRow);
+  });
+
+  setTimeout(() => input.focus(), 0);
+}
+
+/**
  * Full-size hardware image in a lightbox (fetched independently of whatever the panel thumbnail
  * currently shows, so it's always current regardless of when the panel's own fetch resolved).
  * @param {object} device
@@ -3631,6 +3819,88 @@ function openDeviceHardwareImageModal(
     );
   }
 
+  // Set below, inside the relay block, so `teardown` can null out
+  // `activeRelayModalRefresh` on close without clobbering a newer modal's registration.
+  let relayApplyFn: ((cfg: any) => void) | null = null;
+
+  // ── Sideload Relay shortcut row ───────────────────────────────────────────
+  // Add/remove this device from the relay's target list without leaving the
+  // Device tab (the full picker still lives in Settings → Sideload Relay →
+  // Setup Devices; this is a one-device shortcut onto the same config).
+  {
+    const relaySerial = device.serialNumber != null ? String(device.serialNumber).trim() : '';
+    const relayIp = typeof device.ip === 'string' ? device.ip.trim() : '';
+    const relayId = relaySerial || relayIp;
+    if (relayId) {
+      // Same shape as the OS Version & Build row above: a 75/25 grid, left cell holding
+      // a label + a second line (there it's the version string, here it's the "Manage in
+      // Settings" link), right cell bordered-off and centered like the action buttons —
+      // just holding a toggle instead of a button.
+      const relayRow = document.createElement('div');
+      // The extra modifier class only suppresses the divider border below (scoped so it
+      // doesn't affect the OS Version row, which shares the base class).
+      relayRow.className = 'device-hardware-image-modal-actions device-hardware-image-modal-relay-actions';
+
+      const relayCell = document.createElement('div');
+      relayCell.className = 'device-hardware-image-modal-footer-item';
+      const relayLabel = document.createElement('span');
+      relayLabel.className = 'device-hardware-image-modal-footer-label';
+      relayLabel.textContent = S.sideloadRelay.deviceRowLabel;
+      const relayLink = document.createElement('button');
+      relayLink.type = 'button';
+      relayLink.className = 'device-hardware-image-modal-footer-value help-settings-link';
+      relayLink.dataset.settingsSection = 'sideload-relay';
+      relayLink.dataset.settingsHighlight = 'optSideloadRelay-row';
+      relayLink.textContent = S.sideloadRelay.deviceRowManageLinkText;
+      relayCell.appendChild(relayLabel);
+      relayCell.appendChild(relayLink);
+
+      const relayControl = document.createElement('div');
+      relayControl.className = 'device-hardware-image-modal-actions-right';
+
+      relayRow.appendChild(relayCell);
+      relayRow.appendChild(relayControl);
+      modal.appendChild(relayRow);
+
+      // Password-validation failures render here — below the row, not squeezed into the
+      // control cell alongside the input — and self-clear after a few seconds.
+      const relayErrorRow = document.createElement('div');
+      relayErrorRow.className = 'device-hardware-image-modal-relay-error-row';
+      relayErrorRow.setAttribute('aria-live', 'polite');
+      modal.appendChild(relayErrorRow);
+
+      // Shared by the initial fetch below and by `activeRelayModalRefresh` (live updates
+      // from Settings' Setup Devices modal changing this same device from the other
+      // window). Skips applying while an inline password entry is in progress here, so an
+      // unrelated change elsewhere can't yank the input out from under a keystroke.
+      const applyRelayConfig = (cfg: any) => {
+        if (!relayControl.isConnected) return;
+        if (relayControl.querySelector('.device-hardware-image-modal-relay-pw-field')) return;
+        if (!cfg || !cfg.enabled) {
+          renderRelayToggle(relayControl, device, relaySerial, relayIp, false, true, relayErrorRow);
+          return;
+        }
+        const isTarget =
+          Array.isArray(cfg.targets) &&
+          cfg.targets.some((t: any) => (t.serial || t.ip) === relayId && t.enabled !== false);
+        renderRelayToggle(relayControl, device, relaySerial, relayIp, isTarget, false, relayErrorRow);
+      };
+      relayApplyFn = applyRelayConfig;
+      activeRelayModalRefresh = applyRelayConfig;
+
+      void (async () => {
+        let cfg: any = null;
+        try {
+          const res = await window.roku.sideloadRelayGetConfig();
+          cfg = res && res.config;
+        } catch {
+          /* leave the disabled placeholder below on failure */
+        }
+        applyRelayConfig(cfg);
+      })();
+    }
+  }
+
   overlay.appendChild(modal);
   prepareModalOpenOrigin(overlay, opener ?? null);
   document.body.appendChild(overlay);
@@ -3642,6 +3912,7 @@ function openDeviceHardwareImageModal(
   const teardown = () => {
     overlay.remove();
     detachEsc();
+    if (relayApplyFn && activeRelayModalRefresh === relayApplyFn) activeRelayModalRefresh = null;
   };
 
   const requestClose = () => {
@@ -7002,9 +7273,27 @@ function runInit() {
   registerMcpConnectFlow();
   registerRelayAutoConnect();
   registerDebugStopAlerts();
-  // A password validated in the Sideload Relay setup is a shared device credential —
-  // update this window's cache so the Dev App stops prompting for it.
-  (window as any).roku?.onSecretsPasswordUpdated?.((serial: string, password: string) => setCachedPassword(serial, password));
+  // A password validated in the Sideload Relay setup (Settings' Setup Devices modal, or the
+  // Device Info modal's relay row) is a shared device credential — update this window's cache
+  // so the Dev App stops prompting for it, and refresh any already-open panel's Auth card
+  // immediately rather than leaving it stale until the tab is closed and reopened.
+  (window as any).roku?.onSecretsPasswordUpdated?.((serial: string, password: string) => {
+    setCachedPassword(serial, password);
+    notifyPanelsPasswordUpdated(serial, password);
+  });
+  // Same target list, edited from two windows (this one's Device Info modal, and Settings'
+  // Setup Devices modal) — reflect a change made in Settings immediately if a Device Info
+  // modal happens to be open here, instead of only picking it up on next open.
+  (window as any).roku?.onSideloadRelayConfigChanged?.((cfg: unknown) => {
+    activeRelayModalRefresh?.(cfg);
+  });
+  // A relay target's dev password just got invalidated somewhere (Dev App, sideloading,
+  // Action Scripts import, …) and main.ts's delete handler dropped it from the target list
+  // as a result — surface why, since the config-changed listener above only silently
+  // updates state without explaining the change.
+  (window as any).roku?.onSideloadRelayDeviceRemoved?.((payload: { name: string }) => {
+    if (payload?.name) showToast(S.sideloadRelay.deviceRemovedToast(payload.name), 'error');
+  });
   ensureMcpStoredPasswordBridge();
   ensureMcpAgentScreenshotBridge();
   mountUpdateNotification();

@@ -8035,7 +8035,9 @@
       text-align: center;
     }
     .device-hardware-image-modal-footer {
-      padding: 12px 18px 16px;
+      padding: 10px 18px;
+      height: 64px;
+      box-sizing: border-box;
       border-top: 1px solid var(--border);
       flex-shrink: 0;
       font-size: 13px;
@@ -8044,6 +8046,7 @@
       font-family: 'JetBrains Mono', monospace;
       display: flex;
       flex-wrap: wrap;
+      align-items: center;
       gap: 6px 32px;
     }
     .device-hardware-image-modal-footer-item {
@@ -8071,6 +8074,8 @@
        remaining left-space), right 25% (restart button centered). */
     .device-hardware-image-modal-actions {
       padding: 10px 18px;
+      height: 64px;
+      box-sizing: border-box;
       border-top: 1px solid var(--border);
       flex-shrink: 0;
       display: grid;
@@ -8126,6 +8131,180 @@
     .device-hardware-image-modal-action-btn.is-busy {
       opacity: 0.7;
       cursor: progress;
+    }
+    /* Sideload Relay row reuses `.device-hardware-image-modal-actions` (same class, applied
+       directly) for its padding/height/border, so it's pixel-identical to the OS Version &
+       Build row above — its grid-template-columns is overridden below. The "Manage in
+       Settings" link (standing in for a value line) needs its own look, since
+       `.device-hardware-image-modal-footer-value` alone is muted/monospace. */
+    .device-hardware-image-modal-footer-value.help-settings-link {
+      display: inline-block;
+      background: none;
+      border: none;
+      padding: 0;
+      font: inherit;
+      font-family: system-ui, -apple-system, sans-serif;
+      font-size: 12px;
+      color: var(--accent-purple);
+      cursor: pointer;
+      text-decoration: underline;
+    }
+    /* Override the shared 75%/25% grid: the label cell shrinks to fit its text (the
+       "Manage in Settings" link, its widest line) instead of always claiming 75%. The
+       control cell stays the same `25%` width as the OS Version row's own right column —
+       `justify-content: space-between` puts all the space cell 1 gave up between the two
+       cells instead of after the second one, so the control cell still lands flush at the
+       row's right edge. Same width + same edge + the same inherited `place-items:center`
+       as the OS Version row's cell ⇒ the toggle centers at the exact same x-position as
+       the restart button, not just "close enough". `min-width: 0` keeps the cell itself
+       from being forced wider than 25% by the input's own default auto-sizing. */
+    .device-hardware-image-modal-relay-actions {
+      grid-template-columns: max-content 25%;
+      justify-content: space-between;
+      column-gap: 16px;
+      /* Containing block for the password field's `position: absolute` below — anchoring
+         it to the row directly sidesteps every grid-track-sizing interaction (this exact
+         "wider replacement content in a narrow cell" case has repeatedly fought back
+         against `justify-self`/`min-width` fixes; absolute positioning has no track to
+         fight with). */
+      position: relative;
+    }
+    .device-hardware-image-modal-relay-actions .device-hardware-image-modal-actions-right {
+      min-width: 0;
+      border-left: none;
+    }
+    .device-hardware-image-modal-relay-toggle-wrap {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      cursor: pointer;
+    }
+    .device-hardware-image-modal-relay-toggle-input {
+      position: absolute;
+      opacity: 0;
+      width: 0;
+      height: 0;
+      margin: 0;
+    }
+    .device-hardware-image-modal-relay-toggle-ui {
+      display: block;
+      width: 40px;
+      height: 22px;
+      border-radius: 11px;
+      background: #3f3f4e;
+      transition: background 0.2s ease;
+      position: relative;
+      box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.35);
+    }
+    .device-hardware-image-modal-relay-toggle-ui::after {
+      content: '';
+      position: absolute;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: #f4f4f5;
+      top: 2px;
+      left: 2px;
+      transition: transform 0.2s ease;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+    }
+    .device-hardware-image-modal-relay-toggle-input:checked + .device-hardware-image-modal-relay-toggle-ui {
+      background: var(--accent-purple);
+    }
+    .device-hardware-image-modal-relay-toggle-input:checked + .device-hardware-image-modal-relay-toggle-ui::after {
+      transform: translateX(18px);
+    }
+    .device-hardware-image-modal-relay-toggle-input:focus-visible + .device-hardware-image-modal-relay-toggle-ui {
+      outline: 2px solid var(--accent-purple);
+      outline-offset: 3px;
+    }
+    .device-hardware-image-modal-relay-toggle-input:disabled + .device-hardware-image-modal-relay-toggle-ui {
+      opacity: 0.55;
+      cursor: default;
+    }
+    /* Inline password prompt — replaces the toggle in the row's control slot when this
+       device needs a validated dev password before it can be enabled. Input, validate, and
+       cancel all live inside one bordered pill (matching Settings' Setup Devices modal's own
+       inline password editor) instead of three separate boxes side by side. */
+    .device-hardware-image-modal-relay-pw-field {
+      /* Anchored to the row (see `.device-hardware-image-modal-relay-actions`'s
+         `position: relative`), not a grid item of the 25% control cell — it's wider than
+         that cell (unlike the small toggle it replaces), so it grows left from a fixed
+         right edge instead of overflowing past the modal's edge. `18px` matches the row's
+         own right padding, so its right edge lines up with the row's content edge exactly
+         like the restart button's column does. */
+      position: absolute;
+      right: 18px;
+      top: 50%;
+      transform: translateY(-50%);
+      display: flex;
+      align-items: center;
+      background: var(--bg-primary);
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      padding-left: 8px;
+      transition: border-color 0.12s;
+    }
+    .device-hardware-image-modal-relay-pw-field:focus-within {
+      border-color: var(--accent-purple);
+    }
+    .device-hardware-image-modal-relay-pw-input {
+      flex: 1;
+      min-width: 0;
+      width: 100px;
+      background: transparent;
+      border: 0;
+      outline: none;
+      color: var(--text-primary);
+      font-size: 12px;
+      padding: 6px 2px;
+    }
+    .device-hardware-image-modal-relay-pw-validate {
+      flex: none;
+      background: transparent;
+      border: 0;
+      color: #4ade80;
+      font-size: 13px;
+      font-weight: 700;
+      line-height: 1;
+      cursor: pointer;
+      padding: 4px 8px;
+      border-radius: 5px;
+    }
+    .device-hardware-image-modal-relay-pw-validate:hover {
+      background: rgba(74, 222, 128, 0.16);
+    }
+    .device-hardware-image-modal-relay-pw-validate:disabled {
+      opacity: 0.55;
+      cursor: default;
+    }
+    .device-hardware-image-modal-relay-pw-cancel {
+      flex: none;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: transparent;
+      border: 0;
+      color: var(--text-secondary);
+      cursor: pointer;
+      padding: 4px 6px;
+      margin-right: 2px;
+      border-radius: 5px;
+    }
+    .device-hardware-image-modal-relay-pw-cancel:hover {
+      color: var(--text-primary);
+      background: rgba(255, 255, 255, 0.06);
+    }
+    /* Failed-validation message — its own line below the whole row (not squeezed into the
+       control cell next to the input), self-clearing after a few seconds. Takes no space
+       at all while empty, so it doesn't reserve a permanent blank line. */
+    .device-hardware-image-modal-relay-error-row {
+      padding: 0 18px 10px;
+      font-size: 12px;
+      color: var(--accent-red);
+    }
+    .device-hardware-image-modal-relay-error-row:empty {
+      display: none;
     }
 
     .device-panel-info h2,

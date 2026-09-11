@@ -158,6 +158,59 @@ function sanitizedConfig(settings: Record<string, unknown>) {
   };
 }
 
+/** Send `payload` on `channel` to every open window, skipping any that are destroyed. */
+function broadcastToAllWindows(channel: string, payload: unknown): void {
+  const { BrowserWindow } = require('electron') as typeof import('electron');
+  for (const win of BrowserWindow.getAllWindows()) {
+    if (win && !win.isDestroyed() && win.webContents && !win.webContents.isDestroyed()) {
+      win.webContents.send(channel, payload);
+    }
+  }
+}
+
+// Settings' Setup Devices modal and the Device Info modal's relay toggle both edit the
+// same target list from two different windows — broadcast (not just `safeSendToRenderer`,
+// which is main-window-only) so whichever surface is open reflects a change made from the
+// other one immediately, mirroring `broadcastPrivacyModeToAllWindows`.
+function broadcastConfigChanged(): void {
+  broadcastToAllWindows(IPC.SideloadRelayConfigChanged, sanitizedConfig(loadSettings()));
+}
+
+/**
+ * A relay target must have a validated password — call this wherever a device's stored dev
+ * password gets deleted (currently: the single `IPC.SecretsDeletePassword` handler in
+ * main.ts, which every renderer-side `removePassword()` call funnels through) so it can't
+ * stay listed as an active target with no way to authenticate. Drops it if present, re-boots
+ * the live service from the updated settings, and broadcasts both the new config (so Settings'
+ * Setup Devices modal / the Device Info modal reflect the removal live) and a dedicated
+ * notice (so the main window can toast about it) — returns the removed target's display name,
+ * or null if this device wasn't a target (the common case; most password deletions are
+ * unrelated to the relay).
+ */
+export function dropRelayTargetIfPasswordRemoved(serial: string | undefined, ip: string | undefined): string | null {
+  const id = (serial || '').trim() || (ip || '').trim();
+  if (!id) return null;
+  const settings = loadSettings();
+  const targets = readTargets(settings);
+  const match = targets.find((t) => t.id === id);
+  if (!match) return null;
+
+  settings['sideloadRelayTargets'] = targets.filter((t) => t.id !== id);
+  if (!saveSettings(settings)) return null;
+
+  // The singleton is already created by this point in the app's lifecycle (relay handlers
+  // boot it at startup) — these callbacks only matter for a first-ever creation, which won't
+  // happen here, so no-ops are fine rather than threading the real ones through from main.ts.
+  initSideloadRelayFromSettings(
+    () => undefined,
+    readBootConfig(settings),
+    () => false
+  );
+  broadcastConfigChanged();
+  broadcastToAllWindows(IPC.SideloadRelayDeviceRemoved, { name: match.name });
+  return match.name;
+}
+
 function setupRelayHandlers(
   _mainWindow: BrowserWindow | undefined,
   safeSendToRenderer: SafeSendFn,
@@ -186,6 +239,7 @@ function setupRelayHandlers(
   function syncFromDisk(): void {
     const settings = loadSettings();
     initSideloadRelayFromSettings(safeSendToRenderer, readBootConfig(settings), isPrivacyModeEnabled);
+    broadcastConfigChanged();
   }
 
   syncFromDisk();
@@ -334,6 +388,54 @@ function setupRelayHandlers(
       } catch (e) {
         return { success: false, error: (e as Error)?.message || S.sideloadRelay.errValidationFailed };
       }
+    }
+  );
+
+  // Add/remove a single device from the relay's target list — the Device Info modal's
+  // shortcut. Mirrors what Settings' Setup Devices modal produces on Save (an "enabled"
+  // target is present in the array; a disabled one is simply absent from it), just
+  // scoped to one device instead of resubmitting the whole list.
+  ipcMain.handle(
+    IPC.SideloadRelayToggleDevice,
+    async (
+      _event: IpcMainInvokeEvent,
+      payload?: {
+        ip?: string;
+        serial?: string;
+        name?: string;
+        location?: string;
+        remote?: boolean;
+        serverUrl?: string;
+        locationId?: string;
+        enabled?: boolean;
+      }
+    ) => {
+      const ip = typeof payload?.ip === 'string' ? payload.ip.trim() : '';
+      const serial = typeof payload?.serial === 'string' ? payload.serial.trim() : '';
+      const id = serial || ip;
+      if (!id) return { success: false, error: S.sideloadRelay.errDeviceIpPasswordRequired };
+
+      const settings = loadSettings();
+      const remaining = readTargets(settings).filter((t) => t.id !== id);
+      if (payload?.enabled) {
+        remaining.push({
+          id,
+          ip,
+          name: (typeof payload?.name === 'string' && payload.name.trim()) || ip,
+          enabled: true,
+          serial: serial || undefined,
+          location: typeof payload?.location === 'string' ? payload.location : undefined,
+          remote: payload?.remote === true,
+          serverUrl: typeof payload?.serverUrl === 'string' ? payload.serverUrl : undefined,
+          locationId: typeof payload?.locationId === 'string' ? payload.locationId : undefined
+        });
+      }
+      settings['sideloadRelayTargets'] = remaining;
+      if (!saveSettings(settings)) {
+        return { success: false, error: S.sideloadRelay.errCouldNotWriteSettings };
+      }
+      syncFromDisk();
+      return { success: true, config: sanitizedConfig(settings) };
     }
   );
 

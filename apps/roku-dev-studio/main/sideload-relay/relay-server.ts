@@ -328,7 +328,12 @@ export class RelayIngestServer {
       return;
     }
 
-    if (!url.startsWith('/plugin_install')) {
+    // `HEAD /` is roku-deploy's developer-password probe (validateDeveloperPassword):
+    // it deliberately avoids `HEAD /plugin_install` (a real Roku answers that HEAD with
+    // a body, which Node's http parser rejects) and hits the root page instead, expecting
+    // the same Digest challenge. Route it into the same auth handling as /plugin_install
+    // below rather than 404 — a 404 there reads as "device unreachable" to the IDE.
+    if (!url.startsWith('/plugin_install') && !(method === 'HEAD' && (url === '/' || url.startsWith('/index')))) {
       res.writeHead(404, { Connection: 'close' });
       res.end('Not found');
       return;

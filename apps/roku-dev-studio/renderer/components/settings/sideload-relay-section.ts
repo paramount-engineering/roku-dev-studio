@@ -107,6 +107,43 @@ function EYE_SVG(): Node {
 function keyOf(x: { serial?: string; ip: string }): string {
   return deviceKey(x);
 }
+
+/** Map the backend's renderer-safe target shape to this module's `Target[]`. */
+function mapTargets(rawTargets: unknown): Target[] {
+  return Array.isArray(rawTargets)
+    ? rawTargets.map((t: any) => ({
+        id: t.id,
+        ip: t.ip,
+        name: t.name || t.ip,
+        enabled: t.enabled !== false,
+        serial: t.serial,
+        location: t.location,
+        remote: t.remote === true,
+        serverUrl: t.serverUrl,
+        locationId: t.locationId
+      }))
+    : [];
+}
+
+/**
+ * Apply a config change that arrived from another window (Device Info modal's relay
+ * toggle, or this same section's own save landing back via the broadcast) — targets only,
+ * not the enable/password/flag fields, since those are this section's own in-progress
+ * form state and only that window's own Save should touch them. Skips rebuilding the
+ * open Setup Devices modal while an inline password editor is active so it doesn't yank
+ * focus out from under a keystroke in progress.
+ */
+function applyLiveTargetsUpdate(cfg: any): void {
+  if (!cfg) return;
+  targets = mapTargets(cfg.targets);
+  updateTargetSummary();
+  updateGateBanner();
+  const overlay = document.getElementById('srSetupOverlay');
+  if (overlay && !overlay.hasAttribute('hidden') && pwEditingKey === null) {
+    buildModalRows();
+    renderModalTable();
+  }
+}
 function isReachable(t: Target): boolean {
   return discovered.some((d) => keyOf(d) === keyOf(t) || d.ip === t.ip);
 }
@@ -867,24 +904,16 @@ export function initSideloadRelaySection(): void {
     hasSavedPassword = cfg.hasPassword === true;
     const pwdInput = document.getElementById('srPassword') as HTMLInputElement | null;
     if (pwdInput && cfg.hasPassword) pwdInput.placeholder = S.sideloadRelay.savedPasswordPlaceholder;
-    targets = Array.isArray(cfg.targets)
-      ? cfg.targets.map((t: any) => ({
-          id: t.id,
-          ip: t.ip,
-          name: t.name || t.ip,
-          enabled: t.enabled !== false,
-          serial: t.serial,
-          location: t.location,
-          remote: t.remote === true,
-          serverUrl: t.serverUrl,
-          locationId: t.locationId
-        }))
-      : [];
+    targets = mapTargets(cfg.targets);
     updateTargetSummary();
     updateGateBanner();
     // Background scan so the summary count reflects reachability without opening the modal.
     if (targets.some((t) => t.enabled)) void scanDevices();
   });
+
+  // Live sync: the Device Info modal's relay toggle (or this section's own save, landing
+  // back via the same broadcast) can change the target list from outside this window.
+  api.onSideloadRelayConfigChanged?.((cfg: any) => applyLiveTargetsUpdate(cfg));
 
   void refreshRelayUrlHint();
 }

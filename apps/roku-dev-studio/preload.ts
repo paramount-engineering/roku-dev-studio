@@ -806,10 +806,37 @@ contextBridge.exposeInMainWorld('roku', {
     ipcRenderer.invoke(IPC.SideloadRelayApplySettings, payload),
   sideloadRelaySeedTargets: (includeSubnetScan?: boolean) =>
     ipcRenderer.invoke(IPC.SideloadRelaySeedTargets, { includeSubnetScan }),
+  sideloadRelayValidatePassword: (payload: {
+    ip: string;
+    serial?: string;
+    remote?: boolean;
+    serverUrl?: string;
+    password: string;
+  }) => ipcRenderer.invoke(IPC.SideloadRelayValidatePassword, payload),
+  sideloadRelayToggleDevice: (payload: {
+    ip: string;
+    serial?: string;
+    name?: string;
+    location?: string;
+    remote?: boolean;
+    serverUrl?: string;
+    locationId?: string;
+    enabled: boolean;
+  }) => ipcRenderer.invoke(IPC.SideloadRelayToggleDevice, payload),
   onSideloadRelayStatus: (callback: (status: unknown) => void) => {
     const handler = (_event: IpcRendererEvent, status: unknown) => callback(status);
     ipcRenderer.on(IPC.SideloadRelayStatus, handler);
     return () => ipcRenderer.removeListener(IPC.SideloadRelayStatus, handler);
+  },
+  onSideloadRelayConfigChanged: (callback: (config: unknown) => void) => {
+    const handler = (_event: IpcRendererEvent, config: unknown) => callback(config);
+    ipcRenderer.on(IPC.SideloadRelayConfigChanged, handler);
+    return () => ipcRenderer.removeListener(IPC.SideloadRelayConfigChanged, handler);
+  },
+  onSideloadRelayDeviceRemoved: (callback: (payload: { name: string }) => void) => {
+    const handler = (_event: IpcRendererEvent, payload: { name: string }) => callback(payload);
+    ipcRenderer.on(IPC.SideloadRelayDeviceRemoved, handler);
+    return () => ipcRenderer.removeListener(IPC.SideloadRelayDeviceRemoved, handler);
   },
   onSideloadRelayRunStarted: (callback: (run: unknown) => void) => {
     const handler = (_event: IpcRendererEvent, run: unknown) => callback(run);
