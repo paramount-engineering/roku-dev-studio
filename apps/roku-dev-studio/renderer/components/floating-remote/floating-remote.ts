@@ -26,7 +26,13 @@ import {
 import { onAppSettingsChanged } from '../../modules/utils/app-settings-change-bus.js';
 import { getPanelApi } from '../../modules/device-api/panel-api-registry.js';
 import { rendererError } from '../../modules/utils/logger.js';
-import { icon, escapeHtml, setSafeHTML } from '../../modules/utils/index.js';
+import {
+  icon,
+  escapeHtml,
+  setSafeHTML,
+  playElementOpenMotion,
+  closeElementWithOriginMotion
+} from '../../modules/utils/index.js';
 import type { DevAppApi } from '../dev-app/dev-app-types.js';
 import { S } from '@shared/strings/index.js';
 
@@ -54,6 +60,10 @@ let positionRafId: number | null = null;
 let hasExplicitPosition = false;
 /** Persisted position is applied once on first show so we measure real layout. */
 let persistedPositionApplied = false;
+/** Guards against a second close animation starting while one is already in flight. */
+let closingInFlight = false;
+/** Bumped on every show()/hide() so a stale close finalize can't hide a floater a later show() just reopened. */
+let motionGeneration = 0;
 
 /**
  * Mount the singleton shell, restore persisted position, wire drag, and
@@ -310,8 +320,20 @@ export function isFloatingRemoteVisible(): boolean {
   return shellEl?.classList.contains(VISIBLE_CLASS) === true;
 }
 
+/** The titlebar toggle button — origin/target for the open/close scale animation. */
+function getToggleButton(): HTMLElement | null {
+  return document.querySelector<HTMLElement>('.floating-remote-toggle-btn');
+}
+
 function show(): void {
   if (!shellEl) return;
+  const wasVisible = shellEl.classList.contains(VISIBLE_CLASS);
+  // A show() always wins over a close that's still animating (e.g. a fast
+  // disable-then-re-enable) — cancel it so its finalize can't hide us again.
+  const wasClosing = closingInFlight;
+  closingInFlight = false;
+  motionGeneration++;
+
   shellEl.classList.add(VISIBLE_CLASS);
   // Apply any persisted position the first time the floater becomes visible.
   // Doing it here (rather than at mount) means `display: flex` has taken
@@ -327,10 +349,24 @@ function show(): void {
       setShellPosition(clampToViewport(FLOATING_REMOTE_POSITION, shellEl), /*persist*/ false);
     }
   }
+  // Only the hidden -> visible transition animates; a refresh while already
+  // visible (e.g. re-binding to a new active device panel) must not replay it.
+  if (!wasVisible || wasClosing) {
+    playElementOpenMotion(shellEl, getToggleButton());
+  }
 }
 
 function hide(): void {
-  shellEl?.classList.remove(VISIBLE_CLASS);
+  if (!shellEl || !shellEl.classList.contains(VISIBLE_CLASS) || closingInFlight) return;
+  closingInFlight = true;
+  const gen = ++motionGeneration;
+  closeElementWithOriginMotion(shellEl, getToggleButton(), () => {
+    // A show() may have reopened the floater (and bumped the generation)
+    // while this close was still animating — don't hide it out from under that.
+    if (motionGeneration !== gen) return;
+    closingInFlight = false;
+    shellEl?.classList.remove(VISIBLE_CLASS);
+  });
 }
 
 // ---------- Drag ----------

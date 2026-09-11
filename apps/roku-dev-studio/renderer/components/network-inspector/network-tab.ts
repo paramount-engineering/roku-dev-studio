@@ -1,6 +1,7 @@
 import type { ParsedNetworkEvent } from '@shared/network-inspector/types';
 import { escapeHtml } from '../../modules/utils/dom.js';
 import { attachBackdropClickToClose } from '../../modules/utils/modal-backdrop-click.js';
+import { openModalOverlayActiveFromOpener, closeModalWithOriginMotion } from '../../modules/utils/modal-origin-motion.js';
 import {
   renderSidebarSequence,
   renderSidebarRows,
@@ -178,9 +179,9 @@ function isHotspotClientIp(ip: string): boolean {
  * only ever appears for a genuine structured→raw downgrade — never for natively-raw bodies. Reuses
  * the filter-help modal's shell styling for consistency.
  */
-function openLargeBodyInfoModal(kb: number): void {
+function openLargeBodyInfoModal(kb: number, opener?: HTMLElement | null): void {
   const overlay = document.createElement('div');
-  overlay.className = 'modal-overlay ni-filter-help-overlay ni-large-body-overlay active';
+  overlay.className = 'modal-overlay ni-filter-help-overlay ni-large-body-overlay';
   const sizeLabel = kb > 0 ? `${kb.toLocaleString()} KB` : S.networkInspector.thisBody;
   const limitKb = Math.round(MAX_STRUCTURED_BYTES / 1024).toLocaleString();
   overlay.innerHTML = `
@@ -195,10 +196,13 @@ function openLargeBodyInfoModal(kb: number): void {
       </div>
     </div>`;
   document.body.appendChild(overlay);
+  openModalOverlayActiveFromOpener(overlay, opener ?? null);
 
   const close = (): void => {
-    overlay.remove();
-    document.removeEventListener('keydown', onKey);
+    closeModalWithOriginMotion(overlay, () => {
+      overlay.remove();
+      document.removeEventListener('keydown', onKey);
+    });
   };
   const onKey = (e: KeyboardEvent): void => {
     if (e.key === 'Escape') close();
@@ -1715,7 +1719,7 @@ export function setupNetworkTab(
 
   /** Open the Compose (Edit & Resend) modal for the selected request. The modal injects the resulting
    *  row and calls back to select it (the live capture-events push renders the row/detail). */
-  function openCompose(): void {
+  function openCompose(opener?: HTMLElement | null): void {
     const summary = selectedEvent();
     if (!isExportableEvent(summary) || !summary) return;
     closeReplayDropdown();
@@ -1728,7 +1732,8 @@ export function setupNetworkTab(
         deviceIp,
         onSent: (id) => selectEventById(id),
         isRemote: api?.isRemote,
-        serverUrl: api?.serverUrl
+        serverUrl: api?.serverUrl,
+        opener
       });
     })();
   }
@@ -1812,7 +1817,7 @@ export function setupNetworkTab(
         : await window.roku.networkInspectorExportPcap(ips.length > 0 ? ips : undefined);
       if (res?.success) {
         const n = typeof res.packetsWritten === 'number' ? res.packetsWritten : 0;
-        showToast(S.networkInspector.savedPackets(n, res.filePath || S.networkInspector.fileFallback), 'success');
+        showToast(S.networkInspector.savedPackets(n, res.filePath || S.networkInspector.fileFallback), 'success', undefined, undefined, res.filePath || undefined);
       } else if (res?.error && res.error !== 'cancelled') {
         showToast(res.error, 'error');
       }
@@ -1848,7 +1853,7 @@ export function setupNetworkTab(
         dialogTitle: kind === 'har' ? S.networkInspector.exportHarDialog : S.networkInspector.exportSessionDialog
       });
       if (res?.success) {
-        showToast(S.networkInspector.exportedRequests(events.length, res.filePath || S.networkInspector.fileFallback), 'success');
+        showToast(S.networkInspector.exportedRequests(events.length, res.filePath || S.networkInspector.fileFallback), 'success', undefined, undefined, res.filePath || undefined);
       } else if (res?.error && res.error !== 'Save cancelled') {
         showToast(res.error, 'error');
       }
@@ -2489,9 +2494,9 @@ export function setupNetworkTab(
           renderDetail('response');
         },
         onReplay: () => void replaySelected(),
-        onCompose: () => openCompose(),
+        onCompose: (btn) => openCompose(btn),
         onReplayMenuToggle: () => toggleReplayDropdown(),
-        onNote: () => openNote()
+        onNote: (btn) => openNote(btn)
       },
       listenerOpts
     );
@@ -2502,7 +2507,7 @@ export function setupNetworkTab(
   // marker update immediately, while the modal's debounced `onSave` mirrors the note into the main
   // service via IPC (the same persistence path the old inline editor used). The detailSignature
   // repaint-skip means an idle poll won't rewrite the detail while the modal is open.
-  function openNote(): void {
+  function openNote(opener?: HTMLElement | null): void {
     const summary = selectedEvent();
     if (!summary) return;
     const id = summary.id;
@@ -2511,6 +2516,7 @@ export function setupNetworkTab(
       id,
       note: current,
       subtitle: eventRequestLabel(summary),
+      opener,
       onSave: (savedId, value) => {
         const note = value.trim() ? value : undefined;
         const ev = eventIndex.get(savedId);
@@ -2594,12 +2600,12 @@ export function setupNetworkTab(
   // body. Visibility is driven by `setFormatInfo`; the click just opens the explainer with the size.
   requestFormatInfoEl?.addEventListener('click', () => {
     if (requestFormatInfoEl instanceof HTMLElement) {
-      openLargeBodyInfoModal(Number(requestFormatInfoEl.dataset.kb) || getLargeBodyKb('request'));
+      openLargeBodyInfoModal(Number(requestFormatInfoEl.dataset.kb) || getLargeBodyKb('request'), requestFormatInfoEl);
     }
   }, listenerOpts);
   responseFormatInfoEl?.addEventListener('click', () => {
     if (responseFormatInfoEl instanceof HTMLElement) {
-      openLargeBodyInfoModal(Number(responseFormatInfoEl.dataset.kb) || getLargeBodyKb('response'));
+      openLargeBodyInfoModal(Number(responseFormatInfoEl.dataset.kb) || getLargeBodyKb('response'), responseFormatInfoEl);
     }
   }, listenerOpts);
 
@@ -2687,7 +2693,8 @@ export function setupNetworkTab(
       deviceSerial: state.deviceSerial,
       hostSuggestions,
       isRemote: api?.isRemote,
-      serverUrl: api?.serverUrl
+      serverUrl: api?.serverUrl,
+      opener: configureBtn instanceof HTMLElement ? configureBtn : null
     });
   }, listenerOpts);
 
@@ -2871,7 +2878,7 @@ export function setupNetworkTab(
       }
     }
   });
-  findBtn?.addEventListener('click', () => findModal?.open(), listenerOpts);
+  findBtn?.addEventListener('click', () => findModal?.open(findBtn instanceof HTMLElement ? findBtn : null), listenerOpts);
   findClearBtn?.addEventListener('click', () => findModal?.clear(), listenerOpts);
   findPrevBtn?.addEventListener('click', () => findModal?.prev(), listenerOpts);
   findNextBtn?.addEventListener('click', () => findModal?.next(), listenerOpts);

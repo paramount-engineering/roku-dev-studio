@@ -2,6 +2,7 @@
 
 import { escapeHtml, setSafeHTML } from '../../modules/utils/index.js';
 import { attachBackdropClickToClose } from '../../modules/utils/modal-backdrop-click.js';
+import { openModalOverlayActiveFromOpener, closeModalWithOriginMotion } from '../../modules/utils/modal-origin-motion.js';
 import { RALE_BUILTIN_COMMANDS } from './rale-builtins.js';
 import { S } from '@shared/strings/index.js';
 import type {
@@ -35,10 +36,10 @@ export function setupFunctionSelector(
     funcInfoBtn.setAttribute('aria-disabled', enabled ? 'false' : 'true');
   }
 
-  function openFunctionInfoModal(text: string): void {
+  function openFunctionInfoModal(text: string, opener?: HTMLElement | null): void {
     const body = text.trim() || S.inspector.noFunctionDetails;
     const overlay = document.createElement('div');
-    overlay.className = 'modal-overlay active inspector-func-info-overlay';
+    overlay.className = 'modal-overlay inspector-func-info-overlay';
     setSafeHTML(
       overlay,
       `<div class="modal inspector-func-info-modal" role="dialog" aria-modal="true" aria-label="${escapeHtml(S.inspector.functionDetailsTitle)}">
@@ -53,8 +54,10 @@ export function setupFunctionSelector(
     );
 
     const close = (): void => {
-      document.removeEventListener('keydown', onKey);
-      overlay.remove();
+      closeModalWithOriginMotion(overlay, () => {
+        document.removeEventListener('keydown', onKey);
+        overlay.remove();
+      });
     };
     const onKey = (e: KeyboardEvent): void => {
       if (e.key === 'Escape') close();
@@ -66,6 +69,7 @@ export function setupFunctionSelector(
       el.addEventListener('click', close);
     });
     document.body.appendChild(overlay);
+    openModalOverlayActiveFromOpener(overlay, opener ?? null);
   }
 
   function renderRaleOptgroup() {
@@ -170,7 +174,7 @@ export function setupFunctionSelector(
 
   funcInfoBtn?.addEventListener('click', () => {
     if (!funcSelect.value) return;
-    openFunctionInfoModal(selectedFunctionInfo);
+    openFunctionInfoModal(selectedFunctionInfo, funcInfoBtn);
   });
 
   return {

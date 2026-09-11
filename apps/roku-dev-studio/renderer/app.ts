@@ -4232,6 +4232,7 @@ function setupInnerTabs(panel) {
  *  commands like `plugins`) would otherwise wait out the full connect timeout every toggle. */
 const FPS_DISPLAY_COMPLETE = {
   substantialDataThreshold: 1,
+  minWaitTime: 0,
   minDataAfterWait: 0,
   maxDataLength: 200
 } as const;
@@ -4247,9 +4248,11 @@ function setupFpsDisplayToggle(panel: HTMLElement, telnetApi: TelnetSystemRunApi
   if (!btn) return;
   btn.addEventListener('click', async () => {
     btn.disabled = true;
+    btn.classList.add('remote-fps-toggle-btn--busy');
     try {
       const session = await runTelnetSystemCommandSession(telnetApi, 'fps_display', {
-        completeThresholds: FPS_DISPLAY_COMPLETE
+        completeThresholds: FPS_DISPLAY_COMPLETE,
+        postCompleteSettleMs: 0
       });
       if (!session.ok) {
         showToast(S.app.actionFailed(S.app.toggleFps), 'error');
@@ -4258,6 +4261,7 @@ function setupFpsDisplayToggle(panel: HTMLElement, telnetApi: TelnetSystemRunApi
       showToast(errMessage(err) || S.app.actionFailed(S.app.toggleFps), 'error');
     } finally {
       btn.disabled = false;
+      btn.classList.remove('remote-fps-toggle-btn--busy');
     }
   });
 }
@@ -6742,7 +6746,7 @@ window.saveTrackerTask = async function() {
     // Request the TrackerTask content from main process
     const result = await window.roku.saveTrackerTask();
     if (result.success) {
-      showToast(S.app.trackerTaskSaved, 'success');
+      showToast(S.app.trackerTaskSaved, 'success', undefined, undefined, result.filePath);
     } else {
       showToast(S.app.failedToSaveTrackerTask + ' ' + (result.error || S.app.unknownError), 'error');
     }

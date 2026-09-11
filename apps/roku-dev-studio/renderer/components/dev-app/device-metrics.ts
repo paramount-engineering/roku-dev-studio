@@ -1989,7 +1989,7 @@ export function setupRemoteTabMetrics(
         dialogTitle: chartExportDialogTitle(kind)
       });
       if (res?.success) {
-        showToast(S.devApp.exportedTo(res.filePath), 'success', undefined, panel);
+        showToast(S.devApp.exportedTo(res.filePath), 'success', undefined, panel, res.filePath);
       } else if (res?.error && res.error !== 'Save cancelled') {
         showToast(S.devApp.exportFailed(res.error), 'error', undefined, panel);
       }
@@ -2008,7 +2008,7 @@ export function setupRemoteTabMetrics(
         dialogTitle: chartExportDialogTitle(kind)
       });
       if (res?.success) {
-        showToast(S.devApp.exportedTo(res.filePath), 'success', undefined, panel);
+        showToast(S.devApp.exportedTo(res.filePath), 'success', undefined, panel, res.filePath);
       } else if (res?.error && res.error !== 'Save cancelled') {
         showToast(S.devApp.exportFailed(res.error), 'error', undefined, panel);
       }
@@ -2189,7 +2189,6 @@ export function setupRemoteTabMetrics(
   const pausedNav = panel.querySelector('[data-device-panel-paused-nav]');
   const launchNavBtn = panel.querySelector('[data-paused-launch-dev]');
   const sideloadNavBtn = panel.querySelector('[data-paused-goto-sideload]');
-  let suppressToggleEvent = false;
 
   /** Set when `/query/apps` is checked (Dev App tab); drives header Launch vs Sideload. */
   let devAppSideloadInstalled: boolean | null = null;
@@ -2254,32 +2253,42 @@ export function setupRemoteTabMetrics(
     { signal: wrapUiAc.signal }
   );
 
+  function isPerfPressed(): boolean {
+    return perfToggle instanceof HTMLButtonElement && perfToggle.getAttribute('aria-pressed') === 'true';
+  }
+
+  /** Sets pressed state and swaps the visible Show/Hide label — no separate highlight style. */
+  function setPerfPressed(next: boolean): void {
+    if (!(perfToggle instanceof HTMLButtonElement)) return;
+    perfToggle.setAttribute('aria-pressed', String(next));
+    const label = perfToggle.querySelector('[data-remote-performance-label]');
+    if (label) label.textContent = next ? S.app.hideDevicePerformance : S.app.showDevicePerformance;
+  }
+
   function applyPerformanceUiState(): void {
-    if (!(perfToggle instanceof HTMLInputElement)) return;
+    if (!(perfToggle instanceof HTMLButtonElement)) return;
 
     if (perfWrap instanceof HTMLElement) {
       perfWrap.hidden = !developerEnabled;
     }
 
-    const wantQuad = developerEnabled && perfToggle.checked;
+    const pressed = isPerfPressed();
+    const wantQuad = developerEnabled && pressed;
     wrap.setAttribute('data-remote-layout', wantQuad ? 'quad' : 'solo');
     metricsPaused = wantQuad && devAppForeground === false;
     updateDevicePanelPausedNav();
 
-    /* Unchecked: only enable when dev is foreground. Checked: always allow uncheck (incl. paused / unknown). */
-    perfToggle.disabled = !perfToggle.checked && devAppForeground !== true;
+    /* Hidden: only enable when dev is foreground. Showing: always allow hiding (incl. paused / unknown). */
+    perfToggle.disabled = !pressed && devAppForeground !== true;
 
-    const label = perfWrap instanceof HTMLElement ? perfWrap : perfToggle.closest('label');
-    if (label instanceof HTMLElement) {
-      if (!developerEnabled) {
-        label.removeAttribute('title');
-      } else if (devAppForeground !== true && !perfToggle.checked) {
-        label.title = S.devApp.bringDevAppToForegroundTitle;
-      } else if (devAppForeground === false && perfToggle.checked) {
-        label.title = pausedNavMessage(devAppSideloadInstalled).title;
-      } else {
-        label.removeAttribute('title');
-      }
+    if (!developerEnabled) {
+      perfToggle.removeAttribute('title');
+    } else if (devAppForeground !== true && !pressed) {
+      perfToggle.title = S.devApp.bringDevAppToForegroundTitle;
+    } else if (devAppForeground === false && pressed) {
+      perfToggle.title = pausedNavMessage(devAppSideloadInstalled).title;
+    } else {
+      perfToggle.title = S.app.devicePerformanceToggleTitle;
     }
 
     if (!wantQuad) {
@@ -2299,12 +2308,10 @@ export function setupRemoteTabMetrics(
     if (destroyed) return false;
     if (!developerEnabled) return false;
     if (wrap.getAttribute('data-remote-layout') === 'quad') return true;
-    if (!(perfToggle instanceof HTMLInputElement)) return false;
-    /* Programmatically match checking “Show Device Performance” (may be disabled in solo until dev is foreground). */
+    if (!(perfToggle instanceof HTMLButtonElement)) return false;
+    /* Programmatically match pressing “Show Device Performance” (may be disabled in solo until dev is foreground). */
     perfToggle.disabled = false;
-    suppressToggleEvent = true;
-    perfToggle.checked = true;
-    suppressToggleEvent = false;
+    setPerfPressed(true);
     if (REMEMBER_DEVICE_PERFORMANCE_QUAD_PER_DEVICE && deviceKey) {
       try {
         await setDevicePerformanceQuadPref(deviceKey, true);
@@ -2321,25 +2328,23 @@ export function setupRemoteTabMetrics(
   }
 
   async function applyPersistedQuadPreference(): Promise<void> {
-    if (!(perfToggle instanceof HTMLInputElement)) return;
+    if (!(perfToggle instanceof HTMLButtonElement)) return;
     const remember = REMEMBER_DEVICE_PERFORMANCE_QUAD_PER_DEVICE;
     const persisted =
       remember && deviceKey ? await getDevicePerformanceQuadPref(deviceKey) : false;
-    suppressToggleEvent = true;
-    perfToggle.checked = !!(developerEnabled && persisted);
-    suppressToggleEvent = false;
+    setPerfPressed(!!(developerEnabled && persisted));
     applyPerformanceUiState();
   }
 
-  if (perfToggle instanceof HTMLInputElement) {
+  if (perfToggle instanceof HTMLButtonElement) {
     perfToggle.addEventListener(
-      'change',
+      'click',
       async () => {
-        if (suppressToggleEvent) return;
+        setPerfPressed(!isPerfPressed());
         // Match the gating used by applyPersistedQuadPreference: the pref is scoped
         // per-device, so skip the write when we have no device key.
         if (REMEMBER_DEVICE_PERFORMANCE_QUAD_PER_DEVICE && deviceKey) {
-          await setDevicePerformanceQuadPref(deviceKey, perfToggle.checked);
+          await setDevicePerformanceQuadPref(deviceKey, isPerfPressed());
         }
         applyPerformanceUiState();
       },
@@ -2372,6 +2377,12 @@ export function setupRemoteTabMetrics(
   registerPanelRetranslate(panel, () => {
     renderCharts(wrap);
     syncDevicePanelPerfStrip();
+    // The Show/Hide label and title are JS-rendered S.* strings, not static `data-i18n` text —
+    // re-derive them for the new locale (re-applying the same pressed state is a no-op otherwise).
+    if (perfToggle instanceof HTMLButtonElement) {
+      setPerfPressed(isPerfPressed());
+      applyPerformanceUiState();
+    }
   });
 
   panel.addEventListener(

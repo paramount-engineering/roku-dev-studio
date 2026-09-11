@@ -3186,29 +3186,38 @@
       gap: var(--device-layout-gap);
     }
     /* Flush strip on the right edge of .remote-quad-remote-header, same idiom as
-     * .remote-chart-export-btn / .remote-mem-bitmaps-btn / .remote-chart-info-btn. */
-    .remote-performance-toggle {
+     * .remote-fps-toggle-btn / .remote-chart-export-btn / .remote-mem-bitmaps-btn / .remote-chart-info-btn.
+     * Show/Hide label text alone carries the on/off state — no separate highlight style. */
+    .remote-performance-toggle-btn {
       display: flex;
       flex-direction: row;
       align-items: center;
-      gap: 8px;
+      gap: 6px;
       cursor: pointer;
-      user-select: none;
       font-size: 11px;
       font-weight: 500;
       color: var(--text-secondary);
-      text-transform: none;
-      letter-spacing: normal;
       flex-shrink: 0;
       padding: 0 12px;
+      border: none;
       border-left: 1px solid var(--border);
       background: var(--bg-tertiary);
     }
-    .remote-performance-toggle[hidden] { display: none !important; }
-    .remote-performance-toggle:hover {
-      color: var(--text-primary);
+    .remote-performance-toggle-btn[hidden] { display: none !important; }
+    .remote-performance-toggle-btn:hover {
+      background: rgba(139, 92, 246, 0.18);
+      color: var(--accent-purple);
     }
-    /* Same flush-strip idiom as .remote-performance-toggle, but a real button (fire-and-forget
+    .remote-performance-toggle-btn:disabled {
+      cursor: not-allowed;
+      color: var(--text-muted);
+      box-shadow: none;
+    }
+    .remote-performance-toggle-btn:disabled:hover {
+      background: var(--bg-tertiary);
+      color: var(--text-muted);
+    }
+    /* Same flush-strip idiom as .remote-performance-toggle-btn, but a real button (fire-and-forget
      * action, not a state checkbox — there's no way to read fps_display's on/off state back from
      * the device, so a checkbox would imply a state we don't actually know). */
     .remote-fps-toggle-btn {
@@ -3234,23 +3243,15 @@
       cursor: not-allowed;
       color: var(--text-muted);
     }
-    .remote-performance-checkbox {
-      width: 17px;
-      height: 17px;
-      margin: 0;
-      flex-shrink: 0;
-      accent-color: #8b5cf6;
-      cursor: pointer;
+    /* In-flight indicator while the fps_display command round-trips — same inset-ring idiom as
+     * .inner-tab--attn / attnBtnPulse (pure box-shadow, no layout shift), recolored to this
+     * button's own accent-purple hover color instead of the app's red "needs attention" color. */
+    .remote-fps-toggle-btn--busy {
+      animation: fpsToggleBusyPulse 1.1s ease-in-out infinite;
     }
-    .remote-performance-toggle:has(.remote-performance-checkbox:disabled) {
-      cursor: not-allowed;
-      color: var(--text-muted);
-    }
-    .remote-performance-toggle:has(.remote-performance-checkbox:disabled):hover {
-      color: var(--text-muted);
-    }
-    .remote-performance-checkbox:disabled {
-      cursor: not-allowed;
+    @keyframes fpsToggleBusyPulse {
+      0%, 100% { box-shadow: inset 0 0 0 0 rgba(139, 92, 246, 0); }
+      50% { box-shadow: inset 0 0 0 2px rgba(139, 92, 246, 0.6); }
     }
     .remote-tab-metrics-root[data-remote-layout="solo"] .remote-metrics-hint {
       display: none;
@@ -3806,6 +3807,10 @@
       border: none;
       cursor: pointer;
       font-family: inherit;
+      /* The switch-wrap is absolutely positioned (centered via left:50% + translate) with no
+         explicit width, so its shrink-to-fit sizing is tight — without this, "CPU %" is free to
+         break at the space and wrap the % onto its own line. */
+      white-space: nowrap;
     }
     .remote-cpu-mode-btn:hover,
     .remote-mem-mode-btn:hover { color: var(--text-secondary); }
@@ -7163,8 +7168,18 @@
     .telnet-debug-why-title { margin: 0; font-size: 14px; font-weight: 600; }
     .telnet-debug-why-body {
       padding: 14px 16px; overflow: auto; font-size: 12.5px; line-height: 1.55;
-      white-space: pre-wrap; color: var(--text-primary);
+      color: var(--text-primary);
     }
+    .telnet-debug-why-body p { margin: 0 0 10px; }
+    /* Device details get their own chip-like section, separate from the lead sentence/steps. */
+    .telnet-debug-why-device {
+      margin: 0 0 10px; padding: 8px 10px; border-radius: 6px;
+      background: var(--bg-tertiary); border: 1px solid var(--border);
+      font-size: 12px; color: var(--text-secondary);
+    }
+    .telnet-debug-why-steps { margin: 0 0 10px; padding-left: 20px; }
+    .telnet-debug-why-steps li { margin: 4px 0; }
+    .telnet-debug-why-body > :last-child { margin-bottom: 0; }
     .telnet-debug-divider {
       flex: 0 0 auto;
       height: 6px;
@@ -15365,6 +15380,9 @@
     <symbol id="icon-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/>
     </symbol>
+    <symbol id="icon-film" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <rect width="18" height="18" x="3" y="3" rx="2"/><path d="M7 3v18"/><path d="M17 3v18"/><path d="M3 7.5h4"/><path d="M17 7.5h4"/><path d="M3 12h18"/><path d="M3 16.5h4"/><path d="M17 16.5h4"/>
+    </symbol>
     <symbol id="icon-eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"/><line x1="2" x2="22" y1="2" y2="22"/>
     </symbol>
@@ -16034,13 +16052,22 @@
                   </div>
                 </div>
                 <button type="button" class="remote-fps-toggle-btn" data-fps-display-toggle data-requires-connection title="Toggle On-Screen FPS meter" data-i18n-title="app.fpsToggleTitle">
-                  <span class="icon icon-xs"><svg><use href="#icon-eye"/></svg></span>
+                  <span class="icon icon-sm"><svg><use href="#icon-film"/></svg></span>
                   <span data-i18n="app.toggleFps">Toggle FPS</span>
                 </button>
-                <label class="remote-performance-toggle" data-remote-performance-wrap hidden>
-                  <input type="checkbox" class="remote-performance-checkbox" data-remote-performance-toggle autocomplete="off" />
-                  <span data-i18n="app.showDevicePerformance">Show Device Performance</span>
-                </label>
+                <button
+                  type="button"
+                  class="remote-performance-toggle-btn"
+                  data-remote-performance-wrap
+                  data-remote-performance-toggle
+                  hidden
+                  aria-pressed="false"
+                  title="Toggle Device Performance charts"
+                  data-i18n-title="app.devicePerformanceToggleTitle"
+                >
+                  <span class="icon icon-sm" aria-hidden="true"><svg><use href="#icon-grid"/></svg></span>
+                  <span data-remote-performance-label data-i18n="app.showDevicePerformance">Show Device Performance</span>
+                </button>
               </div>
               <div class="remote-quad-remote-scroll">
                 <div class="remote-quad-remote-body" data-requires-connection>

@@ -338,7 +338,8 @@ async function main() {
             const viewIndex = model.fileLineToViewIndex(fileLine);
             if (viewIndex === null) return;
             revealAndFlashLine(surface.view, viewIndex);
-          }
+          },
+          monitorBtn
         );
       })
       .finally(() => {

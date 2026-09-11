@@ -671,7 +671,8 @@ export function setupBuilder(panel, api, context) {
     await ensureSavedScriptsLoaded();
     const name = await promptSaveScriptName({
       defaultName: typeof getSaveDefaultName === 'function' ? getSaveDefaultName() : undefined,
-      savedNames: listSavedScripts().map((s) => s.name)
+      savedNames: listSavedScripts().map((s) => s.name),
+      opener: builderSaveScriptBtn
     });
     if (!name) return;
     let script: { version?: string; steps: unknown[] };

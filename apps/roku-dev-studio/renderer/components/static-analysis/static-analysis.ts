@@ -18,6 +18,7 @@ import { initLocaleForWindow } from '../../modules/utils/locale-live.js';
 import { rendererError } from '../../modules/utils/logger.js';
 import { attachBackdropClickToClose } from '../../modules/utils/modal-backdrop-click.js';
 import { attachModalResize } from '../../modules/utils/modal-resize.js';
+import { prepareModalOpenOrigin, playModalOpenMotion, closeModalWithOriginMotion } from '../../modules/utils/modal-origin-motion.js';
 import { renderStructuredInto, attachFoldToggle, structuredBodyText, detectStructuredKind } from '../../modules/ui/structured-body.js';
 import { resolveCertRequirementUrl } from './cert-requirements-map.js';
 import { installCrashCapture } from '../../modules/errors/install.js';
@@ -541,12 +542,16 @@ function wireFilePicker(): void {
  *  About the Java Requirement) — no resize/collapse, just backdrop-click + Escape + close button. */
 function wireInfoModal(overlay: HTMLElement, closeBtn: HTMLButtonElement, openBtns: HTMLButtonElement[]): void {
   const close = (): void => {
-    overlay.hidden = true;
-    overlay.setAttribute('aria-hidden', 'true');
+    closeModalWithOriginMotion(overlay, () => {
+      overlay.hidden = true;
+      overlay.setAttribute('aria-hidden', 'true');
+    });
   };
-  const open = (): void => {
+  const open = (e: MouseEvent): void => {
+    prepareModalOpenOrigin(overlay, e.currentTarget instanceof HTMLElement ? e.currentTarget : null);
     overlay.hidden = false;
     overlay.setAttribute('aria-hidden', 'false');
+    playModalOpenMotion(overlay);
   };
   openBtns.forEach((btn) => btn.addEventListener('click', open));
   closeBtn.addEventListener('click', close);
@@ -632,13 +637,17 @@ function wireJsonModal(): void {
   attachFoldToggle(els.jsonModalBody);
 
   const close = (): void => {
-    els.jsonModalOverlay.hidden = true;
-    els.jsonModalOverlay.setAttribute('aria-hidden', 'true');
+    closeModalWithOriginMotion(els.jsonModalOverlay, () => {
+      els.jsonModalOverlay.hidden = true;
+      els.jsonModalOverlay.setAttribute('aria-hidden', 'true');
+    });
   };
-  const open = (): void => {
+  const open = (e: MouseEvent): void => {
     renderStructuredInto(els.jsonModalBody, lastJsonModalText);
+    prepareModalOpenOrigin(els.jsonModalOverlay, e.currentTarget instanceof HTMLElement ? e.currentTarget : null);
     els.jsonModalOverlay.hidden = false;
     els.jsonModalOverlay.setAttribute('aria-hidden', 'false');
+    playModalOpenMotion(els.jsonModalOverlay);
   };
 
   els.viewJsonBtn.addEventListener('click', open);
