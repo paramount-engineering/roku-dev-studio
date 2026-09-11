@@ -89,6 +89,11 @@ type Emit = (event: DebuggerEventKind, payload: unknown) => void;
 
 export class DebugSessionController {
   private sessions = new Map<string, DebugSession>();
+  /** Connect attempts currently in flight, keyed by ip. A session only enters `sessions` once its
+   *  handshake succeeds, so a second `attach()` call for the same ip while one is still connecting
+   *  can't see it there and would otherwise start a competing connection against the single-client
+   *  8081 port (see `attach()`). */
+  private attaching = new Map<string, Promise<{ ok: boolean; error?: string }>>();
 
   constructor(private readonly emit: Emit) {}
 
@@ -128,6 +133,25 @@ export class DebugSessionController {
       return { ok: true };
     }
 
+    // A connect attempt for this ip may already be mid-flight (it isn't in `this.sessions` yet —
+    // that only happens once the handshake succeeds, below). Join it instead of racing it: two
+    // concurrent attach() calls (e.g. a duplicate "Waiting for debugger" telnet line firing a
+    // second auto-reattach while a manual Attach click is still connecting) would otherwise fight
+    // over the single-client 8081 port, and one side always loses with a misleading "port
+    // closed"/"handshake never completed" error against a session that's actually fine.
+    const inFlight = this.attaching.get(clean);
+    if (inFlight) return inFlight;
+
+    const attempt = this.runAttach(clean);
+    this.attaching.set(clean, attempt);
+    try {
+      return await attempt;
+    } finally {
+      this.attaching.delete(clean);
+    }
+  }
+
+  private async runAttach(clean: string): Promise<{ ok: boolean; error?: string }> {
     await this.detach(clean); // single-client control port — never stack sessions
 
     // Surface "connecting" immediately; the port can take a beat to open after a
@@ -185,16 +209,21 @@ export class DebugSessionController {
     // shows the summary and reveals `detail` on demand (hover tooltip + a "Why?" modal)
     // instead of dumping the whole paragraph into a one-line clipped status.
     const summary = refused ? `Port ${DEBUG_CONTROL_PORT} closed — not a debug launch` : 'Debug handshake never completed';
+    // Structured as: lead sentence, then the device line as its own paragraph, then a blank line,
+    // then `- `-prefixed remediation steps — the renderer (telnet-debug-sidebar.ts) parses this
+    // into a paragraph + a separate device section + a bullet list instead of one text blob. Kept
+    // as a single plain string (not a richer object) so `attach()`'s `error: detail` return below —
+    // and any other plain-text consumer (e.g. the MCP debugger_attach tool) — see identical text.
+    const deviceParagraph = desc ? `\n\n${desc}` : '';
     const detail = refused
-      ? `Debug port ${DEBUG_CONTROL_PORT} is closed on ${clean} (connection refused). ${desc} ` +
-        `The running channel was NOT launched with debugging. Re-sideload with "Sideload with Debugging" enabled ` +
-        `(or drop a STOP in your code — that auto-enables it). A plain sideload, a Replace/reload without the debug ` +
-        `flag, or an app relaunch does not open the debug port. If the console shows the Micro Debugger ` +
-        `"Thread selected…" text, the socket protocol is NOT active for this run. Also confirm Settings → System → ` +
-        `Advanced system settings → "Control by mobile apps" is Enabled or Permissive.`
-      : `Connected to debug port ${DEBUG_CONTROL_PORT} on ${clean} but the debug handshake never completed. ${desc} ` +
-        `The port may be held by another debugger (a VS Code BrightScript session or a second RDS window), or the ` +
-        `running channel is not a debug build. Close other debuggers and re-sideload with debugging.`;
+      ? `Debug port ${DEBUG_CONTROL_PORT} is closed on ${clean} (connection refused). The running channel was NOT launched with debugging.${deviceParagraph}\n\n` +
+        `- Re-sideload with "Sideload with Debugging" enabled (or drop a STOP in your code — that auto-enables it).\n` +
+        `- A plain sideload, a Replace/reload without the debug flag, or an app relaunch does not open the debug port.\n` +
+        `- If the console shows the Micro Debugger "Thread selected…" text, the socket protocol is NOT active for this run.\n` +
+        `- Confirm Settings → System → Advanced system settings → "Control by mobile apps" is Enabled or Permissive.`
+      : `Connected to debug port ${DEBUG_CONTROL_PORT} on ${clean} but the debug handshake never completed.${deviceParagraph}\n\n` +
+        `- The port may be held by another debugger (a VS Code BrightScript session or a second RDS window), or the running channel is not a debug build.\n` +
+        `- Close other debuggers and re-sideload with debugging.`;
     this.emit(DEBUGGER_EVENTS.State, { ip: clean, state: 'error', message: summary, detail });
     apiError(`[debugger] attach gave up for ${clean} after ${attempt} attempt(s): ${lastError} (${refused ? 'port closed' : 'handshake never completed'}). ${desc}`);
     return { ok: false, error: detail };
