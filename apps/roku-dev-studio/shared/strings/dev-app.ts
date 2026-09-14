@@ -25,6 +25,25 @@ export const devApp = {
   failedToCopy: (detail: string): string => `Failed to copy: ${detail}`,
   couldNotGetCanvasContext: 'Could not get canvas context',
   couldNotEncodeScreenshot: 'Could not encode screenshot',
+  screenshotPreviewTitle: 'Screenshot',
+
+  // ── RCE live video (rce-video.ts, screenshots.ts RCE branch, index.ts) ────
+  captureSuccess: 'Captured!',
+  rceStreamNotReady: 'The video stream is not ready yet.',
+  rceVideoConnecting: 'Connecting to the video stream…',
+  rceVideoReconnecting: 'Reconnecting to the video stream…',
+  rceVideoStopped: 'Video stream stopped — the device is no longer running.',
+  rceVideoError: (detail: string): string => `Video stream error: ${detail}`,
+  rceVolumeLabel: 'Volume',
+  rceMuteLabel: 'Mute',
+  rceUnmuteLabel: 'Unmute',
+  rceDeviceScreenRelay: 'Screen Relay',
+  rceGalleryButton: 'Screenshots',
+  rceGalleryTitle: 'Session Screenshots',
+  rceGalleryEmpty: 'No screenshots captured yet this session.',
+  rceGalleryCapturedAt: (time: string): string => `Captured ${time}`,
+  downloadAll: 'Download All',
+  clearAll: 'Clear All',
 
   // ── Sideloaded app card (sideloaded-app.ts) ───────────────────────────────
   versionLabel: 'Version:',

@@ -79,6 +79,20 @@ export interface RelayDeviceResult {
   serverUrl?: string;
   /** Remote location id (remote targets only) — the key `connectRemoteDevice` tabs use. */
   locationId?: string;
+  /**
+   * True for an RCE (cloud emulator) target. `ip` above is the device's serial for these — RCE
+   * has no real IP (see `normalizeRceDevice`). The renderer's auto-connect flow needs `rceAccountName`
+   * (there's no `locationId` here — the main process's RCE registry only knows the RCE account, not
+   * the renderer-local `state.remoteLocations` id) to find the matching location, plus `rceDeviceId`
+   * to build/refresh a device object without a prior discovery pass, and route through
+   * `connectRceDevice` instead of the local-only `connectDevice` — otherwise it opens a second,
+   * duplicate tab for a device that's already connected.
+   */
+  rce?: boolean;
+  /** RCE account name (RCE targets only). */
+  rceAccountName?: string;
+  /** RCE numeric device id (RCE targets only). */
+  rceDeviceId?: number;
 }
 
 /** Emitted when a new upload is accepted and fan-out begins. */

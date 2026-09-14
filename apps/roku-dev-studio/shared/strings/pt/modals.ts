@@ -179,7 +179,9 @@ export const modals = {
   addLocation: {
     title: '🌐 Adicionar localização remota',
     intro:
-      'Conecte-se a dispositivos Roku em uma localização remota via o Roku Relay Server em execução em um Mac Mini ou outro computador.',
+      'Conecte-se a dispositivos Roku em uma localização remota via o Roku Relay Server.',
+    tabRelay: 'Relay do RDS',
+    tabRce: 'RCE',
     nameLabel: 'Nome da localização',
     namePlaceholder: 'ex.: Laboratório do escritório, Estúdio B',
     nameHint: 'Um nome amigável para identificar esta localização',
@@ -188,6 +190,10 @@ export const modals = {
     hostHint: 'Endereço IP ou nome de host do Relay Server',
     portLabel: 'Porta',
     portHint: 'A porta padrão é 4951',
+    rceIntro: 'Conecte-se a uma conta do Roku Cloud Emulator para listar, iniciar e controlar seus dispositivos virtuais.',
+    tokenLabel: 'Token de API',
+    tokenPlaceholder: 'Token de acesso pessoal',
+    tokenHint: 'Gere um na interface web do Roku Cloud Emulator (aba Token)',
     addBtn: 'Adicionar localização',
   },
 
@@ -610,14 +616,16 @@ export const modals = {
 
     remoteLocationsHeading: 'Localizações remotas',
     remoteLocationsListHtml: `
-            <li><strong>Configuração</strong> - Execute o Roku Relay Server em um Mac Mini na localização remota</li>
-            <li><strong>Adicionar localização</strong> - Clique em "Adicionar" na seção Localizações remotas para configurar uma conexão</li>
-            <li><strong>Endereço do servidor</strong> - Insira o endereço IP ou o nome de host do servidor de retransmissão</li>
+            <li><strong>Configuração</strong> - Execute o Roku Relay Server em uma máquina na localização remota</li>
+            <li><strong>Adicionar localização</strong> - Clique em "Adicionar" na seção Localizações remotas e escolha a aba <strong>RDS Relay</strong> ou <strong>RCE</strong></li>
+            <li><strong>Endereço do servidor</strong> - Aba RDS Relay: insira o endereço IP ou o nome de host do servidor de retransmissão</li>
             <li><strong>Porta padrão</strong> - O servidor de retransmissão é executado na porta <code>4951</code> por padrão</li>
+            <li><strong>Conta RCE</strong> - Aba RCE: dê um nome à conta e cole o token de API do painel do Roku Cloud Emulator</li>
           `,
     remoteLocationsServerHtml: `O servidor de retransmissão pode ser encontrado na pasta <code>remote-server</code>. Consulte o README para instruções de configuração (LaunchAgent no macOS, systemd no Linux, Agendador de Tarefas no Windows).`,
     remoteLocationsTroubleshootHtml: `<strong>O sideload ou a captura de tela falham via retransmissão, mas o ECP funciona?</strong> Atualize o host de retransmissão para a mesma versão do <code>roku-dev-studio-api</code> deste app. Verifique <code>GET /health</code> na retransmissão (campo <code>apiVersion</code>) e garanta que a porta <code>4951</code> esteja acessível através dos firewalls.`,
-    remoteLocationsIntro: 'Controle dispositivos Roku em localizações remotas por meio de um Relay Server:',
+    remoteLocationsRceHtml: `<strong>Dispositivos RCE</strong> aparecem como desligado/pendente/em execução. Inicie um a partir do seu cartão (ou do próprio painel do Roku Cloud Emulator) antes de conectar — ECP, sideload e console só respondem enquanto estiver em execução, e o dispositivo para automaticamente após seu próprio Tempo máximo de execução configurado.`,
+    remoteLocationsIntro: 'Controle dispositivos Roku em Localizações remotas — por meio de um Relay Server (dispositivos LAN em outro site) ou de uma conta Roku Cloud Emulator (RCE):',
 
     sideloadRelayHeading: 'Sideload Relay',
     sideloadRelayIntroHtml: `Faça sideload de um build para <strong>muitos dispositivos de uma vez</strong>. Quando a retransmissão está ativada, o Roku Dev Studio se anuncia como um Roku na sua rede: aponte seu IDE (VS Code BrightScript / roku-deploy / Eclipse) ou um navegador para esta máquina, faça o upload uma vez, e o RDS distribui o build — <em>instalar → iniciar → console</em> — para cada dispositivo de destino, local ou em uma localização remota.`,

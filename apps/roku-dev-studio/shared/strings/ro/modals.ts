@@ -175,7 +175,9 @@ export const modals = {
   addLocation: {
     title: '🌐 Adaugă locație la distanță',
     intro:
-      'Conectați-vă la dispozitive Roku dintr-o locație la distanță prin Roku Relay Server care rulează pe un Mac Mini sau alt computer.',
+      'Conectați-vă la dispozitive Roku dintr-o locație la distanță prin Roku Relay Server.',
+    tabRelay: 'Releu RDS',
+    tabRce: 'RCE',
     nameLabel: 'Nume locație',
     namePlaceholder: 'ex.: Laborator birou, Studio B',
     nameHint: 'Un nume prietenos pentru a identifica această locație',
@@ -184,6 +186,10 @@ export const modals = {
     hostHint: 'Adresa IP sau numele de gazdă al Relay Server',
     portLabel: 'Port',
     portHint: 'Portul implicit este 4951',
+    rceIntro: 'Conectați-vă la un cont Roku Cloud Emulator pentru a lista, porni și controla dispozitivele sale virtuale.',
+    tokenLabel: 'Token API',
+    tokenPlaceholder: 'Token de acces personal',
+    tokenHint: 'Generați unul din interfața web Roku Cloud Emulator (fila Token)',
     addBtn: 'Adaugă locație',
   },
 
@@ -606,14 +612,16 @@ export const modals = {
 
     remoteLocationsHeading: 'Locații la distanță',
     remoteLocationsListHtml: `
-            <li><strong>Configurare</strong> - Rulați Roku Relay Server pe un Mac Mini la locația la distanță</li>
-            <li><strong>Adaugă locație</strong> - Faceți clic pe „Adaugă” în secțiunea Locații la distanță pentru a configura o conexiune</li>
-            <li><strong>Adresă server</strong> - Introduceți adresa IP sau numele de gazdă al serverului releu</li>
+            <li><strong>Configurare</strong> - Rulați Roku Relay Server pe un computer la locația la distanță</li>
+            <li><strong>Adaugă locație</strong> - Faceți clic pe „Adaugă” în secțiunea Locații la distanță, apoi alegeți fila <strong>RDS Relay</strong> sau <strong>RCE</strong></li>
+            <li><strong>Adresă server</strong> - Fila RDS Relay: introduceți adresa IP sau numele de gazdă al serverului releu</li>
             <li><strong>Port implicit</strong> - Serverul releu rulează implicit pe portul <code>4951</code></li>
+            <li><strong>Cont RCE</strong> - Fila RCE: denumiți contul și lipiți token-ul său API din panoul Roku Cloud Emulator</li>
           `,
     remoteLocationsServerHtml: `Serverul releu poate fi găsit în folderul <code>remote-server</code>. Consultați README pentru instrucțiuni de configurare (LaunchAgent pe macOS, systemd pe Linux, Task Scheduler pe Windows).`,
     remoteLocationsTroubleshootHtml: `<strong>Sideload-ul sau captura de ecran eșuează prin releu, dar ECP funcționează?</strong> Actualizați gazda releu la aceeași versiune <code>roku-dev-studio-api</code> ca această aplicație. Verificați <code>GET /health</code> pe releu (câmpul <code>apiVersion</code>) și asigurați-vă că portul <code>4951</code> este accesibil prin firewalluri.`,
-    remoteLocationsIntro: 'Controlați dispozitive Roku din locații la distanță prin intermediul unui Relay Server:',
+    remoteLocationsRceHtml: `<strong>Dispozitivele RCE</strong> apar ca oprite/în așteptare/pornite. Porniți unul din cardul său (sau din propriul panou Roku Cloud Emulator) înainte de a vă conecta — ECP, sideload și consola răspund doar cât timp este pornit, iar dispozitivul se oprește automat după propriul Timp maxim de rulare configurat.`,
+    remoteLocationsIntro: 'Controlați dispozitive Roku din Locații la distanță — printr-un Relay Server (dispozitive LAN dintr-o altă locație) sau printr-un cont Roku Cloud Emulator (RCE):',
 
     sideloadRelayHeading: 'Sideload Relay',
     sideloadRelayIntroHtml: `Încărcați (sideload) o singură versiune pe <strong>mai multe dispozitive deodată</strong>. Când releul este activat, Roku Dev Studio se anunță ca un Roku în rețeaua dvs.: îndreptați IDE-ul (VS Code BrightScript / roku-deploy / Eclipse) sau un browser către acest computer, încărcați o singură dată, iar RDS distribuie versiunea — <em>instalare → lansare → consolă</em> — către fiecare dispozitiv vizat, local sau dintr-o locație la distanță.`,

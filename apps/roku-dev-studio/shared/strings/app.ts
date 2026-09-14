@@ -40,6 +40,82 @@ export const app = {
   failedToConnectRelay: 'Failed to connect to relay server',
   addLocation: 'Add Location',
 
+  // Add-location flow — RCE tab (errors surfaced via alert, same as the RDS Relay tab above)
+  rceNameRequired: 'A name is required.',
+  rceTokenRequired: 'A token is required.',
+  rceAccountExists: (name: string): string => `An RCE account named "${name}" already exists.`,
+  rceNoStoredAccount: (name: string): string => `No stored RCE account named "${name}".`,
+  rceAccountStatus: 'RCE Account',
+
+  // RCE device lifecycle — Start/Stop
+  rceStart: 'Start',
+  rceStop: 'Stop',
+  rceStarting: 'Starting…',
+  // RCE-only quick actions (Quick Remote / Floating Remote / Remote tab), mirroring Roku's own
+  // RCE dashboard's "Wake device" / "Dev mode" buttons.
+  rceWakeDevice: 'Wake Device',
+  rceDevMode: 'Dev Mode',
+  rceStatusOff: 'Off',
+  rceNoStartableSnapshot: 'No usable snapshot or firmware version found for this device.',
+  rceNoInstanceUrl: 'Device has no instance URL — is it still running?',
+  rceNoLongerRunning: 'Device is no longer running.',
+  rceDevPasswordRequired: 'A developer password is required.',
+
+  // RCE "Start device" modal (Start button's split-button caret — POST /devices/{id}/start options)
+  rceStartDeviceOptions: 'Options',
+  rceStartDeviceOptionsAria: 'Start Device Options',
+  rceStartDeviceModalTitle: (name: string): string => `Start RCE Device: ${name}`,
+  rceStartDevice: 'Start Device',
+  rceMaxRunTime: 'Max Run Time',
+  rceMaxRunTimeHour: 'Hour',
+  rceMaxRunTimeMin: 'Min',
+  rceMaxRunTimeHint: 'Up to 48 hours',
+  rceFirmwareVersion: 'Firmware Version',
+  rceFirmwareSelectPlaceholder: 'Select Firmware',
+  rceFirmwareNoData: 'No firmware data',
+  rceFirmwareRequired: 'Please select a firmware version.',
+  rceFirmwareRetired: (id: string): string => `This device's firmware (${id}) is no longer available — please select a different one.`,
+  rceFirmwareUnavailable: (id: string): string =>
+    `Firmware ${id} is no longer available for this device — click the dropdown next to Start to pick a different one.`,
+  rceUseThisSnapshot: 'Use this Snapshot',
+  rceSnapshotAria: 'Snapshot',
+  rceSnapshotSelectPlaceholder: 'Select Snapshot',
+  rceSnapshotInitialOption: 'Initial Snapshot',
+  rceSnapshotLoadFailed: 'Could not load snapshots — using default.',
+  rceSnapshotStarted: 'Started',
+  rceSnapshotReady: 'Ready',
+  rceSnapshotLive: 'Live',
+  rceSnapshotBase: 'Base',
+
+  // RCE user info modal ("User Info" button, GET /user/me)
+  // "Roku Cloud Emulator" is the product name — stays untranslated in every locale (see rceIntro
+  // in modals.ts for the same precedent).
+  rceCloudEmulatorTitle: 'Roku Cloud Emulator',
+  rceUserInfoTitle: 'User Info',
+  rceUserInfoOrganization: 'Organization',
+  rceUserInfoName: 'User',
+  rceUserInfoEmail: 'Email',
+  rceUserInfoDevices: 'Devices',
+  rceUserInfoSnapshots: 'Snapshots',
+  rceUserInfoMaxRuntime: 'Max Runtime',
+  rceUserInfoDevicesValue: (used: number, max: number): string => `${used} / ${max}`,
+  rceUserInfoRuntimeValue: (hours: number): string => `${hours}h`,
+  rceUserInfoLoadFailed: 'Failed to load user info.',
+  rceUserInfoLoading: 'Loading user info...',
+
+  // RCE user info modal — usage chart (GET /usage/owner, falls back to /usage/user)
+  rceUsageHeading: 'Usage — Last 7 Days',
+  rceUsageHoursValue: (hours: number): string => `${hours}h`,
+  rceUsageBarTooltip: (dateLabel: string, hoursLabel: string): string => `${dateLabel}: ${hoursLabel}`,
+
+  // RCE device info modal (opened from the device card's icon)
+  rceDeviceInfoTitle: 'Device Info',
+  rceDeviceInfoCreated: 'Created',
+  rceDeviceInfoLastSnapshot: 'Last Snapshot',
+  rceDeviceInfoNote: 'Note',
+  rceDeviceInfoInstanceId: 'Instance ID',
+  rceDeviceInfoDurationValue: (h: number, m: number): string => (h > 0 ? (m > 0 ? `${h}h ${m}m` : `${h}h`) : `${m}m`),
+
   // Server capabilities modal
   serverCapabilities: {
     remote: { label: 'Remote Control', desc: 'Keypress and Navigation Commands' },
@@ -47,6 +123,7 @@ export const app = {
     query: { label: 'Query', desc: 'Device Info, Media Player Status' },
     devApp: { label: 'Dev App', desc: 'Sideload Development Channels' },
     screenshot: { label: 'Screenshot', desc: 'Capture Device Screen' },
+    screenRelay: { label: 'Screen Relay', desc: 'Live Video Feed of the Device Screen' },
     console: { label: 'Console', desc: 'BrightScript Debug Output' },
     debugger: { label: 'Debugger', desc: 'Breakpoints, Step Execution, Variable Inspection' },
     appConnector: { label: 'App Connector', desc: 'RALE TrackerTask Integration' },
@@ -71,6 +148,9 @@ export const app = {
   labelModel: 'Model',
   labelSerial: 'Serial',
   labelSw: 'SW',
+  labelStatus: 'Status',
+  labelFirmware: 'Firmware',
+  labelSnapshots: 'Snapshots',
   expand: 'Expand',
   minimize: 'Minimize',
   reconnect: 'Reconnect',
@@ -181,7 +261,7 @@ WiFi MAC: ${d.wifiMac || 'N/A'}`,
     'Remote control is off. Enable "Control by Mobile Apps" → Network Access on your Roku device to use remote, apps, and text input.',
   ecpWarnLimitedTitle: 'Control by Mobile Apps: Limited',
   ecpWarnLimitedDesc:
-    'Text input, app launch, and app query work. Full remote keypress may not be available—set Network Access to <strong>Permissive</strong> or <strong>Enabled</strong> for full remote.',
+    'Basic remote and text input work, but some app queries and full remote keypress may not be available—set Network Access to <strong>Permissive</strong> or <strong>Enabled</strong> for full functionality.',
   ecpWarnSubnetTitle: 'Permissive: Check Network',
   ecpWarnSubnetDesc:
     'Permissive mode accepts commands only from the same subnet. Your machine may be on a different subnet; if commands fail, check your network.',

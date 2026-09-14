@@ -178,7 +178,9 @@ export const modals = {
   addLocation: {
     title: '🌐 Add Remote Location',
     intro:
-      'Connect to Roku devices at a remote location via the Roku Relay Server running on a Mac Mini or other computer.',
+      'Connect to Roku devices at a remote location via the Roku Relay Server.',
+    tabRelay: 'RDS Relay',
+    tabRce: 'RCE',
     nameLabel: 'Location Name',
     namePlaceholder: 'e.g., Office Lab, Studio B',
     nameHint: 'A friendly name to identify this location',
@@ -187,6 +189,10 @@ export const modals = {
     hostHint: 'IP Address or Hostname of the Relay Server',
     portLabel: 'Port',
     portHint: 'Default port is 4951',
+    rceIntro: 'Connect to a Roku Cloud Emulator account to list, start, and control its virtual devices.',
+    tokenLabel: 'API Token',
+    tokenPlaceholder: 'Personal Access Token',
+    tokenHint: 'Generate one from the Roku Cloud Emulator web UI (Token tab)',
     addBtn: 'Add Location',
   },
 
@@ -609,14 +615,16 @@ export const modals = {
 
     remoteLocationsHeading: 'Remote Locations',
     remoteLocationsListHtml: `
-            <li><strong>Setup</strong> - Run the Roku Relay Server on a Mac Mini at the remote location</li>
-            <li><strong>Add Location</strong> - Click "Add" in the Remote Locations section to configure a connection</li>
-            <li><strong>Server Address</strong> - Enter the IP Address or Hostname of the relay server</li>
+            <li><strong>Setup</strong> - Run the Roku Relay Server on a machine at the remote location</li>
+            <li><strong>Add Location</strong> - Click "Add" in the Remote Locations section, then choose the <strong>RDS Relay</strong> or <strong>RCE</strong> tab</li>
+            <li><strong>Server Address</strong> - RDS Relay tab: enter the IP Address or Hostname of the relay server</li>
             <li><strong>Default Port</strong> - The relay server runs on port <code>4951</code> by default</li>
+            <li><strong>RCE Account</strong> - RCE tab: name the account and paste in its API token from Roku's Cloud Emulator dashboard</li>
           `,
     remoteLocationsServerHtml: `The relay server can be found in the <code>remote-server</code> folder. See the README for setup instructions (macOS LaunchAgent, Linux systemd, Windows Task Scheduler).`,
     remoteLocationsTroubleshootHtml: `<strong>Sideload or screenshot fails via relay but ECP works?</strong> Update the relay host to the same <code>roku-dev-studio-api</code> version as this app. Check <code>GET /health</code> on the relay (<code>apiVersion</code> field) and ensure port <code>4951</code> is reachable through firewalls.`,
-    remoteLocationsIntro: 'Control Roku devices at Remote Locations via a Relay Server:',
+    remoteLocationsRceHtml: `<strong>RCE devices</strong> list as shutdown/pending/running. Start one from its card (or Roku's own Cloud Emulator dashboard) before connecting — ECP, sideload, and console only respond while running, and a device auto-stops after its own configured Max Run Time.`,
+    remoteLocationsIntro: 'Control Roku devices at Remote Locations — either a Relay Server (LAN devices at another site) or a Roku Cloud Emulator (RCE) account:',
 
     sideloadRelayHeading: 'Sideload Relay',
     sideloadRelayIntroHtml: `Sideload one build to <strong>many devices at once</strong>. When the relay is on, Roku Dev Studio advertises itself as a Roku on your network: point your IDE (VS Code BrightScript / roku-deploy / Eclipse) or a browser at this machine, upload once, and RDS fans the build out — <em>install → launch → console</em> — to every targeted device, local or at a remote location.`,

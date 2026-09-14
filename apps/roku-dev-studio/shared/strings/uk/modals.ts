@@ -175,7 +175,9 @@ export const modals = {
   addLocation: {
     title: '🌐 Додати віддалене розташування',
     intro:
-      'Підключайтеся до пристроїв Roku у віддаленому розташуванні через Roku Relay Server, що працює на Mac Mini чи іншому комп’ютері.',
+      'Підключайтеся до пристроїв Roku у віддаленому розташуванні через Roku Relay Server.',
+    tabRelay: 'Реле RDS',
+    tabRce: 'RCE',
     nameLabel: 'Назва розташування',
     namePlaceholder: 'напр., офісна лабораторія, студія B',
     nameHint: 'Зрозуміла назва для ідентифікації цього розташування',
@@ -184,6 +186,10 @@ export const modals = {
     hostHint: 'IP-адреса або ім’я хоста Relay Server',
     portLabel: 'Порт',
     portHint: 'Типовий порт — 4951',
+    rceIntro: 'Підключіться до облікового запису Roku Cloud Emulator, щоб переглядати, запускати та керувати його віртуальними пристроями.',
+    tokenLabel: 'Токен API',
+    tokenPlaceholder: 'Персональний токен доступу',
+    tokenHint: 'Створіть його у вебінтерфейсі Roku Cloud Emulator (вкладка Token)',
     addBtn: 'Додати розташування',
   },
 
@@ -606,14 +612,16 @@ export const modals = {
 
     remoteLocationsHeading: 'Віддалені розташування',
     remoteLocationsListHtml: `
-            <li><strong>Налаштування</strong> - Запустіть Roku Relay Server на Mac Mini у віддаленому розташуванні</li>
-            <li><strong>Додати розташування</strong> - Натисніть «Додати» в розділі віддалених розташувань, щоб налаштувати з’єднання</li>
-            <li><strong>Адреса сервера</strong> - Уведіть IP-адресу або ім’я хоста сервера-ретранслятора</li>
+            <li><strong>Налаштування</strong> - Запустіть Roku Relay Server на комп’ютері у віддаленому розташуванні</li>
+            <li><strong>Додати розташування</strong> - Натисніть «Додати» в розділі віддалених розташувань, а потім виберіть вкладку <strong>RDS Relay</strong> або <strong>RCE</strong></li>
+            <li><strong>Адреса сервера</strong> - Вкладка RDS Relay: уведіть IP-адресу або ім’я хоста сервера-ретранслятора</li>
             <li><strong>Типовий порт</strong> - Сервер-ретранслятор за замовчуванням працює на порту <code>4951</code></li>
+            <li><strong>Обліковий запис RCE</strong> - Вкладка RCE: назвіть обліковий запис і вставте його токен API з панелі Roku Cloud Emulator</li>
           `,
     remoteLocationsServerHtml: `Сервер-ретранслятор можна знайти в папці <code>remote-server</code>. Див. README для інструкцій із налаштування (macOS LaunchAgent, Linux systemd, Windows Task Scheduler).`,
     remoteLocationsTroubleshootHtml: `<strong>Sideload або знімок екрана не працює через ретранслятор, але ECP працює?</strong> Оновіть хост ретранслятора до тієї самої версії <code>roku-dev-studio-api</code>, що й цей застосунок. Перевірте <code>GET /health</code> на ретрансляторі (поле <code>apiVersion</code>) і переконайтеся, що порт <code>4951</code> доступний через брандмауери.`,
-    remoteLocationsIntro: 'Керуйте пристроями Roku у віддалених розташуваннях через Relay Server:',
+    remoteLocationsRceHtml: `<strong>Пристрої RCE</strong> відображаються як вимкнені/очікують/запущені. Запустіть пристрій з його картки (або з власної панелі Roku Cloud Emulator) перед підключенням — ECP, sideload і консоль реагують, лише коли пристрій запущено, а пристрій автоматично зупиняється після власного налаштованого максимального часу роботи.`,
+    remoteLocationsIntro: 'Керуйте пристроями Roku у віддалених розташуваннях — через Relay Server (пристрої в локальній мережі в іншому місці) або обліковий запис Roku Cloud Emulator (RCE):',
 
     sideloadRelayHeading: 'Sideload Relay',
     sideloadRelayIntroHtml: `Виконуйте sideload однієї збірки на <strong>багато пристроїв одразу</strong>. Коли ретранслятор увімкнено, Roku Dev Studio оголошує себе як Roku у вашій мережі: спрямуйте свій IDE (VS Code BrightScript / roku-deploy / Eclipse) або браузер на цей комп’ютер, завантажте один раз, і RDS роздає збірку — <em>встановлення → запуск → консоль</em> — на кожен цільовий пристрій, локальний чи у віддаленому розташуванні.`,
