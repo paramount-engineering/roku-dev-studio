@@ -96,6 +96,23 @@ export function encodeAddConditionalBreakpoints(requestId: number, breakpoints: 
   return frame(CommandCode.AddConditionalBreakpoints, requestId, body);
 }
 
+export interface ExceptionBreakpointSpec {
+  filter: 'caught' | 'uncaught';
+  conditionExpression?: string;
+}
+
+/** Wire values for the `filter` field — matches roku-debug's `ExceptionBreakpointFilterType`. */
+const EXCEPTION_FILTER_CODE: Record<'caught' | 'uncaught', number> = { caught: 1, uncaught: 2 };
+
+export function encodeSetExceptionBreakpoints(requestId: number, filters: ExceptionBreakpointSpec[]): Buffer {
+  const list = filters ?? [];
+  const body = new BufWriter().u32(list.length);
+  for (const f of list) {
+    body.u32(EXCEPTION_FILTER_CODE[f.filter] ?? EXCEPTION_FILTER_CODE.uncaught).stringNT((f.conditionExpression ?? '').trim());
+  }
+  return frame(CommandCode.SetExceptionBreakpoints, requestId, body);
+}
+
 /** Bit flags for the VARIABLES request's leading uint8. */
 const VAR_FLAG_GET_CHILD_KEYS = 1;
 const VAR_FLAG_CASE_SENSITIVITY_OPTIONS = 2;

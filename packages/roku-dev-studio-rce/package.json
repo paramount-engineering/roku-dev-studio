@@ -1,0 +1,42 @@
+{
+  "name": "roku-dev-studio-rce",
+  "version": "1.0.0",
+  "description": "Roku Cloud Emulator (RCE) client — Core API (accounts/devices/snapshots) and Device API (ECP proxy, ports-bridge sockets) for cloud-hosted virtual Roku devices.",
+  "main": "index.ts",
+  "types": "index.ts",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/paramount-engineering/roku-dev-studio.git",
+    "directory": "packages/roku-dev-studio-rce"
+  },
+  "engines": {
+    "node": ">=24.17.0"
+  },
+  "keywords": [
+    "roku",
+    "rce",
+    "cloud-emulator",
+    "virtual-device"
+  ],
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test test/*.test.ts"
+  },
+  "dependencies": {
+    "roku-dev-studio-platform": "^1.0.0",
+    "ws": "^8.21.0"
+  },
+  "devDependencies": {
+    "@types/node": "22.19.21",
+    "@types/ws": "8.18.1",
+    "typescript": "5.9.3"
+  },
+  "exports": {
+    ".": "./index.ts",
+    "./types": "./types.ts",
+    "./management-client": "./rce-management-client.ts",
+    "./ecp": "./rce-ecp.ts",
+    "./socket": "./rce-socket.ts"
+  }
+}

@@ -141,6 +141,9 @@ module.exports = {
   // RALE direct (TCP on LAN)
   raleWake: raleDirect.raleWake,
   raleConnect: raleDirect.raleConnect,
+  // Register an already-connected socket (e.g. RCE's WebSocket ports-bridge tunnel) so
+  // raleCommand/raleDisconnect/raleConnectionStatus can drive it too — see rale-direct.ts.
+  raleRegisterSocket: raleDirect.raleRegisterSocket,
   raleCommand: raleDirect.raleCommand,
   raleDisconnect: raleDirect.raleDisconnect,
   raleDisconnectAll: raleDirect.raleDisconnectAll,

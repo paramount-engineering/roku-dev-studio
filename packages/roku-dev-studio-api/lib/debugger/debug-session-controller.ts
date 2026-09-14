@@ -23,7 +23,8 @@
  */
 import { apiError, apiLog } from '../log';
 import { DEBUG_CONTROL_PORT } from './protocol/constants';
-import { DebugProtocolClient } from './protocol/debug-protocol-client';
+import { DebugProtocolClient, type DebugSocketLike } from './protocol/debug-protocol-client';
+import type { ExceptionBreakpointSpec } from './protocol/encode';
 
 /** Total budget to keep retrying attach after a debug sideload (8081 opens a beat late). */
 const PORT_WAIT_MS = 20000;
@@ -46,7 +47,8 @@ export const DEBUGGER_EVENTS = {
   Output: 'output',
   RuntimeError: 'runtime-error',
   CompileErrors: 'compile-errors',
-  Breakpoints: 'breakpoints'
+  Breakpoints: 'breakpoints',
+  ExceptionBreakpointError: 'exception-breakpoint-error'
 } as const;
 
 export type DebuggerEventKind = (typeof DEBUGGER_EVENTS)[keyof typeof DEBUGGER_EVENTS];
@@ -120,8 +122,13 @@ export class DebugSessionController {
    * that IP is already up. Otherwise tears down any existing (stale/errored)
    * session first (the control port is single-client) and reconnects. Resolves
    * once the handshake completes or rejects with an actionable message.
+   *
+   * `connectSocket`, when given, tunnels the control/IO sockets through an RCE
+   * instance's ports-bridge instead of a raw TCP connect to `ip` — see
+   * {@link DebugSocketLike}. `ip` is still the map key either way (for an RCE
+   * device it's the device's serial, per the app's device-identity convention).
    */
-  async attach(ip: string): Promise<{ ok: boolean; error?: string }> {
+  async attach(ip: string, opts?: { connectSocket?: (port: number) => Promise<DebugSocketLike> }): Promise<{ ok: boolean; error?: string }> {
     const clean = (ip || '').trim();
     if (!clean) return { ok: false, error: 'A device IP is required to attach.' };
 
@@ -142,7 +149,7 @@ export class DebugSessionController {
     const inFlight = this.attaching.get(clean);
     if (inFlight) return inFlight;
 
-    const attempt = this.runAttach(clean);
+    const attempt = this.runAttach(clean, opts?.connectSocket);
     this.attaching.set(clean, attempt);
     try {
       return await attempt;
@@ -151,7 +158,7 @@ export class DebugSessionController {
     }
   }
 
-  private async runAttach(clean: string): Promise<{ ok: boolean; error?: string }> {
+  private async runAttach(clean: string, connectSocket?: (port: number) => Promise<DebugSocketLike>): Promise<{ ok: boolean; error?: string }> {
     await this.detach(clean); // single-client control port — never stack sessions
 
     // Surface "connecting" immediately; the port can take a beat to open after a
@@ -172,7 +179,7 @@ export class DebugSessionController {
       attempt++;
       let client: DebugProtocolClient;
       try {
-        client = new DebugProtocolClient({ host: clean, controlPort: DEBUG_CONTROL_PORT });
+        client = new DebugProtocolClient({ host: clean, controlPort: DEBUG_CONTROL_PORT, connectSocket });
       } catch (e) {
         return { ok: false, error: e instanceof Error ? e.message : String(e) };
       }
@@ -419,6 +426,13 @@ export class DebugSessionController {
     return { removed: ids.length };
   }
 
+  /** Break on caught/uncaught BrightScript errors device-wide (not tied to a file:line).
+   *  A no-op on firmware that predates the command — see `DebugProtocolClient.setExceptionBreakpoints`. */
+  async setExceptionBreakpoints(ip: string, filters: ExceptionBreakpointSpec[]): Promise<unknown> {
+    const res = await this.require(ip).setExceptionBreakpoints(filters);
+    return plain((res as { data?: { breakpoints?: unknown } } | undefined)?.data?.breakpoints ?? res);
+  }
+
   // --- Event wiring ----------------------------------------------------------
 
   private wireEvents(session: DebugSession): void {
@@ -461,6 +475,11 @@ export class DebugSessionController {
     // instead of dropping it — otherwise a breakpoint silently never hits.
     client.on('breakpoint-error', (arg) => {
       this.emit(DEBUGGER_EVENTS.Breakpoints, { ip, error: plain(arg) });
+    });
+    // Device rejected an exception-breakpoint filter (e.g. a bad conditionExpression) —
+    // distinct from a line breakpoint error, so it gets its own event kind.
+    client.on('exception-breakpoint-error', (arg) => {
+      this.emit(DEBUGGER_EVENTS.ExceptionBreakpointError, { ip, error: plain(arg) });
     });
 
     const end = (): void => {
