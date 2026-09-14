@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "Roku Remote Server API",
-    "description": "REST API for controlling Roku devices remotely via the Roku Dev Studio remote server. This server runs on a Mac Mini (or any computer) at a remote location and exposes Roku ECP (External Control Protocol) functionality over HTTP, along with telnet debug console and telnet system console streaming, a remote Network Inspector (MITM capture/replay/traffic rules), and a remote BrightScript socket debugger, both of which also stream live events over Server-Sent Events (SSE).",
+    "description": "REST API for controlling Roku devices remotely via the Roku Dev Studio remote server. This server runs on a machine at a remote location and exposes Roku ECP (External Control Protocol) functionality over HTTP, along with telnet debug console and telnet system console streaming, a remote Network Inspector (MITM capture/replay/traffic rules), and a remote BrightScript socket debugger, both of which also stream live events over Server-Sent Events (SSE).",
     "version": "1.0.0",
     "contact": {
       "name": "Roku Dev Studio"

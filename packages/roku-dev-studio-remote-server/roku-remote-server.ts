@@ -1,9 +1,10 @@
 /**
  * Roku Remote Server
  * 
- * This server runs on a remote Mac Mini and provides a REST API to control
- * Roku devices on the local network. It acts as a bridge between the
- * Roku Dev Studio desktop app and Roku devices at a remote location.
+ * This server runs on a machine at a remote location (macOS, Linux, or Windows)
+ * and provides a REST API to control Roku devices on the local network. It
+ * acts as a bridge between the Roku Dev Studio desktop app and Roku devices
+ * at a remote location.
  * 
  * Usage:
  *   node roku-remote-server.js [port]
@@ -1196,7 +1197,7 @@ async function handleRequest(req, res) {
     if (pathname === '/capabilities' && method === 'GET') {
       return sendJson(res, {
         success: true,
-        version: '1.0.0',
+        version: api.PACKAGE_VERSION || 'unknown',
         capabilities: {
           // Core features
           remote: true,           // Remote control (keypress, text input)
@@ -1888,9 +1889,13 @@ async function handleRequest(req, res) {
           remoteDebugFlag = parts.remotedebug === '1' || parts.remotedebug === 'true';
 
           if (parts.file && parts.file.data) {
-            // Save uploaded file to temp location (extension only, no path from filename)
+            // Save uploaded file to temp location (extension only, no path from filename).
+            // Unique per request (like the pcap/CA-cert temp names above) rather than
+            // `Date.now()`-only — a Sideload Relay fan-out can fire two `/sideload` POSTs at this
+            // device close enough together to land in the same millisecond, and a shared filename
+            // means whichever request finishes first deletes the file the other is still reading.
             const ext = (path.extname(parts.file.filename) || '.zip').replace(/[^a-zA-Z0-9.]/g, '') || '.zip';
-            const safeTempName = `upload-${Date.now()}${ext}`;
+            const safeTempName = `upload-${nodeCrypto.randomUUID()}${ext}`;
             tempFile = resolveUnderBase(TEMP_DIR, safeTempName) || path.join(TEMP_DIR, safeTempName);
             fs.writeFileSync(tempFile, parts.file.data);
             filePath = tempFile;

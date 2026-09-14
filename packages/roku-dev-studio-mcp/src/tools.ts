@@ -1006,7 +1006,7 @@ const BESPOKE_TOOLS: Tool[] = [
     name: 'list_devices',
     title: 'List All Known Devices',
     description:
-      'Return every device Dev Studio already knows about — connected, discovered, remembered, or remote — without running a network scan. Read-only. Each entry: `ip`, `serial`, `modelName`, `friendlyDeviceName`, `softwareVersion`, `source`, `isConnected`, `isFocused`. Use this as the first step to resolve a `device` argument (IP or serial) for other tools. Related tools: get_selected_device returns only the one focused device; scan_devices actively probes the network for NEW devices not yet known; connect_device opens/focuses a tab for one of these entries.',
+      'Return every device Dev Studio already knows about — connected, discovered, remembered, remote, or RCE — without running a network scan. Read-only. Each entry: `ip`, `serial`, `modelName`, `friendlyDeviceName`, `softwareVersion`, `source`, `isConnected`, `isFocused`. `source` is `local` (physical, this LAN), `remote` (physical, via an RDS Relay location), or `rce` (Roku Cloud Emulator — no real IP, `ip` is a serial stand-in; most main-direct ops work against it directly, but `sideload`/`delete_sideload` don\'t — use connect_device + Dev Studio\'s Sideload Relay/Dev App tab for those). Use this as the first step to resolve a `device` argument (IP or serial) for other tools. Related tools: get_selected_device returns only the one focused device; scan_devices actively probes the network for NEW devices not yet known; connect_device opens/focuses a tab for one of these entries.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
     annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
     handler: async () => listDevices()
@@ -1015,7 +1015,7 @@ const BESPOKE_TOOLS: Tool[] = [
     name: 'connect_device',
     title: 'Connect to a Device',
     description:
-      'Open (or focus, if already open) a Dev Studio device tab for the given Roku, making it the active target for renderer-routed tools (rale_command, telnet_*, app_function, get_telnet_log). Required `device`: Roku IP or serial from list_devices / scan_devices. Idempotent — a no-op if that device is already connected and focused. Not needed for main-direct ECP ops (keypress, launch_app, ecp_query, …), which accept a `device` argument directly; use test_connection to verify reachability without opening a tab.',
+      'Open (or focus, if already open) a Dev Studio device tab for the given Roku, making it the active target for renderer-routed tools (rale_command, telnet_*, app_function, get_telnet_log). Required `device`: Roku IP or serial from list_devices / scan_devices. Idempotent — a no-op if that device is already connected and focused. Not needed for main-direct ECP ops (keypress, launch_app, ecp_query, …) on local/remote devices, which accept a `device` argument directly; use test_connection to verify reachability without opening a tab. Only connects a device that\'s actually reachable right now — fails with a clear reason instead of guessing: a local device must be currently discoverable, a remote device\'s RDS Relay location must be online, and an `rce` (Roku Cloud Emulator) device must already be **running** — this tool will never start one; tell the user to start it in Roku Dev Studio first.',
     inputSchema: {
       type: 'object',
       properties: {

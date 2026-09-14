@@ -10,6 +10,9 @@ device through the Roku Dev Studio desktop app and exposes **two surfaces**:
    `get_app_icon`, `app_connector_connect` /
    `app_connector_disconnect`, `rale_get_node_by_id`,
    `telnet_connect` / `telnet_disconnect` / `get_telnet_log`.
+   Two of these (`sideload`, `delete_sideload`) do **not** work against a
+   Roku Cloud Emulator (`rce`) device — see §4 for the three device kinds
+   and which tools each one supports.
 2. **Action Scripts** — `validate_script` + `send_script_to_builder`.
    A script opens in the Builder UI for the human to review. Nothing runs
    automatically.
@@ -64,7 +67,33 @@ connect_device({ device: "..." })   → open a tab (IP or serial)
 ```
 
 For every tool that talks to a device, `device` is **optional** — omit to
-target the focused tab.
+target the focused tab. When given, `device` accepts either the Roku's LAN
+IP or its serial number — whichever `list_devices` shows for that entry;
+both work everywhere a `device` argument is accepted.
+
+### Three kinds of device
+
+Every entry from `list_devices` / `get_selected_device` carries a `source`:
+
+- **`local`** — a physical Roku on this LAN, reachable directly.
+- **`remote`** — a physical Roku at another location, reached through an
+  RDS Relay server. Only connectable while that location's relay server is
+  itself online; if it isn't, `connect_device` fails rather than guessing.
+- **`rce`** — a Roku Cloud Emulator (a cloud-hosted virtual device, not a
+  physical box). Has no real IP — its `ip` field is a serial/synthetic
+  stand-in, so it only works with tools that accept a serial. Only
+  connectable while the instance is already **running**: `connect_device`
+  will never start one on your behalf, and no MCP tool does — if it's not
+  running, tell the user to start it in Roku Dev Studio first.
+
+**Most tools work the same against `rce` as `local`/`remote`.** The bridge
+detects an `rce` target and dials its Device API directly instead of a real
+IP — `keypress`, `launch_app`, `ecp_query`, `ecp_post`, `input_text`,
+`deep_link`, `get_app_icon`, `test_connection`, and `screenshot` all work
+normally, no extra step needed. `rale_command`/`app_function`/`telnet_*`
+also work unchanged (renderer-routed regardless of device kind). **Only
+`sideload` and `delete_sideload` don't yet support `rce`** — use Dev
+Studio's Sideload Relay or the Dev App tab for those instead.
 
 ## 5. Doing a single action (direct ops path)
 
