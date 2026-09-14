@@ -25,7 +25,11 @@ import {
   bounceDebugTelnet
 } from './telnet-handlers';
 import { ensureRemoteTelnetConnected } from './remote-handlers';
+import { ensureRceDebugTelnetConnected } from './rce-handlers';
+import { resolveRceDeviceBySerial, resolveRceInstanceBySerial, type RceLiveInstance } from '../rce-device-registry';
+import { rceSideload, rceDeleteSideload, RceEcpClient } from 'roku-dev-studio-rce';
 import { mainLog, mainWarn, mainError } from '../log.js';
+import { notifyDebuggerReattach } from './debugger-handlers';
 
 const fs = require('fs');
 const path = require('path');
@@ -218,6 +222,7 @@ async function sideloadRemoteUploadOnce(opts: {
   ip: string;
   zipPath: string;
   password: string;
+  remoteDebug?: boolean;
 }): Promise<{ success: boolean; error?: string; message?: string; authFailed?: boolean }> {
   const fileName = path.basename(opts.zipPath);
   // Async read (the zip can be many MB) BEFORE constructing the upload Promise, so the main
@@ -233,6 +238,9 @@ async function sideloadRemoteUploadOnce(opts: {
       const form = new FormData();
       form.append('file', fileBuffer, { filename: fileName, contentType: 'application/zip' });
       form.append('password', opts.password);
+      // Field name/value match relay-server.ts's `getField(parsed, 'remotedebug')` check —
+      // same convention the Dev App tab's own remote sideload (`remoteSideloadUpload`) uses.
+      if (opts.remoteDebug) form.append('remotedebug', '1');
       const url = new URL(opts.serverUrl);
       const httpModule = require(url.protocol === 'https:' ? 'https' : 'http');
       const req = httpModule.request(
@@ -276,6 +284,7 @@ async function sideloadRemoteUpload(opts: {
   ip: string;
   zipPath: string;
   password: string;
+  remoteDebug?: boolean;
 }): Promise<{ success: boolean; error?: string; message?: string; authFailed?: boolean }> {
   const maxAttempts = 3;
   let last: { success: boolean; error?: string; message?: string; authFailed?: boolean } = { success: false };
@@ -295,12 +304,19 @@ async function sideloadRemoteUpload(opts: {
  * slot is currently our Fiddle channel (matched by manifest title). If the
  * query fails we return `false` — delete is suppressed rather than risking
  * removing someone else's sideloaded channel.
+ *
+ * `rceInstance` set means the query goes through the RCE ECP proxy instead — same
+ * fail-closed behavior applies if that 403s (e.g. the device's ECP mode is Limited, which blocks
+ * `query/apps` — confirmed live 2026-09-12): the delete is simply skipped, matching what already
+ * happens for a physical device whose query fails for any other reason.
  */
-async function isFiddleInstalled(ip: string, serverUrl: string | null | undefined): Promise<boolean> {
+async function isFiddleInstalled(ip: string, serverUrl: string | null | undefined, rceInstance?: RceLiveInstance | null): Promise<boolean> {
   try {
-    const xml = serverUrl
-      ? await fetchRemoteAppsXml(serverUrl, ip)
-      : await fetchLocalAppsXml(ip);
+    const xml = rceInstance
+      ? await fetchRceAppsXml(rceInstance)
+      : serverUrl
+        ? await fetchRemoteAppsXml(serverUrl, ip)
+        : await fetchLocalAppsXml(ip);
     if (!xml) return false;
     // `<app id="dev" ...>Roku Dev Studio Fiddle</app>` — manifest title is
     // what Roku puts between the tags for sideloaded apps.
@@ -362,6 +378,16 @@ function fetchRemoteAppsXml(serverUrl: string, ip: string): Promise<string> {
   });
 }
 
+async function fetchRceAppsXml(instance: RceLiveInstance): Promise<string> {
+  try {
+    const client = new RceEcpClient(instance.instanceApiUrl, instance.token);
+    const result = await client.query('/query/apps');
+    return result.success && typeof result.data === 'string' ? result.data : '';
+  } catch {
+    return '';
+  }
+}
+
 function deleteSideloadRemote(opts: {
   serverUrl: string;
   ip: string;
@@ -410,6 +436,10 @@ function deleteSideloadRemote(opts: {
  * Verify the device still has our Fiddle channel installed, then delete it.
  * Returns `{ success, error?, skipped?, authFailed? }` where `skipped: true`
  * means the channel wasn't our Fiddle (so we left it alone). Never throws.
+ *
+ * Resolves RCE identity internally (from `device.ip`, which already *is* the serial for an RCE
+ * device — see normalizeRceDevice) rather than requiring every caller to do it, since this is
+ * called from both `FiddleStop` and the window-close cleanup below.
  */
 async function verifyAndDeleteFiddle(
   device: Pick<FiddleDeviceSnapshotEntry, 'ip' | 'isRemote' | 'serverUrl' | 'password'>
@@ -417,11 +447,23 @@ async function verifyAndDeleteFiddle(
   if (!device.password) {
     return { success: false, error: S.fiddle.errNoPasswordAvailable };
   }
-  const isOurs = await isFiddleInstalled(device.ip, device.serverUrl || null);
+  const rceKnown = resolveRceDeviceBySerial(device.ip);
+  const rceInstance = rceKnown ? await resolveRceInstanceBySerial(device.ip) : null;
+  if (rceKnown && rceInstance && !rceInstance.success) {
+    return { success: false, error: rceInstance.error };
+  }
+  const isOurs = await isFiddleInstalled(device.ip, device.serverUrl || null, rceInstance?.success ? rceInstance.instance : null);
   if (!isOurs) {
     return { success: true, skipped: true };
   }
   try {
+    if (rceInstance?.success) {
+      return await rceDeleteSideload({
+        instanceApiUrl: rceInstance.instance.instanceApiUrl,
+        rceToken: rceInstance.instance.token,
+        devPassword: device.password
+      });
+    }
     if (device.isRemote && device.serverUrl) {
       return await deleteSideloadRemote({
         serverUrl: device.serverUrl,
@@ -494,7 +536,7 @@ export function registerBsFiddleIpc(ipcMain: IpcMain): void {
     }
   });
 
-  ipcMain.handle(IPC.FiddleRun, async (event: IpcMainInvokeEvent, payload: { deviceId: string; code: string; password?: string }) => {
+  ipcMain.handle(IPC.FiddleRun, async (event: IpcMainInvokeEvent, payload: { deviceId: string; code: string; password?: string; remoteDebug?: boolean }) => {
     const senderWin = BrowserWindow.fromWebContents(event.sender);
     if (!senderWin || senderWin.isDestroyed()) {
       return { success: false, error: S.fiddle.errWindowUnavailable };
@@ -546,6 +588,17 @@ export function registerBsFiddleIpc(ipcMain: IpcMain): void {
       return { success: false, error: S.fiddle.errPackageFailed(errMsg(err)), runId };
     }
 
+    // RCE devices are identified by serial, not IP (device.ip already *is* the serial for RCE —
+    // see normalizeRceDevice in renderer/app.ts) — resolved fresh here rather than trusting
+    // anything cached, since a restarted instance invalidates the old instanceApiUrl outright.
+    // See [[device-identity-key-rule]] / rce-device-registry.ts's header for the full reasoning.
+    const rceKnown = resolveRceDeviceBySerial(device.ip);
+    const rceInstance = rceKnown ? await resolveRceInstanceBySerial(device.ip) : null;
+    if (rceKnown && rceInstance && !rceInstance.success) {
+      try { fs.unlinkSync(zipPath); } catch { /* ignore */ }
+      return { success: false, error: rceInstance.error, runId };
+    }
+
     // Make sure a telnet stream is live for this device BEFORE sideloading.
     // For remote devices we dial the relay WebSocket (or reuse an already-
     // open one so we don't disrupt a Console session the user has going).
@@ -556,12 +609,23 @@ export function registerBsFiddleIpc(ipcMain: IpcMain): void {
     // prints only to whichever telnet client was bound last, and that needs
     // to be us at the exact moment `_rdsFiddle_setUpApp` runs.
     const fiddleTelnetHolder = `fiddle:${senderWin.id}`;
-    if (!device.isRemote) {
+    if (rceInstance?.success) {
+      // No holder-tracking equivalent for RCE (see rce-handlers.ts's ensureRceDebugTelnetConnected
+      // doc comment) — it just (re)connects, matching what `RceTelnetConnect` already does for the
+      // Console tab.
+    } else if (!device.isRemote) {
       state.telnetIpsUsed.add(device.ip);
     } else if (device.serverUrl) {
       state.remoteTelnetTargetsUsed.push({ serverUrl: device.serverUrl, ip: device.ip });
     }
-    if (device.isRemote) {
+    if (rceInstance?.success) {
+      try {
+        const res = await ensureRceDebugTelnetConnected(rceInstance.instance.accountName, rceInstance.instance.instanceApiUrl, device.ip);
+        mainLog('[Fiddle] ensureRceDebugTelnetConnected (pre-sideload) →', res, 'for', device.ip);
+      } catch (err) {
+        mainWarn('[Fiddle] RCE telnet connect failed (continuing):', errMsg(err));
+      }
+    } else if (device.isRemote) {
       if (!device.serverUrl) {
         return {
           success: false,
@@ -588,24 +652,42 @@ export function registerBsFiddleIpc(ipcMain: IpcMain): void {
       }
     }
 
-    // Sideload (local or remote).
+    // "Sideload with Debugging" — same remotedebug=1 convention Sideload Relay / the Dev App tab
+    // use, just read straight off the Fiddle modal's checkbox instead of a persisted per-device
+    // setting (a Fiddle run is a one-off, not a saved preference).
+    const debugEnabled = !!payload?.remoteDebug;
+
+    // Sideload (local, remote, or RCE).
     let sideloadRes: { success: boolean; error?: string; message?: string; authFailed?: boolean } = {
       success: false,
       error: 'unknown'
     };
     try {
-      if (device.isRemote && device.serverUrl) {
+      if (rceInstance?.success) {
+        const zipData = fs.readFileSync(zipPath);
+        sideloadRes = await rceSideload(
+          { instanceApiUrl: rceInstance.instance.instanceApiUrl, rceToken: rceInstance.instance.token, devPassword: password },
+          zipData,
+          path.basename(zipPath),
+          debugEnabled
+        );
+      } else if (device.isRemote && device.serverUrl) {
         sideloadRes = await sideloadRemoteUpload({
           serverUrl: device.serverUrl,
           ip: device.ip,
           zipPath,
-          password
+          password,
+          remoteDebug: debugEnabled
         });
       } else {
         sideloadRes = await sideloadChannel({
           ip: device.ip,
           filePath: zipPath,
-          password
+          password,
+          // Debug launches need a clean Delete+Install so the device actually relaunches with
+          // remotedebug=1 (Replace can drop it — see dev-app-handlers.ts's identical comment).
+          cleanInstall: debugEnabled,
+          ...(debugEnabled ? { extraFields: [{ name: 'remotedebug', value: '1' }] } : {})
         });
       }
     } catch (err) {
@@ -643,6 +725,20 @@ export function registerBsFiddleIpc(ipcMain: IpcMain): void {
       // password is never written (session-only modal entry path).
       setFiddleActiveSideload(senderWin.id, device.id, password);
 
+      // "Sideload with Debugging" reopened the device's debug port (8081) — tell the Telnet
+      // debug sidebar to reattach to this fresh run, same event `dev-app-handlers.ts` /
+      // `remote-handlers.ts` / `rce-handlers.ts`'s own sideload handlers already fire.
+      if (debugEnabled) {
+        try {
+          notifyDebuggerReattach(
+            device.ip,
+            device.isRemote && device.serverUrl ? { isRemote: true, serverUrl: device.serverUrl } : undefined
+          );
+        } catch {
+          /* best-effort */
+        }
+      }
+
       // Post-sideload telnet bounce (LOCAL ONLY).
       //
       // Root cause this fixes: on some Roku firmwares port 8085 streams
@@ -666,7 +762,10 @@ export function registerBsFiddleIpc(ipcMain: IpcMain): void {
       // bounce is fire-and-forget; we don't block the Fiddle IPC response
       // on it, but we do await the reconnect so subsequent logic sees a
       // live socket.
-      if (!device.isRemote) {
+      // Not applicable to RCE: `bounceDebugTelnet` is the physical-IP-keyed telnet map, and this
+      // firmware quirk hasn't been observed against RCE's own console tunnel (the pre-sideload
+      // `ensureRceDebugTelnetConnected` above is the only connect RCE gets for now).
+      if (!device.isRemote && !rceInstance?.success) {
         const ip = device.ip;
         void (async () => {
           try {

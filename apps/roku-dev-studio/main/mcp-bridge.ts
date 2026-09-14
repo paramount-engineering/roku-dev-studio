@@ -58,6 +58,8 @@ import {
 import { sanitizeFindOptions } from 'roku-dev-studio-network-inspector/input-sanitize';
 import { getDebugSessionController } from './ipc/debugger-handlers';
 import type { DebugSessionController } from 'roku-dev-studio-api/lib/debugger/debug-session-controller';
+import { RceEcpClient, rceCaptureScreenshot } from 'roku-dev-studio-rce';
+import { resolveRceInstanceBySerial } from './rce-device-registry';
 
 const rokuApi = require('roku-dev-studio-api') as {
   query: (ip: string, endpoint: string) => Promise<unknown>;
@@ -711,6 +713,104 @@ function deviceLabel(ip: string | null): string {
   const match = state.connectedDevices.find((d) => d.ip === ip) || state.knownDevices.find((d) => d.ip === ip);
   const name = match?.friendlyDeviceName || match?.modelName || 'device';
   return `${name} (${ip})`;
+}
+
+/**
+ * `runOpForHttp` dials a real `ip:8060` — it cannot work for an RCE device, whose `ip` in
+ * `state.connectedDevices` is a serial/synthetic stand-in with no real network address (see
+ * `shared/mcp-bridge-state.ts`'s `rce` source doc). For those, run the equivalent RCE Device API
+ * call directly in THIS (main) process instead: `resolveRceInstanceBySerial` is the same
+ * account-token + live-instance-URL resolution `main/ipc/rce-handlers.ts`'s own IPC handlers use,
+ * so this needs no renderer round-trip (unlike rale_command/app_function, which genuinely need
+ * renderer-owned session state) and works even with no Dev Studio window open.
+ *
+ * Returns `null` when `params.ip` isn't a currently-connected RCE device, so the `/op/<id>`
+ * handler falls through to the existing `rokuApi.runOpForHttp` local/LAN path unchanged.
+ */
+async function runOpForRce(
+  opId: string,
+  params: Record<string, unknown>
+): Promise<{ status: number; body: Record<string, unknown> } | null> {
+  const ip = typeof params.ip === 'string' ? params.ip : '';
+  if (!ip || !state.connectedDevices.some((d) => d.ip === ip && d.source === 'rce')) return null;
+
+  const resolved = await resolveRceInstanceBySerial(ip);
+  if (!resolved.success) return { status: 409, body: { error: resolved.error } };
+  const { instanceApiUrl, token } = resolved.instance;
+  const client = new RceEcpClient(instanceApiUrl, token);
+  const appId = typeof params.appId === 'string' ? params.appId : '';
+  const endpoint = typeof params.endpoint === 'string' ? params.endpoint : '';
+
+  try {
+    switch (opId) {
+      case 'keypress':
+        return { status: 200, body: { ...(await client.keypress(typeof params.key === 'string' ? params.key : '')) } };
+      case 'launch_app': {
+        const query =
+          params.params && typeof params.params === 'object'
+            ? new URLSearchParams(params.params as Record<string, string>).toString()
+            : undefined;
+        return { status: 200, body: { ...(await client.launch(appId, query)) } };
+      }
+      case 'ecp_query':
+        return { status: 200, body: { ...(await client.query(endpoint)) } };
+      case 'ecp_post':
+        return { status: 200, body: { ...(await client.post(endpoint)) } };
+      case 'input_text':
+        return { status: 200, body: { ...(await client.inputText(params.text)) } };
+      case 'deep_link':
+        return {
+          status: 200,
+          body: {
+            ...(await client.deeplink(
+              appId,
+              typeof params.contentId === 'string' ? params.contentId : undefined,
+              typeof params.mediaType === 'string' ? params.mediaType : undefined,
+              params.params && typeof params.params === 'object' ? (params.params as Record<string, string>) : undefined
+            ))
+          }
+        };
+      case 'get_app_icon':
+        return { status: 200, body: { ...(await client.getIcon(appId)) } };
+      case 'test_connection':
+        // A resolved, running instance already proves reachability — RCE has no ip:8060 to probe.
+        return { status: 200, body: { success: true, deviceInfo: { instanceApiUrl, status: 'running' } } };
+      case 'screenshot': {
+        const password = typeof params.password === 'string' ? params.password : '';
+        const waitAfterTriggerMs = typeof params.waitAfterTriggerMs === 'number' ? params.waitAfterTriggerMs : undefined;
+        const shot = await rceCaptureScreenshot({
+          instanceApiUrl,
+          rceToken: token,
+          devPassword: password,
+          waitAfterTriggerMs
+        });
+        if (!shot.success || !shot.imageBuffer) {
+          return { status: 200, body: { success: false, error: shot.error || 'Screenshot failed' } };
+        }
+        return {
+          status: 200,
+          body: {
+            success: true,
+            filename: 'dev.jpg',
+            bytes: shot.imageBuffer.length,
+            imageMimeType: 'image/jpeg',
+            imageBase64: shot.imageBuffer.toString('base64')
+          }
+        };
+      }
+      default:
+        // sideload / delete_sideload: not yet wired for RCE via MCP (would need to duplicate
+        // sideload's contentBase64/sandbox-path validation from operations.ts, which can't be
+        // shared here — roku-dev-studio-api can't depend on roku-dev-studio-rce, see that
+        // package's own dependency direction). Use Dev Studio's Sideload Relay or Dev App tab.
+        return {
+          status: 501,
+          body: { error: `"${opId}" is not yet supported for RCE devices via MCP. Use Roku Dev Studio's Sideload Relay or the Dev App tab instead.` }
+        };
+    }
+  } catch (e) {
+    return { status: 502, body: { error: e instanceof Error ? e.message : String(e) } };
+  }
 }
 
 async function runConnectDevice(target: TargetRef): Promise<ConnectResult> {
@@ -1735,7 +1835,7 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
     const isScreenshot = opId === 'screenshot';
     const agentWantsImage = isScreenshot ? params.returnImageBase64 !== false : true;
     if (isScreenshot) params.returnImageBase64 = true;
-    const result = await rokuApi.runOpForHttp(op, params);
+    const result = (await runOpForRce(opId, params)) ?? (await rokuApi.runOpForHttp(op, params));
     if (
       isScreenshot &&
       result.status >= 200 &&
@@ -2043,7 +2143,7 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
 function sanitizeOneDevice(d: Record<string, unknown>): DeviceSnapshot {
   const sourceRaw = typeof d.source === 'string' ? d.source : 'unknown';
   const source: DeviceSnapshot['source'] =
-    sourceRaw === 'local' || sourceRaw === 'remote' ? sourceRaw : 'unknown';
+    sourceRaw === 'local' || sourceRaw === 'remote' || sourceRaw === 'rce' ? sourceRaw : 'unknown';
   return {
     ip: typeof d.ip === 'string' ? d.ip : null,
     serial: typeof d.serial === 'string' ? d.serial : null,

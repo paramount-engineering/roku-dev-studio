@@ -18,6 +18,10 @@ import { isRelaySelfDevice } from '../sideload-relay/fake-device-info';
 import { remoteHttpRequest } from '../remote-http';
 import { readRemoteLocations } from '../remote-locations';
 import { recordRemoteDeviceSeen } from '../remote-device-registry';
+import { resolveRceDeviceBySerial, resolveRceInstanceBySerial, recordRceDeviceSeen } from '../rce-device-registry';
+import { rceVerifyDevAuth, RceManagementClient } from 'roku-dev-studio-rce';
+import type { RceDevice } from 'roku-dev-studio-rce';
+import { getRceAccountNames, getRceAccountToken } from '../rce-account-store';
 
 const { mainLog, mainWarn } = require('../log');
 const secretStore = require('../secret-store') as typeof import('../secret-store');
@@ -346,6 +350,48 @@ function setupRelayHandlers(
         })
       );
 
+      // --- RCE devices (every configured account, every device) ---
+      // Never had a discovery path at all before this — the fan-out step (fanout.ts) already
+      // knew how to install to an RCE target once one existed, but nothing ever populated
+      // `discovered`, so an RCE device could never show as targetable/reachable here.
+      //
+      // `enrichWithEcpMode` (rce-handlers.ts) doubles as both gates this needs: it only ever
+      // sets `developerEnabled` for a device whose `runningDevice.instanceApiUrl` resolved (i.e.
+      // it silently no-ops for a shutdown device, same as a real device with no running instance
+      // to query), and `developerEnabled === true` is the exact same "nothing can be sideloaded
+      // without dev mode" gate `toCandidate` already applies to local/remote devices above.
+      const { enrichWithEcpMode } = require('./rce-handlers') as {
+        enrichWithEcpMode: (device: RceDevice, token: string) => Promise<void>;
+      };
+      await Promise.all(
+        getRceAccountNames().map(async (accountName) => {
+          const token = getRceAccountToken(accountName);
+          if (!token) return;
+          try {
+            const client = new RceManagementClient(token);
+            const result = await client.listDevices();
+            if (!result.success) return;
+            await Promise.all(result.devices.map((d) => enrichWithEcpMode(d, token)));
+            for (const d of result.devices) {
+              recordRceDeviceSeen(accountName, d);
+              if (d.developerEnabled !== true) continue; // shutdown, or dev mode actually off
+              const ip = d.serialNumber || `rce-${d.id}`; // matches normalizeRceDevice's own fallback
+              add({
+                id: d.serialNumber || ip,
+                ip,
+                name: d.name || ip,
+                serial: d.serialNumber || undefined,
+                location: accountName,
+                remote: false,
+                hasPassword: deviceHasStoredPassword(d.serialNumber || ip, d.serialNumber || undefined, allPasswords)
+              });
+            }
+          } catch (e) {
+            mainWarn(`[SideloadRelay] RCE discovery failed for account "${accountName}":`, (e as Error)?.message || e);
+          }
+        })
+      );
+
       return { success: true, devices: Array.from(byKey.values()) };
     } catch (e) {
       mainWarn('[SideloadRelay] seed-targets discovery failed:', (e as Error)?.message || e);
@@ -362,12 +408,29 @@ function setupRelayHandlers(
       payload?: { ip?: string; serial?: string; remote?: boolean; serverUrl?: string; password?: string }
     ) => {
       const ip = typeof payload?.ip === 'string' ? payload.ip.trim() : '';
+      const serial = typeof payload?.serial === 'string' ? payload.serial.trim() : '';
       const password = typeof payload?.password === 'string' ? payload.password : '';
-      if (!ip || !password) return { success: false, error: S.sideloadRelay.errDeviceIpPasswordRequired };
+      if ((!ip && !serial) || !password) return { success: false, error: S.sideloadRelay.errDeviceIpPasswordRequired };
       try {
         let ok = false;
         let err = '';
-        if (payload?.remote && payload.serverUrl) {
+        // RCE devices have no real IP — identified by serial only (see [[device-identity-key-rule]]
+        // and rce-device-registry.ts's header for why this can't just persist an instanceApiUrl).
+        // Resolved fresh here rather than trusting anything cached, since a restarted instance
+        // invalidates the old instanceApiUrl outright (unlike a physical device's IP, which at
+        // least often still degrades to "unreachable" rather than "404s a torn-down instance").
+        const rceKnown = resolveRceDeviceBySerial(serial || ip);
+        if (rceKnown) {
+          const rceInstance = await resolveRceInstanceBySerial(serial || ip);
+          if (!rceInstance.success) return { success: false, error: rceInstance.error };
+          const res = await rceVerifyDevAuth({
+            instanceApiUrl: rceInstance.instance.instanceApiUrl,
+            rceToken: rceInstance.instance.token,
+            devPassword: password
+          });
+          ok = !!res.success;
+          err = res.error || '';
+        } else if (payload?.remote && payload.serverUrl) {
           const res = await remoteHttpRequest(payload.serverUrl, `/device/${encodeURIComponent(ip)}/verify-dev-auth`, 'POST', { password });
           ok = !!res?.success;
           err = res?.error || '';
@@ -380,7 +443,6 @@ function setupRelayHandlers(
         // Save it as the ONE canonical device credential (same serial key the Dev
         // App / sideloading / Action Scripts use) and push it to the open window so
         // its cache reflects it live. No relay-specific per-device store.
-        const serial = typeof payload?.serial === 'string' ? payload.serial.trim() : '';
         const key = serial || ip;
         secretStore.setPassword(key, password);
         safeSendToRenderer(IPC.SecretsPasswordUpdated, { serial: key, password });

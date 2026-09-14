@@ -116,7 +116,7 @@ contextBridge.exposeInMainWorld('roku', {
     ipcRenderer.invoke(IPC.RokuSideload, { ip, filePath, password, remoteDebug, serial }),
   deleteSideload: (ip: string, password: string | undefined) =>
     ipcRenderer.invoke(IPC.RokuDeleteSideload, { ip, password }),
-  launchDemoApp: (payload: { ip: string; isRemote?: boolean; serverUrl?: string | null; password: string }) =>
+  launchDemoApp: (payload: { ip: string; isRemote?: boolean; serverUrl?: string | null; password: string; remoteDebug?: boolean }) =>
     ipcRenderer.invoke(IPC.DemoAppLaunch, payload),
   /** The Settings window's "Demo App" button asked main to open the picker here. */
   onDemoAppOpenRequested: (callback: () => void) => {
@@ -136,9 +136,14 @@ contextBridge.exposeInMainWorld('roku', {
     ipcRenderer.invoke(IPC.RokuScreenshot, { ip, password, waitAfterTriggerMs: options?.waitAfterTriggerMs }),
   verifyDevAuth: (ip: string, password: string | undefined) =>
     ipcRenderer.invoke(IPC.RokuVerifyDevAuth, { ip, password }),
-  saveScreenshot: (tempFile: string, dataUrl: string) => 
+  saveScreenshot: (tempFile: string, dataUrl: string) =>
     ipcRenderer.invoke(IPC.RokuSaveScreenshot, { tempFile, dataUrl }),
-  
+  // Session-gallery screenshot storage — persists a capture that has no device-written file of
+  // its own (canvas frame-grab / agent-driven) to a temp file, and deletes a temp file once its
+  // history entry is cleared or its device tab disconnects. See screenshots.ts.
+  persistScreenshotDataUrl: (dataUrl: string) => ipcRenderer.invoke(IPC.PersistScreenshotDataUrl, { dataUrl }),
+  deleteScreenshotTempFile: (tempFile: string) => ipcRenderer.invoke(IPC.DeleteScreenshotTempFile, { tempFile }),
+
   // Deep link to content
   deeplink: (ip: string, appId: string, contentId: string, mediaType?: string, params?: Record<string, string>) =>
     ipcRenderer.invoke(IPC.RokuDeeplink, { ip, appId, contentId, mediaType, params }),
@@ -301,8 +306,132 @@ contextBridge.exposeInMainWorld('roku', {
     ipcRenderer.invoke(IPC.RemoteHealth, { serverUrl }),
 
   // Get server capabilities/features
-  remoteCapabilities: (serverUrl: string) => 
+  remoteCapabilities: (serverUrl: string) =>
     ipcRenderer.invoke(IPC.RemoteCapabilities, { serverUrl }),
+
+  // Roku Cloud Emulator (RCE) — Phase 1: account add/validate, device listing.
+  rceValidateToken: (token: string) => ipcRenderer.invoke(IPC.RceValidateToken, { token }),
+  rceAddAccount: (name: string, token: string) => ipcRenderer.invoke(IPC.RceAddAccount, { name, token }),
+  rceRemoveAccount: (name: string) => ipcRenderer.invoke(IPC.RceRemoveAccount, { name }),
+  rceListAccounts: () => ipcRenderer.invoke(IPC.RceListAccounts),
+  // User/org info + quota (GET /user/me) for the "User Info" button on an RCE location.
+  rceGetUserInfo: (name: string) => ipcRenderer.invoke(IPC.RceGetUserInfo, { name }),
+  rceGetUsage: (name: string, start: string, end: string, interval: '1h' | '24h' | '1w' | '1mo') =>
+    ipcRenderer.invoke(IPC.RceGetUsage, { name, start, end, interval }),
+  rceListDevices: (name: string) => ipcRenderer.invoke(IPC.RceListDevices, { name }),
+  rceGetDevice: (name: string, deviceId: number) => ipcRenderer.invoke(IPC.RceGetDevice, { name, deviceId }),
+  rceStartDevice: (
+    name: string,
+    deviceId: number,
+    hint?: {
+      deviceType?: string | null;
+      /** Explicit pick from the "Run device" modal's snapshot dropdown — overrides the default. */
+      snapshotId?: number | null;
+      /** Explicit pick from the "Run device" modal's firmware dropdown — overrides deriving it
+       *  from the chosen snapshot, since a snapshot's own recorded firmware can be retired
+       *  entirely (not just mismatched) on Roku's side. */
+      firmwareVersionId?: string | null;
+      /** Explicit pick from the "Run device" modal's Max Run Time fields, in seconds. */
+      maxRuntimeSeconds?: number | null;
+    }
+  ) => ipcRenderer.invoke(IPC.RceStartDevice, { name, deviceId, ...hint }),
+  rceStopDevice: (name: string, deviceId: number) => ipcRenderer.invoke(IPC.RceStopDevice, { name, deviceId }),
+  // "Run device" modal's snapshot dropdown (GET /devices/{id}/snapshots).
+  rceListSnapshots: (name: string, deviceId: number) => ipcRenderer.invoke(IPC.RceListSnapshots, { name, deviceId }),
+  // Account-wide firmware list, all device types in one call — fetched once per location on
+  // connect (renderer's refreshRceLocation) and cached, not per-device like snapshots.
+  rceListFirmwareVersions: (name: string) => ipcRenderer.invoke(IPC.RceListFirmwareVersions, { name }),
+
+  // ECP over an RCE instance's Device API — see rce-handlers.ts for why `instanceApiUrl` travels
+  // with every call instead of being cached main-process-side.
+  rceKeypress: (name: string, instanceApiUrl: string, key: string) =>
+    ipcRenderer.invoke(IPC.RceKeypress, { name, instanceApiUrl, key }),
+  rceDevSettingsCombo: (name: string, instanceApiUrl: string) =>
+    ipcRenderer.invoke(IPC.RceDevSettingsCombo, { name, instanceApiUrl }),
+  rceLaunch: (name: string, instanceApiUrl: string, appId: string, params?: string) =>
+    ipcRenderer.invoke(IPC.RceLaunch, { name, instanceApiUrl, appId, params }),
+  rceQuery: (name: string, instanceApiUrl: string, endpoint: string) =>
+    ipcRenderer.invoke(IPC.RceQuery, { name, instanceApiUrl, endpoint }),
+  rcePost: (name: string, instanceApiUrl: string, endpoint: string) =>
+    ipcRenderer.invoke(IPC.RcePost, { name, instanceApiUrl, endpoint }),
+  rceInputText: (name: string, instanceApiUrl: string, text: string) =>
+    ipcRenderer.invoke(IPC.RceInputText, { name, instanceApiUrl, text }),
+  rceDeeplink: (name: string, instanceApiUrl: string, appId: string, contentId?: string, mediaType?: string, params?: Record<string, string>) =>
+    ipcRenderer.invoke(IPC.RceDeeplink, { name, instanceApiUrl, appId, contentId, mediaType, params }),
+  rceGetIcon: (name: string, instanceApiUrl: string, appId: string) =>
+    ipcRenderer.invoke(IPC.RceGetIcon, { name, instanceApiUrl, appId }),
+  rceGetHardwareImage: (name: string, instanceApiUrl: string) =>
+    ipcRenderer.invoke(IPC.RceGetHardwareImage, { name, instanceApiUrl }),
+  rceScreenshot: (name: string, instanceApiUrl: string, password: string | undefined, options: { waitAfterTriggerMs?: number } | undefined) =>
+    ipcRenderer.invoke(IPC.RceScreenshot, { name, instanceApiUrl, password, waitAfterTriggerMs: options?.waitAfterTriggerMs }),
+  rceVerifyDevAuth: (name: string, instanceApiUrl: string, password: string | undefined) =>
+    ipcRenderer.invoke(IPC.RceVerifyDevAuth, { name, instanceApiUrl, password }),
+
+  // Telnet system console (port 8080) via the Device API's ports-bridge. Data arrives on the
+  // existing `onTelnetSystemData` listener (below) — no separate RCE listener needed.
+  rceTelnetSystemConnect: (name: string, instanceApiUrl: string, ip: string) =>
+    ipcRenderer.invoke(IPC.RceTelnetSystemConnect, { name, instanceApiUrl, ip }),
+  rceTelnetSystemDisconnect: (ip: string) =>
+    ipcRenderer.invoke(IPC.RceTelnetSystemDisconnect, { ip }),
+  rceTelnetSystemSend: (ip: string, command: string) =>
+    ipcRenderer.invoke(IPC.RceTelnetSystemSend, { ip, command }),
+
+  // BrightScript debug console (port 8085) via the same ports-bridge. Data arrives on the
+  // existing `onTelnetData`/`onTelnetConnected`/`onTelnetDisconnected`/`onTelnetError` listeners
+  // the Console tab already uses for physical/LAN devices — no separate RCE listener needed.
+  rceTelnetConnect: (name: string, instanceApiUrl: string, ip: string) =>
+    ipcRenderer.invoke(IPC.RceTelnetConnect, { name, instanceApiUrl, ip }),
+  rceTelnetDisconnect: (ip: string) => ipcRenderer.invoke(IPC.RceTelnetDisconnect, { ip }),
+
+  // App Connector (RALE, port 49200) via the same ports-bridge. Wake and connect are RCE-specific;
+  // once connected, the device's synthetic `ip` IS the connectionId, so raleCommand/raleDisconnect
+  // above (the local-device RALE IPC, already connectionId-generic) are reused unchanged.
+  rceRaleWake: (name: string, instanceApiUrl: string, port: number) =>
+    ipcRenderer.invoke(IPC.RceRaleWake, { name, instanceApiUrl, port }),
+  rceRaleConnect: (name: string, instanceApiUrl: string, ip: string, port: number) =>
+    ipcRenderer.invoke(IPC.RceRaleConnect, { name, instanceApiUrl, ip, port }),
+
+  // Sideload (design doc §6 item 7) — POST /sideload/plugin_install on the Device API.
+  rceSideload: (name: string, instanceApiUrl: string, filePath: string, password: string, remoteDebug?: boolean, ip?: string) =>
+    ipcRenderer.invoke(IPC.RceSideload, { name, instanceApiUrl, filePath, password, remoteDebug, ip }),
+  rceDeleteSideload: (name: string, instanceApiUrl: string, password: string) =>
+    ipcRenderer.invoke(IPC.RceDeleteSideload, { name, instanceApiUrl, password }),
+
+  // Live video preview (Janus/WebRTC signaling, design doc §7). The offer/status arrive on the
+  // onRceVideoOffer/onRceVideoStatus listeners below; the renderer's RTCPeerConnection answers
+  // back through rceVideoAnswer/rceVideoCandidate/rceVideoCandidatesComplete.
+  rceVideoStart: (name: string, deviceId: number) => ipcRenderer.invoke(IPC.RceVideoStart, { name, deviceId }),
+  rceVideoStop: (name: string, deviceId: number) => ipcRenderer.invoke(IPC.RceVideoStop, { name, deviceId }),
+  rceVideoAnswer: (name: string, deviceId: number, answer: { type: string; sdp: string }) =>
+    ipcRenderer.invoke(IPC.RceVideoAnswer, { name, deviceId, answer }),
+  rceVideoCandidate: (name: string, deviceId: number, candidate: unknown) =>
+    ipcRenderer.invoke(IPC.RceVideoCandidate, { name, deviceId, candidate }),
+  rceVideoCandidatesComplete: (name: string, deviceId: number) =>
+    ipcRenderer.invoke(IPC.RceVideoCandidatesComplete, { name, deviceId }),
+  onRceVideoOffer: (
+    callback: (payload: { name: string; deviceId: number; offer: { type: string; sdp: string }; iceServers: unknown[] }) => void
+  ) => {
+    const handler = (
+      _event: IpcRendererEvent,
+      payload: { name: string; deviceId: number; offer: { type: string; sdp: string }; iceServers: unknown[] }
+    ) => callback(payload);
+    ipcRenderer.on(IPC.RceVideoOffer, handler);
+    return () => ipcRenderer.removeListener(IPC.RceVideoOffer, handler);
+  },
+  onRceVideoStatus: (callback: (payload: { name: string; deviceId: number; status: string; error?: string }) => void) => {
+    const handler = (_event: IpcRendererEvent, payload: { name: string; deviceId: number; status: string; error?: string }) => callback(payload);
+    ipcRenderer.on(IPC.RceVideoStatus, handler);
+    return () => ipcRenderer.removeListener(IPC.RceVideoStatus, handler);
+  },
+
+  // Push-based RCE device state (design doc §5)
+  rceWatchDeviceState: (name: string, deviceId: number) => ipcRenderer.invoke(IPC.RceWatchDeviceState, { name, deviceId }),
+  rceUnwatchDeviceState: (name: string, deviceId: number) => ipcRenderer.invoke(IPC.RceUnwatchDeviceState, { name, deviceId }),
+  onRceDeviceStateChanged: (callback: (payload: { name: string; deviceId: number; stateVersion: number; device: unknown }) => void) => {
+    const handler = (_event: IpcRendererEvent, payload: { name: string; deviceId: number; stateVersion: number; device: unknown }) => callback(payload);
+    ipcRenderer.on(IPC.RceDeviceStateChanged, handler);
+    return () => ipcRenderer.removeListener(IPC.RceDeviceStateChanged, handler);
+  },
 
   // Remote Network Inspector (proxies the server's /network/* endpoints)
   remoteNetworkStatus: (serverUrl: string) =>

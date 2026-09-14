@@ -4,8 +4,14 @@
  * does for its dedicated subdir, and the stale-cache cleanup the Network Inspector does for its
  * detail store — but for the two artifacts RDS writes directly into `os.tmpdir()`:
  *
- *   - `roku-screenshot-*.jpg` — captured by `dev-app-handlers` (`RokuScreenshot`); normally unlinked
- *     when the user Saves, so a never-saved or crashed run leaves them behind.
+ *   - `roku-screenshot-*.jpg` — captured by `dev-app-handlers` (`RokuScreenshot`/
+ *     `PersistScreenshotDataUrl`); normally unlinked when its session-gallery entry is cleared or
+ *     its device tab disconnects (see `screenshots.ts`), so only a crashed run leaves these behind.
+ *   - `rce-screenshot-*.jpg` — captured by `rce-handlers` (`RceScreenshot`); same lifecycle/cleanup
+ *     as the physical-device one above. This prefix was missing here until 2026-09-14 — every RCE
+ *     screenshot ever taken before that leaked permanently, since nothing but an explicit Save ever
+ *     unlinked it; this sweep is what retroactively clears that backlog on an existing install's
+ *     next launch, not just future captures.
  *   - `rds-fiddle-*.zip` — built by `bs-fiddle-template.buildFiddleZip`; normally unlinked in the run's
  *     `finally`, so a crash mid-run leaves them behind.
  *
@@ -19,7 +25,7 @@ import * as os from 'os';
 import * as path from 'path';
 
 // Keep in sync with the producers cited above.
-const STALE_TEMP_PREFIXES = ['roku-screenshot-', 'rds-fiddle-'];
+const STALE_TEMP_PREFIXES = ['roku-screenshot-', 'rce-screenshot-', 'rds-fiddle-'];
 
 let cleaned = false;
 

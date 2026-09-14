@@ -3,7 +3,19 @@
  * Use `import type` from the renderer so legacy transpile emits no runtime import.
  */
 
-export type McpBridgeDeviceSource = 'local' | 'remote' | 'unknown';
+/**
+ * `local`: a physical Roku on this LAN, ECP'd directly by the main process.
+ * `remote`: a physical Roku reachable through an RDS Relay server at another location.
+ * `rce`: a Roku Cloud Emulator (cloud-hosted virtual device) — no real IP; `ip` above is a
+ * serial/synthetic stand-in. Most main-direct device-control tools (keypress/launch_app/
+ * ecp_query/ecp_post/input_text/deep_link/get_app_icon/test_connection/screenshot) DO work
+ * against an `rce` device — `main/mcp-bridge.ts`'s `runOpForRce` detects it via this `source`
+ * field and dials the RCE Device API directly instead of a real `ip:8060`. `sideload` /
+ * `delete_sideload` do NOT yet work against `rce` — use connect_device + Dev Studio's Sideload
+ * Relay or Dev App tab instead.
+ * `unknown`: the renderer didn't tag a source (shouldn't happen in practice).
+ */
+export type McpBridgeDeviceSource = 'local' | 'remote' | 'rce' | 'unknown';
 
 /** One device row (connected tab, discovered, or known from list). */
 export type McpBridgeDeviceSnapshot = {

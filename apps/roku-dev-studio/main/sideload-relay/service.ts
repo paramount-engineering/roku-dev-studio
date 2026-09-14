@@ -25,6 +25,7 @@ import { SsdpResponder } from './ssdp-responder';
 import { RokuEmulator } from './roku-emulator';
 import { runFanout, type FanoutTarget, type RemoteFanoutOps } from './fanout';
 import { resolveRemoteDeviceIp } from '../remote-device-registry';
+import { resolveRceDeviceBySerial } from '../rce-device-registry';
 
 const { mainLog, mainWarn } = require('../log');
 const { loadSettings, saveSettings } = require('../settings') as {
@@ -282,7 +283,7 @@ export class SideloadRelayService {
     // Password (IDE→RDS auth) is a separate concept and not used here.
     const pwds = this.config.targetPasswords || {};
     const debugIps = readDebugSideloadIps(loadSettings());
-    return this.enabledTargets().map((t) => ({
+    const targets = this.enabledTargets().map((t) => ({
       id: t.id,
       // Targets are configured once (Setup Devices) and can go stale after a network change —
       // resolve against whatever this run's live discovery has actually seen for this serial,
@@ -302,6 +303,23 @@ export class SideloadRelayService {
       // its own DebugSessionController with real network access to the device.
       remoteDebug: debugIps.includes(t.id) || debugIps.includes(t.ip) || autoDebug
     }));
+
+    // `readTargets` (relay-handlers.ts) only dedupes by stored `id` (serial, else ip) — a device
+    // re-added to Setup Devices after its serial became known (or after a stale IP-only row was
+    // never cleaned up) can end up with two rows whose `id`s differ but whose resolved `ip` above
+    // is identical. Fanning both out concurrently double-installs the same device and, for a
+    // remote target, sends two simultaneous `/sideload` POSTs at the same remote server — which
+    // can race that server's own single-use temp upload file. Keep only the first row per
+    // resolved (remote flag + server + ip); a target that failed to resolve an ip at all is left
+    // alone so it still reports its own "device not found"-style failure.
+    const seen = new Set<string>();
+    return targets.filter((t) => {
+      if (!t.ip) return true;
+      const key = `${t.remote ? t.serverUrl || '' : 'local'}:${t.ip.toLowerCase()}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
   }
 
   /** Add IPs to the persisted "Sideload with Debugging" list (auto-enable from a STOP scan). */
@@ -460,7 +478,13 @@ export class SideloadRelayService {
     if (targets.length) {
       const maskIp = this.isPrivacyModeEnabled();
       for (const t of targets) {
-        const via = t.remote ? ` — via ${t.location || 'remote'}` : '';
+        // `t.ip` doubles as the device's serial for an RCE target (RCE has no real IP/host —
+        // see RelayTarget's doc comment) — that's how an RCE row in "Setup Devices" is
+        // recognized here, since `RelayTarget` itself carries no rce/location-for-rce fields of
+        // its own (unlike `RelayDeviceResult`, which only serves the narrower "avoid opening a
+        // duplicate auto-connect tab" need). Same registry lookup fanout.ts's RCE branch uses.
+        const rce = !t.remote ? resolveRceDeviceBySerial(t.ip) : null;
+        const via = t.remote ? ` — via ${t.location || 'remote'}` : rce ? ` — via ${rce.accountName}` : '';
         this.proxy.status(`  • ${t.name} (${maskIp ? PRIVACY_IP_MASK : t.ip})${via}`);
       }
     } else {

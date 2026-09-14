@@ -16,7 +16,7 @@ contextBridge.exposeInMainWorld('fiddle', {
   getSymbols: (payload: { deviceId: string }) =>
     ipcRenderer.invoke(IPC.FiddleGetSymbols, payload),
 
-  run: (payload: { deviceId: string; code: string; password?: string }) =>
+  run: (payload: { deviceId: string; code: string; password?: string; remoteDebug?: boolean }) =>
     ipcRenderer.invoke(IPC.FiddleRun, payload),
 
   stop: (payload: { deviceId: string; password?: string }) =>

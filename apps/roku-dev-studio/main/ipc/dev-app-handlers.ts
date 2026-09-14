@@ -45,6 +45,11 @@ function errMsg(e: unknown): string {
  * package is uploaded FROM this file, so the STOP scan and the "last debug zip" memory
  * (used by Restart / the Breakpoints panel's scan-stops IPC) are identical for a local
  * or remote sideload target and never need a remote-server counterpart.
+ *
+ * Already exported (see the bottom of this file) so `rce-handlers.ts`'s `RceSideload` handler can
+ * use the exact same persisted-setting + STOP-auto-detect logic instead of a one-off inline
+ * calculation — an RCE sideload should respect "Sideload with Debugging" identically to a
+ * local/LAN-relay one.
  */
 function computeSideloadDebugFlags(
   ip: string,
@@ -337,6 +342,41 @@ function setupDevAppHandlers(mainWindow: BrowserWindow | undefined, dialog: Dial
     }
   });
 
+  // Persists a canvas-frame-grab / agent-driven capture's `data:` URL to a temp file — those two
+  // paths never go through a device call, so (unlike RokuScreenshot/RceScreenshot above) they'd
+  // otherwise have no on-disk copy at all, forcing the renderer to keep the full base64 string
+  // resident for the session-gallery entry's whole lifetime. Naming matches RokuScreenshot's own
+  // `roku-screenshot-*` prefix so `cleanupStaleTempFiles` (startup-temp-cleanup.ts) already covers
+  // any of these left behind by a crash — no separate prefix to register there.
+  ipcMain.handle(IPC.PersistScreenshotDataUrl, async (_event: IpcMainInvokeEvent, { dataUrl }: { dataUrl: string }) => {
+    const match = /^data:image\/(\w+);base64,(.+)$/.exec(dataUrl || '');
+    if (!match) return { success: false, error: 'Not a data: image URL' };
+    const [, subtype, base64] = match;
+    const ext = subtype === 'jpeg' ? 'jpg' : subtype;
+    const tempFile = path.join(os.tmpdir(), `roku-screenshot-${Date.now()}.${ext}`);
+    try {
+      await fs.promises.writeFile(tempFile, Buffer.from(base64, 'base64'));
+      return { success: true, tempFile };
+    } catch (error: unknown) {
+      return { success: false, error: errMsg(error) };
+    }
+  });
+
+  // Deletes one screenshot temp file — the session gallery's Clear/Clear All actions and a device
+  // tab's disconnect teardown both call this so a capture's temp file doesn't outlive its own
+  // history entry (previously nothing ever deleted these except an explicit Save). Renderer-
+  // supplied path is untrusted, so restrict to `os.tmpdir()` — same guard RokuSaveScreenshot uses.
+  ipcMain.handle(IPC.DeleteScreenshotTempFile, async (_event: IpcMainInvokeEvent, { tempFile }: { tempFile: string }) => {
+    const safePath = tempFile ? resolveUserPathUnderOneOf([os.tmpdir()], tempFile) : null;
+    if (!safePath) return { success: false, error: 'Invalid temp file path' };
+    try {
+      await fs.promises.unlink(safePath);
+    } catch {
+      // Best-effort — already gone, or a transient lock. Not worth surfacing to the user.
+    }
+    return { success: true };
+  });
+
   // Developer password check: Digest GET http://device/ (same as browser sign-in; no screenshot required)
   ipcMain.handle(IPC.RokuVerifyDevAuth, async (_event: IpcMainInvokeEvent, { ip, password }: IpPasswordPayload) => {
     return verifyDeveloperDigestAuth({ ip, password: password || '' });
@@ -360,4 +400,4 @@ function setupDevAppHandlers(mainWindow: BrowserWindow | undefined, dialog: Dial
   });
 }
 
-export { setupDevAppHandlers, computeSideloadDebugFlags };
+export { setupDevAppHandlers, computeSideloadDebugFlags, resolveSideloadPackageFile };

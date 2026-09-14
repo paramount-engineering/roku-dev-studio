@@ -37,6 +37,35 @@ const { ensureDebugTelnetConnected } = require('../ipc/telnet-handlers') as {
     options?: { holder?: string }
   ) => Promise<{ success: boolean; error?: string }>;
 };
+const { ensureRceDebugTelnetConnected } = require('../ipc/rce-handlers') as {
+  ensureRceDebugTelnetConnected: (
+    name: string,
+    instanceApiUrl: string,
+    ip: string
+  ) => Promise<{ success: boolean; error?: string }>;
+};
+const { resolveRceDeviceBySerial, resolveRceInstanceBySerial } = require('../rce-device-registry') as {
+  resolveRceDeviceBySerial: (serial: string | undefined | null) => { accountName: string; deviceId: number } | null;
+  resolveRceInstanceBySerial: (
+    serial: string | undefined | null
+  ) => Promise<{ success: true; instance: { accountName: string; instanceApiUrl: string; token: string } } | { success: false; error: string }>;
+};
+const { rceSideload } = require('roku-dev-studio-rce') as {
+  rceSideload: (
+    opts: { instanceApiUrl: string; rceToken: string; devPassword: string },
+    zipData: Buffer,
+    filename: string,
+    remoteDebug?: boolean
+  ) => Promise<{ success: boolean; error?: string; message?: string }>;
+};
+// A debug-enabled install just (re)opened the target's debug protocol port (8081) — tell the
+// Telnet debug sidebar to reattach, the same event every other sideload entry point
+// (dev-app-handlers.ts / bs-fiddle-handlers.ts / rce-handlers.ts) already fires. Fan-out never did
+// this, so a fleet target with an already-open device panel never picked up its fresh debug
+// session automatically. Harmless no-op if no panel is open for that target.
+import { notifyDebuggerReattach } from '../ipc/debugger-handlers';
+const fs = require('fs');
+const path = require('path');
 const { mainLog, mainWarn } = require('../log');
 
 /** A target with its credentials already resolved by the service. */
@@ -91,6 +120,17 @@ export async function runFanout(opts: FanoutOptions, listener: RelayListener): P
 
   await Promise.all(
     targets.map(async (target) => {
+      // RCE targets are identified by serial, not IP (design doc / [[device-identity-key-rule]]) —
+      // `target.ip` already *is* the serial for an RCE device (see `normalizeRceDevice` in
+      // renderer/app.ts; `resolveDeviceIp`/`resolveRemoteDeviceIp` above never touch it, since a
+      // synthetic RCE identifier is never in either physical registry, so it always falls through
+      // to the saved value unchanged). Checked first, cheaply and synchronously, so a genuine
+      // physical/remote target's dispatch below is completely unaffected. Computed up front (not
+      // inline below) so the initial `result` can carry the RCE identity fields the renderer's
+      // auto-connect needs to route through `connectRceDevice` instead of the local-only
+      // `connectDevice` — without it, a relay install to an already-open RCE tab opened a second,
+      // duplicate one every time.
+      const rceKnown = resolveRceDeviceBySerial(target.ip);
       const result: RelayDeviceResult = {
         runId,
         targetId: target.id,
@@ -101,7 +141,8 @@ export async function runFanout(opts: FanoutOptions, listener: RelayListener): P
         done: false,
         // Lets the renderer's auto-connect flow route through `connectRemoteDevice` for a
         // remote target instead of the local-only `connectDevice` (see RelayDeviceResult).
-        ...(target.remote ? { remote: true, serverUrl: target.serverUrl, locationId: target.locationId } : {})
+        ...(target.remote ? { remote: true, serverUrl: target.serverUrl, locationId: target.locationId } : {}),
+        ...(rceKnown ? { rce: true, rceAccountName: rceKnown.accountName, rceDeviceId: rceKnown.deviceId } : {})
       };
       const emit = () => {
         try {
@@ -111,6 +152,71 @@ export async function runFanout(opts: FanoutOptions, listener: RelayListener): P
         }
       };
       emit();
+
+      if (rceKnown) {
+        const rceInstance = await resolveRceInstanceBySerial(target.ip);
+        if (!rceInstance.success) {
+          result.install = step('error', rceInstance.error);
+          result.console = step('skipped', 'install failed');
+          result.done = true;
+          emit();
+          return;
+        }
+        const { accountName, instanceApiUrl, token } = rceInstance.instance;
+        result.install = step('running');
+        emit();
+        const installStart = Date.now();
+        let zipData: Buffer;
+        try {
+          zipData = fs.readFileSync(packagePath);
+        } catch (e) {
+          result.install = step('error', (e as Error)?.message || 'Could not read package', Date.now() - installStart);
+          result.console = step('skipped', 'install failed');
+          result.done = true;
+          emit();
+          return;
+        }
+        // Honor the per-device "Sideload with Debugging" preference here too — same
+        // `remotedebug=1` field the local/remote branches below pass, just via rceSideload's own
+        // parameter instead of an extraFields array (see rceSideload's doc comment).
+        let r = await rceSideload({ instanceApiUrl, rceToken: token, devPassword: target.password }, zipData, path.basename(packagePath), target.remoteDebug);
+        if (!r.success && retryOnFailure) {
+          mainWarn(`[SideloadRelay] RCE install failed on ${target.name} (${r.error}); retrying once`);
+          r = await rceSideload({ instanceApiUrl, rceToken: token, devPassword: target.password }, zipData, path.basename(packagePath), target.remoteDebug);
+        }
+        result.install = step(r.success ? 'ok' : 'error', r.success ? undefined : r.error || 'Install failed', Date.now() - installStart);
+        emit();
+        if (!r.success) {
+          result.console = step('skipped', 'install failed');
+          result.done = true;
+          emit();
+          return;
+        }
+        mainLog(`[SideloadRelay] installed on ${target.name} (RCE)`);
+        if (target.remoteDebug) {
+          try {
+            notifyDebuggerReattach(target.ip);
+          } catch {
+            /* best-effort */
+          }
+        }
+        if (autoConsole) {
+          result.console = step('running');
+          emit();
+          const consoleStart = Date.now();
+          try {
+            const cr = await ensureRceDebugTelnetConnected(accountName, instanceApiUrl, target.ip);
+            result.console = step(cr.success ? 'ok' : 'error', cr.success ? undefined : cr.error || 'Console connect failed', Date.now() - consoleStart);
+          } catch (e) {
+            result.console = step('error', (e as Error)?.message || String(e), Date.now() - consoleStart);
+          }
+        } else {
+          result.console = step('skipped', 'auto-console off');
+        }
+        result.done = true;
+        emit();
+        return;
+      }
 
       // Pick local (direct-IP) or remote (via the location's RDS server) transport.
       // A remote target with no server/ops available can't be reached — error out
@@ -164,6 +270,13 @@ export async function runFanout(opts: FanoutOptions, listener: RelayListener): P
       emit();
       if (installOk) {
         mainLog(`[SideloadRelay] installed on ${where}`);
+        if (target.remoteDebug) {
+          try {
+            notifyDebuggerReattach(target.ip, isRemote && target.serverUrl ? { isRemote: true, serverUrl: target.serverUrl } : undefined);
+          } catch {
+            /* best-effort */
+          }
+        }
       }
 
       if (!installOk) {
