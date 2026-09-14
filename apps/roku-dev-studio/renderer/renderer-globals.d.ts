@@ -97,6 +97,12 @@ declare global {
     _telnetCleanup?: () => void;
     /** Device metrics polling / listeners teardown. */
     _deviceMetricsCleanup?: () => void;
+    /** RCE live video (Janus/WebRTC) teardown — stops the peer connection and the main-process
+     *  signaling session (design doc §7). Does not stop the underlying cloud device. */
+    _rceVideoCleanup?: () => void;
+    /** Session-screenshot-gallery teardown — deletes every remaining temp file this panel's
+     *  captures wrote to disk, so a closed tab doesn't leave them orphaned. See screenshots.ts. */
+    _screenshotsCleanup?: () => void;
     /** Action Script import modal: chosen output folder path (set at runtime). */
     _importOutputFolder?: string;
     /** Action Script import: target container element for mount bookkeeping. */

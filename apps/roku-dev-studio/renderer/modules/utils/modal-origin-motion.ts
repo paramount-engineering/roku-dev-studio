@@ -72,7 +72,8 @@ function getModalDialogSurface(overlay: HTMLElement): HTMLElement | null {
     ':scope > .ni-modal',
     ':scope > .sr-modal',
     ':scope > .telnet-debug-why-modal',
-    ':scope > .rds-release-notes-dialog'
+    ':scope > .rds-release-notes-dialog',
+    ':scope > .rce-start-modal'
   ];
   for (const sel of selectors) {
     const el = overlay.querySelector(sel);

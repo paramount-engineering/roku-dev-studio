@@ -149,7 +149,13 @@ export async function runTelnetSystemCommandSession(
 
     onStatus?.(S.utils.connectedSettingUpListener);
 
-    if (api.isRemote) {
+    // A LAN-relay device (`isRemote` with a `serverUrl`) has its socket living on a separate
+    // machine, so this process polls that server's buffer instead of getting pushed events —
+    // RCE is also `isRemote: true` (it's not "this machine") but its socket lives right here in
+    // our own main process (tunneled via the Device API's ports-bridge), so it pushes data the
+    // same way a local physical device does. `serverUrl` is what actually distinguishes the two,
+    // not `isRemote` alone.
+    if (api.isRemote && api.serverUrl) {
       const roku = window.roku;
       if (!roku?.remoteTelnetSystemPollData) {
         await api.telnetSystemDisconnect().catch(() => {});

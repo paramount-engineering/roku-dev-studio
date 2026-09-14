@@ -118,6 +118,20 @@ body {
   gap: 8px;
 }
 
+.fiddle-debug-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.fiddle-debug-toggle input {
+  margin: 0;
+}
+
 .fiddle-brand {
   display: flex;
   align-items: center;

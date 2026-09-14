@@ -54,6 +54,10 @@ export function openTryDemoAppModal(opts: {
            <select class="try-demo-app-select" id="tryDemoAppDeviceSelect"></select>
            <button type="button" class="btn btn-secondary try-demo-app-rescan">${escapeHtml(S.actionScripts.viewerRescan)}</button>
          </div>
+         <label class="try-demo-app-debug-toggle" title="${escapeHtml(S.debugger.sideloadWithDebuggingTitle)}">
+           <input type="checkbox" class="try-demo-app-debug-checkbox">
+           ${escapeHtml(S.debugger.sideloadWithDebugging)}
+         </label>
          <p class="try-demo-app-error" hidden></p>
        </div>
        <div class="modal-footer try-demo-app-footer">
@@ -67,6 +71,7 @@ export function openTryDemoAppModal(opts: {
   const rescanBtn = overlay.querySelector('.try-demo-app-rescan') as HTMLButtonElement;
   const launchBtn = overlay.querySelector('.try-demo-app-launch') as HTMLButtonElement;
   const errorEl = overlay.querySelector('.try-demo-app-error') as HTMLElement;
+  const debugCheckbox = overlay.querySelector('.try-demo-app-debug-checkbox') as HTMLInputElement;
 
   let devices: TryDemoAppDeviceOption[] = [];
 
@@ -133,7 +138,8 @@ export function openTryDemoAppModal(opts: {
         ip: device.ip,
         isRemote: device.isRemote,
         serverUrl: device.serverUrl,
-        password: device.password || ''
+        password: device.password || '',
+        remoteDebug: debugCheckbox.checked
       });
       if (result && result.success) {
         settle();

@@ -8,7 +8,7 @@ import type {
   InnertabSwitchDetail,
   SideloadedAppElements
 } from './dev-app-types.js';
-import { pollDevAppForegroundAfterLaunch, pollDevAppForegroundOnce } from './dev-app-foreground-sync.js';
+import { pollDevAppForegroundAfterHome, pollDevAppForegroundAfterLaunch, pollDevAppForegroundOnce } from './dev-app-foreground-sync.js';
 import { rendererError } from '../../modules/utils/logger.js';
 import { S } from '@shared/strings/index.js';
 
@@ -156,9 +156,13 @@ export function setupSideloadedApp(
     }
   });
   
-  // Listen for Home button press to check if dev app exited
+  // Listen for Home button press to check if dev app exited. A single immediate query races the
+  // device's own state transition — usually wins against a physical device's near-instant LAN
+  // ECP response, but an RCE device's extra ports-bridge/HTTPS hop loses that race often enough to
+  // leave Launch (Dev App tab and Floating Remote alike) stuck hidden until some unrelated refresh
+  // — so this polls a few times instead of checking once (see pollDevAppForegroundAfterHome).
   panel.addEventListener('homePressed', () => {
-    checkIfDevAppActive();
+    void pollDevAppForegroundAfterHome(panel, api);
   });
 
   /** Periodic device active check: refresh Launch + screenshot gate from /query/active-app */

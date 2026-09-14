@@ -109,7 +109,7 @@ interface FiddleBridge {
   refreshDevices: () => void;
   lint: (code: string) => Promise<FiddleDiagnosticsPayload | { error?: string }>;
   getSymbols: (payload: { deviceId: string }) => Promise<{ symbols: FiddleSymbolEntry[] }>;
-  run: (payload: { deviceId: string; code: string; password?: string }) => Promise<FiddleRunResultPayload>;
+  run: (payload: { deviceId: string; code: string; password?: string; remoteDebug?: boolean }) => Promise<FiddleRunResultPayload>;
   stop: (payload: { deviceId: string; password?: string }) => Promise<{ success: boolean; error?: string; authFailed?: boolean }>;
   onInit: (cb: (data: FiddleInitPayload) => void) => () => void;
   onDevicesUpdate: (cb: (data: { devices: FiddleDeviceEntry[] }) => void) => () => void;
@@ -260,6 +260,7 @@ interface FiddleCtx {
     passwordCancelBtn: HTMLButtonElement;
     passwordError: HTMLElement;
     passwordDeviceLabel: HTMLElement;
+    debugCheckbox: HTMLInputElement;
   };
 }
 
@@ -779,7 +780,8 @@ async function handleRun(ctx: FiddleCtx): Promise<void> {
     const res = await getWindowFiddle().run({
       deviceId,
       code,
-      password
+      password,
+      remoteDebug: ctx.els.debugCheckbox.checked
     });
     if (res && res.runId) {
       // Update the runId now that main assigned one.
@@ -1044,7 +1046,8 @@ async function main(): Promise<void> {
     passwordCancel: qs<HTMLButtonElement>('fiddlePasswordCancel'),
     passwordCancelBtn: qs<HTMLButtonElement>('fiddlePasswordCancelBtn'),
     passwordError: qs<HTMLElement>('fiddlePasswordError'),
-    passwordDeviceLabel: qs<HTMLElement>('fiddlePasswordDeviceLabel')
+    passwordDeviceLabel: qs<HTMLElement>('fiddlePasswordDeviceLabel'),
+    debugCheckbox: qs<HTMLInputElement>('fiddleDebugCheckbox')
   };
 
   // Paint a pre-context status so the user sees "Loading editor..." before

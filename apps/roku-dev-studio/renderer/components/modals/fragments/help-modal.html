@@ -247,15 +247,17 @@
         
         <div class="help-section" id="help-section-remote-locations">
           <h3 data-i18n="modals.helpModal.remoteLocationsHeading"><span class="icon icon-sm icon-cyan"><svg><use href="#icon-globe"/></svg></span> Remote Locations</h3>
-          <p data-i18n="modals.helpModal.remoteLocationsIntro">Control Roku devices at Remote Locations via a Relay Server:</p>
+          <p data-i18n="modals.helpModal.remoteLocationsIntro">Control Roku devices at Remote Locations — either a Relay Server (LAN devices at another site) or a Roku Cloud Emulator (RCE) account:</p>
           <ul data-i18n-html="modals.helpModal.remoteLocationsListHtml">
-            <li><strong>Setup</strong> - Run the Roku Relay Server on a Mac Mini at the remote location</li>
-            <li><strong>Add Location</strong> - Click "Add" in the Remote Locations section to configure a connection</li>
-            <li><strong>Server Address</strong> - Enter the IP Address or Hostname of the relay server</li>
+            <li><strong>Setup</strong> - Run the Roku Relay Server on a machine at the remote location</li>
+            <li><strong>Add Location</strong> - Click "Add" in the Remote Locations section, then choose the <strong>RDS Relay</strong> or <strong>RCE</strong> tab</li>
+            <li><strong>Server Address</strong> - RDS Relay tab: enter the IP Address or Hostname of the relay server</li>
             <li><strong>Default Port</strong> - The relay server runs on port <code>4951</code> by default</li>
+            <li><strong>RCE Account</strong> - RCE tab: name the account and paste in its API token from Roku's Cloud Emulator dashboard</li>
           </ul>
           <p data-i18n-html="modals.helpModal.remoteLocationsServerHtml">The relay server can be found in the <code>remote-server</code> folder. See the README for setup instructions (macOS LaunchAgent, Linux systemd, Windows Task Scheduler).</p>
           <p data-i18n-html="modals.helpModal.remoteLocationsTroubleshootHtml"><strong>Sideload or screenshot fails via relay but ECP works?</strong> Update the relay host to the same <code>roku-dev-studio-api</code> version as this app. Check <code>GET /health</code> on the relay (<code>apiVersion</code> field) and ensure port <code>4951</code> is reachable through firewalls.</p>
+          <p data-i18n-html="modals.helpModal.remoteLocationsRceHtml"><strong>RCE devices</strong> list as shutdown/pending/running. Start one from its card (or Roku's own Cloud Emulator dashboard) before connecting — ECP, sideload, and console only respond while running, and a device auto-stops after its own configured Max Run Time.</p>
         </div>
         
         <div class="help-section" id="help-section-sideload-relay">

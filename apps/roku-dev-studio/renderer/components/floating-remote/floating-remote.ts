@@ -13,6 +13,21 @@
  * from the active panel and re-attach `attachQuickRemoteKeys` against that
  * panel's `getPanelApi` adapter, so local vs relay routing matches the
  * Remote / Dev App paths exactly.
+ *
+ * For an RCE device (`api.kind === 'rce'`), the floater also borrows the Dev
+ * App tab's live `.rce-video-stream` `<video>` and its mute/volume controls —
+ * moved (not cloned) into a `.floating-remote-video-slot` above the D-pad, at
+ * the same width as the shell. It's a move rather than a second live feed
+ * because the RCE video session is single-subscriber server-side (see
+ * `main/ipc/rce-video-handlers.ts`'s `stopSession`-before-start): a second
+ * `attachRceVideo` call for the same device would kill the Dev App tab's
+ * session instead of fanning it out. Moving the existing node is free — the
+ * video keeps decoding/playing while display:none (it's not tied to CSS
+ * visibility), so it's already live behind the hidden Dev App tab; claiming
+ * it just makes it visible somewhere else. It's handed back to its original
+ * DOM position (`claimRceVideo`/`releaseRceVideo`) whenever the floater stops
+ * owning it — switching device tabs, switching into that device's own Dev
+ * App/Remote tab, hiding the floater, or the panel closing.
  */
 
 import { attachQuickRemoteKeys } from '../dev-app/quick-remote.js';
@@ -34,6 +49,7 @@ import {
   closeElementWithOriginMotion
 } from '../../modules/utils/index.js';
 import type { DevAppApi } from '../dev-app/dev-app-types.js';
+import { isRceDevice } from '../dev-app/dev-app-types.js';
 import { S } from '@shared/strings/index.js';
 
 const ROOT_ID = 'floating-remote-root';
@@ -42,9 +58,29 @@ const DRAG_HANDLE_SELECTOR = '.floating-remote-shell-handle';
 
 let mounted = false;
 let shellEl: HTMLElement | null = null;
+let videoSlotEl: HTMLElement | null = null;
 let cardSlotEl: HTMLElement | null = null;
 let footerEl: HTMLElement | null = null;
 let boundPanel: HTMLElement | null = null;
+
+/** Where a reparented element came from, so it can be put back exactly where it was. */
+interface HomeSlot {
+  parent: HTMLElement;
+  nextSibling: Node | null;
+}
+/**
+ * The Dev App tab's real `<video class="rce-video-stream">` (and its mute/volume controls) are
+ * *moved*, not cloned, into the floater for RCE devices — see the module doc comment for why a
+ * second `attachRceVideo` subscriber isn't viable. `rceVideoOwnerPanel` tracks which panel we
+ * currently borrowed them from so they can be handed back the moment that panel stops being the
+ * bound one (switching device tabs, switching into its own Dev App tab, hiding the floater, or the
+ * panel closing).
+ */
+let rceVideoEl: HTMLElement | null = null;
+let rceVideoHome: HomeSlot | null = null;
+let rceControlsEl: HTMLElement | null = null;
+let rceControlsHome: HomeSlot | null = null;
+let rceVideoOwnerPanel: HTMLElement | null = null;
 /** Panel whose dev-app events the footer is currently subscribed to. */
 let footerListenerPanel: HTMLElement | null = null;
 let footerRefreshHandler: (() => void) | null = null;
@@ -93,15 +129,17 @@ export function mountFloatingRemote(): void {
           <span class="icon icon-xs" aria-hidden="true"><svg><use href="#icon-x"/></svg></span>
         </button>
       </div>
+      <div class="floating-remote-video-slot" data-floating-remote-video-slot></div>
       <div class="floating-remote-shell-body" data-floating-remote-slot></div>
       <div class="floating-remote-footer" data-floating-remote-footer></div>
     </div>
   `;
 
   shellEl = root.querySelector('.floating-remote-shell');
+  videoSlotEl = root.querySelector<HTMLElement>('[data-floating-remote-video-slot]');
   cardSlotEl = root.querySelector<HTMLElement>('[data-floating-remote-slot]');
   footerEl = root.querySelector<HTMLElement>('[data-floating-remote-footer]');
-  if (!shellEl || !cardSlotEl || !footerEl) {
+  if (!shellEl || !videoSlotEl || !cardSlotEl || !footerEl) {
     rendererError('[FloatingRemote] shell, slot, or footer element missing after mount');
     return;
   }
@@ -197,7 +235,62 @@ function rebindCard(panel: HTMLElement, api: DevAppApi): void {
     delete shellEl.dataset.ecpMode;
   }
 
+  if (isRceDevice(api)) {
+    claimRceVideo(panel);
+  } else {
+    releaseRceVideo();
+  }
+
   bindDevAppFooter(panel);
+}
+
+/** Move the active RCE panel's live video + controls into the floater. Idempotent per panel. */
+function claimRceVideo(panel: HTMLElement): void {
+  if (!videoSlotEl || rceVideoOwnerPanel === panel) return;
+  releaseRceVideo();
+
+  const video = panel.querySelector('.rce-video-stream');
+  if (!(video instanceof HTMLElement) || !(video.parentElement instanceof HTMLElement)) return;
+
+  rceVideoEl = video;
+  rceVideoHome = { parent: video.parentElement, nextSibling: video.nextSibling };
+  videoSlotEl.appendChild(video);
+
+  const controls = panel.querySelector('.rce-video-controls');
+  if (controls instanceof HTMLElement && controls.parentElement instanceof HTMLElement) {
+    rceControlsEl = controls;
+    rceControlsHome = { parent: controls.parentElement, nextSibling: controls.nextSibling };
+    videoSlotEl.appendChild(controls);
+  }
+
+  rceVideoOwnerPanel = panel;
+  videoSlotEl.classList.add('floating-remote-video-slot--active');
+}
+
+/** Hand the video + controls back to wherever `claimRceVideo` found them. Safe to call anytime. */
+function releaseRceVideo(): void {
+  if (rceVideoEl && rceVideoHome) {
+    rceVideoHome.parent.insertBefore(rceVideoEl, rceVideoHome.nextSibling);
+  }
+  if (rceControlsEl && rceControlsHome) {
+    rceControlsHome.parent.insertBefore(rceControlsEl, rceControlsHome.nextSibling);
+  }
+  rceVideoEl = null;
+  rceVideoHome = null;
+  rceControlsEl = null;
+  rceControlsHome = null;
+  rceVideoOwnerPanel = null;
+  videoSlotEl?.classList.remove('floating-remote-video-slot--active');
+}
+
+/**
+ * Called from `disconnectDevice` (app.ts) right before a tab panel is removed. If the floater
+ * currently owns that panel's video, hand it back first — otherwise the video/controls nodes
+ * (reparented into the body-level floater root, outside the panel) would survive `panel.remove()`
+ * and leak as an orphaned, still-live video element.
+ */
+export function releaseFloatingRemoteVideoForPanel(panel: HTMLElement): void {
+  if (rceVideoOwnerPanel === panel) releaseRceVideo();
 }
 
 /**
@@ -357,6 +450,11 @@ function show(): void {
 }
 
 function hide(): void {
+  // Always release, even if already hidden/mid-close — a caller may reach here (e.g. the
+  // active panel switched to its own Dev App tab) while `rceVideoOwnerPanel` still points at
+  // a *different* panel than the one that triggered this hide, so this can't be folded into
+  // the early-return guard below.
+  releaseRceVideo();
   if (!shellEl || !shellEl.classList.contains(VISIBLE_CLASS) || closingInFlight) return;
   closingInFlight = true;
   const gen = ++motionGeneration;
