@@ -176,8 +176,14 @@ interface RokuOp<P extends Record<string, unknown> = Record<string, unknown>, R 
   id: string;
   /** Human-readable title. */
   title: string;
-  /** Longer description; shown verbatim in the MCP tool catalog. */
-  description: string;
+  /**
+   * Longer description; shown verbatim in the MCP tool catalog. A single paragraph, or an array
+   * of discrete points for anything with more than a couple distinct facts (response shape,
+   * caveats, related ops, ...) — `opToMcpTool` (roku-dev-studio-mcp/src/tools.ts) joins the array
+   * with spaces for the real MCP wire response; docs/assets/mcp-tools.js renders it as a bullet
+   * list instead of one blob.
+   */
+  description: string | string[];
   /** Where the op runs; see OpRunLocation. */
   runIn: OpRunLocation;
   /** True if the op changes device state. Drives toast policy + audit flags. */
@@ -330,8 +336,11 @@ function rendererOnlyExecute(opId: string) {
 const KEYPRESS: RokuOp<{ ip: string; key: string }, unknown> = {
   id: 'keypress',
   title: 'Send Remote Key',
-  description:
-    'Send one ECP remote key (e.g. "Home", "Up", "Select", "Play") to a Roku device — mirrors a physical remote press. Mutates on-screen state: each key advances the UI, so repeated calls are NOT a no-op. Use keypress for navigation/transport keys; to type characters into a focused text field use input_text (far faster than sending "Lit_" keys one at a time).',
+  description: [
+    'Send one ECP remote key (e.g. "Home", "Up", "Select", "Play") to a Roku device — mirrors a physical remote press.',
+    'Mutates on-screen state: each key advances the UI, so repeated calls are NOT a no-op.',
+    'Use keypress for navigation/transport keys; to type characters into a focused text field use input_text (far faster than sending "Lit_" keys one at a time).'
+  ],
   runIn: 'main',
   destructive: false,
   readOnly: false,
@@ -369,8 +378,12 @@ const KEYPRESS: RokuOp<{ ip: string; key: string }, unknown> = {
 const LAUNCH: RokuOp<{ ip: string; appId: string; params?: Record<string, string> }, unknown> = {
   id: 'launch_app',
   title: 'Launch Roku App',
-  description:
-    'Launch a channel / app on the device to its home screen by app id. Discover ids with ecp_query "/query/apps"; "dev" is the sideloaded Dev App. Changes device state (foregrounds the app). To open the app directly on a specific title use deep_link instead; optional launch params are passed through as ECP query params.',
+  description: [
+    'Launch a channel / app on the device to its home screen by app id.',
+    'Discover ids with ecp_query "/query/apps"; "dev" is the sideloaded Dev App.',
+    'Changes device state (foregrounds the app).',
+    'To open the app directly on a specific title use deep_link instead; optional launch params are passed through as ECP query params.'
+  ],
   runIn: 'main',
   destructive: false,
   readOnly: false,
@@ -399,8 +412,12 @@ const LAUNCH: RokuOp<{ ip: string; appId: string; params?: Record<string, string
 const INPUT_TEXT: RokuOp<{ ip: string; text: string }, unknown> = {
   id: 'input_text',
   title: 'Send Text Input',
-  description:
-    'Type a literal text string into whatever input field is currently focused on the device (ECP /input endpoint). Requires a text field to already be focused — use keypress to navigate into one first. Mutates the focused field: repeated calls append, so this is NOT read-only or idempotent. Use this instead of sending characters as individual keypress keys.',
+  description: [
+    'Type a literal text string into whatever input field is currently focused on the device (ECP /input endpoint).',
+    'Requires a text field to already be focused — use keypress to navigate into one first.',
+    'Mutates the focused field: repeated calls append, so this is NOT read-only or idempotent.',
+    'Use this instead of sending characters as individual keypress keys.'
+  ],
   runIn: 'main',
   destructive: false,
   readOnly: false,
@@ -437,8 +454,12 @@ const DEEP_LINK: RokuOp<
 > = {
   id: 'deep_link',
   title: 'Deep-Link into an App',
-  description:
-    'Launch an app straight into a specific piece of content via ECP Deep-Link (contentId + mediaType, plus any extra params the channel expects). Equivalent to /launch/<appId>?contentId=...&mediaType=...&<extra params>. Changes device state (foregrounds the app on the requested content). Use this when you have a content id to open; to just open an app to its home screen use launch_app instead.',
+  description: [
+    'Launch an app straight into a specific piece of content via ECP Deep-Link (contentId + mediaType, plus any extra params the channel expects).',
+    'Equivalent to /launch/<appId>?contentId=...&mediaType=...&<extra params>.',
+    'Changes device state (foregrounds the app on the requested content).',
+    'Use this when you have a content id to open; to just open an app to its home screen use launch_app instead.'
+  ],
   runIn: 'main',
   destructive: false,
   readOnly: false,
@@ -475,8 +496,12 @@ const DEEP_LINK: RokuOp<
 const ECP_QUERY: RokuOp<{ ip: string; endpoint: string }, unknown> = {
   id: 'ecp_query',
   title: 'ECP Query (read-only)',
-  description:
-    'Run a read-only ECP GET against a device (device info, installed apps, active app, media player state, …). Pick an endpoint from list_query_presets or pass any /query/* path. Read-only — does not change device state. This is the go-to inspection tool; for state-changing POSTs use ecp_post, and to enumerate app ids call this with "/query/apps".',
+  description: [
+    'Run a read-only ECP GET against a device (device info, installed apps, active app, media player state, …).',
+    'Pick an endpoint from list_query_presets or pass any /query/* path.',
+    'Read-only — does not change device state.',
+    'This is the go-to inspection tool; for state-changing POSTs use ecp_post, and to enumerate app ids call this with "/query/apps".'
+  ],
   runIn: 'main',
   destructive: false,
   readOnly: true,
@@ -500,8 +525,11 @@ const ECP_QUERY: RokuOp<{ ip: string; endpoint: string }, unknown> = {
 const ECP_POST: RokuOp<{ ip: string; endpoint: string }, unknown> = {
   id: 'ecp_post',
   title: 'ECP POST (raw)',
-  description:
-    'POST to an arbitrary ECP endpoint (e.g. /sgrendezvous/track). Side-effecting — agents should use list_post_presets for safe defaults. For read-only lookups use ecp_query instead.',
+  description: [
+    'POST to an arbitrary ECP endpoint (e.g. /sgrendezvous/track).',
+    'Side-effecting — agents should use list_post_presets for safe defaults.',
+    'For read-only lookups use ecp_query instead.'
+  ],
   runIn: 'main',
   destructive: true,
   readOnly: false,
@@ -529,8 +557,12 @@ const ECP_POST: RokuOp<{ ip: string; endpoint: string }, unknown> = {
 const TEST_CONNECTION: RokuOp<{ ip: string }, unknown> = {
   id: 'test_connection',
   title: 'Test Device Connection',
-  description:
-    'Probe one known device IP for ECP reachability and return basic device info. Does not require a Dev Studio tab to be open — use it to confirm a specific IP is a reachable Roku before connect_device. Read-only. Differs from its siblings: probe_bridge checks whether Dev Studio itself is running (not a device); scan_devices discovers unknown devices on the network; test_connection verifies one address you already have.',
+  description: [
+    'Probe one known device IP for ECP reachability and return basic device info.',
+    'Does not require a Dev Studio tab to be open — use it to confirm a specific IP is a reachable Roku before connect_device.',
+    'Read-only.',
+    'Differs from its siblings: probe_bridge checks whether Dev Studio itself is running (not a device); scan_devices discovers unknown devices on the network; test_connection verifies one address you already have.'
+  ],
   runIn: 'main',
   destructive: false,
   readOnly: true,
@@ -558,8 +590,12 @@ const TEST_CONNECTION: RokuOp<{ ip: string }, unknown> = {
 const GET_APP_ICON: RokuOp<{ ip: string; appId: string }, unknown> = {
   id: 'get_app_icon',
   title: 'Get App Icon',
-  description:
-    'Fetch the 336x210 app icon for one installed channel on the device, returned as base64 / data URL (ECP /query/icon/<appId>). Read-only. Discover valid app ids with ecp_query "/query/apps" (or launch_app\'s notes); "dev" is the sideloaded Dev App. Use this to preview a channel\'s branding — for a picture of the current screen use screenshot instead.',
+  description: [
+    'Fetch the 336x210 app icon for one installed channel on the device, returned as base64 / data URL (ECP /query/icon/<appId>).',
+    'Read-only.',
+    'Discover valid app ids with ecp_query "/query/apps" (or launch_app\'s notes); "dev" is the sideloaded Dev App.',
+    'Use this to preview a channel\'s branding — for a picture of the current screen use screenshot instead.'
+  ],
   runIn: 'main',
   destructive: false,
   readOnly: true,
@@ -596,8 +632,13 @@ const SIDELOAD: RokuOp<
 > = {
   id: 'sideload',
   title: 'Sideload Channel Package',
-  description:
-    'Upload and install a .zip channel package on the device. Destructive: replaces any currently sideloaded Dev App (readOnly false; not safe for autonomous use without user intent). Provide the zip in ONE of two ways: (1) `filePath` — an absolute path to a .zip on the SAME machine that runs Roku Dev Studio. Do NOT use this when running in a remote agent sandbox (Claude.ai, ChatGPT web) where files only exist inside the agent\'s container — the path will not resolve on the user\'s machine. (2) `contentBase64` + `filename` — the .zip bytes inline; this server writes them to a temp file on the user\'s machine, sideloads, and cleans up. Use this whenever the agent has file content but no shared filesystem with Roku Dev Studio. Password is optional when Dev Studio has remembered it for this device.',
+  description: [
+    'Upload and install a .zip channel package on the device.',
+    'Destructive: replaces any currently sideloaded Dev App (readOnly false; not safe for autonomous use without user intent).',
+    'Provide the zip via `filePath` — an absolute path to a .zip on the SAME machine that runs Roku Dev Studio. Do NOT use this when running in a remote agent sandbox (Claude.ai, ChatGPT web) where files only exist inside the agent\'s container — the path will not resolve on the user\'s machine.',
+    'OR via `contentBase64` + `filename` — the .zip bytes inline; this server writes them to a temp file on the user\'s machine, sideloads, and cleans up. Use this whenever the agent has file content but no shared filesystem with Roku Dev Studio.',
+    'Password is optional when Dev Studio has remembered it for this device.'
+  ],
   runIn: 'main',
   destructive: true,
   inputSchema: {
@@ -743,8 +784,12 @@ function sanitizeUploadFilename(raw: unknown): string {
 const DELETE_SIDELOAD: RokuOp<{ ip: string; password?: string }, unknown> = {
   id: 'delete_sideload',
   title: 'Delete Sideloaded Channel',
-  description:
-    'Remove the currently sideloaded Dev App from the device. Password optional when Dev Studio has remembered it for this device. Destructive; idempotent (deleting when nothing is sideloaded still ends with no Dev App). To install/replace a Dev App use sideload — you do not need to delete first, since sideload overwrites.',
+  description: [
+    'Remove the currently sideloaded Dev App from the device.',
+    'Password optional when Dev Studio has remembered it for this device.',
+    'Destructive; idempotent (deleting when nothing is sideloaded still ends with no Dev App).',
+    'To install/replace a Dev App use sideload — you do not need to delete first, since sideload overwrites.'
+  ],
   runIn: 'main',
   destructive: true,
   readOnly: false,
@@ -785,8 +830,12 @@ const SCREENSHOT: RokuOp<
 > = {
   id: 'screenshot',
   title: 'Capture Screenshot',
-  description:
-    'Capture a screenshot of the current device screen and return it inline as an MCP image content block (JPEG, base64). Hosts (Cursor, Claude Desktop, etc.) render this image to the user, so for any human-facing capture **let `returnImageBase64` default to true** (or omit it). Set `returnImageBase64: false` ONLY for batch / metadata-only flows where no one will view the screenshot; in that case the response is just `{ success, filename, bytes }` and the image will not appear in the chat. Password is optional when Dev Studio has remembered it for this device.',
+  description: [
+    'Capture a screenshot of the current device screen and return it inline as an MCP image content block (JPEG, base64).',
+    'Hosts (Cursor, Claude Desktop, etc.) render this image to the user, so for any human-facing capture **let `returnImageBase64` default to true** (or omit it).',
+    'Set `returnImageBase64: false` ONLY for batch / metadata-only flows where no one will view the screenshot; in that case the response is just `{ success, filename, bytes }` and the image will not appear in the chat.',
+    'Password is optional when Dev Studio has remembered it for this device.'
+  ],
   runIn: 'main',
   // destructive:true is conservative — capturing triggers a device-side write
   // of dev.jpg — but it takes no user-visible action; readOnly stays false to
@@ -863,8 +912,11 @@ const SCAN_DEVICES: RokuOp<
 > = {
   id: 'scan_devices',
   title: 'Scan Network for Roku Devices',
-  description:
-    'Discover Roku devices on the local network via SSDP (multicast) and, optionally, a subnet HTTP sweep. Read-only; does not connect devices — follow up with connect_device to open a tab. Use this to FIND unknown devices; to list devices Dev Studio already knows (connected / remembered) without a network scan, use list_devices instead.',
+  description: [
+    'Discover Roku devices on the local network via SSDP (multicast) and, optionally, a subnet HTTP sweep.',
+    'Read-only; does not connect devices — follow up with connect_device to open a tab.',
+    'Use this to FIND unknown devices; to list devices Dev Studio already knows (connected / remembered) without a network scan, use list_devices instead.'
+  ],
   runIn: 'main',
   destructive: false,
   readOnly: true,
@@ -915,8 +967,12 @@ const RALE_COMMAND: RokuOp<
 > = {
   id: 'rale_command',
   title: 'RALE Command (full; read + write)',
-  description:
-    'Run any built-in RALE command against the active App Connector session — including destructive ones (addRegistryField, removeRegistrySection, clearRegistry, …). Use list_rale_builtins for the catalog. Every call surfaces as a toast in Dev Studio. Some commands read (getNodeById, getRegistry) and some write; the tool as a whole is not read-only — for a plain read prefer rale_get_node_by_id.',
+  description: [
+    'Run any built-in RALE command against the active App Connector session — including destructive ones (addRegistryField, removeRegistrySection, clearRegistry, …).',
+    'Use list_rale_builtins for the catalog.',
+    'Every call surfaces as a toast in Dev Studio.',
+    'Some commands read (getNodeById, getRegistry) and some write; the tool as a whole is not read-only — for a plain read prefer rale_get_node_by_id.'
+  ],
   runIn: 'renderer',
   destructive: true,
   readOnly: false,
@@ -941,8 +997,12 @@ const RALE_COMMAND: RokuOp<
 const APP_CONNECTOR_CONNECT: RokuOp<{ device?: string }, unknown> = {
   id: 'app_connector_connect',
   title: 'App Connector: Connect',
-  description:
-    'Open a RALE / App Connector session against the device\'s running Dev App. Mutates session state (establishes a connection), so it is not read-only; idempotent — reconnecting an open session is a no-op. You rarely need to call this explicitly: rale_command, app_function, and rale_get_node_by_id auto-connect on demand. Use it only to pre-warm the session or surface connection errors early.',
+  description: [
+    'Open a RALE / App Connector session against the device\'s running Dev App.',
+    'Mutates session state (establishes a connection), so it is not read-only; idempotent — reconnecting an open session is a no-op.',
+    'You rarely need to call this explicitly: rale_command, app_function, and rale_get_node_by_id auto-connect on demand.',
+    'Use it only to pre-warm the session or surface connection errors early.'
+  ],
   runIn: 'renderer',
   destructive: false,
   readOnly: false,
@@ -960,8 +1020,11 @@ const APP_CONNECTOR_CONNECT: RokuOp<{ device?: string }, unknown> = {
 const APP_CONNECTOR_DISCONNECT: RokuOp<{ device?: string }, unknown> = {
   id: 'app_connector_disconnect',
   title: 'App Connector: Disconnect',
-  description:
-    'Close the RALE / App Connector session on the targeted device. Mutates session state (tears down the connection), so it is not read-only; idempotent — closing an already-closed session is a no-op. Use it to free the session or force a clean reconnect; normal RALE tools do not require you to disconnect between calls.',
+  description: [
+    'Close the RALE / App Connector session on the targeted device.',
+    'Mutates session state (tears down the connection), so it is not read-only; idempotent — closing an already-closed session is a no-op.',
+    'Use it to free the session or force a clean reconnect; normal RALE tools do not require you to disconnect between calls.'
+  ],
   runIn: 'renderer',
   destructive: false,
   readOnly: false,
@@ -982,13 +1045,14 @@ const APP_FUNCTION: RokuOp<
 > = {
   id: 'app_function',
   title: 'App Connector: Call Channel Function',
-  description:
-    'Invoke a single function on the sideloaded channel through the App Connector. ' +
-    'Use this for any one-off function call exposed by the channel; only wrap it in an `appFunction` Action Script step when the call is part of a multi-step flow. ' +
-    'The set of available functions is **channel-specific** — every sideloaded app exports its own. **Always call `list_app_connector_functions` first** to discover the exact name and the declared parameter list (`params: [{ name, type }, …]`) for the running channel before calling this tool. ' +
-    '`functionParams` is a **positional array** with one entry per declared parameter, in declaration order. Each entry\'s value matches the declared `type`: `String`/`Integer`/`Boolean`/number types are primitives; `roAssociativeArray` is a JSON object (still wrapped in the outer array slot); `roArray` / `roList` is a JSON array (also wrapped). For a zero-arg function pass `[]`. ' +
-    'A named object (`{ <paramName>: value }`, keyed by names from `list_app_connector_functions`) is accepted for backward compatibility and rewritten to a positional array before the call is sent. Authors should still emit positional form: a typo in a key silently passes `undefined` for that slot. ' +
-    'Auto-connects the App Connector session if needed; surfaces the call as a toast in Dev Studio. Invokes channel code, so it is not read-only and not assumed idempotent — a function may mutate app state.',
+  description: [
+    'Invoke a single function on the sideloaded channel through the App Connector.',
+    'Use this for any one-off function call exposed by the channel; only wrap it in an `appFunction` Action Script step when the call is part of a multi-step flow.',
+    'The set of available functions is **channel-specific** — every sideloaded app exports its own. **Always call `list_app_connector_functions` first** to discover the exact name and the declared parameter list (`params: [{ name, type }, …]`) for the running channel before calling this tool.',
+    '`functionParams` is a **positional array** with one entry per declared parameter, in declaration order. Each entry\'s value matches the declared `type`: `String`/`Integer`/`Boolean`/number types are primitives; `roAssociativeArray` is a JSON object (still wrapped in the outer array slot); `roArray` / `roList` is a JSON array (also wrapped). For a zero-arg function pass `[]`.',
+    'A named object (`{ <paramName>: value }`, keyed by names from `list_app_connector_functions`) is accepted for backward compatibility and rewritten to a positional array before the call is sent. Authors should still emit positional form: a typo in a key silently passes `undefined` for that slot.',
+    'Auto-connects the App Connector session if needed; surfaces the call as a toast in Dev Studio. Invokes channel code, so it is not read-only and not assumed idempotent — a function may mutate app state.'
+  ],
   runIn: 'renderer',
   destructive: true,
   readOnly: false,
@@ -1019,13 +1083,15 @@ const GET_TELNET_LOG: RokuOp<
 > = {
   id: 'get_telnet_log',
   title: 'Get Telnet / BrightScript Console Log',
-  description:
-    'Read lines from the BrightScript debug console (port 8085) buffer that Dev Studio holds in memory. ' +
-    'Returns `{ lines, cursor, totalLines, connected }`. ' +
-    'Pass `afterCursor` (the `cursor` from a previous call) to get only new lines — use this for polling. ' +
-    '`maxLines` caps the response (default 500, max 2000). ' +
-    'Lines only accumulate while the console is **connected**: if `connected` is false call `telnet_connect` first, then re-run this tool. ' +
-    'The Roku 8085 telnet socket only allows one client at a time — `telnet_connect` will close any existing telnet session held by another tool/IDE before attaching. Read-only — it drains the buffer Dev Studio already holds and never touches the device.',
+  description: [
+    'Read lines from the BrightScript debug console (port 8085) buffer that Dev Studio holds in memory.',
+    'Returns `{ lines, cursor, totalLines, connected }`.',
+    'Pass `afterCursor` (the `cursor` from a previous call) to get only new lines — use this for polling.',
+    '`maxLines` caps the response (default 500, max 2000).',
+    'Lines only accumulate while the console is **connected**: if `connected` is false call `telnet_connect` first, then re-run this tool.',
+    'The Roku 8085 telnet socket only allows one client at a time — `telnet_connect` will close any existing telnet session held by another tool/IDE before attaching.',
+    'Read-only — it drains the buffer Dev Studio already holds and never touches the device.'
+  ],
   runIn: 'renderer',
   destructive: false,
   readOnly: true,
@@ -1060,11 +1126,13 @@ const GET_TELNET_LOG: RokuOp<
 const TELNET_CONNECT: RokuOp<{ device?: string }, unknown> = {
   id: 'telnet_connect',
   title: 'Telnet Console: Connect',
-  description:
-    'Open the BrightScript debug console (TCP 8085) for the targeted device, exactly as if the user had clicked the Connect button on the Telnet Console tab. ' +
-    'Idempotent: returns `{ connected: true, already: true }` when already attached. ' +
-    'Lines do not accumulate until this is called. After it returns successfully, poll the buffer with `get_telnet_log({ afterCursor })`. ' +
-    'Roku\'s 8085 socket is single-client: connecting here will displace another tool (e.g. an IDE telnet session) that may currently hold it. Opening the socket is a side effect (displaces other clients), so this is not read-only; idempotent — already-attached returns { already: true }.',
+  description: [
+    'Open the BrightScript debug console (TCP 8085) for the targeted device, exactly as if the user had clicked the Connect button on the Telnet Console tab.',
+    'Idempotent: returns `{ connected: true, already: true }` when already attached.',
+    'Lines do not accumulate until this is called. After it returns successfully, poll the buffer with `get_telnet_log({ afterCursor })`.',
+    'Roku\'s 8085 socket is single-client: connecting here will displace another tool (e.g. an IDE telnet session) that may currently hold it.',
+    'Opening the socket is a side effect (displaces other clients), so this is not read-only.'
+  ],
   runIn: 'renderer',
   destructive: false,
   readOnly: false,
@@ -1088,10 +1156,12 @@ const TELNET_CONNECT: RokuOp<{ device?: string }, unknown> = {
 const TELNET_DISCONNECT: RokuOp<{ device?: string }, unknown> = {
   id: 'telnet_disconnect',
   title: 'Telnet Console: Disconnect',
-  description:
-    'Close the BrightScript debug console (TCP 8085) for the targeted device, mirroring the Disconnect button. ' +
-    'Idempotent: returns `{ connected: false, already: true }` when no session is open. ' +
-    'Use this to release the 8085 socket so another tool can attach, or to stop log accumulation. Closing the socket is a side effect, so this is not read-only; idempotent — already-closed returns { already: true }.',
+  description: [
+    'Close the BrightScript debug console (TCP 8085) for the targeted device, mirroring the Disconnect button.',
+    'Idempotent: returns `{ connected: false, already: true }` when no session is open.',
+    'Use this to release the 8085 socket so another tool can attach, or to stop log accumulation.',
+    'Closing the socket is a side effect, so this is not read-only.'
+  ],
   runIn: 'renderer',
   destructive: false,
   readOnly: false,
@@ -1115,18 +1185,14 @@ const TELNET_DISCONNECT: RokuOp<{ device?: string }, unknown> = {
 const CONSOLE_MONITOR_FINDINGS: RokuOp<{ device?: string }, unknown> = {
   id: 'console_monitor_findings',
   title: 'Console Monitor: BrightScript Findings',
-  description:
-    'Analyze the in-memory BrightScript debug console (port 8085) buffer and return the recognized ' +
-    'BrightScript ISSUES and CRASHES — the same data the Console Monitor UI shows. ' +
-    'Returns `{ connected, scannedLines, totalCaptured, totalIssues, issueTypeCount, byCategory, findings, crashes }`, ' +
-    'where each finding is `{ id, title, category, severity, meaning, cause, fix, docsUrl?, count, lines }` ' +
-    'and `lines` is that issue\'s unique console lines with per-line `count` and (when present) `file`/`line`. ' +
-    '`crashes` are Micro Debugger dumps (uncaught runtime errors): each is ' +
-    '`{ message, code?, file?, line?, backtrace[], count, exited?, app?, raw }` where `backtrace` is the stack ' +
-    '(`{ depth, func, file?, line? }`, innermost first) and `exited` marks a fatal `EXIT_BRIGHTSCRIPT_CRASH`. ' +
-    'Only Roku/BrightScript-emitted diagnostics (`BRIGHTSCRIPT: ERROR:`/`WARNING:`, rendezvous, FormatJSON, ' +
-    'roUrlEvent, …) are recognized — NOT arbitrary app log output. ' +
-    'Data only accumulates while the console is **connected**: if `connected` is false call `telnet_connect` first. Read-only — it analyzes the buffer Dev Studio already holds and never touches the device.',
+  description: [
+    'Analyze the in-memory BrightScript debug console (port 8085) buffer and return the recognized BrightScript ISSUES and CRASHES — the same data the Console Monitor UI shows.',
+    'Returns `{ connected, scannedLines, totalCaptured, totalIssues, issueTypeCount, byCategory, findings, crashes }`, where each finding is `{ id, title, category, severity, meaning, cause, fix, docsUrl?, count, lines }` and `lines` is that issue\'s unique console lines with per-line `count` and (when present) `file`/`line`.',
+    '`crashes` are Micro Debugger dumps (uncaught runtime errors): each is `{ message, code?, file?, line?, backtrace[], count, exited?, app?, raw }` where `backtrace` is the stack (`{ depth, func, file?, line? }`, innermost first) and `exited` marks a fatal `EXIT_BRIGHTSCRIPT_CRASH`.',
+    'Only Roku/BrightScript-emitted diagnostics (`BRIGHTSCRIPT: ERROR:`/`WARNING:`, rendezvous, FormatJSON, roUrlEvent, …) are recognized — NOT arbitrary app log output.',
+    'Data only accumulates while the console is **connected**: if `connected` is false call `telnet_connect` first.',
+    'Read-only — it analyzes the buffer Dev Studio already holds and never touches the device.'
+  ],
   runIn: 'renderer',
   destructive: false,
   readOnly: true,
@@ -1160,13 +1226,15 @@ const DEVICE_PERFORMANCE_METRICS: RokuOp<
 > = {
   id: 'device_performance_metrics',
   title: 'Device Performance Metrics (CPU / Memory / Objects)',
-  description:
-    'Time-series Device Performance metrics — the same chanperf/r2d2-bitmaps/app-object-counts data the Remote tab\'s CPU/Memory/BrightScript Objects quad charts poll and plot, returned as compact per-timestamp entries with a decoding `legend`. ' +
-    'Requires "Show Device Performance" (quad layout) to have been turned on for this device tab at some point this session, with the sideloaded Dev channel as the foreground app — if it never was, `devicePerformanceEnabled` is false and `samples` is empty (never an error). ' +
-    '`charts` selects which of cpu/memory/objects to include (default: all three) — each requested type appears as its own key per sample (`c`=cpu, `m`=memory, `o`=objects; see `legend` for field meanings). ' +
-    '`windowSec` (default 60) sets how far back from now to report; if the device\'s retained history is shorter, `actualWindowSec`/`sampleCount` reflect what was actually available. ' +
-    'A window whose natural sample count exceeds `maxSamples` (default 120, max 500) is evenly downsampled across the window (not truncated from one end) and `downsampled` is set true. ' +
-    '`cpuProcessSnapshot` (only present when `cpu` is requested) is a single latest-value object (process state, channel uptime, CPU time, cumulative fault counts) — Roku\'s `<proc-stat>` block has no historical series of its own, only the fault-rate numbers inside each cpu sample do. Read-only.',
+  description: [
+    'Time-series Device Performance metrics — the same chanperf/r2d2-bitmaps/app-object-counts data the Remote tab\'s CPU/Memory/BrightScript Objects quad charts poll and plot, returned as compact per-timestamp entries with a decoding `legend`.',
+    'Requires "Show Device Performance" (quad layout) to have been turned on for this device tab at some point this session, with the sideloaded Dev channel as the foreground app — if it never was, `devicePerformanceEnabled` is false and `samples` is empty (never an error).',
+    '`charts` selects which of cpu/memory/objects to include (default: all three) — each requested type appears as its own key per sample (`c`=cpu, `m`=memory, `o`=objects; see `legend` for field meanings).',
+    '`windowSec` (default 60) sets how far back from now to report; if the device\'s retained history is shorter, `actualWindowSec`/`sampleCount` reflect what was actually available.',
+    'A window whose natural sample count exceeds `maxSamples` (default 120, max 500) is evenly downsampled across the window (not truncated from one end) and `downsampled` is set true.',
+    '`cpuProcessSnapshot` (only present when `cpu` is requested) is a single latest-value object (process state, channel uptime, CPU time, cumulative fault counts) — Roku\'s `<proc-stat>` block has no historical series of its own, only the fault-rate numbers inside each cpu sample do.',
+    'Read-only.'
+  ],
   runIn: 'renderer',
   destructive: false,
   readOnly: true,
@@ -1348,7 +1416,7 @@ function opToMcpTool<P extends Record<string, unknown>, R>(
 ): {
   name: string;
   title: string;
-  description: string;
+  description: string | string[];
   inputSchema: JsonSchemaObject;
   handler: (args: Record<string, unknown>) => Promise<McpToolResult>;
   destructive: boolean;

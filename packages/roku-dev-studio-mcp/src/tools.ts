@@ -102,8 +102,23 @@ export type ToolAnnotations = {
 export type Tool = {
   name: string;
   title?: string;
-  description: string;
+  /**
+   * A single paragraph, or an array of discrete points — write the array form for anything with
+   * more than two or three distinct facts (response shape, related tools, caveats, ...), since a
+   * wall of comma/semicolon-spliced clauses is hard for both a human and an agent to parse back
+   * out. `index.ts`'s `toolToWire` joins the array with spaces for the real MCP wire response
+   * (the protocol's `description` field is a plain string); docs/assets/mcp-tools.js renders the
+   * array form as a bullet list instead of one blob.
+   */
+  description: string | string[];
   inputSchema: ToolInputSchema;
+  /**
+   * Declared response shape, docs/validation-only — NOT sent on the real MCP `tools/list`
+   * response (see `toolToWire` in index.ts), same as op-backed tools' `outputSchema` in
+   * `roku-dev-studio-api/lib/operations.ts`. Optional because several bespoke tools' handlers
+   * pass through an opaque, channel/renderer-defined payload with no fixed shape to declare.
+   */
+  outputSchema?: ToolInputSchema;
   annotations?: ToolAnnotations;
   handler: (args: Record<string, unknown>) => Promise<ToolResult>;
 };
@@ -274,6 +289,8 @@ function opToMcpTool(op: RokuOpDescriptor): Tool {
     title: op.title,
     description: op.description,
     inputSchema: agentFacingSchema(op.inputSchema as ToolInputSchema),
+    // Docs/validation-only (see the `Tool` type) — not copied onto the real MCP wire response.
+    outputSchema: op.outputSchema as ToolInputSchema,
     annotations,
     handler: async (args: Record<string, unknown>) => {
       try {
@@ -596,21 +613,96 @@ function orArray(itemSchema: Record<string, unknown>): Record<string, unknown> {
   return { type: 'array', items: itemSchema, description: 'One or more values to match (OR).' };
 }
 
+/** Fields on `roku-dev-studio-network-inspector`'s `ParsedNetworkEvent` — reused by every NI tool
+ *  below whose response embeds one or more captured events, so the shape is declared once. */
+const NETWORK_EVENT_PROPERTIES = {
+  id: { type: 'string' },
+  type: { type: 'string', enum: NETWORK_EVENT_TYPES as unknown as string[] },
+  deviceIp: { type: 'string' },
+  timestamp: { type: 'string' },
+  hostname: { type: 'string' },
+  resolvedIps: { type: 'array', items: { type: 'string' } },
+  sni: { type: 'string' },
+  destIp: { type: 'string' },
+  destPort: { type: 'number' },
+  ttl: { type: 'number' },
+  flowId: { type: 'string' },
+  httpRequest: { type: 'object', additionalProperties: true },
+  httpResponse: { type: 'object', additionalProperties: true },
+  mitm: { type: 'boolean' },
+  replay: { type: 'boolean' },
+  durationMs: { type: 'number' },
+  // DNS/Connect/TLS/Send/Wait/Download phase breakdown for a proxied HTTP transaction — see
+  // NetworkTimingPhases in roku-dev-studio-network-inspector/types.ts. Absent whenever a phase
+  // (or the whole object) couldn't be measured.
+  timing: {
+    type: 'object',
+    properties: {
+      dnsMs: { type: 'number' },
+      connectMs: { type: 'number' },
+      tlsMs: { type: 'number' },
+      sendMs: { type: 'number' },
+      waitMs: { type: 'number' },
+      receiveMs: { type: 'number' }
+    },
+    additionalProperties: false
+  },
+  detailAvailable: { type: 'boolean' },
+  note: { type: 'string' }
+} as const;
+
 const NETWORK_INSPECTOR_TOOLS: Tool[] = [
   {
     name: 'network_inspector_status',
     title: 'Network Inspector: Status',
-    description:
-      'Report whether Dev Studio\'s Network Inspector is enabled and actively capturing, plus connected Roku clients, packet/event counts, MITM (HTTPS decryption) state, and `prerequisites[]` remediation. **Call this first** before the other network_inspector_* tools — if `ready` is false, relay `notice` / `remediation` to the user (enable the feature, grant capture access, connect the Roku to the hotspot). Reads return nothing useful until `ready` is true.',
+    description: [
+      'Report whether Dev Studio\'s Network Inspector is enabled and actively capturing, plus connected Roku clients, packet/event counts, MITM (HTTPS decryption) state, and `prerequisites[]` remediation.',
+      '**Call this first** before the other network_inspector_* tools — if `ready` is false, relay `notice` / `remediation` to the user (enable the feature, grant capture access, connect the Roku to the hotspot).',
+      'Reads return nothing useful until `ready` is true.'
+    ],
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        // `status` has many more platform/MITM/hotspot fields (see NetworkInspectorStatus in
+        // roku-dev-studio-network-inspector/types.ts) — only the ones most relevant to an agent
+        // are declared; additionalProperties covers the rest.
+        status: {
+          type: 'object',
+          properties: {
+            enabled: { type: 'boolean' },
+            captureActive: { type: 'boolean' },
+            mitmEnabled: { type: 'boolean' },
+            mitmActive: { type: 'boolean' },
+            eventsBuffered: { type: 'number' },
+            packetsCaptured: { type: 'number' },
+            packetsDropped: { type: 'number' },
+            connectedClients: { type: 'array' },
+            matchedSerials: { type: 'array', items: { type: 'string' } },
+            lastError: { type: 'string' }
+          },
+          additionalProperties: true
+        },
+        ready: { type: 'boolean' },
+        notice: { type: 'string' },
+        remediation: { type: 'array', items: { type: 'string' } }
+      },
+      required: ['status', 'ready'],
+      additionalProperties: false
+    },
     annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
     handler: async () => networkInspectorStatusTool()
   },
   {
     name: 'network_inspector_list_events',
     title: 'Network Inspector: List Events',
-    description:
-      'List captured network events as lightweight summaries (no full headers/body — drill down with network_inspector_get_event_detail using an event `id`). Summary-first by design to protect context. All filters optional and AND-combined across fields; give a field an array to OR within it (e.g. `status: [404, 500]`): `device` (IP or serial; omit for all Rokus on the hotspot), `host` (case-insensitive substring of hostname/SNI/URL), `method` (GET/POST/…), `type` (one of the network event types), `status` (exact HTTP response status code(s)), `statusClass` (\'2xx\'|\'3xx\'|\'4xx\'|\'5xx\'), `contentType` (case-insensitive substring against the response Content-Type, e.g. "json"), `errorsOnly` (HTTP status >= 400 — a shortcut for statusClass 4xx+5xx), `mitmOnly` (decrypted-HTTPS transactions only), `limit` (default 200, max 2000). Returns most-recent events. Requires Network Inspector enabled (see network_inspector_status).',
+    description: [
+      'List captured network events as lightweight summaries (no full headers/body — drill down with network_inspector_get_event_detail using an event `id`).',
+      'Summary-first by design to protect context.',
+      'All filters optional and AND-combined across fields; give a field an array to OR within it (e.g. `status: [404, 500]`): `device` (IP or serial; omit for all Rokus on the hotspot), `host` (case-insensitive substring of hostname/SNI/URL), `method` (GET/POST/…), `type` (one of the network event types), `status` (exact HTTP response status code(s)), `statusClass` (\'2xx\'|\'3xx\'|\'4xx\'|\'5xx\'), `contentType` (case-insensitive substring against the response Content-Type, e.g. "json"), `errorsOnly` (HTTP status >= 400 — a shortcut for statusClass 4xx+5xx), `mitmOnly` (decrypted-HTTPS transactions only), `limit` (default 200, max 2000).',
+      'Returns most-recent events.',
+      'Requires Network Inspector enabled (see network_inspector_status).'
+    ],
     inputSchema: {
       type: 'object',
       properties: {
@@ -627,14 +719,34 @@ const NETWORK_INSPECTOR_TOOLS: Tool[] = [
       },
       additionalProperties: false
     },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        events: {
+          type: 'array',
+          items: { type: 'object', properties: { ...NETWORK_EVENT_PROPERTIES }, additionalProperties: true }
+        },
+        count: { type: 'number' },
+        // Echoes the resolved filter — `null` when no `device` argument was given/resolved.
+        deviceIp: { type: ['string', 'null'] },
+        notice: { type: 'string' },
+        remediation: { type: 'array', items: { type: 'string' } }
+      },
+      required: ['events', 'count', 'deviceIp'],
+      additionalProperties: false
+    },
     annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
     handler: async (args) => networkInspectorListEventsTool(args)
   },
   {
     name: 'network_inspector_get_event_detail',
     title: 'Network Inspector: Event Detail',
-    description:
-      'Fetch the full headers and body for one captured event by `id` (from network_inspector_list_events). Bodies are capped at `maxBodyChars` (default 4096) and the response lists `warnings` when truncated; pass `includeFullBody: true` to override. DNS/TLS/TCP events have no body and may return 404. Requires Network Inspector enabled.',
+    description: [
+      'Fetch the full headers and body for one captured event by `id` (from network_inspector_list_events).',
+      'Bodies are capped at `maxBodyChars` (default 4096) and the response lists `warnings` when truncated; pass `includeFullBody: true` to override.',
+      'DNS/TLS/TCP events have no body and may return 404.',
+      'Requires Network Inspector enabled.'
+    ],
     inputSchema: {
       type: 'object',
       properties: {
@@ -645,14 +757,27 @@ const NETWORK_INSPECTOR_TOOLS: Tool[] = [
       required: ['id'],
       additionalProperties: false
     },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        event: { type: 'object', properties: { ...NETWORK_EVENT_PROPERTIES }, additionalProperties: true },
+        warnings: { type: 'array', items: { type: 'string' } }
+      },
+      required: ['event', 'warnings'],
+      additionalProperties: false
+    },
     annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
     handler: async (args) => networkInspectorGetEventDetailTool(args)
   },
   {
     name: 'network_inspector_analyze',
     title: 'Network Inspector: Analyze',
-    description:
-      'Aggregate the captured buffer into hotspots and rollups in one call — counts by event type, by HTTP status class (2xx/3xx/4xx/5xx), top hosts (with error counts), top content types, total HTTP/MITM transactions, error count, and the largest responses. Use this to orient on a session before drilling into individual events. Accepts the same optional filters as network_inspector_list_events (`device`, `host`, `method`, `type`, `status`, `statusClass`, `contentType`, `errorsOnly`, `mitmOnly`). Requires Network Inspector enabled.',
+    description: [
+      'Aggregate the captured buffer into hotspots and rollups in one call — counts by event type, by HTTP status class (2xx/3xx/4xx/5xx), top hosts (with error counts), top content types, total HTTP/MITM transactions, error count, and the largest responses.',
+      'Use this to orient on a session before drilling into individual events.',
+      'Accepts the same optional filters as network_inspector_list_events (`device`, `host`, `method`, `type`, `status`, `statusClass`, `contentType`, `errorsOnly`, `mitmOnly`).',
+      'Requires Network Inspector enabled.'
+    ],
     inputSchema: {
       type: 'object',
       properties: {
@@ -668,14 +793,80 @@ const NETWORK_INSPECTOR_TOOLS: Tool[] = [
       },
       additionalProperties: false
     },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        analysis: {
+          type: 'object',
+          properties: {
+            totalMatched: { type: 'number' },
+            byType: { type: 'object', additionalProperties: true },
+            byStatusClass: { type: 'object', additionalProperties: true },
+            topHosts: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: { host: { type: 'string' }, count: { type: 'number' }, errors: { type: 'number' } },
+                required: ['host', 'count', 'errors'],
+                additionalProperties: false
+              }
+            },
+            topContentTypes: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: { contentType: { type: 'string' }, count: { type: 'number' } },
+                required: ['contentType', 'count'],
+                additionalProperties: false
+              }
+            },
+            httpTransactions: { type: 'number' },
+            mitmTransactions: { type: 'number' },
+            errors: { type: 'number' },
+            largestResponses: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string' },
+                  host: { type: 'string' },
+                  url: { type: 'string' },
+                  status: { type: 'number' },
+                  bytes: { type: 'number' }
+                },
+                required: ['id', 'bytes'],
+                additionalProperties: false
+              }
+            }
+          },
+          required: [
+            'totalMatched', 'byType', 'byStatusClass', 'topHosts', 'topContentTypes',
+            'httpTransactions', 'mitmTransactions', 'errors', 'largestResponses'
+          ],
+          additionalProperties: false
+        },
+        // Echoes the resolved filter — `null` when no `device` argument was given/resolved.
+        deviceIp: { type: ['string', 'null'] },
+        notice: { type: 'string' },
+        remediation: { type: 'array', items: { type: 'string' } }
+      },
+      required: ['analysis', 'deviceIp'],
+      additionalProperties: false
+    },
     annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
     handler: async (args) => networkInspectorAnalyzeTool(args)
   },
   {
     name: 'network_inspector_find',
     title: 'Network Inspector: Find in Content',
-    description:
-      'Search the FULL content of captured transactions — request/response URL, headers, and bodies — for `query`, unlike network_inspector_list_events\' `host` filter which only matches hostname/SNI/URL. This is the tool for "which request(s) contain X" (a session id, an error string, a specific JSON field/value) across the whole buffer, without paging through every event with get_event_detail. Each result carries `total` (match count), `scopes` (per-scope breakdown: url/reqHeaders/reqBody/respHeaders/respBody), and the matching event\'s summary (host/url/method/status) inline. `query` is required; `scopes` optionally narrows which parts are searched (omit for all); `caseSensitive` (default false); `regex` treats `query` as a JS regex (a dangerous/over-long pattern safely degrades to a literal search rather than erroring). `device` optional — omit to search every Roku with captured traffic. `limit` caps results (default 50, max 500). Requires Network Inspector enabled (see network_inspector_status).',
+    description: [
+      'Search the FULL content of captured transactions — request/response URL, headers, and bodies — for `query`, unlike network_inspector_list_events\' `host` filter which only matches hostname/SNI/URL.',
+      'This is the tool for "which request(s) contain X" (a session id, an error string, a specific JSON field/value) across the whole buffer, without paging through every event with get_event_detail.',
+      'Each result carries `total` (match count), `scopes` (per-scope breakdown: url/reqHeaders/reqBody/respHeaders/respBody), and the matching event\'s summary (host/url/method/status) inline.',
+      '`query` is required; `scopes` optionally narrows which parts are searched (omit for all); `caseSensitive` (default false); `regex` treats `query` as a JS regex (a dangerous/over-long pattern safely degrades to a literal search rather than erroring).',
+      '`device` optional — omit to search every Roku with captured traffic. `limit` caps results (default 50, max 500).',
+      'Requires Network Inspector enabled (see network_inspector_status).'
+    ],
     inputSchema: {
       type: 'object',
       properties: {
@@ -693,15 +884,70 @@ const NETWORK_INSPECTOR_TOOLS: Tool[] = [
       required: ['query'],
       additionalProperties: false
     },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        matches: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'string' },
+              total: { type: 'number' },
+              scopes: { type: 'object', additionalProperties: true },
+              // Always present (a single-term request is still routed through the multi-term
+              // matcher), keyed by term id — `{q1: {total, scopes}}` for this tool's one implicit term.
+              terms: { type: 'object', additionalProperties: true },
+              // `null` when the matched event fell outside the summary lookup window used to
+              // enrich matches with host/url/method/status (see mcp-bridge.ts's `/network-inspector/find` route).
+              event: { type: ['object', 'null'], properties: { ...NETWORK_EVENT_PROPERTIES }, additionalProperties: true }
+            },
+            required: ['id', 'total', 'scopes', 'terms', 'event'],
+            additionalProperties: false
+          }
+        },
+        count: { type: 'number' },
+        // Echoes the resolved filter — `null` when no `device` argument was given/resolved.
+        deviceIp: { type: ['string', 'null'] },
+        notice: { type: 'string' },
+        remediation: { type: 'array', items: { type: 'string' } }
+      },
+      required: ['matches', 'count', 'deviceIp'],
+      additionalProperties: false
+    },
     annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
     handler: async (args) => networkInspectorFindTool(args)
   },
   {
     name: 'network_inspector_get_ca_info',
     title: 'Network Inspector: HTTPS CA Info',
-    description:
-      'Return the Dev Studio MITM CA fingerprint, proxy host:port, and the BrightScript snippet needed to trust the proxy so HTTPS request/response bodies become visible to the Network Inspector. Use when network_inspector_list_events shows TLS handshakes but no decrypted HTTP bodies, to guide the user through enabling HTTPS decryption for their sideloaded dev channel.',
+    description: [
+      'Return the Dev Studio MITM CA fingerprint, proxy host:port, and the BrightScript snippet needed to trust the proxy so HTTPS request/response bodies become visible to the Network Inspector.',
+      'Use when network_inspector_list_events shows TLS handshakes but no decrypted HTTP bodies, to guide the user through enabling HTTPS decryption for their sideloaded dev channel.'
+    ],
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        caInfo: {
+          type: 'object',
+          properties: {
+            commonName: { type: 'string' },
+            fingerprintSha256: { type: 'string' },
+            createdAt: { type: 'string' },
+            expiresAt: { type: 'string' },
+            proxyHostPort: { type: 'string' }
+          },
+          required: ['commonName', 'fingerprintSha256', 'createdAt', 'expiresAt', 'proxyHostPort'],
+          additionalProperties: false
+        },
+        mitmEnabled: { type: 'boolean' },
+        mitmActive: { type: 'boolean' },
+        mitmListenAddress: { type: 'string' }
+      },
+      required: ['caInfo', 'mitmEnabled', 'mitmActive'],
+      additionalProperties: false
+    },
     annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
     handler: async () => networkInspectorGetCaInfoTool()
   }
@@ -731,41 +977,147 @@ const DEVICE_PROP = {
   device: { type: 'string', description: 'Optional. Roku IP or serial; must match a connected Dev Studio tab. Omit to use the focused tab.' }
 } as const;
 
+const DEBUGGER_SESSION_STATE_ENUM = ['connecting', 'attached', 'stopped', 'running', 'disconnected', 'error'] as const;
+
+// Response fragments below mirror roku-dev-studio-api/lib/debugger/protocol/decode.ts's parsed
+// shapes (StackEntry, ThreadInfo, VariableInfo) — reused across debugger_get_callstack,
+// debugger_get_variables, and debugger_wait_for_stop's embedded `stop` snapshot.
+const STACK_FRAME_PROPERTIES = {
+  lineNumber: { type: 'number' },
+  functionName: { type: 'string' },
+  filePath: { type: 'string' }
+} as const;
+
+const THREAD_INFO_PROPERTIES = {
+  isPrimary: { type: 'boolean' },
+  isDetached: { type: 'boolean' },
+  stopReason: { type: 'string' },
+  stopReasonDetail: { type: 'string' },
+  lineNumber: { type: 'number' },
+  functionName: { type: 'string' },
+  filePath: { type: 'string' },
+  codeSnippet: { type: 'string' },
+  osThreadId: { type: 'string' },
+  name: { type: 'string' },
+  type: { type: 'string' }
+} as const;
+
+// `value` has no declared type — VariableInfo.value is `unknown` on the wire (its shape depends
+// on the BrightScript type being inspected). `children` isn't recursively typed (same shape as
+// this array, one level deep is enough for the reference page — see docs/assets/mcp-tools.js).
+const VARIABLE_PROPERTIES = {
+  name: { type: 'string' },
+  type: { type: 'string' },
+  value: {},
+  isConst: { type: 'boolean' },
+  isContainer: { type: 'boolean' },
+  isVirtual: { type: 'boolean' },
+  refCount: { type: 'number' },
+  keyType: { type: 'string' },
+  childCount: { type: 'number' },
+  children: { type: 'array' }
+} as const;
+
 const DEBUGGER_TOOLS: Tool[] = [
   {
     name: 'debugger_attach',
     title: 'Debugger: Attach',
-    description:
-      'Open a BrightScript debug session to the Roku on control port 8081. REQUIRED FIRST — every other debugger_* tool needs an attached session. Prefer calling the read-only `debugger_status` before this one: if it already reports `attached`/`running`/`stopped`, skip this call entirely and go straight to the debugger_* operation you need. The port is only open when the channel was launched with debugging (sideload "with Debugging", or a STOP in the source auto-enables it); a plain sideload/relaunch does NOT open it, and attach returns an actionable error explaining that. Safe to call anyway even when already attached: if a healthy session for this device already exists (e.g. the user attached via the app\'s own debugger UI), this is a no-op that returns success without touching it — it only tears down and reconnects when there is no session, or the existing one is stale/errored (the control port is single-client, so a doomed reconnect would otherwise kill a working session for nothing). On success returns `{ ip, state }`.',
+    description: [
+      'Open a BrightScript debug session to the Roku on control port 8081. REQUIRED FIRST — every other debugger_* tool needs an attached session.',
+      'Prefer calling the read-only `debugger_status` before this one: if it already reports `attached`/`running`/`stopped`, skip this call entirely and go straight to the debugger_* operation you need.',
+      'The port is only open when the channel was launched with debugging (sideload "with Debugging", or a STOP in the source auto-enables it); a plain sideload/relaunch does NOT open it, and attach returns an actionable error explaining that.',
+      'Safe to call anyway even when already attached: if a healthy session for this device already exists (e.g. the user attached via the app\'s own debugger UI), this is a no-op that returns success without touching it — it only tears down and reconnects when there is no session, or the existing one is stale/errored (the control port is single-client, so a doomed reconnect would otherwise kill a working session for nothing).',
+      'On success returns `{ ip, state }`.'
+    ],
     inputSchema: { type: 'object', properties: { ...DEVICE_PROP }, additionalProperties: false },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        ip: { type: 'string' },
+        state: { type: 'string', enum: DEBUGGER_SESSION_STATE_ENUM as unknown as string[] },
+        protocolVersion: { type: 'string' },
+        attached: { type: 'boolean' }
+      },
+      required: ['ip', 'state', 'attached'],
+      additionalProperties: false
+    },
     annotations: { readOnlyHint: false, idempotentHint: true, openWorldHint: true },
     handler: async (args) => debuggerCall('attach', 'debugger_attach', args)
   },
   {
     name: 'debugger_detach',
     title: 'Debugger: Detach',
-    description: 'Close the debug session for a device (releases the 8081 control socket). Idempotent — a no-op if not attached. The running channel keeps executing.',
+    description: [
+      'Close the debug session for a device (releases the 8081 control socket).',
+      'Idempotent — a no-op if not attached.',
+      'The running channel keeps executing.'
+    ],
     inputSchema: { type: 'object', properties: { ...DEVICE_PROP }, additionalProperties: false },
+    outputSchema: {
+      type: 'object',
+      properties: { ip: { type: 'string' }, detached: { type: 'boolean' } },
+      required: ['ip', 'detached'],
+      additionalProperties: false
+    },
     annotations: { readOnlyHint: false, idempotentHint: true, openWorldHint: true },
     handler: async (args) => debuggerCall('detach', 'debugger_detach', args)
   },
   {
     name: 'debugger_status',
     title: 'Debugger: Status',
-    description:
-      'Return the session `state` for a device WITHOUT blocking: one of `disconnected` (not attached), `connecting`, `attached`, `running`, `stopped` (HALTED — safe to inspect), or `error`. Call this before `debugger_attach` — if it already reports `attached`/`running`/`stopped`, a session is already up (maybe from the app\'s own debugger UI) and you can skip straight to the operation you need. Also poll this to decide whether inspection tools will work; to block until the next halt use debugger_wait_for_stop instead.',
+    description: [
+      'Return the session `state` for a device WITHOUT blocking: one of `disconnected` (not attached), `connecting`, `attached`, `running`, `stopped` (HALTED — safe to inspect), or `error`.',
+      'Call this before `debugger_attach` — if it already reports `attached`/`running`/`stopped`, a session is already up (maybe from the app\'s own debugger UI) and you can skip straight to the operation you need.',
+      'Also poll this to decide whether inspection tools will work; to block until the next halt use debugger_wait_for_stop instead.'
+    ],
     inputSchema: { type: 'object', properties: { ...DEVICE_PROP }, additionalProperties: false },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        ip: { type: 'string' },
+        state: { type: 'string', enum: DEBUGGER_SESSION_STATE_ENUM as unknown as string[] },
+        protocolVersion: { type: 'string' }
+      },
+      required: ['ip', 'state'],
+      additionalProperties: false
+    },
     annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
     handler: async (args) => debuggerCall('status', 'debugger_status', args)
   },
   {
     name: 'debugger_wait_for_stop',
     title: 'Debugger: Wait for Stop',
-    description:
-      'Block (server-side poll) until the target HALTS at a breakpoint / STOP / step-completion / runtime error, then return `{ stopped: true, stop: { reason, detail, threads, stackFrames, variables } }` — the top-frame snapshot. Returns `{ stopped: false, timedOut: true }` if it is still running at the deadline, or `{ stopped:false, state }` if the session ended. Call this right after debugger_continue / debugger_step, or after triggering the app, to know when you can inspect. Optional `timeoutMs` (default 15000, max 30000).',
+    description: [
+      'Block (server-side poll) until the target HALTS at a breakpoint / STOP / step-completion / runtime error, then return `{ stopped: true, stop: { reason, detail, threads, stackFrames, variables } }` — the top-frame snapshot.',
+      'Returns `{ stopped: false, timedOut: true }` if it is still running at the deadline, or `{ stopped:false, state }` if the session ended.',
+      'Call this right after debugger_continue / debugger_step, or after triggering the app, to know when you can inspect.',
+      'Optional `timeoutMs` (default 15000, max 30000).'
+    ],
     inputSchema: {
       type: 'object',
       properties: { ...DEVICE_PROP, timeoutMs: { type: 'number', description: 'Max ms to wait (default 15000, capped at 30000).' } },
+      additionalProperties: false
+    },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        stopped: { type: 'boolean' },
+        state: { type: 'string', enum: DEBUGGER_SESSION_STATE_ENUM as unknown as string[] },
+        timedOut: { type: 'boolean' },
+        stop: {
+          type: 'object',
+          properties: {
+            ip: { type: 'string' },
+            reason: { type: 'string' },
+            detail: { type: 'string' },
+            threads: { type: 'array', items: { type: 'object', properties: { ...THREAD_INFO_PROPERTIES }, additionalProperties: true } },
+            stackFrames: { type: 'array', items: { type: 'object', properties: { ...STACK_FRAME_PROPERTIES }, additionalProperties: false } },
+            variables: { type: 'array', items: { type: 'object', properties: { ...VARIABLE_PROPERTIES }, additionalProperties: true } }
+          },
+          additionalProperties: true
+        }
+      },
+      required: ['stopped', 'state'],
       additionalProperties: false
     },
     annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
@@ -774,23 +1126,48 @@ const DEBUGGER_TOOLS: Tool[] = [
   {
     name: 'debugger_continue',
     title: 'Debugger: Continue',
-    description: 'Resume execution from a halted state (run until the next breakpoint / STOP / error). After calling this, use debugger_wait_for_stop to catch the next halt. Only meaningful while `stopped`.',
+    description: [
+      'Resume execution from a halted state (run until the next breakpoint / STOP / error).',
+      'After calling this, use debugger_wait_for_stop to catch the next halt.',
+      'Only meaningful while `stopped`.'
+    ],
     inputSchema: { type: 'object', properties: { ...DEVICE_PROP }, additionalProperties: false },
+    outputSchema: {
+      type: 'object',
+      properties: { ip: { type: 'string' }, state: { type: 'string', enum: DEBUGGER_SESSION_STATE_ENUM as unknown as string[] } },
+      required: ['ip', 'state'],
+      additionalProperties: false
+    },
     annotations: { readOnlyHint: false, idempotentHint: false, openWorldHint: true },
     handler: async (args) => debuggerCall('continue', 'debugger_continue', args)
   },
   {
     name: 'debugger_pause',
     title: 'Debugger: Pause',
-    description: 'Request a halt of a running channel (best-effort). Follow with debugger_wait_for_stop to get the snapshot once it stops. Only meaningful while `running`.',
+    description: [
+      'Request a halt of a running channel (best-effort).',
+      'Follow with debugger_wait_for_stop to get the snapshot once it stops.',
+      'Only meaningful while `running`.'
+    ],
     inputSchema: { type: 'object', properties: { ...DEVICE_PROP }, additionalProperties: false },
+    outputSchema: {
+      type: 'object',
+      properties: { ip: { type: 'string' }, requested: { type: 'string', enum: ['pause'] } },
+      required: ['ip', 'requested'],
+      additionalProperties: false
+    },
     annotations: { readOnlyHint: false, idempotentHint: false, openWorldHint: true },
     handler: async (args) => debuggerCall('pause', 'debugger_pause', args)
   },
   {
     name: 'debugger_step',
     title: 'Debugger: Step',
-    description: 'Single-step the halted thread. `kind`: "over" (default — next line, skipping calls), "in" (into the call), or "out" (finish the current function). Requires the target to be HALTED. Follow with debugger_wait_for_stop to get the new location.',
+    description: [
+      'Single-step the halted thread.',
+      '`kind`: "over" (default — next line, skipping calls), "in" (into the call), or "out" (finish the current function).',
+      'Requires the target to be HALTED.',
+      'Follow with debugger_wait_for_stop to get the new location.'
+    ],
     inputSchema: {
       type: 'object',
       properties: {
@@ -800,16 +1177,38 @@ const DEBUGGER_TOOLS: Tool[] = [
       },
       additionalProperties: false
     },
+    outputSchema: {
+      type: 'object',
+      properties: { ip: { type: 'string' }, stepped: { type: 'string', enum: ['over', 'in', 'out'] } },
+      required: ['ip', 'stepped'],
+      additionalProperties: false
+    },
     annotations: { readOnlyHint: false, idempotentHint: false, openWorldHint: true },
     handler: async (args) => debuggerCall('step', 'debugger_step', args)
   },
   {
     name: 'debugger_get_callstack',
     title: 'Debugger: Get Call Stack',
-    description: 'Return the call-stack frames (function, file, line — top frame first) for the halted thread. Requires the target to be HALTED. Optional `threadIndex` (default the stopped/primary thread). A frame index from here feeds `stackFrameIndex` in debugger_get_variables / debugger_evaluate.',
+    description: [
+      'Return the call-stack frames (function, file, line — top frame first) for the halted thread.',
+      'Requires the target to be HALTED.',
+      'Optional `threadIndex` (default the stopped/primary thread).',
+      'A frame index from here feeds `stackFrameIndex` in debugger_get_variables / debugger_evaluate.'
+    ],
     inputSchema: {
       type: 'object',
       properties: { ...DEVICE_PROP, threadIndex: { type: 'number', description: 'Optional thread index (default the stopped/primary thread).' } },
+      additionalProperties: false
+    },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        frames: {
+          type: 'array',
+          items: { type: 'object', properties: { ...STACK_FRAME_PROPERTIES }, required: ['lineNumber', 'functionName', 'filePath'], additionalProperties: false }
+        }
+      },
+      required: ['frames'],
       additionalProperties: false
     },
     annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
@@ -818,8 +1217,12 @@ const DEBUGGER_TOOLS: Tool[] = [
   {
     name: 'debugger_get_variables',
     title: 'Debugger: Get Variables',
-    description:
-      'Return variables in scope at a stack frame while HALTED. With no `variablePath`, returns the frame\'s locals (incl. `m`); each entry has `name`, `type`, `value`, and for containers a `childCount`. To drill into a container, pass its `variablePath` (e.g. `["m","top"]`; a quoted `"key"` segment forces a case-sensitive AA lookup, a bare number indexes an array) — the response is `[container]` whose `.children` is the next level. Optional `stackFrameIndex` (default 0 = top) and `threadIndex`.',
+    description: [
+      'Return variables in scope at a stack frame while HALTED.',
+      'With no `variablePath`, returns the frame\'s locals (incl. `m`); each entry has `name`, `type`, `value`, and for containers a `childCount`.',
+      'To drill into a container, pass its `variablePath` (e.g. `["m","top"]`; a quoted `"key"` segment forces a case-sensitive AA lookup, a bare number indexes an array) — the response is `[container]` whose `.children` is the next level.',
+      'Optional `stackFrameIndex` (default 0 = top) and `threadIndex`.'
+    ],
     inputSchema: {
       type: 'object',
       properties: {
@@ -830,14 +1233,36 @@ const DEBUGGER_TOOLS: Tool[] = [
       },
       additionalProperties: false
     },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        variables: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: { ...VARIABLE_PROPERTIES },
+            required: ['type', 'isConst', 'isContainer', 'isVirtual', 'refCount'],
+            additionalProperties: false
+          }
+        }
+      },
+      required: ['variables'],
+      additionalProperties: false
+    },
     annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
     handler: async (args) => debuggerCall('variables', 'debugger_get_variables', args)
   },
   {
     name: 'debugger_evaluate',
     title: 'Debugger: Evaluate (REPL)',
-    description:
-      'Run a BrightScript expression/statement in the halted frame (the debug-console REPL) — e.g. `print m.top.count` or `print type(node)`. Output streams to the device console; the result reports compile/runtime errors if any. Requires the target to be HALTED. Can have side effects (it executes code), so it is not read-only. For a plain variable read prefer debugger_get_variables. Optional `stackFrameIndex` / `threadIndex` select the scope.',
+    description: [
+      'Run a BrightScript expression/statement in the halted frame (the debug-console REPL) — e.g. `print m.top.count` or `print type(node)`.',
+      'Output streams to the device console; the result reports compile/runtime errors if any.',
+      'Requires the target to be HALTED.',
+      'Can have side effects (it executes code), so it is not read-only.',
+      'For a plain variable read prefer debugger_get_variables.',
+      'Optional `stackFrameIndex` / `threadIndex` select the scope.'
+    ],
     inputSchema: {
       type: 'object',
       properties: {
@@ -849,14 +1274,47 @@ const DEBUGGER_TOOLS: Tool[] = [
       required: ['expression'],
       additionalProperties: false
     },
+    // `result` is the raw BrightScript Debug Protocol envelope { success, readOffset, data } —
+    // see ExecuteData in roku-dev-studio-api/lib/debugger/protocol/decode.ts. Can be entirely
+    // absent (device rejects Execute while not actually halted).
+    outputSchema: {
+      type: 'object',
+      properties: {
+        result: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean' },
+            readOffset: { type: 'number' },
+            data: {
+              type: 'object',
+              properties: {
+                executeSuccess: { type: 'boolean' },
+                runtimeStopCode: { type: 'number' },
+                compileErrors: { type: 'array', items: { type: 'string' } },
+                runtimeErrors: { type: 'array', items: { type: 'string' } },
+                otherErrors: { type: 'array', items: { type: 'string' } }
+              },
+              additionalProperties: true
+            }
+          },
+          additionalProperties: true
+        }
+      },
+      additionalProperties: false
+    },
     annotations: { readOnlyHint: false, idempotentHint: false, openWorldHint: true },
     handler: async (args) => debuggerCall('evaluate', 'debugger_evaluate', args)
   },
   {
     name: 'debugger_set_breakpoints',
     title: 'Debugger: Set Breakpoints',
-    description:
-      'Add breakpoints. `breakpoints`: array of `{ path, line, condition?, hitCount? }` — `path` is a `pkg:/…` source path (a bare path is prefixed with `pkg:/`), `condition` is an optional BrightScript expression (Roku OS 11.5+), `hitCount` skips that many hits first. IMPORTANT: the device only registers breakpoints while HALTED — one added while the channel is running comes back `pending:true` and is queued to register at the next stop. Each result carries a `breakpointId` (registered) or an error. Existing conditions are replaced on re-add.',
+    description: [
+      'Add breakpoints.',
+      '`breakpoints`: array of `{ path, line, condition?, hitCount? }` — `path` is a `pkg:/…` source path (a bare path is prefixed with `pkg:/`), `condition` is an optional BrightScript expression (Roku OS 11.5+), `hitCount` skips that many hits first.',
+      'IMPORTANT: the device only registers breakpoints while HALTED — one added while the channel is running comes back `pending:true` and is queued to register at the next stop.',
+      'Each result carries a `breakpointId` (registered) or an error.',
+      'Existing conditions are replaced on re-add.'
+    ],
     inputSchema: {
       type: 'object',
       properties: {
@@ -880,13 +1338,28 @@ const DEBUGGER_TOOLS: Tool[] = [
       required: ['breakpoints'],
       additionalProperties: false
     },
+    // Item shape varies by branch (device.addBreakpoints's queued-vs-sent split in
+    // debug-session-controller.ts): queued entries echo back the request shape + `pending:true`;
+    // sent entries are the device's `{id, breakpointId, errorCode, ignoreCount?}` results instead
+    // — not expressible as one object shape in this validator's subset (no oneOf), so left generic.
+    outputSchema: {
+      type: 'object',
+      properties: { breakpoints: { type: 'array' } },
+      required: ['breakpoints'],
+      additionalProperties: false
+    },
     annotations: { readOnlyHint: false, idempotentHint: true, openWorldHint: true },
     handler: async (args) => debuggerCall('set-breakpoints', 'debugger_set_breakpoints', args)
   },
   {
     name: 'debugger_remove_breakpoints',
     title: 'Debugger: Remove Breakpoints',
-    description: 'Remove breakpoints by location. `locations`: array of `{ filePath, lineNumber }` (matching what debugger_list_breakpoints reports). Removal is by file:line so it also clears a still-queued breakpoint that has no device id yet. Returns `{ removed }`.',
+    description: [
+      'Remove breakpoints by location.',
+      '`locations`: array of `{ filePath, lineNumber }` (matching what debugger_list_breakpoints reports).',
+      'Removal is by file:line so it also clears a still-queued breakpoint that has no device id yet.',
+      'Returns `{ removed }`.'
+    ],
     inputSchema: {
       type: 'object',
       properties: {
@@ -908,14 +1381,47 @@ const DEBUGGER_TOOLS: Tool[] = [
       required: ['locations'],
       additionalProperties: false
     },
+    outputSchema: {
+      type: 'object',
+      properties: { removed: { type: 'number' } },
+      required: ['removed'],
+      additionalProperties: false
+    },
     annotations: { readOnlyHint: false, idempotentHint: true, openWorldHint: true },
     handler: async (args) => debuggerCall('remove-breakpoints', 'debugger_remove_breakpoints', args)
   },
   {
     name: 'debugger_list_breakpoints',
     title: 'Debugger: List Breakpoints',
-    description: 'List the breakpoints the debugger is tracking for a device: each with `filePath`, `lineNumber`, `conditionalExpression?`, `hitCount?`, `verified` (registered on the device), `queued` (waiting for the next halt to register), and `breakpointId?`. Read-only.',
+    description: [
+      'List the breakpoints the debugger is tracking for a device: each with `filePath`, `lineNumber`, `conditionalExpression?`, `hitCount?`, `verified` (registered on the device), `queued` (waiting for the next halt to register), and `breakpointId?`.',
+      'Read-only.'
+    ],
     inputSchema: { type: 'object', properties: { ...DEVICE_PROP }, additionalProperties: false },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        breakpoints: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              filePath: { type: 'string' },
+              lineNumber: { type: 'number' },
+              conditionalExpression: { type: 'string' },
+              hitCount: { type: 'number' },
+              verified: { type: 'boolean' },
+              queued: { type: 'boolean' },
+              breakpointId: { type: 'number' }
+            },
+            required: ['filePath', 'lineNumber', 'verified', 'queued'],
+            additionalProperties: false
+          }
+        }
+      },
+      required: ['breakpoints'],
+      additionalProperties: false
+    },
     annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
     handler: async (args) => debuggerCall('list-breakpoints', 'debugger_list_breakpoints', args)
   }
@@ -925,21 +1431,67 @@ const DEBUGGER_TOOLS: Tool[] = [
 // Tool registry
 // ============================================================================
 
-const BESPOKE_TOOLS: Tool[] = [
+/** Fields on `shared/mcp-bridge-state.ts`'s `McpBridgeDeviceSnapshot` — reused by every bespoke
+ *  tool below whose response embeds one or more device entries, so the shape is declared once. */
+const DEVICE_SNAPSHOT_PROPERTIES = {
+  ip: { type: 'string' },
+  serial: { type: 'string' },
+  modelName: { type: 'string' },
+  modelNumber: { type: 'string' },
+  friendlyDeviceName: { type: 'string' },
+  softwareVersion: { type: 'string' },
+  source: { type: 'string', enum: ['local', 'remote', 'rce', 'unknown'] },
+  remoteLocationId: { type: 'string' },
+  isTabOpen: { type: 'boolean' },
+  isTabFocused: { type: 'boolean' },
+  isReachable: { type: 'boolean' }
+} as const;
+
+const DISCOVERY_TOOLS: Tool[] = [
   {
     name: 'list_action_types',
     title: 'List Action Types',
-    description:
-      'Return every supported Action Script step `type` (with label, description, required / optional fields). Read-only. Start here when authoring a script, then call get_action_schema for one type\'s exact fields, and validate_script before send_script_to_builder. For the full authoring contract in one call use get_capability_bundle or read resource `roku-dev-studio://action-script-contract.md`.',
+    description: [
+      'Return every supported Action Script step `type` (with label, description, required / optional fields). Read-only.',
+      'Start here when authoring a script, then call get_action_schema for one type\'s exact fields, and validate_script before send_script_to_builder.',
+      'For the full authoring contract in one call use get_capability_bundle or read resource `roku-dev-studio://action-script-contract.md`.'
+    ],
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        scriptVersions: { type: 'array', items: { type: 'string' } },
+        actions: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              type: { type: 'string' },
+              label: { type: 'string' },
+              description: { type: 'string' },
+              required: { type: 'array', items: { type: 'string' } },
+              optional: { type: 'array', items: { type: 'string' } }
+            },
+            required: ['type', 'label', 'description', 'required', 'optional'],
+            additionalProperties: false
+          }
+        }
+      },
+      required: ['scriptVersions', 'actions'],
+      additionalProperties: false
+    },
     annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
     handler: async () => listActionTypes()
   },
   {
     name: 'get_action_schema',
     title: 'Get Action Schema',
-    description:
-      'Return the authoring schema (label, description, required and optional fields) for ONE Action Script step `type`. Read-only. Call this after list_action_types (which enumerates every type) when you are about to author or fix a specific step and need its exact field names before running validate_script. Required argument `type` — one of the values from list_action_types (also enumerated in this tool\'s inputSchema). For the whole authoring contract at once, prefer get_capability_bundle.',
+    description: [
+      'Return the authoring schema (label, description, required and optional fields) for ONE Action Script step `type`. Read-only.',
+      'Call this after list_action_types (which enumerates every type) when you are about to author or fix a specific step and need its exact field names before running validate_script.',
+      'Required argument `type` — one of the values from list_action_types (also enumerated in this tool\'s inputSchema).',
+      'For the whole authoring contract at once, prefer get_capability_bundle.'
+    ],
     inputSchema: {
       type: 'object',
       properties: {
@@ -952,23 +1504,77 @@ const BESPOKE_TOOLS: Tool[] = [
       required: ['type'],
       additionalProperties: false
     },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        type: { type: 'string' },
+        label: { type: 'string' },
+        description: { type: 'string' },
+        required: { type: 'array', items: { type: 'string' } },
+        optional: { type: 'array', items: { type: 'string' } }
+      },
+      required: ['type', 'label', 'description', 'required', 'optional'],
+      additionalProperties: false
+    },
     annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
     handler: async (args) => getActionSchema(args)
   },
   {
     name: 'get_capability_bundle',
     title: 'Get Capability Bundle',
-    description:
-      'Single payload of every static capability (actions, vocabularies, RALE built-ins, presets, authoring rules, op directory, `actionScriptAgentContract`). Load **once** before authoring scripts, then cache. Same JSON is also available as resource `roku-dev-studio://capability-bundle.json`.',
+    description: [
+      'Single payload of every static capability (actions, vocabularies, RALE built-ins, presets, authoring rules, op directory, `actionScriptAgentContract`).',
+      'Load **once** before authoring scripts, then cache.',
+      'Same JSON is also available as resource `roku-dev-studio://capability-bundle.json`.'
+    ],
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        schemaVersion: { type: 'number' },
+        actionScriptAgentContract: { type: 'string' },
+        scriptVersions: { type: 'array', items: { type: 'string' } },
+        actions: { type: 'array' },
+        keypress: { type: 'object', additionalProperties: true },
+        presets: { type: 'object', additionalProperties: true },
+        conditions: { type: 'object', additionalProperties: true },
+        devicePerformanceCharts: { type: 'array', items: { type: 'string' } },
+        raleBuiltins: { type: 'array' },
+        authoringRules: { type: 'array' },
+        ops: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'string' },
+              title: { type: 'string' },
+              runIn: { type: 'string', enum: ['main', 'renderer'] },
+              destructive: { type: 'boolean' }
+            },
+            required: ['id', 'title', 'runIn', 'destructive'],
+            additionalProperties: false
+          }
+        }
+      },
+      required: [
+        'schemaVersion', 'actionScriptAgentContract', 'scriptVersions', 'actions', 'keypress',
+        'presets', 'conditions', 'devicePerformanceCharts', 'raleBuiltins', 'authoringRules', 'ops'
+      ],
+      additionalProperties: false
+    },
     annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
     handler: async () => getCapabilityBundle()
   },
   {
     name: 'validate_script',
     title: 'Validate Action Script',
-    description:
-      'Validate an Action Script before `send_script_to_builder`. Argument `script`: JSON object or JSON string. Response: `ok`, `errors[]` (path, code, message, expected?), `stepCounts`, `humanSummary`, `referenceTools`. `ok=false` is returned as isError. Contract: resource `roku-dev-studio://action-script-contract.md`. Only author a script for **multi-step / conditional / polling / saved-or-reviewed** flows — for a single action use the matching direct op (keypress, launch_app, rale_command, ecp_query, ecp_post, screenshot, …).',
+    description: [
+      'Validate an Action Script before `send_script_to_builder`.',
+      'Argument `script`: JSON object or JSON string.',
+      'Response: `ok`, `errors[]` (path, code, message, expected?), `stepCounts`, `humanSummary`, `referenceTools`. `ok=false` is returned as isError.',
+      'Contract: resource `roku-dev-studio://action-script-contract.md`.',
+      'Only author a script for **multi-step / conditional / polling / saved-or-reviewed** flows — for a single action use the matching direct op (keypress, launch_app, rale_command, ecp_query, ecp_post, screenshot, …).'
+    ],
     inputSchema: {
       type: 'object',
       properties: {
@@ -981,41 +1587,117 @@ const BESPOKE_TOOLS: Tool[] = [
       required: ['script'],
       additionalProperties: false
     },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        ok: { type: 'boolean' },
+        errors: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              path: { type: 'string' },
+              code: { type: 'string' },
+              message: { type: 'string' },
+              expected: { type: ['string', 'array'] },
+              stepIndex: { type: 'number' }
+            },
+            required: ['path', 'code', 'message'],
+            additionalProperties: false
+          }
+        },
+        stepCounts: { type: 'object', additionalProperties: true },
+        humanSummary: { type: 'string' },
+        referenceTools: { type: 'array', items: { type: 'string' } }
+      },
+      required: ['ok', 'errors', 'stepCounts', 'humanSummary', 'referenceTools'],
+      additionalProperties: false
+    },
     annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
     handler: async (args) => validateScriptTool(args)
-  },
+  }
+];
+
+const BRIDGE_TOOLS: Tool[] = [
   {
     name: 'probe_bridge',
     title: 'Probe Dev Studio Bridge',
-    description:
-      'Returns `{ live, port, pid, startedAt }` or `{ live: false, reason }`. Call **once per session** before the first bridge-dependent tool; once `live=true`, call direct ops (keypress, launch_app, ecp_query, rale_command, …) and `send_script_to_builder` freely without re-probing.',
+    description: [
+      'Returns `{ live, port, pid, startedAt }` or `{ live: false, reason }`.',
+      'Call **once per session** before the first bridge-dependent tool; once `live=true`, call direct ops (keypress, launch_app, ecp_query, rale_command, …) and `send_script_to_builder` freely without re-probing.'
+    ],
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        live: { type: 'boolean' },
+        pid: { type: 'number' },
+        port: { type: 'number' },
+        startedAt: { type: 'string' },
+        reason: { type: 'string' }
+      },
+      required: ['live'],
+      additionalProperties: false
+    },
     annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
     handler: async () => probeBridge()
   },
   {
     name: 'get_selected_device',
     title: 'Get Selected Device',
-    description:
-      'Return the single device tab the user currently has focused in Dev Studio (`ip`, `serial`, `modelName`, `friendlyDeviceName`, …), or an empty/`null` result when no tab is focused. Read-only. Call this to resolve the implicit target before a device op when the user says "this device" / "the current one" and gave no IP. For the full inventory (all connected / discovered / remembered devices) use list_devices instead; to change the focus use connect_device.',
+    description: [
+      'Return the single device tab the user currently has focused in Dev Studio (`ip`, `serial`, `modelName`, `friendlyDeviceName`, …), or an empty/`null` result when no tab is focused. Read-only.',
+      'Call this to resolve the implicit target before a device op when the user says "this device" / "the current one" and gave no IP.',
+      'For the full inventory (all connected / discovered / remembered devices) use list_devices instead; to change the focus use connect_device.'
+    ],
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+    outputSchema: {
+      type: 'object',
+      properties: { ...DEVICE_SNAPSHOT_PROPERTIES, observedAt: { type: 'string' } },
+      additionalProperties: false
+    },
     annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
     handler: async () => getSelectedDevice()
   },
   {
     name: 'list_devices',
     title: 'List All Known Devices',
-    description:
-      'Return every device Dev Studio already knows about — connected, discovered, remembered, remote, or RCE — without running a network scan. Read-only. Each entry: `ip`, `serial`, `modelName`, `friendlyDeviceName`, `softwareVersion`, `source`, `isConnected`, `isFocused`. `source` is `local` (physical, this LAN), `remote` (physical, via an RDS Relay location), or `rce` (Roku Cloud Emulator — no real IP, `ip` is a serial stand-in; most main-direct ops work against it directly, but `sideload`/`delete_sideload` don\'t — use connect_device + Dev Studio\'s Sideload Relay/Dev App tab for those). Use this as the first step to resolve a `device` argument (IP or serial) for other tools. Related tools: get_selected_device returns only the one focused device; scan_devices actively probes the network for NEW devices not yet known; connect_device opens/focuses a tab for one of these entries.',
+    description: [
+      'Return every device Dev Studio already knows about — connected, discovered, remembered, remote, or RCE — without running a network scan. Read-only.',
+      'Each entry: `ip`, `serial`, `modelName`, `friendlyDeviceName`, `softwareVersion`, `source`, `isTabOpen`, `isTabFocused`, `isReachable`.',
+      '`isTabOpen` only means a Dev Studio tab/session exists for this device — it does NOT mean the device will respond right now (it could be powered off or off-network).',
+      'Check `isReachable` before relying on a device to answer a live command; other tools that need to reach the device (keypress, ecp_query, rale_command, …) will themselves fail with a clear "not responding" error if it\'s unreachable — treat `isReachable: false` as a signal to tell the user to check the device rather than retrying blindly.',
+      '`source` is `local` (physical, this LAN), `remote` (physical, via an RDS Relay location), or `rce` (Roku Cloud Emulator — no real IP, `ip` is a serial stand-in; most main-direct ops work against it directly, but `sideload`/`delete_sideload` don\'t — use connect_device + Dev Studio\'s Sideload Relay/Dev App tab for those).',
+      'Use this as the first step to resolve a `device` argument (IP or serial) for other tools.',
+      'Related tools: get_selected_device returns only the one focused device; scan_devices actively probes the network for NEW devices not yet known; connect_device opens/focuses a tab for one of these entries.'
+    ],
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        devices: {
+          type: 'array',
+          items: { type: 'object', properties: { ...DEVICE_SNAPSHOT_PROPERTIES }, additionalProperties: false }
+        },
+        observedAt: { type: 'string' },
+        selectedSerial: { type: 'string' }
+      },
+      required: ['devices'],
+      additionalProperties: false
+    },
     annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
     handler: async () => listDevices()
   },
   {
     name: 'connect_device',
     title: 'Connect to a Device',
-    description:
-      'Open (or focus, if already open) a Dev Studio device tab for the given Roku, making it the active target for renderer-routed tools (rale_command, telnet_*, app_function, get_telnet_log). Required `device`: Roku IP or serial from list_devices / scan_devices. Idempotent — a no-op if that device is already connected and focused. Not needed for main-direct ECP ops (keypress, launch_app, ecp_query, …) on local/remote devices, which accept a `device` argument directly; use test_connection to verify reachability without opening a tab. Only connects a device that\'s actually reachable right now — fails with a clear reason instead of guessing: a local device must be currently discoverable, a remote device\'s RDS Relay location must be online, and an `rce` (Roku Cloud Emulator) device must already be **running** — this tool will never start one; tell the user to start it in Roku Dev Studio first.',
+    description: [
+      'Open (or focus, if already open) a Dev Studio device tab for the given Roku, making it the active target for renderer-routed tools (rale_command, telnet_*, app_function, get_telnet_log).',
+      'Required `device`: Roku IP or serial from list_devices / scan_devices.',
+      'Idempotent — a no-op if that device is already connected and focused.',
+      'Not needed for main-direct ECP ops (keypress, launch_app, ecp_query, …) on local/remote devices, which accept a `device` argument directly; use test_connection to verify reachability without opening a tab.',
+      'Only connects a device that\'s actually reachable right now — fails with a clear reason instead of guessing: a local device must be currently discoverable, a remote device\'s RDS Relay location must be online, and an `rce` (Roku Cloud Emulator) device must already be **running** — this tool will never start one; tell the user to start it in Roku Dev Studio first.'
+    ],
     inputSchema: {
       type: 'object',
       properties: {
@@ -1027,14 +1709,31 @@ const BESPOKE_TOOLS: Tool[] = [
       required: ['device'],
       additionalProperties: false
     },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        already: { type: 'boolean' },
+        device: {
+          type: 'object',
+          properties: { ip: { type: 'string' }, serial: { type: 'string' } },
+          additionalProperties: false
+        }
+      },
+      required: ['already'],
+      additionalProperties: false
+    },
     annotations: { readOnlyHint: false, idempotentHint: true, openWorldHint: true },
     handler: async (args) => connectDeviceTool(args)
   },
   {
     name: 'list_app_connector_functions',
     title: 'List App Connector Functions',
-    description:
-      'Live `functionName` + parameter metadata from RALE `getExternalControlFunctions`. Each entry has `name`, `params: [{ name, type }, …]`, and an optional `description` string when the channel includes one in its payload — surface that description verbatim to the user when explaining what a function does. Call before authoring `appFunction` steps so names and param keys/order match. Optional `device` (IP or serial).',
+    description: [
+      'Live `functionName` + parameter metadata from RALE `getExternalControlFunctions`.',
+      'Each entry has `name`, `params: [{ name, type }, …]`, and an optional `description` string when the channel includes one in its payload — surface that description verbatim to the user when explaining what a function does.',
+      'Call before authoring `appFunction` steps so names and param keys/order match.',
+      'Optional `device` (IP or serial).'
+    ],
     inputSchema: {
       type: 'object',
       properties: {
@@ -1045,14 +1744,52 @@ const BESPOKE_TOOLS: Tool[] = [
       },
       additionalProperties: false
     },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        status: { type: 'string', enum: ['connected', 'available-not-connected', 'not-applicable', 'unknown'] },
+        functions: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              name: { type: 'string' },
+              params: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: { name: { type: 'string' }, type: { type: 'string' } },
+                  required: ['name'],
+                  additionalProperties: false
+                }
+              },
+              description: { type: 'string' }
+            },
+            required: ['name', 'params'],
+            additionalProperties: false
+          }
+        },
+        fetchedAt: { type: 'string' },
+        // Only present on the cached-fallback response (live fetch failed).
+        warning: { type: 'string' },
+        cached: { type: 'boolean' }
+      },
+      required: ['status', 'functions'],
+      additionalProperties: false
+    },
     annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
     handler: async (args) => listAppConnectorFunctions(args)
   },
   {
     name: 'rale_get_node_by_id',
     title: 'RALE: Get Node by ID',
-    description:
-      'Read-only convenience wrapper over rale_command `getNodeById`: fetch one SceneGraph node (its fields / children) by its `id` from the running Dev App via the App Connector. Requires a connected App Connector session (auto-connects if needed). Use this — not the general rale_command — for the common "inspect one node" case; drop to rale_command only for other RALE built-ins (registry, focus, other queries). Required `id` (the node\'s `id` field as authored in XML/BrightScript). Optional `path` (array of child indices/ids to disambiguate when the id is not globally unique; omit or `[]` for a global lookup) and `device` (IP or serial; omit for the focused tab).',
+    description: [
+      'Read-only convenience wrapper over rale_command `getNodeById`: fetch one SceneGraph node (its fields / children) by its `id` from the running Dev App via the App Connector.',
+      'Requires a connected App Connector session (auto-connects if needed).',
+      'Use this — not the general rale_command — for the common "inspect one node" case; drop to rale_command only for other RALE built-ins (registry, focus, other queries).',
+      'Required `id` (the node\'s `id` field as authored in XML/BrightScript).',
+      'Optional `path` (array of child indices/ids to disambiguate when the id is not globally unique; omit or `[]` for a global lookup) and `device` (IP or serial; omit for the focused tab).'
+    ],
     inputSchema: {
       type: 'object',
       properties: {
@@ -1067,14 +1804,21 @@ const BESPOKE_TOOLS: Tool[] = [
       required: ['id'],
       additionalProperties: false
     },
+    // The node's own field set is channel-defined (arbitrary SceneGraph fields), so — like
+    // rale_command's own outputSchema in operations.ts — this stays a permissive object rather
+    // than pretending to enumerate every possible node shape.
+    outputSchema: { type: 'object', additionalProperties: true },
     annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
     handler: async (args) => raleGetNodeByIdTool(args)
   },
   {
     name: 'send_script_to_builder',
     title: 'Send Script to Builder',
-    description:
-      'Drop a validated Action Script into Dev Studio Builder for human review (does not auto-run). Runs the same validation as `validate_script`. Arguments: `script` (object or JSON string), optional `device`. **Use only for multi-step / conditional / saved-or-reviewed flows** — if the task is a single deterministic action (one keypress, one launch, one RALE command, one ECP query/POST, one screenshot), call the matching direct op (`keypress`, `launch_app`, `rale_command`, `ecp_query`, `ecp_post`, `screenshot`, …) directly instead of wrapping it in a one-step script.',
+    description: [
+      'Drop a validated Action Script into Dev Studio Builder for human review (does not auto-run). Runs the same validation as `validate_script`.',
+      'Arguments: `script` (object or JSON string), optional `device`.',
+      '**Use only for multi-step / conditional / saved-or-reviewed flows** — if the task is a single deterministic action (one keypress, one launch, one RALE command, one ECP query/POST, one screenshot), call the matching direct op (`keypress`, `launch_app`, `rale_command`, `ecp_query`, `ecp_post`, `screenshot`, …) directly instead of wrapping it in a one-step script.'
+    ],
     inputSchema: {
       type: 'object',
       properties: {
@@ -1092,6 +1836,18 @@ const BESPOKE_TOOLS: Tool[] = [
       required: ['script'],
       additionalProperties: false
     },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        delivered: { type: 'boolean' },
+        note: { type: 'string' },
+        // Builder-drop confirmation payload from the bridge; not otherwise schematized.
+        bridge: { type: 'object', additionalProperties: true },
+        inputReminder: { type: 'string' }
+      },
+      required: ['delivered', 'note', 'bridge', 'inputReminder'],
+      additionalProperties: false
+    },
     annotations: { readOnlyHint: false, idempotentHint: true, openWorldHint: true },
     handler: async (args) => sendScriptToBuilder(args)
   }
@@ -1100,11 +1856,23 @@ const BESPOKE_TOOLS: Tool[] = [
 // Public registry: bespoke + auto-generated, deduped by name.
 // Op-backed tools should win when there's overlap so new catalog additions
 // propagate automatically. In practice there's no overlap today.
+//
+// `TOOL_CATEGORIES` is derived from which array a tool is defined in — not a separately
+// hand-maintained lookup — so docs/assets/mcp-tools.js's grouping can never drift from this
+// registry: adding a tool to (e.g.) DEBUGGER_TOOLS categorizes it correctly with no extra step.
+export const TOOL_CATEGORIES: Record<string, string> = {};
 const byName: Map<string, Tool> = new Map();
-for (const t of BESPOKE_TOOLS) byName.set(t.name, t);
-for (const t of NETWORK_INSPECTOR_TOOLS) byName.set(t.name, t);
-for (const t of DEBUGGER_TOOLS) byName.set(t.name, t);
-for (const t of OP_BACKED_TOOLS) byName.set(t.name, t);
+function registerTools(tools: Tool[], category: string): void {
+  for (const t of tools) {
+    byName.set(t.name, t);
+    TOOL_CATEGORIES[t.name] = category;
+  }
+}
+registerTools(DISCOVERY_TOOLS, 'Discovery & Scripting');
+registerTools(BRIDGE_TOOLS, 'Bridge & Device');
+registerTools(NETWORK_INSPECTOR_TOOLS, 'Network Inspector');
+registerTools(DEBUGGER_TOOLS, 'BrightScript Debugger');
+registerTools(OP_BACKED_TOOLS, 'Device Control & App Connector');
 
 export const TOOLS: Tool[] = Array.from(byName.values());
 
