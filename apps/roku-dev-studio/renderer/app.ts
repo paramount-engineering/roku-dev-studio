@@ -543,16 +543,18 @@ type DeviceSnap = {
   softwareVersion: string | null;
   source: 'local' | 'remote' | 'rce';
   remoteLocationId: string | null;
-  isFocused: boolean;
-  isConnected: boolean;
+  isTabFocused: boolean;
+  isTabOpen: boolean;
+  isReachable: boolean;
 };
 
 function snapDevice(
   dev: Record<string, unknown>,
   extras: {
     source: 'local' | 'remote' | 'rce';
-    isConnected: boolean;
-    isFocused: boolean;
+    isTabOpen: boolean;
+    isTabFocused: boolean;
+    isReachable: boolean;
     remoteLocationId: string | null;
   }
 ): DeviceSnap {
@@ -577,8 +579,9 @@ function snapDevice(
     softwareVersion: typeof dev.softwareVersion === 'string' ? dev.softwareVersion : null,
     source: extras.source,
     remoteLocationId: extras.remoteLocationId,
-    isFocused: extras.isFocused,
-    isConnected: extras.isConnected
+    isTabFocused: extras.isTabFocused,
+    isTabOpen: extras.isTabOpen,
+    isReachable: extras.isReachable
   };
 }
 
@@ -600,8 +603,11 @@ function pushDeviceListToMcpBridge(): void {
         snapDevice(dev, {
           source,
           remoteLocationId: locId,
-          isConnected: true,
-          isFocused: typeof conn?.tabId === 'string' && conn.tabId === activeTabId
+          isTabOpen: true,
+          // Undefined (no reachability check has run for this tab yet) reads as reachable —
+          // only an explicit failed check should block a live command.
+          isReachable: conn?.isReachable !== false,
+          isTabFocused: typeof conn?.tabId === 'string' && conn.tabId === activeTabId
         })
       );
       connectedKeys.add(key);
@@ -620,8 +626,9 @@ function pushDeviceListToMcpBridge(): void {
         snapDevice(dev, {
           source: 'local',
           remoteLocationId: null,
-          isConnected: false,
-          isFocused: false
+          isTabOpen: false,
+          isReachable: false,
+          isTabFocused: false
         })
       );
     });
@@ -639,21 +646,21 @@ function pushDeviceListToMcpBridge(): void {
           snapDevice(dev, {
             source,
             remoteLocationId: locId,
-            isConnected: false,
-            isFocused: false
+            isTabOpen: false,
+            isReachable: false,
+            isTabFocused: false
           })
         );
       });
     });
 
-    const focused = connected.find((d) => d.isFocused) || null;
+    const focused = connected.find((d) => d.isTabFocused) || null;
 
     // Let the bridge client know which device is focused so untargeted tool
     // calls fall back to it.
     setFocusedDevice(focused ? { serial: focused.serial, ip: focused.ip } : null);
 
     pushMcpBridgeState({
-      connectedDevices: connected,
       knownDevices: known,
       selectedDevice: focused
         ? {
@@ -665,8 +672,9 @@ function pushDeviceListToMcpBridge(): void {
             softwareVersion: focused.softwareVersion,
             source: focused.source,
             remoteLocationId: focused.remoteLocationId,
-            isFocused: true,
-            isConnected: true
+            isTabFocused: true,
+            isTabOpen: true,
+            isReachable: focused.isReachable
           }
         : null
     });
@@ -4308,6 +4316,7 @@ function updateDeviceOfflineState(deviceKey, isOffline, isRemote = false) {
   // Update the device panel overlay
   const connection = state.connectedDevices.get(deviceKey);
   if (connection) {
+    connection.isReachable = !isOffline;
     const panel = document.getElementById(connection.tabId);
     if (panel) {
       const panelDot = panel.querySelector('.panel-device-ip-row .status-dot');
@@ -4372,6 +4381,10 @@ function updateDeviceOfflineState(deviceKey, isOffline, isRemote = false) {
 
       applyConnectionGating(panel, isOffline);
     }
+
+    // Refresh the MCP-facing snapshot now, not just on connect/disconnect/activate-tab — an
+    // MCP agent's `isReachable` read would otherwise lag until the next tab event.
+    pushDeviceListToMcpBridge();
   }
 }
 

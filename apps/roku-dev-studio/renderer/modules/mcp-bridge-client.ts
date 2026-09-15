@@ -297,9 +297,8 @@ export function setFocusedDevice(key: HandlerKey | null): void {
 export function pushMcpBridgeState(payload: {
   selectedDevice?: SelectedDeviceState | null;
   appConnector?: AppConnectorState;
-  /** Devices with an open tab. */
-  connectedDevices?: SelectedDeviceState[];
-  /** All known devices (connected + discovered on LAN + remembered). */
+  /** All known devices (connected + discovered on LAN + remembered); each entry's own
+   *  `isTabOpen`/`isReachable` says whether it's connected. */
   knownDevices?: SelectedDeviceState[];
 }): void {
   const api = getApi();

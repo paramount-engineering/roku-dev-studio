@@ -105,12 +105,12 @@ type AppConnectorState = McpBridgeAppConnectorState;
 
 type BridgeState = {
   selectedDevice: SelectedDeviceSnapshot;
-  /** Every device with an open tab in the running Dev Studio. */
-  connectedDevices: DeviceSnapshot[];
-  /** All known devices (connected + discovered on LAN + remote-location devices the user has seen). */
+  /** All known devices (connected + discovered on LAN + remote-location devices the user has seen).
+   *  Each entry's own `isTabOpen`/`isReachable` says whether it's connected — use `connectedDevices()`
+   *  below rather than re-filtering inline. */
   knownDevices: DeviceSnapshot[];
-  /** ISO time the renderer last pushed `connectedDevices` / `knownDevices`. */
-  connectedDevicesObservedAt: string | null;
+  /** ISO time the renderer last pushed `knownDevices`. */
+  knownDevicesObservedAt: string | null;
   appConnector: AppConnectorState;
 };
 
@@ -170,10 +170,10 @@ function resolveTarget(deviceArg: string | undefined): TargetRef | null {
   // "what did the caller mean and which device is it?").
   const ref = parseDeviceRef(deviceArg);
   if (!ref) return null;
-  // Search connectedDevices first (freshest data), then knownDevices as fallback.
-  // Avoids a stale knownDevices entry winning over a live connectedDevices entry.
-  // findDevice() matches serial before IP, so a live entry normalizes serial + ip together.
-  const match = findDevice([...state.connectedDevices, ...state.knownDevices], ref);
+  // findDevice() matches serial before IP, so a match normalizes serial + ip together.
+  // Every device — connected or not — appears exactly once in knownDevices (the renderer
+  // never double-lists a connected device under "discovered" too), so one search suffices.
+  const match = findDevice(state.knownDevices, ref);
   if (match) return { targetSerial: match.serial || undefined, targetIp: match.ip || undefined };
   // Nothing matched — still forward whatever the caller typed so the renderer
   // can produce a clear error.
@@ -181,17 +181,39 @@ function resolveTarget(deviceArg: string | undefined): TargetRef | null {
 }
 
 /**
- * Whether the resolved target is currently connected. When false, the bridge
- * can short-circuit with a clear error + suggestion to call `connect_device`.
+ * Whether the resolved target already has an open tab in Dev Studio — a session existing, not a
+ * live reachability check. Used only by `connect_device`'s own idempotency shortcut (open a tab
+ * once, don't reopen); everything that's about to forward a live command should use
+ * `isTargetReachable` instead.
  */
-function isTargetConnected(target: TargetRef | null): boolean {
-  if (!target) return state.connectedDevices.length > 0;
+function isTargetTabOpen(target: TargetRef | null): boolean {
+  if (!target) return connectedDevices().length > 0;
   const ref = { serial: target.targetSerial, ip: target.targetIp };
-  return state.connectedDevices.some((d) => deviceMatches(d, ref));
+  return connectedDevices().some((d) => deviceMatches(d, ref));
 }
 
-function notConnectedError(target: TargetRef): { error: string; suggestion: string } {
+/**
+ * Whether the resolved target has an open tab AND answered its last reachability check. When
+ * false, the bridge can short-circuit with a clear error instead of forwarding a command that
+ * will fail late (timeout) against a powered-off/off-network device.
+ */
+function isTargetReachable(target: TargetRef | null): boolean {
+  if (!target) return connectedDevices().some((d) => d.isReachable !== false);
+  const ref = { serial: target.targetSerial, ip: target.targetIp };
+  return connectedDevices().some((d) => deviceMatches(d, ref) && d.isReachable !== false);
+}
+
+function notReachableError(target: TargetRef): { error: string; suggestion: string } {
   const label = target.targetSerial || target.targetIp || '(unspecified)';
+  const ref = { serial: target.targetSerial, ip: target.targetIp };
+  const hasOpenTab = connectedDevices().some((d) => deviceMatches(d, ref));
+  if (hasOpenTab) {
+    return {
+      error: `Device "${label}" has an open tab in Dev Studio but isn't responding right now (unreachable).`,
+      suggestion:
+        'Check it\'s powered on and on the network, then retry; `list_devices` reports its current `isReachable` state.'
+    };
+  }
   return {
     error: `Device "${label}" is not connected in Dev Studio.`,
     suggestion:
@@ -256,7 +278,7 @@ const SCAN_DEVICES_COOLDOWN_MS = 10000;
 let lastScanDevicesAt = 0;
 
 function serialForConnectedIp(ip: string): string | null {
-  const row = state.connectedDevices.find((d) => d.ip === ip);
+  const row = connectedDevices().find((d) => d.ip === ip);
   if (row?.serial) return row.serial;
   if (state.selectedDevice?.ip === ip && state.selectedDevice.serial) return state.selectedDevice.serial;
   return null;
@@ -300,11 +322,17 @@ async function fillPasswordFromDevStudioIfNeeded(opId: string, params: Record<st
 
 const state: BridgeState = {
   selectedDevice: null,
-  connectedDevices: [],
   knownDevices: [],
-  connectedDevicesObservedAt: null,
+  knownDevicesObservedAt: null,
   appConnector: { status: 'unknown', functions: [] }
 };
+
+/** Devices with an open tab in the running Dev Studio — a filtered view of `knownDevices`, not a
+ *  separately maintained list (both are pushed from the same renderer snapshot, so nothing can
+ *  drift between them). */
+function connectedDevices(): DeviceSnapshot[] {
+  return state.knownDevices.filter((d) => d.isTabOpen);
+}
 
 function logInfo(message: string, ...rest: unknown[]): void {
   mainLog(`[mcp-bridge] ${message}`, ...rest);
@@ -564,8 +592,8 @@ function resolveIpForConnectedDevice(
   noIpMessage = 'No device selected. Pass `device` or open a device tab.'
 ): { target: TargetRef | null; ip: string } | null {
   const target = resolveTarget(typeof body.device === 'string' ? body.device : undefined);
-  if (target && !isTargetConnected(target)) {
-    sendJson(res, 409, notConnectedError(target));
+  if (target && !isTargetReachable(target)) {
+    sendJson(res, 409, notReachableError(target));
     return null;
   }
   const ip = resolveIp(target);
@@ -699,7 +727,7 @@ function notifyAgentScreenshot(payload: {
  */
 function resolveIp(target: TargetRef | null): string | null {
   if (target) {
-    const match = findDevice(state.connectedDevices, { serial: target.targetSerial, ip: target.targetIp });
+    const match = findDevice(connectedDevices(), { serial: target.targetSerial, ip: target.targetIp });
     return match?.ip || null;
   }
   return state.selectedDevice?.ip || null;
@@ -710,14 +738,14 @@ function resolveIp(target: TargetRef | null): string | null {
  */
 function deviceLabel(ip: string | null): string {
   if (!ip) return 'selected device';
-  const match = state.connectedDevices.find((d) => d.ip === ip) || state.knownDevices.find((d) => d.ip === ip);
+  const match = state.knownDevices.find((d) => d.ip === ip);
   const name = match?.friendlyDeviceName || match?.modelName || 'device';
   return `${name} (${ip})`;
 }
 
 /**
- * `runOpForHttp` dials a real `ip:8060` — it cannot work for an RCE device, whose `ip` in
- * `state.connectedDevices` is a serial/synthetic stand-in with no real network address (see
+ * `runOpForHttp` dials a real `ip:8060` — it cannot work for an RCE device, whose `ip` among
+ * connected devices is a serial/synthetic stand-in with no real network address (see
  * `shared/mcp-bridge-state.ts`'s `rce` source doc). For those, run the equivalent RCE Device API
  * call directly in THIS (main) process instead: `resolveRceInstanceBySerial` is the same
  * account-token + live-instance-URL resolution `main/ipc/rce-handlers.ts`'s own IPC handlers use,
@@ -732,7 +760,7 @@ async function runOpForRce(
   params: Record<string, unknown>
 ): Promise<{ status: number; body: Record<string, unknown> } | null> {
   const ip = typeof params.ip === 'string' ? params.ip : '';
-  if (!ip || !state.connectedDevices.some((d) => d.ip === ip && d.source === 'rce')) return null;
+  if (!ip || !connectedDevices().some((d) => d.ip === ip && d.source === 'rce')) return null;
 
   const resolved = await resolveRceInstanceBySerial(ip);
   if (!resolved.success) return { status: 409, body: { error: resolved.error } };
@@ -1193,8 +1221,17 @@ async function runDebuggerVerb(
       const deadline = Date.now() + timeoutMs;
       for (;;) {
         const st = controller.status(ip);
-        if (st.state === 'stopped') return { data: { stopped: true, state: st.state, stop: controller.getStop(ip) } };
-        if (st.state === 'disconnected' || st.state === 'error') return { data: { stopped: false, state: st.state } };
+        if (st.state === 'stopped') {
+          // The device flips to `stopped` synchronously, but the snapshot (threads/stack/
+          // variables — 3 device round-trips) lands a beat later; `getStop` returns null until
+          // then. Keep polling rather than handing back `stopped:true, stop:null` — the snapshot
+          // is always the very next thing the controller assigns, so this never waits long
+          // (bounded by the same overall `timeoutMs` deadline as everything else here).
+          const stop = controller.getStop(ip);
+          if (stop) return { data: { stopped: true, state: st.state, stop } };
+        } else if (st.state === 'disconnected' || st.state === 'error') {
+          return { data: { stopped: false, state: st.state } };
+        }
         if (Date.now() >= deadline) return { data: { stopped: false, state: st.state, timedOut: true } };
         await debuggerDelay(300);
       }
@@ -1337,8 +1374,8 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
     audit.params = qs.get('device') ? { device: qs.get('device') } : {};
     const target = resolveTarget(qs.get('device') || undefined);
     audit.device = resolveIp(target);
-    if (target && !isTargetConnected(target)) {
-      const info = notConnectedError(target);
+    if (target && !isTargetReachable(target)) {
+      const info = notReachableError(target);
       sendJson(res, 409, { ...info });
       return;
     }
@@ -1365,12 +1402,9 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
   }
 
   if (method === 'GET' && pathname === '/devices') {
-    // Prefer the expanded "known" list when present; fall back to connected.
-    const devices = state.knownDevices.length > 0 ? state.knownDevices : state.connectedDevices;
     sendJson(res, 200, {
-      devices,
-      connectedDevices: state.connectedDevices,
-      observedAt: state.connectedDevicesObservedAt,
+      devices: state.knownDevices,
+      observedAt: state.knownDevicesObservedAt,
       selectedSerial: state.selectedDevice?.serial || null
     });
     return;
@@ -1393,12 +1427,12 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
     const target = resolveTarget(typeof body.device === 'string' ? body.device : undefined);
     let ip: string | null = null;
     if (target) {
-      if (!isTargetConnected(target)) {
-        sendJson(res, 409, notConnectedError(target));
+      if (!isTargetReachable(target)) {
+        sendJson(res, 409, notReachableError(target));
         return;
       }
       // Find the connected entry with matching serial or ip to get its IP.
-      const match = state.connectedDevices.find(
+      const match = connectedDevices().find(
         (d) =>
           (target.targetSerial && d.serial === target.targetSerial) ||
           (target.targetIp && d.ip === target.targetIp)
@@ -1441,8 +1475,8 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
     }
     const target = resolveTarget(typeof body.device === 'string' ? body.device : undefined);
     audit.device = resolveIp(target);
-    if (target && !isTargetConnected(target)) {
-      sendJson(res, 409, notConnectedError(target));
+    if (target && !isTargetReachable(target)) {
+      sendJson(res, 409, notReachableError(target));
       return;
     }
     const args = { path: Array.isArray(body.path) ? body.path : [], id: idStr };
@@ -1798,8 +1832,8 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
     const params: Record<string, unknown> = { ...body };
     if (typeof params.device === 'string' && !params.ip) {
       const target = resolveTarget(params.device);
-      if (target && !isTargetConnected(target)) {
-        sendJson(res, 409, notConnectedError(target));
+      if (target && !isTargetReachable(target)) {
+        sendJson(res, 409, notReachableError(target));
         return;
       }
       const ip = resolveIp(target);
@@ -1887,8 +1921,8 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
     if (renderOp) audit.destructive = renderOp.destructive;
     const target = resolveTarget(typeof body.device === 'string' ? body.device : undefined);
     audit.device = resolveIp(target);
-    if (target && !isTargetConnected(target)) {
-      sendJson(res, 409, notConnectedError(target));
+    if (target && !isTargetReachable(target)) {
+      sendJson(res, 409, notReachableError(target));
       return;
     }
     const result = await runRendererTool(tool, body.args, target);
@@ -1924,7 +1958,7 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
       return;
     }
     // Already connected → short-circuit as a no-op success.
-    if (isTargetConnected(target)) {
+    if (isTargetTabOpen(target)) {
       sendJson(res, 200, {
         already: true,
         device: { ip: target.targetIp || null, serial: target.targetSerial || null }
@@ -2153,8 +2187,9 @@ function sanitizeOneDevice(d: Record<string, unknown>): DeviceSnapshot {
     softwareVersion: typeof d.softwareVersion === 'string' ? d.softwareVersion : null,
     source,
     remoteLocationId: typeof d.remoteLocationId === 'string' ? d.remoteLocationId : null,
-    isFocused: !!d.isFocused,
-    isConnected: d.isConnected == null ? undefined : !!d.isConnected
+    isTabFocused: !!d.isTabFocused,
+    isTabOpen: d.isTabOpen == null ? undefined : !!d.isTabOpen,
+    isReachable: d.isReachable == null ? undefined : !!d.isReachable
   };
 }
 
@@ -2165,25 +2200,40 @@ function sanitizeStatePush(raw: unknown): Partial<BridgeState> {
 
   if (o.selectedDevice != null && typeof o.selectedDevice === 'object' && !Array.isArray(o.selectedDevice)) {
     const d = o.selectedDevice as Record<string, unknown>;
+    const incoming = sanitizeOneDevice(d);
+    // Two independent renderer producers push `selectedDevice` — app.ts's full device-list
+    // snapshot (always has serial/name once a device is known at all) and the Action Scripts
+    // panel's own leaner snapshot (built from its local `device` object, which can genuinely not
+    // know serial/friendlyDeviceName yet — e.g. a Sideload Relay auto-connected tab, before its
+    // first health check resolves). Whichever pushes last wins, so a leaner push could regress an
+    // already-known serial to null. Backfill missing fields from the previous snapshot only when
+    // it's for the SAME device (matched by ip, falling back to serial) — a genuine focus switch to
+    // a different device must never inherit the old device's data.
+    const prev = state.selectedDevice;
+    const sameDevice =
+      !!prev && ((!!incoming.ip && prev.ip === incoming.ip) || (!!incoming.serial && prev.serial === incoming.serial));
     out.selectedDevice = {
-      ...sanitizeOneDevice(d),
+      ...incoming,
+      ...(sameDevice
+        ? {
+            serial: incoming.serial ?? prev!.serial,
+            friendlyDeviceName: incoming.friendlyDeviceName ?? prev!.friendlyDeviceName,
+            modelName: incoming.modelName ?? prev!.modelName,
+            modelNumber: incoming.modelNumber ?? prev!.modelNumber,
+            softwareVersion: incoming.softwareVersion ?? prev!.softwareVersion
+          }
+        : {}),
       observedAt: new Date().toISOString()
     };
   } else if (o.selectedDevice === null) {
     out.selectedDevice = null;
   }
 
-  if (Array.isArray(o.connectedDevices)) {
-    out.connectedDevices = o.connectedDevices
-      .filter((d): d is Record<string, unknown> => d != null && typeof d === 'object' && !Array.isArray(d))
-      .map((d) => ({ ...sanitizeOneDevice(d), isConnected: true }));
-    out.connectedDevicesObservedAt = new Date().toISOString();
-  }
-
   if (Array.isArray(o.knownDevices)) {
     out.knownDevices = o.knownDevices
       .filter((d): d is Record<string, unknown> => d != null && typeof d === 'object' && !Array.isArray(d))
       .map(sanitizeOneDevice);
+    out.knownDevicesObservedAt = new Date().toISOString();
   }
 
   if (o.appConnector != null && typeof o.appConnector === 'object' && !Array.isArray(o.appConnector)) {
@@ -2270,10 +2320,9 @@ export function startMcpBridge(deps: BridgeDeps): void {
     const sanitized = sanitizeStatePush(payload);
     if (sanitized.selectedDevice !== undefined) state.selectedDevice = sanitized.selectedDevice;
     if (sanitized.appConnector !== undefined) state.appConnector = sanitized.appConnector;
-    if (sanitized.connectedDevices !== undefined) state.connectedDevices = sanitized.connectedDevices;
     if (sanitized.knownDevices !== undefined) state.knownDevices = sanitized.knownDevices;
-    if (sanitized.connectedDevicesObservedAt !== undefined) {
-      state.connectedDevicesObservedAt = sanitized.connectedDevicesObservedAt;
+    if (sanitized.knownDevicesObservedAt !== undefined) {
+      state.knownDevicesObservedAt = sanitized.knownDevicesObservedAt;
     }
   });
 
@@ -2421,9 +2470,8 @@ export function stopMcpBridge(): void {
   // `stopMcpBridge` path the whole renderer is gone right after, so this
   // is belt-and-suspenders rather than load-bearing today.
   state.selectedDevice = null;
-  state.connectedDevices = [];
   state.knownDevices = [];
-  state.connectedDevicesObservedAt = null;
+  state.knownDevicesObservedAt = null;
   state.appConnector = { status: 'unknown', functions: [] };
 }
 

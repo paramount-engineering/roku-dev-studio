@@ -28,10 +28,17 @@ export type McpBridgeDeviceSnapshot = {
   /** Where the device is connected: local network, or a remote relay location id. */
   source?: McpBridgeDeviceSource;
   remoteLocationId?: string | null;
-  /** Whether this is the device the user currently has focused. */
-  isFocused?: boolean;
-  /** Whether the device has an open tab in Dev Studio (vs just discovered). */
-  isConnected?: boolean;
+  /** Whether this is the device tab the user currently has focused. */
+  isTabFocused?: boolean;
+  /** Whether the device has an open tab in Dev Studio (vs just discovered) — a session existing,
+   *  not a live reachability check. A device can have an open tab and still be unreachable
+   *  (powered off, off-network); see `isReachable`. */
+  isTabOpen?: boolean;
+  /** Whether the device actually answered the last reachability check (ECP ping / connection-check
+   *  poll). Only tracked for devices with an open tab (`isTabOpen`); devices merely discovered or
+   *  remembered are always `false` here since there's no live session to probe. This is the flag
+   *  to gate a live command on — `isTabOpen` alone does not mean the device will respond right now. */
+  isReachable?: boolean;
 };
 
 export type McpBridgeSelectedDeviceSnapshot = (McpBridgeDeviceSnapshot & { observedAt: string }) | null;

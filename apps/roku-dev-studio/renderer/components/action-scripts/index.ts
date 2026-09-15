@@ -647,8 +647,10 @@ export function setupActionScripts(panel: DevicePanelRoot, device, api) {
           softwareVersion: typeof dev.softwareVersion === 'string' ? dev.softwareVersion : null,
           source: isRemote ? 'remote' : 'local',
           remoteLocationId: typeof dev.remoteLocationId === 'string' ? dev.remoteLocationId : null,
-          isFocused: true,
-          isConnected: true
+          isTabFocused: true,
+          isTabOpen: true,
+          // Same signal `updateDeviceOfflineState` (renderer/app.ts) sets on this panel.
+          isReachable: panel.dataset.deviceOffline !== 'true'
         }
       });
     } catch (e) {
