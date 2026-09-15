@@ -103,6 +103,10 @@ declare global {
     /** Session-screenshot-gallery teardown — deletes every remaining temp file this panel's
      *  captures wrote to disk, so a closed tab doesn't leave them orphaned. See screenshots.ts. */
     _screenshotsCleanup?: () => void;
+    /** Unsubscribes this panel's `deviceEnrichmentListeners` subscription (dev-mode/ECP warning
+     *  banners) — registered once in `createDevicePanel`, must be torn down on disconnect or it
+     *  leaks one listener per device ever connected-then-disconnected in a session. */
+    _enrichmentCleanup?: () => void;
     /** Action Script import modal: chosen output folder path (set at runtime). */
     _importOutputFolder?: string;
     /** Action Script import: target container element for mount bookkeeping. */

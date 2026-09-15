@@ -1424,24 +1424,6 @@ function normalizeRceDevice(device: Record<string, unknown>) {
 }
 
 /**
- * `setupDevicePanel` only paints the Developer Mode / Control by Mobile Apps warning banners
- * once, at connect time — a later location refresh or push update that changes
- * `developerEnabled`/`ecpSettingMode` (e.g. the device's Developer Mode gets toggled while its
- * tab is already open) never revisits an already-open panel, so the banner goes stale. Callers
- * that write a freshly normalized RCE device into `location.devices` should also call this for
- * that device's key.
- */
-function refreshOpenRcePanelWarnings(deviceKey: string, device: RceDeviceSummary): void {
-  if (device.ecpSettingMode == null) return; // enrichment didn't run on this update — don't guess
-  const connection = state.connectedDevices.get(deviceKey);
-  if (!connection) return;
-  const panel = document.getElementById(connection.tabId);
-  if (!panel) return;
-  updateDevModeWarnings(panel, device.developerEnabled === true);
-  updateEcpWarnings(panel, device);
-}
-
-/**
  * Refresh an RCE location's device list. Deliberately much simpler than the LAN/relay path
  * below — no health check, no capabilities negotiation (synthesized client-side per design
  * doc §6, not fetched), just list-devices.
@@ -1483,7 +1465,7 @@ async function refreshRceLocation(locationId) {
         location.devices.set(`rce-device-${device.id}`, normalized);
         // Push-based status (design doc §5) — idempotent server-side, no-ops if already watching.
         void window.roku.rceWatchDeviceState(location.accountName, device.id);
-        refreshOpenRcePanelWarnings(`${locationId}:${normalized.ip}`, normalized as unknown as RceDeviceSummary);
+        notifyDeviceEnrichmentChanged(`${locationId}:${normalized.ip}`, normalized);
       }
       const idsChanged = previousIds.size !== location.devices.size || [...previousIds].some((id) => !location.devices.has(id));
       if (idsChanged) location.rceUserInfo = null;
@@ -1511,9 +1493,13 @@ function setupRceDeviceStateListener() {
     for (const [locationId, location] of state.remoteLocations.entries()) {
       if (!isRceDevice(location) || location.accountName !== name) continue;
       const key = `rce-device-${deviceId}`;
-      if (!location.devices.has(key)) continue;
+      const existing = location.devices.get(key);
+      if (!existing) continue;
       const normalized = normalizeRceDevice(device);
-      location.devices.set(key, normalized);
+      // Merge in place (not overwrite) — the push payload never carries `developerEnabled`/
+      // `ecpSettingMode`/`isTv` at all (`enrichWithEcpMode` only runs on the list/get IPC calls,
+      // never on this stream), so a flat overwrite would erase any enrichment already resolved.
+      const merged = Object.assign(existing, normalized);
       renderRemoteLocations();
       // Drive the same gating pass physical/LAN-relay devices get from their periodic
       // ECP-reachability poll (`updateDeviceOfflineState` -> `applyConnectionGating`), off this
@@ -1521,14 +1507,19 @@ function setupRceDeviceStateListener() {
       // `[data-requires-connection]` controls never re-disable when the instance stops
       // (max_runtime expiry, a Stop from another window, …) while its tab stays open. See
       // CLAUDE.md's connection-gating rule.
-      const deviceKey = `${locationId}:${normalized.ip}`;
-      if (state.connectedDevices.has(deviceKey)) {
+      const deviceKey = `${locationId}:${merged.ip}`;
+      const connection = state.connectedDevices.get(deviceKey);
+      if (connection) {
         // `device` (the raw push payload), not `normalized` — `normalizeRceDevice`'s object-spread
         // return type loses `Record<string, unknown>`'s index signature per TS's spread rules, so
         // `.status` isn't visible on its inferred return type even though it's the same object.
         updateDeviceOfflineState(deviceKey, device.status !== 'running', true);
+        // `connectRceDevice` hands the panel a separate value-copy of the device (`deviceForPanel`),
+        // not this same `location.devices` object reference — keep it in sync too, or the open
+        // panel's own copy never sees this push at all.
+        if (connection.device && connection.device !== merged) Object.assign(connection.device, normalized);
       }
-      refreshOpenRcePanelWarnings(deviceKey, normalized as unknown as RceDeviceSummary);
+      notifyDeviceEnrichmentChanged(deviceKey, merged);
       return;
     }
   });
@@ -1620,13 +1611,17 @@ async function refreshRemoteLocation(locationId) {
             devLog(`[Remote ${location.name}] Device ${deviceId} IP changed from ${existingDevice.ip} to ${device.ip}`);
             existingDevice.ip = device.ip;
           }
-          // Update any other fields that might have changed, but preserve remote-specific properties
+          // Update any other fields that might have changed, but preserve remote-specific properties.
+          // `capabilities` is NOT preserved from the old value — `device.capabilities` was just set
+          // a few lines up from `location.capabilities`, itself freshly re-fetched this same poll
+          // (see `remoteCapabilities` above), so it's never stale here; keeping the old value once
+          // truthy meant a device's tab-gating could never pick up a real capability change again.
           const preservedProps = {
             serverUrl: existingDevice.serverUrl || device.serverUrl,
             locationId: existingDevice.locationId || device.locationId,
             locationName: existingDevice.locationName || device.locationName,
             isRemote: existingDevice.isRemote !== undefined ? existingDevice.isRemote : device.isRemote,
-            capabilities: existingDevice.capabilities || device.capabilities
+            capabilities: device.capabilities
           };
           Object.assign(existingDevice, device, preservedProps);
         } else {
@@ -1965,19 +1960,6 @@ function createRceDeviceCard(device: RceDeviceSummary, accountName: string, loca
   const stopIconBtn = canStop
     ? `<button type="button" class="location-action-btn icon-btn danger rce-stop-btn" title="${S.app.rceStop}">${icon('stop', 'icon-sm')}</button>`
     : '';
-  // Same Dev/ECP badges the physical/relay device card shows — `enrichWithEcpMode` (main process,
-  // only run for a device this session has actually connected to at least once) is the only
-  // source for either field, so both stay off rather than guessing when unknown, same as that
-  // banner's own "stays hidden rather than showing a wrong default" rule.
-  const devBadge = device.developerEnabled === true
-    ? `<span class="dev-badge enabled">${icon('wrench', 'icon-xs')} ${S.app.devBadge}</span>`
-    : '';
-  const ecpMode = device.ecpSettingMode != null ? getEcpMode(device) : null;
-  const ecpBadge = ecpMode === 'Disabled'
-    ? `<span class="ecp-badge" title="${S.app.ecpBadgeDisabledTitle}">${icon('tv', 'icon-xs')} ${S.app.remoteOff}</span>`
-    : ecpMode === 'Limited'
-      ? `<span class="ecp-badge ecp-badge-limited" title="${S.app.ecpBadgeLimitedTitle}">${icon('tv', 'icon-xs')} ${S.app.ecpLimited}</span>`
-      : '';
 
   setSafeHTML(card, `
     <div class="device-card-header">
@@ -1991,8 +1973,7 @@ function createRceDeviceCard(device: RceDeviceSummary, accountName: string, loca
         </div>
       </div>
       <div class="device-card-header-right">
-        ${ecpBadge}
-        ${devBadge}
+        <span class="device-card-enrichment-badges">${renderDeviceCardBadges(device)}</span>
         ${statusBadge}
         ${stopIconBtn}
         <button class="device-toggle-btn" title="${isMinimized ? S.app.expand : S.app.minimize}">
@@ -2039,6 +2020,18 @@ function createRceDeviceCard(device: RceDeviceSummary, accountName: string, loca
 
   // `device.isTv` is already set correctly by `normalizeRceDevice` — no override needed here.
   setDeviceCardThumbnail(card.querySelector('.device-card-thumb'), device, { isRemote: true, serverUrl: null });
+
+  // Keep the Dev/ECP badges live for as long as this card stays in the DOM — see
+  // `deviceEnrichmentListeners` near the hardware-image cache. Self-evicts on disconnect (cards have
+  // no other teardown hook; they're fully rebuilt by `renderRemoteLocations()`).
+  const badgesEl = card.querySelector('.device-card-enrichment-badges');
+  const unsubscribeBadges = onDeviceEnrichmentChanged(deviceKey, (d) => {
+    if (!card.isConnected) {
+      unsubscribeBadges();
+      return;
+    }
+    if (badgesEl instanceof HTMLElement) setSafeHTML(badgesEl, renderDeviceCardBadges(d));
+  });
 
   const thumb = card.querySelector('.device-card-thumb');
   if (thumb instanceof HTMLElement) {
@@ -2539,17 +2532,8 @@ function createRemoteDeviceCard(device, locationId) {
   card.dataset.deviceKey = deviceKey;
   card.dataset.ip = device.ip;
   card.dataset.locationId = locationId;
-  
+
   const softwareBuild = device.softwareBuild ? ` (${device.softwareBuild})` : '';
-  const devBadge = isDeveloperEnabled 
-    ? `<span class="dev-badge enabled">${icon('wrench', 'icon-xs')} ${S.app.devBadge}</span>`
-    : '';
-  const ecpMode = getEcpMode(device);
-  const ecpBadge = ecpMode === 'Disabled'
-    ? `<span class="ecp-badge" title="${S.app.ecpBadgeDisabledTitle}">${icon('tv', 'icon-xs')} ${S.app.remoteOff}</span>`
-    : ecpMode === 'Limited'
-      ? `<span class="ecp-badge ecp-badge-limited" title="${S.app.ecpBadgeLimitedTitle}">${icon('tv', 'icon-xs')} ${S.app.ecpLimited}</span>`
-      : '';
   const deviceType = isTv ? `${icon('tv', 'icon-sm')} ${S.app.deviceTypeTv}` : `${icon('stb', 'icon-sm')} ${S.app.deviceTypeStb}`;
   
   setSafeHTML(card, `
@@ -2564,8 +2548,7 @@ function createRemoteDeviceCard(device, locationId) {
         </div>
       </div>
       <div class="device-card-header-right">
-        ${ecpBadge}
-        ${devBadge}
+        <span class="device-card-enrichment-badges">${renderDeviceCardBadges(device)}</span>
         <button class="device-toggle-btn" title="${isMinimized ? S.app.expand : S.app.minimize}">
           ${icon('chevron-down', 'icon-sm')}
         </button>
@@ -2611,7 +2594,19 @@ function createRemoteDeviceCard(device, locationId) {
     isRemote: true,
     serverUrl: device.serverUrl || null
   });
-  
+
+  // Keep the Dev/ECP badges live for as long as this card stays in the DOM — see
+  // `deviceEnrichmentListeners` near the hardware-image cache. Self-evicts on disconnect (cards have
+  // no other teardown hook; they're fully rebuilt by `renderRemoteLocations()`).
+  const badgesEl = card.querySelector('.device-card-enrichment-badges');
+  const unsubscribeBadges = onDeviceEnrichmentChanged(deviceKey, (d) => {
+    if (!card.isConnected) {
+      unsubscribeBadges();
+      return;
+    }
+    if (badgesEl instanceof HTMLElement) setSafeHTML(badgesEl, renderDeviceCardBadges(d));
+  });
+
   // Toggle minimize/expand
   const toggleBtn = card.querySelector('.device-toggle-btn');
   const connectBtn = card.querySelector('.connect-btn');
@@ -3570,17 +3565,8 @@ function createDeviceCard(device) {
   card.dataset.ip = device.ip;
   
   const softwareBuild = device.softwareBuild ? ` (${device.softwareBuild})` : '';
-  const devBadge = isDeveloperEnabled 
-    ? `<span class="dev-badge enabled">${icon('wrench', 'icon-xs')} ${S.app.devBadge}</span>`
-    : '';
-  const ecpMode = getEcpMode(device);
-  const ecpBadge = ecpMode === 'Disabled'
-    ? `<span class="ecp-badge" title="${S.app.ecpBadgeDisabledTitle}">${icon('tv', 'icon-xs')} ${S.app.remoteOff}</span>`
-    : ecpMode === 'Limited'
-      ? `<span class="ecp-badge ecp-badge-limited" title="${S.app.ecpBadgeLimitedTitle}">${icon('tv', 'icon-xs')} ${S.app.ecpLimited}</span>`
-      : '';
   const deviceType = isTv ? `${icon('tv', 'icon-sm')} ${S.app.deviceTypeTv}` : `${icon('stb', 'icon-sm')} ${S.app.deviceTypeStb}`;
-  
+
   setSafeHTML(card, `
     <div class="device-card-header">
       <div class="device-card-header-left">
@@ -3593,8 +3579,7 @@ function createDeviceCard(device) {
         </div>
       </div>
       <div class="device-card-header-right">
-        ${ecpBadge}
-        ${devBadge}
+        <span class="device-card-enrichment-badges">${renderDeviceCardBadges(device)}</span>
         <button class="device-toggle-btn" title="${isMinimized ? S.app.expand : S.app.minimize}">
           ${icon('chevron-down', 'icon-sm')}
         </button>
@@ -3640,7 +3625,19 @@ function createDeviceCard(device) {
     isRemote: false,
     serverUrl: null
   });
-  
+
+  // Keep the Dev/ECP badges live for as long as this card stays in the DOM — see
+  // `deviceEnrichmentListeners` near the hardware-image cache. Self-evicts on disconnect (cards have
+  // no other teardown hook; they're fully rebuilt by `renderDeviceList()`).
+  const badgesEl = card.querySelector('.device-card-enrichment-badges');
+  const unsubscribeBadges = onDeviceEnrichmentChanged(device.ip, (d) => {
+    if (!card.isConnected) {
+      unsubscribeBadges();
+      return;
+    }
+    if (badgesEl instanceof HTMLElement) setSafeHTML(badgesEl, renderDeviceCardBadges(d));
+  });
+
   // Toggle minimize/expand
   const toggleBtn = card.querySelector('.device-toggle-btn');
   const connectBtn = card.querySelector('.connect-btn');
@@ -3785,6 +3782,9 @@ function disconnectDevice(deviceKey) {
     }
     if (panel._screenshotsCleanup) {
       panel._screenshotsCleanup();
+    }
+    if (panel._enrichmentCleanup) {
+      panel._enrichmentCleanup();
     }
     // Tear down the per-panel AppConnector explicitly. The WeakMap-keyed
     // registry would eventually let GC reclaim it once `panel` is gone,
@@ -4194,6 +4194,11 @@ async function checkDeviceConnection(
       // Merge fresh device info into connection so panel has correct ecpSettingMode, developerEnabled, etc.
       if (result.deviceInfo && connection && connection.device) {
         Object.assign(connection.device, result.deviceInfo);
+        // Sidebar card badges (dev/ECP) subscribe to this and patch themselves — see
+        // `deviceEnrichmentListeners` above. The open panel's own warning banners are one of those
+        // subscribers too (registered once in `createDevicePanel`), so no need to call
+        // `updateEcpWarnings`/`updateDevModeWarnings` here directly anymore.
+        notifyDeviceEnrichmentChanged(deviceKey, connection.device);
         const panel = document.getElementById(connection.tabId);
         if (panel) {
           const iconEl = panel.querySelector('.device-panel-icon');
@@ -4210,8 +4215,6 @@ async function checkDeviceConnection(
             isRemote: !!serverUrl,
             serverUrl: serverUrl || connection.serverUrl
           });
-          updateEcpWarnings(panel, connection.device);
-          updateDevModeWarnings(panel, connection.device.developerEnabled === true);
           // Tab label + hover tooltip + panel header name: set once from whatever `device` had at
           // panel-creation time (the relay auto-connect fallback's `r.name || ip`/`"Roku"`) and
           // never revisited since. Re-applying here — same pattern already used a few lines up in
@@ -4488,6 +4491,92 @@ function applyCapabilities(panel, capabilities) {
 const deviceHardwareImageCache = new Map<string, string>();
 
 /**
+ * Per-device-ip "notify me once the image resolves" registry. Without this, only whichever
+ * surface's OWN `loadDeviceHardwareImageSrc` call happens to succeed ever shows the real photo —
+ * every OTHER already-rendered surface for that same device (a sidebar list card whose own attempt
+ * ran too early, e.g. before an RCE device's instance was actually running/reachable) stays stuck
+ * on the placeholder glyph forever, since nothing tells it the cache was filled in later by someone
+ * else. `notifyDeviceHardwareImageResolved` is called right after each successful cache write in
+ * `loadDeviceHardwareImageSrc` below; `onDeviceHardwareImageResolved` is used by the render-site
+ * helpers (`setDeviceCardThumbnail`, `setDevicePanelIcon`) to patch themselves when that happens
+ * elsewhere, not just when their own fetch resolves.
+ */
+const deviceHardwareImageListeners = new Map<string, Set<(src: string) => void>>();
+
+function onDeviceHardwareImageResolved(ip: string, listener: (src: string) => void): () => void {
+  let set = deviceHardwareImageListeners.get(ip);
+  if (!set) {
+    set = new Set();
+    deviceHardwareImageListeners.set(ip, set);
+  }
+  set.add(listener);
+  return () => set!.delete(listener);
+}
+
+function notifyDeviceHardwareImageResolved(ip: string, src: string): void {
+  const set = deviceHardwareImageListeners.get(ip);
+  if (!set || !set.size) return;
+  // Snapshot first — a listener may unsubscribe itself synchronously as a side effect of updating
+  // its element, which would otherwise mutate `set` mid-iteration.
+  for (const fn of Array.from(set)) fn(src);
+}
+
+/**
+ * Wires `showImage` to also fire if this device's photo resolves later via a DIFFERENT surface's
+ * fetch (see the listener registry doc comment above) — used by `setDeviceCardThumbnail` and
+ * `setDevicePanelIcon` right after their own cache-miss-then-load attempt. No-ops for the relay
+ * `isRemote && serverUrl` case (a deterministic URL string, not ip-cache-backed — see
+ * `getCachedDeviceHardwareImageSrc`). Unsubscribes after the first notification: once resolved, a
+ * device's photo doesn't change again this session, and any future render of this same element
+ * would hit the cache directly anyway.
+ */
+function subscribeDeviceHardwareImageUpdates(
+  device: { ip?: string },
+  isRemote: boolean,
+  serverUrl: string | null,
+  isConnected: () => boolean,
+  showImage: (src: string) => void
+): void {
+  if ((isRemote && serverUrl) || !device.ip) return;
+  const unsubscribe = onDeviceHardwareImageResolved(device.ip, (src) => {
+    unsubscribe();
+    if (isConnected()) showImage(src);
+  });
+}
+
+/**
+ * Per-device-key "notify me when enrichment data changes" registry — same shape as the hardware-
+ * image one above, for a different vein of device data: `developerEnabled`/`ecpSettingMode`/`isTv`
+ * (and, for Relay devices, `capabilities`), resolved lazily after initial discovery and read by
+ * multiple independent surfaces (a sidebar card's dev/ECP badges, an open device-panel's warning
+ * banner). Unlike the image registry, this does NOT unsubscribe after the first notification —
+ * Developer Mode / ECP setting can be toggled repeatedly in a session, so a listener needs to keep
+ * firing. Callers instead self-evict on DOM disconnection (`if (!el.isConnected) { unsubscribe();
+ * return; }`) since sidebar cards have no other teardown hook; the device-panel subscription is the
+ * one exception — panels DO have an explicit teardown sequence (see `disconnectDevice`'s
+ * `panel._xCleanup()` calls), so its unsubscribe is stashed on `panel._enrichmentCleanup` and
+ * invoked from there instead, since panels are far longer-lived and self-eviction alone would leak
+ * one dead listener per device ever connected-then-disconnected in a session.
+ */
+const deviceEnrichmentListeners = new Map<string, Set<(device: any) => void>>();
+
+function onDeviceEnrichmentChanged(deviceKey: string, listener: (device: any) => void): () => void {
+  let set = deviceEnrichmentListeners.get(deviceKey);
+  if (!set) {
+    set = new Set();
+    deviceEnrichmentListeners.set(deviceKey, set);
+  }
+  set.add(listener);
+  return () => set!.delete(listener);
+}
+
+function notifyDeviceEnrichmentChanged(deviceKey: string, device: any): void {
+  const set = deviceEnrichmentListeners.get(deviceKey);
+  if (!set || !set.size) return;
+  for (const fn of Array.from(set)) fn(device);
+}
+
+/**
  * Synchronous cache/URL check — use this to decide whether a render can show the image
  * immediately (no fallback flash) versus needing the fallback-then-async-swap path below.
  * @param {object} device
@@ -4532,6 +4621,7 @@ async function loadDeviceHardwareImageSrc(device, isRemote, serverUrl) {
       const result = await window.roku.rceGetHardwareImage(device.accountName, instanceApiUrl);
       if (result && result.success && typeof result.dataUrl === 'string') {
         deviceHardwareImageCache.set(device.ip, result.dataUrl);
+        notifyDeviceHardwareImageResolved(device.ip, result.dataUrl);
         return result.dataUrl;
       }
       return null;
@@ -4543,6 +4633,7 @@ async function loadDeviceHardwareImageSrc(device, isRemote, serverUrl) {
     const result = await window.roku.getDeviceHardwareImage(device.ip);
     if (result && result.success && typeof result.dataUrl === 'string') {
       deviceHardwareImageCache.set(device.ip, result.dataUrl);
+      notifyDeviceHardwareImageResolved(device.ip, result.dataUrl);
       return result.dataUrl;
     }
     return null;
@@ -5495,6 +5586,7 @@ function setDeviceCardThumbnail(
   }
 
   showFallback();
+  subscribeDeviceHardwareImageUpdates(device, isRemote, serverUrl, () => thumbEl.isConnected, showImage);
   void loadDeviceHardwareImageSrc(device, isRemote, serverUrl).then((hardwareSrc) => {
     if (!hardwareSrc || !thumbEl.isConnected) return;
     showImage(hardwareSrc);
@@ -5572,6 +5664,7 @@ function setDevicePanelIcon(
   }
 
   showFallback();
+  subscribeDeviceHardwareImageUpdates(device, isRemote, serverUrl, () => iconEl.isConnected, showImage);
   void loadDeviceHardwareImageSrc(device, isRemote, serverUrl).then((hardwareSrc) => {
     if (!hardwareSrc || !iconEl.isConnected) return;
     showImage(hardwareSrc);
@@ -5896,18 +5989,32 @@ function createDevicePanel(device, tabId, isRemote = false, serverUrl = null, lo
       void window.roku.remoteNetworkStreamConnect(networkCtrl.serverUrl, tabId);
     }
     
-    // Update dev mode warnings based on device status. For RCE, `developerEnabled`/`ecpSettingMode`
-    // aren't part of the Core API's device shape — `RceGetDevice` (main process) best-effort
-    // enriches them from a live `query/device-info` ECP call before `connectRceDevice` gets here.
-    // Only trust them when that enrichment actually ran: an absent `ecpSettingMode` means "didn't
-    // check", not "Disabled" — showing the warning anyway would just trade one false banner for
-    // another. See connection-gating fix in `checkConnectedDevices`/`activateTab` for the matching
-    // "Device Offline" banner issue — same root cause.
-    if (!isRceDevice(device) || device.ecpSettingMode != null) {
-      updateDevModeWarnings(panel, device.developerEnabled === true);
-      // Update ECP / Control by Mobile Apps warnings (mode-aware)
-      updateEcpWarnings(panel, device);
-    }
+    // Paint dev mode / ECP warnings now, then keep them live for the rest of this panel's life via
+    // the shared enrichment registry (see `deviceEnrichmentListeners` near the hardware-image
+    // cache) — a later location refresh or RCE push that changes `developerEnabled`/`ecpSettingMode`
+    // (e.g. Developer Mode toggled while this tab is already open) would otherwise never revisit an
+    // already-open panel. For RCE, `developerEnabled`/`ecpSettingMode` aren't part of the Core API's
+    // device shape — `RceGetDevice` (main process) best-effort enriches them from a live
+    // `query/device-info` ECP call before `connectRceDevice` gets here. Only trust them when that
+    // enrichment actually ran: an absent `ecpSettingMode` means "didn't check", not "Disabled" —
+    // showing the warning anyway would just trade one false banner for another. See
+    // connection-gating fix in `checkConnectedDevices`/`activateTab` for the matching "Device
+    // Offline" banner issue — same root cause.
+    const applyEnrichmentWarnings = (d) => {
+      if (isRceDevice(d) && d.ecpSettingMode == null) return;
+      updateDevModeWarnings(panel, d.developerEnabled === true);
+      updateEcpWarnings(panel, d);
+    };
+    applyEnrichmentWarnings(device);
+    const enrichmentKey = locationId ? `${locationId}:${device.ip}` : device.ip;
+    const unsubscribeEnrichment = onDeviceEnrichmentChanged(enrichmentKey, (d) => {
+      if (!panel.isConnected) {
+        unsubscribeEnrichment();
+        return;
+      }
+      applyEnrichmentWarnings(d);
+    });
+    panel._enrichmentCleanup = unsubscribeEnrichment;
 
     devLog('Device panel setup complete');
   } catch (error) {
@@ -8621,6 +8728,27 @@ function getEcpMode(device) {
   if (lower === 'permissive') return 'Permissive';
   if (lower === 'enabled') return 'Enabled';
   return 'Disabled';
+}
+
+/**
+ * Sidebar device-card Dev/ECP badges — shared by `createDeviceCard`/`createRemoteDeviceCard`/
+ * `createRceDeviceCard` (previously three near-identical copies) for both the card's initial HTML
+ * and its `deviceEnrichmentListeners` patch callback. Gated on `ecpSettingMode != null` (not just
+ * `getEcpMode`'s own "unknown treated as Disabled" default) so a not-yet-enriched card shows no
+ * badge instead of a wrong "Remote Off" one — same guard `createRceDeviceCard` already used, now
+ * applied to all three.
+ */
+function renderDeviceCardBadges(device): string {
+  const devBadge = device.developerEnabled === true
+    ? `<span class="dev-badge enabled">${icon('wrench', 'icon-xs')} ${S.app.devBadge}</span>`
+    : '';
+  const ecpMode = device.ecpSettingMode != null ? getEcpMode(device) : null;
+  const ecpBadge = ecpMode === 'Disabled'
+    ? `<span class="ecp-badge" title="${S.app.ecpBadgeDisabledTitle}">${icon('tv', 'icon-xs')} ${S.app.remoteOff}</span>`
+    : ecpMode === 'Limited'
+      ? `<span class="ecp-badge ecp-badge-limited" title="${S.app.ecpBadgeLimitedTitle}">${icon('tv', 'icon-xs')} ${S.app.ecpLimited}</span>`
+      : '';
+  return `${ecpBadge}${devBadge}`;
 }
 
 function canSendText(device) {
