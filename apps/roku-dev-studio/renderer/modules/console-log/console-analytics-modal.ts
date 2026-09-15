@@ -146,6 +146,34 @@ function ensureConsoleAnalyticsStyles(): void {
     @media (prefers-reduced-motion: reduce) {
       .telnet-an-issue::details-content { transition: none; }
     }
+    /* Live-refresh arrival animations (see render()'s count-diffing below) — deliberately reuse this
+       app's own established "make the user notice this" convention (console-occurrence-flash-kf in
+       reveal-occurrence.ts: a 1.8s purple background flash) applied to the WHOLE card rather than a
+       small sub-element, since a short/tiny-area animation reads as unnoticeable against a list full
+       of static cards. A brand-new finding/crash/beacon card also slides+fades in on top of the flash;
+       an existing card whose occurrence count just ticked up gets the same card-wide flash plus an
+       extra pop on its count badge specifically. Never applied on the modal's first paint — only on a
+       later refresh(). */
+    @keyframes telnet-an-card-enter-kf {
+      0% { opacity: 0; transform: translateY(-10px); background-color: rgba(139, 92, 246, 0.55); }
+      15% { opacity: 1; transform: translateY(0); }
+      100% { background-color: rgba(139, 92, 246, 0); }
+    }
+    .telnet-an-card-enter { animation: telnet-an-card-enter-kf 1.8s cubic-bezier(0.16, 1, 0.3, 1); }
+    @keyframes telnet-an-card-bump-kf {
+      0% { background-color: rgba(139, 92, 246, 0.55); }
+      100% { background-color: rgba(139, 92, 246, 0); }
+    }
+    .telnet-an-card-bump { animation: telnet-an-card-bump-kf 1.8s ease-out; }
+    @keyframes telnet-an-badge-bump-kf {
+      0% { transform: scale(1); }
+      35% { transform: scale(1.5); background: var(--accent-purple); color: #fff; border-color: var(--accent-purple); }
+      100% { transform: scale(1); }
+    }
+    .telnet-an-badge-bump { animation: telnet-an-badge-bump-kf 0.9s ease; }
+    @media (prefers-reduced-motion: reduce) {
+      .telnet-an-card-enter, .telnet-an-card-bump, .telnet-an-badge-bump { animation: none; }
+    }
     .telnet-an-issue-body { padding: 15px 14px 16px; }
     .telnet-an-issue-kind { margin: 0 0 12px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); }
     /* Label / value grid — replaces the packed "What: … Cause: …" paragraphs. */
@@ -456,7 +484,13 @@ function beaconsList(f: ConsoleFindings, navigable: boolean): string {
       const label = (S.consoleLog.beaconFlows as Record<string, string>)[g.flow] ?? g.label;
       const domId = `beacon:${g.flow}`;
       const rows = g.timings.map((t) => beaconOccurrence(t, navigable)).join('');
-      const avgMs = Math.round(g.timings.reduce((sum, t) => sum + t.durationMs, 0) / g.timings.length);
+      // A 0ms entry (e.g. an InstantOn/"Pended without Render" launch) is still a real occurrence —
+      // shown in the badge count and the occurrence list below — but it's not a real duration
+      // measurement, so it's excluded here to avoid dragging the average down.
+      const measured = g.timings.filter((t) => t.durationMs > 0);
+      const avgMs = measured.length > 0
+        ? Math.round(measured.reduce((sum, t) => sum + t.durationMs, 0) / measured.length)
+        : 0;
       return (
         `<details class="telnet-an-issue" data-issue-id="${escapeHtml(domId)}">` +
         `<summary>` +
@@ -530,6 +564,12 @@ export function openConsoleAnalyticsModal(
   const subEl = overlay.querySelector('[data-an-sub]') as HTMLElement;
   const bodyEl = overlay.querySelector('[data-an-body]') as HTMLElement;
 
+  // Occurrence count per finding/crash/beacon-flow as of the last render — null only before the very
+  // first render, so the modal's initial content never fake-animates as "just arrived". Diffed against
+  // on every later `refresh()` to decide which cards are brand-new vs. which existing ones just had
+  // their count go up (see the bottom of `render()`).
+  let previousCounts: Map<string, number> | null = null;
+
   const render = (): void => {
     const { findings: f, scannedLines, timeSpan, meta } = getSnapshot();
     // Preserve which issues/crashes are expanded + each log table's scroll offset across the re-render.
@@ -556,6 +596,27 @@ export function openConsoleAnalyticsModal(
       const top = id ? scrolls.get(id) : undefined;
       if (top !== undefined) el.scrollTop = top;
     });
+
+    const newCounts = new Map<string, number>();
+    for (const finding of f.findings) newCounts.set(finding.id, finding.count);
+    for (const crash of f.crashes) newCounts.set(crashDomKey(crash), crash.count);
+    for (const group of groupBeaconTimings(f.beacons)) newCounts.set(`beacon:${group.flow}`, group.timings.length);
+    if (previousCounts) {
+      const prior = previousCounts;
+      bodyEl.querySelectorAll<HTMLElement>('details.telnet-an-issue').forEach((card) => {
+        const key = card.getAttribute('data-issue-id') ?? card.getAttribute('data-crash-id');
+        const count = key ? newCounts.get(key) : undefined;
+        if (!key || count === undefined) return;
+        const priorCount = prior.get(key);
+        if (priorCount === undefined) {
+          card.classList.add('telnet-an-card-enter');
+        } else if (count > priorCount) {
+          card.classList.add('telnet-an-card-bump');
+          card.querySelector('.telnet-an-issue-badge')?.classList.add('telnet-an-badge-bump');
+        }
+      });
+    }
+    previousCounts = newCounts;
   };
 
   // Let the user SELECT the issue title without the <summary> toggling the <details> shut. A drag to

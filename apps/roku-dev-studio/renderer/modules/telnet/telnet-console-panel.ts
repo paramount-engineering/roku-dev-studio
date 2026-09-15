@@ -1558,7 +1558,6 @@ export function setupTelnet(
   // copy so streaming can keep mutating logLines underneath the open modal.
   let analyticsHandle: ConsoleAnalyticsHandle | null = null;
   let analyticsRefreshTimer: ReturnType<typeof setTimeout> | undefined;
-  let lastRenderedIssueCount = -1;
 
   // The Console computes findings in-renderer from the live buffer (cheap; the buffer is resident).
   // The modal itself is content-only — it renders whatever findings/timeSpan we hand it — so the
@@ -1600,7 +1599,6 @@ export function setupTelnet(
   dashboardBtn?.addEventListener('click', () => {
     if (recognizedIssueCount === 0) return;
     analyticsHandle?.close();
-    lastRenderedIssueCount = recognizedIssueCount;
     analyticsHandle = openConsoleAnalyticsModal(
       analyticsSnapshot,
       () => {
@@ -1612,15 +1610,17 @@ export function setupTelnet(
     );
   });
 
-  // While the monitor is open, re-render it (debounced) whenever the recognized-issue count changed —
-  // new issues (or new occurrences) that arrive since it opened show up without a manual reopen.
+  // While the monitor is open, re-render it (debounced) on every new batch of lines. Deliberately NOT
+  // gated on "did recognizedIssueCount change" — that counter only reflects single-line BrightScript
+  // catalog matches (see lineHasBrsIssue above), so a batch containing only a performance beacon
+  // (Video Start, Channel Exit, …) or only a crash dump would leave it unchanged, and the modal would
+  // silently miss that update until manually reopened (which pulls a fresh snapshot unconditionally).
+  // The 400ms debounce below already bounds the cost of recomputing findings while the modal is open.
   function scheduleAnalyticsRefresh(): void {
-    if (!analyticsHandle || recognizedIssueCount === lastRenderedIssueCount) return;
+    if (!analyticsHandle) return;
     clearTimeout(analyticsRefreshTimer);
     analyticsRefreshTimer = setTimeout(() => {
-      if (!analyticsHandle) return;
-      lastRenderedIssueCount = recognizedIssueCount;
-      analyticsHandle.refresh();
+      analyticsHandle?.refresh();
     }, 400);
   }
 
