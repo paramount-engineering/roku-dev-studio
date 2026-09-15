@@ -68,7 +68,9 @@ function toolToWire(t: Tool): Record<string, unknown> {
   return {
     name: t.name,
     title: t.title || t.name,
-    description: t.description,
+    // The MCP protocol's `description` is a plain string — a tool authored as an array of
+    // points (see the `Tool` type) still joins into one string here for real agents.
+    description: Array.isArray(t.description) ? t.description.join(' ') : t.description,
     inputSchema: t.inputSchema,
     ...(t.annotations ? { annotations: t.annotations } : {})
   };
