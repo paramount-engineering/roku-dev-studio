@@ -203,6 +203,11 @@ WiFi MAC: ${d.wifiMac || 'N/A'}`,
   actionSucceeded: (label: string): string => `${label} succeeded.`,
   actionFailed: (label: string): string => `${label} failed.`,
   actionFailedWith: (label: string, err: string): string => `${label} failed: ${err}`,
+  deviceInfoPanelTitle: 'Device Info',
+  deviceInfoUnavailable: 'Device info unavailable.',
+  networkTypeWifi: 'Wi-Fi',
+  networkTypeEthernet: 'Ethernet',
+  refreshDeviceInfo: 'Refresh Device Info',
 
   // Apps tab
   installedApps: 'Installed Apps',

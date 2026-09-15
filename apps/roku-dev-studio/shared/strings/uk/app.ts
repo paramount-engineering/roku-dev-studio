@@ -207,6 +207,11 @@ WiFi MAC: ${d.wifiMac || 'Н/Д'}`,
   actionSucceeded: (label: string): string => `${label} — виконано успішно.`,
   actionFailed: (label: string): string => `${label} — не вдалося.`,
   actionFailedWith: (label: string, err: string): string => `${label} — не вдалося: ${err}`,
+  deviceInfoPanelTitle: 'Інформація про пристрій',
+  deviceInfoUnavailable: 'Інформація про пристрій недоступна.',
+  networkTypeWifi: 'Wi-Fi',
+  networkTypeEthernet: 'Ethernet',
+  refreshDeviceInfo: 'Оновити інформацію про пристрій',
 
   // Apps tab
   installedApps: 'Встановлені застосунки',

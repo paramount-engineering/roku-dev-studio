@@ -201,6 +201,11 @@ MAC WiFi: ${d.wifiMac || 'N/A'}`,
   actionSucceeded: (label: string): string => `${label} a reușit.`,
   actionFailed: (label: string): string => `${label} a eșuat.`,
   actionFailedWith: (label: string, err: string): string => `${label} a eșuat: ${err}`,
+  deviceInfoPanelTitle: 'Informații dispozitiv',
+  deviceInfoUnavailable: 'Informațiile despre dispozitiv nu sunt disponibile.',
+  networkTypeWifi: 'Wi-Fi',
+  networkTypeEthernet: 'Ethernet',
+  refreshDeviceInfo: 'Actualizează informațiile dispozitivului',
 
   // Apps tab
   installedApps: 'Aplicații instalate',
