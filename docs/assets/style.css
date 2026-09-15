@@ -517,7 +517,6 @@ pre code { background: none; padding: 0; color: var(--text); }
 
 /* ---------- Long-form content (feature detail sections, install steps) ---------- */
 .doc-section {
-  padding: 40px 0;
   border-bottom: 1px solid var(--border);
 }
 .doc-section:last-child { border-bottom: none; }
@@ -788,3 +787,70 @@ img:not(.brand-icon) { cursor: zoom-in; }
 }
 .lightbox-close:hover { background: rgba(255, 255, 255, 0.18); }
 .lightbox-close .icon { color: #fff; }
+
+/* ---------- MCP tool reference (mcp-tools.html) ---------- */
+.tool-search-input {
+  width: 100%;
+  padding: 12px 16px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  color: var(--text);
+  font-size: 0.95em;
+  margin-bottom: 14px;
+}
+.tool-search-input:focus { outline: 2px solid var(--accent-purple); outline-offset: 1px; }
+.tool-filter-row { display: flex; gap: 8px; margin-bottom: 30px; flex-wrap: wrap; }
+.chip {
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 0.85em;
+  cursor: pointer;
+}
+.chip.active { border-color: var(--accent-purple); color: var(--accent-purple); background: var(--accent-purple-dim); }
+.tool-item {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  margin-bottom: 10px;
+  padding: 4px 16px;
+}
+.tool-item summary {
+  cursor: pointer;
+  padding: 12px 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 0.95em;
+}
+.tool-item summary code { font-weight: 700; }
+.tool-item .tool-title { color: var(--text-secondary); font-weight: 400; }
+.tool-item .tool-badges { margin-left: auto; display: flex; gap: 6px; flex-wrap: wrap; }
+.tool-item-body { padding: 4px 0 16px; }
+.tool-item-body h4 { margin: 18px 0 6px; font-size: 0.85em; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); }
+.tool-item-body table { margin: 8px 0; font-size: 0.9em; }
+.tool-schema-note { color: var(--text-secondary); font-size: 0.9em; margin: 8px 0; }
+.tool-raw { margin-top: 10px; }
+.tool-raw summary { cursor: pointer; color: var(--text-muted); font-size: 0.85em; padding: 6px 0; }
+.badge {
+  display: inline-block;
+  border-radius: 999px;
+  padding: 2px 10px;
+  font-size: 0.75em;
+  font-weight: 600;
+}
+.badge-cyan { background: var(--accent-cyan-dim); color: var(--accent-cyan); }
+.badge-amber { background: rgba(180, 83, 9, 0.12); color: var(--accent-amber); }
+.badge-red { background: rgba(220, 38, 38, 0.12); color: var(--accent-red); }
+.badge-purple { background: var(--accent-purple-dim); color: var(--accent-purple); }
+.tool-description-points { margin: 6px 0 0; padding-left: 20px; color: var(--text-secondary); font-size: 0.95em; }
+.tool-description-points li { margin-bottom: 6px; }
+.req-icon { font-weight: 700; }
+.req-yes { color: var(--accent-green); }
+.req-no { color: var(--text-muted); }
+.tool-group { margin-bottom: 28px; }
+.tool-group-title { font-size: 1.05em; margin: 0 0 12px; color: var(--text); }
+.tool-group-count { color: var(--text-muted); font-weight: 400; font-size: 0.85em; }
