@@ -1898,6 +1898,9 @@ interface RceDeviceSummary {
     startedAt: string | null;
     maxRuntime: number;
     instanceUuid: string;
+    /** Device API host+path prefix — same field `enrichWithEcpMode` (rce-handlers.ts) reads
+     *  main-process-side; present here too since `normalizeRceDevice` spreads the raw object. */
+    instanceApiUrl?: string | null;
   } | null;
   /** Best-effort `query/device-info` enrichment (main process's `enrichWithEcpMode`) — only
    *  present once this device has actually been connected to at least once this session. */
@@ -4771,6 +4774,149 @@ function renderRelayPasswordPrompt(
 }
 
 /**
+ * Tags already shown elsewhere in the Device Info modal (name/model/software-version rows) —
+ * dropped from the live `/query/device-info` panel so nothing is shown twice.
+ */
+const DEVICE_INFO_REDUNDANT_TAGS_ALWAYS = new Set([
+  'friendly-device-name', 'user-device-name', 'default-device-name', 'is-tv'
+]);
+/** Only redundant for non-RCE devices — shown there in the Model/Screen Size footer and the OS
+ *  Version & Build row. RCE devices get neither (no modelName/modelNumber/softwareVersion fields
+ *  on the client-side summary at all — see the `isRceDevice` branches below), so for RCE this
+ *  table is the ONLY place any of it is shown; dropping it there was a real loss, not a de-dupe. */
+const DEVICE_INFO_REDUNDANT_TAGS_NON_RCE = new Set([
+  'model-name', 'model-number', 'software-version', 'software-build', 'screen-size'
+]);
+
+/** Tags reusing an existing Privacy Mode CSS class (see privacy-mode-architecture memory).
+ *  Any OTHER tag ending in `-mac` (bluetooth-mac, wifi2-mac, and whatever else Roku/OEMs add —
+ *  real dumps keep turning up more of these) falls back to the generic `.device-mac` class
+ *  instead of needing a new entry here every time; see {@link buildDeviceInfoRows}. */
+const DEVICE_INFO_MASK_CLASS: Record<string, string> = {
+  'serial-number': 'device-serial',
+  'wifi-mac': 'device-wifi-mac',
+  'ethernet-mac': 'device-ethernet-mac'
+};
+/** Other persistent identifiers with no dedicated class — masked via the generic `data-privacy="mask"` escape hatch. */
+const DEVICE_INFO_MASK_ATTR_TAGS = new Set([
+  'device-id', 'advertising-id', 'udn', 'keyed-developer-id', 'network-name'
+]);
+
+/** trc = "The Roku Channel" (Roku's own first-party app — see developer.roku.com/trc-docs). */
+const DEVICE_INFO_LABEL_ACRONYMS = new Set(['mac', 'ecp', 'tls', 'ui', 'tv', 'id', 'url', 'udn', 'dtv', 'av', 'trc']);
+
+/** `wifi-mac` → "Wi-Fi MAC", `ecp-setting-mode` → "ECP Setting Mode", `has-wifi-5G-support` →
+ *  "Has Wi-Fi 5G Support" (a bare digit+letter token like "5g" keeps its letter uppercase — it's
+ *  a generation suffix, e.g. 5G/4G Wi-Fi, not a word to sentence-case), etc. */
+function formatDeviceInfoLabel(tag: string): string {
+  return tag
+    .split('-')
+    .map((word) => {
+      const lower = word.toLowerCase();
+      if (lower === 'wifi') return 'Wi-Fi';
+      if (/^\d+[a-z]$/.test(lower)) return lower.toUpperCase();
+      if (DEVICE_INFO_LABEL_ACRONYMS.has(lower)) return lower.toUpperCase();
+      return lower.charAt(0).toUpperCase() + lower.slice(1);
+    })
+    .join(' ');
+}
+
+/** Light, targeted value formatting — booleans, PascalCase enums (`PowerOn` → "Power On"), uptime seconds. */
+function formatDeviceInfoValue(tag: string, raw: string): string {
+  const v = raw.trim();
+  if (!v) return S.app.unknown;
+  if (v === 'true') return S.common.yes;
+  if (v === 'false') return S.common.no;
+  if (tag === 'uptime') {
+    const secs = Number(v);
+    if (Number.isFinite(secs) && secs >= 0) {
+      const h = Math.floor(secs / 3600);
+      const m = Math.floor((secs % 3600) / 60);
+      return h > 0 ? `${h}h ${m}m` : `${m}m`;
+    }
+  }
+  if (tag === 'network-type') {
+    if (v === 'wifi') return S.app.networkTypeWifi;
+    if (v === 'ethernet') return S.app.networkTypeEthernet;
+  }
+  if (tag === 'ecp-setting-mode') return v.charAt(0).toUpperCase() + v.slice(1);
+  // PascalCase enum like "PowerOn" / "DisplayOff" → space before each inner capital.
+  if (/^[A-Z][a-zA-Z0-9]*$/.test(v) && /[a-z][A-Z]/.test(v)) {
+    return v.replace(/([a-z0-9])([A-Z])/g, '$1 $2');
+  }
+  return v;
+}
+
+type DeviceInfoRow = { tag: string; label: string; value: string; maskClass?: string; maskAttr?: boolean };
+
+/**
+ * Per-device cache of the already-built (parsed, labeled, formatted) Device Info rows — keyed by
+ * `device.ip` same as `deviceHardwareImageCache` above. A successful fetch is cached and reused on
+ * every later modal open for that device (skips the ECP round-trip AND the parse/format pass, not
+ * just the network call) instead of re-querying every time the modal opens. In-memory/session-only
+ * (cleared by an app restart, not invalidated on reconnect) — a deliberate simplicity trade-off:
+ * most fields here are static (serial, MACs, model-ish info); a few (power-mode, uptime,
+ * headphones-connected, developer-enabled) can drift stale between opens, but re-fetching every
+ * open for those few fields defeats the point of caching at all. A failed fetch is NOT cached, so
+ * a device that was unreachable gets retried on the next open rather than being stuck on empty.
+ */
+const deviceInfoRowsCache = new Map<string, DeviceInfoRow[]>();
+
+/** Parse `/query/device-info`'s flat XML (no nested elements) into a tag → raw-text map. */
+function parseDeviceInfoXml(xml: string): Record<string, string> {
+  const fields: Record<string, string> = {};
+  try {
+    const doc = new DOMParser().parseFromString(xml, 'application/xml');
+    if (doc.querySelector('parsererror') || !doc.documentElement) return fields;
+    for (const el of Array.from(doc.documentElement.children)) {
+      fields[el.tagName] = el.textContent || '';
+    }
+  } catch {
+    /* fields stays empty — panel shows the "unavailable" message */
+  }
+  return fields;
+}
+
+function buildDeviceInfoRows(fields: Record<string, string>, isRce: boolean): DeviceInfoRow[] {
+  return Object.keys(fields)
+    .filter((tag) => !DEVICE_INFO_REDUNDANT_TAGS_ALWAYS.has(tag) && (isRce || !DEVICE_INFO_REDUNDANT_TAGS_NON_RCE.has(tag)))
+    .map((tag) => ({
+      tag,
+      label: formatDeviceInfoLabel(tag),
+      value: formatDeviceInfoValue(tag, fields[tag]),
+      maskClass: DEVICE_INFO_MASK_CLASS[tag] || (tag.endsWith('-mac') ? 'device-mac' : undefined),
+      maskAttr: DEVICE_INFO_MASK_ATTR_TAGS.has(tag)
+    }));
+}
+
+/** Fills the Device Info panel's scrollable body — the loading placeholder, the row list, or the unavailable message. */
+function renderDeviceInfoPanelBody(container: HTMLElement, rows: DeviceInfoRow[]): void {
+  container.textContent = '';
+  if (!rows.length) {
+    container.textContent = S.app.deviceInfoUnavailable;
+    return;
+  }
+  for (const row of rows) {
+    const rowEl = document.createElement('div');
+    rowEl.className = 'device-info-panel-row';
+    const labelEl = document.createElement('span');
+    labelEl.className = 'device-info-panel-label';
+    labelEl.textContent = row.label;
+    const valueEl = document.createElement('span');
+    valueEl.className = 'device-info-panel-value';
+    if (row.maskClass) valueEl.classList.add(row.maskClass);
+    if (row.maskAttr) {
+      valueEl.classList.add('info-value');
+      valueEl.dataset.privacy = 'mask';
+    }
+    valueEl.textContent = row.value;
+    rowEl.appendChild(labelEl);
+    rowEl.appendChild(valueEl);
+    container.appendChild(rowEl);
+  }
+}
+
+/**
  * Full-size hardware image in a lightbox (fetched independently of whatever the panel thumbnail
  * currently shows, so it's always current regardless of when the panel's own fetch resolved).
  * @param {object} device
@@ -4801,25 +4947,39 @@ function openDeviceHardwareImageModal(
   const titleGroup = document.createElement('div');
   titleGroup.className = 'device-hardware-image-modal-title-group';
 
-  const titleEl = document.createElement('span');
-  titleEl.className = 'device-hardware-image-modal-title';
-  titleEl.textContent = device.deviceName || device.modelName || S.app.rokuDevice;
-  titleGroup.appendChild(titleEl);
-
   const ip = typeof device.ip === 'string' ? device.ip.trim() : '';
+
+  // Same panel lookup the offline-dot check always needed — extended here so the modal's header
+  // matches its sidebar tab exactly: the kind icon (RCE cloud / relay server, via the same
+  // devicePanelNameHtml the tab itself renders with) in front of the name, and the "@ <location>"
+  // suffix after the ip/serial (S.app.atLocation, ditto) instead of a plainer bare version.
+  let isOffline = false;
+  let isRemotePanel = false;
+  let locationName: string | null = null;
   if (ip) {
     // This modal is a one-shot snapshot built fresh at open time, not a live-updating element
     // `updateDeviceOfflineState` can reach later — so it must read the panel's current
     // `dataset.deviceOffline` (set by `applyConnectionGating`) right now, at build time, instead
     // of hardcoding "Connected" regardless of actual reachability.
-    let isOffline = false;
     for (const connection of state.connectedDevices.values()) {
       if (connection.device?.ip !== ip) continue;
       const panel = document.getElementById(connection.tabId);
       isOffline = panel?.dataset.deviceOffline === 'true';
+      isRemotePanel = panel?.dataset.isRemote === 'true';
+      if (isRemotePanel) {
+        const location = panel?.dataset.locationId ? state.remoteLocations.get(panel.dataset.locationId) : null;
+        locationName = location?.name || S.app.remote;
+      }
       break;
     }
+  }
 
+  const titleEl = document.createElement('span');
+  titleEl.className = 'device-hardware-image-modal-title';
+  setSafeHTML(titleEl, devicePanelNameHtml(device, isRemotePanel));
+  titleGroup.appendChild(titleEl);
+
+  if (ip) {
     const ipRow = document.createElement('div');
     ipRow.className = 'device-hardware-image-modal-ip-row';
     const dot = document.createElement('span');
@@ -4834,7 +4994,7 @@ function openDeviceHardwareImageModal(
     }
     const ipEl = document.createElement('span');
     ipEl.className = 'device-ip';
-    ipEl.textContent = ip;
+    ipEl.textContent = locationName ? S.app.atLocation(ip, locationName) : ip;
     ipRow.appendChild(dot);
     ipRow.appendChild(ipEl);
     titleGroup.appendChild(ipRow);
@@ -4897,7 +5057,103 @@ function openDeviceHardwareImageModal(
   header.appendChild(titleGroup);
   header.appendChild(closeBtn);
   modal.appendChild(header);
-  modal.appendChild(body);
+
+  // Everything below the header (image, footer rows, actions, relay row) lives in a left
+  // column, wrapped in a row so the Device Info panel below can sit alongside it as an
+  // absolutely-positioned right column that matches its height (see the CSS for why absolute,
+  // not a shared grid/flex track).
+  const contentRow = document.createElement('div');
+  contentRow.className = 'device-hardware-image-modal-content-row';
+  modal.appendChild(contentRow);
+
+  const leftCol = document.createElement('div');
+  leftCol.className = 'device-hardware-image-modal-left';
+  contentRow.appendChild(leftCol);
+  leftCol.appendChild(body);
+
+  // ── Device Info panel (right column) ─────────────────────────────────────
+  // Live ECP `/query/device-info` dump, alongside the already-cached fields to the left. RCE
+  // devices have no real ip:8060 to hit, but the same ECP endpoint is reachable through the
+  // Device API's ECP proxy instead (`rceQuery`, mirroring `enrichWithEcpMode` in
+  // rce-handlers.ts) — same XML shape either way, so the parse/format pipeline is unchanged.
+  const rceInfoDevice = isRceDevice(device) ? (device as RceDeviceSummary) : null;
+  if (rceInfoDevice || ip) {
+    modal.classList.add('device-hardware-image-modal--with-info');
+    const infoPanel = document.createElement('div');
+    infoPanel.className = 'device-hardware-image-modal-info-panel';
+    const infoTitle = document.createElement('div');
+    infoTitle.className = 'device-hardware-image-modal-info-panel-title';
+    infoTitle.textContent = S.app.deviceInfoPanelTitle;
+    const infoRefreshBtn = document.createElement('button');
+    infoRefreshBtn.type = 'button';
+    infoRefreshBtn.className = 'device-hardware-image-modal-info-panel-refresh';
+    infoRefreshBtn.title = S.app.refreshDeviceInfo;
+    infoRefreshBtn.setAttribute('aria-label', S.app.refreshDeviceInfo);
+    setSafeHTML(infoRefreshBtn, icon('refresh', 'icon-xs'));
+    infoTitle.appendChild(infoRefreshBtn);
+    const infoBody = document.createElement('div');
+    infoBody.className = 'device-hardware-image-modal-info-panel-body';
+    infoPanel.appendChild(infoTitle);
+    infoPanel.appendChild(infoBody);
+    contentRow.appendChild(infoPanel);
+
+    const deviceInfoCacheKey = typeof device.ip === 'string' ? device.ip : '';
+
+    const fetchDeviceInfoXml = (): Promise<{ success?: boolean; data?: string }> => {
+      if (rceInfoDevice) {
+        const accountName = rceInfoDevice.accountName || '';
+        const instanceApiUrl = rceInfoDevice.runningDevice?.instanceApiUrl || '';
+        // Not running / never enriched with an instance URL — nothing to query yet.
+        if (!accountName || !instanceApiUrl) return Promise.resolve({ success: false });
+        return window.roku.rceQuery(accountName, instanceApiUrl, '/query/device-info');
+      }
+      return window.roku.query(ip, '/query/device-info');
+    };
+
+    // Shared by the initial cache-miss load and the manual refresh button — always re-fetches
+    // live (the refresh button's whole point is bypassing the cache), and always overwrites the
+    // cache entry with whatever it gets back so the *next* open reflects the refreshed data too.
+    const loadDeviceInfo = () => {
+      // `.rce-info-spinner` is the same spinning-ring glyph the RCE account modal's own
+      // "loading" state already uses elsewhere in this file — reused as-is, no new keyframe.
+      setSafeHTML(
+        infoBody,
+        `<div class="device-hardware-image-modal-info-panel-loading">
+          <span class="rce-info-spinner" aria-hidden="true"></span>
+          <span>${escapeHtml(S.common.loading)}</span>
+        </div>`
+      );
+      void fetchDeviceInfoXml()
+        .then((res: { success?: boolean; data?: string }) => {
+          if (!infoBody.isConnected) return;
+          const rows = res && res.success && res.data
+            ? buildDeviceInfoRows(parseDeviceInfoXml(res.data), Boolean(rceInfoDevice))
+            : [];
+          if (rows.length && deviceInfoCacheKey) deviceInfoRowsCache.set(deviceInfoCacheKey, rows);
+          renderDeviceInfoPanelBody(infoBody, rows);
+        })
+        .catch(() => {
+          if (infoBody.isConnected) renderDeviceInfoPanelBody(infoBody, []);
+        })
+        .finally(() => {
+          infoRefreshBtn.disabled = false;
+          infoRefreshBtn.classList.remove('is-busy');
+        });
+    };
+
+    const cachedDeviceInfoRows = deviceInfoCacheKey ? deviceInfoRowsCache.get(deviceInfoCacheKey) : undefined;
+    if (cachedDeviceInfoRows) {
+      renderDeviceInfoPanelBody(infoBody, cachedDeviceInfoRows);
+    } else {
+      loadDeviceInfo();
+    }
+
+    infoRefreshBtn.addEventListener('click', () => {
+      infoRefreshBtn.disabled = true;
+      infoRefreshBtn.classList.add('is-busy');
+      loadDeviceInfo();
+    });
+  }
 
   const footerItems: Array<{ label: string; value: string; end?: boolean }> = [];
   const footerModel = getDeviceHardwareImageModalFooterModel(device);
@@ -4923,7 +5179,7 @@ function openDeviceHardwareImageModal(
       cell.appendChild(value);
       footer.appendChild(cell);
     }
-    modal.appendChild(footer);
+    leftCol.appendChild(footer);
   }
 
   // RCE has none of the fields the Model/Screen Size footer above reads (no modelName/modelNumber/
@@ -4953,7 +5209,7 @@ function openDeviceHardwareImageModal(
         )
         .join('')
     );
-    modal.appendChild(rowsWrap);
+    leftCol.appendChild(rowsWrap);
 
     // The Organization row starts as a placeholder — `device.accountName` is only the RDS
     // location's own display name (the secret-store lookup key), not the real RCE org — so the
@@ -4992,8 +5248,8 @@ function openDeviceHardwareImageModal(
     swCell.appendChild(swLabel);
     swCell.appendChild(swValue);
 
-    const leftCol = document.createElement('div');
-    leftCol.className = 'device-hardware-image-modal-actions-left';
+    const actionsLeftCol = document.createElement('div');
+    actionsLeftCol.className = 'device-hardware-image-modal-actions-left';
 
     // Icon-only buttons; the label lives in the native tooltip + aria-label.
     const checkBtn = document.createElement('button');
@@ -5018,11 +5274,11 @@ function openDeviceHardwareImageModal(
     rightCol.className = 'device-hardware-image-modal-actions-right';
     rightCol.appendChild(restartBtn);
 
-    leftCol.appendChild(swCell);
-    leftCol.appendChild(checkSlot);
-    actions.appendChild(leftCol);
+    actionsLeftCol.appendChild(swCell);
+    actionsLeftCol.appendChild(checkSlot);
+    actions.appendChild(actionsLeftCol);
     actions.appendChild(rightCol);
-    modal.appendChild(actions);
+    leftCol.appendChild(actions);
 
     const actionIp = typeof device.ip === 'string' ? device.ip.trim() : '';
     const serial =
@@ -5116,14 +5372,14 @@ function openDeviceHardwareImageModal(
 
       relayRow.appendChild(relayCell);
       relayRow.appendChild(relayControl);
-      modal.appendChild(relayRow);
+      leftCol.appendChild(relayRow);
 
       // Password-validation failures render here — below the row, not squeezed into the
       // control cell alongside the input — and self-clear after a few seconds.
       const relayErrorRow = document.createElement('div');
       relayErrorRow.className = 'device-hardware-image-modal-relay-error-row';
       relayErrorRow.setAttribute('aria-live', 'polite');
-      modal.appendChild(relayErrorRow);
+      leftCol.appendChild(relayErrorRow);
 
       // Shared by the initial fetch below and by `activeRelayModalRefresh` (live updates
       // from Settings' Setup Devices modal changing this same device from the other

@@ -8064,6 +8064,142 @@
       box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
       overflow: hidden;
     }
+    /* Device Info panel present (see openDeviceHardwareImageModal). `.device-hardware-image-modal-left`
+       is everything that used to be the whole modal's flex-column content — it keeps driving the
+       modal's height in normal flow exactly like before this panel existed (same min/max-width as
+       the base rule, just moved onto this column). The info panel does NOT share a row/track with
+       it (a shared grid row let the panel's own, often much longer, content inflate the *whole*
+       modal's height — that's the bug this replaced): it's absolutely positioned over a reserved
+       strip on the right of `.device-hardware-image-modal-content-row`, so it can only ever match
+       whatever height the left column already resolved to, and scrolls internally past that. */
+    .device-hardware-image-modal--with-info {
+      min-width: min(760px, 94vw);
+      max-width: min(1320px, 96vw);
+    }
+    .device-hardware-image-modal-content-row {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
+    /* Reserve a fixed strip for the info panel — everything else (the left column's own width,
+       the existing `.rce-info-row`s, footer/actions rows, all of it) stays exactly as wide as it
+       always was. A 50/50 split here previously squeezed those existing rows into half their
+       normal width and broke their layout — the left side must never be resized to accommodate
+       the panel; only the reserved strip's own width changes. */
+    .device-hardware-image-modal--with-info .device-hardware-image-modal-content-row {
+      padding-right: 360px;
+    }
+    .device-hardware-image-modal-left {
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+      overflow-y: auto;
+    }
+    /* Plain flex column, not a scroll container itself — the title is a normal (non-sticky, non-
+       scrolling) header, and only `.device-hardware-image-modal-info-panel-body` below it scrolls.
+       Deliberately not `position: sticky` inside a scrolling container: that combination flickered
+       on window focus changes (e.g. clicking the macOS menu bar while this modal was open) — a
+       known Chromium repaint quirk with sticky positioning alongside this overlay's backdrop-filter
+       blur. A fixed header + independently scrolling body via plain flex sizing avoids the whole
+       class of bug and is the more standard pattern for this shape anyway. */
+    .device-hardware-image-modal-info-panel {
+      position: absolute;
+      top: 0;
+      right: 0;
+      bottom: 0;
+      width: 360px;
+      display: flex;
+      flex-direction: column;
+      border-left: 1px solid var(--border);
+    }
+    .device-hardware-image-modal-info-panel-title {
+      position: relative;
+      flex: none;
+      padding: 10px 10px 12px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(139, 92, 246, 0.08);
+      text-align: center;
+      font-family: system-ui, -apple-system, sans-serif;
+      font-weight: 700;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--accent-purple);
+    }
+    /* Anchored to the title bar (not a flex sibling of the centered text) so the "DEVICE INFO"
+       label stays visually centered regardless of the button's own width. */
+    .device-hardware-image-modal-info-panel-refresh {
+      position: absolute;
+      right: 10px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 22px;
+      height: 22px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: transparent;
+      border: none;
+      border-radius: 5px;
+      color: var(--accent-purple);
+      cursor: pointer;
+      transition: background 0.15s, opacity 0.15s;
+    }
+    .device-hardware-image-modal-info-panel-refresh:hover {
+      background: rgba(139, 92, 246, 0.16);
+    }
+    .device-hardware-image-modal-info-panel-refresh:disabled {
+      opacity: 0.5;
+      cursor: progress;
+    }
+    .device-hardware-image-modal-info-panel-refresh.is-busy .icon {
+      animation: spin 1s linear infinite;
+    }
+    .device-hardware-image-modal-info-panel-body {
+      flex: 1 1 auto;
+      min-height: 0;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      padding: 14px 16px;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+    /* Fills the body's own available space (its parent is already a flex column) and centers the
+       spinner + label within it, instead of the plain "Loading…" text sitting flush under the
+       header like just another row. */
+    .device-hardware-image-modal-info-panel-loading {
+      flex: 1 1 auto;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+    }
+    .device-info-panel-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 12px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--border);
+    }
+    .device-info-panel-row:last-child {
+      border-bottom: none;
+      padding-bottom: 0;
+    }
+    .device-info-panel-label {
+      color: var(--text-secondary);
+      flex-shrink: 0;
+    }
+    .device-info-panel-value {
+      color: var(--text-primary);
+      font-family: 'JetBrains Mono', monospace;
+      text-align: right;
+      word-break: break-word;
+    }
     .device-hardware-image-modal-header {
       display: flex;
       align-items: center;
