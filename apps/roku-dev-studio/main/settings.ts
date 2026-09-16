@@ -10,6 +10,11 @@ const fs = require('fs');
 const { resolveUnderBase } = require('roku-dev-studio-platform/path-safe');
 const { mainLog, mainWarn, mainError } = require('./log');
 const sharedConstants = require('roku-dev-studio-api/lib/shared-constants') as Record<string, number>;
+import {
+  DEBUGGER_ENABLED_DEVICES_KEY,
+  LEGACY_DEBUGGER_ENABLED_DEVICES_KEY,
+  asDebuggerEnabledList
+} from '../shared/platform/debugger-enabled';
 
 let settingsDir: string | null = null;
 let settingsFile: string | null = null;
@@ -43,12 +48,28 @@ function loadSettings(): Record<string, unknown> {
     ensureSettingsDir();
     if (settingsFile && fs.existsSync(settingsFile)) {
       const data = fs.readFileSync(settingsFile, 'utf-8');
-      return JSON.parse(data);
+      return migrateLegacyKeys(JSON.parse(data));
     }
   } catch (e) {
     mainError('Failed to load settings:', e);
   }
   return {};
+}
+
+/** One-time key renames, applied (and persisted) the first time an old key is seen. */
+function migrateLegacyKeys(settings: Record<string, unknown>): Record<string, unknown> {
+  if (LEGACY_DEBUGGER_ENABLED_DEVICES_KEY in settings) {
+    settings[DEBUGGER_ENABLED_DEVICES_KEY] = [
+      ...new Set([
+        ...asDebuggerEnabledList(settings[DEBUGGER_ENABLED_DEVICES_KEY]),
+        ...asDebuggerEnabledList(settings[LEGACY_DEBUGGER_ENABLED_DEVICES_KEY])
+      ])
+    ];
+    delete settings[LEGACY_DEBUGGER_ENABLED_DEVICES_KEY];
+    saveSettings(settings);
+    mainLog(`[settings] migrated ${LEGACY_DEBUGGER_ENABLED_DEVICES_KEY} → ${DEBUGGER_ENABLED_DEVICES_KEY}`);
+  }
+  return settings;
 }
 
 /**
@@ -93,10 +114,9 @@ const RENDERER_WRITABLE_KEYS = new Set<string>([
   'floating-remote.position',
   'deeplink-custom-media-types',
   'deeplink-saved-presets',
-  // IPs the user opted into "Sideload with Debugging" for (Dev App checkbox).
-  // Persisted per-device so it survives launches and so the main-process Sideload
-  // Relay can fan out those devices with remotedebug=1.
-  'sideload-debug-ips',
+  // Devices with "Enable Debugger" on — see shared/platform/debugger-enabled.ts (the only
+  // predicate/mutator; legacy `sideload-debug-ips` is folded in by migrateLegacyKeys above).
+  DEBUGGER_ENABLED_DEVICES_KEY,
   // Managed debugger breakpoints, keyed by device IP → [{ path, line, condition? }].
   'debug-breakpoints',
   // Debugger watch expressions, keyed by device IP → [expr, …].
