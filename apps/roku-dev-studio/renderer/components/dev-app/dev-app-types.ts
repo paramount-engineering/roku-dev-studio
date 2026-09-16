@@ -16,7 +16,7 @@ export interface DevAppDevice {
 export interface DevAppApi {
   isRemote: boolean;
   /** False when a remote device's server reports `capabilities.debugger === false` (see
-   *  createApiAdapter in app.ts) — "Sideload with Debugging" disables itself since the
+   *  createApiAdapter in app.ts) — "Enable Debugger" disables itself since the
    *  server has no debug-protocol route to attach through. Always true/undefined locally. */
   debuggerSupported?: boolean;
   /** `'rce'` for a Roku Cloud Emulator device — the Screenshot card becomes a live video feed

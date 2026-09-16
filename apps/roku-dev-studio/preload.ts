@@ -521,7 +521,7 @@ contextBridge.exposeInMainWorld('roku', {
   
   // Sideload via remote server with file upload from local machine. remoteDebug/serial
   // mirror the local `sideload(ip, filePath, password, remoteDebug, serial)` signature —
-  // previously dropped here, which silently prevented "Sideload with Debugging" from
+  // previously dropped here, which silently prevented "Enable Debugger" from
   // ever opening port 8081 on a remote-managed device.
   remoteSideloadUpload: (serverUrl: string, ip: string, filePath: string, password: string | undefined, remoteDebug?: boolean, serial?: string) =>
     ipcRenderer.invoke(IPC.RemoteSideloadUpload, { serverUrl, ip, filePath, password, remoteDebug, serial }),

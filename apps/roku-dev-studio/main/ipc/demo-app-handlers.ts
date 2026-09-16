@@ -121,7 +121,7 @@ export function registerDemoAppIpc(ipcMain: IpcMain): void {
       return { success: false, error: S.tryDemoApp.errPackageFailed(errMsg(err)) };
     }
 
-    // "Sideload with Debugging" — same remotedebug=1 convention Sideload Relay / the Dev App tab /
+    // "Enable Debugger" — same remotedebug=1 convention Sideload Relay / the Dev App tab /
     // Fiddle use.
     const debugEnabled = !!payload.remoteDebug;
 

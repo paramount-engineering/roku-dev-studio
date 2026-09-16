@@ -5,7 +5,8 @@
  * execution-control toolbar, shown in a device's Telnet Console tab while
  * debugging is enabled. Drives a socket debug-protocol session over
  * `window.roku.debugger*` (auto-connects the 8085 console + auto-attaches 8081
- * when the device opted into "Sideload with Debugging").
+ * when the device has "Enable Debugger" on — after a debug sideload, and whenever
+ * the Console sees the channel announce it is waiting for a debugger).
  *
  * The Breakpoints panel is a UNIFIED, deduped-by-`file:line` view of three
  * sources (Roku never hands us a breakpoint list — it's client-owned):
@@ -25,11 +26,15 @@ import { attachInstantTooltips } from '../utils/instant-tooltip.js';
 import { attachBackdropClickToClose } from '../utils/modal-backdrop-click.js';
 import { openModalOverlayActiveFromOpener, closeModalWithOriginMotion } from '../utils/modal-origin-motion.js';
 import { deviceKey } from '@shared/platform/device-identity.js';
+import { debugEventTargetsDevice } from '@shared/ipc/debug-telnet-connection-id.js';
+import { DEBUGGER_ENABLED_CHANGED_EVENT, refreshPanelDebuggerEnabled } from '../utils/device-debugger-flag.js';
 
 /**
- * Raw serial for a device panel, read from the `data-serial` attribute (never the localized
- * `.device-serial` display text — that shows the translated "N/A" placeholder when absent, which
- * would otherwise get treated as a real serial).
+ * Legacy fallback: raw serial from a `.device-serial[data-serial]` element, if the container has
+ * one (never the localized display text — that shows the translated "N/A" placeholder when absent).
+ * Only the device-LIST cards render that element; a device TAB panel does not, so for the sidebar
+ * the serial comes from `SidebarOpts.serial` + `device-info-refreshed` (see `liveSerial`) and this
+ * is reached only when neither knows it.
  */
 function resolvePanelSerial(devPanel: Element): string {
   return (devPanel.querySelector('.device-serial')?.getAttribute('data-serial') || '').trim();
@@ -106,6 +111,11 @@ interface SidebarOpts {
    *  attempting a session the server has no debug-protocol route for. Always true/undefined
    *  for local devices. */
   debuggerSupported?: boolean;
+  /** The device's serial, if known at mount. Per-device settings ("Enable Debugger", breakpoints,
+   *  watches) are keyed by serial, so without it every lookup silently falls back to the IP and
+   *  misses. Kept live via the panel's `device-info-refreshed` event (a tab opened from a minimal
+   *  fallback device object, e.g. by the Sideload Relay, learns its serial a moment later). */
+  serial?: string;
 }
 
 /**
@@ -125,6 +135,10 @@ export interface ReplController {
 export interface DebugSidebarHandle {
   cleanup: () => void;
   repl: ReplController;
+  /** The Console saw `[plg.dbg.conn.wait] Waiting for debugger on …:8081` — attach if enabled. */
+  onDeviceWaitingForDebugger: () => void;
+  /** True while a session is attached/running/stopped (the Console uses it to explain quiet output). */
+  isAttached: () => boolean;
 }
 
 interface BpEntry {
@@ -144,12 +158,13 @@ interface BpEntry {
   condition?: string;
 }
 
-const DEBUG_SIDELOAD_KEY = 'sideload-debug-ips';
 const BREAKPOINTS_KEY = 'debug-breakpoints';
 const WATCHES_KEY = 'debug-watches';
 const NOOP_HANDLE: DebugSidebarHandle = {
   cleanup: (): void => undefined,
-  repl: { isStopped: () => false, execute: async () => ({ ok: false, errors: [] }), onAvailabilityChange: () => () => undefined }
+  repl: { isStopped: () => false, execute: async () => ({ ok: false, errors: [] }), onAvailabilityChange: () => () => undefined },
+  onDeviceWaitingForDebugger: (): void => undefined,
+  isAttached: (): boolean => false
 };
 
 export function setupTelnetDebugSidebar(panel: HTMLElement, ip: string, opts: SidebarOpts = {}): DebugSidebarHandle {
@@ -199,14 +214,16 @@ export function setupTelnetDebugSidebar(panel: HTMLElement, ip: string, opts: Si
   /** True if a debugger push event's origin tag matches this sidebar's (local vs. this
    *  specific remote server) — same filtering shape as the Network Inspector tab controllers. */
   const originMatches = (d: { isRemote?: boolean; serverUrl?: string }): boolean =>
-    !!d.isRemote === isRemote && (!isRemote || d.serverUrl === serverUrl);
+    debugEventTargetsDevice(d, { ip, isRemote: opts.isRemote, serverUrl: opts.serverUrl }); // shared with the Console panel
 
-  // Persisted per-device state (breakpoints, watches) is keyed by serial, not IP — IP isn't
-  // stable across networks/DHCP, so an IP-keyed entry would silently orphan on a network change.
-  // Recomputed on each persist/load (not cached) since the panel can be re-rendered.
+  // Persisted per-device state ("Enable Debugger", breakpoints, watches) is keyed by serial, not
+  // IP — IP isn't stable across networks/DHCP, so an IP-keyed entry would silently orphan on a
+  // network change. The serial arrives with the device object (and later via enrichment); the
+  // DOM lookup is only a last resort. Recomputed on each use since the panel can be re-rendered.
+  let liveSerial = (opts.serial || '').trim();
   const resolveKey = (): string => {
     const devPanel = panel.closest('.device-panel') || panel.querySelector('.device-panel') || panel;
-    return deviceKey({ serial: resolvePanelSerial(devPanel), ip });
+    return deviceKey({ serial: liveSerial || resolvePanelSerial(devPanel), ip });
   };
 
   const q = <T extends HTMLElement>(sel: string): T | null => panel.querySelector<T>(sel);
@@ -240,6 +257,9 @@ export function setupTelnetDebugSidebar(panel: HTMLElement, ip: string, opts: Si
   let sessionActive = false;
   let collapsed = false;
   let didAutoStart = false;
+  /** Set by a device-driven (cue) attach: its failure returns to "Not attached" with no error surface,
+   *  because the cue may be stale history Roku replayed to a fresh console client. */
+  let quietAttach = false;
   let state: SessionState = 'idle';
   let lastError = '';
   // Where we last halted ("fn — file:line"); shown on the status-dot tooltip on a clean stop.
@@ -1085,7 +1105,8 @@ export function setupTelnetDebugSidebar(panel: HTMLElement, ip: string, opts: Si
   // Every attach here is a REAL one (manual button, post-sideload reattach, or a
   // sync when a session already exists) — the console-open speculative 8081 probe was
   // removed, so an attach failure always surfaces the full remediation.
-  const doAttach = async (): Promise<void> => {
+  const doAttach = async (opts?: { quiet?: boolean }): Promise<void> => {
+    quietAttach = !!opts?.quiet;
     setStatus(S.debugger.status.connecting, 'connecting');
     try {
       await debugApi.debuggerAttach(ip);
@@ -1093,8 +1114,51 @@ export function setupTelnetDebugSidebar(panel: HTMLElement, ip: string, opts: Si
       // + full remediation, rendered by the state handler; we don't set the long error
       // here (it would clobber the summary and get clipped).
     } catch (e) {
-      setStatus(S.debugger.status.error, 'error', e instanceof Error ? e.message : String(e));
+      if (quietAttach) setStatus(S.debugger.status.idle);
+      else setStatus(S.debugger.status.error, 'error', e instanceof Error ? e.message : String(e));
     }
+  };
+
+  /** Re-resolve the device's "Enable Debugger" flag (one shared predicate; stamped on the device). */
+  const refreshPrefEnabled = async (): Promise<boolean> => {
+    prefEnabled = await refreshPanelDebuggerEnabled(panel);
+    return prefEnabled;
+  };
+
+  /**
+   * The Console just saw the device announce it is waiting for a socket debugger on 8081 — a debug
+   * channel launched by any means (Roku remote, Apps tab, an IDE), on any transport. Attach if the
+   * device has "Enable Debugger" on and no session is up. The flag is re-read here so a checkbox
+   * toggled after this panel mounted counts. Quiet: the line may be stale history Roku replayed to a
+   * fresh console client (8081 already closed again) — that attempt just returns to "Not attached".
+   */
+  let cueAttachInFlight = false;
+  /** A cue that arrived while an attempt was still retrying (a stale replayed cue can hold the port
+   *  wait for ~20 s) — retried once that attempt settles, so a real launch in that window isn't lost. */
+  let cuePending = false;
+  const onDeviceWaitingForDebugger = (): void => {
+    if (isAttached()) return;
+    if (cueAttachInFlight) {
+      cuePending = true; // drained by that attempt's finally
+      return;
+    }
+    // A MANUAL attach is mid-flight: its own retry loop will connect once the port opens, and
+    // nothing would drain a latched cue — so just stand aside.
+    if (state === 'connecting') return;
+    cueAttachInFlight = true;
+    void (async () => {
+      try {
+        if (!(await refreshPrefEnabled())) return;
+        updateVisibility();
+        await doAttach({ quiet: true });
+      } finally {
+        cueAttachInFlight = false;
+        if (cuePending) {
+          cuePending = false;
+          onDeviceWaitingForDebugger();
+        }
+      }
+    })();
   };
   /** Detach and collapse the sidebar — a disconnect must never leave it stuck open. */
   const doDetach = async (): Promise<void> => {
@@ -1359,8 +1423,13 @@ export function setupTelnetDebugSidebar(panel: HTMLElement, ip: string, opts: Si
     state = d.state;
     sessionActive = d.state !== 'disconnected';
     syncSectionsForState(d.state === 'stopped');
-    // Show the compact summary + the full remediation on demand (status-dot click / tooltip).
-    if (d.state === 'error' && d.message) setAttachError(d.message, d.detail);
+    // Show the compact summary + the full remediation on demand (status-dot click / tooltip) — unless
+    // this was a quiet, cue-driven attempt (see onDeviceWaitingForDebugger): then just stand down.
+    if (d.state === 'error' && d.message) {
+      if (quietAttach) setStatus(S.debugger.status.idle);
+      else setAttachError(d.message, d.detail);
+    }
+    if (d.state !== 'connecting') quietAttach = false;
     // Running (continue / step) → the last stop's stack + variables are now stale; clear
     // them so nothing misleading lingers until the next stop repopulates.
     if (d.state === 'running') {
@@ -1509,7 +1578,11 @@ export function setupTelnetDebugSidebar(panel: HTMLElement, ip: string, opts: Si
     const d = (data ?? {}) as { ip?: string; discovered?: number; isRemote?: boolean; serverUrl?: string };
     if (d.ip && d.ip !== ip) return;
     if (!originMatches(d)) return;
-    prefEnabled = true;
+    prefEnabled = true; // main just (re)installed with debugging — sticky for this tab, as before
+    // Re-stamp device.debuggerEnabled from the persisted list WITHOUT assigning prefEnabled: an
+    // IDE/Fiddle debug launch that wasn't persisted (no STOPs, flag off) must not hide the sidebar
+    // it just opened. A real flag change reaches prefEnabled via the debugger-enabled-changed event.
+    void refreshPanelDebuggerEnabled(panel);
     didAutoStart = true;
     updateVisibility();
     // Toast when the build's STOP breakpoints were discovered (debugger auto-enabled).
@@ -1545,12 +1618,23 @@ export function setupTelnetDebugSidebar(panel: HTMLElement, ip: string, opts: Si
     }
   };
 
+  const onDeviceInfoRefreshed = (e: Event): void => {
+    const next = ((e as CustomEvent<{ device?: { serialNumber?: string } }>).detail?.device?.serialNumber || '').trim();
+    if (next && next !== liveSerial) liveSerial = next; // breakpoints/watches key off it
+  };
+  panel.addEventListener('device-info-refreshed', onDeviceInfoRefreshed);
+  disposers.push(() => panel.removeEventListener('device-info-refreshed', onDeviceInfoRefreshed));
+  // The flag itself is owned by device-debugger-flag.ts: checkbox toggles, late serials and the
+  // relay's STOP auto-enable all arrive here as one event.
+  const onDebuggerEnabledChanged = (e: Event): void => {
+    prefEnabled = !!(e as CustomEvent<{ enabled?: boolean }>).detail?.enabled;
+    updateVisibility();
+  };
+  panel.addEventListener(DEBUGGER_ENABLED_CHANGED_EVENT, onDebuggerEnabledChanged);
+  disposers.push(() => panel.removeEventListener(DEBUGGER_ENABLED_CHANGED_EVENT, onDebuggerEnabledChanged));
+
   void (async () => {
-    try {
-      const res = await roku.getSetting(DEBUG_SIDELOAD_KEY);
-      const ips = res && res.success && Array.isArray(res.value) ? (res.value as string[]) : [];
-      prefEnabled = ips.includes(resolveKey()) || ips.includes(ip);
-    } catch { /* default off */ }
+    await refreshPrefEnabled();
     updateVisibility();
     await loadManaged();
     await loadScanned();
@@ -1611,7 +1695,7 @@ export function setupTelnetDebugSidebar(panel: HTMLElement, ip: string, opts: Si
     if (sessionActive) void debugApi.debuggerDetach(ip);
   };
 
-  return { cleanup, repl };
+  return { cleanup, repl, onDeviceWaitingForDebugger, isAttached };
 }
 
 // --- helpers -----------------------------------------------------------------

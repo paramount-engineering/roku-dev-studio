@@ -4841,6 +4841,12 @@
       gap: 8px;
       justify-content: center;
     }
+    /* display:flex above otherwise beats the `hidden` attribute (same gotcha as
+       .remote-inputs-panel[hidden] nearby) — this is what actually keeps Wake Device /
+       Dev Mode RCE-only for Local and Remote devices. */
+    .devapp-rce-actions-row[hidden] {
+      display: none;
+    }
     .devapp-rce-actions-row .devapp-side-btn {
       flex: 0 1 auto;
       white-space: nowrap;
@@ -17422,9 +17428,9 @@
                   </div>
                   <input type="hidden" class="sideload-file-path">
                   <button class="btn btn-primary sideload-btn" style="width: 100%; padding: 8px 10px; font-size: 10px;" disabled data-i18n="app.install"><span class="icon icon-xs"><svg><use href="#icon-rocket"/></svg></span> Install</button>
-                  <label class="checkbox-label sideload-debug-row" style="font-size: 10px; display: flex; align-items: center; gap: 6px; justify-content: center; margin-top: 6px;" data-i18n-title="debugger.sideloadWithDebuggingTitle" title="Reinstall with the BrightScript debug protocol (port 8081) enabled, then open the debugger.">
+                  <label class="checkbox-label sideload-debug-row" style="font-size: 10px; display: flex; align-items: center; gap: 6px; justify-content: center; margin-top: 6px;" data-i18n-title="debugger.enableDebuggerTitle" title="Sideload with the BrightScript debug protocol (port 8081) enabled and attach the debugger. While on, the debugger also attaches automatically whenever this device reports it is waiting for one.">
                     <input type="checkbox" class="sideload-debug-checkbox">
-                    <span data-i18n="debugger.sideloadWithDebugging">Sideload with Debugging</span>
+                    <span data-i18n="debugger.enableDebugger">Enable Debugger</span>
                   </label>
                   <div class="sideload-status" style="font-size: 9px; margin-top: 4px;"></div>
                   <div class="sideload-progress" style="display: none; margin-top: 4px;">

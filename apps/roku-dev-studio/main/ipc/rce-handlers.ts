@@ -162,25 +162,39 @@ export async function enrichWithEcpMode(device: RceDevice, token: string): Promi
  *  going through IPC — mirrors `telnet-handlers.ts` exporting `ensureDebugTelnetConnected` the
  *  same way for physical devices. */
 const debugTelnetSockets = new Map<string, { socket: RceSocket; openedAtMs: number; bytesReceived: number }>();
+type RceTelnetConnectResult = { success: boolean; error?: string; connectionId?: string };
+/** ip -> connect in flight. Same single-flight guard as telnet-handlers.ts's `debugTelnetConnecting`:
+ *  the relay fan-out's pre-open and the Console tab adopting it call this concurrently for one
+ *  device, and Roku's 8085 is single-client. */
+const debugTelnetConnecting = new Map<string, Promise<RceTelnetConnectResult>>();
 
 /**
- * Open (or re-open) the RCE debug console (port 8085) for `ip`, tunneled through the Device API's
+ * Open (or reuse) the RCE debug console (port 8085) for `ip`, tunneled through the Device API's
  * ports-bridge. Pushes the same `TelnetConnected`/`TelnetData`/`TelnetDisconnected`/`TelnetError`
  * events the Console tab UI and physical devices already consume — see the IPC handler below and
- * `setupTelnet` in renderer/app.ts.
+ * `setupTelnet` in renderer/app.ts. Idempotent like `ensureDebugTelnetConnected`: a live tunnel is
+ * reused, a connect already in flight is joined.
  */
-export async function ensureRceDebugTelnetConnected(
+export function ensureRceDebugTelnetConnected(
   name: string,
   instanceApiUrl: string,
   ip: string
-): Promise<{ success: boolean; error?: string; connectionId?: string }> {
+): Promise<RceTelnetConnectResult> {
+  const inFlight = debugTelnetConnecting.get(ip);
+  if (inFlight) return inFlight;
+  const attempt = openRceDebugTelnet(name, instanceApiUrl, ip).finally(() => debugTelnetConnecting.delete(ip));
+  debugTelnetConnecting.set(ip, attempt);
+  return attempt;
+}
+
+async function openRceDebugTelnet(name: string, instanceApiUrl: string, ip: string): Promise<RceTelnetConnectResult> {
   const token = getAccountToken(name);
   if (!token) return { success: false, error: S.app.rceNoStoredAccount(name) };
   if (!instanceApiUrl) return { success: false, error: S.app.rceNoInstanceUrl };
 
   const existing = debugTelnetSockets.get(ip);
   if (existing) {
-    existing.socket.destroy();
+    if (!existing.socket.destroyed) return { success: true, connectionId: ip };
     debugTelnetSockets.delete(ip);
   }
 
@@ -206,6 +220,8 @@ export async function ensureRceDebugTelnetConnected(
     broadcastToAllWindows(IPC.TelnetError, { ip, connectionId: ip, error: error.message });
   });
   entry.socket.on('close', () => {
+    const live = debugTelnetSockets.get(ip);
+    if (live && live !== entry) return; // superseded — the bookkeeping belongs to the live tunnel
     const aliveMs = Date.now() - entry.openedAtMs;
     debugTelnetSockets.delete(ip);
     broadcastToAllWindows(IPC.TelnetDisconnected, {
@@ -553,7 +569,7 @@ export function setupRceHandlers(): void {
       // arbitrary path the user never picked via the OS dialog/drop zone.
       const resolvedFile = resolveSideloadPackageFile(filePath);
       if (!resolvedFile.success) return resolvedFile;
-      // Same persisted "Sideload with Debugging" preference + STOP-auto-detect the local/LAN-relay
+      // Same persisted "Enable Debugger" preference + STOP-auto-detect the local/LAN-relay
       // sideload path uses (dev-app-handlers.ts's computeSideloadDebugFlags) — an RCE device should
       // remember this opt-in across sideloads exactly like a physical one does, not just honor
       // whatever the checkbox happened to be this one time.

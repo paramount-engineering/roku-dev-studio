@@ -28,6 +28,19 @@
  */
 
 /**
+ * The line a debug-enabled channel prints at launch while it waits (~10 s) for a socket debugger on
+ * 8081 before falling back to the on-device micro debugger — the cue for the Console's debug sidebar
+ * to attach (telnet-console-panel.ts → telnet-debug-sidebar.ts). Real on-device signature:
+ *   `09-16 19:31:39.077 sdkl [plg.dbg.conn.wait] Waiting for debugger on 10.136.216.75:8081`
+ */
+export const DEBUGGER_WAITING_RE = /\[plg\.dbg\.conn\.wait\]\s*Waiting for debugger on/i;
+/** How that wait ended: a debugger connected (`conn.ok`) or nobody did (`conn.timeout`, Roku falls back to
+ *  its on-device micro debugger). Seen together with the cue in one burst, they mark REPLAYED history. */
+export const DEBUGGER_CLAIMED_RE = /\[plg\.dbg\.conn\.(ok|timeout)\]/i;
+/** `[plg.dbg.conn.ok] remote debugger connected` — a socket debugger owns this channel run's output. */
+export const DEBUGGER_ATTACHED_RE = /\[plg\.dbg\.conn\.ok\]/i;
+
+/**
  * One Initiate/Complete beacon pair the Roku OS (or `signalBeacon()`) emits around a lifecycle event —
  * one row of the doc's "Performance Metrics Reference" table (developer.roku.com/dev/docs/
  * measuring-channel-performance#performance-metrics-reference), which defines exactly these 8 metric

@@ -39,6 +39,8 @@ export const telnet = {
   lineConnectionFailed: (err: string): string => `--- Conexiune eșuată: ${err} ---`,
   lineConnectionError: (msg: string): string => `--- Eroare de conexiune: ${msg} ---`,
   lineDisconnected: '--- Deconectat ---',
+  lineDebuggerOutputRouted:
+    '--- A debugger was attached to this channel run: Roku keeps routing its print output to that debugger (not to this console) and port 8081 stays closed. Relaunch the channel (Restart in the debug sidebar, or re-sideload) to see output here again. ---',
   lineError: (err: string): string => `--- Eroare: ${err} ---`,
   lineConnectionClosed: (aliveStr: string | null, bytes: number): string => {
     let s = '--- Conexiune închisă';

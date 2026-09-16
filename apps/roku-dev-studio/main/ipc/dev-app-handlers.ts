@@ -11,7 +11,7 @@ import type {
 import { IPC } from '../../shared/ipc/channels';
 import { mainError, mainLog } from '../log.js';
 import { S } from '../../shared/strings/index';
-import { deviceKey } from 'roku-dev-studio-platform/device-ref';
+import { DEBUGGER_ENABLED_DEVICES_KEY, isDebuggerEnabled, withDebuggerEnabled } from '../../shared/platform/debugger-enabled';
 
 const fs = require('fs');
 const path = require('path');
@@ -48,7 +48,7 @@ function errMsg(e: unknown): string {
  *
  * Already exported (see the bottom of this file) so `rce-handlers.ts`'s `RceSideload` handler can
  * use the exact same persisted-setting + STOP-auto-detect logic instead of a one-off inline
- * calculation — an RCE sideload should respect "Sideload with Debugging" identically to a
+ * calculation — an RCE sideload should respect "Enable Debugger" identically to a
  * local/LAN-relay one.
  */
 function computeSideloadDebugFlags(
@@ -70,22 +70,18 @@ function computeSideloadDebugFlags(
     discovered = scan.scanZipForStops(filePath).length;
   } catch { /* scan best-effort */ }
 
-  const key = deviceKey({ serial, ip });
+  const ref = { serial, ip };
   let debugEnabled = !!remoteDebug;
   try {
-    const v = settingsMod.loadSettings()['sideload-debug-ips'];
-    if (Array.isArray(v) && (v.includes(key) || v.includes(ip))) debugEnabled = true;
+    if (isDebuggerEnabled(settingsMod.loadSettings()[DEBUGGER_ENABLED_DEVICES_KEY], ref)) debugEnabled = true;
   } catch { /* default off */ }
   if (discovered > 0 && !debugEnabled) {
     debugEnabled = true;
     try {
       // Persist the auto-enable so future sideloads (and the sidebar) stay on.
       const s = settingsMod.loadSettings();
-      const cur = Array.isArray(s['sideload-debug-ips']) ? (s['sideload-debug-ips'] as string[]) : [];
-      if (!cur.includes(key)) {
-        s['sideload-debug-ips'] = [...cur, key];
-        settingsMod.saveSettings(s);
-      }
+      s[DEBUGGER_ENABLED_DEVICES_KEY] = withDebuggerEnabled(s[DEBUGGER_ENABLED_DEVICES_KEY], ref, true);
+      settingsMod.saveSettings(s);
     } catch { /* best-effort persist */ }
   }
   return { debugEnabled, discovered };
@@ -260,7 +256,7 @@ function setupDevAppHandlers(mainWindow: BrowserWindow | undefined, dialog: Dial
       rememberSideloadZip: (ip: string, p: string) => void;
     };
     const zip = scan.getRememberedZip(ip);
-    if (!zip) return { success: false, error: 'No previous debug sideload to restart. Sideload with Debugging first.' };
+    if (!zip) return { success: false, error: 'No previous debug sideload to restart. Turn on Enable Debugger and sideload first.' };
     if (!fs.existsSync(zip)) return { success: false, error: 'The previous debug build is no longer on disk. Sideload again.' };
     mainLog(`[sideload] restart ip=${ip} remotedebug=1 file=${path.basename(zip)}`);
     const result = await sideloadChannel({

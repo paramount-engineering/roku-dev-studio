@@ -652,7 +652,7 @@ export function registerBsFiddleIpc(ipcMain: IpcMain): void {
       }
     }
 
-    // "Sideload with Debugging" — same remotedebug=1 convention Sideload Relay / the Dev App tab
+    // "Enable Debugger" — same remotedebug=1 convention Sideload Relay / the Dev App tab
     // use, just read straight off the Fiddle modal's checkbox instead of a persisted per-device
     // setting (a Fiddle run is a one-off, not a saved preference).
     const debugEnabled = !!payload?.remoteDebug;
@@ -725,7 +725,7 @@ export function registerBsFiddleIpc(ipcMain: IpcMain): void {
       // password is never written (session-only modal entry path).
       setFiddleActiveSideload(senderWin.id, device.id, password);
 
-      // "Sideload with Debugging" reopened the device's debug port (8081) — tell the Telnet
+      // "Enable Debugger" reopened the device's debug port (8081) — tell the Telnet
       // debug sidebar to reattach to this fresh run, same event `dev-app-handlers.ts` /
       // `remote-handlers.ts` / `rce-handlers.ts`'s own sideload handlers already fire.
       if (debugEnabled) {

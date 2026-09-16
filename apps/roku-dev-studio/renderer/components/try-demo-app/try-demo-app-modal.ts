@@ -54,9 +54,9 @@ export function openTryDemoAppModal(opts: {
            <select class="try-demo-app-select" id="tryDemoAppDeviceSelect"></select>
            <button type="button" class="btn btn-secondary try-demo-app-rescan">${escapeHtml(S.actionScripts.viewerRescan)}</button>
          </div>
-         <label class="try-demo-app-debug-toggle" title="${escapeHtml(S.debugger.sideloadWithDebuggingTitle)}">
+         <label class="try-demo-app-debug-toggle" title="${escapeHtml(S.debugger.enableDebuggerTitle)}">
            <input type="checkbox" class="try-demo-app-debug-checkbox">
-           ${escapeHtml(S.debugger.sideloadWithDebugging)}
+           ${escapeHtml(S.debugger.enableDebugger)}
          </label>
          <p class="try-demo-app-error" hidden></p>
        </div>

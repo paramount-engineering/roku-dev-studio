@@ -42,20 +42,21 @@ const { resolveDeviceIp } = require('roku-dev-studio-api') as {
  *  the real IP, not a real address, so it's a fixed literal rather than an IP-shaped mask. */
 const PRIVACY_IP_MASK = '#IP.MAS.KED.###';
 
-/**
- * Device keys (serial preferred, else IP — see `deviceKey()`/`RelayTarget.id`) the user opted
- * into "Sideload with Debugging" for (persisted from the Dev App checkbox). Also matches the
- * pre-migration raw-IP form so entries saved before this used serial keys still apply. Shared
- * setting key with the renderer — keep the literal in sync with sideloading.ts.
- */
-function readDebugSideloadIps(settings: Record<string, unknown>): string[] {
-  const v = settings['sideload-debug-ips'];
-  return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [];
-}
-const { subscribeDebugTelnetData, createTelnetMarkerWatcher } = require('../ipc/telnet-handlers') as {
-  subscribeDebugTelnetData: (ip: string, cb: (text: string) => void) => () => void;
-  createTelnetMarkerWatcher: (pattern: RegExp, carryLen?: number) => { feed: (text: string) => boolean };
-};
+// "Enable Debugger" per device — the ONE shared predicate/mutator (serial-keyed, legacy raw-IP
+// entries honored). Never re-implement this lookup locally.
+import {
+  DEBUGGER_ENABLED_DEVICES_KEY,
+  asDebuggerEnabledList,
+  isDebuggerEnabled,
+  withDebuggerEnabled
+} from '../../shared/platform/debugger-enabled';
+const { subscribeDebugTelnetData, createTelnetMarkerWatcher, msSinceDebugTelnetConnected, TELNET_BACKLOG_SETTLE_MS } =
+  require('../ipc/telnet-handlers') as {
+    subscribeDebugTelnetData: (ip: string, cb: (text: string) => void) => () => void;
+    createTelnetMarkerWatcher: (pattern: RegExp, carryLen?: number) => { feed: (text: string) => boolean };
+    msSinceDebugTelnetConnected: (ip: string) => number;
+    TELNET_BACKLOG_SETTLE_MS: number;
+  };
 
 /** The real "app fully launched" beacon `watchForLaunchComplete` watches for — see its doc comment. */
 const LAUNCH_COMPLETE_RE = /\[beacon\.signal\]\s*\|AppLaunchChainComplete|\[scrpt\.ctx\.run\.enter\]/i;
@@ -282,9 +283,10 @@ export class SideloadRelayService {
     // store (validated via the setup modal / Dev App). The relay's own Dev
     // Password (IDE→RDS auth) is a separate concept and not used here.
     const pwds = this.config.targetPasswords || {};
-    const debugIps = readDebugSideloadIps(loadSettings());
+    const debuggerEnabledList = loadSettings()[DEBUGGER_ENABLED_DEVICES_KEY];
     const targets = this.enabledTargets().map((t) => ({
       id: t.id,
+      serial: t.serial,
       // Targets are configured once (Setup Devices) and can go stale after a network change —
       // resolve against whatever this run's live discovery has actually seen for this serial,
       // falling back to the saved IP when the serial hasn't been (re)discovered yet this run.
@@ -297,11 +299,11 @@ export class SideloadRelayService {
       location: t.location,
       serverUrl: t.serverUrl,
       locationId: t.locationId,
-      // Enable debugging for a target when it opted into "Sideload with Debugging"
+      // Enable debugging for a target when it opted into "Enable Debugger"
       // OR the uploaded build carries STOP breakpoints / the IDE asked for a debug
       // launch (autoDebug). Honored for remote targets too — the remote server runs
       // its own DebugSessionController with real network access to the device.
-      remoteDebug: debugIps.includes(t.id) || debugIps.includes(t.ip) || autoDebug
+      remoteDebug: isDebuggerEnabled(debuggerEnabledList, { serial: t.serial, ip: t.ip }) || autoDebug
     }));
 
     // `readTargets` (relay-handlers.ts) only dedupes by stored `id` (serial, else ip) — a device
@@ -322,14 +324,15 @@ export class SideloadRelayService {
     });
   }
 
-  /** Add IPs to the persisted "Sideload with Debugging" list (auto-enable from a STOP scan). */
-  private persistDebugSideloadIps(ips: Set<string>): void {
+  /** Switch "Enable Debugger" on for these targets (auto-enable from a STOP scan). */
+  private persistDebuggerEnabled(targets: Array<{ serial?: string; ip: string }>): void {
     try {
       const s = loadSettings();
-      const cur = readDebugSideloadIps(s);
-      const merged = [...new Set([...cur, ...ips])];
-      if (merged.length !== cur.length) {
-        s['sideload-debug-ips'] = merged;
+      const before = asDebuggerEnabledList(s[DEBUGGER_ENABLED_DEVICES_KEY]);
+      let list: string[] = before;
+      for (const t of targets) list = withDebuggerEnabled(list, { serial: t.serial, ip: t.ip }, true);
+      if (JSON.stringify(list) !== JSON.stringify(before)) {
+        s[DEBUGGER_ENABLED_DEVICES_KEY] = list;
         saveSettings(s);
       }
     } catch {
@@ -351,7 +354,7 @@ export class SideloadRelayService {
       this.launchCompleteWatcher = createTelnetMarkerWatcher(LAUNCH_COMPLETE_RE);
       this.deviceTapUnsub = subscribeDebugTelnetData(rep.ip, (text) => {
         this.proxy.relayDeviceOutput(text);
-        this.watchForLaunchComplete(text);
+        this.watchForLaunchComplete(rep.ip, text);
       });
       mainLog(`[SideloadRelay] relaying ${rep.name} (${rep.ip}) console to the IDE for this run`);
     } catch {
@@ -382,9 +385,13 @@ export class SideloadRelayService {
    * This is what makes the end reliable across repeated launches: we key off the
    * device's own lifecycle instead of racing a fixed timer against a live stream.
    */
-  private watchForLaunchComplete(text: string): void {
+  private watchForLaunchComplete(ip: string, text: string): void {
     if (this.endArmed) return;
     if (!this.launchCompleteWatcher?.feed(text)) return;
+    // A freshly (re)opened 8085 socket — the fan-out's pre-install connect and its post-install
+    // re-dial both are — first receives Roku's replay of recent history, i.e. the PREVIOUS run's
+    // AppLaunchComplete. Same settle window the debugger-wait watcher uses.
+    if (msSinceDebugTelnetConnected(ip) < TELNET_BACKLOG_SETTLE_MS) return;
     this.endArmed = true;
     this.scheduleEnd(1200);
   }
@@ -427,7 +434,7 @@ export class SideloadRelayService {
 
   private handleUpload(upload: RelayUpload): void {
     const runId = this.nextRunId();
-    // Match the single-device "Sideload with Debugging" path: scan the uploaded build
+    // Match the single-device "Enable Debugger" path: scan the uploaded build
     // for STOP breakpoints and auto-enable debugging on all LOCAL targets when any are
     // found (or when the IDE explicitly requested a debug launch). Without this a relay
     // fan-out of a build full of STOPs installs WITHOUT remotedebug=1, so every STOP
@@ -514,9 +521,8 @@ export class SideloadRelayService {
       } catch {
         /* best-effort */
       }
-      // Persist by device key (id), not IP — an IP-keyed entry would silently stop
-      // matching this device after a network change.
-      if (discovered > 0) this.persistDebugSideloadIps(new Set(debugTargets.map((t) => t.id)));
+      // Persist by device identity (serial when known) — see shared/platform/debugger-enabled.ts.
+      if (discovered > 0) this.persistDebuggerEnabled(debugTargets);
     }
 
     const stepWord = (s: RelayDeviceResult['install']) =>

@@ -1022,7 +1022,7 @@ function setupRemoteHandlers(mainWindow: BrowserWindow | undefined, safeSendToRe
       rememberSideloadZip: (ip: string, p: string) => void;
     };
     const zip = scan.getRememberedZip(ip);
-    if (!zip) return { success: false, error: 'No previous debug sideload to restart. Sideload with Debugging first.' };
+    if (!zip) return { success: false, error: 'No previous debug sideload to restart. Turn on Enable Debugger and sideload first.' };
     if (!fs.existsSync(zip)) return { success: false, error: 'The previous debug build is no longer on disk. Sideload again.' };
     mainLog(`[remote sideload] restart server=${serverUrl} ip=${ip} remotedebug=1`);
     const result = await sideloadFileToRemote(serverUrl, ip, zip, password || '', true);

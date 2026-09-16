@@ -26,6 +26,22 @@ export type DebugTelnetIpcPayload = {
   isRemote?: boolean;
 };
 
+/**
+ * True when a DEBUGGER push event (`DebuggerState` / `DebuggerOutput` / …, shape
+ * `{ ip?, isRemote?, serverUrl? }`) belongs to this device tab. Origin is "remote" only when the
+ * tab has a server URL: an RCE tab is `isRemote: true` with NO serverUrl, but its debug session
+ * runs in the LOCAL controller, whose events carry no origin tag — treating RCE as remote here is
+ * what made the Console drop every debugger output line for RCE devices.
+ */
+export function debugEventTargetsDevice(
+  event: { ip?: string; isRemote?: boolean; serverUrl?: string | null },
+  device: DebugTelnetDeviceRef
+): boolean {
+  if (event.ip && event.ip !== device.ip) return false;
+  const remote = !!(device.isRemote && device.serverUrl);
+  return !!event.isRemote === remote && (!remote || event.serverUrl === device.serverUrl);
+}
+
 /** True when a main-process telnet IPC payload belongs to this device tab. */
 export function debugTelnetIpcTargetsDevice(
   payload: DebugTelnetIpcPayload,

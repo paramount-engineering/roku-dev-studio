@@ -38,14 +38,15 @@ import {
   detectBrsCrashes,
   type ConsoleFindings
 } from '@shared/console/brightscript-error-catalog.js';
-import { detectBeaconTimings } from '@shared/console/roku-beacons.js';
+import { detectBeaconTimings, DEBUGGER_WAITING_RE, DEBUGGER_CLAIMED_RE, DEBUGGER_ATTACHED_RE } from '@shared/console/roku-beacons.js';
 import {
   debugTelnetIpcTargetsDevice,
+  debugEventTargetsDevice,
   type DebugTelnetIpcPayload
 } from '@shared/ipc/debug-telnet-connection-id.js';
 import { S } from '@shared/strings/index.js';
 
-export type TelnetConsoleDevice = { deviceName?: string; modelName?: string; ip: string };
+export type TelnetConsoleDevice = { deviceName?: string; modelName?: string; ip: string; serialNumber?: string };
 
 export type TelnetConsoleApi = {
   ip: string;
@@ -57,6 +58,8 @@ export type TelnetConsoleApi = {
   debuggerSupported?: boolean;
   telnetConnect: (options?: { skipRelayBuffer?: boolean }) => Promise<{ success: boolean; error?: string }>;
   telnetDisconnect: () => Promise<unknown>;
+  /** Absent for RCE devices (no telnet-status IPC); used to adopt a socket main already holds. */
+  telnetStatus?: () => Promise<{ connected?: boolean } | undefined>;
   /** Remote relay only — clears the server-side gap buffer without closing 8085. */
   telnetClearRelayBuffer?: () => Promise<{ success?: boolean; error?: string; clearedBytes?: number }>;
 };
@@ -891,10 +894,29 @@ export function setupTelnet(
     if (!isConnected) return;
     const lines = appendTelnetChunk(telnetTcpState, chunk);
     if (lines.length === 0) return;
+    let sawCue = false;
+    let sawClaim = false;
+    let sawAttached = false;
     for (let i = 0; i < lines.length; i++) {
-      pendingTelnetLines.push(lines[i]!);
+      const line = lines[i]!;
+      pendingTelnetLines.push(line);
+      if (DEBUGGER_WAITING_RE.test(line)) sawCue = true;
+      else if (DEBUGGER_CLAIMED_RE.test(line)) {
+        sawClaim = true;
+        if (DEBUGGER_ATTACHED_RE.test(line)) sawAttached = true;
+      }
     }
     scheduleTelnetRender();
+    // Roku flushes recent history to a fresh 8085 client. A burst landing right after OUR connect
+    // that holds the "waiting" cue AND how it ended (a debugger connected / nobody did) is that
+    // replay — the port for that launch is long gone, so don't dial it. Outside that window a cue is
+    // live: a debug channel is waiting (~10 s) for a socket debugger on 8081 — attach.
+    // Transport-agnostic on purpose: local, lab-server and RCE consoles all land here.
+    const replayBurst = performance.now() - connectedAt < REPLAY_WINDOW_MS;
+    if (sawCue && !(replayBurst && sawClaim)) debugSidebar.onDeviceWaitingForDebugger();
+    // Replayed "remote debugger connected" with no live session here: a debugger owned this channel
+    // run and left, and Roku keeps routing its print output there — say so instead of going quiet.
+    if (replayBurst && sawAttached && !debugSidebar.isAttached()) noteDebuggerOwnsOutput();
   }
 
   /** Add many complete log lines in one layout pass (stable under flood). */
@@ -1117,6 +1139,16 @@ export function setupTelnet(
   // redundant `updateConnectionState` work, and to give every caller the
   // same resolved promise.
   let connectInFlight: Promise<void> | null = null;
+  /** When this panel's current Connect succeeded — the window in which incoming lines are Roku's replay. */
+  let connectedAt = -Infinity;
+  const REPLAY_WINDOW_MS = 3000;
+  /** Printed at most once per console session / debug session (see noteDebuggerOwnsOutput). */
+  let routedNoticeShown = false;
+  function noteDebuggerOwnsOutput(): void {
+    if (routedNoticeShown || !isConnected) return;
+    routedNoticeShown = true;
+    void addLogLine(S.telnet.lineDebuggerOutputRouted, false);
+  }
 
   /** Shared click-handler + programmatic-entry path so the button and the
    *  exposed `panel.connectTelnet()` go through identical logic. */
@@ -1193,6 +1225,8 @@ export function setupTelnet(
               rendererWarn('[Console spill] start rejected:', err);
             });
           updateConnectionState(true);
+          connectedAt = performance.now();
+          routedNoticeShown = false;
           const relayNote = api.isRemote
             ? options?.skipRelayBuffer
               ? S.telnet.relayNoteSkipBuffer
@@ -1742,13 +1776,33 @@ export function setupTelnet(
     onDebuggerOutput?: (cb: (data: unknown) => void) => () => void;
   }).onDebuggerOutput?.((data) => {
     const d = (data ?? {}) as { ip?: string; text?: string; isRemote?: boolean; serverUrl?: string };
-    if (d.ip && d.ip !== api.ip) return;
-    if (!!d.isRemote !== !!api.isRemote || (api.isRemote && d.serverUrl !== api.serverUrl)) return;
+    if (!debugEventTargetsDevice(d, telnetDeviceRef)) return; // RCE tabs are local-origin here
     if (!d.text) return;
     debugOutBuffer += d.text;
     const parts = debugOutBuffer.split(/\r?\n/);
     debugOutBuffer = parts.pop() ?? '';
     if (parts.length) addLogLinesBatch(parts, true, false);
+  });
+
+  // Roku does NOT hand a channel's print output back to 8085 when the socket debugger leaves — the
+  // console goes silent for the rest of that channel instance (system beacons still arrive, print
+  // output doesn't). Explain that at the moment it happens: a live session ending while the console
+  // is up. (The replayed-history variant is handled in ingestTelnetIpcChunk.)
+  let debuggerWasLive = false;
+  const debugStateCleanup = (window.roku as unknown as {
+    onDebuggerState?: (cb: (data: unknown) => void) => () => void;
+  }).onDebuggerState?.((data) => {
+    const d = (data ?? {}) as { ip?: string; state?: string; isRemote?: boolean; serverUrl?: string };
+    if (!debugEventTargetsDevice(d, telnetDeviceRef)) return;
+    if (d.state === 'attached' || d.state === 'running' || d.state === 'stopped') {
+      debuggerWasLive = true;
+      routedNoticeShown = false; // a new session may end later — say it again then
+      return;
+    }
+    if (d.state === 'disconnected' && debuggerWasLive) {
+      debuggerWasLive = false;
+      noteDebuggerOwnsOutput();
+    }
   });
 
   const disconnectCleanup = window.roku.onTelnetDisconnected(async (data) => {
@@ -1801,8 +1855,25 @@ export function setupTelnet(
       telnetParseWorker = null;
 
       updateConnectionState(false, false, payload.hadError ? S.telnet.connectionLost : null);
+      // A bounce (main destroys + re-dials, e.g. Fiddle's post-sideload rebind) can deliver the
+      // replacement's TelnetConnected while the awaits above were still running — at that moment
+      // isConnected was still true, so the adoption listener below skipped it. Re-sync now.
+      adoptIfMainConnected();
     }
   });
+
+  /** Adopt a live 8085 socket main already holds for this device (see the onTelnetConnected
+   *  listener below). Optional: the RCE adapter has no status IPC. */
+  function adoptIfMainConnected(): void {
+    void api.telnetStatus?.().then(
+      (status) => {
+        if (status?.connected) void connectTelnet();
+      },
+      () => {
+        /* best-effort */
+      }
+    );
+  }
   
   const errorCleanup = window.roku.onTelnetError((data) => {
     const payload = data as DebugTelnetIpcPayload & { error?: string };
@@ -1810,6 +1881,16 @@ export function setupTelnet(
       addLogLine(S.telnet.lineError(payload.error ?? S.telnet.unknownError), false);
     }
   });
+
+  // Main can open (or re-open) this device's 8085 socket on the panel's behalf — the Sideload
+  // Relay fan-out's console step, Fiddle's pre-sideload ensure / post-sideload bounce. Adopt it
+  // through the normal Connect path so the status/buttons reflect the live socket and this panel
+  // takes its own 'main-ui' lease. connectTelnet() no-ops when already connected or in flight, and
+  // the main-side connect reuses a healthy socket, so this can't bounce or double-connect.
+  const connectedCleanup = window.roku.onTelnetConnected((data: unknown) => {
+    if (isOurTelnetEvent(data)) void connectTelnet();
+  });
+  adoptIfMainConnected();
   
   // For a remote-managed device the debug session runs on the remote server, not this
   // machine — subscribe to its live event stream (server-wide, like the Network
@@ -1833,7 +1914,8 @@ export function setupTelnet(
     },
     isRemote: api.isRemote,
     serverUrl: api.serverUrl,
-    debuggerSupported: api.debuggerSupported
+    debuggerSupported: api.debuggerSupported,
+    serial: device.serialNumber
   });
 
   // Debug REPL: an input bar that slides up under the console output while the
@@ -1898,8 +1980,10 @@ export function setupTelnet(
     clearDeferredTelnetHeavyLines();
     dataCleanup();
     debugOutputCleanup?.();
+    debugStateCleanup?.();
     disconnectCleanup();
     errorCleanup();
+    connectedCleanup();
     // Drop the disk spill for this tab. The renderer-side cleanup is
     // best-effort (the main process also wipes the temp dir on
     // `app.on('will-quit')`), but doing it eagerly here avoids leaving

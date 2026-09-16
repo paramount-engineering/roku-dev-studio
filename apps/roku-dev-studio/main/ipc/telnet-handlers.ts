@@ -11,10 +11,9 @@ import {
   scheduleCoalescedMapFlush,
   type TelnetIpcCoalesceState
 } from './telnet-log-ipc-coalesce.js';
-import { getPersistedTimingValue, loadSettings } from '../settings';
+import { getPersistedTimingValue } from '../settings';
 import { mainLog, mainWarn } from '../log.js';
 import { notifyDeviceConnectionSuspect } from '../device-connection-suspect';
-import { notifyDebuggerReattach, getDebugSessionController } from './debugger-handlers';
 
 const {
   connectRokuDebugTelnet,
@@ -110,61 +109,23 @@ export function createTelnetMarkerWatcher(pattern: RegExp, carryLen = 120): { fe
   };
 }
 
-/**
- * Auto-reattach the debugger the moment a relaunched channel starts waiting for one on 8081, instead of
- * silently falling back to Roku's local debugger after its ~10s timeout. Real on-device signature:
- *   `[plg.dbg.conn.wait] Waiting for debugging connection`
- *   `[plg.dbg.conn.wait] Waiting for debugger on 192.168.1.75:8081`
- *   (then, if nothing attaches in time) `[plg.dbg.conn.timeout] Timeout waiting for connection: using local debugger`
- *
- * Gated on `sideload-debug-ips` (the same "Sideload with Debugging" opt-in every other auto-attach path
- * in this codebase checks — see `computeSideloadDebugFlags` in dev-app-handlers.ts) so this only ever
- * restores a session for a device the user already asked to debug; it never force-attaches a device that
- * was never opted in. Reuses `notifyDebuggerReattach` (the same broadcast a normal post-sideload
- * reattach fires) so the Telnet debug sidebar shows its familiar Attaching/Attached feedback instead of
- * this happening silently.
- */
-const DEBUGGER_WAITING_RE = /\[plg\.dbg\.conn\.wait\]\s*Waiting for debugger on/i;
-/** IPs already watched — the underlying regex-match subscription is registered once per IP and stays
- *  live across every reconnect on that device (see `debuggerWaitConnectedAt` below for what DOES reset
- *  per reconnect). */
-const debuggerWaitWatchedIps = new Set<string>();
 /** ip -> when its 8085 socket was (re)connected. Roku's debug console — like the Sideload Relay's own
  *  faithful emulation of it, see the "replayed to clients that connect mid-run" gap buffer in
- *  `sideload-relay/debug-endpoints.ts` — can flush a burst of recent console history to a freshly-opened
+ *  `sideload-relay/debug-endpoints.ts` — flushes a burst of recent console history to a freshly-opened
  *  socket. Those bytes arrive via the same `socket.on('data', …)` event as genuinely new output, so a
- *  match landing right after a (re)connect is untrustworthy: it may be a stale "Waiting for debugger" line
- *  from an already-resolved earlier launch, not a live one worth reattaching for. */
-const debuggerWaitConnectedAt = new Map<string, number>();
+ *  one-shot marker matched right after a (re)connect may be stale history, not a live event. */
+const debugTelnetConnectedAt = new Map<string, number>();
 /** How long after a (re)connect a match is treated as possible backlog rather than a live event. Real
  *  device backlog arrives in one immediate burst on connect, not trickled in over seconds, so this only
  *  needs to clear that initial burst — confirmed against a real capture where a stale match landed 22ms
- *  after reconnect and the genuine one landed 6.8s later. */
-const DEBUGGER_WAIT_SETTLE_MS = 3000;
-
-function isDebuggerAutoAttachEnabled(ip: string): boolean {
-  try {
-    const v = loadSettings()['sideload-debug-ips'];
-    return Array.isArray(v) && v.includes(ip);
-  } catch {
-    return false;
-  }
-}
-
-function watchForDebuggerWaiting(ip: string): void {
-  debuggerWaitConnectedAt.set(ip, Date.now()); // reset the settle window on every (re)connect
-  if (debuggerWaitWatchedIps.has(ip)) return; // the regex-match subscription itself only needs one registration
-  debuggerWaitWatchedIps.add(ip);
-  const watcher = createTelnetMarkerWatcher(DEBUGGER_WAITING_RE);
-  subscribeDebugTelnetData(ip, (text) => {
-    if (!watcher.feed(text)) return;
-    const connectedAt = debuggerWaitConnectedAt.get(ip) ?? 0;
-    if (Date.now() - connectedAt < DEBUGGER_WAIT_SETTLE_MS) return; // likely replayed backlog, not live
-    if (isDebuggerAutoAttachEnabled(ip) && !getDebugSessionController().isAttached(ip)) {
-      mainLog('[Telnet] device', ip, 'is waiting for a debugger on 8081 — reattaching automatically');
-      notifyDebuggerReattach(ip);
-    }
-  });
+ *  after reconnect and the genuine one landed 6.8s later. Used by the Sideload Relay's launch-complete
+ *  watcher (sideload-relay/service.ts). The "Waiting for debugger" auto-attach does NOT live here any
+ *  more: the Console panel watches its own line stream for every transport (local / lab server / RCE)
+ *  and tries the attach quietly instead of guessing at staleness — see telnet-console-panel.ts. */
+export const TELNET_BACKLOG_SETTLE_MS = 3000;
+export function msSinceDebugTelnetConnected(ip: string): number {
+  const t = debugTelnetConnectedAt.get(ip);
+  return t == null ? Infinity : Date.now() - t;
 }
 
 function addDebugTelnetHolder(ip: string, holder: string): void {
@@ -210,12 +171,31 @@ export async function disconnectDebugTelnetIfUnheld(ip: string): Promise<void> {
 
 let cachedSafeSend: SafeSendFn | null = null;
 
+type DebugTelnetConnectResult = { success: boolean; error?: string; connectionId?: string };
+
+/** ip -> the connect currently in flight for it. The map entry only lands after the TCP await,
+ *  so two concurrent connects for one device (the Sideload Relay fan-out's console step racing
+ *  the debug sidebar's auto-connect, an MCP `telnet_connect` racing a click, …) used to both
+ *  dial. Roku's 8085 is single-client: it rejected the loser ("Console connection is already in
+ *  use.") and the loser's `close` wiped the winner's bookkeeping, orphaning a live socket that
+ *  held the port — every later connect was rejected — until the app quit. */
+const debugTelnetConnecting = new Map<string, Promise<DebugTelnetConnectResult>>();
+
 /**
  * Open (or re-open) the local 8085 debug telnet socket for `ip`. If a
  * connection already exists it is destroyed and replaced. Renderer stays in
- * sync via the usual `IPC.TelnetConnected` / `TelnetData` events.
+ * sync via the usual `IPC.TelnetConnected` / `TelnetData` events. Single-flight
+ * per ip: a caller arriving while a connect is in flight joins that attempt.
  */
-async function connectDebugTelnetInternal(ip: string): Promise<{ success: boolean; error?: string; connectionId?: string }> {
+function connectDebugTelnetInternal(ip: string): Promise<DebugTelnetConnectResult> {
+  const inFlight = debugTelnetConnecting.get(ip);
+  if (inFlight) return inFlight;
+  const attempt = openDebugTelnet(ip).finally(() => debugTelnetConnecting.delete(ip));
+  debugTelnetConnecting.set(ip, attempt);
+  return attempt;
+}
+
+async function openDebugTelnet(ip: string): Promise<DebugTelnetConnectResult> {
   const connectionId = ip;
   const safeSend = cachedSafeSend;
   if (telnetConnections.has(connectionId)) {
@@ -244,7 +224,7 @@ async function connectDebugTelnetInternal(ip: string): Promise<{ success: boolea
   });
   mainLog('[Telnet] connected to', ip, ':8085 (readyState=' + (socket as unknown as { readyState?: string }).readyState + ')');
   if (safeSend) safeSend(IPC.TelnetConnected, { ip, connectionId });
-  watchForDebuggerWaiting(ip);
+  debugTelnetConnectedAt.set(ip, Date.now());
 
   socket.on('data', (data: Buffer) => {
     const text = data.toString('utf8');
@@ -271,6 +251,13 @@ async function connectDebugTelnetInternal(ip: string): Promise<{ success: boolea
   });
 
   socket.on('close', (hadError: boolean) => {
+    const live = telnetConnections.get(connectionId);
+    if (live && live.socket !== socket) {
+      // A newer socket already replaced this one; the map entry, holders and the renderer's
+      // connected state belong to it — this close must not tear them down.
+      mainLog('[Telnet] ignoring close of superseded socket for', ip, ':8085');
+      return;
+    }
     // Diagnostic detail for the "connected but no logs are received" class
     // of bug. `bytesReceived === 0` + a short lifetime is the signature of
     // either (a) another telnet client holds Roku's BrightScript stdout
@@ -317,18 +304,39 @@ async function disconnectDebugTelnetInternal(ip: string): Promise<{ success: boo
   return { success: true };
 }
 
-export async function bounceDebugTelnet(ip: string): Promise<{ success: boolean; error?: string }> {
+/**
+ * Swap the 8085 socket for `ip` under the same connectionId — TRANSPARENT to every consumer:
+ * holders are kept, the renderer sees no TelnetDisconnected/Connected flip (so the Console panel
+ * keeps its scrollback and keeps ingesting; a visible flip used to make it re-adopt via Connect,
+ * clearing the view and dropping the backlog Roku flushes to a fresh socket). Only a FAILED
+ * re-dial is surfaced as a disconnect, since then there really is no socket any more.
+ * Used after a sideload: on some firmware `plugin_install` unbinds whichever 8085 client was
+ * connected beforehand (see bs-fiddle-handlers.ts), so a pre-opened console must be re-dialed
+ * for the new channel's output to land on it.
+ */
+export async function bounceDebugTelnet(ip: string, opts?: { onlyIfOpen?: boolean }): Promise<{ success: boolean; error?: string }> {
+  const safeSend = cachedSafeSend;
+  const old = telnetConnections.get(ip);
+  if (!old && opts?.onlyIfOpen) return { success: true }; // nothing bound to rebind
   mainLog('[Telnet] bounceDebugTelnet: disconnect + reconnect', ip);
-  // Snapshot logical holders before the bounce. Destroying the socket fires the
-  // `close` handler, which wipes `debugTelnetHoldersByIp` for this IP; without
-  // restoring them the socket would re-open with zero holders, breaking the
-  // lease invariant (a leaked socket nothing will ever close, or one that
-  // `disconnectDebugTelnetIfUnheld` tears down out from under Fiddle).
-  const preservedHolders = new Set(debugTelnetHoldersByIp.get(ip) ?? []);
-  await disconnectDebugTelnetInternal(ip);
+  if (old) {
+    flushCoalescedMapNow(telnetConnections, ip, (_live, slice) => {
+      if (safeSend) safeSend(IPC.TelnetData, { ip, connectionId: ip, data: slice });
+    });
+    // Terminate a mid-line tail so the renderer's line assembler can't glue it onto the fresh
+    // socket's first chunk (an empty segment renders nothing, so this is invisible at a boundary).
+    if (safeSend) safeSend(IPC.TelnetData, { ip, connectionId: ip, data: '\n' });
+    // Detach the old socket's 'close' bookkeeping — this is a replacement, not a teardown.
+    old.socket.removeAllListeners('close');
+    telnetConnections.delete(ip);
+    old.socket.destroy();
+  }
   const result = await connectDebugTelnetInternal(ip);
-  if (result.success) {
-    for (const holder of preservedHolders) addDebugTelnetHolder(ip, holder);
+  if (!result.success && old) {
+    // There WAS a socket and now there isn't — that is a disconnect. (A failed dial with nothing
+    // open before is just a failed connect: the panel was never connected, don't flip it.)
+    debugTelnetHoldersByIp.delete(ip);
+    if (safeSend) safeSend(IPC.TelnetDisconnected, { ip, connectionId: ip, hadError: true, aliveMs: -1, bytesReceived: -1 });
   }
   return { success: result.success, error: result.error };
 }

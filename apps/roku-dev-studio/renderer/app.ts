@@ -28,6 +28,7 @@ import {
   QUERY_ENDPOINTS
 } from './modules/index.js';
 import { attachInstantTooltips } from './modules/utils/instant-tooltip.js';
+import { bindPanelDevice } from './modules/utils/device-debugger-flag.js';
 import {
   openTryDemoAppModal,
   type TryDemoAppDeviceOption
@@ -801,9 +802,11 @@ function ensureDeviceConnectedWithConsole(
     rce?: boolean;
     rceAccountName?: string;
     rceDeviceId?: number;
+    /** Default true. False = open/activate the tab only, leave its Console alone. */
+    connectConsole?: boolean;
   } = {}
 ): string {
-  const { isRemote, locationId, fallbackDevice, activate, rce, rceAccountName, rceDeviceId } = opts;
+  const { isRemote, locationId, fallbackDevice, activate, rce, rceAccountName, rceDeviceId, connectConsole = true } = opts;
   let tabId: string;
 
   if (rce && rceAccountName && rceDeviceId != null) {
@@ -892,21 +895,27 @@ function ensureDeviceConnectedWithConsole(
 
   if (activate) activateTab(tabId);
   const panel = document.getElementById(tabId) as (HTMLElement & { connectTelnet?: () => Promise<void> }) | null;
-  if (panel?.connectTelnet) {
+  if (connectConsole && panel?.connectTelnet) {
     void panel.connectTelnet().catch((e: unknown) => rendererWarn('[auto console connect] failed', e));
   }
   return tabId;
 }
 
 /**
- * Auto-connect Sideload Relay targets in the UI. When the relay fans a build out to a device,
- * open that device as a connected tab (if it isn't already) and connect its console.
+ * Auto-connect Sideload Relay targets in the UI. On the FIRST result the relay streams for a
+ * target in a run — i.e. at run start, before its install — open that device as a connected tab
+ * (if it isn't already) and connect its console. The Console is then already listening when the
+ * channel compiles, and a target whose install fails is still connected and visible instead of
+ * silently absent (this used to wait for `done` + a successful install).
  */
 function registerRelayAutoConnect(): void {
   const roku = (window as any).roku;
   if (!roku?.onSideloadRelayResult) return;
+  const openedThisRun = new Set<string>();
   roku.onSideloadRelayResult((raw: unknown) => {
     const r = raw as {
+      runId?: string;
+      targetId?: string;
       ip?: string;
       name?: string;
       install?: { state?: string };
@@ -919,7 +928,18 @@ function registerRelayAutoConnect(): void {
       rceAccountName?: string;
       rceDeviceId?: number;
     } | null;
-    if (!r || !r.ip || r.done !== true || r.install?.state !== 'ok') return;
+    if (!r || !r.ip) return;
+    // One open per target per run — the relay streams several results per target, and an RCE
+    // connect is async (a second call before the tab lands would open a duplicate tab).
+    const key = `${r.runId ?? ''}:${r.targetId ?? r.ip}`;
+    const isFirst = !openedThisRun.has(key);
+    if (isFirst) openedThisRun.add(key);
+    if (r.done === true) openedThisRun.delete(key);
+    // Local + RCE: tab AND console at run start. Remote: tab at run start, console only once the
+    // install succeeded — the lab server has no post-install rebind (see fanout.ts), so a
+    // pre-install console could stay bound to the old channel.
+    const remoteInstalled = !!r.remote && r.done === true && r.install?.state === 'ok';
+    if (!isFirst && !remoteInstalled) return;
     const ip = r.ip;
     try {
       ensureDeviceConnectedWithConsole(ip, {
@@ -930,7 +950,8 @@ function registerRelayAutoConnect(): void {
         rceDeviceId: r.rceDeviceId,
         fallbackDevice: r.remote
           ? { ip, deviceName: r.name || ip, modelName: r.name || 'Roku', serverUrl: r.serverUrl }
-          : { ip, deviceName: r.name || ip, modelName: r.name || 'Roku' }
+          : { ip, deviceName: r.name || ip, modelName: r.name || 'Roku' },
+        connectConsole: !r.remote || remoteInstalled
       });
     } catch (e) {
       rendererError('[SideloadRelay] auto-connect failed', e);
@@ -1149,7 +1170,9 @@ function createApiAdapter(isRemote, ip, serverUrl = null, capabilities: Record<s
  * governs which tabs show at all, the same way a LAN relay's own `capabilities` object does.
  */
 function createRceApiAdapter(accountName: string, device: { id: number; ip: string; runningDevice?: { instanceApiUrl?: string | null } | null }) {
-  const instanceApiUrl = device.runningDevice?.instanceApiUrl || '';
+  // Resolved PER CALL, not captured: an RCE instance restart hands the device a new instanceApiUrl, and the
+  // device-state push updates this same object in place (see `Object.assign(connection.device, normalized)`).
+  const instanceApiUrl = () => device.runningDevice?.instanceApiUrl || '';
   const deviceId = device.id;
 
   const wrap = (method: string, fn: (...args: unknown[]) => unknown) => {
@@ -1174,52 +1197,52 @@ function createRceApiAdapter(accountName: string, device: { id: number; ip: stri
     // consoles (control port 8081, IO port per the device's own IOPortOpened negotiation) — see
     // rce-socket.ts's createRceDebugSocketFactory and debugger-handlers.ts's DebuggerAttach.
     debuggerSupported: true,
-    keypress: wrap('keypress', (key: unknown) => roku.rceKeypress(accountName, instanceApiUrl, key)),
-    launch: wrap('launch', (appId: unknown, params?: unknown) => roku.rceLaunch(accountName, instanceApiUrl, appId, params)),
-    query: wrap('query', (endpoint: unknown) => roku.rceQuery(accountName, instanceApiUrl, endpoint)),
-    post: wrap('post', (endpoint: unknown) => roku.rcePost(accountName, instanceApiUrl, endpoint)),
-    inputText: wrap('inputText', (text: unknown) => roku.rceInputText(accountName, instanceApiUrl, text)),
+    keypress: wrap('keypress', (key: unknown) => roku.rceKeypress(accountName, instanceApiUrl(), key)),
+    launch: wrap('launch', (appId: unknown, params?: unknown) => roku.rceLaunch(accountName, instanceApiUrl(), appId, params)),
+    query: wrap('query', (endpoint: unknown) => roku.rceQuery(accountName, instanceApiUrl(), endpoint)),
+    post: wrap('post', (endpoint: unknown) => roku.rcePost(accountName, instanceApiUrl(), endpoint)),
+    inputText: wrap('inputText', (text: unknown) => roku.rceInputText(accountName, instanceApiUrl(), text)),
     deeplink: wrap('deeplink', (appId: unknown, contentId?: unknown, mediaType?: unknown, params?: unknown) =>
-      roku.rceDeeplink(accountName, instanceApiUrl, appId, contentId, mediaType, params)),
-    getIcon: wrap('getIcon', (appId: unknown) => roku.rceGetIcon(accountName, instanceApiUrl, appId)),
+      roku.rceDeeplink(accountName, instanceApiUrl(), appId, contentId, mediaType, params)),
+    getIcon: wrap('getIcon', (appId: unknown) => roku.rceGetIcon(accountName, instanceApiUrl(), appId)),
     // Classic plugin_inspect/Screenshot flow proxied through the RCE instance's `/sideload` path
     // (design doc — ported from the RokuCommunity VS Code extension's reference `roku-deploy`
     // implementation). Not used by the Dev App tab's own Capture button (isRce grabs the live
     // video frame instead, see screenshots.ts) — this is what Action Scripts' Screenshot step and
     // the Remote tab's auto-screenshot preview actually call.
-    screenshot: wrap('screenshot', (password: unknown, options?: unknown) => roku.rceScreenshot(accountName, instanceApiUrl, password, options)),
-    verifyDevAuth: wrap('verifyDevAuth', (password?: unknown) => roku.rceVerifyDevAuth(accountName, instanceApiUrl, password)),
+    screenshot: wrap('screenshot', (password: unknown, options?: unknown) => roku.rceScreenshot(accountName, instanceApiUrl(), password, options)),
+    verifyDevAuth: wrap('verifyDevAuth', (password?: unknown) => roku.rceVerifyDevAuth(accountName, instanceApiUrl(), password)),
     // "Dev mode" quick action (Quick Remote / Floating Remote / Remote tab) — opens the on-device
     // Developer Settings wizard. "Wake device" needs no adapter entry of its own — it's just two
     // ordinary keypresses (`Guide` then `Home`, matching Roku's own RCE dashboard — see
     // quick-remote.ts's wake-button comment), already covered by the generic `keypress` above.
-    devSettingsCombo: wrap('devSettingsCombo', () => roku.rceDevSettingsCombo(accountName, instanceApiUrl)),
+    devSettingsCombo: wrap('devSettingsCombo', () => roku.rceDevSettingsCombo(accountName, instanceApiUrl())),
     // Telnet system console (port 8080, plugins/free/etc.) — tunneled via the Device API's
     // ports-bridge (`RceSocket`). Pushed data arrives over the same `onTelnetSystemData` listener
     // physical devices use (see `runTelnetSystemCommandSession`'s push-vs-poll branch, keyed off
     // `serverUrl` rather than `isRemote` alone so this adapter's `isRemote:true`/`serverUrl:null`
     // routes here instead of into the LAN-relay polling path).
-    telnetSystemConnect: wrap('telnetSystemConnect', () => roku.rceTelnetSystemConnect(accountName, instanceApiUrl, device.ip)),
+    telnetSystemConnect: wrap('telnetSystemConnect', () => roku.rceTelnetSystemConnect(accountName, instanceApiUrl(), device.ip)),
     telnetSystemDisconnect: wrap('telnetSystemDisconnect', () => roku.rceTelnetSystemDisconnect(device.ip)),
     telnetSystemSend: wrap('telnetSystemSend', (command: unknown) => roku.rceTelnetSystemSend(device.ip, command)),
     // BrightScript debug console (port 8085, the Console tab) — same ports-bridge tunnel.
     // `setupTelnet` consumes pushed data via `onTelnetData`/`onTelnetDisconnected`/`onTelnetError`,
     // matched to this tab by `debugTelnetConnectionId()` falling through to plain `ip` for any
     // device with a falsy `serverUrl` — no separate RCE-specific listener needed.
-    telnetConnect: wrap('telnetConnect', () => roku.rceTelnetConnect(accountName, instanceApiUrl, device.ip)),
+    telnetConnect: wrap('telnetConnect', () => roku.rceTelnetConnect(accountName, instanceApiUrl(), device.ip)),
     telnetDisconnect: wrap('telnetDisconnect', () => roku.rceTelnetDisconnect(device.ip)),
     // Sideload (design doc §6 item 7) — `sideloading.ts`/`sideloaded-app.ts` call this through the
     // same DevAppApi shape physical devices use. `remoteDebug` forwards `remotedebug=1` (opens the
     // debug control port, matching `debuggerSupported: true` above); `serial` is accepted but
     // ignored — RCE resolves its own identity from `device.ip` (the serial), not this param.
     sideload: wrap('sideload', (filePath: unknown, password: unknown, remoteDebug?: unknown) =>
-      roku.rceSideload(accountName, instanceApiUrl, filePath, password, !!remoteDebug, device.ip)),
-    deleteSideload: wrap('deleteSideload', (password: unknown) => roku.rceDeleteSideload(accountName, instanceApiUrl, password)),
+      roku.rceSideload(accountName, instanceApiUrl(), filePath, password, !!remoteDebug, device.ip)),
+    deleteSideload: wrap('deleteSideload', (password: unknown) => roku.rceDeleteSideload(accountName, instanceApiUrl(), password)),
     // App Connector (RALE, port 49200) — wake and connect are RCE-specific (ECP-proxy wake,
     // ports-bridge tunnel dial); once connected, the device's synthetic `ip` IS the connectionId,
     // so command/disconnect reuse the same local-device RALE IPC unchanged (see channels.ts).
-    raleWake: wrap('raleWake', (port: unknown) => roku.rceRaleWake(accountName, instanceApiUrl, port)),
-    raleConnect: wrap('raleConnect', (port: unknown) => roku.rceRaleConnect(accountName, instanceApiUrl, device.ip, port)),
+    raleWake: wrap('raleWake', (port: unknown) => roku.rceRaleWake(accountName, instanceApiUrl(), port)),
+    raleConnect: wrap('raleConnect', (port: unknown) => roku.rceRaleConnect(accountName, instanceApiUrl(), device.ip, port)),
     raleCommand: wrap('raleCommand', (connectionId: unknown, command: unknown, args: unknown) =>
       roku.raleCommand(connectionId, command, args)),
     raleDisconnect: wrap('raleDisconnect', (connectionId: unknown) => roku.raleDisconnect(connectionId))
@@ -5915,6 +5938,9 @@ function createDevicePanel(device, tabId, isRemote = false, serverUrl = null, lo
   panel.className = 'tab-panel';
   panel.id = tabId;
   panel.dataset.ip = device.ip;
+  // "Enable Debugger" lives on the device object from here on (device.debuggerEnabled) — see
+  // modules/utils/device-debugger-flag.ts. Panel modules read it / listen for its change event.
+  bindPanelDevice(panel, device);
   
   // Add remote-specific data attributes
   if (isRemote) {
