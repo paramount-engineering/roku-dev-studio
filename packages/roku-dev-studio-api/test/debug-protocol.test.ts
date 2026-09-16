@@ -243,7 +243,7 @@ describe('DebugProtocolClient connectSocket injection', () => {
     await new Promise((resolve) => process.nextTick(resolve));
     assert.deepEqual(requestedPorts, [8081, 8085]);
 
-    await client.destroy(true);
+    await client.destroy();
   });
 
   it('does not end the session when the IO-port connect fails — only console-output streaming is lost', async () => {
@@ -276,7 +276,7 @@ describe('DebugProtocolClient connectSocket injection', () => {
     assert.equal(appExitEmitted, false);
     assert.equal(sockets[0].destroyed, false);
 
-    await client.destroy(true);
+    await client.destroy();
   });
 
   it('ignores the device isPrimary flag on protocol <3.1.0 (thread-hopping workaround)', async () => {
@@ -297,7 +297,7 @@ describe('DebugProtocolClient connectSocket injection', () => {
     await client.threads();
     assert.equal(client.primaryThread, 0);
 
-    await client.destroy(true);
+    await client.destroy();
   });
 
   it('trusts the device isPrimary flag on protocol >=3.1.0', async () => {
@@ -313,7 +313,7 @@ describe('DebugProtocolClient connectSocket injection', () => {
     await client.threads();
     assert.equal(client.primaryThread, 1);
 
-    await client.destroy(true);
+    await client.destroy();
   });
 
   it('retries a variable path lowercased on protocol <3.1.0 casing errors', async () => {
@@ -351,7 +351,7 @@ describe('DebugProtocolClient connectSocket injection', () => {
     const result = await pending;
     assert.equal(result.data.errorCode, 0);
 
-    await client.destroy(true);
+    await client.destroy();
   });
 });
 

@@ -6,6 +6,25 @@ tags in [Releases](https://github.com/paramount-engineering/roku-dev-studio/rele
 
 ## [Unreleased]
 
+### Fixed
+- Console: a Sideload Relay install with debugging enabled could leave the device's console port held by an orphaned socket — the panel showed Disconnected, every Connect failed with "Console connection is already in use.", and only restarting the app recovered. Concurrent connects for one device now share a single socket, a replaced socket's close can no longer tear down its successor, and the Console panel adopts a connection the app opened on its behalf (status and Connect/Disconnect reflect the live socket).
+- Console: after a relay run, Disconnect and closing the device tab now actually release the device's console port (the relay no longer holds a lease it never released).
+- Debugger: Detach, closing a device tab, the MCP `debugger_detach` tool, and quitting the app no longer exit the running channel on the device — detaching releases a halted thread and closes the debug sockets without sending the protocol's exit-channel command. "Stop & Exit App" remains the explicit way to exit.
+- Roku Cloud Emulator: a tunnel closed by the remote end now surfaces as a disconnect (and is re-dialed on the next connect) instead of appearing connected with no output.
+- Remote Server: uploads and exports no longer fail with `ENOENT … /tmp/roku-relay-uploads/…` after the host's temp cleaner removes the idle upload directory — it is re-created before every write.
+- Debugger: the automatic attach when a channel reports "Waiting for debugger" never fired for local devices (it matched the flag by IP while the flag is stored by serial) and did not exist for lab-server or Cloud Emulator devices. It now works for all three.
+- Console: after a debugger session ends, Roku keeps routing that channel run's print output to the (closed) debugger and does not send it back to port 8085 until the channel is relaunched — the Console used to just go silent. It now says so, both when the session ends and when a reconnect replays a run that a debugger had owned, and points at Restart / re-sideload.
+- Roku Cloud Emulator: the Console dropped every line of the debugger's output for RCE devices (an origin-filter mismatch), so a debugged RCE channel looked dead even while attached. Debugger output now renders for RCE like it does locally.
+- Roku Cloud Emulator: a debug sideload is now Delete + Install (so `remotedebug=1` is honored and the channel really relaunches), and an "Identical to previous version" reply no longer counts as success — it triggers the same clean reinstall.
+- Roku Cloud Emulator: device operations resolve the instance URL per call instead of capturing it once, so an instance restart no longer leaves an open tab talking to a stale URL.
+- Debugger: a replayed "Waiting for debugger" line that already resolved (a debugger connected, or nobody did) no longer triggers a 20-second attach attempt on every console reconnect.
+- Debugger: the attach-failure help no longer claims that "Thread selected" means the socket protocol is inactive (that line also follows a successful attach); it now explains the detached-run case and the real micro-debugger banner.
+
+### Changed
+- Debugger: the per-device "Sideload with Debugging" checkbox (Dev App tab, Fiddle) is now "Enable Debugger", because it governs more than sideloads: while on, the debugger also attaches automatically whenever the running channel reports it is waiting for one on port 8081 — a launch from the Roku remote, the Apps tab, or an IDE, on local, lab-server and Cloud Emulator devices alike. A stale "waiting" line replayed by Roku when the Console connects is tried and dropped quietly. Existing per-device choices are carried over automatically (the stored setting key changed).
+- Sideload Relay: every target's device tab and Console now open at the start of a run, and the console connects before the install, so a target whose install fails is still connected and visible, and the Console is already listening when the channel compiles. Local targets get a transparent console reconnect after install (some firmware unbinds the previous console client on install). The debugger still attaches after install, since its port only opens on a debug launch.
+- Remote Server: sideload uploads are forwarded to the device straight from memory instead of being written to and read back from a temp file; the temp directory is now used only for pcap and CA-certificate exports.
+
 ## [1.2.0]
 
 ### Added

@@ -106,10 +106,14 @@ describe('RceSocket', () => {
       // A Readable with only an 'end' listener stays paused and never emits 'end' — resume()
       // (or a 'data' listener) is required to put it in flowing mode.
       socket.resume();
+      const closed = new Promise<void>((resolve) => socket.on('close', resolve));
       await new Promise<void>((resolve) => socket.on('end', resolve));
+      // allowHalfOpen:false — a remote close must also finish the writable side so the stream
+      // auto-destroys and emits 'close' (net.Socket semantics); consumers key on `destroyed`/'close'.
+      await closed;
 
       assert.equal(errored, false);
-      socket.destroy();
+      assert.equal(socket.destroyed, true);
     } finally {
       await close();
     }

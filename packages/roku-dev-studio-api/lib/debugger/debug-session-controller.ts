@@ -201,7 +201,7 @@ export class DebugSessionController {
         return { ok: true };
       } catch (e) {
         lastError = e instanceof Error ? e.message : String(e);
-        try { await client.destroy(true); } catch { /* best-effort teardown before retry */ }
+        try { await client.destroy(); } catch { /* best-effort teardown before retry */ }
         if (Date.now() >= deadline) break;
         await sleep(PROBE_INTERVAL_MS);
       }
@@ -224,9 +224,10 @@ export class DebugSessionController {
     const deviceParagraph = desc ? `\n\n${desc}` : '';
     const detail = refused
       ? `Debug port ${DEBUG_CONTROL_PORT} is closed on ${clean} (connection refused). The running channel was NOT launched with debugging.${deviceParagraph}\n\n` +
-        `- Re-sideload with "Sideload with Debugging" enabled (or drop a STOP in your code — that auto-enables it).\n` +
+        `- Re-sideload with "Enable Debugger" checked (or drop a STOP in your code — that auto-enables it).\n` +
         `- A plain sideload, a Replace/reload without the debug flag, or an app relaunch does not open the debug port.\n` +
-        `- If the console shows the Micro Debugger "Thread selected…" text, the socket protocol is NOT active for this run.\n` +
+        `- If the console showed "Waiting for debugger" followed by "remote debugger connected", a debugger already used this run and left — 8081 does not reopen for the same launch; relaunch (Restart) to debug again.\n` +
+        `- If the console shows "BrightScript Micro Debugger" / "Suspending threads…" banners, STOPs are falling into the on-device 8085 debugger and the socket protocol is not active.\n` +
         `- Confirm Settings → System → Advanced system settings → "Control by mobile apps" is Enabled or Permissive.`
       : `Connected to debug port ${DEBUG_CONTROL_PORT} on ${clean} but the debug handshake never completed.${deviceParagraph}\n\n` +
         `- The port may be held by another debugger (a VS Code BrightScript session or a second RDS window), or the running channel is not a debug build.\n` +
@@ -237,11 +238,13 @@ export class DebugSessionController {
   }
 
   /**
-   * Close and forget the session for `ip` (idempotent). Releases any halted thread and asks
-   * the device to exit cleanly before closing the socket — a hard kill (the previous
-   * `destroy(true)`) skips both, so a thread paused at a breakpoint/STOP stayed halted
-   * forever once the only debugger that could resume it was gone, freezing the channel
-   * on-device (e.g. pressing the sidebar's Stop/Detach while stopped at a breakpoint).
+   * Close and forget the session for `ip` (idempotent). Releases any halted thread first —
+   * without it a thread paused at a breakpoint/STOP stayed halted forever once the only
+   * debugger that could resume it was gone, freezing the channel on-device — then hard-closes
+   * the sockets. Deliberately does NOT send the protocol's ExitChannel command: that terminates
+   * the channel on the device, and detaching (sidebar Detach, tab close, app quit, the teardown
+   * before a re-attach) must leave the app running. Exiting the app is the sidebar's separate
+   * Stop action (detach + Home keypress).
    */
   async detach(ip: string): Promise<void> {
     const s = this.sessions.get(ip);
@@ -255,9 +258,7 @@ export class DebugSessionController {
       /* best-effort */
     }
     try {
-      // destroy(false) sends the protocol's ExitChannel command and waits briefly for it,
-      // instead of the previous immediate hard socket kill with no handshake at all.
-      await s.client.destroy(false);
+      await s.client.destroy();
     } catch (e) {
       apiError('[debugger] destroy error:', ip, e instanceof Error ? e.message : String(e));
     }
@@ -489,8 +490,8 @@ export class DebugSessionController {
       // (channel exit, or a control-socket error while the app is still printing) leaves
       // the io socket live, emitting ghost output for a session we've marked
       // disconnected — and a later re-attach can't clean it up (detach() early-returns
-      // once the session is gone). destroy(true) is idempotent (guards on `ended`).
-      void session.client.destroy(true);
+      // once the session is gone). destroy() is idempotent (guards on `ended`).
+      void session.client.destroy();
       this.emit(DEBUGGER_EVENTS.State, { ip, state: 'disconnected' });
     };
     client.on('app-exit', end);

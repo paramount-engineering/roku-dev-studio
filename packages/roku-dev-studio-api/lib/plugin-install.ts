@@ -17,13 +17,22 @@ type LogFn = (msg: string) => void;
 
 interface SideloadChannelOpts {
   ip: string;
-  filePath: string;
+  /** Path to the .zip on this machine. Alternatively pass `zipData` (+ `filename`). */
+  filePath?: string;
+  /**
+   * The .zip bytes already in memory — e.g. the remote server forwarding a multipart upload
+   * straight to the device, without a temp-file round-trip through its disk (which failed with
+   * ENOENT whenever the host's tmp cleaner had pruned the upload directory).
+   */
+  zipData?: Buffer;
+  /** Archive filename sent to the device with `zipData` (sanitized; defaults to `channel.zip`). */
+  filename?: string;
   password: string;
   log?: LogFn;
   /**
    * Optional extra multipart form fields sent alongside `mysubmit` + `archive`
    * (e.g. `remotedebug=1`). The Dev App sideload and the Sideload Relay fan-out
-   * both forward this for "Sideload with Debugging" devices. Carried through every
+   * both forward this for "Enable Debugger" devices. Carried through every
    * attempt (Replace, Install, and the Delete+Install force-reload) so a debug
    * sideload keeps opening port 8081 on whichever path lands.
    */
@@ -131,21 +140,28 @@ async function postPluginInstall(
 /**
  * Sideload a channel package to a Roku device.
  */
-async function sideloadChannel({ ip, filePath, password, log = (_m: string) => undefined, extraFields = [], cleanInstall = false }: SideloadChannelOpts) {
+async function sideloadChannel({ ip, filePath, zipData, filename, password, log = (_m: string) => undefined, extraFields = [], cleanInstall = false }: SideloadChannelOpts) {
   const guard = validateDevRequest(ip, password);
   if (guard) return guard;
-  if (typeof filePath !== 'string' || !filePath.trim()) {
-    return { success: false, error: 'File path is required' };
-  }
-  const normalizedPath = path.normalize(filePath.trim());
-  // Reject only actual `..` path segments, not directory names that merely contain
-  // ".." (e.g. `/Users/x/my..app/chan.zip`). After normalize, a legit path has no
-  // standalone `..` segment, so this catches traversal without false-positives.
-  if (normalizedPath.split(path.sep).includes('..')) {
-    return { success: false, error: 'Invalid file path' };
-  }
-  if (!fs.existsSync(normalizedPath)) {
-    return { success: false, error: 'File not found' };
+  let normalizedPath = '';
+  if (zipData) {
+    if (!Buffer.isBuffer(zipData) || zipData.length === 0) {
+      return { success: false, error: 'Package data is empty' };
+    }
+  } else {
+    if (typeof filePath !== 'string' || !filePath.trim()) {
+      return { success: false, error: 'File path is required' };
+    }
+    normalizedPath = path.normalize(filePath.trim());
+    // Reject only actual `..` path segments, not directory names that merely contain
+    // ".." (e.g. `/Users/x/my..app/chan.zip`). After normalize, a legit path has no
+    // standalone `..` segment, so this catches traversal without false-positives.
+    if (normalizedPath.split(path.sep).includes('..')) {
+      return { success: false, error: 'Invalid file path' };
+    }
+    if (!fs.existsSync(normalizedPath)) {
+      return { success: false, error: 'File not found' };
+    }
   }
 
   const AUTH_FAIL = { success: false, error: 'Authentication failed. Check your developer password.', authFailed: true };
@@ -159,9 +175,12 @@ async function sideloadChannel({ ip, filePath, password, log = (_m: string) => u
   const isFailureBody = (t: string) => /Install Failure|Failure/i.test(t);
 
   try {
-    const fileData = fs.readFileSync(normalizedPath);
-    const filename = path.basename(normalizedPath);
-    const files = [{ name: 'archive', filename, data: fileData }];
+    const fileData: Buffer = zipData ?? fs.readFileSync(normalizedPath);
+    // An uploaded name is untrusted input headed into a multipart header — keep it to a safe charset.
+    const archiveName = zipData
+      ? (filename || '').replace(/[^A-Za-z0-9._-]/g, '') || 'channel.zip'
+      : path.basename(normalizedPath);
+    const files = [{ name: 'archive', filename: archiveName, data: fileData }];
     const postWith = (submit: string) =>
       postPluginInstall(ip, password, [{ name: 'mysubmit', value: submit }, ...extraFields], files, SIDELOAD_TIMEOUT_MS, log);
     const postDelete = () =>

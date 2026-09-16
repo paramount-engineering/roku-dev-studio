@@ -66,7 +66,12 @@ export class RceSocket extends Duplex {
   private readonly writeQueue: Array<{ chunk: Buffer; callback: (error?: Error | null) => void }> = [];
 
   constructor(opts: RceSocketOptions) {
-    super();
+    // allowHalfOpen:false = net.Socket's default: when the remote end closes the tunnel (readable
+    // side ends via push(null) below) the writable side is ended too, so the stream auto-destroys
+    // and emits 'close'. With Node's Duplex default (true) a remote close never produced 'close' or
+    // `destroyed`, so consumers keyed on those — the RCE telnet map's TelnetDisconnected broadcast,
+    // the debugger client's session end — never learned the tunnel was dead.
+    super({ allowHalfOpen: false });
     const url = opts.urlOverride ?? buildPortBridgeUrl(opts.instanceApiUrl, opts.port);
     this.socket = new WebSocketImpl(url, {
       headers: { Authorization: `Bearer ${opts.token}` }

@@ -68,6 +68,10 @@ function parseSideloadResponse(text: string): RceSideloadResult {
     const match = text.match(/Install Failure:\s*([^<\n]+)/);
     return { success: false, error: match ? match[1].trim() : 'Installation failed' };
   }
+  // The device kept the OLD instance running — nothing relaunched (reads as a success page otherwise).
+  if (isIdenticalBuild(text)) {
+    return { success: false, error: 'Identical to previous version — the device did not relaunch the channel.' };
+  }
   if (responseLooksLikeAuthFailure(0, text)) {
     return { success: false, error: 'Authentication failed. Check the dev password.', authFailed: true };
   }
@@ -181,23 +185,40 @@ export async function rceVerifyDevAuth(opts: RceSideloadOptions): Promise<RceSid
   }
 }
 
-/** Sideload a channel package to a running RCE instance. Simpler than the physical-device
- *  `sideloadChannel` (no Replace/identical-build/Delete+Install fallback chain) — RCE instances are
- *  short-lived and freshly booted per session, so the firmware quirks that chain exists for
- *  (a long-running device accumulating state across many sideloads) don't apply the same way; a
- *  plain `Install` is enough. Widen this if that assumption turns out wrong in practice.
+/** Roku's "Identical to previous version -- not replacing." reply: the OLD instance keeps running. */
+function isIdenticalBuild(text: string): boolean {
+  return /identical to previous version/i.test(text);
+}
+
+/** Sideload a channel package to a running RCE instance — the same launch semantics as the
+ *  physical-device `sideloadChannel`, minimally: a DEBUG sideload (`remoteDebug`) is always
+ *  Delete+Install so the channel really relaunches with `remotedebug=1`; a plain Install that the
+ *  device answers with "Identical to previous version" (it kept the old instance running — no
+ *  relaunch, so no new console output and no reopened debug port) falls back to Delete+Install too.
+ *  The earlier "a plain Install is enough on RCE" assumption was wrong in practice: an instance
+ *  stays up across many sideloads within a session, and a channel whose previous run had a socket
+ *  debugger attached keeps its print output bound to that (closed) debugger until it relaunches.
  *
  *  `remoteDebug` forwards `remotedebug=1`, the same multipart field the physical/LAN-relay
- *  sideload paths use for "Sideload with Debugging" — it opens the debug control port (8081) on
+ *  sideload paths use for "Enable Debugger" — it opens the debug control port (8081) on
  *  launch, tunneled the same ports-bridge way as the telnet consoles (see `rce-socket.ts`). */
 export async function rceSideload(opts: RceSideloadOptions, zipData: Buffer, filename: string, remoteDebug?: boolean): Promise<RceSideloadResult> {
-  try {
-    const { statusCode, text } = await postPluginInstall(
+  const AUTH_FAIL: RceSideloadResult = { success: false, error: 'Authentication failed. Check the dev password.', authFailed: true };
+  const install = () =>
+    postPluginInstall(
       opts,
       [{ name: 'mysubmit', value: 'Install' }, ...(remoteDebug ? [{ name: 'remotedebug', value: '1' }] : [])],
       [{ name: 'archive', filename, data: zipData }]
     );
-    if (statusCode === 401) return { success: false, error: 'Authentication failed. Check the dev password.', authFailed: true };
+  try {
+    if (remoteDebug) await rceDeleteSideload(opts).catch(() => undefined); // clean launch — best-effort
+    let { statusCode, text } = await install();
+    if (statusCode === 401) return AUTH_FAIL;
+    if (isIdenticalBuild(text)) {
+      await rceDeleteSideload(opts).catch(() => undefined);
+      ({ statusCode, text } = await install());
+      if (statusCode === 401) return AUTH_FAIL;
+    }
     return parseSideloadResponse(text);
   } catch (error: unknown) {
     return { success: false, error: errorMessage(error) };

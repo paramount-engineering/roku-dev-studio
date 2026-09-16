@@ -504,11 +504,15 @@ function parseMultipart(buffer, boundary) {
   return parts;
 }
 
-// Create temp directory for uploads (path under tmp only)
+// Temp directory for the pcap / CA-cert exports (path under tmp only; sideload uploads no longer
+// touch the disk). Re-ensured before every write: the host's tmp cleaner can prune it while the
+// server is up (it sits empty between requests), after which every write failed with a bare
+// `ENOENT … open '/tmp/roku-relay-uploads/…'` until the process was restarted.
 const TEMP_DIR = resolveUnderBase(os.tmpdir(), 'roku-relay-uploads') || path.join(os.tmpdir(), 'roku-relay-uploads');
-if (!fs.existsSync(TEMP_DIR)) {
+function ensureTempDir(): void {
   fs.mkdirSync(TEMP_DIR, { recursive: true });
 }
+ensureTempDir();
 
 // ============================================
 // Roku Device Discovery + ECP (roku-dev-studio-api)
@@ -1392,6 +1396,7 @@ async function handleRequest(req, res) {
         resolveUnderBase(TEMP_DIR, `pcap-${nodeCrypto.randomUUID()}.pcap`) ||
         path.join(TEMP_DIR, `pcap-${Date.now()}.pcap`);
       try {
+        ensureTempDir();
         const result = await networkInspector.exportPcap(tempPath, deviceIps.length > 0 ? deviceIps : undefined);
         if (!result.success || !fs.existsSync(tempPath)) {
           return sendError(res, result.error || 'Export failed', 400);
@@ -1427,6 +1432,7 @@ async function handleRequest(req, res) {
       const tempPath =
         resolveUnderBase(TEMP_DIR, `ca-${nodeCrypto.randomUUID()}.pem`) || path.join(TEMP_DIR, `ca-${Date.now()}.pem`);
       try {
+        ensureTempDir();
         const result = networkInspector.exportCaPem(tempPath);
         if (!result.success || !fs.existsSync(tempPath)) {
           return sendError(res, result.error || 'Export failed', 400);
@@ -1449,6 +1455,7 @@ async function handleRequest(req, res) {
       const tempPath =
         resolveUnderBase(TEMP_DIR, `ca-${nodeCrypto.randomUUID()}.crt`) || path.join(TEMP_DIR, `ca-${Date.now()}.crt`);
       try {
+        ensureTempDir();
         const result = networkInspector.exportCaCert(tempPath);
         if (!result.success || !fs.existsSync(tempPath)) {
           return sendError(res, result.error || 'Export failed', 400);
@@ -1863,9 +1870,10 @@ async function handleRequest(req, res) {
       // Sideload (requires password) - supports both file upload and filePath
       if (subPath === '/sideload' && method === 'POST') {
         const contentType = req.headers['content-type'] || '';
-        let filePath = null;
+        let filePath: string | null = null;
+        let zipData: Buffer | null = null;
+        let uploadName = '';
         let password = null;
-        let tempFile = null;
         let remoteDebugFlag = false;
 
         // Handle multipart file upload
@@ -1889,17 +1897,14 @@ async function handleRequest(req, res) {
           remoteDebugFlag = parts.remotedebug === '1' || parts.remotedebug === 'true';
 
           if (parts.file && parts.file.data) {
-            // Save uploaded file to temp location (extension only, no path from filename).
-            // Unique per request (like the pcap/CA-cert temp names above) rather than
-            // `Date.now()`-only — a Sideload Relay fan-out can fire two `/sideload` POSTs at this
-            // device close enough together to land in the same millisecond, and a shared filename
-            // means whichever request finishes first deletes the file the other is still reading.
-            const ext = (path.extname(parts.file.filename) || '.zip').replace(/[^a-zA-Z0-9.]/g, '') || '.zip';
-            const safeTempName = `upload-${nodeCrypto.randomUUID()}${ext}`;
-            tempFile = resolveUnderBase(TEMP_DIR, safeTempName) || path.join(TEMP_DIR, safeTempName);
-            fs.writeFileSync(tempFile, parts.file.data);
-            filePath = tempFile;
-            log(`Sideload: Saved uploaded file: ${parts.file.filename} -> ${tempFile} (${parts.file.data.length} bytes)`);
+            // Forward the uploaded bytes straight to the device. They used to be written under
+            // TEMP_DIR only so the path-based sideloadChannel could read them back (then deleted) —
+            // a disk round-trip that failed every sideload with ENOENT once the host's tmp cleaner
+            // had pruned the directory.
+            const uploaded: Buffer = parts.file.data;
+            zipData = uploaded;
+            uploadName = String(parts.file.filename || '');
+            log(`Sideload: Received upload ${uploadName || '(unnamed)'} (${uploaded.length} bytes)`);
           } else {
             log(`Sideload: No file data found. Parts: ${JSON.stringify(Object.keys(parts))}`);
           }
@@ -1920,8 +1925,7 @@ async function handleRequest(req, res) {
           }
         }
         
-        if (!filePath || !password) {
-          if (tempFile && fs.existsSync(tempFile)) fs.unlinkSync(tempFile);
+        if ((!filePath && !zipData) || !password) {
           return sendError(res, 'Missing file or password', 400);
         }
 
@@ -1930,18 +1934,13 @@ async function handleRequest(req, res) {
           // remotedebug=1 (a Replace can drop it), matching the local app's sideload handler.
           const result = await sideloadChannel({
             ip,
-            filePath,
+            ...(zipData ? { zipData, filename: uploadName } : { filePath: filePath as string }),
             password,
             log: (msg) => log(msg),
             ...(remoteDebugFlag ? { cleanInstall: true, extraFields: [{ name: 'remotedebug', value: '1' }] } : {})
           });
-          if (tempFile && fs.existsSync(tempFile)) {
-            fs.unlinkSync(tempFile);
-            log(`Cleaned up temp file: ${tempFile}`);
-          }
           return sendJson(res, result);
         } catch (error) {
-          if (tempFile && fs.existsSync(tempFile)) fs.unlinkSync(tempFile);
           return sendJson(res, { success: false, error: `Upload failed: ${errMsg(error)}` });
         }
       }

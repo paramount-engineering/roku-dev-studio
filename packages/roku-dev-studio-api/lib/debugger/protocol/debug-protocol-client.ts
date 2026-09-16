@@ -22,7 +22,6 @@ import {
   encodeAddConditionalBreakpoints,
   encodeContinue,
   encodeExecute,
-  encodeExitChannel,
   encodeHandshake,
   encodeRemoveBreakpoints,
   encodeSetExceptionBreakpoints,
@@ -86,10 +85,6 @@ interface AddBreakpointInput {
 }
 
 type AnyResult = ParseResult<Record<string, unknown>>;
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
 
 export class DebugProtocolClient extends EventEmitter {
   private readonly host: string;
@@ -614,16 +609,12 @@ export class DebugProtocolClient extends EventEmitter {
     this.emit(evt);
   }
 
-  async destroy(immediate = false): Promise<void> {
-    // Politely ask the device to end the debug session (unless a hard/immediate kill).
-    if (this.controlSocket && !immediate) {
-      try {
-        const id = this.nextId();
-        await Promise.race([this.send(CommandCode.ExitChannel, id, encodeExitChannel(id)), sleep(1500)]);
-      } catch {
-        /* best-effort */
-      }
-    }
+  /**
+   * Hard-close the control + IO sockets and fail any in-flight requests. Idempotent. Never
+   * sends ExitChannel: that command exits the channel on the device, and every caller here is a
+   * detach/teardown that must leave the app running (see DebugSessionController.detach).
+   */
+  async destroy(): Promise<void> {
     this.ended = true;
     this.teardownControlSocket();
     if (this.ioSocket) {

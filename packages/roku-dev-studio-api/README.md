@@ -255,7 +255,7 @@ Most ECP calls resolve to an object:
 | API | Signature |
 |-----|-----------|
 | `captureRokuScreenshot` | `({ ip, password, exec?, waitAfterTriggerMs?, retryWaitMs?, maxRetries?, minValidBytes?, log? })` |
-| `sideloadChannel` | `({ ip, filePath, password, log? })` |
+| `sideloadChannel` | `({ ip, filePath? \| zipData? (+ filename?), password, log?, extraFields?, cleanInstall? })` |
 | `deleteSideload` | `({ ip, password, log? })` |
 
 ---
