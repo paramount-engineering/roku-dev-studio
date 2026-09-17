@@ -214,7 +214,11 @@ export class RceManagementClient {
         body: init.body !== undefined ? JSON.stringify(init.body) : undefined
       });
       const text = await res.text();
-      const parsed = text ? JSON.parse(text) : null;
+      // Error bodies are not always JSON (a bad token gets a plain-text "Jwt is not valid" 401) —
+      // keep the raw text so `errorForStatus` falls through to its status message instead of the
+      // caller seeing "Unexpected token 'J' … is not valid JSON".
+      let parsed: unknown = null;
+      try { parsed = text ? JSON.parse(text) : null; } catch { parsed = text; }
       if (!res.ok) {
         // `rawBody` carries whatever the API actually returned beyond the flattened `error`
         // string (e.g. a structured `detail` object with per-field validation reasons) —

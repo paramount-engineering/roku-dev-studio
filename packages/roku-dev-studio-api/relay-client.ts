@@ -275,51 +275,50 @@ function createRelayClient({
     /**
      * Sideload a channel package to the Roku via the relay.
      *
-     * Upload modes (checked in order):
+     * Upload modes:
      *  - `file` is a Buffer  → multipart upload of that buffer
      *  - `file` is a string  → read from that local path, then multipart upload
-     *  - neither `file` provided → JSON body with `filePath` (must exist on relay host)
+     * (The server's former JSON `{ filePath }` mode — a path on the relay host — was removed; the
+     * route is multipart-only.)
      *
      * @param {string} deviceIp
-     * @param {{ file?: Buffer | string, filePath?: string, password: string, fileName?: string }} opts
+     * @param {{ file: Buffer | string, password: string, fileName?: string }} opts
      *   `fileName` is optional; derived from the path when `file` is a string, defaults to "package.zip" for Buffers.
      */
     sideload(
       deviceIp: string,
       {
         file,
-        filePath,
         password,
         fileName
       }: {
         file?: Buffer | string;
-        filePath?: string;
         password?: string;
         fileName?: string;
       } = {}
     ) {
-      if (file != null) {
-        if (password == null || password === '') {
-          throw new Error('password is required for sideload');
-        }
-        let buf: Buffer;
-        let name: string;
-        if (Buffer.isBuffer(file)) {
-          buf = file;
-          name = fileName || 'package.zip';
-        } else if (typeof file === 'string') {
-          buf = fs.readFileSync(file);
-          name = fileName || path.basename(file);
-        } else {
-          throw new Error('file must be a Buffer or a string path');
-        }
-        const fields: MultipartField[] = [
-          { name: 'file', value: buf, filename: name, contentType: 'application/zip' },
-          { name: 'password', value: password }
-        ];
-        return relayMultipartRequest(base, `/device/${enc(deviceIp)}/sideload`, fields, uploadTimeout);
+      if (file == null) {
+        throw new Error('file is required for sideload (a Buffer or a local path)');
       }
-      return relayRequest(base, 'POST', `/device/${enc(deviceIp)}/sideload`, { filePath, password }, timeout);
+      if (password == null || password === '') {
+        throw new Error('password is required for sideload');
+      }
+      let buf: Buffer;
+      let name: string;
+      if (Buffer.isBuffer(file)) {
+        buf = file;
+        name = fileName || 'package.zip';
+      } else if (typeof file === 'string') {
+        buf = fs.readFileSync(file);
+        name = fileName || path.basename(file);
+      } else {
+        throw new Error('file must be a Buffer or a string path');
+      }
+      const fields: MultipartField[] = [
+        { name: 'file', value: buf, filename: name, contentType: 'application/zip' },
+        { name: 'password', value: password }
+      ];
+      return relayMultipartRequest(base, `/device/${enc(deviceIp)}/sideload`, fields, uploadTimeout);
     },
 
     raleWake(deviceIp: string, port = DEFAULT_RALE_PORT) {

@@ -26,6 +26,8 @@ import { DEBUG_CONTROL_PORT } from './protocol/constants';
 import { DebugProtocolClient, type DebugSocketLike } from './protocol/debug-protocol-client';
 import type { ExceptionBreakpointSpec } from './protocol/encode';
 
+const { singleFlight } = require('roku-dev-studio-platform/async-patterns');
+
 /** Total budget to keep retrying attach after a debug sideload (8081 opens a beat late). */
 const PORT_WAIT_MS = 20000;
 /** Per-attempt bound on connect + handshake (belt-and-suspenders around the socket connect). */
@@ -146,16 +148,7 @@ export class DebugSessionController {
     // second auto-reattach while a manual Attach click is still connecting) would otherwise fight
     // over the single-client 8081 port, and one side always loses with a misleading "port
     // closed"/"handshake never completed" error against a session that's actually fine.
-    const inFlight = this.attaching.get(clean);
-    if (inFlight) return inFlight;
-
-    const attempt = this.runAttach(clean, opts?.connectSocket);
-    this.attaching.set(clean, attempt);
-    try {
-      return await attempt;
-    } finally {
-      this.attaching.delete(clean);
-    }
+    return singleFlight(this.attaching, clean, () => this.runAttach(clean, opts?.connectSocket));
   }
 
   private async runAttach(clean: string, connectSocket?: (port: number) => Promise<DebugSocketLike>): Promise<{ ok: boolean; error?: string }> {

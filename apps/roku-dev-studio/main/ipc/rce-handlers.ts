@@ -11,12 +11,23 @@
 
 import type { IpcMainInvokeEvent } from 'electron';
 import { IPC } from '../../shared/ipc/channels';
+import type { DebugTelnetConnectResult } from '../../shared/ipc/debug-telnet-connection-id';
 import { S } from '../../shared/strings/index';
+import { singleFlight } from 'roku-dev-studio-platform/async-patterns';
 import { RceManagementClient, RceEcpClient, connectRceSocket, rceSideload, rceDeleteSideload, rceVerifyDevAuth, rceCaptureScreenshot } from 'roku-dev-studio-rce';
 import type { RceDevice, RceSocket, WatchDeviceStateHandle } from 'roku-dev-studio-rce';
 import { resolveSideloadPackageFile, computeSideloadDebugFlags } from './dev-app-handlers';
 import { notifyDebuggerReattach } from './debugger-handlers';
-import { getRceAccountNames as getAccountNames, getRceAccountToken as getAccountToken, rceAccountKey as accountKey } from '../rce-account-store';
+import {
+  getRceAccountNames as getAccountNames,
+  getRceAccountToken as getAccountToken,
+  getRceAccountUserId,
+  findRceAccountByToken,
+  findRceAccountByUserId,
+  setRceAccount,
+  setRceAccountUserId,
+  deleteRceAccount
+} from '../rce-account-store';
 import { recordRceDeviceSeen } from '../rce-device-registry';
 import { broadcastFiddleTerminalData } from '../fiddle-window';
 
@@ -25,7 +36,6 @@ const path = require('path');
 const os = require('os');
 const { errorMessage } = require('roku-dev-studio-platform');
 const { parseDeviceInfo, normalizeEcpSettingMode, writeRokuTelnetLine, raleRegisterSocket } = require('roku-dev-studio-api');
-const secretStore = require('../secret-store') as typeof import('../secret-store');
 const { mainWarn } = require('../log');
 
 /** Roku's telnet system console (plugins/free/remove_plugin) — same port physical devices use,
@@ -162,7 +172,7 @@ export async function enrichWithEcpMode(device: RceDevice, token: string): Promi
  *  going through IPC — mirrors `telnet-handlers.ts` exporting `ensureDebugTelnetConnected` the
  *  same way for physical devices. */
 const debugTelnetSockets = new Map<string, { socket: RceSocket; openedAtMs: number; bytesReceived: number }>();
-type RceTelnetConnectResult = { success: boolean; error?: string; connectionId?: string };
+type RceTelnetConnectResult = DebugTelnetConnectResult;
 /** ip -> connect in flight. Same single-flight guard as telnet-handlers.ts's `debugTelnetConnecting`:
  *  the relay fan-out's pre-open and the Console tab adopting it call this concurrently for one
  *  device, and Roku's 8085 is single-client. */
@@ -180,11 +190,7 @@ export function ensureRceDebugTelnetConnected(
   instanceApiUrl: string,
   ip: string
 ): Promise<RceTelnetConnectResult> {
-  const inFlight = debugTelnetConnecting.get(ip);
-  if (inFlight) return inFlight;
-  const attempt = openRceDebugTelnet(name, instanceApiUrl, ip).finally(() => debugTelnetConnecting.delete(ip));
-  debugTelnetConnecting.set(ip, attempt);
-  return attempt;
+  return singleFlight(debugTelnetConnecting, ip, () => openRceDebugTelnet(name, instanceApiUrl, ip));
 }
 
 async function openRceDebugTelnet(name: string, instanceApiUrl: string, ip: string): Promise<RceTelnetConnectResult> {
@@ -236,6 +242,17 @@ async function openRceDebugTelnet(name: string, instanceApiUrl: string, ip: stri
   return { success: true, connectionId: ip };
 }
 
+/** Record the RCE user id for accounts stored before it was kept — one call each, once. */
+async function backfillRceUserIds(): Promise<void> {
+  for (const name of getAccountNames()) {
+    if (getRceAccountUserId(name)) continue;
+    const token = getAccountToken(name);
+    if (!token) continue;
+    const info = await new RceManagementClient(token).getUserInfo().catch(() => null);
+    if (info?.success && info.user?.id) setRceAccountUserId(name, info.user.id);
+  }
+}
+
 export function setupRceHandlers(): void {
   const { ipcMain } = require('electron') as typeof import('electron');
 
@@ -259,19 +276,30 @@ export function setupRceHandlers(): void {
     if (getAccountNames().some((n) => n.toLowerCase() === trimmedName.toLowerCase())) {
       return { success: false, error: S.app.rceAccountExists(trimmedName) };
     }
+    // Same PAT under a new name — a pure secret-store lookup, no network.
+    const sameToken = findRceAccountByToken(trimmedToken);
+    if (sameToken) return { success: false, error: S.app.rceTokenExists(sameToken) };
     // Validate before persisting — fail with a clear error instead of silently storing a bad token.
     const client = new RceManagementClient(trimmedToken);
     const validation = await client.getUserInfo();
     if (!validation.success) {
       return { success: false, error: validation.error };
     }
-    secretStore.setPassword(accountKey(trimmedName), trimmedToken);
+    // A different PAT for the same RCE user — compare the `GET /user/me` id against the ids
+    // recorded for stored accounts (backfilled once for accounts stored before ids were kept).
+    const userId = validation.user?.id;
+    if (userId) {
+      await backfillRceUserIds();
+      const sameUser = findRceAccountByUserId(userId);
+      if (sameUser) return { success: false, error: S.app.rceUserExists(sameUser) };
+    }
+    setRceAccount(trimmedName, trimmedToken, userId);
     return { success: true, name: trimmedName };
   });
 
   ipcMain.handle(IPC.RceRemoveAccount, async (_event: IpcMainInvokeEvent, { name }: { name: string }) => {
     if (typeof name !== 'string' || !name) return { success: false, error: S.app.rceNameRequired };
-    secretStore.deletePassword(accountKey(name));
+    deleteRceAccount(name);
     return { success: true };
   });
 

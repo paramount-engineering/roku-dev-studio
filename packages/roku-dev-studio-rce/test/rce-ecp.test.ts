@@ -157,6 +157,47 @@ describe('RceEcpClient', () => {
     assert.equal(result.dataUrl, `data:image/png;base64,${Buffer.from(pngBytes).toString('base64')}`);
   });
 
+  // Regression test: a freshly-started RCE instance's own ECP port can take a few seconds to come
+  // up, and Roku's gateway 503s ("upstream connect error ... Connection refused") during that
+  // window instead of queuing the request — confirmed live 2026-09-16 immediately after connecting
+  // to a just-started instance. A bounded retry should ride this out instead of surfacing it.
+  it('retries a 503 and succeeds once the gateway recovers', async () => {
+    let callCount = 0;
+    stubFetch(() => {
+      callCount += 1;
+      return callCount < 3 ? { status: 503, body: 'upstream connect error' } : { status: 200, body: '<device-info/>' };
+    });
+    const client = new RceEcpClient('device.rce.roku.com/instance/abc', 'tok');
+    const result = await client.query('/query/device-info', { retryWaitMs: 0 });
+    assert.equal(result.success, true);
+    assert.equal(callCount, 3);
+  });
+
+  it('gives up after the retry budget on a persistent 503', async () => {
+    let callCount = 0;
+    stubFetch(() => {
+      callCount += 1;
+      return { status: 503, body: 'upstream connect error' };
+    });
+    const client = new RceEcpClient('device.rce.roku.com/instance/abc', 'tok');
+    const result = await client.query('/query/device-info', { retryWaitMs: 0 });
+    assert.equal(result.success, false);
+    assert.match(result.error ?? '', /HTTP 503/);
+    assert.equal(callCount, 5); // initial attempt + 4 retries
+  });
+
+  it('does not retry a non-503 error status', async () => {
+    let callCount = 0;
+    stubFetch(() => {
+      callCount += 1;
+      return { status: 404 };
+    });
+    const client = new RceEcpClient('device.rce.roku.com/instance/abc', 'tok');
+    const result = await client.query('/query/device-info', { retryWaitMs: 0 });
+    assert.equal(result.success, false);
+    assert.equal(callCount, 1);
+  });
+
   it('getHardwareImage falls back to the default filename when the root has no iconList', async () => {
     const seenUrls: string[] = [];
     const pngBytes = new Uint8Array([0x89, 0x50, 0x4e, 0x47]);

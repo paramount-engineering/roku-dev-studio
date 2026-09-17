@@ -33,6 +33,19 @@ const { parseUpnpDeviceImagePath } = require('roku-dev-studio-api/lib/device-har
 const INPUT_TEXT_KEY_DELAY_MS = 6;
 
 /**
+ * A freshly-started RCE instance's emulated device can take a few seconds to bring its own ECP
+ * port up; Roku's own gateway responds with a 503 ("upstream connect error ... Connection
+ * refused") during that window instead of queuing the request. The gateway rejects it before it
+ * ever reaches the device, so retrying is safe (no risk of a duplicate keypress/launch landing
+ * twice) — a bounded retry here rides out normal boot instead of surfacing it as a hard failure
+ * for whichever call happened to run first. Same shape as `SCREENSHOT_MAX_RETRIES` /
+ * `SCREENSHOT_RETRY_WAIT_MS` in rce-sideload.ts for the analogous "RCE still catching up" case.
+ */
+const RCE_GATEWAY_RETRY_STATUS = 503;
+const RCE_GATEWAY_RETRY_MAX_ATTEMPTS = 4;
+const RCE_GATEWAY_RETRY_WAIT_MS = 1500;
+
+/**
  * Node's fetch (undici) wraps every network-level failure — DNS, connection refused/reset,
  * TLS, abort — in a generic `TypeError: fetch failed`, with the actual reason only on `.cause`.
  * Surfacing just `errorMessage(error)` would always read "fetch failed" with no way to tell a
@@ -52,6 +65,9 @@ export interface RceEcpOptions {
    *  (`developer-settings-combo`, not an ECP call at all) instead needs `X-Authorization`, per the
    *  RokuCommunity roku-deploy reference implementation; this override exists for that one case. */
   authHeaderName?: 'Authorization' | 'X-Authorization';
+  /** Delay between gateway-503 retries. Exposed mainly so tests don't have to sit through the
+   *  real 1.5s default (same escape hatch as `RceScreenshotOptions.retryWaitMs`). */
+  retryWaitMs?: number;
 }
 
 export interface RceEcpResult {
@@ -69,6 +85,35 @@ export interface RceEcpIconResult {
 }
 
 /**
+ * One `fetch` with the per-attempt abort timeout and the bounded gateway-503 retry loop described
+ * above. `read` decodes the body (text vs binary) INSIDE the timeout window: a body that stalls
+ * after the headers arrived must still fail at `timeoutMs`, exactly as the two pre-dedupe copies
+ * did. Returns the final `Response` (2xx or a non-retryable / budget-exhausted status) with its
+ * decoded body. Network-level failures throw.
+ */
+async function rceFetchWithRetry<T>(
+  url: string,
+  init: RequestInit,
+  opts: RceEcpOptions,
+  read: (res: Response) => Promise<T>
+): Promise<{ res: Response; body: T }> {
+  for (let attempt = 0; ; attempt++) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), opts.timeoutMs ?? 5000);
+    try {
+      const res = await fetch(url, { ...init, signal: controller.signal });
+      if (res.status !== RCE_GATEWAY_RETRY_STATUS || attempt >= RCE_GATEWAY_RETRY_MAX_ATTEMPTS) {
+        return { res, body: await read(res) };
+      }
+      await res.arrayBuffer().catch(() => undefined); // drain so the connection is reusable
+    } finally {
+      clearTimeout(timeout);
+    }
+    await new Promise((r) => setTimeout(r, opts.retryWaitMs ?? RCE_GATEWAY_RETRY_WAIT_MS));
+  }
+}
+
+/**
  * Binary counterpart to {@link rceEcpFetch} — `res.text()` decodes the body as UTF-8, which
  * corrupts an image response into garbage bytes. Reads `arrayBuffer()` instead and base64-encodes
  * into a `data:` URL, matching what the local device's `getIcon` already returns (see
@@ -76,20 +121,14 @@ export interface RceEcpIconResult {
  * `result.dataUrl`) works unchanged for RCE devices.
  */
 async function rceEcpFetchBinary(url: string, token: string, opts: RceEcpOptions = {}): Promise<RceEcpIconResult> {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), opts.timeoutMs ?? 5000);
   try {
-    const res = await fetch(url, {
-      method: 'GET',
-      headers: { Authorization: `Bearer ${token}` },
-      signal: controller.signal
-    });
+    const { res, body } = await rceFetchWithRetry(url, { method: 'GET', headers: { Authorization: `Bearer ${token}` } }, opts, (r) => r.arrayBuffer());
     const contentType = res.headers.get('content-type');
     // Mirrors the local device's icon-fetch guard — a device that 200s with an HTML "not found"
     // page would otherwise be base64-encoded into a broken image (absent content-type is
     // tolerated, some devices omit it, and defaults to png).
     const looksLikeImage = !contentType || /^image\//i.test(contentType);
-    const buffer = Buffer.from(await res.arrayBuffer());
+    const buffer = Buffer.from(body);
     if (!res.ok) {
       return { success: false, error: `RCE ECP request failed (HTTP ${res.status}) for ${url}` };
     }
@@ -103,21 +142,12 @@ async function rceEcpFetchBinary(url: string, token: string, opts: RceEcpOptions
     return { success: true, dataUrl: `data:${mimeType};base64,${buffer.toString('base64')}`, mimeType };
   } catch (error: unknown) {
     return { success: false, error: describeFetchError(error) };
-  } finally {
-    clearTimeout(timeout);
   }
 }
 
 async function rceEcpFetch(url: string, method: string, token: string, opts: RceEcpOptions = {}): Promise<RceEcpResult> {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), opts.timeoutMs ?? 5000);
   try {
-    const res = await fetch(url, {
-      method,
-      headers: { [opts.authHeaderName ?? 'Authorization']: `Bearer ${token}` },
-      signal: controller.signal
-    });
-    const data = await res.text();
+    const { res, body: data } = await rceFetchWithRetry(url, { method, headers: { [opts.authHeaderName ?? 'Authorization']: `Bearer ${token}` } }, opts, (r) => r.text());
     if (!res.ok) {
       // Include the URL and a body snippet — a bare "HTTP 404" told us nothing about which of
       // {path structure, instanceApiUrl shape, auth} was wrong last time; this should make the
@@ -128,8 +158,6 @@ async function rceEcpFetch(url: string, method: string, token: string, opts: Rce
     return { success: true, status: res.status, data };
   } catch (error: unknown) {
     return { success: false, error: describeFetchError(error) };
-  } finally {
-    clearTimeout(timeout);
   }
 }
 

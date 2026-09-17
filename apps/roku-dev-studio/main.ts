@@ -141,6 +141,7 @@ const { registerSettingsWindowIpc } = require('./main/settings-window-ipc');
 const { initSettings, loadSettings, saveSettings, registerSettingsIpc } = require('./main/settings');
 const secretStore = require('./main/secret-store') as typeof import('./main/secret-store');
 const { dropRelayTargetIfPasswordRemoved } = require('./main/ipc/relay-handlers') as typeof import('./main/ipc/relay-handlers');
+const { forgetEphemeralRemoteLocations } = require('./main/remote-locations') as typeof import('./main/remote-locations');
 const { startMcpBridge } = require('./main/mcp-bridge');
 const { getDeviceInfo, getDeviceId } = require('roku-dev-studio-api');
 const { mainLog, mainWarn, mainError } = require('./main/log');
@@ -472,74 +473,6 @@ function createWindow(appState: AppWindowState, opts: { startHidden?: boolean } 
       label: S.menu.file,
       submenu: [
         {
-          label: S.menu.developerMode,
-          type: 'checkbox',
-          checked: developerModeEnabled,
-          accelerator: 'CmdOrCtrl+Shift+D',
-          click: (menuItem: import('electron').MenuItem) => {
-            developerModeEnabled = !!menuItem.checked;
-            // Notify renderer of the change
-            if (win && win.webContents) {
-              win.webContents.send('developer-mode-changed', developerModeEnabled);
-            }
-          }
-        },
-        {
-          label: S.menu.privacyMode,
-          type: 'checkbox',
-          checked: privacyModeEnabled,
-          accelerator: 'CmdOrCtrl+Shift+P',
-          click: (menuItem: import('electron').MenuItem) => {
-            privacyModeEnabled = !!menuItem.checked;
-            // Keep appState in sync so the system-handler `getPrivacyMode`
-            // invoke (used by freshly-opened Fiddle / Settings windows) reads
-            // the current value instead of the snapshot captured at startup.
-            if (appState) {
-              appState.privacyModeEnabled = privacyModeEnabled;
-            }
-            // Fan the toggle out to every open window (main, Fiddle, Settings,
-            // Session Viewer, …) so they mask IPs/serials in lockstep.
-            broadcastPrivacyModeToAllWindows(privacyModeEnabled);
-          }
-        },
-        {
-          label: S.menu.debugLogging,
-          type: 'checkbox',
-          checked: debugLoggingEnabled,
-          accelerator: 'CmdOrCtrl+Shift+L',
-          enabled: !isDiagnosticBuild(),
-          click: (menuItem: import('electron').MenuItem) => {
-            if (isDiagnosticBuild()) return;
-            debugLoggingEnabled = !!menuItem.checked;
-            if (appState) {
-              appState.debugLoggingEnabled = debugLoggingEnabled;
-              appState.logFile = logFile;
-            }
-            const settings = loadSettings();
-            settings.debugLoggingEnabled = debugLoggingEnabled;
-            saveSettings(settings);
-            if (debugLoggingEnabled && logFile) {
-              enableFileLogging(logFile);
-            } else {
-              disableFileLogging();
-            }
-            if (win && win.webContents) {
-              win.webContents.send('debug-logging-changed', debugLoggingEnabled);
-            }
-          }
-        },
-        ...(isDiagnosticBuild()
-          ? [
-              {
-                label: S.menu.openDiagnosticLogsFolder,
-                click: () => {
-                  void shell.openPath(app.getPath('userData'));
-                }
-              }
-            ]
-          : []),
-        { type: 'separator' },
-        {
           label: S.menu.openLogFile,
           accelerator: 'CmdOrCtrl+Shift+O',
           click: async () => {
@@ -630,6 +563,74 @@ function createWindow(appState: AppWindowState, opts: { startHidden?: boolean } 
           label: S.menu.clearCacheAndReload,
           click: () => clearCacheAndReload(appState)
         },
+        { type: 'separator' },
+        {
+          label: S.menu.developerMode,
+          type: 'checkbox',
+          checked: developerModeEnabled,
+          accelerator: 'CmdOrCtrl+Shift+D',
+          click: (menuItem: import('electron').MenuItem) => {
+            developerModeEnabled = !!menuItem.checked;
+            // Notify renderer of the change
+            if (win && win.webContents) {
+              win.webContents.send('developer-mode-changed', developerModeEnabled);
+            }
+          }
+        },
+        {
+          label: S.menu.privacyMode,
+          type: 'checkbox',
+          checked: privacyModeEnabled,
+          accelerator: 'CmdOrCtrl+Shift+P',
+          click: (menuItem: import('electron').MenuItem) => {
+            privacyModeEnabled = !!menuItem.checked;
+            // Keep appState in sync so the system-handler `getPrivacyMode`
+            // invoke (used by freshly-opened Fiddle / Settings windows) reads
+            // the current value instead of the snapshot captured at startup.
+            if (appState) {
+              appState.privacyModeEnabled = privacyModeEnabled;
+            }
+            // Fan the toggle out to every open window (main, Fiddle, Settings,
+            // Session Viewer, …) so they mask IPs/serials in lockstep.
+            broadcastPrivacyModeToAllWindows(privacyModeEnabled);
+          }
+        },
+        {
+          label: S.menu.debugLogging,
+          type: 'checkbox',
+          checked: debugLoggingEnabled,
+          accelerator: 'CmdOrCtrl+Shift+L',
+          enabled: !isDiagnosticBuild(),
+          click: (menuItem: import('electron').MenuItem) => {
+            if (isDiagnosticBuild()) return;
+            debugLoggingEnabled = !!menuItem.checked;
+            if (appState) {
+              appState.debugLoggingEnabled = debugLoggingEnabled;
+              appState.logFile = logFile;
+            }
+            const settings = loadSettings();
+            settings.debugLoggingEnabled = debugLoggingEnabled;
+            saveSettings(settings);
+            if (debugLoggingEnabled && logFile) {
+              enableFileLogging(logFile);
+            } else {
+              disableFileLogging();
+            }
+            if (win && win.webContents) {
+              win.webContents.send('debug-logging-changed', debugLoggingEnabled);
+            }
+          }
+        },
+        ...(isDiagnosticBuild()
+          ? [
+              {
+                label: S.menu.openDiagnosticLogsFolder,
+                click: () => {
+                  void shell.openPath(app.getPath('userData'));
+                }
+              }
+            ]
+          : []),
         { type: 'separator' },
         isMac ? { role: 'close' } : { role: 'quit' }
       ]
@@ -822,6 +823,9 @@ app.whenReady().then(() => {
   setLocale(effectiveLocale(lastBroadcastLocalePref, app.getLocale()));
   const rememberPasswordsInKeychain = earlySettings.rememberPasswordsInKeychain === true;
   secretStore.init(app, { enabled: rememberPasswordsInKeychain });
+  // Startup sweep of "Forget it on App Quit/Close" locations (crash safety — a hard kill skips
+  // before-quit). Needs the secret store up: an RCE location's stored token goes with it.
+  forgetEphemeralRemoteLocations();
   registerAboutIpc(ipcMain, clipboard, shell);
   updaterControls = setupAutoUpdater(app, ipcMain, () => mainWindow);
   registerLogViewerIpc(ipcMain);
@@ -1169,7 +1173,8 @@ app.on('window-all-closed', () => {
 // Close any live BrightScript debug sessions (8081 control + IO sockets) on quit,
 // rather than leaving them to be reaped by process exit. Best-effort; no-op unless
 // someone actually attached the debugger this session.
-app.on('before-quit', () => {
+let fiddleQuitCleanupDone = false;
+app.on('before-quit', (event: Electron.Event) => {
   try {
     (require('./main/ipc/debugger-handlers') as { teardownDebuggerSessions: () => void }).teardownDebuggerSessions();
   } catch {
@@ -1179,6 +1184,32 @@ app.on('before-quit', () => {
     killAllScaRuns();
   } catch {
     /* best-effort teardown */
+  }
+  // Never leave the Fiddle channel behind on a device: `before-quit` is synchronous, so hold the
+  // quit (once) until the bounded delete has settled, then quit for real.
+  if (!fiddleQuitCleanupDone) {
+    try {
+      const pending = (require('./main/ipc/bs-fiddle-handlers') as typeof import('./main/ipc/bs-fiddle-handlers')).settleFiddleCleanupsForQuit();
+      if (pending) {
+        event.preventDefault();
+        void pending.finally(() => {
+          fiddleQuitCleanupDone = true;
+          app.quit();
+        });
+        // The purge below runs on the re-fired `before-quit` instead — the Fiddle delete re-resolves
+        // RCE credentials at delete time, so its account token must still exist here.
+        return;
+      }
+    } catch {
+      /* best-effort teardown */
+    }
+  }
+  // Drop session-only ("Forget it on App Quit/Close") remote locations last, once the quit really
+  // proceeds: it deletes RCE account tokens, which the Fiddle cleanup above may still need.
+  try {
+    forgetEphemeralRemoteLocations();
+  } catch {
+    /* best-effort */
   }
 });
 

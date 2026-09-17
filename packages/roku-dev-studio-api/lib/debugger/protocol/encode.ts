@@ -28,10 +28,6 @@ export function encodeStop(requestId: number): Buffer {
   return frame(CommandCode.Stop, requestId, new BufWriter());
 }
 
-export function encodeExitChannel(requestId: number): Buffer {
-  return frame(CommandCode.ExitChannel, requestId, new BufWriter());
-}
-
 export function encodeListBreakpoints(requestId: number): Buffer {
   return frame(CommandCode.ListBreakpoints, requestId, new BufWriter());
 }

@@ -60,6 +60,7 @@ import { getDebugSessionController } from './ipc/debugger-handlers';
 import type { DebugSessionController } from 'roku-dev-studio-api/lib/debugger/debug-session-controller';
 import { RceEcpClient, rceCaptureScreenshot } from 'roku-dev-studio-rce';
 import { resolveRceInstanceBySerial } from './rce-device-registry';
+import type { SideloadChannelOpts } from 'roku-dev-studio-api/lib/plugin-install';
 
 const rokuApi = require('roku-dev-studio-api') as {
   query: (ip: string, endpoint: string) => Promise<unknown>;
@@ -70,7 +71,7 @@ const rokuApi = require('roku-dev-studio-api') as {
   deeplink: (ip: string, appId: string, contentId?: string, mediaType?: string) => Promise<unknown>;
   testConnection: (ip: string) => Promise<unknown>;
   getIcon: (ip: string, appId: string) => Promise<unknown>;
-  sideloadChannel: (opts: { ip: string; filePath: string; password: string; log?: (m: string) => void }) => Promise<{ success: boolean; error?: string }>;
+  sideloadChannel: (opts: SideloadChannelOpts) => Promise<{ success: boolean; error?: string }>;
   deleteSideload: (opts: { ip: string; password: string; log?: (m: string) => void }) => Promise<{ success: boolean; error?: string }>;
   captureRokuScreenshot: (opts: {
     ip: string;

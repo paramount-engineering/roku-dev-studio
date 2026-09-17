@@ -18,7 +18,6 @@ const {
   encodeAddBreakpoints,
   encodeContinue,
   encodeExecute,
-  encodeExitChannel,
   encodeHandshake,
   encodeListBreakpoints,
   encodeRemoveBreakpoints,
@@ -47,7 +46,6 @@ const {
 const EXPECTED_ENCODERS: Record<string, string> = {
   continue7: '0c0000000700000002000000',
   stop7: '0c0000000700000001000000',
-  exitChannel7: '0c000000070000007a000000',
   listBreakpoints7: '0c0000000700000008000000',
   stepOver9: '1100000009000000060000000000000003',
   stepLine9: '1100000009000000060000000200000001',
@@ -89,7 +87,6 @@ const fx = (name: keyof typeof DECODER_FIXTURES): Buffer => Buffer.from(DECODER_
 describe('debug protocol encoders (golden wire bytes)', () => {
   it('continue', () => assert.equal(encodeContinue(7).toString('hex'), EXPECTED_ENCODERS.continue7));
   it('stop', () => assert.equal(encodeStop(7).toString('hex'), EXPECTED_ENCODERS.stop7));
-  it('exitChannel', () => assert.equal(encodeExitChannel(7).toString('hex'), EXPECTED_ENCODERS.exitChannel7));
   it('listBreakpoints', () => assert.equal(encodeListBreakpoints(7).toString('hex'), EXPECTED_ENCODERS.listBreakpoints7));
   it('step(Over)', () => assert.equal(encodeStep(9, 0, StepTypeCode.Over).toString('hex'), EXPECTED_ENCODERS.stepOver9));
   it('step(Line)', () => assert.equal(encodeStep(9, 2, StepTypeCode.Line).toString('hex'), EXPECTED_ENCODERS.stepLine9));

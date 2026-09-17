@@ -20,10 +20,8 @@
  * export rather than re-implementing them.
  *
  * Roku's installer always answers HTTP 200 with an HTML body, even on failure — status code alone
- * never tells you whether it worked; the body must be parsed (`parseSideloadResponse` below, the
- * same string patterns `plugin-install.ts`'s internal `parsePluginInstallResponse` checks for
- * physical devices — not reused directly since that function isn't part of that module's exported
- * surface).
+ * never tells you whether it worked; the body must be parsed (`parseSideloadResponse` below, using
+ * the same exported reply matchers `plugin-install.ts` uses for physical devices).
  */
 
 import { errorMessage } from 'roku-dev-studio-platform';
@@ -37,9 +35,11 @@ const {
   buildMultipartBody,
   responseLooksLikeAuthFailure
 } = require('roku-dev-studio-api/lib/http-digest');
+const { isInstallSuccessReply, isIdenticalBuildReply } = require('roku-dev-studio-api/lib/plugin-install');
 
 const SIDELOAD_PATH = '/sideload/plugin_install';
 const DEFAULT_TIMEOUT_MS = 120000;
+const AUTH_FAIL: RceSideloadResult = { success: false, error: 'Authentication failed. Check the dev password.', authFailed: true };
 
 export interface RceSideloadOptions {
   instanceApiUrl: string;
@@ -58,7 +58,7 @@ export interface RceSideloadResult {
 }
 
 function parseSideloadResponse(text: string): RceSideloadResult {
-  if (text.includes('Install Success') || text.includes('Application Received') || text.includes('Conversion complete')) {
+  if (isInstallSuccessReply(text)) {
     return { success: true, message: 'Channel installed successfully!' };
   }
   if (text.includes('Delete Success')) {
@@ -69,11 +69,11 @@ function parseSideloadResponse(text: string): RceSideloadResult {
     return { success: false, error: match ? match[1].trim() : 'Installation failed' };
   }
   // The device kept the OLD instance running — nothing relaunched (reads as a success page otherwise).
-  if (isIdenticalBuild(text)) {
+  if (isIdenticalBuildReply(text)) {
     return { success: false, error: 'Identical to previous version — the device did not relaunch the channel.' };
   }
   if (responseLooksLikeAuthFailure(0, text)) {
-    return { success: false, error: 'Authentication failed. Check the dev password.', authFailed: true };
+    return AUTH_FAIL;
   }
   if (text.includes('Roku') && !text.includes('Failure')) {
     return { success: true, message: 'Channel installed! Check the device.' };
@@ -177,17 +177,12 @@ export async function rceVerifyDevAuth(opts: RceSideloadOptions): Promise<RceSid
       method: 'GET'
     });
     await response.text().catch(() => undefined);
-    if (statusCode === 401) return { success: false, error: 'Authentication failed. Check the dev password.', authFailed: true };
+    if (statusCode === 401) return AUTH_FAIL;
     if (statusCode >= 200 && statusCode < 300) return { success: true };
     return { success: false, error: `Unexpected HTTP status ${statusCode} from the device.` };
   } catch (error: unknown) {
     return { success: false, error: errorMessage(error) };
   }
-}
-
-/** Roku's "Identical to previous version -- not replacing." reply: the OLD instance keeps running. */
-function isIdenticalBuild(text: string): boolean {
-  return /identical to previous version/i.test(text);
 }
 
 /** Sideload a channel package to a running RCE instance — the same launch semantics as the
@@ -203,7 +198,6 @@ function isIdenticalBuild(text: string): boolean {
  *  sideload paths use for "Enable Debugger" — it opens the debug control port (8081) on
  *  launch, tunneled the same ports-bridge way as the telnet consoles (see `rce-socket.ts`). */
 export async function rceSideload(opts: RceSideloadOptions, zipData: Buffer, filename: string, remoteDebug?: boolean): Promise<RceSideloadResult> {
-  const AUTH_FAIL: RceSideloadResult = { success: false, error: 'Authentication failed. Check the dev password.', authFailed: true };
   const install = () =>
     postPluginInstall(
       opts,
@@ -214,7 +208,7 @@ export async function rceSideload(opts: RceSideloadOptions, zipData: Buffer, fil
     if (remoteDebug) await rceDeleteSideload(opts).catch(() => undefined); // clean launch — best-effort
     let { statusCode, text } = await install();
     if (statusCode === 401) return AUTH_FAIL;
-    if (isIdenticalBuild(text)) {
+    if (isIdenticalBuildReply(text)) {
       await rceDeleteSideload(opts).catch(() => undefined);
       ({ statusCode, text } = await install());
       if (statusCode === 401) return AUTH_FAIL;
@@ -236,7 +230,7 @@ export async function rceDeleteSideload(opts: RceSideloadOptions): Promise<RceSi
       ],
       []
     );
-    if (statusCode === 401) return { success: false, error: 'Authentication failed. Check the dev password.', authFailed: true };
+    if (statusCode === 401) return AUTH_FAIL;
     return parseSideloadResponse(text);
   } catch (error: unknown) {
     return { success: false, error: errorMessage(error) };
@@ -293,9 +287,7 @@ export async function rceCaptureScreenshot(opts: RceScreenshotOptions): Promise<
       body,
       contentType
     });
-    if (trigger.statusCode === 401) {
-      return { success: false, error: 'Authentication failed. Check the dev password.', authFailed: true };
-    }
+    if (trigger.statusCode === 401) return AUTH_FAIL;
 
     // The response body embeds the on-device image path, e.g. `pkgs/dev.jpg?t=...` — same pattern
     // the reference `roku-deploy` implementation extracts (see file header).
@@ -324,9 +316,7 @@ export async function rceCaptureScreenshot(opts: RceScreenshotOptions): Promise<
     }
     return { success: true, imageBuffer };
   } catch (error: unknown) {
-    if (error && typeof error === 'object' && (error as { authFailed?: boolean }).authFailed) {
-      return { success: false, error: 'Authentication failed. Check the dev password.', authFailed: true };
-    }
+    if (error && typeof error === 'object' && (error as { authFailed?: boolean }).authFailed) return AUTH_FAIL;
     return { success: false, error: errorMessage(error) };
   }
 }

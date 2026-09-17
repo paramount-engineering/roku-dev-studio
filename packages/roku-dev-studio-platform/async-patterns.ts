@@ -106,3 +106,20 @@ export function exponentialBackoff(options: ExponentialBackoffOptions): BackoffS
     }
   };
 }
+
+/**
+ * Coalesce concurrent async work per key: while a call for `key` is in flight, later calls join
+ * that same promise instead of starting a second one; the entry clears when it settles. Use it for
+ * anything that must never run twice at once against a single-client resource — a Roku's 8085
+ * console, its 8081 debugger socket, one device tab — every hand-rolled copy of this idiom has
+ * been a "lost race orphans the live thing" bug at some point.
+ */
+export function singleFlight<T>(inFlight: Map<string, Promise<T>>, key: string, run: () => Promise<T>): Promise<T> {
+  const existing = inFlight.get(key);
+  if (existing) return existing;
+  const p = run().finally(() => {
+    if (inFlight.get(key) === p) inFlight.delete(key);
+  });
+  inFlight.set(key, p);
+  return p;
+}

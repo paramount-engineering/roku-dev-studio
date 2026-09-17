@@ -40,9 +40,10 @@ const { exec } = require('child_process');
 const { promisify } = require('util');
 const fs = require('fs');
 const path = require('path');
-const { resolveUnderBase, isPathUnderOneOf, resolveUserPathUnderOneOf } = require('roku-dev-studio-platform/path-safe');
+const { resolveUnderBase, isPathUnderOneOf } = require('roku-dev-studio-platform/path-safe');
 const { serverLog } = require('./log');
 import { TtlCache } from 'roku-dev-studio-platform/ttl-cache';
+import { SERVER_PACKAGE_VERSION } from './package-version';
 
 const execPromise = promisify(exec);
 
@@ -513,6 +514,27 @@ function ensureTempDir(): void {
   fs.mkdirSync(TEMP_DIR, { recursive: true });
 }
 ensureTempDir();
+
+/**
+ * The network-inspector export APIs are disk-oriented (matching the desktop app's native
+ * save-dialog flow): run `fn` against a fresh temp path, read the bytes back, always delete the
+ * file. `buf` is null when the export reported failure or wrote nothing.
+ */
+async function withTempExport<R extends { success: boolean }>(
+  prefix: string,
+  ext: string,
+  fn: (tempPath: string) => R | Promise<R>
+): Promise<{ result: R; buf: Buffer | null }> {
+  const tempPath =
+    resolveUnderBase(TEMP_DIR, `${prefix}-${nodeCrypto.randomUUID()}.${ext}`) || path.join(TEMP_DIR, `${prefix}-${Date.now()}.${ext}`);
+  try {
+    ensureTempDir();
+    const result = await fn(tempPath);
+    return { result, buf: result.success && fs.existsSync(tempPath) ? fs.readFileSync(tempPath) : null };
+  } finally {
+    try { fs.unlinkSync(tempPath); } catch { /* best-effort */ }
+  }
+}
 
 // ============================================
 // Roku Device Discovery + ECP (roku-dev-studio-api)
@@ -1185,10 +1207,13 @@ async function handleRequest(req, res) {
 
     // Health check
     if (pathname === '/health' && method === 'GET') {
-      return sendJson(res, { 
-        success: true, 
+      return sendJson(res, {
+        success: true,
         status: 'ok',
         apiVersion: api.PACKAGE_VERSION || 'unknown',
+        // This server's own release version — distinct from `apiVersion` (the roku-dev-studio-api
+        // version it bundles), which can differ from this on its own release cadence.
+        serverVersion: SERVER_PACKAGE_VERSION || 'unknown',
         hostname: os.hostname(),
         platform: os.platform(),
         uptime: process.uptime(),
@@ -1201,7 +1226,10 @@ async function handleRequest(req, res) {
     if (pathname === '/capabilities' && method === 'GET') {
       return sendJson(res, {
         success: true,
+        // Kept for backward compatibility — this is actually the roku-dev-studio-api version this
+        // server bundles, not the server's own release version. See `serverVersion` for that.
         version: api.PACKAGE_VERSION || 'unknown',
+        serverVersion: SERVER_PACKAGE_VERSION || 'unknown',
         capabilities: {
           // Core features
           remote: true,           // Remote control (keypress, text input)
@@ -1387,39 +1415,29 @@ async function handleRequest(req, res) {
       return sendJson(res, { success: true });
     }
 
-    // Raw-packet export — the engine's API is disk-oriented (matching the desktop app's native
-    // save-dialog flow), so this writes to a temp file, streams the bytes back, then cleans up.
+    // Raw-packet export — written to a temp file and streamed back (see withTempExport).
     if (pathname === '/network/export-pcap' && method === 'GET') {
       const deviceIpsRaw = parsedUrl.searchParams.get('deviceIps') || '';
       const deviceIps = deviceIpsRaw.split(',').map((ip) => ip.trim()).filter(Boolean);
-      const tempPath =
-        resolveUnderBase(TEMP_DIR, `pcap-${nodeCrypto.randomUUID()}.pcap`) ||
-        path.join(TEMP_DIR, `pcap-${Date.now()}.pcap`);
-      try {
-        ensureTempDir();
-        const result = await networkInspector.exportPcap(tempPath, deviceIps.length > 0 ? deviceIps : undefined);
-        if (!result.success || !fs.existsSync(tempPath)) {
-          return sendError(res, result.error || 'Export failed', 400);
-        }
-        const buf = fs.readFileSync(tempPath);
-        const pcapHeaders: Record<string, string> = {
-          'Content-Type': 'application/vnd.tcpdump.pcap',
-          'Content-Disposition': 'attachment; filename="capture.pcap"',
-          'X-Packets-Written': String(result.packetsWritten ?? 0)
-        };
-        if (res._corsOrigin) pcapHeaders['Access-Control-Allow-Origin'] = res._corsOrigin;
-        res.writeHead(200, pcapHeaders);
-        res.end(buf);
-        return;
-      } finally {
-        try { fs.unlinkSync(tempPath); } catch { /* best-effort */ }
-      }
+      const { result, buf } = await withTempExport('pcap', 'pcap', (tempPath) =>
+        networkInspector.exportPcap(tempPath, deviceIps.length > 0 ? deviceIps : undefined)
+      );
+      if (!buf) return sendError(res, result.error || 'Export failed', 400);
+      const pcapHeaders: Record<string, string> = {
+        'Content-Type': 'application/vnd.tcpdump.pcap',
+        'Content-Disposition': 'attachment; filename="capture.pcap"',
+        'X-Packets-Written': String(result.packetsWritten ?? 0)
+      };
+      if (res._corsOrigin) pcapHeaders['Access-Control-Allow-Origin'] = res._corsOrigin;
+      res.writeHead(200, pcapHeaders);
+      res.end(buf);
+      return;
     }
 
     // MITM CA certificate — metadata, then downloadable PEM/CRT so a Roku (or a browser) can trust
     // THIS server's proxy cert. There's no native save dialog on a headless server, so these just
-    // serve the bytes directly (a temp file is still the engine's only export API, so write-then-
-    // stream-then-delete same as the pcap route above).
+    // serve the bytes directly (a temp file is still the engine's only export API — withTempExport,
+    // same as the pcap route above).
     if (pathname === '/network/ca/info' && method === 'GET') {
       return sendJson(res, {
         success: true,
@@ -1429,49 +1447,29 @@ async function handleRequest(req, res) {
     }
 
     if (pathname === '/network/ca/pem' && method === 'GET') {
-      const tempPath =
-        resolveUnderBase(TEMP_DIR, `ca-${nodeCrypto.randomUUID()}.pem`) || path.join(TEMP_DIR, `ca-${Date.now()}.pem`);
-      try {
-        ensureTempDir();
-        const result = networkInspector.exportCaPem(tempPath);
-        if (!result.success || !fs.existsSync(tempPath)) {
-          return sendError(res, result.error || 'Export failed', 400);
-        }
-        const buf = fs.readFileSync(tempPath);
-        const pemHeaders: Record<string, string> = {
-          'Content-Type': 'application/x-pem-file',
-          'Content-Disposition': 'attachment; filename="rds-network-inspector-ca.pem"'
-        };
-        if (res._corsOrigin) pemHeaders['Access-Control-Allow-Origin'] = res._corsOrigin;
-        res.writeHead(200, pemHeaders);
-        res.end(buf);
-        return;
-      } finally {
-        try { fs.unlinkSync(tempPath); } catch { /* best-effort */ }
-      }
+      const { result, buf } = await withTempExport('ca', 'pem', (tempPath) => networkInspector.exportCaPem(tempPath));
+      if (!buf) return sendError(res, result.error || 'Export failed', 400);
+      const pemHeaders: Record<string, string> = {
+        'Content-Type': 'application/x-pem-file',
+        'Content-Disposition': 'attachment; filename="rds-network-inspector-ca.pem"'
+      };
+      if (res._corsOrigin) pemHeaders['Access-Control-Allow-Origin'] = res._corsOrigin;
+      res.writeHead(200, pemHeaders);
+      res.end(buf);
+      return;
     }
 
     if (pathname === '/network/ca/cert' && method === 'GET') {
-      const tempPath =
-        resolveUnderBase(TEMP_DIR, `ca-${nodeCrypto.randomUUID()}.crt`) || path.join(TEMP_DIR, `ca-${Date.now()}.crt`);
-      try {
-        ensureTempDir();
-        const result = networkInspector.exportCaCert(tempPath);
-        if (!result.success || !fs.existsSync(tempPath)) {
-          return sendError(res, result.error || 'Export failed', 400);
-        }
-        const buf = fs.readFileSync(tempPath);
-        const crtHeaders: Record<string, string> = {
-          'Content-Type': 'application/x-x509-ca-cert',
-          'Content-Disposition': 'attachment; filename="rds-network-inspector-ca.crt"'
-        };
-        if (res._corsOrigin) crtHeaders['Access-Control-Allow-Origin'] = res._corsOrigin;
-        res.writeHead(200, crtHeaders);
-        res.end(buf);
-        return;
-      } finally {
-        try { fs.unlinkSync(tempPath); } catch { /* best-effort */ }
-      }
+      const { result, buf } = await withTempExport('ca', 'crt', (tempPath) => networkInspector.exportCaCert(tempPath));
+      if (!buf) return sendError(res, result.error || 'Export failed', 400);
+      const crtHeaders: Record<string, string> = {
+        'Content-Type': 'application/x-x509-ca-cert',
+        'Content-Disposition': 'attachment; filename="rds-network-inspector-ca.crt"'
+      };
+      if (res._corsOrigin) crtHeaders['Access-Control-Allow-Origin'] = res._corsOrigin;
+      res.writeHead(200, crtHeaders);
+      res.end(buf);
+      return;
     }
 
     // Live event/status stream (Server-Sent Events). The app subscribes here for the remote
@@ -1867,16 +1865,14 @@ async function handleRequest(req, res) {
         return;
       }
 
-      // Sideload (requires password) - supports both file upload and filePath
+      // Sideload (requires password) — multipart upload only (the .zip bytes go straight to the device)
       if (subPath === '/sideload' && method === 'POST') {
         const contentType = req.headers['content-type'] || '';
-        let filePath: string | null = null;
         let zipData: Buffer | null = null;
         let uploadName = '';
         let password = null;
         let remoteDebugFlag = false;
 
-        // Handle multipart file upload
         if (contentType.includes('multipart/form-data')) {
           const boundaryMatch = contentType.match(/boundary=([^;]+)/);
           if (!boundaryMatch) {
@@ -1908,24 +1904,9 @@ async function handleRequest(req, res) {
           } else {
             log(`Sideload: No file data found. Parts: ${JSON.stringify(Object.keys(parts))}`);
           }
-        } else {
-          // JSON body: filePath must be under TEMP_DIR
-          const body = await readBody(req);
-          const params = parseJson(body);
-          if (params) {
-            if (params.filePath && typeof params.filePath === 'string') {
-              const resolvedTempPath = resolveUserPathUnderOneOf([TEMP_DIR], params.filePath);
-              if (!resolvedTempPath) {
-                return sendError(res, 'Invalid file path', 400);
-              }
-              filePath = resolvedTempPath;
-            }
-            password = params.password;
-            remoteDebugFlag = params.remotedebug === '1' || params.remotedebug === true;
-          }
         }
-        
-        if ((!filePath && !zipData) || !password) {
+
+        if (!zipData || !password) {
           return sendError(res, 'Missing file or password', 400);
         }
 
@@ -1934,7 +1915,8 @@ async function handleRequest(req, res) {
           // remotedebug=1 (a Replace can drop it), matching the local app's sideload handler.
           const result = await sideloadChannel({
             ip,
-            ...(zipData ? { zipData, filename: uploadName } : { filePath: filePath as string }),
+            zipData,
+            filename: uploadName,
             password,
             log: (msg) => log(msg),
             ...(remoteDebugFlag ? { cleanInstall: true, extraFields: [{ name: 'remotedebug', value: '1' }] } : {})
