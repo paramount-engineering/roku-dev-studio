@@ -262,7 +262,6 @@ var init_channels = __esm({
       RemoteGetIcon: "remote:get-icon",
       RemoteScreenshot: "remote:screenshot",
       RemoteVerifyDevAuth: "remote:verify-dev-auth",
-      RemoteSideload: "remote:sideload",
       RemoteSideloadUpload: "remote:sideload-upload",
       RemoteDeleteSideload: "remote:delete-sideload",
       RemoteRaleWake: "remote:rale-wake",
@@ -316,6 +315,7 @@ var init_channels = __esm({
       DebuggerStopped: "debugger:stopped",
       DebuggerOutput: "debugger:output",
       DebuggerRuntimeError: "debugger:runtime-error",
+      DebuggerExceptionBreakpointError: "debugger:exception-breakpoint-error",
       DebuggerCompileErrors: "debugger:compile-errors",
       /** Main → windows: breakpoints verified/errored by the device (async). */
       DebuggerBreakpoints: "debugger:breakpoints",
@@ -421,6 +421,12 @@ var init_channels = __esm({
       FiddleRunResult: "fiddle:run-result",
       FiddleTerminalData: "fiddle:terminal-data",
       FiddleTerminalCleared: "fiddle:terminal-cleared",
+      /** Main → Fiddle window: our Fiddle channel was removed from `deviceId` by a main-side cleanup
+       *  (device tab closed, quit) — the window drops its active-run state. */
+      FiddleChannelRemoved: "fiddle:channel-removed",
+      /** Renderer → main (one-way): a device tab was closed. Per-device main-side cleanup hook —
+       *  today it removes our Fiddle channel from that device if it still has it. */
+      DeviceTabClosed: "device:tab-closed",
       FiddleDevicesUpdate: "fiddle:devices-update",
       FiddleRefreshDevices: "fiddle:refresh-devices",
       /** Main renderer pushes its current device snapshot to main (main re-broadcasts to fiddle windows). */
