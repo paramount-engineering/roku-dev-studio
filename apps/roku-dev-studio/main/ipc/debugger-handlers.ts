@@ -24,6 +24,7 @@ const EVENT_TO_IPC_CHANNEL: Record<DebuggerEventKind, string> = {
   [DEBUGGER_EVENTS.Stopped]: IPC.DebuggerStopped,
   [DEBUGGER_EVENTS.Output]: IPC.DebuggerOutput,
   [DEBUGGER_EVENTS.RuntimeError]: IPC.DebuggerRuntimeError,
+  [DEBUGGER_EVENTS.ExceptionBreakpointError]: IPC.DebuggerExceptionBreakpointError,
   [DEBUGGER_EVENTS.CompileErrors]: IPC.DebuggerCompileErrors,
   [DEBUGGER_EVENTS.Breakpoints]: IPC.DebuggerBreakpoints
 };
@@ -51,6 +52,18 @@ let mainWindowRef: BrowserWindow | undefined;
 function broadcastDebugEvent(channel: string, payload: unknown): void {
   if (mainWindowRef && !mainWindowRef.isDestroyed()) {
     mainWindowRef.webContents.send(channel, payload);
+  }
+  // While a debugger is attached, Roku routes the channel's print output to the debugger's IO port
+  // instead of 8085 — the Fiddle terminal (fed from telnet chunks) went blank the moment its run
+  // attached (a per-device "Enable Debugger" now does that for every Fiddle run). Fan the output
+  // out to Fiddle windows as terminal data; local + RCE sessions use connectionId = ip, matching
+  // what rce-handlers/telnet forwarding already send. Lazy require: fiddle-window → remote-handlers
+  // → this module would otherwise be an import cycle.
+  if (channel === IPC.DebuggerOutput) {
+    const p = payload as { ip?: unknown; text?: unknown } | null;
+    if (p && typeof p.ip === 'string' && typeof p.text === 'string') {
+      (require('../fiddle-window') as typeof import('../fiddle-window')).broadcastFiddleTerminalData({ ip: p.ip, data: p.text, connectionId: p.ip });
+    }
   }
 }
 
