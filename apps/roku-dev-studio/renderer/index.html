@@ -7375,6 +7375,10 @@
       opacity: 0; visibility: hidden; transition: opacity 0.08s ease; white-space: normal;
     }
     .rds-tip--visible { opacity: 1; visibility: visible; }
+    .rds-tip code {
+      font-family: 'JetBrains Mono', monospace; font-size: 10.5px;
+      background: rgba(255, 255, 255, 0.1); padding: 1px 4px; border-radius: 3px;
+    }
     .telnet-debug-bp-badge--scanned { color: #93c5fd; border-color: #3b5b8c; }
     .telnet-debug-bp-badge--hit { color: #fbbf24; border-color: #8c6d3b; }
     .telnet-debug-bp-badge--managed { color: #a78bfa; border-color: #5b45b8; }
@@ -13917,11 +13921,6 @@
       background: var(--bg-tertiary); color: var(--text-primary); font-family: inherit; font-size: 13px; cursor: pointer;
     }
     .try-demo-app-select:focus { outline: none; border-color: var(--accent-purple); }
-    .try-demo-app-debug-toggle {
-      display: flex; align-items: center; gap: 6px; margin-top: 10px;
-      font-size: 12.5px; color: var(--text-muted); cursor: pointer;
-    }
-    .try-demo-app-debug-toggle input { margin: 0; }
     .try-demo-app-error { margin: 12px 0 0; color: var(--accent-red, #ef4444); font-size: 12.5px; }
     .try-demo-app-footer { display: flex; align-items: center; justify-content: flex-end; gap: 8px; padding: 16px 24px; border-top: 1px solid var(--border); }
     .try-demo-app-settings-link {
@@ -14618,6 +14617,14 @@
       line-height: 1.5;
     }
 
+    /* Footer: forget-on-quit checkbox on the left, Add Location on the right. The row rules must outrank
+       the generic `.add-location-form input { width:100% }` / `label { display:block }` rules below. */
+    .add-location-form .form-actions.add-location-footer { justify-content: space-between; align-items: center; }
+    .add-location-form .add-location-forget-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
+    .add-location-form .add-location-forget-row input[type="checkbox"] { width: auto; flex: 0 0 auto; margin: 0; padding: 0; cursor: pointer; accent-color: var(--accent-purple); }
+    .add-location-form .add-location-forget-row label { display: inline; margin: 0; cursor: pointer; white-space: nowrap; font-size: 13px; color: var(--text-primary); }
+    .location-ephemeral { display: inline-flex; align-items: center; }
+
     .add-location-form .form-group {
       margin-bottom: 16px;
     }
@@ -14752,6 +14759,12 @@
       color: var(--text-muted);
     }
     
+    .server-version-group {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
     .server-version {
       font-size: 11px;
       color: var(--text-muted);
@@ -14875,7 +14888,9 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
-      margin-bottom: 14px;
+      /* A full-height bar's native `title` tooltip renders just above the cursor, right at the top
+         of the chart — 14px left it overlapping this header's text (confirmed live). */
+      margin-bottom: 32px;
     }
 
     .rce-usage-title {
@@ -14913,6 +14928,12 @@
       min-height: 2px;
       background: var(--accent-purple);
       border-radius: 3px 3px 0 0;
+    }
+
+    /* A day with zero usage should render as no bar at all, not the same 2px sliver a tiny-but-real
+       amount of usage gets — otherwise an idle day looks indistinguishable from "some usage". */
+    .rce-usage-bar.zero {
+      min-height: 0;
     }
 
     .rce-usage-bar-label {
@@ -18307,11 +18328,6 @@
     hidden
   >
     <ul class="titlebar-hamburger-menu-list" role="menu">
-      <li role="none"><button type="button" class="titlebar-hamburger-menu-item" role="menuitemcheckbox" data-menu-action="toggle-developer" aria-checked="false" data-i18n="app.developerMode">Developer Mode</button></li>
-      <li role="none"><button type="button" class="titlebar-hamburger-menu-item" role="menuitemcheckbox" data-menu-action="toggle-privacy" aria-checked="false" data-i18n="app.privacyMode">Privacy Mode</button></li>
-      <li role="none"><button type="button" class="titlebar-hamburger-menu-item" role="menuitemcheckbox" data-menu-action="toggle-debug-logging" aria-checked="false" data-i18n="app.debugLogging">Debug Logging</button></li>
-      <li role="none" id="titlebarDiagnosticLogFolderItem" hidden><button type="button" class="titlebar-hamburger-menu-item" role="menuitem" data-menu-action="open-diagnostic-log-folder" data-i18n="app.openDiagnosticLogsFolder"><span class="titlebar-hamburger-menu-icon icon icon-sm" aria-hidden="true"><svg><use href="#icon-folder"/></svg></span>Open Diagnostic Logs Folder</button></li>
-      <li class="titlebar-hamburger-menu-sep" role="separator" aria-hidden="true"></li>
       <li role="none"><button type="button" class="titlebar-hamburger-menu-item" role="menuitem" data-menu-action="open-log-file" data-i18n="app.openLogFile"><span class="titlebar-hamburger-menu-icon icon icon-sm" aria-hidden="true"><svg><use href="#icon-file-text"/></svg></span>Open Log File</button></li>
       <li role="none"><button type="button" class="titlebar-hamburger-menu-item" role="menuitem" data-menu-action="open-fiddle" data-i18n="app.openFiddle"><span class="titlebar-hamburger-menu-icon icon icon-sm" aria-hidden="true"><svg><use href="#icon-code"/></svg></span>Open Fiddle</button></li>
       <li role="none"><button type="button" class="titlebar-hamburger-menu-item" role="menuitem" data-menu-action="settings" data-i18n="app.settings"><span class="titlebar-hamburger-menu-icon icon icon-sm" aria-hidden="true"><svg><use href="#icon-settings"/></svg></span>Settings</button></li>
@@ -18327,6 +18343,11 @@
       </li>
       <li class="titlebar-hamburger-menu-sep" role="separator" aria-hidden="true"></li>
       <li role="none"><button type="button" class="titlebar-hamburger-menu-item" role="menuitem" data-menu-action="about" data-i18n="app.aboutRokuDevStudio"><span class="titlebar-hamburger-menu-icon icon icon-sm" aria-hidden="true"><svg><use href="#icon-info"/></svg></span>About Roku Dev Studio</button></li>
+      <li class="titlebar-hamburger-menu-sep" role="separator" aria-hidden="true"></li>
+      <li role="none"><button type="button" class="titlebar-hamburger-menu-item" role="menuitemcheckbox" data-menu-action="toggle-developer" aria-checked="false" data-i18n="app.developerMode">Developer Mode</button></li>
+      <li role="none"><button type="button" class="titlebar-hamburger-menu-item" role="menuitemcheckbox" data-menu-action="toggle-privacy" aria-checked="false" data-i18n="app.privacyMode">Privacy Mode</button></li>
+      <li role="none"><button type="button" class="titlebar-hamburger-menu-item" role="menuitemcheckbox" data-menu-action="toggle-debug-logging" aria-checked="false" data-i18n="app.debugLogging">Debug Logging</button></li>
+      <li role="none" id="titlebarDiagnosticLogFolderItem" hidden><button type="button" class="titlebar-hamburger-menu-item" role="menuitem" data-menu-action="open-diagnostic-log-folder" data-i18n="app.openDiagnosticLogsFolder"><span class="titlebar-hamburger-menu-icon icon icon-sm" aria-hidden="true"><svg><use href="#icon-folder"/></svg></span>Open Diagnostic Logs Folder</button></li>
       <li class="titlebar-hamburger-menu-sep" role="separator" aria-hidden="true"></li>
       <li role="none"><button type="button" class="titlebar-hamburger-menu-item" role="menuitem" data-menu-action="quit" data-i18n="app.quitRokuDevStudio"><span class="titlebar-hamburger-menu-icon icon icon-sm" aria-hidden="true"><svg><use href="#icon-x"/></svg></span>Quit Roku Dev Studio</button></li>
     </ul>

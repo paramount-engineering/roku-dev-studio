@@ -23,45 +23,17 @@ import type {
   RelayStepResult,
   RelayStepState
 } from '../../shared/sideload-relay/types';
+import type { SideloadChannelOpts } from 'roku-dev-studio-api/lib/plugin-install';
 
+// `roku-dev-studio-api`'s root is a CJS `module.exports` (its .d.ts is `export {}`), so this one
+// member stays hand-typed against the api's own exported opts type.
 const rokuApi = require('roku-dev-studio-api') as {
-  sideloadChannel: (opts: {
-    ip: string;
-    filePath: string;
-    password: string;
-    log?: (msg: string) => void;
-    extraFields?: { name: string; value: string }[];
-    cleanInstall?: boolean;
-  }) => Promise<{ success: boolean; error?: string; message?: string }>;
+  sideloadChannel: (opts: SideloadChannelOpts) => Promise<{ success: boolean; error?: string; message?: string }>;
 };
-const { ensureDebugTelnetConnected, bounceDebugTelnet } = require('../ipc/telnet-handlers') as {
-  ensureDebugTelnetConnected: (
-    ip: string,
-    options?: { holder?: string }
-  ) => Promise<{ success: boolean; error?: string }>;
-  bounceDebugTelnet: (ip: string, opts?: { onlyIfOpen?: boolean }) => Promise<{ success: boolean; error?: string }>;
-};
-const { ensureRceDebugTelnetConnected } = require('../ipc/rce-handlers') as {
-  ensureRceDebugTelnetConnected: (
-    name: string,
-    instanceApiUrl: string,
-    ip: string
-  ) => Promise<{ success: boolean; error?: string }>;
-};
-const { resolveRceDeviceBySerial, resolveRceInstanceBySerial } = require('../rce-device-registry') as {
-  resolveRceDeviceBySerial: (serial: string | undefined | null) => { accountName: string; deviceId: number } | null;
-  resolveRceInstanceBySerial: (
-    serial: string | undefined | null
-  ) => Promise<{ success: true; instance: { accountName: string; instanceApiUrl: string; token: string } } | { success: false; error: string }>;
-};
-const { rceSideload } = require('roku-dev-studio-rce') as {
-  rceSideload: (
-    opts: { instanceApiUrl: string; rceToken: string; devPassword: string },
-    zipData: Buffer,
-    filename: string,
-    remoteDebug?: boolean
-  ) => Promise<{ success: boolean; error?: string; message?: string }>;
-};
+const { ensureDebugTelnetConnected, bounceDebugTelnet } = require('../ipc/telnet-handlers') as typeof import('../ipc/telnet-handlers');
+const { ensureRceDebugTelnetConnected } = require('../ipc/rce-handlers') as typeof import('../ipc/rce-handlers');
+const { resolveRceDeviceBySerial, resolveRceInstanceBySerial } = require('../rce-device-registry') as typeof import('../rce-device-registry');
+const { rceSideload } = require('roku-dev-studio-rce') as typeof import('roku-dev-studio-rce');
 // A debug-enabled install just (re)opened the target's debug protocol port (8081) — tell the
 // Telnet debug sidebar to reattach, the same event every other sideload entry point
 // (dev-app-handlers.ts / bs-fiddle-handlers.ts / rce-handlers.ts) already fires. Fan-out never did
@@ -115,6 +87,13 @@ export interface FanoutOptions {
   /** Remote-server ops for remote targets; absent = remote targets error out. */
   remoteOps?: RemoteFanoutOps;
 }
+
+// Step messages are developer output: their only sink is the emulated Roku 8085 console streamed to
+// the IDE (service.ts `stepWord`, an English line like `install FAILED (<message>)`) — no renderer
+// surface renders `RelayStepResult.message`. Deliberately plain English, not `S.*` (a localized
+// fragment inside that English line was worse). 'skipped' messages are informational in the IPC
+// payload only; `stepWord` prints just the state for them.
+const CONSOLE_SKIPPED_INSTALL_FAILED = 'install failed';
 
 function step(state: RelayStepState, message?: string, durationMs?: number): RelayStepResult {
   return { state, ...(message ? { message } : {}), ...(durationMs != null ? { durationMs } : {}) };
@@ -183,7 +162,7 @@ export async function runFanout(opts: FanoutOptions, listener: RelayListener): P
         const rceInstance = await resolveRceInstanceBySerial(target.ip);
         if (!rceInstance.success) {
           result.install = step('error', rceInstance.error);
-          result.console = step('skipped', 'install failed');
+          result.console = step('skipped', CONSOLE_SKIPPED_INSTALL_FAILED);
           result.done = true;
           emit();
           return;
@@ -199,7 +178,7 @@ export async function runFanout(opts: FanoutOptions, listener: RelayListener): P
           zipData = fs.readFileSync(packagePath);
         } catch (e) {
           result.install = step('error', (e as Error)?.message || 'Could not read package', Date.now() - installStart);
-          result.console = step('skipped', 'install failed');
+          result.console = step('skipped', CONSOLE_SKIPPED_INSTALL_FAILED);
           result.done = true;
           emit();
           return;
@@ -215,7 +194,7 @@ export async function runFanout(opts: FanoutOptions, listener: RelayListener): P
         result.install = step(r.success ? 'ok' : 'error', r.success ? undefined : r.error || 'Install failed', Date.now() - installStart);
         emit();
         if (!r.success) {
-          result.console = step('skipped', 'install failed');
+          result.console = step('skipped', CONSOLE_SKIPPED_INSTALL_FAILED);
           result.done = true;
           emit();
           return;
@@ -320,7 +299,7 @@ export async function runFanout(opts: FanoutOptions, listener: RelayListener): P
           }
         }
       } else if (isRemote) {
-        result.console = step('skipped', 'install failed');
+        result.console = step('skipped', CONSOLE_SKIPPED_INSTALL_FAILED);
       }
 
       result.done = true;

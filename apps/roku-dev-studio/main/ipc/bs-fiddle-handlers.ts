@@ -14,6 +14,9 @@ import { IPC } from '../../shared/ipc/channels';
 import { S } from '../../shared/strings/index';
 import {
   getFiddleStateByWindow,
+  getAllFiddleWindowStates,
+  notifyFiddleChannelRemoved,
+  pendingFiddleCleanupPromises,
   broadcastFiddleTerminalCleared,
   setFiddleActiveSideload,
   requestMainRendererClearPassword,
@@ -30,6 +33,7 @@ import { resolveRceDeviceBySerial, resolveRceInstanceBySerial, type RceLiveInsta
 import { rceSideload, rceDeleteSideload, RceEcpClient } from 'roku-dev-studio-rce';
 import { mainLog, mainWarn, mainError } from '../log.js';
 import { notifyDebuggerReattach } from './debugger-handlers';
+import { computeSideloadDebugFlags } from './dev-app-handlers';
 
 const fs = require('fs');
 const path = require('path');
@@ -479,9 +483,69 @@ async function verifyAndDeleteFiddle(
 
 let registered = false;
 
+/**
+ * The "never leave the Fiddle channel behind" rule, one routine behind every trigger: Fiddle window
+ * close (the window-close cleanup in registerBsFiddleIpc), switching the Fiddle target device (the
+ * renderer's Stop), closing the device's tab in the main window (`DeviceTabClosed`) and quitting RDS
+ * (`settleFiddleCleanupsForQuit`). Removes our channel from every device an open Fiddle window still
+ * has it on — only the device at `filter.ip` when given. A device that is already off just fails
+ * the delete; nothing more can be done for it.
+ */
+export async function clearFiddleSideloads(filter?: { ip?: string }): Promise<void> {
+  const jobs: Promise<void>[] = [];
+  for (const { winId, state } of getAllFiddleWindowStates()) {
+    const activeId = state.activeFiddleDeviceId;
+    if (!activeId) continue;
+    const device = state.devices.find((d) => d.id === activeId);
+    if (!device) continue;
+    if (filter?.ip && device.ip !== filter.ip) continue;
+    const password = state.activeFiddlePassword || device.password || '';
+    jobs.push(
+      (async () => {
+        const result = await verifyAndDeleteFiddle({ ip: device.ip, isRemote: device.isRemote, serverUrl: device.serverUrl || null, password });
+        if (result.success) {
+          setFiddleActiveSideload(winId, null, null);
+          notifyFiddleChannelRemoved(winId, device.id);
+          mainLog(`[Fiddle] cleanup: ${result.skipped ? 'dev channel is not ours on' : 'fiddle channel removed from'} ${device.ip}`);
+        } else {
+          mainWarn('[Fiddle] cleanup delete failed:', device.ip, result.error);
+          if (result.authFailed) requestMainRendererClearPassword(device.id);
+        }
+      })()
+    );
+  }
+  await Promise.all(jobs);
+}
+
+/**
+ * Quit hook for main.ts's `before-quit`: `null` when nothing needs deleting, else a promise (bounded
+ * to `timeoutMs`) that settles once every Fiddle channel is gone — the still-open windows' channels
+ * via {@link clearFiddleSideloads} plus window-close cleanups already in flight (a
+ * `window-all-closed` quit closes the Fiddle window first, and the process used to exit before that
+ * cleanup's HTTP delete ever reached the device).
+ */
+export function settleFiddleCleanupsForQuit(timeoutMs = 6000): Promise<void> | null {
+  const pending = pendingFiddleCleanupPromises();
+  const hasActive = getAllFiddleWindowStates().some(({ state }) => !!state.activeFiddleDeviceId);
+  if (!hasActive && pending.length === 0) return null;
+  const work = Promise.all([clearFiddleSideloads(), ...pending]).then(
+    () => undefined,
+    () => undefined
+  );
+  const timeout = new Promise<void>((resolve) => setTimeout(resolve, timeoutMs));
+  return Promise.race([work, timeout]);
+}
+
 export function registerBsFiddleIpc(ipcMain: IpcMain): void {
   if (registered) return;
   registered = true;
+
+  // A device tab closed in the main window: remove our Fiddle channel from that device if a
+  // Fiddle window still has it there (one of the four triggers of the cleanup rule above).
+  ipcMain.on(IPC.DeviceTabClosed, (_event, payload: { ip?: unknown } | undefined) => {
+    const ip = typeof payload?.ip === 'string' ? payload.ip.trim() : '';
+    if (ip) void clearFiddleSideloads({ ip });
+  });
 
   // Wire the window-close cleanup once. When the user closes the Fiddle
   // window while a Fiddle channel is still installed, we verify it's ours
@@ -536,7 +600,7 @@ export function registerBsFiddleIpc(ipcMain: IpcMain): void {
     }
   });
 
-  ipcMain.handle(IPC.FiddleRun, async (event: IpcMainInvokeEvent, payload: { deviceId: string; code: string; password?: string; remoteDebug?: boolean }) => {
+  ipcMain.handle(IPC.FiddleRun, async (event: IpcMainInvokeEvent, payload: { deviceId: string; code: string; password?: string }) => {
     const senderWin = BrowserWindow.fromWebContents(event.sender);
     if (!senderWin || senderWin.isDestroyed()) {
       return { success: false, error: S.fiddle.errWindowUnavailable };
@@ -652,10 +716,10 @@ export function registerBsFiddleIpc(ipcMain: IpcMain): void {
       }
     }
 
-    // "Enable Debugger" — same remotedebug=1 convention Sideload Relay / the Dev App tab
-    // use, just read straight off the Fiddle modal's checkbox instead of a persisted per-device
-    // setting (a Fiddle run is a one-off, not a saved preference).
-    const debugEnabled = !!payload?.remoteDebug;
+    // "Enable Debugger" — no checkbox of its own here (nor in the Try Demo App modal): both read
+    // the same persisted per-device setting the Dev App tab's checkbox controls, via the exact
+    // persisted-setting + STOP-auto-detect logic that path already uses.
+    const { debugEnabled } = computeSideloadDebugFlags(device.ip, device.serial, zipPath, undefined);
 
     // Sideload (local, remote, or RCE).
     let sideloadRes: { success: boolean; error?: string; message?: string; authFailed?: boolean } = {

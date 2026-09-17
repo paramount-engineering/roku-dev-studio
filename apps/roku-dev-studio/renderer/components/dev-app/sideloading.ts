@@ -1,6 +1,6 @@
 // Sideloading functionality
 
-import { icon, escapeHtml, decodeHtmlEntities, setSafeHTML } from '../../modules/utils/index.js';
+import { icon, setSafeHTML } from '../../modules/utils/index.js';
 import { showStatusMessage } from '../../modules/utils/ui.js';
 import { savePassword, removePassword, getStoredPassword } from '../../modules/utils/storage.js';
 import { SCREENSHOT_AFTER_LAUNCH_DELAY } from '../../modules/utils/constants.js';

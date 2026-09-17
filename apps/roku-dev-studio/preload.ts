@@ -116,7 +116,7 @@ contextBridge.exposeInMainWorld('roku', {
     ipcRenderer.invoke(IPC.RokuSideload, { ip, filePath, password, remoteDebug, serial }),
   deleteSideload: (ip: string, password: string | undefined) =>
     ipcRenderer.invoke(IPC.RokuDeleteSideload, { ip, password }),
-  launchDemoApp: (payload: { ip: string; isRemote?: boolean; serverUrl?: string | null; password: string; remoteDebug?: boolean }) =>
+  launchDemoApp: (payload: { ip: string; serial?: string; isRemote?: boolean; serverUrl?: string | null; password: string }) =>
     ipcRenderer.invoke(IPC.DemoAppLaunch, payload),
   /** The Settings window's "Demo App" button asked main to open the picker here. */
   onDemoAppOpenRequested: (callback: () => void) => {
@@ -515,10 +515,6 @@ contextBridge.exposeInMainWorld('roku', {
   remoteVerifyDevAuth: (serverUrl: string, ip: string, password: string | undefined) =>
     ipcRenderer.invoke(IPC.RemoteVerifyDevAuth, { serverUrl, ip, password }),
 
-  // Sideload via remote server (file must be on remote server)
-  remoteSideload: (serverUrl: string, ip: string, filePath: string, password: string | undefined) => 
-    ipcRenderer.invoke(IPC.RemoteSideload, { serverUrl, ip, filePath, password }),
-  
   // Sideload via remote server with file upload from local machine. remoteDebug/serial
   // mirror the local `sideload(ip, filePath, password, remoteDebug, serial)` signature —
   // previously dropped here, which silently prevented "Enable Debugger" from
@@ -555,6 +551,8 @@ contextBridge.exposeInMainWorld('roku', {
   
   // Disconnect local telnet
   telnetDisconnect: (ip: string) => ipcRenderer.invoke(IPC.TelnetDisconnect, { ip }),
+  /** One-way: a device tab was closed — main runs its per-device cleanup (removes our Fiddle channel). */
+  deviceTabClosed: (ip: string) => ipcRenderer.send(IPC.DeviceTabClosed, { ip }),
   
   // Send command to local telnet
   telnetSend: (ip: string, command: string) => ipcRenderer.invoke(IPC.TelnetSend, { ip, command }),

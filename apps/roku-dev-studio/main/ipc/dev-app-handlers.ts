@@ -12,6 +12,7 @@ import { IPC } from '../../shared/ipc/channels';
 import { mainError, mainLog } from '../log.js';
 import { S } from '../../shared/strings/index';
 import { DEBUGGER_ENABLED_DEVICES_KEY, isDebuggerEnabled, withDebuggerEnabled } from '../../shared/platform/debugger-enabled';
+import { notifyDebuggerReattach } from './debugger-handlers';
 
 const fs = require('fs');
 const path = require('path');
@@ -71,18 +72,14 @@ function computeSideloadDebugFlags(
   } catch { /* scan best-effort */ }
 
   const ref = { serial, ip };
-  let debugEnabled = !!remoteDebug;
-  try {
-    if (isDebuggerEnabled(settingsMod.loadSettings()[DEBUGGER_ENABLED_DEVICES_KEY], ref)) debugEnabled = true;
-  } catch { /* default off */ }
+  // One read: `loadSettings()` also runs the legacy-key migration, so don't call it twice per sideload.
+  const settings = settingsMod.loadSettings();
+  let debugEnabled = !!remoteDebug || isDebuggerEnabled(settings[DEBUGGER_ENABLED_DEVICES_KEY], ref);
   if (discovered > 0 && !debugEnabled) {
     debugEnabled = true;
-    try {
-      // Persist the auto-enable so future sideloads (and the sidebar) stay on.
-      const s = settingsMod.loadSettings();
-      s[DEBUGGER_ENABLED_DEVICES_KEY] = withDebuggerEnabled(s[DEBUGGER_ENABLED_DEVICES_KEY], ref, true);
-      settingsMod.saveSettings(s);
-    } catch { /* best-effort persist */ }
+    // Persist the auto-enable so future sideloads (and the sidebar) stay on.
+    settings[DEBUGGER_ENABLED_DEVICES_KEY] = withDebuggerEnabled(settings[DEBUGGER_ENABLED_DEVICES_KEY], ref, true);
+    settingsMod.saveSettings(settings);
   }
   return { debugEnabled, discovered };
 }
@@ -237,9 +234,7 @@ function setupDevAppHandlers(mainWindow: BrowserWindow | undefined, dialog: Dial
         // Remember the .zip for STOP scanning, and reattach the debugger to the fresh
         // run — passing the discovered count so the sidebar can toast it.
         scan.rememberSideloadZip(ip, resolved);
-        (require('./debugger-handlers') as {
-          notifyDebuggerReattach: (ip: string, extra?: { discovered?: number }) => void;
-        }).notifyDebuggerReattach(ip, { discovered });
+        notifyDebuggerReattach(ip, { discovered });
       } catch {
         /* best-effort */
       }
@@ -256,8 +251,8 @@ function setupDevAppHandlers(mainWindow: BrowserWindow | undefined, dialog: Dial
       rememberSideloadZip: (ip: string, p: string) => void;
     };
     const zip = scan.getRememberedZip(ip);
-    if (!zip) return { success: false, error: 'No previous debug sideload to restart. Turn on Enable Debugger and sideload first.' };
-    if (!fs.existsSync(zip)) return { success: false, error: 'The previous debug build is no longer on disk. Sideload again.' };
+    if (!zip) return { success: false, error: S.debugger.errNoPreviousDebugSideload };
+    if (!fs.existsSync(zip)) return { success: false, error: S.debugger.errPreviousDebugBuildMissing };
     mainLog(`[sideload] restart ip=${ip} remotedebug=1 file=${path.basename(zip)}`);
     const result = await sideloadChannel({
       ip,
@@ -270,9 +265,7 @@ function setupDevAppHandlers(mainWindow: BrowserWindow | undefined, dialog: Dial
     if (result && (result as { success?: boolean }).success !== false) {
       try {
         scan.rememberSideloadZip(ip, zip);
-        (require('./debugger-handlers') as {
-          notifyDebuggerReattach: (ip: string, extra?: { discovered?: number }) => void;
-        }).notifyDebuggerReattach(ip);
+        notifyDebuggerReattach(ip);
       } catch {
         /* best-effort */
       }

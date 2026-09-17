@@ -16,7 +16,7 @@ contextBridge.exposeInMainWorld('fiddle', {
   getSymbols: (payload: { deviceId: string }) =>
     ipcRenderer.invoke(IPC.FiddleGetSymbols, payload),
 
-  run: (payload: { deviceId: string; code: string; password?: string; remoteDebug?: boolean }) =>
+  run: (payload: { deviceId: string; code: string; password?: string }) =>
     ipcRenderer.invoke(IPC.FiddleRun, payload),
 
   stop: (payload: { deviceId: string; password?: string }) =>
@@ -45,6 +45,11 @@ contextBridge.exposeInMainWorld('fiddle', {
     const handler = () => callback();
     ipcRenderer.on(IPC.FiddleTerminalCleared, handler);
     return () => ipcRenderer.removeListener(IPC.FiddleTerminalCleared, handler);
+  },
+  onChannelRemoved: (callback: (data: unknown) => void) => {
+    const handler = (_event: unknown, data: unknown) => callback(data);
+    ipcRenderer.on(IPC.FiddleChannelRemoved, handler);
+    return () => ipcRenderer.removeListener(IPC.FiddleChannelRemoved, handler);
   },
 
   onRunResult: (callback: (data: unknown) => void) => {

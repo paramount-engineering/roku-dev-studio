@@ -26,13 +26,14 @@ import { RokuEmulator } from './roku-emulator';
 import { runFanout, type FanoutTarget, type RemoteFanoutOps } from './fanout';
 import { resolveRemoteDeviceIp } from '../remote-device-registry';
 import { resolveRceDeviceBySerial } from '../rce-device-registry';
+import { notifyDebuggerReattach } from '../ipc/debugger-handlers';
+import { CONSOLE_REPLAY_WINDOW_MS } from '../../shared/console/roku-beacons';
 
 const { mainLog, mainWarn } = require('../log');
-const { loadSettings, saveSettings } = require('../settings') as {
-  loadSettings: () => Record<string, unknown>;
-  saveSettings: (s: Record<string, unknown>) => boolean;
-};
+const { loadSettings, saveSettings } = require('../settings') as typeof import('../settings');
 const { DEFAULT_RELAY_PORT } = require('../../shared/sideload-relay/types');
+// `roku-dev-studio-api`'s root is a CJS `module.exports` (its .d.ts is `export {}`), so this one
+// member stays hand-typed.
 const { resolveDeviceIp } = require('roku-dev-studio-api') as {
   resolveDeviceIp: (serial: string | undefined | null, fallbackIp: string) => string;
 };
@@ -50,16 +51,32 @@ import {
   isDebuggerEnabled,
   withDebuggerEnabled
 } from '../../shared/platform/debugger-enabled';
-const { subscribeDebugTelnetData, createTelnetMarkerWatcher, msSinceDebugTelnetConnected, TELNET_BACKLOG_SETTLE_MS } =
-  require('../ipc/telnet-handlers') as {
-    subscribeDebugTelnetData: (ip: string, cb: (text: string) => void) => () => void;
-    createTelnetMarkerWatcher: (pattern: RegExp, carryLen?: number) => { feed: (text: string) => boolean };
-    msSinceDebugTelnetConnected: (ip: string) => number;
-    TELNET_BACKLOG_SETTLE_MS: number;
-  };
+const { subscribeDebugTelnetData, msSinceDebugTelnetConnected } =
+  require('../ipc/telnet-handlers') as typeof import('../ipc/telnet-handlers');
 
 /** The real "app fully launched" beacon `watchForLaunchComplete` watches for — see its doc comment. */
 const LAUNCH_COMPLETE_RE = /\[beacon\.signal\]\s*\|AppLaunchChainComplete|\[scrpt\.ctx\.run\.enter\]/i;
+
+/**
+ * Regex-watch raw (unbuffered, not line-aligned) 8085 chunks for `pattern`. Carries a short tail
+ * across chunks so a match spanning a chunk boundary can't be missed. Feed it consecutive chunks via
+ * `feed()`; a match clears the carry so the same physical occurrence can't re-fire on the next
+ * unrelated chunk.
+ */
+function createTelnetMarkerWatcher(pattern: RegExp): { feed: (text: string) => boolean } {
+  let carry = '';
+  return {
+    feed(text: string): boolean {
+      const combined = carry + text;
+      if (pattern.test(combined)) {
+        carry = '';
+        return true;
+      }
+      carry = combined.slice(-120);
+      return false;
+    }
+  };
+}
 
 function defaultConfig(): RelayBootConfig {
   return {
@@ -391,7 +408,7 @@ export class SideloadRelayService {
     // A freshly (re)opened 8085 socket — the fan-out's pre-install connect and its post-install
     // re-dial both are — first receives Roku's replay of recent history, i.e. the PREVIOUS run's
     // AppLaunchComplete. Same settle window the debugger-wait watcher uses.
-    if (msSinceDebugTelnetConnected(ip) < TELNET_BACKLOG_SETTLE_MS) return;
+    if (msSinceDebugTelnetConnected(ip) < CONSOLE_REPLAY_WINDOW_MS) return;
     this.endArmed = true;
     this.scheduleEnd(1200);
   }
@@ -441,7 +458,7 @@ export class SideloadRelayService {
     // falls to the on-device 8085 micro-debugger instead of the RDS debugger.
     let discovered = 0;
     try {
-      discovered = (require('roku-dev-studio-api/lib/debugger/scan-stops') as { scanZipForStops: (p: string) => unknown[] })
+      discovered = (require('roku-dev-studio-api/lib/debugger/scan-stops') as typeof import('roku-dev-studio-api/lib/debugger/scan-stops'))
         .scanZipForStops(upload.filePath).length;
     } catch {
       /* scan best-effort */
@@ -501,7 +518,7 @@ export class SideloadRelayService {
     // symbol-completion scan has a zip to read, regardless of remotedebug.
     if (targets.length) {
       try {
-        const scanSymbols = require('roku-dev-studio-api/lib/debugger/scan-symbols') as { rememberAnySideloadZip: (ip: string, p: string) => void };
+        const scanSymbols = require('roku-dev-studio-api/lib/debugger/scan-symbols') as typeof import('roku-dev-studio-api/lib/debugger/scan-symbols');
         for (const t of targets) scanSymbols.rememberAnySideloadZip(t.ip, upload.filePath);
       } catch {
         /* best-effort */
@@ -516,7 +533,7 @@ export class SideloadRelayService {
       // zip), and persist the auto-enable so the sidebar / future runs stay in debug
       // mode (only when the build actually carried STOPs, matching single-device).
       try {
-        const scan = require('roku-dev-studio-api/lib/debugger/scan-stops') as { rememberSideloadZip: (ip: string, p: string) => void };
+        const scan = require('roku-dev-studio-api/lib/debugger/scan-stops') as typeof import('roku-dev-studio-api/lib/debugger/scan-stops');
         for (const dip of debugTargetIps) scan.rememberSideloadZip(dip, upload.filePath);
       } catch {
         /* best-effort */
@@ -540,9 +557,7 @@ export class SideloadRelayService {
         if (result.done && result.install.state === 'ok' && debugTargetIps.has(result.ip)) {
           try {
             const target = debugTargets.find((t) => t.id === result.targetId);
-            (require('../ipc/debugger-handlers') as {
-              notifyDebuggerReattach: (ip: string, extra?: { discovered?: number; isRemote?: boolean; serverUrl?: string }) => void;
-            }).notifyDebuggerReattach(result.ip, {
+            notifyDebuggerReattach(result.ip, {
               discovered,
               ...(target?.remote ? { isRemote: true, serverUrl: target.serverUrl } : {})
             });

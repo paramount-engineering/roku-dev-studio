@@ -21,6 +21,7 @@ export interface TryDemoAppDeviceOption {
   id: string;
   label: string;
   ip: string;
+  serial?: string;
   isRemote: boolean;
   serverUrl?: string | null;
   password?: string;
@@ -54,10 +55,6 @@ export function openTryDemoAppModal(opts: {
            <select class="try-demo-app-select" id="tryDemoAppDeviceSelect"></select>
            <button type="button" class="btn btn-secondary try-demo-app-rescan">${escapeHtml(S.actionScripts.viewerRescan)}</button>
          </div>
-         <label class="try-demo-app-debug-toggle" title="${escapeHtml(S.debugger.enableDebuggerTitle)}">
-           <input type="checkbox" class="try-demo-app-debug-checkbox">
-           ${escapeHtml(S.debugger.enableDebugger)}
-         </label>
          <p class="try-demo-app-error" hidden></p>
        </div>
        <div class="modal-footer try-demo-app-footer">
@@ -71,7 +68,6 @@ export function openTryDemoAppModal(opts: {
   const rescanBtn = overlay.querySelector('.try-demo-app-rescan') as HTMLButtonElement;
   const launchBtn = overlay.querySelector('.try-demo-app-launch') as HTMLButtonElement;
   const errorEl = overlay.querySelector('.try-demo-app-error') as HTMLElement;
-  const debugCheckbox = overlay.querySelector('.try-demo-app-debug-checkbox') as HTMLInputElement;
 
   let devices: TryDemoAppDeviceOption[] = [];
 
@@ -136,10 +132,10 @@ export function openTryDemoAppModal(opts: {
     try {
       const result = await window.roku.launchDemoApp({
         ip: device.ip,
+        serial: device.serial,
         isRemote: device.isRemote,
         serverUrl: device.serverUrl,
-        password: device.password || '',
-        remoteDebug: debugCheckbox.checked
+        password: device.password || ''
       });
       if (result && result.success) {
         settle();

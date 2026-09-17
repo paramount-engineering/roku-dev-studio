@@ -4,7 +4,6 @@
 // Import modules
 import {
   escapeHtml,
-  decodeHtmlEntities,
   icon,
   animateHeight,
   setSafeHTML,
@@ -35,6 +34,7 @@ import {
 } from './components/try-demo-app/try-demo-app-modal.js';
 import { errMessage } from '@shared/platform/err-util.js';
 import { deviceKey } from '@shared/platform/device-identity.js';
+import { singleFlight } from '@shared/platform/single-flight.js';
 import { S, applyI18n, setLocale } from '@shared/strings/index.js';
 import { applyLocalePreference } from './modules/utils/locale-live.js';
 import { devLog } from './modules/utils/dev-log.js';
@@ -66,6 +66,12 @@ import { setupQueries as setupQueriesComponent } from './components/queries/inde
 import { setupInspector as setupInspectorComponent } from './components/inspector/index.js';
 import { setupDevApp as setupDevAppComponent } from './components/dev-app/index.js';
 import { isLocalDevice, isRemoteDevice, isRceDevice } from './components/dev-app/dev-app-types.js';
+import {
+  loadAppsAndInputs,
+  onAppsAndInputsResolved,
+  type AppsAndInputsResult,
+  type AppsAndInputsFailure
+} from './components/dev-app/apps-and-inputs.js';
 import { setupActionScripts as setupActionScriptsComponent } from './components/action-scripts/index.js';
 import {
   setupNetworkTab,
@@ -771,6 +777,14 @@ function registerMcpConnectFlow(): void {
   });
 }
 
+/** Live device object from a scan cache by ip, else `fallback` (the caller's hint or a minimal one). */
+function pickLiveDevice(cache: Iterable<unknown>, ip: string, fallback: Record<string, unknown>): Record<string, unknown> {
+  for (const dev of cache) {
+    if ((dev as { ip?: string }).ip === ip) return dev as Record<string, unknown>;
+  }
+  return fallback;
+}
+
 /**
  * Ensure a device's tab is open and its Console is connected after a successful sideload —
  * shared by Sideload Relay's auto-connect and "Try Demo App" (both fire this once a build has
@@ -797,6 +811,8 @@ function ensureDeviceConnectedWithConsole(
   opts: {
     isRemote?: boolean;
     locationId?: string;
+    /** Remote server URL — resolves the location when `locationId` is stale. */
+    serverUrl?: string;
     fallbackDevice?: Record<string, unknown>;
     activate?: boolean;
     rce?: boolean;
@@ -806,7 +822,7 @@ function ensureDeviceConnectedWithConsole(
     connectConsole?: boolean;
   } = {}
 ): string {
-  const { isRemote, locationId, fallbackDevice, activate, rce, rceAccountName, rceDeviceId, connectConsole = true } = opts;
+  const { isRemote, locationId, serverUrl, fallbackDevice, activate, rce, rceAccountName, rceDeviceId, connectConsole = true } = opts;
   let tabId: string;
 
   if (rce && rceAccountName && rceDeviceId != null) {
@@ -814,13 +830,7 @@ function ensureDeviceConnectedWithConsole(
     // key `state.connectedDevices` on `${locationId}:${serial}` (`connectRceDevice`), but the main
     // process only knows the RCE account, not this renderer's local `state.remoteLocations` id, so
     // it has to be resolved here by matching `accountName` first.
-    let rceLocationId: string | null = null;
-    for (const [id, loc] of state.remoteLocations) {
-      if (isRceDevice(loc as { kind?: string; accountName?: string }) && (loc as { accountName?: string }).accountName === rceAccountName) {
-        rceLocationId = id;
-        break;
-      }
-    }
+    const rceLocationId = resolveRemoteLocationId({ accountName: rceAccountName });
     if (!rceLocationId) {
       rendererWarn('[SideloadRelay] RCE auto-connect: no matching location for account', rceAccountName);
       return '';
@@ -847,8 +857,16 @@ function ensureDeviceConnectedWithConsole(
       void connectRceDevice(device, rceLocationId);
       tabId = `tab-rce-${rceLocationId}-${rceDeviceId}`;
     }
-  } else if (isRemote && locationId) {
-    const connKey = `${locationId}:${ip}`;
+  } else if (isRemote) {
+    const resolvedLocationId = resolveRemoteLocationId({
+      locationId,
+      serverUrl: serverUrl || (fallbackDevice?.serverUrl as string | undefined)
+    });
+    if (!resolvedLocationId) {
+      rendererWarn('[auto-connect] remote location not found', { locationId, serverUrl });
+      return '';
+    }
+    const connKey = `${resolvedLocationId}:${ip}`;
     const existing = state.connectedDevices.get(connKey) as { tabId?: string } | undefined;
     if (existing?.tabId) {
       tabId = existing.tabId;
@@ -857,21 +875,16 @@ function ensureDeviceConnectedWithConsole(
       // wired for the remote transport) instead of the local-only connectDevice, which would
       // open a direct-IP tab for a device this machine can't actually reach. Prefer a full
       // device object from the scan cache; fall back to the caller's hint (or a minimal one).
-      let liveDevice: Record<string, unknown> | undefined;
-      const location = state.remoteLocations.get(locationId) as
+      const location = state.remoteLocations.get(resolvedLocationId) as
         | { devices?: Map<string, unknown>; serverUrl?: string }
         | undefined;
-      for (const dev of location?.devices?.values() || []) {
-        if ((dev as { ip?: string }).ip === ip) {
-          liveDevice = dev as Record<string, unknown>;
-          break;
-        }
-      }
-      if (!liveDevice) {
-        liveDevice = fallbackDevice || { ip, deviceName: ip, modelName: 'Roku', serverUrl: location?.serverUrl };
-      }
-      connectRemoteDevice(liveDevice, locationId);
-      tabId = `tab-remote-${locationId}-${ip.replace(/\./g, '-')}`;
+      const liveDevice = pickLiveDevice(
+        location?.devices?.values() || [],
+        ip,
+        fallbackDevice || { ip, deviceName: ip, modelName: 'Roku', serverUrl: location?.serverUrl }
+      );
+      connectRemoteDevice(liveDevice, resolvedLocationId);
+      tabId = `tab-remote-${resolvedLocationId}-${ip.replace(/\./g, '-')}`;
     }
   } else {
     const existing = state.connectedDevices.get(ip) as { tabId?: string } | undefined;
@@ -880,14 +893,7 @@ function ensureDeviceConnectedWithConsole(
     } else {
       // Prefer a full device object from the scan cache; fall back to the caller's hint (or a
       // minimal one — enough for the tab/panel + passwordless ECP/telnet).
-      let liveDevice: Record<string, unknown> | undefined;
-      for (const dev of state.devices.values()) {
-        if ((dev as { ip?: string }).ip === ip) {
-          liveDevice = dev as Record<string, unknown>;
-          break;
-        }
-      }
-      if (!liveDevice) liveDevice = fallbackDevice || { ip, deviceName: ip, modelName: 'Roku' };
+      const liveDevice = pickLiveDevice(state.devices.values(), ip, fallbackDevice || { ip, deviceName: ip, modelName: 'Roku' });
       connectDevice(liveDevice);
       tabId = `tab-${ip.replace(/\./g, '-')}`;
     }
@@ -933,7 +939,6 @@ function registerRelayAutoConnect(): void {
     // connect is async (a second call before the tab lands would open a duplicate tab).
     const key = `${r.runId ?? ''}:${r.targetId ?? r.ip}`;
     const isFirst = !openedThisRun.has(key);
-    if (isFirst) openedThisRun.add(key);
     if (r.done === true) openedThisRun.delete(key);
     // Local + RCE: tab AND console at run start. Remote: tab at run start, console only once the
     // install succeeded — the lab server has no post-install rebind (see fanout.ts), so a
@@ -942,9 +947,10 @@ function registerRelayAutoConnect(): void {
     if (!isFirst && !remoteInstalled) return;
     const ip = r.ip;
     try {
-      ensureDeviceConnectedWithConsole(ip, {
+      const tabId = ensureDeviceConnectedWithConsole(ip, {
         isRemote: !!r.remote,
         locationId: r.locationId,
+        serverUrl: r.serverUrl,
         rce: !!r.rce,
         rceAccountName: r.rceAccountName,
         rceDeviceId: r.rceDeviceId,
@@ -953,6 +959,10 @@ function registerRelayAutoConnect(): void {
           : { ip, deviceName: r.name || ip, modelName: r.name || 'Roku' },
         connectConsole: !r.remote || remoteInstalled
       });
+      // '' = the remote/RCE location isn't in `state.remoteLocations` yet (relay run during
+      // startup, before the deferred `loadRemoteLocations()` landed) — leave the key unmarked so
+      // this target's next result in the run (the install result, seconds later) tries again.
+      if (tabId && r.done !== true) openedThisRun.add(key);
     } catch (e) {
       rendererError('[SideloadRelay] auto-connect failed', e);
     }
@@ -1294,11 +1304,12 @@ async function saveRemoteLocations() {
     // RCE locations carry `kind`/`accountName` instead of `host`/`port`/`serverUrl` — persist
     // whichever set the location actually has rather than hardcoding the LAN-relay shape, or an
     // RCE location silently loses its identity (and thus which secret-store account it points at)
-    // on the next save/reload.
+    // on the next save/reload. `forgetOnQuit` (session-only location, purged by main at quit/startup)
+    // is persisted only when set so existing entries keep their shape.
     const locations = Array.from(state.remoteLocations.values()).map(loc =>
       isRceDevice(loc)
-        ? { id: loc.id, name: loc.name, kind: 'rce', accountName: loc.accountName }
-        : { id: loc.id, name: loc.name, host: loc.host, port: loc.port, serverUrl: loc.serverUrl }
+        ? { id: loc.id, name: loc.name, kind: 'rce', accountName: loc.accountName, ...(loc.forgetOnQuit ? { forgetOnQuit: true } : {}) }
+        : { id: loc.id, name: loc.name, host: loc.host, port: loc.port, serverUrl: loc.serverUrl, ...(loc.forgetOnQuit ? { forgetOnQuit: true } : {}) }
     );
     devLog('[Remote Locations] Saving to file storage:', locations);
     const result = await window.roku.setSetting('remote-locations', locations);
@@ -1309,12 +1320,14 @@ async function saveRemoteLocations() {
 }
 
 // Add a new remote location
-async function addRemoteLocation(name, host, port) {
+async function addRemoteLocation(name, host, port, forgetOnQuit = false) {
   const serverUrl = `http://${host}:${port}`;
   const hostLower = host.toLowerCase();
   
-  // Check for duplicate host/IP
+  // Check for duplicate host/IP among RDS Relay locations only — RCE entries have no host/serverUrl
+  // (reading `.host` on one threw and blocked adding any relay location once an RCE account existed).
   for (const [id, existingLocation] of state.remoteLocations) {
+    if (isRceDevice(existingLocation)) continue;
     if (existingLocation.host.toLowerCase() === hostLower) {
       throw new Error(S.app.locationHostExists(host, existingLocation.name));
     }
@@ -1346,6 +1359,7 @@ async function addRemoteLocation(name, host, port) {
     host,
     port,
     serverUrl,
+    forgetOnQuit,
     status: 'online',
     devices: new Map()
   };
@@ -1365,7 +1379,7 @@ async function addRemoteLocation(name, host, port) {
  * (never held in renderer memory beyond this call), then lists the account's devices.
  * Mirrors `addRemoteLocation` above but for the `kind: 'rce'` shape (design doc §4).
  */
-async function addRceLocation(name: string, token: string) {
+async function addRceLocation(name: string, token: string, forgetOnQuit = false) {
   const addResult = await window.roku.rceAddAccount(name, token);
   if (!addResult.success) {
     throw new Error(addResult.error || S.app.failedToConnectRelay);
@@ -1377,6 +1391,7 @@ async function addRceLocation(name: string, token: string) {
     name,
     kind: 'rce',
     accountName: addResult.name,
+    forgetOnQuit,
     status: 'online',
     devices: new Map()
   };
@@ -1436,9 +1451,15 @@ function removeRemoteLocation(locationId) {
  * than `deviceType`, the same source physical devices use — and falls back to `deviceType` for a
  * not-yet-connected device the sidebar list has no live ECP data for yet.
  */
-function normalizeRceDevice(device: Record<string, unknown>) {
+function normalizeRceDevice(device: Record<string, unknown>, accountName: string) {
   return {
     ...device,
+    // The RCE API has no notion of our account/location name — `fromApiDevice` maps `account_name`,
+    // which the API never sends, so every raw device (list, get, AND state-stream push) arrives with
+    // `accountName: null`. Stamp the owning location's name at every normalization site so no later
+    // merge (`applyRceDeviceUpdate`'s Object.assign of a push) can null it out from under consumers
+    // like the Device Info modal, the hardware-image lookup, or the remembered auto-connect entry.
+    accountName,
     ip: (device.serialNumber as string | null) || `rce-${device.id}`,
     deviceName: device.name,
     isTv: typeof device.isTv === 'boolean' ? device.isTv : device.deviceType === 'tv',
@@ -1484,7 +1505,7 @@ async function refreshRceLocation(locationId) {
       const previousIds = new Set(location.devices.keys());
       location.devices.clear();
       for (const device of result.devices) {
-        const normalized = normalizeRceDevice(device);
+        const normalized = normalizeRceDevice(device, location.accountName);
         location.devices.set(`rce-device-${device.id}`, normalized);
         // Push-based status (design doc §5) — idempotent server-side, no-ops if already watching.
         void window.roku.rceWatchDeviceState(location.accountName, device.id);
@@ -1510,39 +1531,46 @@ async function refreshRceLocation(locationId) {
  * live account confirms the `/ws` route's auth assumption holds (still unverified, see
  * `rce-management-client.ts`); the bounded poll stays as a fallback if it doesn't.
  */
+/**
+ * Merge a freshly-known RCE device record (from the push stream, or the periodic fallback poll —
+ * see `checkConnectedRceDevice`) into both the sidebar location's device list and, if connected,
+ * the open panel's own copy. Shared so both transports drive the exact same gating/notify pass
+ * physical/LAN-relay devices get from their periodic ECP-reachability poll
+ * (`updateDeviceOfflineState` -> `applyConnectionGating`) — otherwise an already-open RCE panel's
+ * `[data-requires-connection]` controls never re-disable when the instance stops (max_runtime
+ * expiry, a Stop from another window, …) while its tab stays open. See CLAUDE.md's
+ * connection-gating rule.
+ */
+function applyRceDeviceUpdate(locationId: string, deviceId: number, rawDevice: { status?: string }): void {
+  const location = state.remoteLocations.get(locationId);
+  if (!location) return;
+  const key = `rce-device-${deviceId}`;
+  const existing = location.devices.get(key);
+  if (!existing) return;
+  const normalized = normalizeRceDevice(rawDevice, location.accountName);
+  // Merge in place (not overwrite) — the push payload never carries `developerEnabled`/
+  // `ecpSettingMode`/`isTv` at all (`enrichWithEcpMode` only runs on the list/get IPC calls, never
+  // on this stream), so a flat overwrite would erase any enrichment already resolved.
+  const merged = Object.assign(existing, normalized);
+  renderRemoteLocations();
+  const deviceKey = `${locationId}:${merged.ip}`;
+  const connection = state.connectedDevices.get(deviceKey);
+  if (connection) {
+    updateDeviceOfflineState(deviceKey, rawDevice.status !== 'running', true);
+    // `connectRceDevice` hands the panel a separate value-copy of the device (`deviceForPanel`),
+    // not this same `location.devices` object reference — keep it in sync too, or the open panel's
+    // own copy never sees this update at all.
+    if (connection.device && connection.device !== merged) Object.assign(connection.device, normalized);
+  }
+  notifyDeviceEnrichmentChanged(deviceKey, merged);
+}
+
 function setupRceDeviceStateListener() {
   if (typeof window.roku?.onRceDeviceStateChanged !== 'function') return;
   window.roku.onRceDeviceStateChanged(({ name, deviceId, device }) => {
     for (const [locationId, location] of state.remoteLocations.entries()) {
       if (!isRceDevice(location) || location.accountName !== name) continue;
-      const key = `rce-device-${deviceId}`;
-      const existing = location.devices.get(key);
-      if (!existing) continue;
-      const normalized = normalizeRceDevice(device);
-      // Merge in place (not overwrite) — the push payload never carries `developerEnabled`/
-      // `ecpSettingMode`/`isTv` at all (`enrichWithEcpMode` only runs on the list/get IPC calls,
-      // never on this stream), so a flat overwrite would erase any enrichment already resolved.
-      const merged = Object.assign(existing, normalized);
-      renderRemoteLocations();
-      // Drive the same gating pass physical/LAN-relay devices get from their periodic
-      // ECP-reachability poll (`updateDeviceOfflineState` -> `applyConnectionGating`), off this
-      // push signal instead of only refreshing the sidebar — otherwise an already-open RCE panel's
-      // `[data-requires-connection]` controls never re-disable when the instance stops
-      // (max_runtime expiry, a Stop from another window, …) while its tab stays open. See
-      // CLAUDE.md's connection-gating rule.
-      const deviceKey = `${locationId}:${merged.ip}`;
-      const connection = state.connectedDevices.get(deviceKey);
-      if (connection) {
-        // `device` (the raw push payload), not `normalized` — `normalizeRceDevice`'s object-spread
-        // return type loses `Record<string, unknown>`'s index signature per TS's spread rules, so
-        // `.status` isn't visible on its inferred return type even though it's the same object.
-        updateDeviceOfflineState(deviceKey, device.status !== 'running', true);
-        // `connectRceDevice` hands the panel a separate value-copy of the device (`deviceForPanel`),
-        // not this same `location.devices` object reference — keep it in sync too, or the open
-        // panel's own copy never sees this push at all.
-        if (connection.device && connection.device !== merged) Object.assign(connection.device, normalized);
-      }
-      notifyDeviceEnrichmentChanged(deviceKey, merged);
+      applyRceDeviceUpdate(locationId, deviceId, device);
       return;
     }
   });
@@ -1553,6 +1581,7 @@ async function refreshRemoteLocation(locationId) {
   const location = state.remoteLocations.get(locationId);
   if (location && isRceDevice(location)) {
     await refreshRceLocation(locationId);
+    autoConnectRememberedAsDiscovered();
     return;
   }
   if (!location) return;
@@ -1583,7 +1612,11 @@ async function refreshRemoteLocation(locationId) {
       const capResult = await window.roku.remoteCapabilities(location.serverUrl);
       if (capResult.success && capResult.capabilities) {
         location.capabilities = capResult.capabilities;
-        location.serverVersion = capResult.version;
+        // `version` is actually the roku-dev-studio-api version the server bundles, not the
+        // server's own release — kept under its historical (misleading) name for compatibility,
+        // `serverVersion` is the server package's real version (added alongside it).
+        location.apiVersion = capResult.version;
+        location.serverVersion = capResult.serverVersion;
         devLog(`[Remote ${location.name}] Capabilities:`, location.capabilities);
       } else {
         // Server doesn't support capabilities endpoint - assume all features available
@@ -1690,6 +1723,7 @@ async function refreshRemoteLocation(locationId) {
     }
     
     state.scanningLocations.delete(locationId); // Delete BEFORE render so UI shows "complete"
+    autoConnectRememberedAsDiscovered();
     renderRemoteLocations();
   } catch (e) {
     rendererError('Failed to refresh remote location:', e);
@@ -1793,6 +1827,7 @@ function createRemoteLocationSection(location) {
       <div class="location-header-top">
         <span class="location-status"></span>
         <span class="location-name">${escapeHtml(location.name)}</span>
+        ${location.forgetOnQuit ? `<span class="location-ephemeral" title="${escapeHtml(S.app.locationForgetOnQuitTip)}">${icon('eye-off', 'icon-sm', 'icon-muted')}</span>` : ''}
         <button class="location-action-btn icon-btn info-location" title="${infoBtnTitle}" style="${infoBtnVisible ? '' : 'display:none'}">${icon('info', 'icon-sm')}</button>
         <button class="location-action-btn icon-btn primary refresh-location${isScanning ? ' scanning' : ''}" title="${isScanning ? S.common.scanning : S.common.refresh}">${icon('refresh', 'icon-sm')}</button>
         <button class="location-action-btn icon-btn danger delete-location" title="${S.common.remove}">${icon('trash', 'icon-sm')}</button>
@@ -2233,7 +2268,8 @@ function renderCapabilitiesList(caps: Record<string, unknown>, opts: { withHeadi
 
 function showServerCapabilities(location, opener?: HTMLElement | null) {
   const caps = location.capabilities || {};
-  const version = location.serverVersion || S.app.unknown;
+  const serverVersion = location.serverVersion || S.app.unknown;
+  const apiVersion = location.apiVersion || S.app.unknown;
 
   const modalContent = `
     <div class="server-info-modal">
@@ -2243,7 +2279,10 @@ function showServerCapabilities(location, opener?: HTMLElement | null) {
       </div>
       <div class="server-info-url">
         <span class="server-url-value location-server-url">${escapeHtml(location.host)}:${location.port}</span>
-        <span class="server-version">v${escapeHtml(version)}</span>
+        <span class="server-version-group">
+          <span class="server-version" title="${escapeHtml(S.app.serverVersionTitle)}">v${escapeHtml(serverVersion)}</span>
+          <span class="server-version" data-tip-html="${escapeHtml(S.app.apiVersionTitleHtml)}">API v${escapeHtml(apiVersion)}</span>
+        </span>
       </div>
       ${renderCapabilitiesList(caps)}
     </div>
@@ -2286,10 +2325,26 @@ function renderRceUsageChart(usage: { buckets: Array<{ start: string; stop: stri
 
   // Re-aggregate the (hourly — see the rceGetUsage call site) buckets into local calendar days;
   // see bucketRceUsageByLocalDay's doc comment for why parsing the timestamp correctly isn't
-  // enough on its own. The fetch window is padded by a day precisely so this slice always has a
-  // full 7 local days to take from, regardless of the viewer's UTC offset.
-  const days = bucketRceUsageByLocalDay(rawBuckets).slice(-RCE_USAGE_CHART_DAYS);
-  if (!days.length) return '';
+  // enough on its own. The fetch window is padded by a day precisely so this always has a full 7
+  // local days to take from, regardless of the viewer's UTC offset.
+  //
+  // The usage API only returns buckets for hours that actually had activity, so a day with ZERO
+  // usage across all 24 hours has no bucket at all — `bucketRceUsageByLocalDay` never produces an
+  // entry for it. Slicing that sparse result (the old `.slice(-N)`) silently dropped such days from
+  // the x-axis entirely instead of showing them as empty bars (confirmed live: an idle Sunday
+  // vanished, leaving a 6-day chart with Monday appearing to follow Saturday). Build the last
+  // RCE_USAGE_CHART_DAYS CONSECUTIVE local days ending today instead, backfilling any day with no
+  // matching bucket to 0 minutes, so the x-axis is always a contiguous week.
+  const minutesByDay = new Map(
+    bucketRceUsageByLocalDay(rawBuckets).map((d) => [`${d.date.getFullYear()}-${d.date.getMonth()}-${d.date.getDate()}`, d.minutes])
+  );
+  const today = new Date();
+  const days: Array<{ date: Date; minutes: number }> = [];
+  for (let i = RCE_USAGE_CHART_DAYS - 1; i >= 0; i--) {
+    const date = new Date(today.getFullYear(), today.getMonth(), today.getDate() - i);
+    const key = `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+    days.push({ date, minutes: minutesByDay.get(key) ?? 0 });
+  }
 
   const totalHours = Math.round((days.reduce((sum, d) => sum + d.minutes, 0) / 60) * 10) / 10;
   const maxMinutes = Math.max(1, ...days.map((d) => d.minutes));
@@ -2300,9 +2355,13 @@ function renderRceUsageChart(usage: { buckets: Array<{ start: string; stop: stri
       const dayLabel = d.date.toLocaleDateString(undefined, { weekday: 'short' });
       const tooltip = S.app.rceUsageBarTooltip(d.date.toLocaleDateString(), S.app.rceUsageHoursValue(hours));
       const heightPct = Math.round((d.minutes / maxMinutes) * 100);
+      // `.rce-usage-bar`'s `min-height` keeps a genuinely tiny-but-nonzero amount of usage from
+      // rendering as an invisible 0px sliver — but applied to an ACTUAL zero it makes an idle day
+      // look like it had some usage too. `.zero` opts out of that floor for exactly d.minutes === 0.
+      const barClass = d.minutes === 0 ? 'rce-usage-bar zero' : 'rce-usage-bar';
       return `
         <div class="rce-usage-bar-col" title="${escapeHtml(tooltip)}">
-          <div class="rce-usage-bar" style="height: ${heightPct}%"></div>
+          <div class="${barClass}" style="height: ${heightPct}%"></div>
           <span class="rce-usage-bar-label">${escapeHtml(dayLabel)}</span>
         </div>`;
     })
@@ -2362,11 +2421,6 @@ function showRceUserInfo(location, opener?: HTMLElement | null): void {
   document.body.appendChild(modal);
   modal.classList.add('modal-motion-enabled');
   playModalOpenMotion(modal);
-  // Native `title` tooltips are slow/inconsistent in Electron — use the app-wide instant
-  // popover (see instant-tooltip.ts) for the usage chart's per-day hover text instead.
-  // Event-delegated (see attachInstantTooltips), so it already covers the usage chart's bars
-  // even though that markup doesn't exist yet at this point.
-  const detachTooltips = attachInstantTooltips(modal);
 
   const dialogSurface = modal.querySelector('.rce-info-modal');
   modal.querySelectorAll<HTMLButtonElement>('.rce-info-tab').forEach((tabBtn) => {
@@ -2388,7 +2442,6 @@ function showRceUserInfo(location, opener?: HTMLElement | null): void {
   let detachEsc = () => {};
   const removeModal = () => {
     detachEsc();
-    detachTooltips();
     modal.remove();
   };
   const requestClose = () => {
@@ -2719,7 +2772,15 @@ const RCE_CAPABILITY_INFO = {
  * (design doc §5/§10: an RCE device has no ECP surface at all until it's actually booted, unlike
  * a LAN device which is either reachable or not regardless of a "started" concept).
  */
-async function connectRceDevice(device, locationId) {
+function connectRceDevice(device, locationId): Promise<void> {
+  // Single-flight per device: the connect awaits a network fetch between its "already connected?"
+  // check and creating the tab, so two overlapping callers (startup auto-connect + a relay run, a
+  // card click during either) would otherwise both pass the check and open two tabs.
+  return singleFlight(rceConnectInFlight, `${locationId}:${device.ip}`, () => connectRceDeviceNow(device, locationId));
+}
+const rceConnectInFlight = new Map<string, Promise<void>>();
+
+async function connectRceDeviceNow(device, locationId): Promise<void> {
   if (device.status !== 'running') return;
   const location = state.remoteLocations.get(locationId);
   if (!location) {
@@ -2742,7 +2803,7 @@ async function connectRceDevice(device, locationId) {
   try {
     const fresh = await window.roku.rceGetDevice(location.accountName, device.id);
     if (fresh.success && fresh.device) {
-      freshDevice = normalizeRceDevice(fresh.device);
+      freshDevice = normalizeRceDevice(fresh.device, location.accountName);
       location.devices.set(`rce-device-${device.id}`, freshDevice);
     }
   } catch (e) {
@@ -2796,19 +2857,39 @@ async function connectRceDevice(device, locationId) {
   }
 }
 
+/**
+ * Resolve a `state.remoteLocations` id from a stored hint. Location ids are minted per add
+ * (`generateLocationId`), so anything that snapshots one — Sideload Relay targets, the remembered
+ * auto-connect list — goes stale the moment that location is removed and re-added. The stable
+ * identity is the `serverUrl` (RDS Relay; `addRemoteLocation` already dedupes on it) or the
+ * `accountName` (RCE). Id first, stable identity second, `null` when nothing matches — callers
+ * must NOT open a tab on a `null`/unresolved id (it duplicates the device's real tab as "@ Remote").
+ */
+function resolveRemoteLocationId(hint: { locationId?: string; serverUrl?: string; accountName?: string }): string | null {
+  if (hint.locationId && state.remoteLocations.has(hint.locationId)) return hint.locationId;
+  const norm = (u: unknown) => (typeof u === 'string' ? u.trim().replace(/\/+$/, '').toLowerCase() : '');
+  const url = norm(hint.serverUrl);
+  for (const [id, loc] of state.remoteLocations) {
+    if (isRceDevice(loc)) {
+      if (hint.accountName && loc.accountName === hint.accountName) return id;
+    } else if (url && norm(loc.serverUrl) === url) {
+      return id;
+    }
+  }
+  return null;
+}
+
 function connectRemoteDevice(device, locationId) {
   const deviceKey = `${locationId}:${device.ip}`;
 
-  // Ensure device has serverUrl (get from location if missing)
-  if (!device.serverUrl) {
-    const location = state.remoteLocations.get(locationId);
-    if (location) {
-      device.serverUrl = location.serverUrl;
-    } else {
-      rendererError('Cannot connect to remote device: location not found', locationId);
-      return;
-    }
+  // Unknown location = refuse, even when the caller supplied a serverUrl: a tab keyed on an id no
+  // location owns is invisible to every later lookup, so it duplicates the device's real tab.
+  const location = state.remoteLocations.get(locationId);
+  if (!location) {
+    rendererError('Cannot connect to remote device: location not found', locationId);
+    return;
   }
+  if (!device.serverUrl) device.serverUrl = location.serverUrl;
   
   if (state.connectedDevices.has(deviceKey)) {
     // Already connected, just activate the tab
@@ -2824,7 +2905,6 @@ function connectRemoteDevice(device, locationId) {
   // Add location indicator to tab
   const tabName = tab.querySelector('.tab-name');
   if (tabName instanceof HTMLElement) {
-    const location = state.remoteLocations.get(locationId);
     setSafeHTML(tabName, icon('globe', 'icon-sm', 'icon-cyan') + ' ' + escapeHtml(device.deviceName));
     tabName.title = S.app.atLocation(device.deviceName, location?.name || S.app.remote);
   }
@@ -3021,6 +3101,8 @@ async function addRememberedDeviceToListIfEnabled(
   locationId: string | null
 ) {
   if (!AUTO_CONNECT_LAST_DEVICE_ENABLED || !window.roku?.getSetting || !window.roku?.setSetting) return;
+  // Session-only ("Forget it on App Quit/Close") location: its tabs must never be remembered.
+  if (locationId && state.remoteLocations.get(locationId)?.forgetOnQuit) return;
   const entry = buildAutoConnectEntry(device, kind, locationId);
   const key = autoConnectEntryKey(entry);
   try {
@@ -3054,71 +3136,55 @@ async function removeRememberedDeviceFromListIfEnabled(conn: {
   }
 }
 
-function findLocalDeviceMatchingProfile(snap: AutoConnectDeviceEntry) {
+/** Trimmed-serial match first, else ip match. */
+function findDeviceByProfile(devices: Iterable<any>, snap: { serialNumber?: string; ip: string }) {
+  const list = Array.from(devices);
   const serial = snap.serialNumber?.trim();
   if (serial) {
-    for (const d of state.devices.values()) {
-      if (d.serialNumber && String(d.serialNumber).trim() === serial) return d;
-    }
+    const bySerial = list.find((d) => d.serialNumber && String(d.serialNumber).trim() === serial);
+    if (bySerial) return bySerial;
   }
-  for (const d of state.devices.values()) {
-    if (d.ip === snap.ip) return d;
-  }
-  return null;
+  return list.find((d) => d.ip === snap.ip) ?? null;
+}
+
+function findLocalDeviceMatchingProfile(snap: AutoConnectDeviceEntry) {
+  return findDeviceByProfile(state.devices.values(), snap);
 }
 
 function findRemoteDeviceMatchingProfile(snap: AutoConnectDeviceEntry) {
-  if (!isRemoteDevice(snap) || !snap.locationId) return null;
-  const loc = state.remoteLocations.get(snap.locationId);
-  if (!loc || loc.status !== 'online') return null;
-  const serial = snap.serialNumber?.trim();
-  if (serial) {
-    for (const d of loc.devices.values()) {
-      if (d.serialNumber && String(d.serialNumber).trim() === serial) return { device: d, locationId: snap.locationId };
-    }
-  }
-  for (const d of loc.devices.values()) {
-    if (d.ip === snap.ip) return { device: d, locationId: snap.locationId };
-  }
-  return null;
+  if (!isRemoteDevice(snap)) return null;
+  const locationId = resolveRemoteLocationId(snap);
+  const loc = locationId ? state.remoteLocations.get(locationId) : undefined;
+  if (!locationId || !loc || loc.status !== 'online') return null;
+  const device = findDeviceByProfile(loc.devices.values(), snap);
+  return device ? { device, locationId } : null;
 }
 
 /** Only matches a `'rce'` entry against a device that's actually `status === 'running'` right
  *  now — unlike a physical/relay device (reachable or not), an RCE device between sessions may
  *  simply no longer be started, and there's nothing to connect to until it is. */
 function findRceDeviceMatchingProfile(snap: AutoConnectDeviceEntry) {
-  if (!isRceDevice(snap) || !snap.locationId || !snap.accountName) return null;
-  const loc = state.remoteLocations.get(snap.locationId);
-  if (!loc || !isRceDevice(loc) || loc.status !== 'online' || loc.accountName !== snap.accountName) return null;
-  const serial = snap.serialNumber?.trim();
-  let match: RceDeviceSummary | null = null;
-  if (serial) {
-    for (const d of loc.devices.values()) {
-      if (d.serialNumber && String(d.serialNumber).trim() === serial) {
-        match = d as unknown as RceDeviceSummary;
-        break;
-      }
-    }
-  }
-  if (!match) {
-    for (const d of loc.devices.values()) {
-      if (d.ip === snap.ip) {
-        match = d as unknown as RceDeviceSummary;
-        break;
-      }
-    }
-  }
+  if (!isRceDevice(snap) || !snap.accountName) return null;
+  const locationId = resolveRemoteLocationId(snap);
+  const loc = locationId ? state.remoteLocations.get(locationId) : undefined;
+  if (!locationId || !loc || !isRceDevice(loc) || loc.status !== 'online' || loc.accountName !== snap.accountName) return null;
+  const match = findDeviceByProfile(loc.devices.values(), snap) as RceDeviceSummary | null;
   if (!match || match.status !== 'running') return null;
-  return { device: match, locationId: snap.locationId };
+  return { device: match, locationId };
 }
 
 function connectRememberedListMatches(list: AutoConnectDeviceEntry[]): { count: number; singleLabel: string } {
   let count = 0;
   let singleLabel = '';
+  // The list can hold several entries for one device (an IP-only row plus a serial row, or rows
+  // saved under location ids that were since re-minted and now resolve to the same location) —
+  // connect each resolved device once.
+  const attempted = new Set<string>();
   for (const entry of list) {
     if (isLocalDevice(entry)) {
       const device = findLocalDeviceMatchingProfile(entry);
-      if (device && !state.connectedDevices.has(device.ip)) {
+      if (device && !state.connectedDevices.has(device.ip) && !attempted.has(device.ip)) {
+        attempted.add(device.ip);
         const label = device.deviceName || device.modelName || device.ip;
         connectDevice(device);
         count++;
@@ -3129,7 +3195,8 @@ function connectRememberedListMatches(list: AutoConnectDeviceEntry[]): { count: 
       if (!found) continue;
       const { device, locationId } = found;
       const deviceKey = `${locationId}:${device.ip}`;
-      if (state.connectedDevices.has(deviceKey)) continue;
+      if (state.connectedDevices.has(deviceKey) || attempted.has(deviceKey)) continue;
+      attempted.add(deviceKey);
       void connectRceDevice(device, locationId);
       count++;
       singleLabel = device.deviceName || device.name || device.ip;
@@ -3138,7 +3205,8 @@ function connectRememberedListMatches(list: AutoConnectDeviceEntry[]): { count: 
       if (!found) continue;
       const { device, locationId } = found;
       const deviceKey = `${locationId}:${device.ip}`;
-      if (state.connectedDevices.has(deviceKey)) continue;
+      if (state.connectedDevices.has(deviceKey) || attempted.has(deviceKey)) continue;
+      attempted.add(deviceKey);
       connectRemoteDevice(device, locationId);
       count++;
       singleLabel = device.deviceName || device.modelName || device.ip;
@@ -3147,15 +3215,7 @@ function connectRememberedListMatches(list: AutoConnectDeviceEntry[]): { count: 
   return { count, singleLabel };
 }
 
-async function maybeAutoConnectLastDevice() {
-  if (!AUTO_CONNECT_LAST_DEVICE_ENABLED) return;
-  if (autoConnectLastDeviceAttempted) return;
-  if (state.connectedDevices.size > 0) {
-    autoConnectLastDeviceAttempted = true;
-    return;
-  }
-  if (!startupLocalScanComplete) return;
-
+async function loadRememberedDeviceList(): Promise<AutoConnectDeviceEntry[]> {
   if (cachedRememberedDeviceList === undefined) {
     try {
       const res = await window.roku.getSetting(AUTO_CONNECT_DEVICE_LIST_KEY);
@@ -3164,6 +3224,47 @@ async function maybeAutoConnectLastDevice() {
       cachedRememberedDeviceList = [];
     }
   }
+  return cachedRememberedDeviceList ?? [];
+}
+
+function announceAutoConnected({ count, singleLabel }: { count: number; singleLabel: string }): void {
+  if (count === 1) {
+    showToast(S.app.connectedAutomatically(singleLabel), 'success');
+  } else if (count > 1) {
+    showToast(S.app.connectedMultipleAutomatically(count), 'success');
+  }
+}
+
+/**
+ * Startup auto-connect, incrementally: connect a remembered device the moment discovery reports it
+ * (a local SSDP hit, a remote location's device list, an RCE account's list) instead of only once
+ * every location has finished scanning — the device was visible in the sidebar for seconds while
+ * RDS "waited". Debounced so an SSDP burst runs one pass; `connectRememberedListMatches` skips what
+ * is already open; `maybeAutoConnectLastDevice` still runs the final sweep when all scans complete
+ * and closes the startup window (`autoConnectLastDeviceAttempted`), so later user scans keep their
+ * own path.
+ */
+let autoConnectDiscoveryTimer: number | null = null;
+function autoConnectRememberedAsDiscovered(): void {
+  if (!AUTO_CONNECT_LAST_DEVICE_ENABLED || autoConnectLastDeviceAttempted) return;
+  if (autoConnectDiscoveryTimer !== null) return;
+  autoConnectDiscoveryTimer = window.setTimeout(async () => {
+    autoConnectDiscoveryTimer = null;
+    const list = await loadRememberedDeviceList();
+    if (autoConnectLastDeviceAttempted || list.length === 0) return;
+    announceAutoConnected(connectRememberedListMatches(list));
+  }, 100);
+}
+
+async function maybeAutoConnectLastDevice() {
+  if (!AUTO_CONNECT_LAST_DEVICE_ENABLED) return;
+  if (autoConnectLastDeviceAttempted) return;
+  // Don't bail because something is already connected — a Sideload Relay run that lands during
+  // startup opens its targets' tabs first, and that must not cost the user their remembered tabs.
+  // `connectRememberedListMatches` skips entries that are already open.
+  if (!startupLocalScanComplete) return;
+
+  await loadRememberedDeviceList();
 
   const list = cachedRememberedDeviceList ?? [];
   // RCE locations refresh through the same `refreshAllRemoteLocations` pass as relay locations
@@ -3175,33 +3276,15 @@ async function maybeAutoConnectLastDevice() {
 
   if (list.length === 0) return;
 
-  const { count, singleLabel } = connectRememberedListMatches(list);
-
-  if (count === 1) {
-    showToast(S.app.connectedAutomatically(singleLabel), 'success');
-  } else if (count > 1) {
-    showToast(S.app.connectedMultipleAutomatically(count), 'success');
-  }
+  announceAutoConnected(connectRememberedListMatches(list));
 }
 
 async function tryAutoConnectRememberedMatchesAfterUserScan() {
   if (!AUTO_CONNECT_LAST_DEVICE_ENABLED) return;
-  if (cachedRememberedDeviceList === undefined) {
-    try {
-      const res = await window.roku.getSetting(AUTO_CONNECT_DEVICE_LIST_KEY);
-      cachedRememberedDeviceList = parseRememberedDeviceList(res?.value);
-    } catch {
-      cachedRememberedDeviceList = [];
-    }
-  }
+  await loadRememberedDeviceList();
   const list = cachedRememberedDeviceList ?? [];
   if (list.length === 0) return;
-  const { count, singleLabel } = connectRememberedListMatches(list);
-  if (count === 1) {
-    showToast(S.app.connectedAutomatically(singleLabel), 'success');
-  } else if (count > 1) {
-    showToast(S.app.connectedMultipleAutomatically(count), 'success');
-  }
+  announceAutoConnected(connectRememberedListMatches(list));
 }
 
 /** SSDP + optional subnet fallback; clears non-connected locals first; always removes onDeviceFound listener. */
@@ -3215,6 +3298,7 @@ async function executeLocalDiscoveryScan(): Promise<void> {
   const cleanup = window.roku.onDeviceFound((device) => {
     devLog('onDeviceFound callback:', device.ip);
     addDiscoveredDevice(device);
+    autoConnectRememberedAsDiscovered();
   });
 
   try {
@@ -3778,7 +3862,12 @@ function disconnectDevice(deviceKey) {
   }
 
   const { tabId, isRemote, locationId } = connection;
-  
+
+  // Main-side per-device cleanup for a closed tab — today: remove our Fiddle channel if this device
+  // still has it ("disconnecting the Roku" is one of the Fiddle-cleanup triggers).
+  const closedIp = typeof connection.device?.ip === 'string' ? connection.device.ip : '';
+  if (closedIp) window.roku?.deviceTabClosed?.(closedIp);
+
   // Remove tab
   const tab = document.querySelector(`.tab-item[data-tab-id="${tabId}"]`);
   if (tab) tab.remove();
@@ -6374,31 +6463,29 @@ function setupRemoteTabInputs(
     setInputsVisible(isRce || inputs.length > 0);
   }
 
+  // Stable order regardless of how the device lists them: sort by input id (e.g. tvinput.cvbs,
+  // tvinput.dtv, tvinput.hdmi1…hdmi4 → AV, Live TV, Roku, HDMI 2, …). Layout is CSS-driven
+  // (centered flex-wrap): up to ~6 fit on one row, wrapping when there are more or narrower.
+  const renderFromResult = (result: AppsAndInputsResult | AppsAndInputsFailure): void => {
+    if (!result.success) {
+      renderInputsGrid([]);
+      return;
+    }
+    renderInputsGrid([...result.inputs].sort((a, b) => a.id.localeCompare(b.id)));
+  };
+
+  // Once per panel: `device-info-refreshed` fires on every successful connection check and this
+  // row needs the list once. Every result — the initial one and later reloads (Apps tab Refresh)
+  // — lands through the subscription, so a fetch renders this row exactly once (awaiting the
+  // promise AND subscribing rendered it twice).
   let tvInputsLoaded = false;
   function loadTvInputs(): void {
     if (tvInputsLoaded) return;
     tvInputsLoaded = true;
-    void (async () => {
-      try {
-        const result = await api.query('/query/apps');
-        if (!result?.success || typeof result.data !== 'string') {
-          renderInputsGrid([]);
-          return;
-        }
-        const inputs = [...result.data.matchAll(/<app id="(tvinput\.[^"]+)"[^>]*>([^<]+)<\/app>/g)].map(
-          (m) => ({ id: m[1], label: decodeHtmlEntities(m[2]).trim() })
-        );
-        // Stable order regardless of how the device lists them: sort by input id (e.g.
-        // tvinput.cvbs, tvinput.dtv, tvinput.hdmi1…hdmi4 → AV, Live TV, Roku, HDMI 2, …).
-        inputs.sort((a, b) => a.id.localeCompare(b.id));
-        // Layout is CSS-driven (centered flex-wrap): up to ~6 fit on one row, wrapping when
-        // there are more or the space is narrower. No fixed column count needed here.
-        renderInputsGrid(inputs);
-      } catch (error) {
-        rendererError('Failed to load TV inputs for remote:', error);
-        renderInputsGrid([]);
-      }
-    })();
+    onAppsAndInputsResolved(api, renderFromResult);
+    // Joins the Apps tab's fetch (or triggers it, whichever runs first) instead of firing a
+    // second independent `/query/apps` call — see `loadAppsAndInputs`'s doc comment.
+    void loadAppsAndInputs(api);
   }
 
   // Non-TV, non-RCE devices: leave the panel hidden — the Remote card is unchanged. A device
@@ -6446,9 +6533,6 @@ function setupApps(panel, device, api) {
     rendererError('Apps elements not found:', { appsGrid, appsLoading, appsEmpty, refreshBtn });
     return;
   }
-
-  // TV inputs are exposed by /query/apps with ids prefixed "tvinput." (e.g. tvinput.hdmi1)
-  const isTvInput = (appId) => appId.startsWith('tvinput.');
 
   // Run async tasks with a bounded number running at once. The Roku device's HTTP
   // server drops connections when hit with too many concurrent requests, so firing
@@ -6541,7 +6625,9 @@ function setupApps(panel, device, api) {
     return { btn, loadIcon };
   }
 
-  // Function to load and display installed apps
+  // Function to load and display installed apps. Shares its `/query/apps` fetch with the Remote
+  // tab's TV-input row via `loadAppsAndInputs` instead of firing its own independent call — see
+  // that function's doc comment for why (both used to race the same RCE cold-start 503 window).
   async function loadInstalledApps() {
     appsLoading.style.display = 'block';
     appsGrid.innerHTML = '';
@@ -6550,127 +6636,97 @@ function setupApps(panel, device, api) {
     setAppsTitle(false);
     appsEmpty.style.display = 'none';
 
-    try {
-      const result = await api.query('/query/apps');
+    const result = await loadAppsAndInputs(api);
+    appsLoading.style.display = 'none';
 
-      appsLoading.style.display = 'none';
-
-      if (result.success && result.data) {
-        const appMatches = [...result.data.matchAll(/<app id="([^"]+)"[^>]*>([^<]+)<\/app>/g)];
-
-        if (appMatches.length === 0) {
-          appsEmpty.style.display = 'block';
-          return;
-        }
-
-        // Sort apps alphabetically by name
-        appMatches.sort((a, b) => a[2].localeCompare(b[2]));
-
-        let inputCount = 0;
-        const iconTasks: Array<() => Promise<void>> = [];
-        for (const match of appMatches) {
-          const appId = match[1];
-          const appName = decodeHtmlEntities(match[2]);
-          const { btn, loadIcon } = createAppButton(appId, appName);
-          iconTasks.push(loadIcon);
-
-          // Route TV inputs into their own section, apps into the main grid
-          if (isTvInput(appId) && inputsGrid) {
-            // Input icons are square-ish glyphs, not 16:9 poster art, so mark them
-            // for contain-fit rendering (see .input-tile CSS) to avoid cropping.
-            btn.classList.add('input-tile');
-            inputsGrid.appendChild(btn);
-            inputCount++;
-          } else {
-            appsGrid.appendChild(btn);
-          }
-        }
-
-        // Only reveal the Inputs section when inputs are actually available, and
-        // reflect that in the card title.
-        if (inputsSection) {
-          inputsSection.style.display = inputCount > 0 ? 'flex' : 'none';
-        }
-        setAppsTitle(inputCount > 0);
-
-        // Fetch icons through a bounded pool so the device isn't overwhelmed.
-        // Not awaited: cards are already visible and icons fill in progressively.
-        runWithConcurrency(iconTasks, 6);
-      } else {
-        appsEmpty.style.display = 'block';
-        setSafeHTML(appsEmpty, '<p>' + S.app.failedToLoadApps + ' ' + escapeHtml(result.error || S.app.unknownError) + '</p>');
-      }
-    } catch (error) {
-      appsLoading.style.display = 'none';
+    if (!result.success) {
       appsEmpty.style.display = 'block';
-      setSafeHTML(appsEmpty, '<p>' + S.app.errorPrefix + ' ' + escapeHtml(errMessage(error)) + '</p>');
+      setSafeHTML(appsEmpty, '<p>' + S.app.failedToLoadApps + ' ' + escapeHtml(result.error) + '</p>');
+      return;
     }
+
+    const { apps, inputs } = result;
+    if (apps.length === 0 && inputs.length === 0) {
+      appsEmpty.style.display = 'block';
+      return;
+    }
+
+    // Sort apps alphabetically by name
+    apps.sort((a, b) => a.name.localeCompare(b.name));
+
+    const iconTasks: Array<() => Promise<void>> = [];
+    for (const { id, name } of apps) {
+      const { btn, loadIcon } = createAppButton(id, name);
+      iconTasks.push(loadIcon);
+      appsGrid.appendChild(btn);
+    }
+    for (const { id, label } of inputs) {
+      const { btn, loadIcon } = createAppButton(id, label);
+      // Input icons are square-ish glyphs, not 16:9 poster art, so mark them for
+      // contain-fit rendering (see .input-tile CSS) to avoid cropping.
+      btn.classList.add('input-tile');
+      iconTasks.push(loadIcon);
+      if (inputsGrid) inputsGrid.appendChild(btn);
+    }
+
+    // Only reveal the Inputs section when inputs are actually available, and
+    // reflect that in the card title.
+    if (inputsSection) inputsSection.style.display = inputs.length > 0 ? 'flex' : 'none';
+    setAppsTitle(inputs.length > 0);
+
+    // Fetch icons through a bounded pool so the device isn't overwhelmed.
+    // Not awaited: cards are already visible and icons fill in progressively.
+    runWithConcurrency(iconTasks, 6);
   }
-  
+
   // Load apps on panel creation
   loadInstalledApps();
-  
-  // Refresh button
-  refreshBtn.addEventListener('click', loadInstalledApps);
+
+  // Refresh button — re-fetches (or joins a fetch already in flight) so a stale/failed result can be retried.
+  refreshBtn.addEventListener('click', () => loadInstalledApps());
 
   // List installed apps (raw)
   const listAppsBtn = panel.querySelector('.list-apps-btn');
   const appsOutput = panel.querySelector('.installed-apps-output');
   const copyAppsBtn = panel.querySelector('.copy-apps-btn');
   
-  // Function to load and display raw apps list
+  // Function to load and display raw apps list. Shares its `/query/apps` fetch with the grid
+  // above via `loadAppsAndInputs` instead of re-querying — see that function's doc comment.
   async function loadRawAppsList() {
-    const result = await api.query('/query/apps');
-    
+    const result = await loadAppsAndInputs(api);
+
     appsOutput.classList.remove('hidden');
     appsOutput.classList.add('visible');
     appsOutput.style.display = 'block';
     copyAppsBtn.style.display = '';
-    
-    if (result.success && result.data) {
-      // Match app elements and extract id, version, and name
-      const appMatches = [...result.data.matchAll(/<app\s+([^>]*)>([^<]+)<\/app>/g)];
-      
-      // Parse each match to extract id, version, and name
-      const apps = appMatches.map(match => {
-        const attrs = match[1];
-        const name = decodeHtmlEntities(match[2]);
-        const idMatch = attrs.match(/id="([^"]+)"/);
-        const versionMatch = attrs.match(/version="([^"]+)"/);
-        return {
-          id: idMatch ? idMatch[1] : 'unknown',
-          version: versionMatch ? versionMatch[1] : '',
-          name: name
-        };
-      });
-      
-      // Sort by app name alphabetically, then push TV inputs (tvinput.*) to the bottom
-      apps.sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase()));
-      const isInput = (app) => app.id.startsWith('tvinput.');
-      const regularApps = apps.filter(app => !isInput(app));
-      const inputs = apps.filter(isInput);
 
-      const formatRow = (app) => {
-        const versionStr = app.version ? ` (v${app.version})` : '';
-        return `ID: ${app.id.padEnd(16)} │ ${app.name}${versionStr}\n`;
-      };
-
-      let formatted = S.app.installedAppsHeader + '\n' + '═'.repeat(50) + '\n\n';
-      for (const app of regularApps) {
-        formatted += formatRow(app);
-      }
-
-      if (inputs.length > 0) {
-        formatted += '\n' + S.app.inputsHeader + '\n' + '═'.repeat(50) + '\n\n';
-        for (const app of inputs) {
-          formatted += formatRow(app);
-        }
-      }
-
-      appsOutput.textContent = formatted || result.data;
-    } else {
+    if (!result.success) {
       appsOutput.textContent = `${S.app.errorPrefix} ${result.error}`;
+      return;
     }
+
+    const formatRow = (app: { id: string; version: string }, label: string) => {
+      const versionStr = app.version ? ` (v${app.version})` : '';
+      return `ID: ${app.id.padEnd(16)} │ ${label}${versionStr}\n`;
+    };
+
+    // Sort by name alphabetically within each group (apps, then TV inputs).
+    const apps = [...result.apps].sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase()));
+    const inputs = [...result.inputs].sort((a, b) => a.label.toLowerCase().localeCompare(b.label.toLowerCase()));
+
+    let formatted = S.app.installedAppsHeader + '\n' + '═'.repeat(50) + '\n\n';
+    for (const app of apps) {
+      formatted += formatRow(app, app.name);
+    }
+
+    if (inputs.length > 0) {
+      formatted += '\n' + S.app.inputsHeader + '\n' + '═'.repeat(50) + '\n\n';
+      for (const input of inputs) {
+        formatted += formatRow(input, input.label);
+      }
+    }
+
+    appsOutput.textContent = formatted;
   }
   
   // Button click handler
@@ -6790,14 +6846,22 @@ async function checkConnectedDevices() {
 
   const now = Date.now();
   for (const [deviceKey, connection] of state.connectedDevices) {
-    // RCE has its own reachability signal (the push-based device-state stream, see
-    // `setupRceDeviceStateListener`) — this generic probe assumes an ip-reachable device
-    // (`ip:8060` locally, or a LAN-relay `serverUrl`), neither of which an RCE device has. Without
-    // this guard every RCE connection reads as permanently offline (`window.roku.testConnection`
-    // against a synthetic non-network "ip" always fails) — a confirmed bug, not a hypothetical one.
-    if (isRceDevice(connection)) continue;
     const backoff = connectionCheckBackoff.get(deviceKey);
     if (backoff && now < backoff.nextCheckAt) continue; // still backed off — skip this tick
+
+    if (isRceDevice(connection)) {
+      // RCE has no ip-reachable ECP port for this generic probe (`window.roku.testConnection`
+      // against a synthetic non-network "ip" always fails), so it gets its own per-device
+      // Management-API check instead — see `checkConnectedRceDevice`. This used to be skipped
+      // entirely on the assumption that the push-based device-state stream
+      // (`setupRceDeviceStateListener`) alone was enough, but that stream has no reconnect-on-close
+      // and its own doc comment flags the underlying `/ws` auth path as unverified — silently
+      // leaving an RCE instance's shutdown (e.g. max_runtime expiry) undetected for the rest of the
+      // session. This reuses the same `CONNECTION_CHECK_INTERVAL`/backoff cadence as local/remote,
+      // consistent with that setting's own description ("how often connected devices are polled").
+      await checkConnectedRceDevice(deviceKey, connection);
+      continue;
+    }
 
     // deviceKey is either "ip" for local or "locationId:ip" for remote
     const parts = deviceKey.split(':');
@@ -6809,6 +6873,37 @@ async function checkConnectedDevices() {
       connection.isRemote ? connection.serverUrl : null,
       connection.isRemote ? locationId : null
     );
+  }
+}
+
+/**
+ * RCE per-device fallback check — same cadence/backoff as `checkDeviceConnection` but probing via
+ * the Management API's individual-device endpoint (`rceGetDevice`, already used at connect time)
+ * instead of an ECP ping, since an RCE device has no reachable `ip:8060`. Shares its merge-into-
+ * both-places logic with the push-based listener via `applyRceDeviceUpdate`.
+ */
+async function checkConnectedRceDevice(
+  deviceKey: string,
+  connection: { locationId?: string; device?: { id?: number } }
+): Promise<void> {
+  const locationId = connection.locationId;
+  const location = locationId ? state.remoteLocations.get(locationId) : null;
+  const deviceId = connection.device?.id;
+  if (!locationId || !location || !isRceDevice(location) || deviceId == null) return;
+
+  try {
+    const result = await window.roku.rceGetDevice(location.accountName, deviceId);
+    if (!result.success || !result.device) {
+      updateDeviceOfflineState(deviceKey, true, true);
+      recordConnectionCheckResult(deviceKey, false);
+      return;
+    }
+    applyRceDeviceUpdate(locationId, deviceId, result.device);
+    recordConnectionCheckResult(deviceKey, result.device.status === 'running');
+  } catch (error) {
+    rendererError('RCE connection check failed for', deviceKey, ':', error);
+    updateDeviceOfflineState(deviceKey, true, true);
+    recordConnectionCheckResult(deviceKey, false);
   }
 }
 
@@ -7113,7 +7208,7 @@ async function manualConnect() {
 // ============================================
 
 // Utility functions are now imported from modules/utils
-// escapeHtml, decodeHtmlEntities, showStatusMessage are imported above
+// escapeHtml, showStatusMessage are imported above
 
 // ============================================
 // Remote Location Modal
@@ -7135,12 +7230,14 @@ function setupRemoteLocationModal() {
   const panelRce = document.getElementById('addLocationPanelRce');
   const rceNameInput = document.getElementById('rceLocationName');
   const rceTokenInput = document.getElementById('rceToken');
+  const forgetInput = document.getElementById('locationForgetOnQuit'); // footer, shared by both tabs
 
   if (
     !modal || !addBtn || !confirmBtn || !nameInput || !hostInput || !portInput ||
     !(tabRelay instanceof HTMLElement) || !(tabRce instanceof HTMLElement) ||
     !(panelRelay instanceof HTMLElement) || !(panelRce instanceof HTMLElement) ||
-    !(rceNameInput instanceof HTMLInputElement) || !(rceTokenInput instanceof HTMLInputElement)
+    !(rceNameInput instanceof HTMLInputElement) || !(rceTokenInput instanceof HTMLInputElement) ||
+    !(forgetInput instanceof HTMLInputElement)
   ) {
     devLog('Remote location modal elements not found');
     return;
@@ -7159,6 +7256,7 @@ function setupRemoteLocationModal() {
   const rcePanel = panelRce;
   const rceName = rceNameInput;
   const rceToken = rceTokenInput;
+  const forgetOnQuitBox = forgetInput;
 
   let activeTab: 'relay' | 'rce' = 'relay';
 
@@ -7193,6 +7291,7 @@ function setupRemoteLocationModal() {
     relayPort.value = '4951';
     rceName.value = '';
     rceToken.value = '';
+    forgetOnQuitBox.checked = false;
     relayName.focus();
     playModalOpenMotion(locationModal);
   });
@@ -7239,7 +7338,7 @@ function setupRemoteLocationModal() {
     confirmButton.disabled = true;
     confirmButton.textContent = S.app.connecting;
     try {
-      await addRemoteLocation(name, host, port);
+      await addRemoteLocation(name, host, port, forgetOnQuitBox.checked);
       closeModal();
     } catch (e) {
       rendererError('Failed to add remote location:', e);
@@ -7269,7 +7368,7 @@ function setupRemoteLocationModal() {
     confirmButton.disabled = true;
     confirmButton.textContent = S.app.connecting;
     try {
-      await addRceLocation(name, token);
+      await addRceLocation(name, token, forgetOnQuitBox.checked);
       closeModal();
     } catch (e) {
       rendererError('Failed to add RCE location:', e);
@@ -8130,8 +8229,8 @@ async function init() {
   
   // BrightScript Fiddle: build a snapshot of currently discovered+connected devices and
   // push it to any open Fiddle window. The main menu's "Open Fiddle" action lands here.
-  function buildFiddleDeviceSnapshot(): Array<{ id: string; ip: string; name: string; modelName?: string; isRemote: boolean; serverUrl?: string | null; password?: string }> {
-    const out: Array<{ id: string; ip: string; name: string; modelName?: string; isRemote: boolean; serverUrl?: string | null; password?: string }> = [];
+  function buildFiddleDeviceSnapshot(): Array<{ id: string; ip: string; serial?: string; name: string; modelName?: string; isRemote: boolean; serverUrl?: string | null; password?: string }> {
+    const out: Array<{ id: string; ip: string; serial?: string; name: string; modelName?: string; isRemote: boolean; serverUrl?: string | null; password?: string }> = [];
     const seen = new Set<string>();
 
     const pushDevice = (device: { ip?: string; deviceName?: string; friendlyModelName?: string; modelName?: string; serialNumber?: string; isRemote?: boolean; serverUrl?: string; developerEnabled?: boolean; kind?: string }) => {
@@ -8151,6 +8250,7 @@ async function init() {
       out.push({
         id,
         ip: device.ip,
+        serial: device.serialNumber,
         name: device.deviceName || device.friendlyModelName || device.modelName || 'Roku',
         modelName: device.modelName || device.friendlyModelName,
         isRemote: !!device.isRemote,
@@ -8178,6 +8278,7 @@ async function init() {
       id: d.id,
       label: d.modelName ? `${d.name} (${d.modelName})` : d.name,
       ip: d.ip,
+      serial: d.serial,
       isRemote: d.isRemote,
       serverUrl: d.serverUrl,
       password: d.password
@@ -9155,6 +9256,10 @@ function runInit() {
     const variant = payload.level === 'destructive' ? 'warning' : 'info';
     showToast(payload.summary, variant);
   });
+  // App-wide instant tooltip for every `[title]`/`[data-tip]`/`[data-tip-html]` in this window,
+  // covering both the static template and anything appended later (event-delegated on body) —
+  // no per-modal `attachInstantTooltips(...)` call is needed anymore, see instant-tooltip.ts.
+  attachInstantTooltips(document.body);
   init().catch((err) => {
     rendererError('App init failed:', err);
     alert(S.app.appInitFailed + ' ' + errMessage(err));

@@ -24,6 +24,9 @@ const { BrowserWindow, screen } = require('electron') as typeof import('electron
 export interface FiddleDeviceSnapshotEntry {
   id: string;
   ip: string;
+  /** Roku serial, when known — the identity key "Enable Debugger" (shared/platform/
+   *  debugger-enabled.ts) persists under, preferred over `ip` since IPs change. */
+  serial?: string;
   name: string;
   modelName?: string;
   isRemote: boolean;
@@ -118,6 +121,23 @@ export function getFiddleStateByWindow(winId: number): FiddleWindowState | null 
   return fiddleStateByWindowId.get(winId) || null;
 }
 
+/** Every open Fiddle window's state — for cleanups that must cover all windows (device tab closed, quit). */
+export function getAllFiddleWindowStates(): Array<{ winId: number; state: FiddleWindowState }> {
+  return [...fiddleStateByWindowId].map(([winId, state]) => ({ winId, state }));
+}
+
+/** Window-close cleanups still in flight (see the `closed` handler in openFiddleWindow). */
+const pendingFiddleCleanups = new Set<Promise<unknown>>();
+export function pendingFiddleCleanupPromises(): Promise<unknown>[] {
+  return [...pendingFiddleCleanups];
+}
+
+/** Tell a Fiddle window that main removed our channel from `deviceId` (it drops its active-run state). */
+export function notifyFiddleChannelRemoved(winId: number, deviceId: string): void {
+  const win = fiddleWindowsById.get(winId);
+  if (win && !win.isDestroyed()) win.webContents.send(IPC.FiddleChannelRemoved, { deviceId });
+}
+
 export function openFiddleWindow(
   parent: ElectronBrowserWindow | undefined,
   devicesSnapshot: FiddleDeviceSnapshotEntry[],
@@ -209,9 +229,14 @@ export function openFiddleWindow(
 
     if (activeId && fiddleCloseCleanup) {
       try {
-        void Promise.resolve(
+        const cleanup = Promise.resolve(
           fiddleCloseCleanup({ deviceId: activeId, device: matchingDevice, password: activePassword })
         ).catch((err) => mainWarn('[Fiddle] window-close cleanup failed:', err));
+        // Tracked so a quit that closed this window first (`window-all-closed` → app.quit) can
+        // wait for the delete to land instead of exiting mid-request — see
+        // `settleFiddleCleanupsForQuit` in bs-fiddle-handlers.ts.
+        pendingFiddleCleanups.add(cleanup);
+        void cleanup.finally(() => pendingFiddleCleanups.delete(cleanup));
       } catch (err) {
         mainWarn('[Fiddle] window-close cleanup threw:', err);
       }

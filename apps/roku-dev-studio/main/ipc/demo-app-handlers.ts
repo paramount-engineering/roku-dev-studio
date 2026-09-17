@@ -17,6 +17,7 @@ import { mainWarn } from '../log.js';
 import { resolveRceDeviceBySerial, resolveRceInstanceBySerial } from '../rce-device-registry';
 import { rceSideload } from 'roku-dev-studio-rce';
 import { notifyDebuggerReattach } from './debugger-handlers';
+import { computeSideloadDebugFlags } from './dev-app-handlers';
 
 const fs = require('fs');
 const path = require('path');
@@ -31,10 +32,10 @@ function errMsg(e: unknown): string {
 
 export interface DemoAppLaunchPayload {
   ip: string;
+  serial?: string;
   isRemote?: boolean;
   serverUrl?: string | null;
   password: string;
-  remoteDebug?: boolean;
 }
 
 /** Single-attempt upload to a relay server's `/device/<ip>/sideload` — same
@@ -121,9 +122,10 @@ export function registerDemoAppIpc(ipcMain: IpcMain): void {
       return { success: false, error: S.tryDemoApp.errPackageFailed(errMsg(err)) };
     }
 
-    // "Enable Debugger" — same remotedebug=1 convention Sideload Relay / the Dev App tab /
-    // Fiddle use.
-    const debugEnabled = !!payload.remoteDebug;
+    // "Enable Debugger" — no checkbox of its own here (nor in Fiddle): both read the same
+    // persisted per-device setting the Dev App tab's checkbox controls, via the exact
+    // persisted-setting + STOP-auto-detect logic that path already uses.
+    const { debugEnabled } = computeSideloadDebugFlags(ip, payload.serial, zipPath, undefined);
 
     let sideloadRes: { success: boolean; error?: string; authFailed?: boolean } = {
       success: false,

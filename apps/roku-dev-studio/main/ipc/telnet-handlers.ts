@@ -4,6 +4,8 @@ import type { Socket } from 'net';
 import type { BrowserWindow, IpcMainInvokeEvent } from 'electron';
 import type { IpCommandPayload, IpPayload, SafeSendFn } from '../../shared/ipc/payloads';
 import { IPC } from '../../shared/ipc/channels';
+import type { DebugTelnetConnectResult } from '../../shared/ipc/debug-telnet-connection-id';
+import { singleFlight } from 'roku-dev-studio-platform/async-patterns';
 import {
   appendCoalescedText,
   createTelnetIpcCoalesceState,
@@ -85,44 +87,19 @@ function notifyTelnetDataSubscribers(ip: string, text: string): void {
   }
 }
 
-/**
- * Regex-watch raw (unbuffered, not line-aligned) telnet chunks for `pattern`. Carries a short
- * tail across chunks so a match spanning a chunk boundary can't be missed — shared by every
- * main-process "watch the live 8085 feed for a one-shot marker" consumer (debugger reconnect
- * detection here, the Sideload Relay's launch-complete detection in sideload-relay/service.ts)
- * so both get the same chunk-boundary safety instead of each hand-rolling (or forgetting) it.
- * Feed it consecutive chunks via `feed()`; a match clears the carry so the same physical
- * occurrence can't re-fire on the next unrelated chunk.
- */
-export function createTelnetMarkerWatcher(pattern: RegExp, carryLen = 120): { feed: (text: string) => boolean } {
-  let carry = '';
-  return {
-    feed(text: string): boolean {
-      const combined = carry + text;
-      if (pattern.test(combined)) {
-        carry = '';
-        return true;
-      }
-      carry = combined.slice(-carryLen);
-      return false;
-    }
-  };
-}
-
 /** ip -> when its 8085 socket was (re)connected. Roku's debug console — like the Sideload Relay's own
  *  faithful emulation of it, see the "replayed to clients that connect mid-run" gap buffer in
  *  `sideload-relay/debug-endpoints.ts` — flushes a burst of recent console history to a freshly-opened
  *  socket. Those bytes arrive via the same `socket.on('data', …)` event as genuinely new output, so a
  *  one-shot marker matched right after a (re)connect may be stale history, not a live event. */
 const debugTelnetConnectedAt = new Map<string, number>();
-/** How long after a (re)connect a match is treated as possible backlog rather than a live event. Real
- *  device backlog arrives in one immediate burst on connect, not trickled in over seconds, so this only
- *  needs to clear that initial burst — confirmed against a real capture where a stale match landed 22ms
- *  after reconnect and the genuine one landed 6.8s later. Used by the Sideload Relay's launch-complete
- *  watcher (sideload-relay/service.ts). The "Waiting for debugger" auto-attach does NOT live here any
- *  more: the Console panel watches its own line stream for every transport (local / lab server / RCE)
- *  and tries the attach quietly instead of guessing at staleness — see telnet-console-panel.ts. */
-export const TELNET_BACKLOG_SETTLE_MS = 3000;
+/** Compare against `CONSOLE_REPLAY_WINDOW_MS` (shared/console/roku-beacons.ts) to tell that backlog from
+ *  a live event. Real device backlog arrives in one immediate burst on connect, not trickled in over
+ *  seconds — confirmed against a real capture where a stale match landed 22ms after reconnect and the
+ *  genuine one landed 6.8s later. Used by the Sideload Relay's launch-complete watcher
+ *  (sideload-relay/service.ts). The "Waiting for debugger" auto-attach does NOT live here: the Console
+ *  panel watches its own line stream for every transport (local / lab server / RCE) and tries the
+ *  attach quietly instead of guessing at staleness — see telnet-console-panel.ts. */
 export function msSinceDebugTelnetConnected(ip: string): number {
   const t = debugTelnetConnectedAt.get(ip);
   return t == null ? Infinity : Date.now() - t;
@@ -171,8 +148,6 @@ export async function disconnectDebugTelnetIfUnheld(ip: string): Promise<void> {
 
 let cachedSafeSend: SafeSendFn | null = null;
 
-type DebugTelnetConnectResult = { success: boolean; error?: string; connectionId?: string };
-
 /** ip -> the connect currently in flight for it. The map entry only lands after the TCP await,
  *  so two concurrent connects for one device (the Sideload Relay fan-out's console step racing
  *  the debug sidebar's auto-connect, an MCP `telnet_connect` racing a click, …) used to both
@@ -188,11 +163,7 @@ const debugTelnetConnecting = new Map<string, Promise<DebugTelnetConnectResult>>
  * per ip: a caller arriving while a connect is in flight joins that attempt.
  */
 function connectDebugTelnetInternal(ip: string): Promise<DebugTelnetConnectResult> {
-  const inFlight = debugTelnetConnecting.get(ip);
-  if (inFlight) return inFlight;
-  const attempt = openDebugTelnet(ip).finally(() => debugTelnetConnecting.delete(ip));
-  debugTelnetConnecting.set(ip, attempt);
-  return attempt;
+  return singleFlight(debugTelnetConnecting, ip, () => openDebugTelnet(ip));
 }
 
 async function openDebugTelnet(ip: string): Promise<DebugTelnetConnectResult> {
