@@ -49,6 +49,9 @@ export const app = {
   rceNameRequired: 'Este necesar un nume.',
   rceTokenRequired: 'Este necesar un token.',
   rceAccountExists: (name: string): string => `Există deja un cont RCE numit „${name}”.`,
+  rceTokenExists: (name: string): string => `Acest token este deja adăugat ca „${name}”.`,
+  rceUserExists: (name: string): string => `Acest cont RCE este deja adăugat ca „${name}”.`,
+  locationForgetOnQuitTip: 'Uitată la ieșirea din aplicație',
   rceNoStoredAccount: (name: string): string => `Nu există niciun cont RCE salvat numit „${name}”.`,
   rceAccountStatus: 'Cont RCE',
 
@@ -117,20 +120,22 @@ export const app = {
   // Server capabilities modal
   serverCapabilities: {
     remote: { label: 'Telecomandă', desc: 'Comenzi de taste și navigare' },
-    apps: { label: 'Aplicații', desc: 'Listează și lansează aplicațiile instalate' },
     query: { label: 'Interogare', desc: 'Informații dispozitiv, stare player media' },
-    devApp: { label: 'Dev App', desc: 'Încarcă lateral canale de dezvoltare' },
+    apps: { label: 'Aplicații', desc: 'Listează și lansează aplicațiile instalate' },
+    deepLink: { label: 'Deep-Link', desc: 'Lansează conținut cu parametri' },
     screenshot: { label: 'Captură de ecran', desc: 'Capturează ecranul dispozitivului' },
     screenRelay: { label: 'Redirecționare ecran', desc: 'Flux video live al ecranului dispozitivului' },
+    devApp: { label: 'Dev App', desc: 'Încarcă lateral canale de dezvoltare' },
     console: { label: 'Consolă', desc: 'Ieșire de depanare BrightScript' },
     debugger: { label: 'Depanator', desc: 'Puncte de întrerupere, execuție pas cu pas, inspecția variabilelor' },
     appConnector: { label: 'App Connector', desc: 'Integrare RALE TrackerTask' },
-    deepLink: { label: 'Deep-Link', desc: 'Lansează conținut cu parametri' },
     networkInspector: { label: 'Inspector de rețea', desc: 'Capturează DNS/SNI/HTTP + proxy MITM' }
   },
   capSupported: 'Acceptat',
   capNeedsRoot: 'Necesită root',
   capNotSupported: 'Neacceptat',
+  serverVersionTitle: 'Versiunea serverului la distanță',
+  apiVersionTitleHtml: 'Versiunea <code>roku-dev-studio-api</code> inclusă de acest server',
   capabilitiesHeading: 'Capabilități',
 
   // Device cards + tabs

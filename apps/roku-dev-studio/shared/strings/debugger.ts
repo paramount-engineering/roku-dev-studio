@@ -99,6 +99,8 @@ export const debuggerStrings = {
   restartTitle: 'Re-sideload with debugging and reattach',
   restarting: 'Restarting…',
   restartNoPassword: 'Enter the developer password in the Dev App tab first, then Restart.',
+  errNoPreviousDebugSideload: 'No previous debug sideload to restart. Turn on Enable Debugger and sideload first.',
+  errPreviousDebugBuildMissing: 'The previous debug build is no longer on disk. Sideload again.',
 
   // Runtime / compile errors
   runtimeError: (msg: string): string => `Runtime error${msg ? `: ${msg}` : ''}`,

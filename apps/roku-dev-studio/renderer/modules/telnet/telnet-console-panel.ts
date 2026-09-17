@@ -38,7 +38,7 @@ import {
   detectBrsCrashes,
   type ConsoleFindings
 } from '@shared/console/brightscript-error-catalog.js';
-import { detectBeaconTimings, DEBUGGER_WAITING_RE, DEBUGGER_CLAIMED_RE, DEBUGGER_ATTACHED_RE } from '@shared/console/roku-beacons.js';
+import { detectBeaconTimings, CONSOLE_REPLAY_WINDOW_MS, DEBUGGER_WAITING_RE, DEBUGGER_CLAIMED_RE, DEBUGGER_ATTACHED_RE } from '@shared/console/roku-beacons.js';
 import {
   debugTelnetIpcTargetsDevice,
   debugEventTargetsDevice,
@@ -46,7 +46,7 @@ import {
 } from '@shared/ipc/debug-telnet-connection-id.js';
 import { S } from '@shared/strings/index.js';
 
-export type TelnetConsoleDevice = { deviceName?: string; modelName?: string; ip: string; serialNumber?: string };
+export type TelnetConsoleDevice = { deviceName?: string; modelName?: string; ip: string };
 
 export type TelnetConsoleApi = {
   ip: string;
@@ -912,7 +912,7 @@ export function setupTelnet(
     // replay — the port for that launch is long gone, so don't dial it. Outside that window a cue is
     // live: a debug channel is waiting (~10 s) for a socket debugger on 8081 — attach.
     // Transport-agnostic on purpose: local, lab-server and RCE consoles all land here.
-    const replayBurst = performance.now() - connectedAt < REPLAY_WINDOW_MS;
+    const replayBurst = performance.now() - connectedAt < CONSOLE_REPLAY_WINDOW_MS;
     if (sawCue && !(replayBurst && sawClaim)) debugSidebar.onDeviceWaitingForDebugger();
     // Replayed "remote debugger connected" with no live session here: a debugger owned this channel
     // run and left, and Roku keeps routing its print output there — say so instead of going quiet.
@@ -1141,7 +1141,6 @@ export function setupTelnet(
   let connectInFlight: Promise<void> | null = null;
   /** When this panel's current Connect succeeded — the window in which incoming lines are Roku's replay. */
   let connectedAt = -Infinity;
-  const REPLAY_WINDOW_MS = 3000;
   /** Printed at most once per console session / debug session (see noteDebuggerOwnsOutput). */
   let routedNoticeShown = false;
   function noteDebuggerOwnsOutput(): void {
@@ -1914,8 +1913,7 @@ export function setupTelnet(
     },
     isRemote: api.isRemote,
     serverUrl: api.serverUrl,
-    debuggerSupported: api.debuggerSupported,
-    serial: device.serialNumber
+    debuggerSupported: api.debuggerSupported
   });
 
   // Debug REPL: an input bar that slides up under the console output while the

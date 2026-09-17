@@ -191,6 +191,7 @@ export const modals = {
     tokenPlaceholder: 'Osobisty token dostępu',
     tokenHint: 'Wygeneruj go w interfejsie internetowym Roku Cloud Emulator (karta Token)',
     addBtn: 'Dodaj lokalizację',
+    forgetOnQuit: 'Zapomnij przy zamknięciu aplikacji',
   },
 
   actionScriptsImport: {

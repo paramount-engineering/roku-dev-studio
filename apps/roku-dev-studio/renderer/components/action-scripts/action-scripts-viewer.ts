@@ -7,6 +7,7 @@
  */
 import { S, applyI18n, setLocale, effectiveLocale } from '@shared/strings/index.js';
 import { applyLocalePreference } from '../../modules/utils/locale-live.js';
+import { attachInstantTooltips } from '../../modules/utils/instant-tooltip.js';
 import { setupBuilder } from './builder.js';
 import {
   ensureSavedScriptsLoaded,
@@ -224,5 +225,9 @@ async function main(): Promise<void> {
   populateDropdown(listSavedScripts());
   setDeleteEnabled(false);
 }
+
+// App-wide instant tooltip for every `[title]`/`[data-tip]`/`[data-tip-html]` in this window —
+// same rich `.rds-tip` popover the main window and Settings use instead of the slow native one.
+attachInstantTooltips(document.body);
 
 void main();

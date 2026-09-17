@@ -191,6 +191,7 @@ export const modals = {
     tokenPlaceholder: 'Персональний токен доступу',
     tokenHint: 'Створіть його у вебінтерфейсі Roku Cloud Emulator (вкладка Token)',
     addBtn: 'Додати розташування',
+    forgetOnQuit: 'Забути під час виходу або закриття застосунку',
   },
 
   actionScriptsImport: {

@@ -40,7 +40,6 @@ import {
 } from './device-metrics-performance-step.js';
 import { openBitmapsModal, type BitmapsModalHandle } from './bitmaps-modal.js';
 import { pollDevAppForegroundAfterLaunch } from './dev-app-foreground-sync.js';
-import { attachInstantTooltips } from '../../modules/utils/instant-tooltip.js';
 import { rendererWarn } from '../../modules/utils/logger.js';
 import { devLog } from '../../modules/utils/dev-log.js';
 import { registerPanelRetranslate } from '../../modules/ui/retranslate-registry.js';
@@ -1599,8 +1598,6 @@ export function setupRemoteTabMetrics(
 
   let unsubSettings: (() => void) | null = null;
 
-  const detachTooltips = attachInstantTooltips(wrap);
-
   const wrapUiAc = new AbortController();
 
   const perfHeaderBtn = panel.querySelector('[data-device-panel-perf-btn]');
@@ -2654,7 +2651,6 @@ export function setupRemoteTabMetrics(
     wrapUiAc.abort();
     document.removeEventListener('visibilitychange', vis);
     mo.disconnect();
-    detachTooltips();
     bitmapsModalHandle?.close();
     bitmapsModalHandle = null;
     closeExportMenu();

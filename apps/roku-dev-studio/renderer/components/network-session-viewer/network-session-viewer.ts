@@ -61,6 +61,7 @@ import {
 import { applyFocusDecorations } from '../network-inspector/network-focus-decorations.js';
 import { S, applyI18n } from '@shared/strings/index.js';
 import { initLocaleForWindow } from '../../modules/utils/locale-live.js';
+import { attachInstantTooltips } from '../../modules/utils/instant-tooltip.js';
 import { installCrashCapture } from '../../modules/errors/install.js';
 
 type RokuApi = {
@@ -758,6 +759,10 @@ async function main(): Promise<void> {
   // Keep the export caret in sync as selection changes.
   sessionListEl?.addEventListener('click', () => window.setTimeout(updateCopyCaretVisibility, 0));
 }
+
+// App-wide instant tooltip for every `[title]`/`[data-tip]`/`[data-tip-html]` in this window —
+// same rich `.rds-tip` popover the main window and Settings use instead of the slow native one.
+attachInstantTooltips(document.body);
 
 /** Local escape (avoids importing the DOM util just for one string). */
 function escapeText(s: string): string {

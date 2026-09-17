@@ -45,6 +45,9 @@ export const app = {
   rceNameRequired: 'Nazwa jest wymagana.',
   rceTokenRequired: 'Token jest wymagany.',
   rceAccountExists: (name: string): string => `Konto RCE o nazwie "${name}" już istnieje.`,
+  rceTokenExists: (name: string): string => `Ten token jest już dodany jako "${name}".`,
+  rceUserExists: (name: string): string => `To konto RCE jest już dodane jako "${name}".`,
+  locationForgetOnQuitTip: 'Zapominana przy zamknięciu aplikacji',
   rceNoStoredAccount: (name: string): string => `Brak zapisanego konta RCE o nazwie "${name}".`,
   rceAccountStatus: 'Konto RCE',
 
@@ -113,20 +116,22 @@ export const app = {
   // Server capabilities modal
   serverCapabilities: {
     remote: { label: 'Zdalne sterowanie', desc: 'Polecenia klawiszy i nawigacji' },
-    apps: { label: 'Aplikacje', desc: 'Wyświetlanie i uruchamianie zainstalowanych aplikacji' },
     query: { label: 'Zapytania', desc: 'Informacje o urządzeniu, stan odtwarzacza multimediów' },
-    devApp: { label: 'Dev App', desc: 'Wgrywanie kanałów deweloperskich' },
+    apps: { label: 'Aplikacje', desc: 'Wyświetlanie i uruchamianie zainstalowanych aplikacji' },
+    deepLink: { label: 'Deep-Link', desc: 'Uruchamianie treści z parametrami' },
     screenshot: { label: 'Zrzut ekranu', desc: 'Przechwytywanie ekranu urządzenia' },
     screenRelay: { label: 'Przekaz ekranu', desc: 'Transmisja wideo na żywo z ekranu urządzenia' },
+    devApp: { label: 'Dev App', desc: 'Wgrywanie kanałów deweloperskich' },
     console: { label: 'Konsola', desc: 'Dane wyjściowe debugowania BrightScript' },
     debugger: { label: 'Debugger', desc: 'Punkty przerwania, wykonywanie krok po kroku, podgląd zmiennych' },
     appConnector: { label: 'App Connector', desc: 'Integracja RALE TrackerTask' },
-    deepLink: { label: 'Deep-Link', desc: 'Uruchamianie treści z parametrami' },
     networkInspector: { label: 'Inspektor sieci', desc: 'Przechwytywanie DNS/SNI/HTTP + proxy MITM' }
   },
   capSupported: 'Obsługiwane',
   capNeedsRoot: 'Wymaga uprawnień root',
   capNotSupported: 'Nieobsługiwane',
+  serverVersionTitle: 'Wersja serwera zdalnego',
+  apiVersionTitleHtml: 'Wersja <code>roku-dev-studio-api</code> dołączona do tego serwera',
   capabilitiesHeading: 'Możliwości',
 
   // Device cards + tabs

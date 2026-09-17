@@ -191,6 +191,7 @@ export const modals = {
     tokenPlaceholder: 'Token de acces personal',
     tokenHint: 'Generați unul din interfața web Roku Cloud Emulator (fila Token)',
     addBtn: 'Adaugă locație',
+    forgetOnQuit: 'Uită la ieșirea sau închiderea aplicației',
   },
 
   actionScriptsImport: {

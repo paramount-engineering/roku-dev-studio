@@ -20,6 +20,9 @@ export function debugTelnetConnectionId(device: DebugTelnetDeviceRef): string {
   return device.ip;
 }
 
+/** Result of opening a device's 8085 debug console (local TCP or RCE tunnel alike). */
+export type DebugTelnetConnectResult = { success: boolean; error?: string; connectionId?: string };
+
 export type DebugTelnetIpcPayload = {
   connectionId?: string;
   ip?: string;

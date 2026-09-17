@@ -22,23 +22,11 @@ import { S } from '@shared/strings/index.js';
 import { showToast } from '../utils/ui.js';
 import { setDynamicText, escapeHtml, setSafeHTML } from '../utils/dom.js';
 import { getStoredPassword } from '../utils/storage.js';
-import { attachInstantTooltips } from '../utils/instant-tooltip.js';
 import { attachBackdropClickToClose } from '../utils/modal-backdrop-click.js';
 import { openModalOverlayActiveFromOpener, closeModalWithOriginMotion } from '../utils/modal-origin-motion.js';
 import { deviceKey } from '@shared/platform/device-identity.js';
 import { debugEventTargetsDevice } from '@shared/ipc/debug-telnet-connection-id.js';
-import { DEBUGGER_ENABLED_CHANGED_EVENT, refreshPanelDebuggerEnabled } from '../utils/device-debugger-flag.js';
-
-/**
- * Legacy fallback: raw serial from a `.device-serial[data-serial]` element, if the container has
- * one (never the localized display text — that shows the translated "N/A" placeholder when absent).
- * Only the device-LIST cards render that element; a device TAB panel does not, so for the sidebar
- * the serial comes from `SidebarOpts.serial` + `device-info-refreshed` (see `liveSerial`) and this
- * is reached only when neither knows it.
- */
-function resolvePanelSerial(devPanel: Element): string {
-  return (devPanel.querySelector('.device-serial')?.getAttribute('data-serial') || '').trim();
-}
+import { DEBUGGER_ENABLED_CHANGED_EVENT, getPanelDevice, refreshPanelDebuggerEnabled } from '../utils/device-debugger-flag.js';
 
 /** The subset of `window.roku` this sidebar drives directly, dispatched to either the
  *  local or the remote-server debugger session (see `debugApi` below). */
@@ -111,11 +99,6 @@ interface SidebarOpts {
    *  attempting a session the server has no debug-protocol route for. Always true/undefined
    *  for local devices. */
   debuggerSupported?: boolean;
-  /** The device's serial, if known at mount. Per-device settings ("Enable Debugger", breakpoints,
-   *  watches) are keyed by serial, so without it every lookup silently falls back to the IP and
-   *  misses. Kept live via the panel's `device-info-refreshed` event (a tab opened from a minimal
-   *  fallback device object, e.g. by the Sideload Relay, learns its serial a moment later). */
-  serial?: string;
 }
 
 /**
@@ -211,20 +194,18 @@ export function setupTelnetDebugSidebar(panel: HTMLElement, ip: string, opts: Si
       }
     : roku;
 
-  /** True if a debugger push event's origin tag matches this sidebar's (local vs. this
-   *  specific remote server) — same filtering shape as the Network Inspector tab controllers. */
+  /** True if a debugger push event targets this sidebar's device: ip + origin tag (local vs.
+   *  this specific remote server) — same filtering shape as the Network Inspector tab controllers. */
   const originMatches = (d: { isRemote?: boolean; serverUrl?: string }): boolean =>
     debugEventTargetsDevice(d, { ip, isRemote: opts.isRemote, serverUrl: opts.serverUrl }); // shared with the Console panel
 
   // Persisted per-device state ("Enable Debugger", breakpoints, watches) is keyed by serial, not
   // IP — IP isn't stable across networks/DHCP, so an IP-keyed entry would silently orphan on a
-  // network change. The serial arrives with the device object (and later via enrichment); the
-  // DOM lookup is only a last resort. Recomputed on each use since the panel can be re-rendered.
-  let liveSerial = (opts.serial || '').trim();
-  const resolveKey = (): string => {
-    const devPanel = panel.closest('.device-panel') || panel.querySelector('.device-panel') || panel;
-    return deviceKey({ serial: liveSerial || resolvePanelSerial(devPanel), ip });
-  };
+  // network change. The serial is read off the device object bound to this tab panel
+  // (device-debugger-flag.ts); enrichment mutates that object in place, so a late-arriving
+  // serial is seen. Recomputed on each use.
+  const currentSerial = (): string => (getPanelDevice(panel)?.serialNumber || '').trim();
+  const resolveKey = (): string => deviceKey({ serial: currentSerial(), ip });
 
   const q = <T extends HTMLElement>(sel: string): T | null => panel.querySelector<T>(sel);
   const callStackBody = q<HTMLElement>('[data-debug-body="callstack"]');
@@ -1054,7 +1035,7 @@ export function setupTelnetDebugSidebar(panel: HTMLElement, ip: string, opts: Si
     const devPanel = panel.closest('.device-panel') || panel.querySelector('.device-panel') || panel;
     const fromInput = (devPanel.querySelector<HTMLInputElement>('.dev-password')?.value || '').trim();
     if (fromInput) return fromInput;
-    const serial = resolvePanelSerial(devPanel);
+    const serial = currentSerial();
     try {
       return serial ? getStoredPassword(serial).trim() : '';
     } catch {
@@ -1295,8 +1276,6 @@ export function setupTelnetDebugSidebar(panel: HTMLElement, ip: string, opts: Si
   // --- resize: width + section heights ---------------------------------------
   const disposers: Array<() => void> = [];
 
-  // Instant tooltips across the sidebar (badges + toolbar icons) — shared app-wide util.
-  disposers.push(attachInstantTooltips(sidebar));
   const widthHandle = q<HTMLElement>('[data-debug-resize]');
   if (widthHandle) {
     disposers.push(makeResizer(widthHandle, () => sidebar.offsetWidth, (start, dx) => {
@@ -1417,7 +1396,6 @@ export function setupTelnetDebugSidebar(panel: HTMLElement, ip: string, opts: Si
   let wasAttached = false;
   const stateUnsub = roku.onDebuggerState((data) => {
     const d = (data ?? {}) as { ip?: string; state?: SessionState; message?: string; detail?: string; protocolVersion?: string; isRemote?: boolean; serverUrl?: string };
-    if (d.ip && d.ip !== ip) return;
     if (!originMatches(d)) return;
     if (!d.state) return;
     state = d.state;
@@ -1457,7 +1435,6 @@ export function setupTelnetDebugSidebar(panel: HTMLElement, ip: string, opts: Si
 
   const stoppedUnsub = roku.onDebuggerStopped((data) => {
     const d = (data ?? {}) as { ip?: string; stackFrames?: unknown; variables?: unknown; threads?: unknown; isRemote?: boolean; serverUrl?: string };
-    if (d.ip && d.ip !== ip) return;
     if (!originMatches(d)) return;
     state = 'stopped';
     syncSectionsForState(true); // reveal Call Stack + Variables now that they have data
@@ -1502,7 +1479,6 @@ export function setupTelnetDebugSidebar(panel: HTMLElement, ip: string, opts: Si
 
   const bpUnsub = roku.onDebuggerBreakpoints((data) => {
     const d = (data ?? {}) as { ip?: string; verified?: unknown; error?: unknown; registered?: unknown; isRemote?: boolean; serverUrl?: string };
-    if (d.ip && d.ip !== ip) return;
     if (!originMatches(d)) return;
     // Main registered these on the device (incl. ones that were queued while running) —
     // record the device id by file:line so removal works, and clear the "Q" pending badge.
@@ -1552,7 +1528,6 @@ export function setupTelnetDebugSidebar(panel: HTMLElement, ip: string, opts: Si
   // stack + variables arrive via DebuggerStopped (the controller snapshots on error).
   const runtimeErrUnsub = roku.onDebuggerRuntimeError((data) => {
     const d = (data ?? {}) as { ip?: string; message?: string; error?: unknown; isRemote?: boolean; serverUrl?: string };
-    if (d.ip && d.ip !== ip) return;
     if (!originMatches(d)) return;
     const msg = d.message || pick(d.error, 'stopReasonDetail', 'detail', 'reason');
     lastError = S.debugger.runtimeError(msg);
@@ -1563,7 +1538,6 @@ export function setupTelnetDebugSidebar(panel: HTMLElement, ip: string, opts: Si
   // Compile error: the build failed to load — surface it prominently.
   const compileErrUnsub = roku.onDebuggerCompileErrors((data) => {
     const d = (data ?? {}) as { ip?: string; errors?: unknown; isRemote?: boolean; serverUrl?: string };
-    if (d.ip && d.ip !== ip) return;
     if (!originMatches(d)) return;
     const first = asArray(d.errors, 'errors')[0] ?? d.errors;
     const msg = pick(first, 'errorMessage', 'message') || (typeof d.errors === 'string' ? d.errors : '');
@@ -1576,7 +1550,6 @@ export function setupTelnetDebugSidebar(panel: HTMLElement, ip: string, opts: Si
   // so the sidebar reattaches to the fresh run (the device just reopened 8081).
   const reattachUnsub = roku.onDebuggerReattach((data) => {
     const d = (data ?? {}) as { ip?: string; discovered?: number; isRemote?: boolean; serverUrl?: string };
-    if (d.ip && d.ip !== ip) return;
     if (!originMatches(d)) return;
     prefEnabled = true; // main just (re)installed with debugging — sticky for this tab, as before
     // Re-stamp device.debuggerEnabled from the persisted list WITHOUT assigning prefEnabled: an
@@ -1618,13 +1591,7 @@ export function setupTelnetDebugSidebar(panel: HTMLElement, ip: string, opts: Si
     }
   };
 
-  const onDeviceInfoRefreshed = (e: Event): void => {
-    const next = ((e as CustomEvent<{ device?: { serialNumber?: string } }>).detail?.device?.serialNumber || '').trim();
-    if (next && next !== liveSerial) liveSerial = next; // breakpoints/watches key off it
-  };
-  panel.addEventListener('device-info-refreshed', onDeviceInfoRefreshed);
-  disposers.push(() => panel.removeEventListener('device-info-refreshed', onDeviceInfoRefreshed));
-  // The flag itself is owned by device-debugger-flag.ts: checkbox toggles, late serials and the
+  // The flag is owned by device-debugger-flag.ts: checkbox toggles, late serials and the
   // relay's STOP auto-enable all arrive here as one event.
   const onDebuggerEnabledChanged = (e: Event): void => {
     prefEnabled = !!(e as CustomEvent<{ enabled?: boolean }>).detail?.enabled;

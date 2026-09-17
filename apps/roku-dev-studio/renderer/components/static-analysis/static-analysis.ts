@@ -19,6 +19,7 @@ import { rendererError } from '../../modules/utils/logger.js';
 import { attachBackdropClickToClose } from '../../modules/utils/modal-backdrop-click.js';
 import { attachModalResize } from '../../modules/utils/modal-resize.js';
 import { prepareModalOpenOrigin, playModalOpenMotion, closeModalWithOriginMotion } from '../../modules/utils/modal-origin-motion.js';
+import { attachInstantTooltips } from '../../modules/utils/instant-tooltip.js';
 import { renderStructuredInto, attachFoldToggle, structuredBodyText, detectStructuredKind } from '../../modules/ui/structured-body.js';
 import { resolveCertRequirementUrl } from './cert-requirements-map.js';
 import { installCrashCapture } from '../../modules/errors/install.js';
@@ -714,5 +715,9 @@ async function main(): Promise<void> {
     rendererError('[StaticAnalysis] init failed:', e);
   }
 }
+
+// App-wide instant tooltip for every `[title]`/`[data-tip]`/`[data-tip-html]` in this window —
+// same rich `.rds-tip` popover the main window and Settings use instead of the slow native one.
+attachInstantTooltips(document.body);
 
 void main();

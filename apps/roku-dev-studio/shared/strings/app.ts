@@ -44,6 +44,9 @@ export const app = {
   rceNameRequired: 'A name is required.',
   rceTokenRequired: 'A token is required.',
   rceAccountExists: (name: string): string => `An RCE account named "${name}" already exists.`,
+  rceTokenExists: (name: string): string => `This token is already added as "${name}".`,
+  rceUserExists: (name: string): string => `This RCE account is already added as "${name}".`,
+  locationForgetOnQuitTip: 'Forgotten on App Quit',
   rceNoStoredAccount: (name: string): string => `No stored RCE account named "${name}".`,
   rceAccountStatus: 'RCE Account',
 
@@ -117,22 +120,27 @@ export const app = {
   rceDeviceInfoDurationValue: (h: number, m: number): string => (h > 0 ? (m > 0 ? `${h}h ${m}m` : `${h}h`) : `${m}m`),
 
   // Server capabilities modal
+  // Grouped by relatedness, then by importance within each group: core control/read/launch
+  // first, visual feedback next, the dev-tooling pipeline (sideload -> console -> debugger ->
+  // App Connector) after that, and the standalone advanced/security capability last.
   serverCapabilities: {
     remote: { label: 'Remote Control', desc: 'Keypress and Navigation Commands' },
-    apps: { label: 'Apps', desc: 'List and Launch Installed Apps' },
     query: { label: 'Query', desc: 'Device Info, Media Player Status' },
-    devApp: { label: 'Dev App', desc: 'Sideload Development Channels' },
+    apps: { label: 'Apps', desc: 'List and Launch Installed Apps' },
+    deepLink: { label: 'Deep-Link', desc: 'Launch Content with Parameters' },
     screenshot: { label: 'Screenshot', desc: 'Capture Device Screen' },
     screenRelay: { label: 'Screen Relay', desc: 'Live Video Feed of the Device Screen' },
+    devApp: { label: 'Dev App', desc: 'Sideload Development Channels' },
     console: { label: 'Console', desc: 'BrightScript Debug Output' },
     debugger: { label: 'Debugger', desc: 'Breakpoints, Step Execution, Variable Inspection' },
     appConnector: { label: 'App Connector', desc: 'RALE TrackerTask Integration' },
-    deepLink: { label: 'Deep-Link', desc: 'Launch Content with Parameters' },
     networkInspector: { label: 'Network Inspector', desc: 'Capture DNS/SNI/HTTP + MITM Proxy' }
   },
   capSupported: 'Supported',
   capNeedsRoot: 'Needs Root',
   capNotSupported: 'Not Supported',
+  serverVersionTitle: 'Remote Server version',
+  apiVersionTitleHtml: 'Remote Server <code>roku-dev-studio-api</code> version',
   capabilitiesHeading: 'Capabilities',
 
   // Device cards + tabs

@@ -195,6 +195,7 @@ export const modals = {
     tokenPlaceholder: 'Token de acesso pessoal',
     tokenHint: 'Gere um na interface web do Roku Cloud Emulator (aba Token)',
     addBtn: 'Adicionar localização',
+    forgetOnQuit: 'Esquecer ao sair ou fechar o app',
   },
 
   actionScriptsImport: {

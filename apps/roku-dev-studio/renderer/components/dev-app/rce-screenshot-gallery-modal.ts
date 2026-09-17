@@ -17,7 +17,6 @@ import {
   closeModalWithOriginMotion
 } from '../../modules/utils/modal-origin-motion.js';
 import { attachBackdropClickToClose, attachEscToClose } from '../../modules/utils/modal-backdrop-click.js';
-import { attachInstantTooltips } from '../../modules/utils/instant-tooltip.js';
 import { rendererWarn } from '../../modules/utils/logger.js';
 import { S } from '@shared/strings/index.js';
 
@@ -64,7 +63,6 @@ export function openRceScreenshotGalleryModal(
 
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay rce-gallery-modal-overlay';
-  const detachTooltips = attachInstantTooltips(overlay);
 
   const modal = document.createElement('div');
   modal.className = 'modal rce-gallery-modal';
@@ -231,7 +229,6 @@ export function openRceScreenshotGalleryModal(
     if (closed) return;
     closed = true;
     activeTeardowns.delete(overlay);
-    detachTooltips();
     overlay.remove();
     detachEsc();
     onClose && onClose();

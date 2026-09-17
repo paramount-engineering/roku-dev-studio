@@ -268,6 +268,7 @@ export function setupDevApp(panel: DevicePanelRoot, device: DevAppDevice, api: D
     },
     getSerialNumber,
     passwordAuth.getPassword,
+    // A sideload install/delete just changed what's actually on the device — re-check it.
     sideloadedApp.checkSideloadedApp,
     // Same scheduler the Launch button uses — gated on auto-screenshot
     // checkbox + auth status inside the scheduler.
@@ -279,7 +280,8 @@ export function setupDevApp(panel: DevicePanelRoot, device: DevAppDevice, api: D
   panel.addEventListener('innertabswitch', (e: Event) => {
     const ce = e as CustomEvent<InnertabSwitchDetail>;
     if (ce.detail.tab === 'devapp') {
-      void sideloadedApp.checkSideloadedApp();
+      // Not a redundant `checkSideloadedApp()` call here — `setupSideloadedApp` already registers
+      // its own `innertabswitch` listener for this same condition.
       const devApp1Pass = panel.querySelector('.dev-password');
       if (devApp1Pass instanceof HTMLInputElement && devApp1Pass.value && !passwordInput.value) {
         passwordInput.value = devApp1Pass.value;

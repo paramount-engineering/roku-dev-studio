@@ -33,7 +33,7 @@ interface Binding {
   resolvedForSerial: string;
 }
 
-const bindings = new WeakMap<HTMLElement, Binding>();
+const bindings = new WeakMap<Element, Binding>();
 
 /** Attach the tab's device object and resolve the flag once (async). Idempotent per panel. */
 export function bindPanelDevice(panel: HTMLElement, device: DebuggerFlagDevice): void {
@@ -50,6 +50,11 @@ export function bindPanelDevice(panel: HTMLElement, device: DebuggerFlagDevice):
     b.resolvedForSerial = serial;
     void refreshPanelDebuggerEnabled(panel);
   });
+}
+
+/** The device object bound to this tab panel (live — enrichment mutates it in place). */
+export function getPanelDevice(panel: Element): DebuggerFlagDevice | undefined {
+  return bindings.get(panel)?.device;
 }
 
 /** The stamped value (false until the first resolution lands). */

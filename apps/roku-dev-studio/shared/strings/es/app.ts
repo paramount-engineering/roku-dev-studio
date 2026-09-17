@@ -47,6 +47,9 @@ export const app = {
   rceNameRequired: 'Se requiere un nombre.',
   rceTokenRequired: 'Se requiere un token.',
   rceAccountExists: (name: string): string => `Ya existe una cuenta de RCE llamada "${name}".`,
+  rceTokenExists: (name: string): string => `Este token ya está agregado como "${name}".`,
+  rceUserExists: (name: string): string => `Esta cuenta de RCE ya está agregada como "${name}".`,
+  locationForgetOnQuitTip: 'Se olvida al salir de la app',
   rceNoStoredAccount: (name: string): string => `No hay ninguna cuenta de RCE almacenada llamada "${name}".`,
   rceAccountStatus: 'Cuenta de RCE',
 
@@ -115,20 +118,22 @@ export const app = {
   // Server capabilities modal
   serverCapabilities: {
     remote: { label: 'Control remoto', desc: 'Comandos de pulsación de teclas y navegación' },
-    apps: { label: 'Apps', desc: 'Listar e iniciar apps instaladas' },
     query: { label: 'Consulta', desc: 'Información del dispositivo, estado del reproductor' },
-    devApp: { label: 'Dev App', desc: 'Sideload de canales de desarrollo' },
+    apps: { label: 'Apps', desc: 'Listar e iniciar apps instaladas' },
+    deepLink: { label: 'Deep-Link', desc: 'Iniciar contenido con parámetros' },
     screenshot: { label: 'Captura de pantalla', desc: 'Capturar la pantalla del dispositivo' },
     screenRelay: { label: 'Retransmisión de pantalla', desc: 'Transmisión de video en vivo de la pantalla del dispositivo' },
+    devApp: { label: 'Dev App', desc: 'Sideload de canales de desarrollo' },
     console: { label: 'Consola', desc: 'Salida de depuración de BrightScript' },
     debugger: { label: 'Depurador', desc: 'Puntos de interrupción, ejecución paso a paso, inspección de variables' },
     appConnector: { label: 'App Connector', desc: 'Integración de RALE TrackerTask' },
-    deepLink: { label: 'Deep-Link', desc: 'Iniciar contenido con parámetros' },
     networkInspector: { label: 'Inspector de red', desc: 'Capturar DNS/SNI/HTTP + proxy MITM' }
   },
   capSupported: 'Compatible',
   capNeedsRoot: 'Requiere root',
   capNotSupported: 'No compatible',
+  serverVersionTitle: 'Versión del servidor remoto',
+  apiVersionTitleHtml: 'Versión de <code>roku-dev-studio-api</code> incluida en este servidor',
   capabilitiesHeading: 'Capacidades',
 
   // Device cards + tabs

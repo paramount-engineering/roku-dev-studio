@@ -55,6 +55,9 @@ export const app = {
   rceNameRequired: 'Потрібно вказати назву.',
   rceTokenRequired: 'Потрібен токен.',
   rceAccountExists: (name: string): string => `Обліковий запис RCE з назвою «${name}» вже існує.`,
+  rceTokenExists: (name: string): string => `Цей токен уже додано як «${name}».`,
+  rceUserExists: (name: string): string => `Цей обліковий запис RCE уже додано як «${name}».`,
+  locationForgetOnQuitTip: 'Забувається під час виходу із застосунку',
   rceNoStoredAccount: (name: string): string => `Немає збереженого облікового запису RCE з назвою «${name}».`,
   rceAccountStatus: 'Обліковий запис RCE',
 
@@ -123,20 +126,22 @@ export const app = {
   // Server capabilities modal
   serverCapabilities: {
     remote: { label: 'Дистанційне керування', desc: 'Команди натискання клавіш і навігації' },
-    apps: { label: 'Застосунки', desc: 'Список і запуск встановлених застосунків' },
     query: { label: 'Запити', desc: 'Інформація про пристрій, стан медіапрогравача' },
-    devApp: { label: 'Dev App', desc: 'Sideload каналів розробки' },
+    apps: { label: 'Застосунки', desc: 'Список і запуск встановлених застосунків' },
+    deepLink: { label: 'Deep-Link', desc: 'Запуск контенту з параметрами' },
     screenshot: { label: 'Знімок екрана', desc: 'Захоплення екрана пристрою' },
     screenRelay: { label: 'Трансляція екрана', desc: 'Пряма відеотрансляція екрана пристрою' },
+    devApp: { label: 'Dev App', desc: 'Sideload каналів розробки' },
     console: { label: 'Консоль', desc: 'Налагоджувальний вивід BrightScript' },
     debugger: { label: 'Налагоджувач', desc: 'Точки зупинки, покрокове виконання, перегляд змінних' },
     appConnector: { label: 'App Connector', desc: 'Інтеграція RALE TrackerTask' },
-    deepLink: { label: 'Deep-Link', desc: 'Запуск контенту з параметрами' },
     networkInspector: { label: 'Інспектор мережі', desc: 'Захоплення DNS/SNI/HTTP + MITM-проксі' }
   },
   capSupported: 'Підтримується',
   capNeedsRoot: 'Потрібен root',
   capNotSupported: 'Не підтримується',
+  serverVersionTitle: 'Версія віддаленого сервера',
+  apiVersionTitleHtml: 'Версія <code>roku-dev-studio-api</code>, включена в цей сервер',
   capabilitiesHeading: 'Можливості',
 
   // Device cards + tabs

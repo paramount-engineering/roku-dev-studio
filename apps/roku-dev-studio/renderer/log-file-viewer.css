@@ -1059,3 +1059,18 @@ body {
 ::highlight(telnet-json-plus) {
   background-color: rgba(56, 189, 248, 0.1);
 }
+
+/* App-wide instant custom tooltip (see modules/utils/instant-tooltip.ts). Same rule as
+   index.html / settings.css — keep in sync if that one changes. */
+.rds-tip {
+  position: fixed; z-index: 10050; pointer-events: none; max-width: 280px;
+  padding: 5px 9px; border-radius: 6px; font-size: 11px; line-height: 1.4;
+  background: var(--bg-elevated, #23232e); color: var(--text-primary);
+  border: 1px solid var(--border); box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+  opacity: 0; visibility: hidden; transition: opacity 0.08s ease; white-space: normal;
+}
+.rds-tip--visible { opacity: 1; visibility: visible; }
+.rds-tip code {
+  font-family: 'JetBrains Mono', monospace; font-size: 10.5px;
+  background: rgba(255, 255, 255, 0.1); padding: 1px 4px; border-radius: 3px;
+}
