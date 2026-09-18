@@ -152,6 +152,7 @@ module.exports = {
   ROKU_DEBUG_TELNET_PORT: rokuTelnet.ROKU_DEBUG_TELNET_PORT,
   ROKU_SYSTEM_TELNET_PORT: rokuTelnet.ROKU_SYSTEM_TELNET_PORT,
   DEFAULT_TELNET_CONNECT_TIMEOUT_MS,
+  connectRokuTcp: rokuTelnet.connectRokuTcp,
   connectRokuDebugTelnet: rokuTelnet.connectRokuDebugTelnet,
   connectRokuSystemTelnet: rokuTelnet.connectRokuSystemTelnet,
   writeRokuTelnetLine: rokuTelnet.writeRokuTelnetLine,

@@ -50,7 +50,10 @@ export const DEBUGGER_EVENTS = {
   RuntimeError: 'runtime-error',
   CompileErrors: 'compile-errors',
   Breakpoints: 'breakpoints',
-  ExceptionBreakpointError: 'exception-breakpoint-error'
+  ExceptionBreakpointError: 'exception-breakpoint-error',
+  /** One decoded control-port frame (either direction) — a read-only trace of the live 8081
+   *  session for the Ports window. Payload: `{ ip } & DebugWireFrame`. */
+  Wire: 'wire'
 } as const;
 
 export type DebuggerEventKind = (typeof DEBUGGER_EVENTS)[keyof typeof DEBUGGER_EVENTS];
@@ -99,7 +102,11 @@ export class DebugSessionController {
    *  8081 port (see `attach()`). */
   private attaching = new Map<string, Promise<{ ok: boolean; error?: string }>>();
 
-  constructor(private readonly emit: Emit) {}
+  constructor(
+    private readonly emit: Emit,
+    /** `wireEnabled`: gate for the per-frame 8081 trace — see DebugProtocolClientOptions.wireEnabled. */
+    private readonly options: { wireEnabled?: () => boolean } = {}
+  ) {}
 
   private setState(session: DebugSession, state: SessionState, extra?: Record<string, unknown>): void {
     session.state = state;
@@ -172,7 +179,7 @@ export class DebugSessionController {
       attempt++;
       let client: DebugProtocolClient;
       try {
-        client = new DebugProtocolClient({ host: clean, controlPort: DEBUG_CONTROL_PORT, connectSocket });
+        client = new DebugProtocolClient({ host: clean, controlPort: DEBUG_CONTROL_PORT, connectSocket, wireEnabled: this.options.wireEnabled });
       } catch (e) {
         return { ok: false, error: e instanceof Error ? e.message : String(e) };
       }
@@ -437,6 +444,10 @@ export class DebugSessionController {
       const text = typeof arg === 'string' ? arg : safeText(arg);
       if (!text) return;
       this.emit(DEBUGGER_EVENTS.Output, { ip, text });
+    });
+
+    client.on('wire', (frame) => {
+      this.emit(DEBUGGER_EVENTS.Wire, { ip, ...(frame as Record<string, unknown>) });
     });
 
     client.on('protocol-version', (arg) => {

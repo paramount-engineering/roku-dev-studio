@@ -76,7 +76,7 @@ const {
   raleDisconnect,
   raleDisconnectAll,
   connectRokuDebugTelnet,
-  connectRokuSystemTelnet,
+  connectRokuTcp,
   writeRokuTelnetLine,
   DEVICE_METRICS_SAMPLE_INTERVAL_MIN_MS
 } = api;
@@ -311,8 +311,20 @@ try {
 // Store active Telnet sessions: sessionId -> { socket, wsClients, deviceIP, buffer, lastActivity }
 const telnetSessions = new Map();
 
-// Store active Telnet System connections (port 8080): deviceIP -> { socket, buffer, listeners, lastActivity }
+// Store active Telnet System connections: `${deviceIP}:${port}` -> { socket, buffer, listeners, lastActivity }
 const telnetSystemConnections = new Map();
+/** Roku text consoles the /telnet-system/* routes will dial: 8080 (SceneGraph) and 8087 (Screensaver). */
+const TELNET_SYSTEM_PORTS = [8080, 8087];
+function telnetSystemKey(deviceIP, port) {
+  return `${deviceIP}:${port}`;
+}
+/** `?port=` from the request, default 8080; null when outside the allowlist. */
+function parseTelnetSystemPort(parsedUrl) {
+  const raw = parsedUrl.searchParams.get('port');
+  if (raw === null || raw === '') return 8080;
+  const port = parseInt(raw, 10);
+  return TELNET_SYSTEM_PORTS.includes(port) ? port : null;
+}
 
 // Cached devices (refreshed on discovery)
 let cachedDevices = new Map();
@@ -991,25 +1003,25 @@ const staleSessionCleanupInterval = setInterval(() => {
  * @param {string} deviceIP - Roku device IP
  * @returns {Promise<{success: boolean, error?: string}>}
  */
-async function telnetSystemConnect(deviceIP) {
-  if (telnetSystemConnections.has(deviceIP)) {
+async function telnetSystemConnect(deviceIP, port = 8080) {
+  if (telnetSystemConnections.has(telnetSystemKey(deviceIP, port))) {
     log(`Telnet System: Closing existing connection for ${deviceIP}`);
-    const oldConn = telnetSystemConnections.get(deviceIP);
+    const oldConn = telnetSystemConnections.get(telnetSystemKey(deviceIP, port));
     if (oldConn.socket && !oldConn.socket.destroyed) {
       oldConn.socket.destroy();
     }
-    telnetSystemConnections.delete(deviceIP);
+    telnetSystemConnections.delete(telnetSystemKey(deviceIP, port));
   }
 
-  log(`Telnet System: Connecting to ${deviceIP}:8080`);
+  log(`Telnet System: Connecting to ${deviceIP}:${port}`);
 
-  const conn = await connectRokuSystemTelnet(deviceIP);
+  const conn = await connectRokuTcp(deviceIP, port);
   if (!conn.success) {
     return { success: false, error: conn.error };
   }
 
   const socket = conn.socket;
-  log(`Telnet System: Connected to ${deviceIP}:8080`);
+  log(`Telnet System: Connected to ${deviceIP}:${port}`);
 
   const connection = {
     socket,
@@ -1018,11 +1030,11 @@ async function telnetSystemConnect(deviceIP) {
     lastActivity: Date.now()
   };
 
-  telnetSystemConnections.set(deviceIP, connection);
+  telnetSystemConnections.set(telnetSystemKey(deviceIP, port), connection);
 
   socket.on('data', (data) => {
     const text = data.toString();
-    const c = telnetSystemConnections.get(deviceIP);
+    const c = telnetSystemConnections.get(telnetSystemKey(deviceIP, port));
     if (c) {
       c.lastActivity = Date.now();
       c.buffer += text;
@@ -1043,12 +1055,12 @@ async function telnetSystemConnect(deviceIP) {
 
   socket.on('error', (error) => {
     log(`Telnet System: Socket error for ${deviceIP}: ${errMsg(error)}`);
-    telnetSystemDisconnect(deviceIP);
+    telnetSystemDisconnect(deviceIP, port);
   });
 
   socket.on('close', (hadError) => {
     log(`Telnet System: Socket closed for ${deviceIP}, hadError: ${hadError}`);
-    telnetSystemConnections.delete(deviceIP);
+    telnetSystemConnections.delete(telnetSystemKey(deviceIP, port));
   });
 
   return { success: true };
@@ -1059,14 +1071,14 @@ async function telnetSystemConnect(deviceIP) {
  * @param {string} deviceIP - Roku device IP
  * @returns {Promise<{success: boolean}>}
  */
-function telnetSystemDisconnect(deviceIP) {
-  const connection = telnetSystemConnections.get(deviceIP);
+function telnetSystemDisconnect(deviceIP, port = 8080) {
+  const connection = telnetSystemConnections.get(telnetSystemKey(deviceIP, port));
   if (connection) {
     log(`Telnet System: Disconnecting from ${deviceIP}`);
     if (connection.socket && !connection.socket.destroyed) {
       connection.socket.destroy();
     }
-    telnetSystemConnections.delete(deviceIP);
+    telnetSystemConnections.delete(telnetSystemKey(deviceIP, port));
   }
   return Promise.resolve({ success: true });
 }
@@ -1077,8 +1089,8 @@ function telnetSystemDisconnect(deviceIP) {
  * @param {string} command - Command to send
  * @returns {Promise<{success: boolean, error?: string}>}
  */
-function telnetSystemSend(deviceIP, command) {
-  const connection = telnetSystemConnections.get(deviceIP);
+function telnetSystemSend(deviceIP, command, port = 8080) {
+  const connection = telnetSystemConnections.get(telnetSystemKey(deviceIP, port));
   
   if (!connection || !connection.socket || connection.socket.destroyed) {
     return Promise.resolve({ success: false, error: 'Not connected' });
@@ -1100,8 +1112,8 @@ function telnetSystemSend(deviceIP, command) {
  * @param {string} deviceIP - Roku device IP
  * @returns {Promise<{connected: boolean}>}
  */
-function telnetSystemStatus(deviceIP) {
-  const connection = telnetSystemConnections.get(deviceIP);
+function telnetSystemStatus(deviceIP, port = 8080) {
+  const connection = telnetSystemConnections.get(telnetSystemKey(deviceIP, port));
   if (!connection) {
     return Promise.resolve({ connected: false });
   }
@@ -1120,8 +1132,8 @@ function telnetSystemStatus(deviceIP) {
  * @param {Function} listener - Callback function(data)
  * @returns {Function} Cleanup function
  */
-function telnetSystemAddListener(deviceIP, listener) {
-  const connection = telnetSystemConnections.get(deviceIP);
+function telnetSystemAddListener(deviceIP, listener, port = 8080) {
+  const connection = telnetSystemConnections.get(telnetSystemKey(deviceIP, port));
   if (connection) {
     connection.listeners.add(listener);
     return () => {
@@ -1243,6 +1255,9 @@ async function handleRequest(req, res) {
           
           // Debug features
           console: true,          // Telnet debug console (port 8085)
+          // Text consoles the /telnet-system/* routes will dial (`?port=`; 8080 when absent). The
+          // desktop app hides ports missing here (an older server that predates this key → 8080 only).
+          telnetSystemPorts: TELNET_SYSTEM_PORTS,
           // BrightScript socket debugger (control port 8081) — a REAL check (unlike the other
           // booleans here): false when debug-session-controller failed to load/construct at
           // startup (see DEBUGGER_ENDPOINTS_AVAILABLE above), so an older/reduced-build server
@@ -1658,7 +1673,9 @@ async function handleRequest(req, res) {
       if (!isValidIp(deviceIP)) {
         return sendError(res, 'Invalid device IP', 400);
       }
-      const result = await telnetSystemConnect(deviceIP);
+      const port = parseTelnetSystemPort(parsedUrl);
+      if (port === null) return sendError(res, 'Unsupported port', 400);
+      const result = await telnetSystemConnect(deviceIP, port);
       return sendJson(res, result);
     }
     
@@ -1669,7 +1686,9 @@ async function handleRequest(req, res) {
       if (!isValidIp(deviceIP)) {
         return sendError(res, 'Invalid device IP', 400);
       }
-      const result = await telnetSystemDisconnect(deviceIP);
+      const port = parseTelnetSystemPort(parsedUrl);
+      if (port === null) return sendError(res, 'Unsupported port', 400);
+      const result = await telnetSystemDisconnect(deviceIP, port);
       return sendJson(res, result);
     }
     
@@ -1687,7 +1706,9 @@ async function handleRequest(req, res) {
         return sendError(res, 'Missing command parameter', 400);
       }
       
-      const result = await telnetSystemSend(deviceIP, params.command);
+      const port = parseTelnetSystemPort(parsedUrl);
+      if (port === null) return sendError(res, 'Unsupported port', 400);
+      const result = await telnetSystemSend(deviceIP, params.command, port);
       return sendJson(res, result);
     }
     
@@ -1698,7 +1719,9 @@ async function handleRequest(req, res) {
       if (!isValidIp(deviceIP)) {
         return sendError(res, 'Invalid device IP', 400);
       }
-      const result = await telnetSystemStatus(deviceIP);
+      const port = parseTelnetSystemPort(parsedUrl);
+      if (port === null) return sendError(res, 'Unsupported port', 400);
+      const result = await telnetSystemStatus(deviceIP, port);
       return sendJson(res, result);
     }
     
@@ -1706,7 +1729,9 @@ async function handleRequest(req, res) {
     const telnetSystemDataMatch = pathname.match(/^\/device\/([^\/]+)\/telnet-system\/data$/);
     if (telnetSystemDataMatch && method === 'GET') {
       const deviceIP = telnetSystemDataMatch[1];
-      const connection = telnetSystemConnections.get(deviceIP);
+      const port = parseTelnetSystemPort(parsedUrl);
+      if (port === null) return sendError(res, 'Unsupported port', 400);
+      const connection = telnetSystemConnections.get(telnetSystemKey(deviceIP, port));
       
       if (!connection) {
         return sendJson(res, { success: false, error: 'Not connected' });

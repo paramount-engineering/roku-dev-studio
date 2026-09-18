@@ -74,6 +74,12 @@ export interface DebugProtocolClientOptions {
    * `net.Socket` against `host`, unchanged for local/LAN-relay devices.
    */
   connectSocket?: (port: number) => Promise<DebugSocketLike>;
+  /**
+   * Whether anyone is currently looking at the `'wire'` trace (the app passes "a Ports window is
+   * open"). While it returns false no frame summary is built or emitted — the trace is per-frame
+   * work with no consumer otherwise. Defaults to "yes whenever a 'wire' listener exists".
+   */
+  wireEnabled?: () => boolean;
 }
 
 interface AddBreakpointInput {
@@ -86,9 +92,44 @@ interface AddBreakpointInput {
 
 type AnyResult = ParseResult<Record<string, unknown>>;
 
+/** Emitted as `'wire'` for every control-port frame — see {@link DebugProtocolClient.emitWire}. */
+export interface DebugWireFrame {
+  dir: 'in' | 'out';
+  /** `CommandCode` name for requests/responses, `UpdateTypeCode` name for device-initiated updates. */
+  name: string;
+  requestId: number;
+  bytes: number;
+  /** ms epoch */
+  at: number;
+  errorCode?: number;
+  detail?: string;
+}
+
+const WIRE_DETAIL_MAX = 400;
+const WIRE_HEADER_KEYS = new Set(['requestId', 'errorCode', 'packetLength', 'updateType']);
+
+/** Compact JSON of a decoded frame minus its header fields, truncated — enough to read what the
+ *  debugger asked/got without dumping a 200-variable snapshot into the trace. */
+function summarizeWireData(data: Record<string, unknown>): string | undefined {
+  const body: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(data)) {
+    if (WIRE_HEADER_KEYS.has(k) || v === undefined) continue;
+    body[k] = Array.isArray(v) && v.length > 5 ? `[${v.length} items]` : v;
+  }
+  if (Object.keys(body).length === 0) return undefined;
+  let text: string;
+  try {
+    text = JSON.stringify(body);
+  } catch {
+    return undefined;
+  }
+  return text.length > WIRE_DETAIL_MAX ? `${text.slice(0, WIRE_DETAIL_MAX)}…` : text;
+}
+
 export class DebugProtocolClient extends EventEmitter {
   private readonly host: string;
   private readonly controlPort: number;
+  private readonly wireEnabled?: () => boolean;
   private readonly connectSocket?: (port: number) => Promise<DebugSocketLike>;
 
   private controlSocket?: DebugSocketLike;
@@ -127,6 +168,7 @@ export class DebugProtocolClient extends EventEmitter {
 
   constructor(options: DebugProtocolClientOptions) {
     super();
+    this.wireEnabled = options.wireEnabled;
     this.host = options.host;
     this.controlPort = options.controlPort ?? DEBUG_CONTROL_PORT;
     this.connectSocket = options.connectSocket;
@@ -184,8 +226,23 @@ export class DebugProtocolClient extends EventEmitter {
         reject(new Error('Control socket was closed before the handshake.'));
         return;
       }
-      this.controlSocket.write(encodeHandshake());
+      const hs = encodeHandshake();
+      this.emitWire('out', 'Handshake', 0, hs.length);
+      this.controlSocket.write(hs);
     });
+  }
+
+  /** One control-port frame, either direction, for read-only observers (the Ports window's 8081
+   *  tab). Names are the protocol's own command / update-type identifiers; `detail` is a compact,
+   *  truncated JSON of the decoded payload — the debugger's real traffic, not a second connection. */
+  private wireWanted(): boolean {
+    return this.listenerCount('wire') > 0 && this.wireEnabled?.() !== false;
+  }
+
+  private emitWire(dir: 'in' | 'out', name: string, requestId: number, bytes: number, extra?: { errorCode?: number; detail?: string }): void {
+    if (!this.wireWanted()) return;
+    const frame: DebugWireFrame = { dir, name, requestId, bytes, at: Date.now(), ...extra };
+    this.emit('wire', frame);
   }
 
   // --- Receive loop ----------------------------------------------------------
@@ -263,6 +320,7 @@ export class DebugProtocolClient extends EventEmitter {
     this.watchPacketLength = versionGte(this.protocolVersion, 3, 0, 0);
 
     const [major, minor, patch] = this.protocolVersion.split('.').map((n) => parseInt(n, 10) || 0);
+    this.emitWire('in', 'Handshake', 0, hs.readOffset, { detail: `protocol ${this.protocolVersion}` });
     this.emit('protocol-version', { major, minor, patch, version: this.protocolVersion });
 
     this.handshakeResolve?.();
@@ -295,6 +353,16 @@ export class DebugProtocolClient extends EventEmitter {
   }
 
   private dispatch(result: AnyResult, requestId: number): void {
+    if (this.wireWanted()) {
+      const command = this.activeRequests.get(requestId);
+      const name = requestId !== 0
+        ? (command !== undefined ? CommandCode[command] : 'Response')
+        : String(result.data.updateType ?? 'Update');
+      this.emitWire('in', name, requestId, result.readOffset || 0, {
+        errorCode: result.data.errorCode as number,
+        detail: summarizeWireData(result.data)
+      });
+    }
     if (requestId !== 0) {
       const resolve = this.pending.get(requestId);
       if (resolve) {
@@ -348,6 +416,7 @@ export class DebugProtocolClient extends EventEmitter {
       }
       this.activeRequests.set(requestId, command);
       this.pending.set(requestId, resolve);
+      this.emitWire('out', CommandCode[command], requestId, buffer.length);
       this.controlSocket.write(buffer);
     });
   }

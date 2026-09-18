@@ -189,6 +189,9 @@ function errorForStatus(status: number, body: unknown): string {
   }
 }
 
+/** Per-request cap for the Core API — generous for a cloud round-trip, short enough to fail fast. */
+const REQUEST_TIMEOUT_MS = 15_000;
+
 export class RceManagementClient {
   constructor(
     private readonly token: string,
@@ -211,7 +214,10 @@ export class RceManagementClient {
           Authorization: `Bearer ${this.token}`,
           'Content-Type': 'application/json'
         },
-        body: init.body !== undefined ? JSON.stringify(init.body) : undefined
+        body: init.body !== undefined ? JSON.stringify(init.body) : undefined,
+        // Bounded: an unreachable Core API (DNS down, blocked network) would otherwise hang a caller
+        // for the OS connect timeout — e.g. the Sideload Relay fan-out resolving a target's instance.
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
       });
       const text = await res.text();
       // Error bodies are not always JSON (a bad token gets a plain-text "Jwt is not valid" 401) —
