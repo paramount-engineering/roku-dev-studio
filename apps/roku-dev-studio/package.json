@@ -21,6 +21,7 @@
     "verify:log-file-window-chunking": "tsx scripts/verify-log-file-window-chunking.ts",
     "verify:i18n": "tsx scripts/verify-i18n-keys.ts",
     "verify:telnet-single-flight": "tsx scripts/verify-telnet-single-flight.ts",
+    "verify:held-pool": "tsx scripts/verify-held-pool.ts",
     "verify:debugger-enabled": "tsx scripts/verify-debugger-enabled.ts",
     "verify:mcp-tools": "tsx scripts/verify-mcp-tools-catalog.ts",
     "typecheck:scripts": "tsc --noEmit -p tsconfig.scripts.json",

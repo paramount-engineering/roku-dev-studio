@@ -29,6 +29,8 @@ import {
   deleteRceAccount
 } from '../rce-account-store';
 import { recordRceDeviceSeen } from '../rce-device-registry';
+import { systemTelnetConnectionId } from './telnet-handlers';
+import { createHeldPool, type SystemTelnetConnectResult, type SystemTelnetHolder } from './held-console-pool';
 import { broadcastFiddleTerminalData } from '../fiddle-window';
 
 const fs = require('fs');
@@ -601,16 +603,14 @@ export function setupRceHandlers(): void {
       // sideload path uses (dev-app-handlers.ts's computeSideloadDebugFlags) — an RCE device should
       // remember this opt-in across sideloads exactly like a physical one does, not just honor
       // whatever the checkbox happened to be this one time.
-      const scanStops = require('roku-dev-studio-api/lib/debugger/scan-stops') as {
-        rememberSideloadZip: (ip: string, p: string) => void;
-      };
+      const { rememberDebugZip } = require('../debug-sideload-memory') as typeof import('../debug-sideload-memory');
       const { debugEnabled, discovered } = computeSideloadDebugFlags(ip || '', undefined, resolvedFile.filePath, remoteDebug);
       try {
         const zipData = fs.readFileSync(resolvedFile.filePath);
         const result = await rceSideload({ instanceApiUrl, rceToken: token, devPassword: password }, zipData, resolvedFile.fileName, debugEnabled);
         if (debugEnabled && result.success && ip) {
           try {
-            scanStops.rememberSideloadZip(ip, resolvedFile.filePath);
+            rememberDebugZip(ip, resolvedFile.filePath);
             notifyDebuggerReattach(ip, { discovered });
           } catch {
             /* best-effort */
@@ -633,60 +633,29 @@ export function setupRceHandlers(): void {
     }
   );
 
-  // ── Telnet system console (port 8080), tunneled via the Device API's ports-bridge ─────────
-  // Keyed by the device's synthetic `ip` (unique per device already, see `normalizeRceDevice` in
-  // renderer/app.ts) — mirrors `telnet-handlers.ts`'s `${ip}:8080` connection map, just without a
-  // real IP to compose into the key.
-  const telnetSystemSockets = new Map<string, RceSocket>();
-
+  // ── Telnet system consoles (8080 / 8087 / custom), tunneled via the Device API's ports-bridge ──
+  // One-shot consumer entry points (the Query tab on an RCE device). Same contract as the local and
+  // relay pools: connect reuses a socket the Ports window holds (`reused: true`), disconnect is a
+  // no-op while it does. The window itself calls the exported pool functions below directly.
   ipcMain.handle(
     IPC.RceTelnetSystemConnect,
-    async (_e: IpcMainInvokeEvent, { name, instanceApiUrl, ip }: { name: string; instanceApiUrl: string; ip: string }) => {
+    async (_e: IpcMainInvokeEvent, { name, instanceApiUrl, ip, port }: { name: string; instanceApiUrl: string; ip: string; port?: number }) => {
       const token = getAccountToken(name);
       if (!token) return { success: false, error: S.app.rceNoStoredAccount(name) };
       if (!instanceApiUrl) return { success: false, error: S.app.rceNoInstanceUrl };
-
-      const existing = telnetSystemSockets.get(ip);
-      if (existing) {
-        existing.destroy();
-        telnetSystemSockets.delete(ip);
-      }
-
-      const conn = await connectRceSocket({ instanceApiUrl, token, port: RCE_TELNET_SYSTEM_PORT });
-      if (!conn.success) return { success: false, error: conn.error };
-
-      const socket = conn.socket;
-      telnetSystemSockets.set(ip, socket);
-
-      socket.on('data', (data: Buffer) => {
-        broadcastToAllWindows(IPC.TelnetSystemData, { ip, connectionId: ip, data: data.toString('utf8') });
-      });
-      socket.on('error', (error: Error) => {
-        mainWarn('[RCE Telnet System] Socket error:', error.message);
-      });
-      socket.on('close', () => {
-        telnetSystemSockets.delete(ip);
-      });
-
-      return { success: true, connectionId: ip };
+      const p = port ?? RCE_TELNET_SYSTEM_PORT;
+      if (!isRcePortAllowed(p)) return { success: false, error: 'Unsupported port' };
+      return connectRceSystemTelnet({ instanceApiUrl, token, ip, port: p });
     }
   );
 
-  ipcMain.handle(IPC.RceTelnetSystemDisconnect, async (_e: IpcMainInvokeEvent, { ip }: { ip: string }) => {
-    const socket = telnetSystemSockets.get(ip);
-    if (socket) {
-      socket.destroy();
-      telnetSystemSockets.delete(ip);
-    }
-    return { success: true };
-  });
+  ipcMain.handle(IPC.RceTelnetSystemDisconnect, async (_e: IpcMainInvokeEvent, { ip, port }: { ip: string; port?: number }) =>
+    disconnectRceSystemTelnet(ip, port ?? RCE_TELNET_SYSTEM_PORT)
+  );
 
-  ipcMain.handle(IPC.RceTelnetSystemSend, async (_e: IpcMainInvokeEvent, { ip, command }: { ip: string; command: string }) => {
-    const socket = telnetSystemSockets.get(ip);
-    if (!socket || socket.destroyed) return { success: false, error: 'Not connected' };
-    // System console (8080) uses `\n`, not `\r\n` — matches the physical-device handler.
-    return writeRokuTelnetLine(socket, command, { lineEnding: '\n' });
-  });
+  ipcMain.handle(IPC.RceTelnetSystemSend, async (_e: IpcMainInvokeEvent, { ip, port, command }: { ip: string; port?: number; command: string }) =>
+    sendRceSystemTelnet(ip, port ?? RCE_TELNET_SYSTEM_PORT, command)
+  );
 
   // ── BrightScript debug console (port 8085), tunneled the same way ─────────────────────────
   // Deliberately NOT replicating `telnet-handlers.ts`'s holder-tracking or debugger-auto-reattach
@@ -786,6 +755,80 @@ export function setupRceHandlers(): void {
     }
     return { success: true };
   });
+}
+
+
+// ── RCE text-console pool (ports-bridge WebSocket tunnels) ───────────────────────────────────
+// Keyed `${serial}:${port}` (an RCE device's `ip` IS its serial — see normalizeRceDevice in
+// renderer/app.ts). Mirrors telnet-handlers.ts's local pool: window-hold semantics, single-flight
+// connects, identity-guarded close, data + disconnect pushed to every window (Ports windows filter by
+// serial + port).
+
+type RceSystemConn = { socket: RceSocket; ip: string; port: number; heldByWindow: boolean };
+const rceSystemPool = createHeldPool<RceSystemConn>();
+const rceSystemSockets = rceSystemPool.entries;
+
+/** Ports the Instance API's `/api/v0/ports/{port}` bridge will open (its OpenAPI spec, 2026-09-18):
+ *  8080 SceneGraph, 8081/8082 debugger control + I/O, 8085 console, 8087 screensaver, 9999
+ *  TypeScript debugger, plus the whole ephemeral range 49152–65535. Anything else is refused by the
+ *  gateway, so refuse it here with a clear message instead of a failed WebSocket handshake. */
+export const RCE_TUNNEL_FIXED_PORTS: ReadonlyArray<number> = [8080, 8081, 8082, 8085, 8087, 9999];
+export const RCE_TUNNEL_EPHEMERAL_RANGE: readonly [number, number] = [49152, 65535];
+
+export function isRcePortAllowed(port: unknown): port is number {
+  if (typeof port !== 'number' || !Number.isInteger(port)) return false;
+  return RCE_TUNNEL_FIXED_PORTS.includes(port) || (port >= RCE_TUNNEL_EPHEMERAL_RANGE[0] && port <= RCE_TUNNEL_EPHEMERAL_RANGE[1]);
+}
+
+function emitRceSystemDisconnected(ip: string, port: number): void {
+  broadcastToAllWindows(IPC.TelnetSystemDisconnected, { ip, port, connectionId: systemTelnetConnectionId(ip, port), hadError: false });
+}
+
+export function connectRceSystemTelnet(opts: {
+  instanceApiUrl: string;
+  token: string;
+  ip: string;
+  port: number;
+  holder?: SystemTelnetHolder;
+}): Promise<SystemTelnetConnectResult> {
+  const { instanceApiUrl, token, ip, port, holder } = opts;
+  const connectionId = systemTelnetConnectionId(ip, port);
+  return rceSystemPool.connect(connectionId, holder, {
+    healthy: (e) => !e.socket.destroyed,
+    discardStale: (stale) => { try { stale.socket.destroy(); } catch { /* ignore */ } },
+    dial: async () => {
+      const conn = await connectRceSocket({ instanceApiUrl, token, port });
+      if (!conn.success) return { success: false, error: conn.error };
+      const entry: RceSystemConn = { socket: conn.socket, ip, port, heldByWindow: false };
+      conn.socket.on('data', (data: Buffer) => {
+        if (rceSystemSockets.get(connectionId) !== entry) return;
+        broadcastToAllWindows(IPC.TelnetSystemData, { ip, port, connectionId, data: data.toString('utf8') });
+      });
+      conn.socket.on('error', (error: Error) => {
+        mainWarn('[RCE Telnet System] Socket error:', connectionId, error.message);
+      });
+      conn.socket.on('close', () => {
+        if (rceSystemSockets.get(connectionId) !== entry) return;
+        rceSystemSockets.delete(connectionId);
+        emitRceSystemDisconnected(ip, port);
+      });
+      return { success: true, entry };
+    }
+  });
+}
+
+export function disconnectRceSystemTelnet(ip: string, port: number, holder?: SystemTelnetHolder): Promise<{ success: true; held?: boolean }> {
+  return rceSystemPool.disconnect(systemTelnetConnectionId(ip, port), holder, (conn) => {
+    try { conn.socket.destroy(); } catch { /* ignore */ }
+    emitRceSystemDisconnected(ip, port);
+  });
+}
+
+export function sendRceSystemTelnet(ip: string, port: number, command: string): { success: true } | { success: false; error: string } {
+  const conn = rceSystemSockets.get(systemTelnetConnectionId(ip, port));
+  if (!conn || conn.socket.destroyed) return { success: false, error: 'Not connected' };
+  // Roku's text consoles take a bare `\n`, not telnet's `\r\n` — matches the physical-device pool.
+  return writeRokuTelnetLine(conn.socket, command, { lineEnding: '\n' });
 }
 
 /** Send `payload` on `channel` to every open window, skipping any that are destroyed. Mirrors

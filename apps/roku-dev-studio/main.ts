@@ -121,6 +121,7 @@ const {
   broadcastFiddleTerminalData
 } = require('./main/fiddle-window');
 const { openActionScriptsViewerWindow } = require('./main/action-scripts-viewer-window');
+const { registerPortTerminalIpc } = require('./main/port-terminal-window');
 const { broadcastPrivacyModeToAllWindows } = require('./main/privacy-broadcast');
 const { S, setLocale, getLocale, effectiveLocale } = require('@shared/strings/index.js');
 const { broadcastLocaleToAllWindows } = require('./main/locale-broadcast');
@@ -837,6 +838,7 @@ app.whenReady().then(() => {
   registerBsFiddleIpc(ipcMain);
   registerDemoAppIpc(ipcMain);
   registerStaticAnalysisIpc(ipcMain, app);
+  registerPortTerminalIpc(ipcMain, () => (mainWindow && !mainWindow.isDestroyed() ? mainWindow : null));
 
   // Current language preference, so a window opened while a non-default locale is active can
   // resolve + apply it on load (each renderer has its own catalog instance).

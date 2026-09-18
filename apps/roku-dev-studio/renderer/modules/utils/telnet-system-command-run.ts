@@ -1,6 +1,10 @@
 /**
  * Run a single command on the Roku dev telnet port (8080), same session flow as the Query tab
  * (plugins, free / memory, etc.). Used by action script steps and shared with the Query UI handler.
+ *
+ * Connect → send → collect until the output heuristic says done → disconnect. Main decides what
+ * connect/disconnect really do: while the Ports window holds 8080 for this device, connect reuses
+ * its socket and disconnect is a no-op, so this stays correct without knowing about the window.
  */
 
 import { isTelnetOutputComplete } from './telnet-utils.js';
@@ -13,7 +17,7 @@ export interface TelnetSystemRunApi {
   isRemote?: boolean;
   serverUrl?: string | null;
   telnetSystemDisconnect: () => Promise<unknown>;
-  telnetSystemConnect: () => Promise<{ success?: boolean; error?: string }>;
+  telnetSystemConnect: () => Promise<{ success?: boolean; error?: string; reused?: boolean }>;
   telnetSystemSend: (command: string) => Promise<{ success?: boolean; error?: string }>;
 }
 
@@ -132,13 +136,11 @@ export async function runTelnetSystemCommandSession(
   const timeout = TELNET_TIMEOUT;
   const commandSentTime = { value: 0 };
   let dataCleanup: (() => void) | null = null;
-  let pollInterval: ReturnType<typeof setInterval> | null = null;
   let dataLengthAtCommandSend = 0;
 
   try {
-    await api.telnetSystemDisconnect();
-    await new Promise((resolve) => setTimeout(resolve, 200));
-
+    // Reuses the socket when the Ports window already holds 8080 for this device (`reused: true`,
+    // no banner will follow); otherwise dials fresh and waits out the device's connect banner below.
     const connectResult = await api.telnetSystemConnect();
     if (!connectResult.success) {
       return {
@@ -149,84 +151,40 @@ export async function runTelnetSystemCommandSession(
 
     onStatus?.(S.utils.connectedSettingUpListener);
 
-    // A LAN-relay device (`isRemote` with a `serverUrl`) has its socket living on a separate
-    // machine, so this process polls that server's buffer instead of getting pushed events —
-    // RCE is also `isRemote: true` (it's not "this machine") but its socket lives right here in
-    // our own main process (tunneled via the Device API's ports-bridge), so it pushes data the
-    // same way a local physical device does. `serverUrl` is what actually distinguishes the two,
-    // not `isRemote` alone.
-    if (api.isRemote && api.serverUrl) {
-      const roku = window.roku;
-      if (!roku?.remoteTelnetSystemPollData) {
-        await api.telnetSystemDisconnect().catch(() => {});
-        return { ok: false, error: S.utils.remoteTelnetPollUnavailable };
-      }
-      const pollData = async () => {
-        try {
-          const result = await roku.remoteTelnetSystemPollData(api.serverUrl!, api.ip);
-          if (result.success && result.data) {
-            allData += result.data;
-
-            if (commandSent && !outputComplete) {
-              const timeSinceCommand = Date.now() - commandSentTime.value;
-              const newData = allData.substring(dataLengthAtCommandSend);
-              const trimmedNewData = newData.trim();
-
-              if (
-                isTelnetOutputComplete(newData, trimmedNewData, timeSinceCommand, completeThresholds)
-              ) {
-                outputComplete = true;
-                if (pollInterval) {
-                  clearInterval(pollInterval);
-                  pollInterval = null;
-                }
-              }
-            }
-          }
-        } catch (e) {
-          rendererError('[Telnet System] Poll error:', e);
-        }
-      };
-
-      pollInterval = setInterval(pollData, 200);
-      dataCleanup = () => {
-        if (pollInterval) {
-          clearInterval(pollInterval);
-          pollInterval = null;
-        }
-      };
-    } else {
-      const roku = window.roku;
-      if (!roku?.onTelnetSystemData) {
-        await api.telnetSystemDisconnect().catch(() => {});
-        return { ok: false, error: S.utils.telnetDataListenerUnavailable };
-      }
-      dataCleanup = roku.onTelnetSystemData((data: { ip: string; data: string }) => {
-        if (data.ip === api.ip) {
-          allData += data.data;
-
-          if (commandSent && !outputComplete) {
-            const timeSinceCommand = Date.now() - commandSentTime.value;
-            const newData = allData.substring(dataLengthAtCommandSend);
-            const trimmedNewData = newData.trim();
-
-            if (
-              isTelnetOutputComplete(newData, trimmedNewData, timeSinceCommand, completeThresholds)
-            ) {
-              if (postCompleteSettleMs > 0) {
-                setTimeout(() => {
-                  outputComplete = true;
-                }, postCompleteSettleMs);
-              } else {
-                outputComplete = true;
-              }
-            }
-          }
-        }
-      });
+    // Main pushes console bytes for every transport — local TCP, LAN relay (main polls the relay's
+    // buffer itself), and RCE — on this one listener. Match on ip + port (default 8080), plus the
+    // relay URL for LAN-relay devices so two relays fronting the same private IP can't cross.
+    const roku = window.roku;
+    if (!roku?.onTelnetSystemData) {
+      await api.telnetSystemDisconnect().catch(() => {});
+      return { ok: false, error: S.utils.telnetDataListenerUnavailable };
     }
+    dataCleanup = roku.onTelnetSystemData((data: { ip: string; port?: number; data: string; serverUrl?: string }) => {
+      if (data.ip !== api.ip) return;
+      if ((data.port ?? 8080) !== 8080) return;
+      if (api.serverUrl && data.serverUrl && data.serverUrl !== api.serverUrl) return;
+      allData += data.data;
 
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+      if (commandSent && !outputComplete) {
+        const timeSinceCommand = Date.now() - commandSentTime.value;
+        const newData = allData.substring(dataLengthAtCommandSend);
+        const trimmedNewData = newData.trim();
+
+        if (
+          isTelnetOutputComplete(newData, trimmedNewData, timeSinceCommand, completeThresholds)
+        ) {
+          if (postCompleteSettleMs > 0) {
+            setTimeout(() => {
+              outputComplete = true;
+            }, postCompleteSettleMs);
+          } else {
+            outputComplete = true;
+          }
+        }
+      }
+    });
+
+    if (!connectResult.reused) await new Promise((resolve) => setTimeout(resolve, 1000));
 
     onStatus?.(S.utils.sendingCommand);
 

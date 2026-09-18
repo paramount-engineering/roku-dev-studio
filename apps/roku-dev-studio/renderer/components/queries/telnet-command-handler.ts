@@ -14,14 +14,14 @@ export function setupTelnetCommands(
   api: QueriesDeviceApi,
   outputArea: OutputArea,
   removePluginSection: HTMLElement | null
-): void {
-  panel.querySelectorAll('.telnet-cmd-btn').forEach((btn) => {
-    btn.addEventListener('click', async () => {
-      const command = (btn as HTMLElement).dataset.telnetCmd;
+): { runTelnetCommand: (command: string, btn?: HTMLButtonElement | null) => Promise<void> } {
+  /** One 8080 console command → the results area (the preset buttons and the Custom box's
+   *  non-path input both land here; a held Ports-window socket is reused by the session runner). */
+  async function runTelnetCommand(command: string, btn: HTMLButtonElement | null = null): Promise<void> {
       if (!command) return;
 
-      (btn as HTMLButtonElement).disabled = true;
-      const iconElement = btn.querySelector('.icon');
+      if (btn) btn.disabled = true;
+      const iconElement = btn?.querySelector('.icon') ?? null;
       if (iconElement) {
         iconElement.classList.add('icon-loading');
       }
@@ -37,26 +37,8 @@ export function setupTelnetCommands(
       outputArea.display(`<span style="color: var(--accent-yellow);">${S.queries.connectingToTelnet}</span>`, true);
 
       try {
-        await api.telnetSystemDisconnect();
-        await new Promise((resolve) => setTimeout(resolve, 200));
-
-        const connectResult = await api.telnetSystemConnect();
-        if (!connectResult.success) {
-          const errorContent = S.queries.errorText(S.queries.failedToConnectTelnet(connectResult.error));
-          outputArea.display(
-            `<span style="color: var(--accent-red);">${S.queries.errorText(escapeHtml(connectResult.error || ''))}</span>`,
-            true
-          );
-          outputArea.originalContent = errorContent;
-          (btn as HTMLButtonElement).disabled = false;
-          if (iconElement) {
-            iconElement.classList.remove('icon-loading');
-          }
-          return;
-        }
-
-        outputArea.display(`<span style="color: var(--accent-yellow);">${S.queries.connectedSettingUpListener}</span>`, true);
-
+        // `runTelnetSystemCommandSession` owns connect → send → disconnect (and reuses the Ports
+        // window's socket when it holds 8080) — a pre-connect here would just dial twice per click.
         const session = await runTelnetSystemCommandSession(api, command, {
           onStatus: (msg) =>
             outputArea.display(
@@ -71,7 +53,7 @@ export function setupTelnetCommands(
             true
           );
           outputArea.originalContent = errorContent;
-          (btn as HTMLButtonElement).disabled = false;
+          if (btn) btn.disabled = false;
           if (iconElement) {
             iconElement.classList.remove('icon-loading');
           }
@@ -115,12 +97,20 @@ export function setupTelnetCommands(
         outputArea.originalContent = errorContent;
       }
 
-      (btn as HTMLButtonElement).disabled = false;
+      if (btn) btn.disabled = false;
       if (iconElement) {
         iconElement.classList.remove('icon-loading');
       }
+  }
+
+  panel.querySelectorAll('.telnet-cmd-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const command = (btn as HTMLElement).dataset.telnetCmd;
+      if (command) void runTelnetCommand(command, btn as HTMLButtonElement);
     });
   });
+
+  return { runTelnetCommand };
 }
 
 function checkOutputExpansion(queryOutput: HTMLElement | null) {

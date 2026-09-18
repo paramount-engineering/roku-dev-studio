@@ -17,6 +17,7 @@ import { getScannedStops } from 'roku-dev-studio-api/lib/debugger/scan-stops';
 import { createRceDebugSocketFactory } from 'roku-dev-studio-rce';
 import { resolveRceDeviceBySerial, resolveRceInstanceBySerial } from '../rce-device-registry';
 import { mainError } from '../log.js';
+import { broadcastToPortTerminals, hasPortTerminalWindows } from '../port-terminal-broadcast';
 
 /** Maps the controller's transport-agnostic event kinds onto this app's concrete IPC channels. */
 const EVENT_TO_IPC_CHANNEL: Record<DebuggerEventKind, string> = {
@@ -26,7 +27,8 @@ const EVENT_TO_IPC_CHANNEL: Record<DebuggerEventKind, string> = {
   [DEBUGGER_EVENTS.RuntimeError]: IPC.DebuggerRuntimeError,
   [DEBUGGER_EVENTS.ExceptionBreakpointError]: IPC.DebuggerExceptionBreakpointError,
   [DEBUGGER_EVENTS.CompileErrors]: IPC.DebuggerCompileErrors,
-  [DEBUGGER_EVENTS.Breakpoints]: IPC.DebuggerBreakpoints
+  [DEBUGGER_EVENTS.Breakpoints]: IPC.DebuggerBreakpoints,
+  [DEBUGGER_EVENTS.Wire]: IPC.DebuggerWire
 };
 
 interface IpPayload { ip?: string }
@@ -50,9 +52,18 @@ let mainWindowRef: BrowserWindow | undefined;
 
 /** Send a debug event to the main window (the Telnet Console sidebar lives there). */
 function broadcastDebugEvent(channel: string, payload: unknown): void {
+  // Per-frame control-port traffic is only for the Ports window's read-only 8081 tab — the main
+  // window has no listener for it, so don't push a message per frame through its IPC.
+  if (channel === IPC.DebuggerWire) {
+    broadcastToPortTerminals(channel, payload);
+    return;
+  }
   if (mainWindowRef && !mainWindowRef.isDestroyed()) {
     mainWindowRef.webContents.send(channel, payload);
   }
+  // The Ports window's 8081 tab hosts the same debugger sidebar as the Console tab, driven by the
+  // same events (each window filters by device).
+  broadcastToPortTerminals(channel, payload);
   // While a debugger is attached, Roku routes the channel's print output to the debugger's IO port
   // instead of 8085 — the Fiddle terminal (fed from telnet chunks) went blank the moment its run
   // attached (a per-device "Enable Debugger" now does that for every Fiddle run). Fan the output
@@ -89,9 +100,13 @@ export function notifyDebuggerReattach(ip: string, extra?: DebuggerReattachExtra
 let controllerSingleton: DebugSessionController | null = null;
 function getController(): DebugSessionController {
   if (!controllerSingleton) {
-    controllerSingleton = new DebugSessionController((event, payload) => {
-      broadcastDebugEvent(EVENT_TO_IPC_CHANNEL[event], payload);
-    });
+    controllerSingleton = new DebugSessionController(
+      (event, payload) => {
+        broadcastDebugEvent(EVENT_TO_IPC_CHANNEL[event], payload);
+      },
+      // The per-frame 8081 trace only feeds Ports windows — don't summarise frames while none is open.
+      { wireEnabled: hasPortTerminalWindows }
+    );
   }
   return controllerSingleton;
 }

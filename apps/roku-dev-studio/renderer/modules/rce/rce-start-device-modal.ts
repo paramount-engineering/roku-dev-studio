@@ -14,7 +14,7 @@
  * expands the modal (`animateHeight`) to show its details underneath.
  */
 
-import { escapeHtml, setSafeHTML, icon, animateHeight } from '../utils/dom.js';
+import { escapeHtml, setSafeHTML, icon, animateHeight, setErrorLine } from '../utils/dom.js';
 import { openModalOverlayActiveFromOpener, closeModalWithOriginMotion } from '../utils/modal-origin-motion.js';
 import { attachBackdropClickToClose, attachEscToClose } from '../utils/modal-backdrop-click.js';
 import { parseRceUtcTimestamp } from './rce-time.js';
@@ -225,7 +225,7 @@ export function openRceStartDeviceModal(
     );
   }
   firmwareSelect.addEventListener('change', () => {
-    firmwareError.hidden = true;
+    setErrorLine(modalBody, firmwareError, '');
   });
 
   let snapshotState: 'loading' | 'loaded' | 'error' = 'loading';
@@ -250,9 +250,11 @@ export function openRceStartDeviceModal(
   function syncSnapshotUi(): void {
     const wantsSnapshot = useSnapshotCb.checked;
     snapshotSelect.disabled = !wantsSnapshot || snapshotState !== 'loaded';
-    snapshotSpinner.hidden = !(wantsSnapshot && snapshotState === 'loading');
-    snapshotError.hidden = snapshotState !== 'error';
-    if (snapshotError.hidden === false) snapshotError.textContent = S.app.rceSnapshotLoadFailed;
+    animateHeight(modalBody, () => {
+      snapshotSpinner.hidden = !(wantsSnapshot && snapshotState === 'loading');
+      snapshotError.hidden = snapshotState !== 'error';
+      if (snapshotError.hidden === false) snapshotError.textContent = S.app.rceSnapshotLoadFailed;
+    });
     // Only block Start Device while genuinely waiting on a list the user actually asked to pick
     // from — an unchecked box (or an already-settled fetch, success or failure) never blocks it.
     confirmBtn.disabled = wantsSnapshot && snapshotState === 'loading';
@@ -331,11 +333,13 @@ export function openRceStartDeviceModal(
       // device's original firmware has been retired by Roku entirely and nothing could be
       // pre-selected for them. Surfaced here, on intent to start, not proactively on modal open.
       if (!firmwareSelect.disabled && !firmwareSelect.value) {
-        firmwareError.textContent =
+        setErrorLine(
+          modalBody,
+          firmwareError,
           device.firmwareVersionId && !currentFirmwareAvailable
             ? S.app.rceFirmwareRetired(device.firmwareVersionId)
-            : S.app.rceFirmwareRequired;
-        firmwareError.hidden = false;
+            : S.app.rceFirmwareRequired
+        );
         return;
       }
       confirmBtn.disabled = true;

@@ -13,6 +13,7 @@ import { mainError, mainLog } from '../log.js';
 import { S } from '../../shared/strings/index';
 import { DEBUGGER_ENABLED_DEVICES_KEY, isDebuggerEnabled, withDebuggerEnabled } from '../../shared/platform/debugger-enabled';
 import { notifyDebuggerReattach } from './debugger-handlers';
+import { recallDebugZip, rememberDebugZip } from '../debug-sideload-memory';
 
 const fs = require('fs');
 const path = require('path');
@@ -233,7 +234,7 @@ function setupDevAppHandlers(mainWindow: BrowserWindow | undefined, dialog: Dial
       try {
         // Remember the .zip for STOP scanning, and reattach the debugger to the fresh
         // run — passing the discovered count so the sidebar can toast it.
-        scan.rememberSideloadZip(ip, resolved);
+        rememberDebugZip(ip, resolved, serial);
         notifyDebuggerReattach(ip, { discovered });
       } catch {
         /* best-effort */
@@ -246,11 +247,7 @@ function setupDevAppHandlers(mainWindow: BrowserWindow | undefined, dialog: Dial
   // device (clean Delete+Install so remotedebug=1 is honored), then reattach. This is
   // the one-click edit-run-debug loop — the renderer supplies the stored dev password.
   ipcMain.handle(IPC.DebuggerRestart, async (_event: IpcMainInvokeEvent, { ip, password }: IpPasswordPayload) => {
-    const scan = require('roku-dev-studio-api/lib/debugger/scan-stops') as {
-      getRememberedZip: (ip: string) => string | undefined;
-      rememberSideloadZip: (ip: string, p: string) => void;
-    };
-    const zip = scan.getRememberedZip(ip);
+    const zip = recallDebugZip(ip);
     if (!zip) return { success: false, error: S.debugger.errNoPreviousDebugSideload };
     if (!fs.existsSync(zip)) return { success: false, error: S.debugger.errPreviousDebugBuildMissing };
     mainLog(`[sideload] restart ip=${ip} remotedebug=1 file=${path.basename(zip)}`);
@@ -264,7 +261,8 @@ function setupDevAppHandlers(mainWindow: BrowserWindow | undefined, dialog: Dial
     });
     if (result && (result as { success?: boolean }).success !== false) {
       try {
-        scan.rememberSideloadZip(ip, zip);
+        // The zip is the one we just recalled (already remembered under the device's key) — no
+        // re-remember here, which would only know the ip and rewrite the entry under it.
         notifyDebuggerReattach(ip);
       } catch {
         /* best-effort */

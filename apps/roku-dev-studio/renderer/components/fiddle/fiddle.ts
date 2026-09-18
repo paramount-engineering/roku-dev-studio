@@ -16,6 +16,7 @@ import {
 } from '@shared/ipc/debug-telnet-connection-id.js';
 import { rendererWarn, rendererError } from '../../modules/utils/logger.js';
 import { attachInstantTooltips } from '../../modules/utils/instant-tooltip.js';
+import { setErrorLine } from '../../modules/utils/dom.js';
 import { S, applyI18n } from '@shared/strings/index.js';
 import { initLocaleForWindow } from '../../modules/utils/locale-live.js';
 import { installCrashCapture } from '../../modules/errors/install.js';
@@ -711,8 +712,7 @@ function openPasswordModal(
     const onSubmit = () => {
       const pwd = input.value;
       if (!pwd) {
-        errorEl.hidden = false;
-        errorEl.textContent = S.fiddle.passwordRequired;
+        setErrorLine(modal.querySelector('.fiddle-modal'), errorEl, S.fiddle.passwordRequired);
         input.focus();
         return;
       }

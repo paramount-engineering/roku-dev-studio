@@ -533,8 +533,8 @@ export class SideloadRelayService {
       // zip), and persist the auto-enable so the sidebar / future runs stay in debug
       // mode (only when the build actually carried STOPs, matching single-device).
       try {
-        const scan = require('roku-dev-studio-api/lib/debugger/scan-stops') as typeof import('roku-dev-studio-api/lib/debugger/scan-stops');
-        for (const dip of debugTargetIps) scan.rememberSideloadZip(dip, upload.filePath);
+        const { rememberDebugZip } = require('../debug-sideload-memory') as typeof import('../debug-sideload-memory');
+        for (const t of debugTargets) rememberDebugZip(t.ip, upload.filePath, t.serial);
       } catch {
         /* best-effort */
       }

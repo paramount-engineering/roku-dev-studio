@@ -6264,6 +6264,20 @@
       gap: 8px;
     }
 
+    /* Ports window opener — a `.remote-chart-export-btn` strip, but this header pads its content
+       itself (.card-header: 4px 16px), so cancel that padding to sit flush on the right edge and
+       stretch to the full header height. Connection-gated like every other live control. */
+    .telnet-header .telnet-ports-btn {
+      align-self: stretch;
+      margin: -4px -16px -4px 0;
+      width: 32px;
+    }
+    .telnet-header .telnet-ports-btn.is-connection-gated,
+    .telnet-header .telnet-ports-btn.disabled {
+      opacity: 0.45;
+      pointer-events: none;
+    }
+
     /* Split-button controls — relay devices only (chevron hidden for local tabs). */
     .telnet-split-control {
       position: relative;
@@ -14551,32 +14565,21 @@
       display: flex;
     }
     
+    /* The dialog surface (also what modal-origin-motion animates). Same chrome as `.modal`; the
+       shared .modal-header / .modal-body / .modal-footer bands inside carry the padding. */
     .add-location-form {
       background: var(--bg-secondary);
       border: 1px solid var(--border);
       border-radius: 16px;
-      padding: 24px;
-      width: 400px;
+      width: 440px;
       max-width: 90%;
-    }
-    
-    .add-location-header {
+      max-height: 85vh;
       display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding-bottom: 16px;
-      margin-bottom: 16px;
-      border-bottom: 1px solid var(--border);
+      flex-direction: column;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
     }
-
-    .add-location-form h3 {
-      font-size: 18px;
-      font-weight: 600;
-      margin: 0;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
+    .add-location-form .modal-body { min-height: 0; }
+    .add-location-tab-panel .form-group:last-child { margin-bottom: 0; }
 
     .add-location-tabs {
       display: flex;
@@ -14617,9 +14620,9 @@
       line-height: 1.5;
     }
 
-    /* Footer: forget-on-quit checkbox on the left, Add Location on the right. The row rules must outrank
-       the generic `.add-location-form input { width:100% }` / `label { display:block }` rules below. */
-    .add-location-form .form-actions.add-location-footer { justify-content: space-between; align-items: center; }
+    /* Footer band: forget-on-quit checkbox on the left, Add Location on the right. The row rules must
+       outrank the generic `.add-location-form input { width:100% }` / `label { display:block }` rules below. */
+    .add-location-form .add-location-footer { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
     .add-location-form .add-location-forget-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
     .add-location-form .add-location-forget-row input[type="checkbox"] { width: auto; flex: 0 0 auto; margin: 0; padding: 0; cursor: pointer; accent-color: var(--accent-purple); }
     .add-location-form .add-location-forget-row label { display: inline; margin: 0; cursor: pointer; white-space: nowrap; font-size: 13px; color: var(--text-primary); }
@@ -14661,13 +14664,6 @@
       font-size: 11px;
       color: var(--text-muted);
       margin-top: 4px;
-    }
-    
-    .add-location-form .form-actions {
-      display: flex;
-      gap: 10px;
-      justify-content: flex-end;
-      margin-top: 20px;
     }
     
     .location-empty-state {
@@ -16402,6 +16398,9 @@
     <symbol id="icon-eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"/><line x1="2" x2="22" y1="2" y2="22"/>
     </symbol>
+    <symbol id="icon-open-window" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="8" y="3" width="13" height="13" rx="1.5"/><path d="M16 21H4.5A1.5 1.5 0 0 1 3 19.5V8"/><path d="M12 12l5-5"/><path d="M13.5 7H17v3.5"/>
+    </symbol>
     <symbol id="icon-external-link" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
     </symbol>
@@ -17661,7 +17660,7 @@
                 <div class="query-dev-cell">
                   <div class="query-section-label" data-i18n="app.qsCustom">Custom</div>
                   <div class="custom-query-row">
-                    <input type="text" class="custom-query-input" placeholder="e.g. /query/device-info" data-i18n-placeholder="app.customQueryPlaceholder">
+                    <input type="text" class="custom-query-input" placeholder="e.g. /query/device-info or free" data-i18n-placeholder="app.customQueryPlaceholder">
                     <button class="btn btn-primary run-custom-query-btn" data-i18n="app.run">Run</button>
                   </div>
                 </div>
@@ -17767,6 +17766,12 @@
                   <span class="icon icon-xs"><svg><use href="#icon-x"/></svg></span><span class="telnet-btn-label" data-i18n="common.disconnect">Disconnect</span>
                 </button>
               </div>
+              <!-- Full-height strip on the header's right edge (same idiom as the Device Performance
+                   `.remote-chart-export-btn`): opens this device's Ports window (8080 / 8081 / 8087 tabs).
+                   Local + relay devices only — app.ts removes it for RCE. -->
+              <button type="button" class="remote-chart-export-btn telnet-ports-btn" data-requires-connection title="Open Ports Window" data-i18n-title="portTerminal.openButtonTitle" aria-label="Open Ports Window" data-i18n-aria-label="portTerminal.openButtonTitle">
+                <span class="icon icon-xs"><svg><use href="#icon-open-window"/></svg></span>
+              </button>
             </div>
             <div class="card-body telnet-body">
               <div class="telnet-body-split">
@@ -17813,6 +17818,7 @@
                       <span class="telnet-debug-statustext" data-debug-statustext></span>
                       <span class="telnet-debug-statusdot" data-debug-status role="img" aria-label="Debugger status"></span>
                       <button type="button" class="telnet-debug-why" data-debug-why hidden title="Debugger Attach Failed" data-i18n-title="debugger.attachErrorTitle" data-i18n="debugger.attachWhy">Why?</button>
+                      <button type="button" class="telnet-debug-btn telnet-debug-btn--relaunch" data-debug-cmd="restart" data-debug-relaunch hidden title="Re-sideload the last debug build with the debugger enabled — a fresh run waits on 8081 and attaches" data-i18n-title="debugger.relaunchTitle" data-i18n="debugger.relaunch">Relaunch</button>
                       <button type="button" class="telnet-debug-btn telnet-debug-btn--primary telnet-debug-btn--attach" data-debug-cmd="attach" data-i18n="debugger.attach">Attach</button>
                     </div>
                   </div>

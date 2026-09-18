@@ -99,6 +99,14 @@ interface SidebarOpts {
    *  attempting a session the server has no debug-protocol route for. Always true/undefined
    *  for local devices. */
   debuggerSupported?: boolean;
+  /** Keep the sidebar visible regardless of the device's "Enable Debugger" flag — the Ports
+   *  window's 8081 tab IS the user asking for the debugger panel, so there's nothing to gate. The
+   *  flag still governs auto-attach behavior exactly as in the Console tab. */
+  alwaysVisible?: boolean;
+  /** Default true: tearing this sidebar down (its device tab closing) ends the debug session it
+   *  drives. False for a SECONDARY view of the session — the Ports window's 8081 tab — which must
+   *  leave the session (and the main window's sidebar) exactly as it was. */
+  detachOnCleanup?: boolean;
 }
 
 /**
@@ -216,6 +224,9 @@ export function setupTelnetDebugSidebar(panel: HTMLElement, ip: string, opts: Si
   const statusText = q<HTMLElement>('[data-debug-statustext]');
   const whyBtn = q<HTMLButtonElement>('[data-debug-why]');
   const attachBtn = q<HTMLButtonElement>('[data-debug-cmd="attach"]');
+  /** Re-sideload + reattach while NOT attached (the exec cluster's Restart is hidden then) — the
+   *  way out of "a debugger was attached to this run, output is routed away and 8081 is closed". */
+  const relaunchBtn = q<HTMLButtonElement>('[data-debug-relaunch]');
   // Continue/Pause/Step/Restart/Stop cluster — hidden while no session is attached (see
   // updateControls) so a disabled, unusable button row doesn't force the toolbar to wrap onto a
   // second line around the status + Attach/Detach group, which stays the sole, prominent action.
@@ -297,7 +308,7 @@ export function setupTelnetDebugSidebar(panel: HTMLElement, ip: string, opts: Si
   };
 
   const updateVisibility = (): void => {
-    const enabled = prefEnabled || sessionActive; // debugger enabled for this device
+    const enabled = prefEnabled || sessionActive || !!opts.alwaysVisible; // debugger enabled for this device
     const connected = isAttached();                // attached / running / stopped
     // Button: hidden only when debugging isn't enabled. It stays CLICKABLE whether or
     // not connected so the sidebar can always be closed (a disconnect must never trap
@@ -409,6 +420,7 @@ export function setupTelnetDebugSidebar(panel: HTMLElement, ip: string, opts: Si
     // Only reveal the exec cluster once a session is genuinely up (not just "connecting" — that
     // still shows the prominent status + Attach/Detach alone, single row).
     if (execGroup) execGroup.hidden = !isAttached();
+    if (relaunchBtn) relaunchBtn.hidden = attached;
     if (attachBtn) {
       // Stamp I18N_DYNAMIC_ATTR via setDynamicText so a live-locale-switch applyI18n pass
       // doesn't revert this data-i18n button back to "Attach" while it's showing "Detach"
@@ -1060,12 +1072,17 @@ export function setupTelnetDebugSidebar(panel: HTMLElement, ip: string, opts: Si
     // updateControls), which would otherwise leave the exec cluster visible with stale
     // enabled/disabled buttons for the "Restarting…" window if this device was already attached.
     if (execGroup) execGroup.hidden = true;
+    if (relaunchBtn) relaunchBtn.hidden = true;
     try {
       const res = await debugApi.debuggerRestart(ip, pwd);
-      if (res && res.success === false) setStatus(S.debugger.status.error, 'error', res.error || S.debugger.attachFailed(''));
+      if (res && res.success === false) {
+        setStatus(S.debugger.status.error, 'error', res.error || S.debugger.attachFailed(''));
+        if (relaunchBtn) relaunchBtn.hidden = isAttached();
+      }
       // On success the main process fires DebuggerReattach → the sidebar reattaches.
     } catch (e) {
       setStatus(S.debugger.status.error, 'error', e instanceof Error ? e.message : String(e));
+      if (relaunchBtn) relaunchBtn.hidden = isAttached();
     }
   };
 
@@ -1583,9 +1600,26 @@ export function setupTelnetDebugSidebar(panel: HTMLElement, ip: string, opts: Si
     didAutoStart = true;
     try {
       const st = await debugApi.debuggerStatus(ip);
-      const cur = st?.data?.state;
-      if (cur && cur !== 'disconnected') void doAttach(); // already debugging → sync UI
-      else setStatus(S.debugger.status.idle);
+      const cur = st?.data?.state as SessionState | undefined;
+      if (cur === 'attached' || cur === 'running' || cur === 'stopped' || cur === 'connecting') {
+        // A session already exists (another view of it — the Console tab, the Ports window, MCP, a
+        // relay run). The controller's attach() no-ops on a healthy session WITHOUT emitting a
+        // State event, so calling doAttach() here painted "Connecting…" until the next real state
+        // change. Adopt the snapshot directly; live events take over from here.
+        // ponytail: a 'stopped' snapshot has no stack/variables until the next stop event — the
+        // controller would need to replay its last Stopped snapshot for a late-joining view.
+        state = cur;
+        sessionActive = true;
+        syncSectionsForState(state === 'stopped');
+        if (isAttached() && !wasAttached) { void loadScanned(); void sendManaged(); }
+        wasAttached = isAttached();
+        updateControls();
+        updateVisibility();
+      } else if (cur && cur !== 'disconnected') {
+        void doAttach(); // errored session → try a fresh attach
+      } else {
+        setStatus(S.debugger.status.idle);
+      }
     } catch {
       setStatus(S.debugger.status.idle);
     }
@@ -1659,7 +1693,7 @@ export function setupTelnetDebugSidebar(panel: HTMLElement, ip: string, opts: Si
     runtimeErrUnsub();
     compileErrUnsub();
     replListeners.clear();
-    if (sessionActive) void debugApi.debuggerDetach(ip);
+    if (sessionActive && opts.detachOnCleanup !== false) void debugApi.debuggerDetach(ip);
   };
 
   return { cleanup, repl, onDeviceWaitingForDebugger, isAttached };

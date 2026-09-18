@@ -876,8 +876,15 @@ function ensureDeviceConnectedWithConsole(
       // open a direct-IP tab for a device this machine can't actually reach. Prefer a full
       // device object from the scan cache; fall back to the caller's hint (or a minimal one).
       const location = state.remoteLocations.get(resolvedLocationId) as
-        | { devices?: Map<string, unknown>; serverUrl?: string }
+        | { devices?: Map<string, unknown>; serverUrl?: string; status?: string }
         | undefined;
+      // The location's server is known to be down (its sidebar card says "Server Offline"): a tab
+      // opened now could only ever show "Device Offline". Skip; the caller's later result for
+      // this target (a successful install once the server is back) opens it then.
+      if (location?.status === 'offline') {
+        rendererWarn('[auto-connect] remote location offline — not opening a tab', { locationId: resolvedLocationId, ip });
+        return '';
+      }
       const liveDevice = pickLiveDevice(
         location?.devices?.values() || [],
         ip,
@@ -945,6 +952,9 @@ function registerRelayAutoConnect(): void {
     // pre-install console could stay bound to the old channel.
     const remoteInstalled = !!r.remote && r.done === true && r.install?.state === 'ok';
     if (!isFirst && !remoteInstalled) return;
+    // A target whose FIRST result is already its final failure never started (the fan-out found
+    // its relay server unreachable and skipped it) — there is no device to show, so no tab.
+    if (isFirst && r.done === true && r.install?.state === 'error') return;
     const ip = r.ip;
     try {
       const tabId = ensureDeviceConnectedWithConsole(ip, {
@@ -6092,6 +6102,26 @@ function createDevicePanel(device, tabId, isRemote = false, serverUrl = null, lo
     setupDeepLinkPanel(panel, api);
     setupDevApp(panel, device, api);
     setupInspector(panel, device, api);
+    // Ports window opener in the Console header. Local devices dial raw TCP, relay devices go through
+    // the relay, RCE devices through the Instance API's ports bridge — the window routes by `kind`.
+    const portsBtn = panel.querySelector<HTMLButtonElement>('.telnet-ports-btn');
+    if (portsBtn) {
+      portsBtn.addEventListener('click', () => {
+        const isRce = (api as { kind?: string }).kind === 'rce';
+        const accountName = (device as { accountName?: string }).accountName;
+        void window.roku.openPortTerminal({
+          ip: device.ip,
+          kind: isRce ? 'rce' : isRemote ? 'remote' : 'local',
+          serverUrl: !isRce && isRemote ? serverUrl : null,
+          accountName: isRce ? accountName : undefined,
+          name: device.deviceName || device.modelName,
+          // An RCE device's `ip` IS its serial (normalizeRceDevice) — the same key the sidebar uses.
+          serialNumber: isRce ? device.ip : typeof device.serialNumber === 'string' ? device.serialNumber.trim() : undefined,
+          locationName: isRce ? accountName : isRemote && locationId ? state.remoteLocations.get(locationId)?.name : undefined,
+          debuggerSupported: api.debuggerSupported !== false
+        });
+      });
+    }
     setupTelnet(panel, device, api, { devLog });
     setupActionScripts(panel, device, api);
     const networkCtrl = setupNetworkTab(panel, device, api);

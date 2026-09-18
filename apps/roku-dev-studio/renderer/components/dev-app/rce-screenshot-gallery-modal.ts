@@ -10,7 +10,7 @@
  */
 
 import type { RceSessionScreenshot } from './dev-app-types.js';
-import { icon, setSafeHTML, escapeHtml } from '../../modules/utils/index.js';
+import { animateHeight, icon, setSafeHTML, escapeHtml } from '../../modules/utils/index.js';
 import {
   prepareModalOpenOrigin,
   playModalOpenMotion,
@@ -194,7 +194,7 @@ export function openRceScreenshotGalleryModal(
 
   function render(): void {
     try {
-      renderUnsafe();
+      animateHeight(modal, renderUnsafe);
     } catch (e) {
       rendererWarn('[rce-screenshot-gallery-modal] render failed', e);
       setSafeHTML(body, `<p class="rce-gallery-empty">${escapeHtml(S.devApp.rceGalleryEmpty)}</p>`);

@@ -28,6 +28,7 @@
     "renderer/components/fiddle/**/*.ts",
     "renderer/components/about/**/*.ts",
     "renderer/components/settings/**/*.ts",
+    "renderer/components/port-terminal/**/*.ts",
     "renderer/vendor/modern-screenshot.d.ts",
     "renderer/vendor/tanstack-virtual-core.d.ts"
   ]

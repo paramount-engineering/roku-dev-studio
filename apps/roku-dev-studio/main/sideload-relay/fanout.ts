@@ -29,7 +29,13 @@ import type { SideloadChannelOpts } from 'roku-dev-studio-api/lib/plugin-install
 // member stays hand-typed against the api's own exported opts type.
 const rokuApi = require('roku-dev-studio-api') as {
   sideloadChannel: (opts: SideloadChannelOpts) => Promise<{ success: boolean; error?: string; message?: string }>;
+  testConnection: (ip: string, opts?: { timeout?: number }) => Promise<{ success: boolean; error?: string }>;
 };
+
+/** ECP device-info probe cap for a local target before its first result. A LAN device answers in
+ *  tens of ms; a powered-off one either fails instantly (EHOSTDOWN) or would otherwise sit through
+ *  a TCP connect timeout — twice, with the retry. */
+const LOCAL_PROBE_TIMEOUT_MS = 3000;
 const { ensureDebugTelnetConnected, bounceDebugTelnet } = require('../ipc/telnet-handlers') as typeof import('../ipc/telnet-handlers');
 const { ensureRceDebugTelnetConnected } = require('../ipc/rce-handlers') as typeof import('../ipc/rce-handlers');
 const { resolveRceDeviceBySerial, resolveRceInstanceBySerial } = require('../rce-device-registry') as typeof import('../rce-device-registry');
@@ -40,6 +46,7 @@ const { rceSideload } = require('roku-dev-studio-rce') as typeof import('roku-de
 // this, so a fleet target with an already-open device panel never picked up its fresh debug
 // session automatically. Harmless no-op if no panel is open for that target.
 import { notifyDebuggerReattach } from '../ipc/debugger-handlers';
+import type { RceLiveInstance } from '../rce-device-registry';
 const fs = require('fs');
 const path = require('path');
 const { mainLog, mainWarn } = require('../log');
@@ -75,6 +82,8 @@ export interface FanoutTarget {
 export interface RemoteFanoutOps {
   sideload: (serverUrl: string, ip: string, filePath: string, password: string, remoteDebug?: boolean) => Promise<{ success: boolean; error?: string }>;
   ensureConsole: (serverUrl: string, ip: string) => Promise<{ success: boolean; error?: string }>;
+  /** Quick liveness probe of a relay server (a few seconds at most). Absent = assume reachable. */
+  isReachable?: (serverUrl: string) => Promise<boolean>;
 }
 
 export interface FanoutOptions {
@@ -136,6 +145,54 @@ export async function runFanout(opts: FanoutOptions, listener: RelayListener): P
           /* listener best-effort */
         }
       };
+
+      // A remote target whose relay server doesn't answer a quick health probe gets ONE result —
+      // done + install error — instead of the usual pending→running stream. The renderer opens a
+      // target's tab on its first result, and a location that's offline has no device to show (it
+      // would sit there as "Device Offline"); the install itself would otherwise wait out a ~75 s
+      // TCP connect timeout, then do it again for the retry.
+      if (target.remote && target.serverUrl && opts.remoteOps?.isReachable) {
+        const reachable = await opts.remoteOps.isReachable(target.serverUrl);
+        if (!reachable) {
+          const where = target.location || target.serverUrl;
+          mainWarn(`[SideloadRelay] relay server ${where} is unreachable — skipping ${target.name}`);
+          result.install = step('error', `Relay server ${where} is unreachable`);
+          result.console = step('skipped', 'remote unreachable');
+          result.done = true;
+          emit();
+          return;
+        }
+      }
+      // And a local target: one ECP probe. Unreachable (powered off, left the network) → one final
+      // result instead of a pending one that opens a "Device Offline" tab, then console + install
+      // attempts that can only fail.
+      if (!target.remote && !rceKnown) {
+        const probe = await rokuApi.testConnection(target.ip, { timeout: LOCAL_PROBE_TIMEOUT_MS });
+        if (!probe.success) {
+          mainWarn(`[SideloadRelay] ${target.name} (${target.ip}) is unreachable — skipping (${probe.error || 'no response'})`);
+          result.install = step('error', `Device is unreachable: ${probe.error || 'no response'}`);
+          result.console = step('skipped', 'device unreachable');
+          result.done = true;
+          emit();
+          return;
+        }
+      }
+      // Same for an RCE target: its live instance (running + a current instanceApiUrl) is resolved
+      // from the Core API up front — a stopped emulator, or an API we can't reach, is this target's
+      // one and only result rather than a pending one the renderer would open a tab for.
+      let rceLive: RceLiveInstance | null = null;
+      if (rceKnown) {
+        const rceInstance = await resolveRceInstanceBySerial(target.ip);
+        if (!rceInstance.success) {
+          mainWarn(`[SideloadRelay] RCE ${target.name} unavailable — skipping (${rceInstance.error})`);
+          result.install = step('error', rceInstance.error);
+          result.console = step('skipped', CONSOLE_SKIPPED_INSTALL_FAILED);
+          result.done = true;
+          emit();
+          return;
+        }
+        rceLive = rceInstance.instance;
+      }
       emit();
 
       /** Console step — runs BEFORE install so the tab's Console (and the relay's device tap) is
@@ -158,16 +215,8 @@ export async function runFanout(opts: FanoutOptions, listener: RelayListener): P
         emit();
       };
 
-      if (rceKnown) {
-        const rceInstance = await resolveRceInstanceBySerial(target.ip);
-        if (!rceInstance.success) {
-          result.install = step('error', rceInstance.error);
-          result.console = step('skipped', CONSOLE_SKIPPED_INSTALL_FAILED);
-          result.done = true;
-          emit();
-          return;
-        }
-        const { accountName, instanceApiUrl, token } = rceInstance.instance;
+      if (rceKnown && rceLive) {
+        const { accountName, instanceApiUrl, token } = rceLive;
         // RCE connects its console AFTER install (like remote targets): there is no rebind path for
         // the tunnel, so a pre-install socket could stay bound to the old channel instance.
         result.install = step('running');

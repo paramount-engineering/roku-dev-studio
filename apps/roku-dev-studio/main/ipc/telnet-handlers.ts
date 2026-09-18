@@ -1,4 +1,4 @@
-// Telnet to Roku (debug 8085, system 8080) — TCP from roku-dev-studio-api
+// Telnet to Roku (debug 8085, system consoles 8080/8087) — TCP from roku-dev-studio-api
 
 import type { Socket } from 'net';
 import type { BrowserWindow, IpcMainInvokeEvent } from 'electron';
@@ -9,6 +9,7 @@ import { singleFlight } from 'roku-dev-studio-platform/async-patterns';
 import {
   appendCoalescedText,
   createTelnetIpcCoalesceState,
+  emitTelnetTextInChunks,
   flushCoalescedMapNow,
   scheduleCoalescedMapFlush,
   type TelnetIpcCoalesceState
@@ -16,10 +17,13 @@ import {
 import { getPersistedTimingValue } from '../settings';
 import { mainLog, mainWarn } from '../log.js';
 import { notifyDeviceConnectionSuspect } from '../device-connection-suspect';
+import { broadcastToPortTerminals } from '../port-terminal-broadcast';
+import { createHeldPool, type SystemTelnetConnectResult, type SystemTelnetHolder } from './held-console-pool';
+export type { SystemTelnetConnectResult, SystemTelnetHolder } from './held-console-pool';
 
 const {
   connectRokuDebugTelnet,
-  connectRokuSystemTelnet,
+  connectRokuTcp,
   writeRokuTelnetLine,
   isValidIp
 } = require('roku-dev-studio-api');
@@ -35,7 +39,37 @@ type DebugTelnetConn = {
   bytesReceived: number;
 };
 
-type SystemTelnetConn = { socket: Socket; ipcCoalesce: TelnetIpcCoalesceState };
+type SystemTelnetConn = {
+  socket: Socket;
+  ipcCoalesce: TelnetIpcCoalesceState;
+  ip: string;
+  port: number;
+  /** The Ports window owns this socket: one-shot consumers reuse it and their disconnect is a
+   *  no-op until the window releases it (see `disconnectSystemTelnet`). */
+  heldByWindow: boolean;
+};
+
+export const SYSTEM_TELNET_DEFAULT_PORT = 8080;
+/** Roku text consoles this pool will dial: 8080 (SceneGraph / "system") and 8087 (Screensaver).
+ *  8085 is the Console tab's own pool above; 8081 is the binary debug protocol, not a telnet port. */
+export const SYSTEM_TELNET_PORTS: ReadonlyArray<number> = [8080, 8087];
+export type SystemTelnetPayload = IpPayload & { port?: number };
+
+/** `undefined` → 8080; anything outside {@link SYSTEM_TELNET_PORTS} → null (reject, don't dial).
+ *  Local and relay consoles are limited to these two; only the RCE tunnel accepts more (rce-handlers). */
+export function normalizeSystemTelnetPort(port: unknown): number | null {
+  const p = port === undefined || port === null ? SYSTEM_TELNET_DEFAULT_PORT : port;
+  return typeof p === 'number' && SYSTEM_TELNET_PORTS.includes(p) ? p : null;
+}
+
+/** Ports that already have a dedicated surface and are single-client on the device: 8085 is the
+ *  Console tab, 8081/8082 are the debugger's control and I/O channels (the 8081 tab). A raw console
+ *  on any of them would fight that surface for the one slot. */
+export const RESERVED_CONSOLE_PORTS: ReadonlyArray<number> = [8081, 8082, 8085];
+
+export function systemTelnetConnectionId(ip: string, port: number): string {
+  return `${ip}:${port}`;
+}
 
 /** Process-wide telnet connection maps. Exposed so other main-process modules
  * (e.g. BrightScript Fiddle) can reuse the same pool and avoid fighting over
@@ -344,6 +378,108 @@ export async function ensureDebugTelnetConnected(
   return { success: result.success, error: result.error };
 }
 
+// ── Telnet system console pool (8080 / 8087) ──────────────────────────────────────────────────
+// Ownership rules (reuse / window hold / single-flight / held no-op disconnect) live in
+// held-console-pool.ts; this file owns the TCP socket, its coalesced IPC pushes and the flushes.
+
+const systemPool = createHeldPool<SystemTelnetConn>(telnetSystemConnections);
+
+function emitSystemTelnetData(conn: SystemTelnetConn, connectionId: string, slice: string): void {
+  const payload = { ip: conn.ip, port: conn.port, connectionId, data: slice };
+  cachedSafeSend?.(IPC.TelnetSystemData, payload);
+  broadcastToPortTerminals(IPC.TelnetSystemData, payload);
+}
+
+function emitSystemTelnetDisconnected(ip: string, port: number, connectionId: string, hadError: boolean): void {
+  const payload = { ip, port, connectionId, hadError };
+  cachedSafeSend?.(IPC.TelnetSystemDisconnected, payload);
+  broadcastToPortTerminals(IPC.TelnetSystemDisconnected, payload);
+}
+
+/** Push whatever is still coalesced for `conn` — works on an entry the pool already dropped. */
+function flushSystemTelnetEntry(conn: SystemTelnetConn, connectionId: string): void {
+  const blob = conn.ipcCoalesce.pending;
+  conn.ipcCoalesce.pending = '';
+  conn.ipcCoalesce.flushScheduled = false;
+  emitTelnetTextInChunks(blob, (slice) => emitSystemTelnetData(conn, connectionId, slice));
+}
+
+function systemSocketOpen(conn: SystemTelnetConn): boolean {
+  const sock = conn.socket as Socket & { readyState?: string };
+  return !sock.destroyed && sock.readyState === 'open';
+}
+
+/**
+ * Open — or reuse — the `ip:port` text console (see held-console-pool.ts for the reuse / window-hold
+ * contract). A stale entry is flushed, destroyed and replaced.
+ */
+export function connectSystemTelnet(ip: string, port: number, holder?: SystemTelnetHolder): Promise<SystemTelnetConnectResult> {
+  const connectionId = systemTelnetConnectionId(ip, port);
+  return systemPool.connect(connectionId, holder, {
+    healthy: systemSocketOpen,
+    discardStale: (stale) => {
+      flushSystemTelnetEntry(stale, connectionId);
+      try { stale.socket.destroy(); } catch { /* ignore */ }
+    },
+    dial: async () => {
+      const conn = await connectRokuTcp(ip, port, { connectTimeoutMs: getPersistedTimingValue('TELNET_TIMEOUT') });
+      if (!conn.success) return { success: false, error: conn.error };
+
+      const socket: Socket = conn.socket;
+      mainLog('[Telnet System] Connected to', connectionId);
+      const entry: SystemTelnetConn = { socket, ipcCoalesce: createTelnetIpcCoalesceState(), ip, port, heldByWindow: false };
+
+      socket.on('data', (data: Buffer) => {
+        if (telnetSystemConnections.get(connectionId) !== entry) return;
+        appendCoalescedText(entry, data.toString('utf8'));
+        scheduleCoalescedMapFlush(telnetSystemConnections, connectionId, (live, slice) => emitSystemTelnetData(live, connectionId, slice));
+      });
+      socket.on('error', (error: Error) => {
+        mainLog('[Telnet System] Socket error:', connectionId, error.message);
+        // Only attached post-connect, and a bare `.destroy()` never emits 'error' — always an
+        // involuntary drop (same reasoning as the 8085 handler above).
+        notifyDeviceConnectionSuspect(ip);
+      });
+      socket.on('close', (hadError: boolean) => {
+        // Identity guard: a replacement socket may already own this id (see the 8085 pool's note on
+        // a lost race orphaning a live socket) — only the current entry gets to tear down.
+        if (telnetSystemConnections.get(connectionId) !== entry) return;
+        mainLog('[Telnet System] Socket closed:', connectionId, 'hadError:', hadError);
+        flushSystemTelnetEntry(entry, connectionId);
+        telnetSystemConnections.delete(connectionId);
+        emitSystemTelnetDisconnected(ip, port, connectionId, hadError);
+      });
+      return { success: true, entry };
+    }
+  });
+}
+
+/** Close `ip:port` — a successful no-op (`held: true`) while the Ports window holds it and the
+ *  caller isn't the window. */
+export function disconnectSystemTelnet(ip: string, port: number, holder?: SystemTelnetHolder): Promise<{ success: true; held?: boolean }> {
+  const connectionId = systemTelnetConnectionId(ip, port);
+  return systemPool.disconnect(connectionId, holder, (conn) => {
+    flushSystemTelnetEntry(conn, connectionId);
+    try { conn.socket.destroy(); } catch { /* ignore */ }
+    // The 'close' handler sees a foreign/missing entry and stays silent, so announce it here.
+    emitSystemTelnetDisconnected(ip, port, connectionId, false);
+  });
+}
+
+export function sendSystemTelnet(ip: string, port: number, command: string): { success: true } | { success: false; error: string } {
+  const conn = telnetSystemConnections.get(systemTelnetConnectionId(ip, port));
+  if (!conn || !conn.socket || conn.socket.destroyed) return { success: false, error: 'Not connected' };
+  // Roku's text consoles take a bare `\n`, not telnet's `\r\n`.
+  return writeRokuTelnetLine(conn.socket, command, { lineEnding: '\n' });
+}
+
+export function systemTelnetStatus(ip: string, port: number): { connected: boolean; connectionId: string; heldByWindow: boolean } {
+  const connectionId = systemTelnetConnectionId(ip, port);
+  const conn = telnetSystemConnections.get(connectionId);
+  const connected = !!(conn && conn.socket && !conn.socket.destroyed);
+  return { connected, connectionId, heldByWindow: !!conn?.heldByWindow };
+}
+
 /**
  * Setup telnet IPC handlers
  */
@@ -395,103 +531,32 @@ function setupTelnetHandlers(_mainWindow: BrowserWindow | undefined, safeSendToR
     return { connected, connectionId };
   });
 
-  ipcMain.handle(IPC.TelnetSystemConnect, async (_event: IpcMainInvokeEvent, { ip }: IpPayload) => {
+  // Telnet system consoles (8080 SceneGraph / 8087 Screensaver). These are the one-shot consumer
+  // entry points (Query tab, Action Scripts, Toggle FPS): connect reuses a socket the Ports window
+  // already holds, and disconnect is a no-op while it does. The window itself never comes through
+  // IPC here — `port-terminal-window.ts` calls the exported functions with `holder: 'window'`.
+  ipcMain.handle(IPC.TelnetSystemConnect, async (_event: IpcMainInvokeEvent, { ip, port }: SystemTelnetPayload) => {
     if (!isValidIp(ip)) return { success: false, error: 'Invalid IP address' };
-    const connectionId = `${ip}:8080`;
-
-    if (telnetSystemConnections.has(connectionId)) {
-      const existing = telnetSystemConnections.get(connectionId)!;
-      flushCoalescedMapNow(telnetSystemConnections, connectionId, (_live, slice) => {
-        safeSendToRenderer(IPC.TelnetSystemData, { ip, connectionId, data: slice });
-      });
-      if (existing.socket) {
-        existing.socket.destroy();
-      }
-      telnetSystemConnections.delete(connectionId);
-    }
-
-    const conn = await connectRokuSystemTelnet(ip, {
-      connectTimeoutMs: getPersistedTimingValue('TELNET_TIMEOUT')
-    });
-    if (!conn.success) {
-      return { success: false, error: conn.error };
-    }
-
-    const socket = conn.socket;
-    mainLog('[Telnet System] Connected to', ip, ':8080');
-
-    telnetSystemConnections.set(connectionId, {
-      socket,
-      ipcCoalesce: createTelnetIpcCoalesceState()
-    });
-
-    socket.on('data', (data: Buffer) => {
-      const text = data.toString('utf8');
-      const sysConn = telnetSystemConnections.get(connectionId);
-      if (!sysConn) return;
-      appendCoalescedText(sysConn, text);
-      scheduleCoalescedMapFlush(telnetSystemConnections, connectionId, (_live, slice) => {
-        safeSendToRenderer(IPC.TelnetSystemData, {
-          ip,
-          connectionId,
-          data: slice
-        });
-      });
-    });
-
-    socket.on('error', (error: Error) => {
-      mainLog('[Telnet System] Socket error:', error.message);
-      // Same reasoning as the 8085 debug console handler above: only attached post-connect, and
-      // a bare `.destroy()` never emits 'error' — so this is always an involuntary drop.
-      notifyDeviceConnectionSuspect(ip);
-    });
-
-    socket.on('close', (hadError: boolean) => {
-      mainLog('[Telnet System] Socket closed, hadError:', hadError);
-      flushCoalescedMapNow(telnetSystemConnections, connectionId, (_live, slice) => {
-        safeSendToRenderer(IPC.TelnetSystemData, {
-          ip,
-          connectionId,
-          data: slice
-        });
-      });
-      telnetSystemConnections.delete(connectionId);
-    });
-
-    return { success: true, connectionId };
+    const p = normalizeSystemTelnetPort(port);
+    if (p === null) return { success: false, error: 'Unsupported port' };
+    return connectSystemTelnet(ip, p);
   });
 
-  ipcMain.handle(IPC.TelnetSystemDisconnect, async (_event: IpcMainInvokeEvent, { ip }: IpPayload) => {
-    const connectionId = `${ip}:8080`;
-    const connection = telnetSystemConnections.get(connectionId);
-
-    if (connection && connection.socket) {
-      flushCoalescedMapNow(telnetSystemConnections, connectionId, (_live, slice) => {
-        safeSendToRenderer(IPC.TelnetSystemData, { ip, connectionId, data: slice });
-      });
-      connection.socket.destroy();
-      telnetSystemConnections.delete(connectionId);
-    }
-
-    return { success: true };
+  ipcMain.handle(IPC.TelnetSystemDisconnect, async (_event: IpcMainInvokeEvent, { ip, port }: SystemTelnetPayload) => {
+    const p = normalizeSystemTelnetPort(port);
+    if (p === null) return { success: false, error: 'Unsupported port' };
+    return disconnectSystemTelnet(ip, p);
   });
 
-  ipcMain.handle(IPC.TelnetSystemSend, async (_event: IpcMainInvokeEvent, { ip, command }: IpCommandPayload) => {
-    const connectionId = `${ip}:8080`;
-    const connection = telnetSystemConnections.get(connectionId);
-
-    if (!connection || !connection.socket || connection.socket.destroyed) {
-      return { success: false, error: 'Not connected' };
-    }
-
-    return writeRokuTelnetLine(connection.socket, command, { lineEnding: '\n' });
+  ipcMain.handle(IPC.TelnetSystemSend, async (_event: IpcMainInvokeEvent, { ip, port, command }: SystemTelnetPayload & { command: string }) => {
+    const p = normalizeSystemTelnetPort(port);
+    if (p === null) return { success: false, error: 'Unsupported port' };
+    return sendSystemTelnet(ip, p, command);
   });
 
-  ipcMain.handle(IPC.TelnetSystemStatus, async (_event: IpcMainInvokeEvent, { ip }: IpPayload) => {
-    const connectionId = `${ip}:8080`;
-    const connection = telnetSystemConnections.get(connectionId);
-    const connected = connection && connection.socket && !connection.socket.destroyed;
-    return { connected, connectionId };
+  ipcMain.handle(IPC.TelnetSystemStatus, async (_event: IpcMainInvokeEvent, { ip, port }: SystemTelnetPayload) => {
+    const p = normalizeSystemTelnetPort(port) ?? SYSTEM_TELNET_DEFAULT_PORT;
+    return systemTelnetStatus(ip, p);
   });
 }
 
