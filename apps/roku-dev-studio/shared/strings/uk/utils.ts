@@ -17,7 +17,6 @@ export const utils = {
   // Telnet session errors (surfaced to the user by callers)
   failedToConnectTelnet: (detail: string): string =>
     `Не вдалося підключитися до Telnet (порт 8080): ${detail}`,
-  remoteTelnetPollUnavailable: 'Віддалене опитування Telnet недоступне',
   telnetDataListenerUnavailable: 'Системний слухач даних Telnet недоступний',
   failedToSendCommand: (detail: string): string => `Не вдалося надіслати команду: ${detail}`,
   stopped: 'Зупинено',

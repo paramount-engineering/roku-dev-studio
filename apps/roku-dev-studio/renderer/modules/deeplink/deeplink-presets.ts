@@ -2,6 +2,7 @@
  * Global saved Deep Link presets (App ID, Content ID, Media Type) persisted in app settings.
  */
 import { rendererError } from '../utils/logger.js';
+import { setErrorLine } from '../utils/dom.js';
 import { attachBackdropClickToClose } from '../utils/modal-backdrop-click.js';
 import {
   closeModalWithOriginMotion,
@@ -271,14 +272,7 @@ export async function saveDeeplinkPreset(
 
 function setSaveModalError(message: string): void {
   const el = document.getElementById('deeplinkSavePresetError');
-  if (!el) return;
-  if (message) {
-    el.textContent = message;
-    el.hidden = false;
-  } else {
-    el.textContent = '';
-    el.hidden = true;
-  }
+  setErrorLine(el?.closest('.deeplink-save-preset-modal-box'), el, message);
 }
 
 function closeSavePresetModal(modal: HTMLElement): void {

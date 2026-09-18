@@ -1,13 +1,18 @@
   <!-- Add Remote Location Modal -->
   <div class="add-location-modal" id="addLocationModal">
-    <div class="add-location-form">
-      <div class="add-location-header">
-        <h3 data-i18n="modals.addLocation.title">🌐 Add Remote Location</h3>
+    <div class="add-location-form" role="dialog" aria-modal="true" aria-labelledby="addLocationTitle">
+      <!-- Same header / body / footer bands as every other modal (.modal-header / .modal-body / .modal-footer). -->
+      <div class="modal-header">
+        <span class="modal-title" id="addLocationTitle">
+          <span class="icon icon-md icon-accent"><svg><use href="#icon-globe"/></svg></span>
+          <span data-i18n="modals.addLocation.title">Add Remote Location</span>
+        </span>
         <button type="button" class="modal-close" id="addLocationClose" title="Close" aria-label="Close" data-i18n-title="common.close" data-i18n-aria-label="common.close">
           <span class="icon icon-sm"><svg><use href="#icon-x"/></svg></span>
         </button>
       </div>
 
+      <div class="modal-body add-location-body">
       <div class="add-location-tabs" role="tablist">
         <button type="button" class="rds-tab add-location-tab active" id="addLocationTabRelay" data-tab="relay" role="tab" aria-selected="true" data-i18n="modals.addLocation.tabRelay"><span class="icon icon-xs"><svg><use href="#icon-server"/></svg></span> RDS Relay</button>
         <button type="button" class="rds-tab add-location-tab" id="addLocationTabRce" data-tab="rce" role="tab" aria-selected="false" data-i18n="modals.addLocation.tabRce"><span class="icon icon-xs"><svg><use href="#icon-cloud"/></svg></span> RCE</button>
@@ -50,7 +55,9 @@
         </div>
       </div>
 
-      <div class="form-actions add-location-footer">
+      </div>
+
+      <div class="modal-footer add-location-footer">
         <div class="add-location-forget-row">
           <input type="checkbox" id="locationForgetOnQuit">
           <label for="locationForgetOnQuit" data-i18n="modals.addLocation.forgetOnQuit">Forget it on App Quit/Close</label>

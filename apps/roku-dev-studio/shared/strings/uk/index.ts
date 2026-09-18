@@ -30,6 +30,8 @@ import { debuggerStrings } from '../debugger.js';
 import { tryDemoApp } from '../try-demo-app.js';
 // Placeholder: reuse the English Crash Report strings until a translation exists.
 import { crashReport } from '../crashReport.js';
+// Placeholder: reuse the English Ports window strings until a translation exists.
+import { portTerminal } from '../port-terminal.js';
 
 export const uk = {
   common,
@@ -57,4 +59,5 @@ export const uk = {
   staticAnalysis,
   tryDemoApp,
   crashReport,
+  portTerminal,
 };

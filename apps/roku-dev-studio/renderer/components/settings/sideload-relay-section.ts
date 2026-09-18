@@ -10,6 +10,7 @@
  */
 
 import { attachBackdropClickToClose } from '../../modules/utils/modal-backdrop-click.js';
+import { animateHeight } from '../../modules/utils/dom.js';
 import { prepareModalOpenOrigin, playModalOpenMotion, closeModalWithOriginMotion } from '../../modules/utils/modal-origin-motion.js';
 import { deviceKey } from '@shared/platform/device-identity.js';
 import { S } from '@shared/strings/index.js';
@@ -339,6 +340,10 @@ function buildModalRows(): void {
 function renderModalTable(): void {
   const table = document.getElementById('srDeviceTable');
   if (!table) return;
+  animateHeight(table.closest('.sr-modal'), () => renderModalTableInto(table));
+}
+
+function renderModalTableInto(table: HTMLElement): void {
   table.textContent = '';
   table.append(
     h('div', { class: 'sr-dtable-head' }, [

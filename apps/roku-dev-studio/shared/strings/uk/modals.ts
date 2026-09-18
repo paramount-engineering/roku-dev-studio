@@ -173,7 +173,7 @@ export const modals = {
   // add, clear, close).
 
   addLocation: {
-    title: '🌐 Додати віддалене розташування',
+    title: 'Додати віддалене розташування',
     intro:
       'Підключайтеся до пристроїв Roku у віддаленому розташуванні через Roku Relay Server.',
     tabRelay: 'Реле RDS',

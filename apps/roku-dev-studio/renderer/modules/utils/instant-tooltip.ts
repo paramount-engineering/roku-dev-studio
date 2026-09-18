@@ -25,18 +25,29 @@ function getTip(): HTMLDivElement {
   return el;
 }
 
-function positionAndShowTip(target: HTMLElement, tip: HTMLDivElement): void {
+/** Targets taller than this (a wrapped multi-line console row, not a button/pill) anchor to the
+ *  pointer: their top edge can be hundreds of px away — or scrolled out of view — so a tip placed
+ *  above it lands nowhere near where the user is hovering. */
+const TALL_TARGET_PX = 40;
+
+type Pointer = { x: number; y: number };
+
+function positionAndShowTip(target: HTMLElement, tip: HTMLDivElement, pointer?: Pointer): void {
   const r = target.getBoundingClientRect();
   const tr = tip.getBoundingClientRect();
-  let top = r.top - tr.height - 6;
-  if (top < 4) top = r.bottom + 6; // no room above → flip below
-  const left = Math.max(4, Math.min(r.left + r.width / 2 - tr.width / 2, window.innerWidth - tr.width - 4));
+  const anchor =
+    pointer && r.height > TALL_TARGET_PX
+      ? { top: pointer.y - 12, bottom: pointer.y + 16, cx: pointer.x }
+      : { top: r.top, bottom: r.bottom, cx: r.left + r.width / 2 };
+  let top = anchor.top - tr.height - 6;
+  if (top < 4) top = anchor.bottom + 6; // no room above → flip below
+  const left = Math.max(4, Math.min(anchor.cx - tr.width / 2, window.innerWidth - tr.width - 4));
   tip.style.top = `${top}px`;
   tip.style.left = `${left}px`;
   tip.classList.add('rds-tip--visible');
 }
 
-function showTip(target: HTMLElement): void {
+function showTip(target: HTMLElement, pointer?: Pointer): void {
   const tip = getTip();
   // `data-tip-html` renders as markup (innerHTML) — ONLY ever author this from a hardcoded,
   // trusted template string (e.g. a `*Html`-suffixed catalog entry), never from user/device/
@@ -45,7 +56,7 @@ function showTip(target: HTMLElement): void {
   const html = target.getAttribute('data-tip-html');
   if (html) {
     tip.innerHTML = html;
-    positionAndShowTip(target, tip);
+    positionAndShowTip(target, tip, pointer);
     return;
   }
   // Adopt a native `title` on first hover (and strip it, so the OS tooltip never shows).
@@ -61,7 +72,7 @@ function showTip(target: HTMLElement): void {
     return;
   }
   tip.textContent = text;
-  positionAndShowTip(target, tip);
+  positionAndShowTip(target, tip, pointer);
 }
 
 function hideTip(): void {
@@ -78,7 +89,7 @@ const TIP_SELECTOR = '[title],[data-tip],[data-tip-html]';
 export function attachInstantTooltips(root: HTMLElement): () => void {
   const onOver = (e: MouseEvent): void => {
     const t = (e.target as HTMLElement)?.closest?.(TIP_SELECTOR) as HTMLElement | null;
-    if (t && root.contains(t)) showTip(t);
+    if (t && root.contains(t)) showTip(t, { x: e.clientX, y: e.clientY });
     else hideTip();
   };
   const onOut = (e: MouseEvent): void => {

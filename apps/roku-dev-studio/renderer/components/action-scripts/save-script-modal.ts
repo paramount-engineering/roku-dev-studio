@@ -11,7 +11,7 @@
  * Programmatic + transient (built on open, removed on close), so it carries no `data-i18n` — all
  * text is read from `S.*` at build time.
  */
-import { escapeHtml, setSafeHTML } from '../../modules/utils/index.js';
+import { escapeHtml, setErrorLine, setSafeHTML } from '../../modules/utils/index.js';
 import { attachBackdropClickToClose } from '../../modules/utils/modal-backdrop-click.js';
 import { openModalOverlayActiveFromOpener, closeModalWithOriginMotion } from '../../modules/utils/modal-origin-motion.js';
 import { S } from '@shared/strings/index.js';
@@ -66,6 +66,7 @@ export function promptSaveScriptName(opts: {
 
     const input = overlay.querySelector('.action-scripts-save-modal-input') as HTMLInputElement;
     const warning = overlay.querySelector('.action-scripts-save-modal-warning') as HTMLElement;
+    const dialog = overlay.querySelector('.action-scripts-save-modal');
     const confirmBtn = overlay.querySelector('.action-scripts-save-modal-confirm') as HTMLButtonElement;
     const listEl = overlay.querySelector('.action-scripts-save-modal-list') as HTMLElement;
 
@@ -85,12 +86,7 @@ export function promptSaveScriptName(opts: {
       const name = input.value.trim();
       const key = name.toLowerCase();
       const dup = nameExists(name);
-      if (dup) {
-        warning.textContent = S.actionScripts.saveModalOverwriteWarning(name);
-        warning.hidden = false;
-      } else {
-        warning.hidden = true;
-      }
+      setErrorLine(dialog, warning, dup ? S.actionScripts.saveModalOverwriteWarning(name) : '');
       confirmBtn.textContent = dup ? S.actionScripts.saveModalOverwriteConfirm : S.common.save;
       listEl.querySelectorAll<HTMLElement>('.action-scripts-save-modal-list-item').forEach((item) => {
         item.classList.toggle('is-current', !!key && (item.dataset.name ?? '').trim().toLowerCase() === key);
@@ -100,8 +96,7 @@ export function promptSaveScriptName(opts: {
     const submit = (): void => {
       const name = input.value.trim();
       if (!name) {
-        warning.textContent = S.actionScripts.saveModalNameRequired;
-        warning.hidden = false;
+        setErrorLine(dialog, warning, S.actionScripts.saveModalNameRequired);
         input.focus();
         return;
       }

@@ -16,6 +16,7 @@ import {
 import { initSideloadRelaySection } from './sideload-relay-section.js';
 import { openMcpToolsModal } from './mcp-tools-modal.js';
 import { attachBackdropClickToClose } from '../../modules/utils/modal-backdrop-click.js';
+import { animateHeight } from '../../modules/utils/dom.js';
 import { prepareModalOpenOrigin, playModalOpenMotion, closeModalWithOriginMotion } from '../../modules/utils/modal-origin-motion.js';
 import { attachInstantTooltips } from '../../modules/utils/instant-tooltip.js';
 import { S, applyI18n, availableLocales, getLocale, matchLocale, localeLabel, setLocale, SYSTEM_LOCALE } from '@shared/strings/index.js';
@@ -1272,8 +1273,10 @@ function refreshCaInfo() {
       if (el('niCaFingerprint')) el('niCaFingerprint').textContent = ca.fingerprintSha256 || '';
       if (el('niCaValidity')) el('niCaValidity').textContent = formatCaValidity(ca.createdAt, ca.expiresAt);
       if (el('niCaProxy')) el('niCaProxy').textContent = ca.proxyHostPort || '';
-      if (el('niCaInfo')) el('niCaInfo').hidden = false;
-      if (el('niCaEmpty')) el('niCaEmpty').hidden = true;
+      animateHeight(el('niCaInfo')?.closest('.ni-modal'), function () {
+        if (el('niCaInfo')) el('niCaInfo').hidden = false;
+        if (el('niCaEmpty')) el('niCaEmpty').hidden = true;
+      });
     } else {
       if (el('niCaEmpty')) { el('niCaEmpty').textContent = S.settings.caUnavailable; el('niCaEmpty').hidden = false; }
       if (el('niCaInfo')) el('niCaInfo').hidden = true;

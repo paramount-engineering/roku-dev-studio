@@ -173,7 +173,7 @@ export const modals = {
   // add, clear, close).
 
   addLocation: {
-    title: '🌐 Adaugă locație la distanță',
+    title: 'Adaugă locație la distanță',
     intro:
       'Conectați-vă la dispozitive Roku dintr-o locație la distanță prin Roku Relay Server.',
     tabRelay: 'Releu RDS',

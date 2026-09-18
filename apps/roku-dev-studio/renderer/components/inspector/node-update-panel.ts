@@ -7,6 +7,7 @@ import {
   closeModalWithOriginMotion
 } from '../../modules/utils/modal-origin-motion.js';
 import { attachBackdropClickToClose } from '../../modules/utils/modal-backdrop-click.js';
+import { animateHeight, setErrorLine } from '../../modules/utils/dom.js';
 import { S } from '@shared/strings/index.js';
 import type { DevicePanelRoot, DisplayResponseFn, RaleSendCommand } from './inspector-types.js';
 import type { NodeUpdateContext } from './inspector-node-update-helpers.js';
@@ -202,8 +203,7 @@ export function setupNodeUpdatePanel(panel: DevicePanelRoot, options: NodeUpdate
 
   function clearModalFeedback() {
     if (!(feedbackEl instanceof HTMLElement)) return;
-    feedbackEl.textContent = '';
-    feedbackEl.hidden = true;
+    setErrorLine(modalBox, feedbackEl, '');
     feedbackEl.classList.remove(
       'rale-node-update-feedback--visible',
       'rale-node-update-feedback--loading',
@@ -218,8 +218,7 @@ export function setupNodeUpdatePanel(panel: DevicePanelRoot, options: NodeUpdate
    */
   function showModalFeedback(message: string, variant: 'loading' | 'success' | 'error') {
     if (!(feedbackEl instanceof HTMLElement)) return;
-    feedbackEl.hidden = false;
-    feedbackEl.textContent = message;
+    setErrorLine(modalBox, feedbackEl, message);
     feedbackEl.classList.add('rale-node-update-feedback--visible');
     feedbackEl.classList.remove(
       'rale-node-update-feedback--loading',
@@ -297,6 +296,8 @@ export function setupNodeUpdatePanel(panel: DevicePanelRoot, options: NodeUpdate
     // Add: field name + type + value only (no existing-field dropdown).
     // Remove: existing field dropdown only.
     // Update: dropdown + locked type + value.
+    // The three layouts differ by up to three rows — tween the dialog between them.
+    animateHeight(modalBox, () => {
     if (a === 'add') {
       rowFldEl.hidden = true;
       rowAddEl.hidden = false;
@@ -319,6 +320,7 @@ export function setupNodeUpdatePanel(panel: DevicePanelRoot, options: NodeUpdate
       if (valueLabel) valueLabel.textContent = S.inspector.valueLabel;
       valArea.placeholder = S.inspector.updateValuePlaceholder;
     }
+    });
 
     if (a === 'remove') {
       apply.textContent = S.inspector.removeFieldBtn;

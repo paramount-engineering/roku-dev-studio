@@ -28,6 +28,7 @@ import type {
 } from '@shared/network-inspector/content-search';
 import { isLikelyRedos, looksLikeRegex, MAX_REGEX_PATTERN_LENGTH } from '@shared/platform/text-match.js';
 import { openModalOverlayActiveFromOpener, closeModalWithOriginMotion } from '../../modules/utils/modal-origin-motion.js';
+import { animateHeight } from '../../modules/utils/dom.js';
 import { S } from '@shared/strings/index.js';
 
 /** The four user-facing scope chips, mapped to the engine's granular scopes. */
@@ -690,7 +691,9 @@ export function createNetworkFindModal(cb: FindModalCallbacks): FindModalHandle 
     const listEl = q('[data-find-terms]');
     if (listEl) {
       const row = buildTermRow(term);
-      listEl.appendChild(row);
+      // Tween the dialog's height around the new row instead of letting it jump (shared modal
+      // convention — see animateHeight; the RCE info and Add Location modals do the same).
+      animateHeight(q('.ni-find-modal'), () => listEl.appendChild(row));
       row.querySelector<HTMLInputElement>('[data-term-input]')?.focus();
     }
     syncAddButton();
@@ -717,7 +720,7 @@ export function createNetworkFindModal(cb: FindModalCallbacks): FindModalHandle 
     const idx = terms.indexOf(term);
     if (idx < 0) return;
     terms.splice(idx, 1);
-    q(`[data-find-terms] [data-term-id="${term.id}"]`)?.remove();
+    animateHeight(q('.ni-find-modal'), () => q(`[data-find-terms] [data-term-id="${term.id}"]`)?.remove());
     closePopover();
     syncAddButton();
     void runSearch(false);
@@ -837,8 +840,10 @@ export function createNetworkFindModal(cb: FindModalCallbacks): FindModalHandle 
       totalHits = 0;
       const listEl = q('[data-find-terms]');
       if (listEl) {
-        listEl.innerHTML = '';
-        for (const term of terms) listEl.appendChild(buildTermRow(term));
+        animateHeight(q('.ni-find-modal'), () => {
+          listEl.innerHTML = '';
+          for (const term of terms) listEl.appendChild(buildTermRow(term));
+        });
       }
       closePopover();
       syncAddButton();

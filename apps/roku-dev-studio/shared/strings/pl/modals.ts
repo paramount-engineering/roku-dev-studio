@@ -173,7 +173,7 @@ export const modals = {
   // add, clear, close).
 
   addLocation: {
-    title: '🌐 Dodaj lokalizację zdalną',
+    title: 'Dodaj lokalizację zdalną',
     intro:
       'Łącz się z urządzeniami Roku w zdalnej lokalizacji za pośrednictwem Roku Relay Server.',
     tabRelay: 'Przekaźnik RDS',

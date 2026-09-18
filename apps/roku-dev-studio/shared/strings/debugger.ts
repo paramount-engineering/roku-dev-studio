@@ -96,6 +96,9 @@ export const debuggerStrings = {
 
   // Restart / relaunch
   restart: 'Restart',
+  /** Shown in place of the exec cluster while NOT attached — same re-sideload as Restart. */
+  relaunch: 'Relaunch',
+  relaunchTitle: 'Re-sideload the last debug build with the debugger enabled — a fresh run waits on 8081 and attaches',
   restartTitle: 'Re-sideload with debugging and reattach',
   restarting: 'Restarting…',
   restartNoPassword: 'Enter the developer password in the Dev App tab first, then Restart.',

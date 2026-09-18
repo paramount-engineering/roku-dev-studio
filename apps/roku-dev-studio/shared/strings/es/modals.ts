@@ -173,7 +173,7 @@ export const modals = {
   // add, clear, close).
 
   addLocation: {
-    title: '🌐 Agregar ubicación remota',
+    title: 'Agregar ubicación remota',
     intro:
       'Conéctese a dispositivos Roku en una ubicación remota a través del Roku Relay Server.',
     tabRelay: 'Relay de RDS',

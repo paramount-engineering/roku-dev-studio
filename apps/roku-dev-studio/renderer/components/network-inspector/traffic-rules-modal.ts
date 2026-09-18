@@ -10,7 +10,7 @@ import type {
   RewriteOp,
   TrafficThrottle
 } from '@shared/network-inspector/types.js';
-import { escapeHtml } from '../../modules/utils/dom.js';
+import { animateHeight, escapeHtml } from '../../modules/utils/dom.js';
 import { attachBackdropClickToClose } from '../../modules/utils/modal-backdrop-click.js';
 import { openModalOverlayActiveFromOpener, closeModalWithOriginMotion } from '../../modules/utils/modal-origin-motion.js';
 import { S } from '@shared/strings/index.js';
@@ -170,15 +170,17 @@ function syncRewriteRow(row: Element): void {
   const regexWrap = row.querySelector('[data-rw-regex-wrap]') as HTMLElement | null;
   if (!typeSel) return;
   const cfg = rewriteFieldConfig(typeSel.value);
-  if (matchEl) {
-    matchEl.hidden = !cfg.match;
-    matchEl.placeholder = cfg.match || '';
-  }
-  if (valueEl) {
-    valueEl.hidden = !cfg.value;
-    valueEl.placeholder = cfg.value || '';
-  }
-  if (regexWrap) regexWrap.hidden = !cfg.regex;
+  animateHeight(row.closest('.ni-rules-modal'), () => {
+    if (matchEl) {
+      matchEl.hidden = !cfg.match;
+      matchEl.placeholder = cfg.match || '';
+    }
+    if (valueEl) {
+      valueEl.hidden = !cfg.value;
+      valueEl.placeholder = cfg.value || '';
+    }
+    if (regexWrap) regexWrap.hidden = !cfg.regex;
+  });
 }
 
 /** Read the rewrite ops from a rule row's editor, dropping incomplete rows. */
@@ -557,6 +559,9 @@ export async function openTrafficRulesModal(opts: {
   overlay.querySelector('.ni-rules-close')?.addEventListener('click', close);
 
   const hostList = overlay.querySelector('[data-host-list]') as HTMLElement | null;
+  /** The dialog box — every in-modal change that adds/removes/collapses content tweens its height
+   *  through the shared helper instead of snapping (same convention as the other modals). */
+  const dialog = overlay.querySelector('.ni-rules-modal');
   const addInput = overlay.querySelector('[data-add-host]') as HTMLInputElement | null;
   const emptyHint = overlay.querySelector('[data-host-empty]') as HTMLElement | null;
 
@@ -604,9 +609,11 @@ export async function openTrafficRulesModal(opts: {
     const hasFile = !!filePath;
     if (fileInput) fileInput.title = filePath;
     const clear = row.querySelector('[data-mock-file-clear]') as HTMLElement | null;
-    if (clear) clear.hidden = !hasFile;
     const serving = row.querySelector('[data-mock-file-serving]') as HTMLElement | null;
-    if (serving) serving.hidden = !hasFile;
+    animateHeight(dialog, () => {
+      if (clear) clear.hidden = !hasFile;
+      if (serving) serving.hidden = !hasFile;
+    });
     const body = row.querySelector('[data-mock-body]') as HTMLTextAreaElement | null;
     if (body) body.disabled = hasFile;
   };
@@ -626,11 +633,13 @@ export async function openTrafficRulesModal(opts: {
       window.setTimeout(() => existing.classList.remove('ni-host-rule-flash'), 600);
       return;
     }
-    hostList.insertAdjacentHTML('beforeend', hostRowHtml({ host, pathContains: path || undefined }));
+    animateHeight(dialog, () => {
+      hostList.insertAdjacentHTML('beforeend', hostRowHtml({ host, pathContains: path || undefined }));
+      syncEmptyHint();
+      const newRow = hostList.lastElementChild;
+      if (newRow) { syncRowThrottle(newRow); syncMockFileState(newRow); }
+    });
     if (addInput) addInput.value = '';
-    syncEmptyHint();
-    const newRow = hostList.lastElementChild;
-    if (newRow) { syncRowThrottle(newRow); syncMockFileState(newRow); }
     syncHostThrottleBounds();
   };
 
@@ -645,7 +654,8 @@ export async function openTrafficRulesModal(opts: {
   const toggleCollapse = (header: Element): void => {
     const rule = header.closest('.ni-host-rule');
     if (!rule) return;
-    const collapsed = rule.classList.toggle('is-collapsed');
+    let collapsed = false;
+    animateHeight(dialog, () => { collapsed = rule.classList.toggle('is-collapsed'); });
     header.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
   };
 
@@ -661,12 +671,16 @@ export async function openTrafficRulesModal(opts: {
     row.classList.remove('is-collapsed');
     row.querySelector('[data-host-toggle]')?.setAttribute('aria-expanded', 'true');
     const current = (row.dataset.host || '') + (row.dataset.path || '');
-    idEl.innerHTML = `<input type="text" class="ni-host-rule-edit-input" data-host-edit-input value="${escapeHtml(current)}" spellcheck="false" autocomplete="off" aria-label="${S.networkInspector.editInterceptUrlAria}" />`;
+    animateHeight(dialog, () => {
+      idEl.innerHTML = `<input type="text" class="ni-host-rule-edit-input" data-host-edit-input value="${escapeHtml(current)}" spellcheck="false" autocomplete="off" aria-label="${S.networkInspector.editInterceptUrlAria}" />`;
+    });
     const input = idEl.querySelector('[data-host-edit-input]') as HTMLInputElement;
     input.focus();
     input.select();
     let done = false;
-    const restore = (): void => { idEl.innerHTML = hostRuleIdHtml(row.dataset.host || '', row.dataset.path || ''); };
+    const restore = (): void => {
+      animateHeight(dialog, () => { idEl.innerHTML = hostRuleIdHtml(row.dataset.host || '', row.dataset.path || ''); });
+    };
     const commit = (): void => {
       if (done) return;
       done = true;
@@ -695,8 +709,10 @@ export async function openTrafficRulesModal(opts: {
     if (target.closest('[data-host-edit-input]')) return; // clicks inside the editor don't toggle
     const rm = target.closest('[data-host-remove]');
     if (rm) {
-      rm.closest('.ni-host-rule')?.remove();
-      syncEmptyHint();
+      animateHeight(dialog, () => {
+        rm.closest('.ni-host-rule')?.remove();
+        syncEmptyHint();
+      });
       return;
     }
     const edit = target.closest('[data-host-edit]');
@@ -738,15 +754,17 @@ export async function openTrafficRulesModal(opts: {
     if (rwAdd) {
       const list = rwAdd.closest('.ni-host-rule-rewrite')?.querySelector('[data-rw-list]');
       if (list) {
-        list.insertAdjacentHTML('beforeend', rewriteOpHtml());
-        const newRow = list.lastElementChild;
-        if (newRow) syncRewriteRow(newRow);
+        animateHeight(dialog, () => {
+          list.insertAdjacentHTML('beforeend', rewriteOpHtml());
+          const newRow = list.lastElementChild;
+          if (newRow) syncRewriteRow(newRow);
+        });
       }
       return;
     }
     const rwRemove = target.closest('[data-rw-remove]');
     if (rwRemove) {
-      rwRemove.closest('.ni-rw-op')?.remove();
+      animateHeight(dialog, () => rwRemove.closest('.ni-rw-op')?.remove());
       return;
     }
     const header = target.closest('[data-host-toggle]');
@@ -761,8 +779,10 @@ export async function openTrafficRulesModal(opts: {
     if (t.matches('[data-rw-target]')) {
       const targetVal = (t as HTMLSelectElement).value === 'response' ? 'response' : 'request';
       const typeSel = row.querySelector('[data-rw-type]') as HTMLSelectElement | null;
-      if (typeSel) typeSel.innerHTML = rwTypeOptions(targetVal, rewriteTypes()[targetVal][0]!.value);
-      syncRewriteRow(row);
+      animateHeight(dialog, () => {
+        if (typeSel) typeSel.innerHTML = rwTypeOptions(targetVal, rewriteTypes()[targetVal][0]!.value);
+        syncRewriteRow(row);
+      });
     } else if (t.matches('[data-rw-type]')) {
       syncRewriteRow(row);
     }
@@ -814,7 +834,7 @@ export async function openTrafficRulesModal(opts: {
     });
     if (hostsThrottleNote) {
       const active = !blockAllCb?.checked && (devKbps > 0 || devLatency > 0);
-      hostsThrottleNote.hidden = !active;
+      animateHeight(dialog, () => { hostsThrottleNote.hidden = !active; });
       if (active) {
         const parts: string[] = [];
         if (devKbps > 0) parts.push(S.networkInspector.throttleCapSpeed(kbpsToLabel(devKbps)));
@@ -836,7 +856,7 @@ export async function openTrafficRulesModal(opts: {
     blockCookiesCb?.closest('.ni-rules-toggle-row')?.classList.toggle('is-disabled', blocked);
     devThrottle?.classList.toggle('is-disabled', blocked);
     hostsSection?.classList.toggle('is-hosts-blocked', blocked);
-    if (hostsBlockedNote) hostsBlockedNote.hidden = !blocked;
+    if (hostsBlockedNote) animateHeight(dialog, () => { hostsBlockedNote.hidden = !blocked; });
     syncHostThrottleBounds();
   };
   blockAllCb?.addEventListener('change', syncBlockAllState);
@@ -857,7 +877,7 @@ export async function openTrafficRulesModal(opts: {
     if (target.matches('[data-host-mock]')) {
       const on = (target as HTMLInputElement).checked;
       const editor = row.querySelector('[data-host-mock-editor]') as HTMLElement | null;
-      if (editor) editor.hidden = !on;
+      if (editor) animateHeight(dialog, () => { editor.hidden = !on; });
       if (on) {
         (row.querySelector('[data-host-block]') as HTMLInputElement | null)?.removeAttribute('checked');
         const blockCb = row.querySelector('[data-host-block]') as HTMLInputElement | null;
@@ -870,7 +890,7 @@ export async function openTrafficRulesModal(opts: {
         const mockCb = row.querySelector('[data-host-mock]') as HTMLInputElement | null;
         const editor = row.querySelector('[data-host-mock-editor]') as HTMLElement | null;
         if (mockCb) mockCb.checked = false;
-        if (editor) editor.hidden = true;
+        if (editor && !editor.hidden) animateHeight(dialog, () => { editor.hidden = true; });
         // Block and Reset are also mutually exclusive.
         const other = target.matches('[data-host-block]')
           ? (row.querySelector('[data-host-reset]') as HTMLInputElement | null)
