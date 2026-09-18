@@ -285,12 +285,34 @@ var init_channels = __esm({
       RemoteTelnetSystemDisconnect: "remote:telnet-system-disconnect",
       RemoteTelnetSystemSend: "remote:telnet-system-send",
       RemoteTelnetSystemStatus: "remote:telnet-system-status",
-      RemoteTelnetSystemPollData: "remote:telnet-system-poll-data",
+      // Telnet system consoles (port 8080 SceneGraph, 8087 Screensaver — `port` in the payload,
+      // default 8080). Local and remote share one main-side pool each; the Ports window connects with
+      // `holder: 'window'` and then owns the socket — one-shot consumers (Query tab, Action Scripts,
+      // Toggle FPS) reuse it and their disconnect is a no-op until the window releases it.
       TelnetSystemConnect: "telnet-system:connect",
       TelnetSystemDisconnect: "telnet-system:disconnect",
       TelnetSystemSend: "telnet-system:send",
       TelnetSystemStatus: "telnet-system:status",
+      /** Main → windows: `{ ip, port, connectionId, data, isRemote?, serverUrl? }` — pushed for local AND
+       *  remote (main polls the relay's buffer itself; the renderer never polls). */
       TelnetSystemData: "telnet-system:data",
+      /** Main → windows: the socket for `{ ip, port, connectionId }` closed (device drop, relay idle
+       *  sweep, explicit disconnect). */
+      TelnetSystemDisconnected: "telnet-system:disconnected",
+      // Ports window (main/port-terminal-window.ts) — one per device, opened from the Console header.
+      PortTerminalOpen: "port-terminal:open",
+      /** Window → main: `{ device, ports }` for this window's device (available ports honor the relay's
+       *  capabilities for remote devices). */
+      PortTerminalInfo: "port-terminal:info",
+      /** Window → main: open / release / write a text console (`{ port }`, `{ port, command }`) with
+       *  `holder: 'window'` semantics — routed to the local or relay pool by the window's device. */
+      PortTerminalConnect: "port-terminal:connect",
+      PortTerminalDisconnect: "port-terminal:disconnect",
+      PortTerminalSend: "port-terminal:send",
+      /** Window → main: hold / release the remote debugger SSE stream so a remote 8081 tab receives wire
+       *  frames even when no device panel holds the stream. */
+      PortTerminalDebuggerStreamHold: "port-terminal:debugger-stream-hold",
+      PortTerminalDebuggerStreamRelease: "port-terminal:debugger-stream-release",
       // BrightScript socket-based debugger (debug protocol, control port 8081).
       // Invoke (renderer → main):
       DebuggerAttach: "debugger:attach",
@@ -321,6 +343,9 @@ var init_channels = __esm({
       DebuggerBreakpoints: "debugger:breakpoints",
       /** Main → windows: a (debug-enabled) device was just (re)sideloaded — reattach. */
       DebuggerReattach: "debugger:reattach",
+      /** Main → Ports windows only: one decoded control-port (8081) frame of the live debugger session,
+       *  `{ ip, dir, name, requestId, bytes, at, errorCode?, detail?, isRemote?, serverUrl? }`. */
+      DebuggerWire: "debugger:wire",
       // Remote debugger — the session runs on the remote RDS server (real network access to the
       // device); these proxy each request over HTTP. Push events reuse the local Debugger* channels
       // above (tagged { isRemote: true, serverUrl } by the relay) rather than duplicating them.
