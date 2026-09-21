@@ -105,9 +105,9 @@
 <section class="doc-section" id="platform-notes">
   <h2>Per-platform notes</h2>
   <h3>macOS — code signing &amp; notarization</h3>
-  <p>By default, <code>electron-builder</code> produces a signed-but-not-notarized build if a Developer ID Application certificate is present in your login keychain, and an ad-hoc-signed build otherwise. Without a Developer ID, end users need to clear quarantine before launching:</p>
+  <p>Release builds are signed with a Developer ID Application certificate and notarized by Apple. <code>electron-builder</code> does both natively (<code>build.mac.notarize: true</code>) when it finds a signing identity plus notarytool credentials, and staples the ticket into the <code>.app</code>. Without them it emits an ad-hoc-signed build and end users need to clear quarantine before launching:</p>
   <pre><code>xattr -cr "/Applications/Roku Dev Studio.app"</code></pre>
-  <p>Full one-time signing/notarization setup is in the repo's <a href="https://github.com/paramount-engineering/roku-dev-studio/blob/main/.discussion-docs/macos-code-signing-and-notarization.md" target="_blank" rel="noopener noreferrer">code-signing notes</a>.</p>
+  <p>Certificate import, notarytool credentials and the GitHub Actions secrets are documented in the repo's <a href="https://github.com/paramount-engineering/roku-dev-studio/blob/main/INSTALLATION.md#macos--code-signing--notarization" target="_blank" rel="noopener noreferrer">INSTALLATION.md</a>.</p>
 
   <h3>Windows</h3>
   <p>No code signing is configured by default — Windows shows a SmartScreen warning until you add an Authenticode certificate. Cross-building from macOS/Linux requires Wine; the reliable option is building on Windows (or in a Windows VM / GitHub Actions runner).</p>

@@ -173,11 +173,7 @@ Each release will include the artifacts listed in the **Downloads** table below.
 1. Download the `-arm64.dmg` file (Apple Silicon)
 2. Open the disk image
 3. Drag the app to your Applications folder
-4. **IMPORTANT - Before first launch:**
-   - Use Terminal: `xattr -cr "/Applications/Roku Dev Studio.app"`
-   - Then open the app.
-
-**Note for macOS:** The app is not code-signed. macOS Gatekeeper will block it. The command above removes quarantine attributes.
+4. Open the app — it is signed with a Developer ID certificate and notarized by Apple, so Gatekeeper opens it without any override.
 
 **Windows**
 1. Download the Setup `.exe` file
@@ -201,28 +197,29 @@ Each release will include the artifacts listed in the **Downloads** table below.
 - Check file permissions
 
 ### macOS app shows "damaged" on user's machine
-- The app is unsigned (no Apple Developer certificate)
-- Users need to right-click → Open on first launch
-- Or run: `xattr -cr /Applications/Roku\ Dev\ Studio.app`
+- Release builds are signed + notarized, so this means the build ran without a Developer ID — a local `npm run build:mac` with no certificate (the release workflow fails fast if its secrets are missing)
+- Verify: `spctl -a -vv -t exec "/Applications/Roku Dev Studio.app"` should print `source=Notarized Developer ID`
+- Workaround for an unsigned build: `xattr -cr "/Applications/Roku Dev Studio.app"`
 
 ### Windows SmartScreen warning
 - The app is unsigned (no code signing certificate)
 - Users click "More info" → "Run anyway"
 
-## Code Signing (Optional, for Production)
+## Code Signing
 
-For a professional release without security warnings:
+### macOS (required — the mac release job fails without these)
+1. Get an Apple Developer account ($99/year) and create a "Developer ID Application" certificate; export it from Keychain Access as `.p12`
+2. Create an [app-specific password](https://appleid.apple.com/account/manage) for your Apple ID
+3. Add repository secrets (Settings → Secrets and variables → Actions):
+   - `CSC_LINK` - the `.p12`, base64 encoded: `base64 -i DeveloperID.p12 | pbcopy`
+   - `CSC_KEY_PASSWORD` - the `.p12` password
+   - `APPLE_ID` - your Apple ID email
+   - `APPLE_APP_SPECIFIC_PASSWORD` - the app-specific password
+   - `APPLE_TEAM_ID` - 10-character Team ID (developer.apple.com → Membership details)
 
-### macOS
-1. Get an Apple Developer account ($99/year)
-2. Create a "Developer ID Application" certificate
-3. Add secrets to GitHub:
-   - `APPLE_CERTIFICATE` - Base64 encoded .p12 certificate
-   - `APPLE_CERTIFICATE_PASSWORD` - Certificate password
-   - `APPLE_ID` - Your Apple ID
-   - `APPLE_ID_PASSWORD` - App-specific password
+electron-builder signs, notarizes via `notarytool` and staples the ticket itself (`build.mac.notarize: true`); there is no hook code. Local setup: `INSTALLATION.md` → macOS.
 
-### Windows
+### Windows (optional)
 1. Purchase a code signing certificate (from DigiCert, Sectigo, etc.)
 2. Add to GitHub secrets:
    - `WIN_CSC_LINK` - Base64 encoded certificate
