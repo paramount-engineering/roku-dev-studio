@@ -24,6 +24,7 @@
     "test": "tsx --test test/*.test.ts"
   },
   "dependencies": {
+    "roku-dev-studio-api": "^1.1.0",
     "roku-dev-studio-platform": "^1.0.0",
     "ws": "^8.21.0"
   },
@@ -37,6 +38,8 @@
     "./types": "./types.ts",
     "./management-client": "./rce-management-client.ts",
     "./ecp": "./rce-ecp.ts",
-    "./socket": "./rce-socket.ts"
+    "./socket": "./rce-socket.ts",
+    "./sideload": "./rce-sideload.ts",
+    "./video-signaling": "./rce-video-signaling-client.ts"
   }
 }
