@@ -76,6 +76,9 @@ npm run remote-server     # listens on port 4951 by default</code></pre>
   <h3>Option B — from npm</h3>
   <pre><code>npm install -g roku-dev-studio-remote-server
 roku-remote-server        # or: roku-remote-server 4951</code></pre>
+  <h3>Option C — self-contained copy for the remote machine</h3>
+  <pre><code>npm run deploy:remote-server   # from the repo root → ~/Desktop/RDS-Remote-Server-Copy</code></pre>
+  <p>Rebuilds the server and its <code>roku-dev-studio-api</code> dependency into one folder with a local tarball, so <code>npm install --omit=dev</code> on the remote box never needs the unpublished workspace packages. Copy the folder over and follow the <code>README.txt</code> inside it.</p>
   <p>Package: <a href="https://www.npmjs.com/package/roku-dev-studio-remote-server" target="_blank" rel="noopener noreferrer">npmjs.com/package/roku-dev-studio-remote-server</a></p>
 </section>
 
@@ -84,6 +87,7 @@ roku-remote-server        # or: roku-remote-server 4951</code></pre>
   <ul>
     <li>Open the chosen port (default <code>4951</code>) on the host running the relay</li>
     <li>For internet exposure, prefer a VPN or tunnel rather than a public-internet port</li>
+    <li>Built-in protection: start the server with <code>RDS_RELAY_TOKEN=&lt;secret&gt;</code> and every route except <code>/health</code> — the telnet WebSocket upgrade included — requires <code>Authorization: Bearer &lt;secret&gt;</code> or <code>?token=&lt;secret&gt;</code>; without it, anyone who can reach the port has full control of every Roku on that network</li>
   </ul>
 </section>
 
@@ -101,8 +105,10 @@ roku-remote-server        # or: roku-remote-server 4951</code></pre>
   <div class="feature-grid">
     <div class="feature-card"><h4><svg class="icon" width="16" height="16"><use href="assets/icons.svg#icon-globe"></use></svg> Internet Bridge</h4><p>All ECP commands work through the server</p></div>
     <div class="feature-card"><h4><svg class="icon" width="16" height="16"><use href="assets/icons.svg#icon-radar"></use></svg> Device Discovery</h4><p>Automatically finds devices on the remote network</p></div>
-    <div class="feature-card"><h4><svg class="icon" width="16" height="16"><use href="assets/icons.svg#icon-terminal"></use></svg> Telnet Relay</h4><p>Console access (ports 8085 &amp; 8080) via WebSocket</p></div>
+    <div class="feature-card"><h4><svg class="icon" width="16" height="16"><use href="assets/icons.svg#icon-terminal"></use></svg> Telnet Relay</h4><p>BrightScript debug console (port 8085) streamed over WebSocket at <code>/telnet/stream/:sessionId</code>, plus the 8080 and 8087 system consoles polled over HTTP via <code>/telnet-system/*</code></p></div>
     <div class="feature-card"><h4><svg class="icon" width="16" height="16"><use href="assets/icons.svg#icon-upload"></use></svg> File Upload</h4><p>Sideload dev apps from your desktop to remote devices</p></div>
+    <div class="feature-card"><h4><svg class="icon" width="16" height="16"><use href="assets/icons.svg#icon-network"></use></svg> Network Inspector</h4><p>Capture and MITM proxy on the remote LAN through the <code>/network/*</code> routes, streamed live over <code>/network/stream</code></p></div>
+    <div class="feature-card"><h4><svg class="icon" width="16" height="16"><use href="assets/icons.svg#icon-debug-run"></use></svg> BrightScript Debugger</h4><p>Attach, step, breakpoints and variables via <code>/device/:ip/debugger/*</code>, with events over <code>/debugger/stream</code></p></div>
   </div>
 </section>
 

@@ -12,6 +12,8 @@ Always run **`npm install` from the repository root** so workspaces link correct
 
 ## Quick Start (Development)
 
+**Prerequisites:** Node.js 24.17 or newer (the version CI pins; the workspace packages declare `engines.node >= 24.17.0`) and npm.
+
 1. **Install dependencies (from repo root):**
    ```bash
    npm install
@@ -34,7 +36,7 @@ Always run **`npm install` from the repository root** so workspaces link correct
 ```bash
 npm run build:mac
 ```
-This creates, under `apps/roku-dev-studio/dist/mac/arm64/`, a `.dmg` installer and a `.zip` (consumed by the in-app updater), both for Apple Silicon. Artifact file names come from `build.artifactName` in `apps/roku-dev-studio/package.json` (with `nsis` / `portable` overrides for the two Windows builds) — the single source of truth; `npm run verify:artifact-names` prints the exact names for every target and fails if two collide.
+This creates, under `apps/roku-dev-studio/dist/mac/arm64/`, a `.dmg` installer and a `.zip` (consumed by the in-app updater), both for Apple Silicon. Artifact file names come from `build.artifactName` in `apps/roku-dev-studio/package.json` (with `nsis` / `portable` overrides for the two Windows builds) — the single source of truth; `npm run verify:artifact-names -w roku-dev-studio` prints the exact names for every target and fails if two collide.
 
 Intel Mac builds are no longer produced by default. To build them locally (deprecated):
 
@@ -118,7 +120,7 @@ npm run build:mac:intel
 Or, from `apps/roku-dev-studio/`:
 
 ```bash
-npx electron-builder --mac dmg:x64 zip:x64
+npx electron-builder --mac --publish never dmg:x64 zip:x64
 ```
 
 ### Windows
@@ -138,7 +140,7 @@ libgtk-3-0  libnotify4  libnss3  libxss1  libxtst6  xdg-utils  libatspi2.0-0  li
 On Debian / Ubuntu users install with:
 
 ```bash
-sudo apt install ./Roku\ Dev\ Studio-*.deb
+sudo apt install ./Roku-Dev-Studio-*.deb
 ```
 
 apt resolves the depends automatically. The AppImage variant is self-contained — chmod +x and run.

@@ -35,6 +35,7 @@ pull in what they use:
 | `./async-patterns` | Shared timing / async-rate primitives — debounce, throttle, exponential backoff — so cancellation and edge-case semantics stay consistent everywhere they're used. |
 | `./path-safe` | Safe path resolution / containment checks for building paths from user or external input. |
 | `./text-match` | Environment-agnostic text-search primitives (regex compilation, ReDoS/length guards) shared by every "find" surface in the app. |
+| `./worker-pool` | Generic `worker_threads` pool — task in, result out, over a fixed set of persistent threads. Node-only; a plain FIFO queue (not work-stealing/priority) — a consumer needing strict per-key ordering should create a dedicated `poolSize: 1` instance per key. |
 
 ## Used by
 
@@ -43,6 +44,7 @@ pull in what they use:
 - `roku-dev-studio-api`
 - `roku-dev-studio-mcp`
 - `roku-dev-studio-network-inspector`
+- `roku-dev-studio-rce`
 - `roku-dev-studio-remote-server`
 
 ## License

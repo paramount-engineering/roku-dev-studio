@@ -92,11 +92,11 @@
 
   <h3>Windows</h3>
   <pre><code>npm run build:win</code></pre>
-  <p>Creates, under <code>windows/x64/</code>, the NSIS installer (<code>…-Setup-…-x64.exe</code>) and a portable executable (<code>…-Portable-…-x64.exe</code>). File names for every platform come from <code>build.artifactName</code> in <code>apps/roku-dev-studio/package.json</code>; <code>npm run verify:artifact-names</code> prints them.</p>
+  <p>Creates, under <code>windows/x64/</code>, the NSIS installer (<code>…-Setup-…-x64.exe</code>) and a portable executable (<code>…-Portable-…-x64.exe</code>). File names for every platform come from <code>build.artifactName</code> in <code>apps/roku-dev-studio/package.json</code>; <code>npm run verify:artifact-names -w roku-dev-studio</code> prints them.</p>
 
   <h3>Linux</h3>
   <pre><code>npm run build:linux</code></pre>
-  <p>Creates a Debian package (<code>.deb</code>, x64 &amp; arm64) and an AppImage (x64 &amp; arm64).</p>
+  <p>Creates, under <code>linux/x64/</code> and <code>linux/arm64/</code>, a Debian package (<code>.deb</code>) and an AppImage per architecture. electron-builder spells x64 as <code>amd64</code> in <code>.deb</code> names and <code>x86_64</code> in <code>.AppImage</code> names.</p>
 
   <h3>All platforms</h3>
   <pre><code>npm run build:all</code></pre>
@@ -115,7 +115,7 @@
   <h3>Linux</h3>
   <p>The <code>.deb</code> target lists its runtime dependencies in <code>package.json</code> → <code>build.deb.depends</code>:</p>
   <pre><code>libgtk-3-0  libnotify4  libnss3  libxss1  libxtst6  xdg-utils  libatspi2.0-0  libuuid1</code></pre>
-  <p>Debian/Ubuntu users install with <code>sudo apt install ./Roku Dev Studio-*.deb</code> (apt resolves the depends automatically). The AppImage is self-contained — <code>chmod +x</code> and run.</p>
+  <p>Debian/Ubuntu users install with <code>sudo apt install ./Roku-Dev-Studio-*.deb</code> (apt resolves the depends automatically). The AppImage is self-contained — <code>chmod +x</code> and run.</p>
 </section>
 
 <section class="doc-section" id="troubleshooting">

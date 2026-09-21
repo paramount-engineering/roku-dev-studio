@@ -8,7 +8,7 @@ Roku-side BrightScript / SceneGraph artifacts that Roku Dev Studio depends on. T
 | **`fiddle/`** | A minimal SceneGraph "scratch channel" (manifest, scene component, splash images, `main.brs`). The desktop app sideloads this onto a selected Roku to host **BrightScript Fiddle** — when you click *Run* in the Fiddle window, the editor's code is wrapped into this channel and pushed to the device. | **Internal — Roku Dev Studio itself**. Hand-edits should be rare. |
 | **`demo/`** | A standalone, fictitious "Roku Dev Studio Showcase" channel (poster grid, Details/Player, App Connector functions, real HTTPS catalog fetch) for capturing screenshots/GIFs of Remote Control, App Connector, Network Inspector, and MCP/AI-agent flows — see [`demo/README.md`](demo/README.md). | **Internal — marketing/docs screenshots**. Sideload it standalone like any dev channel. |
 
-Neither of the first two folders is built or generated; they ship as plain text the way Roku channels expect. `demo/` has one generator script (`generate-images.mjs`) for its placeholder art only — the BrightScript/XML itself is hand-authored.
+None of these folders is built or generated; they ship as plain text the way Roku channels expect — the BrightScript/XML itself is hand-authored.
 
 ---
 
@@ -61,7 +61,7 @@ The **Integration Guide** button (left column, under the connection panel) opens
 `TrackerTask.xml` is the published copy that Roku channel developers ship inside their channels. Avoid editing it unless you're intentionally changing the Dev Studio ↔ channel protocol. If you do edit it:
 
 - Keep the standard RALE surface (`getNodeById`, `setField`, `selectNode`, registry CRUD, etc.) unchanged so RALE compatibility doesn't break.
-- Bump anything that depends on a new field/function in lockstep across the desktop app (`apps/roku-dev-studio/main/mcp-bridge.ts`, `packages/roku-dev-studio-api/lib/rale.js`, validators in `packages/roku-dev-studio-api/lib/validate-action-script.ts`, the MCP capability bundle in `packages/roku-dev-studio-mcp/src/resources.ts`).
+- Bump anything that depends on a new field/function in lockstep across the desktop app (`apps/roku-dev-studio/main/mcp-bridge.ts`, `packages/roku-dev-studio-api/lib/rale-direct.ts`, validators in `packages/roku-dev-studio-api/lib/validate-action-script.ts`, the MCP capability bundle in `packages/roku-dev-studio-mcp/src/resources.ts`).
 
 ---
 

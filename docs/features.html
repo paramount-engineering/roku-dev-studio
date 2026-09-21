@@ -33,7 +33,7 @@
   "description": "The full feature tour for Roku Dev Studio, the unified, single desktop app for Roku development: Remote Control, Device Discovery, Sideload Relay, Network Inspector, BrightScript Debugger, Action Scripts, AI Agents (MCP), Static Channel Analysis, and more.",
   "url": "https://paramount-engineering.github.io/roku-dev-studio/features.html",
   "image": "https://paramount-engineering.github.io/roku-dev-studio/images/og-image.png",
-  "softwareVersion": "1.1.0",
+  "softwareVersion": "1.2.1",
   "license": "https://github.com/paramount-engineering/roku-dev-studio/blob/main/LICENSE",
   "downloadUrl": "https://github.com/paramount-engineering/roku-dev-studio/releases",
   "author": {
@@ -87,6 +87,7 @@
     <a href="#try-demo-app" data-feature="try-demo-app" class="features-nav-link"><svg class="icon" width="16" height="16"><use href="assets/icons.svg#icon-devices"></use></svg><span>Try Demo App</span></a>
     <a href="#sideload-relay" data-feature="sideload-relay" class="features-nav-link"><svg class="icon" width="16" height="16"><use href="assets/icons.svg#icon-send"></use></svg><span>Sideload Relay</span></a>
     <a href="#console-debugging" data-feature="console-debugging" class="features-nav-link"><svg class="icon" width="16" height="16"><use href="assets/icons.svg#icon-terminal"></use></svg><span>Console &amp; Debugging</span></a>
+    <a href="#port-terminal" data-feature="port-terminal" class="features-nav-link"><svg class="icon" width="16" height="16"><use href="assets/icons.svg#icon-terminal"></use></svg><span>Ports Window</span></a>
     <a href="#console-monitor" data-feature="console-monitor" class="features-nav-link"><svg class="icon" width="16" height="16"><use href="assets/icons.svg#icon-check"></use></svg><span>Console Monitor</span></a>
     <a href="#brightscript-debugger" data-feature="brightscript-debugger" class="features-nav-link"><svg class="icon" width="16" height="16"><use href="assets/icons.svg#icon-debug-run"></use></svg><span>BrightScript Debugger</span></a>
     <a href="#app-connector" data-feature="app-connector" class="features-nav-link"><svg class="icon" width="16" height="16"><use href="assets/icons.svg#icon-plug"></use></svg><span>App Connector (using RALE)</span></a>
@@ -124,7 +125,10 @@
   <h2><svg class="icon" width="16" height="16"><use href="assets/icons.svg#icon-cpu"></use></svg> Device Performance</h2>
   <p class="doc-kicker">Remote Section</p>
   <ul>
-    <li><strong>Live charts:</strong> On Remote, turn on Show Device Performance for a quad layout with CPU, memory, and object charts</li>
+    <li><strong>Live charts:</strong> On Remote, turn on Show Device Performance for a quad layout with CPU (CPU % or a per-Process table), memory with a System / Graphics mode switch (system usage vs texture memory) plus a View Graphics Bitmaps (r2d2) modal, and object charts (count or memory view where available)</li>
+    <li><strong>Chart history:</strong> Every chart keeps a rolling time series (length set in Settings); the CPU Process view is built from successive proc-stat snapshots (Roku OS 15.2+)</li>
+    <li><strong>Export Chart Data:</strong> Per-chart export as CSV, JSON (the full retained series, not just the latest sample), or an image</li>
+    <li><strong>Chart Info:</strong> Per-chart modal explaining what each series measures and where the data comes from</li>
     <li><strong>When it applies:</strong> Reflects the running app when Developer Mode is on and your sideloaded dev channel is in the foreground</li>
     <li><strong>Settings → Device Performance:</strong> Tune chart sample interval and history window; optional "Remember Show Device Performance" per device</li>
     <li><strong>Action Scripts:</strong> Capture chart cards into run results — e.g. PNGs included in exported PDFs</li>
@@ -201,7 +205,7 @@
     <li><strong>One build → many devices:</strong> With the relay on, Roku Dev Studio advertises itself as a Roku over SSDP; point your IDE (VS Code BrightScript / Eclipse / roku-deploy) or a browser at this machine, upload once, and RDS fans the build out (install → launch → console) to every targeted device — local or at a remote location</li>
     <li><strong>Enable in Settings → Sideload Relay</strong> (off by default): set a Relay Dev Password and pick targets in Setup Devices</li>
     <li><strong>Browser upload page:</strong> A themed drag-and-drop .zip uploader is served at the relay address for sideloads without an IDE</li>
-    <li><strong>Auto-connect:</strong> Each device that receives a build opens as a connected tab with its debug console attached; live fan-out progress streams on telnet 8085</li>
+    <li><strong>Auto-connect:</strong> Every target's device tab and Console open at the start of the run, and the console connects <em>before</em> the install — so a failed install is still visible, and the Console is already listening when the channel compiles; the debugger still attaches after install. Live fan-out progress streams on telnet 8085</li>
     <li><strong>Source approval:</strong> A sideload from another machine prompts for allow / deny on the RDS host; remote browser uploads also require the Relay Dev Password</li>
   </ul>
 </section>
@@ -218,6 +222,16 @@
   <img src="images/TELNET_CONSOLE.png" alt="Console tab">
 </section>
 
+<section class="doc-section" id="port-terminal" data-feature-panel>
+  <h2><svg class="icon" width="16" height="16"><use href="assets/icons.svg#icon-terminal"></use></svg> Ports Window</h2>
+  <ul>
+    <li><strong>Standalone per-device window:</strong> Open it from the Console card header (Open Ports Window); one tab per port</li>
+    <li><strong>Built-in tabs:</strong> 8080 SceneGraph console (<code>plugins</code>, <code>free</code>, <code>sgnodes</code>, <code>fps_display</code>, …), 8087 screensaver console, and 8081 debug protocol — debugger controls with a live trace of the protocol traffic</li>
+    <li><strong>Custom Port:</strong> Open any other tunneled port as a text console (9999 or 49152–65535)</li>
+    <li><strong>The window holds the socket:</strong> One-shot consumers in the main window (Query tab, Action Scripts, Toggle FPS) reuse the port it has open instead of dialing their own; everything is released when the window closes</li>
+  </ul>
+</section>
+
 <section class="doc-section" id="console-monitor" data-feature-panel>
   <h2><svg class="icon" width="16" height="16"><use href="assets/icons.svg#icon-check"></use></svg> Console Monitor</h2>
   <ul>
@@ -225,6 +239,7 @@
     <li><strong>Automatic BrightScript issue detection:</strong> Scans console output for recognized crash / error patterns and expands each issue into What / Cause / Fix guidance plus occurrence lines</li>
     <li><strong>Crashes &amp; Issues:</strong> Crashes show severity and full backtrace with a Copy Crash + Backtrace action; clicking an issue or an occurrence row jumps straight to the matching line in the log</li>
     <li><strong>Works live and on saved logs:</strong> Available from both the Console tab and the Log File Viewer via the Monitor button</li>
+    <li><strong>Launch &amp; performance beacons:</strong> A Performance section pairs Roku's <code>[beacon.signal]</code> Initiate / Complete lines into durations for App Compile, App Launch, Dialog Launch, EPG Launch, Video Start, Live Start, Channel Change, and Channel Exit — flagging an EPG launch beyond the 5 s certification window</li>
   </ul>
   <img src="images/CONSOLE_MONITOR.png" alt="Console Monitor — grouped issues by category with per-group counts">
   <img src="images/CONSOLE_MONITOR_ISSUE_DETAIL.png" alt="Console Monitor — expanded issue with What / Cause / Fix guidance and occurrences">
@@ -234,7 +249,7 @@
 <section class="doc-section" id="brightscript-debugger" data-feature-panel>
   <h2><svg class="icon" width="16" height="16"><use href="assets/icons.svg#icon-debug-run"></use></svg> BrightScript Debugger</h2>
   <ul>
-    <li><strong>Socket debug protocol (port 8081):</strong> Attach to a dev channel sideloaded with debugging enabled; RDS re-sideloads with the protocol turned on if needed</li>
+    <li><strong>Socket debug protocol (port 8081):</strong> Tick the per-device Enable Debugger checkbox (Dev App tab / Fiddle) and RDS sideloads with the protocol turned on; while the flag is on it also attaches automatically whenever the running channel reports it is waiting for a debugger — on local, lab-server and Cloud Emulator devices alike</li>
     <li><strong>Execution control:</strong> Attach / Detach, Continue, Pause, Step Over / In / Out, and Restart (re-sideload with debugging + reattach)</li>
     <li><strong>Breakpoints:</strong> Add / edit / remove, including conditional breakpoints (Roku OS 11.5+); STOPs already in the channel are discovered automatically</li>
     <li><strong>Threads &amp; Call Stack, Variables, Watch:</strong> Inspect the call stack and live variables at a stop, and track watch expressions across stops</li>
@@ -302,8 +317,8 @@
   <h2><svg class="icon" width="16" height="16"><use href="assets/icons.svg#icon-mcp"></use></svg> AI Agents (MCP Server)</h2>
   <ul>
     <li><strong>Model Context Protocol:</strong> Bundled roku-dev-studio-mcp server lets Cursor, Claude Desktop, and VS Code drive a real Roku through this app while it's open</li>
-    <li><strong>Settings → MCP Server:</strong> Toggle a client to add or remove its roku-dev-studio MCP entry</li>
-    <li><strong>Two surfaces:</strong> Direct device ops for one-shot actions plus Action Scripts for multi-step / conditional flows that drop into the Builder for human review</li>
+    <li><strong>Settings → MCP Server:</strong> Toggle a client to add or remove its roku-dev-studio MCP entry. View MCP Tools opens a reference modal listing every exposed tool grouped by capability area</li>
+    <li><strong>Two surfaces:</strong> Direct device ops for one-shot actions (including <code>network_inspector_find</code> for full-content search across captured requests / responses and <code>device_performance_metrics</code> for time-sliced CPU / memory / object series with chart selection, time window and downsampling) plus Action Scripts for multi-step / conditional flows that drop into the Builder for human review</li>
     <li><strong>Toasts on agent actions:</strong> Destructive ops surface a non-blocking toast so you always see what the agent did</li>
     <li><strong>Passwords stay local:</strong> Sideload / screenshot / delete-sideload reuse the password the device panel remembered — the agent never sends one</li>
   </ul>
@@ -359,6 +374,9 @@
     <li><strong>Device Discovery:</strong> Automatically discovers all Roku devices on remote network</li>
     <li><strong>All Features Supported:</strong> Remote control, queries, sideloading, console, and RALE work remotely</li>
     <li><strong>Swagger API:</strong> Interactive API documentation for remote server</li>
+    <li><strong>Two kinds of location:</strong> Add Location offers two tabs — RDS Relay (a relay server address) and RCE (a Roku Cloud Emulator account + Personal Access Token)</li>
+    <li><strong>Roku Cloud Emulator devices:</strong> List as shutdown / pending / running and must be started (Start, with optional snapshot / firmware / Max Run Time options) before ECP, sideload or console respond</li>
+    <li><strong>Forget it on App Quit/Close:</strong> A location added with the box ticked is dropped when the app quits and again at next startup (crash safety), along with its RCE token and any Sideload Relay targets pointing at it; its device tabs are never remembered for auto-connect</li>
   </ul>
   <img src="images/REMOTE_SERVER_SWAGGER.png" alt="Remote server Swagger UI at /api-docs">
   <p>Full setup lives on the <a href="remote-server.html">Remote Server</a> page.</p>
@@ -411,6 +429,8 @@
     <li><strong>Settings persistence:</strong> Preferences and device connections saved between sessions</li>
     <li><strong>Quick Remote (Dev App tab):</strong> Compact remote strip plus drag-drop sideload right next to the screenshot pane</li>
     <li><strong>Secret Screens modal:</strong> One-click presets for Roku's hidden screens</li>
+    <li><strong>Device details modal:</strong> Hardware photos are fetched through the main process so the modal always opens, with a placeholder when no photo resolves</li>
+    <li><strong>Open from toast:</strong> File-related toasts (saved logs, exports, screenshots) carry an Open action that launches the file through the OS</li>
     <li><strong>TrackerTask Export:</strong> Save TrackerTask.xml from the App Connector → Integration Guide</li>
     <li><strong>Clear Cache and Reload:</strong> Wipe Chromium cache without restarting the app</li>
   </ul>

@@ -1730,8 +1730,20 @@
                         <p>HTTP/WebSocket relay that reaches Rokus on another network; exposes a REST surface and Swagger/OpenAPI docs for integration and testing.</p>
                     </div>
                     <div class="feature-card">
-                        <h4><span class="icon"><svg><use href="#icon-link"/></svg></span> lib/</h4>
-                        <p>Small repo-root utilities shared by the app and remote server (e.g. path helpers)—keeps common bits in one place.</p>
+                        <h4><span class="icon"><svg><use href="#icon-link"/></svg></span> packages/roku-dev-studio-platform</h4>
+                        <p>Shared host-platform helpers—OS identity, modifier keys, path-safe, node-only filesystem helpers—used by the app and other packages so platform logic lives in one place.</p>
+                    </div>
+                    <div class="feature-card">
+                        <h4><span class="icon"><svg><use href="#icon-plug"/></svg></span> packages/roku-dev-studio-mcp</h4>
+                        <p>MCP server exposing Roku Dev Studio Action Scripts and device operations to AI agents (Cursor, Claude Desktop, VS Code) through the running desktop app.</p>
+                    </div>
+                    <div class="feature-card">
+                        <h4><span class="icon"><svg><use href="#icon-scan"/></svg></span> packages/roku-dev-studio-network-inspector</h4>
+                        <p>Network Inspector engine—hotspot packet capture (DNS/SNI/HTTP) + local MITM proxy, transport-agnostic so it runs in the desktop app and the remote server.</p>
+                    </div>
+                    <div class="feature-card">
+                        <h4><span class="icon"><svg><use href="#icon-database"/></svg></span> packages/roku-dev-studio-rce</h4>
+                        <p>Roku Cloud Emulator (RCE) client—Core API (accounts/devices/snapshots) and Device API (ECP proxy, ports-bridge sockets) for cloud-hosted virtual Roku devices.</p>
                     </div>
                 </div>
                 <div class="info-box" style="margin-top: clamp(6px, 1.4vw, 22px);">

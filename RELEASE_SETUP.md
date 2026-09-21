@@ -1,73 +1,13 @@
 # GitHub Releases Setup Guide
 
-This guide explains how to automatically build and release your Roku Dev Studio for both **macOS** and **Windows** using GitHub Actions.
+This guide explains how to automatically build and release your Roku Dev Studio for **macOS**, **Windows** and **Linux** using GitHub Actions.
 
 ## Prerequisites
 
-### 1. App Icons (Required)
-
-You need to create app icons in the `assets/` folder:
-
-**For macOS:** `assets/icon.icns`
-- Resolution: 1024x1024 px (and lower sizes embedded)
-- Format: Apple Icon Image format
-
-**For Windows:** `assets/icon.ico`
-- Resolution: 256x256 px (and lower sizes embedded)
-- Format: Windows Icon format
-
-**How to create icons:**
-
-Option A - Use online converter:
-1. Create a 1024x1024 PNG image
-2. Go to https://cloudconvert.com/png-to-icns
-3. Convert to `.icns` for macOS
-4. Go to https://cloudconvert.com/png-to-ico
-5. Convert to `.ico` for Windows
-
-Option B - Use command line (macOS):
-```bash
-# Create iconset folder
-mkdir icon.iconset
-
-# Create different sizes (from your 1024x1024 source image)
-sips -z 16 16     icon-1024.png --out icon.iconset/icon_16x16.png
-sips -z 32 32     icon-1024.png --out icon.iconset/icon_16x16@2x.png
-sips -z 32 32     icon-1024.png --out icon.iconset/icon_32x32.png
-sips -z 64 64     icon-1024.png --out icon.iconset/icon_32x32@2x.png
-sips -z 128 128   icon-1024.png --out icon.iconset/icon_128x128.png
-sips -z 256 256   icon-1024.png --out icon.iconset/icon_128x128@2x.png
-sips -z 256 256   icon-1024.png --out icon.iconset/icon_256x256.png
-sips -z 512 512   icon-1024.png --out icon.iconset/icon_256x256@2x.png
-sips -z 512 512   icon-1024.png --out icon.iconset/icon_512x512.png
-sips -z 1024 1024 icon-1024.png --out icon.iconset/icon_512x512@2x.png
-
-# Convert to icns
-iconutil -c icns icon.iconset -o assets/icon.icns
-```
-
-### 2. Entitlements File
-
-Create `entitlements.mac.plist` in the root folder (if not exists):
-
-```xml
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>com.apple.security.cs.allow-jit</key>
-    <true/>
-    <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
-    <true/>
-    <key>com.apple.security.cs.disable-library-validation</key>
-    <true/>
-    <key>com.apple.security.network.client</key>
-    <true/>
-    <key>com.apple.security.network.server</key>
-    <true/>
-</dict>
-</plist>
-```
+- **Node.js 24.17 or newer** — both workflows pin `node-version: 24.17.0`, and the workspace packages declare `engines.node >= 24.17.0`.
+- **App icons** are checked in at `apps/roku-dev-studio/assets/icon.icns` (macOS) and `assets/icon.ico` (Windows), with their sources in `icon.iconset/` and `ico-parts/` (PNG sizes rendered by `apps/roku-dev-studio/scripts/generate-icons.ts`). Nothing to create.
+- **Hardened-runtime entitlements** are checked in at `apps/roku-dev-studio/entitlements.mac.plist` and wired through `build.mac.entitlements` / `entitlementsInherit`.
+- **Repository secrets** for macOS signing + notarization — see [Code Signing](#code-signing) below. The mac release job fails fast without them.
 
 ## How to Create a Release
 
@@ -95,7 +35,7 @@ git push origin 1.1.0
 ```
 
 The GitHub Action will automatically:
-1. Build the macOS app (DMG for both Intel and Apple Silicon)
+1. Build the macOS app (DMG + zip, Apple Silicon only — signed and notarized)
 2. Build the Windows app (Installer + Portable)
 3. Build the Linux app (`.deb` and `.AppImage` for x64 and arm64)
 4. Create a GitHub Release with all files attached, named `Roku Dev Studio v1.1.0` and pointing at whichever tag you pushed.
@@ -135,19 +75,22 @@ Notes for maintainers (read these before changing the workflow):
 - **`build:mac`, `build:win`, `build:linux` are self-contained** and chain
   `build:bundle` → `clean:dist` → `electron-builder`. They do not rely on
   `prepare` having run.
-- **Publishing is disabled in `apps/roku-dev-studio/package.json`
-  (`"build": { "publish": null }`).** Without this, electron-builder enters
-  auto-publish mode whenever `CI=true` and fails with
-  `Cannot detect repository by .git/config`. Publishing is owned by
-  `softprops/action-gh-release` in the `release` job. Do not add
-  `-- --publish never` either: root-level scripts re-invoke npm via
-  `npm --prefix apps/roku-dev-studio run build:*`, and the inner npm strips
-  the `--publish` flag, leaving a stray `never` that electron-builder reads
-  as a target name.
+- **`build.publish` stays populated (GitHub provider) and every packaging
+  script passes `--publish never`.** The provider block is what makes
+  electron-builder emit the updater metadata (`app-update.yml`,
+  `latest-mac.yml`, `latest.yml`, `latest-linux*.yml`); nulling it out
+  suppresses those files and breaks `checkForUpdates()` at runtime — that is
+  how 1.2.0 shipped without them. `--publish never` keeps electron-builder
+  from uploading anything itself: `build:win` / `build:linux` pass it inline
+  and `build:mac` bakes it into `scripts/build/electron-builder-mac.ts`.
+  Uploading is owned solely by `softprops/action-gh-release` in the
+  `release` job.
 - **All `uses:` references are pinned to full commit SHAs (org policy).**
 
 ### `.github/workflows/ci.yml`
-Per-PR / per-push smoke checks (typecheck + per-package syntax). Just
+Per-PR / per-push checks — workspace typecheck, unit tests, and per-package
+smoke jobs (API package, remote server, Electron main bundle incl.
+`verify:artifact-names`). Just
 `actions/checkout` → `actions/setup-node` → `npm ci` → script per job, with
 all actions SHA-pinned. The CI-guarded prepares above are sufficient — no
 extra topological build is needed here because the smoke checks don't
@@ -155,11 +98,11 @@ consume the desktop app bundle.
 
 ## Release Outputs
 
-Each release will include the artifacts listed in the **Downloads** table below. On GitHub Releases, the workflow automatically fills in the version from the tag (e.g. `v1.2.0` → `1.2.0`), so the release notes show the correct filenames. The table here is a reference for the artifact naming pattern.
+Each release attaches the installers listed in the generated **Downloads** table plus the updater metadata electron-updater reads — `latest-mac.yml`, `latest.yml`, `latest-linux.yml` / `latest-linux-arm64.yml` and the `.blockmap` files. The workflow fills in the version from the tag (e.g. `v1.2.0` → `1.2.0`).
 
 ### Downloads
 
-The **Downloads** table in the release body is **generated at release time from the assets actually uploaded** (one row per `.dmg` / `.zip` / `.exe` / `.deb` / `.AppImage`, grouped by platform), so it cannot drift from the real file names. Artifact file names come from `build.artifactName` in `apps/roku-dev-studio/package.json` (with `nsis` / `portable` overrides for the two Windows builds) — the single source of truth; `npm run verify:artifact-names` prints the exact names for every target and fails if two collide. Current scheme: `Roku-Dev-Studio-<version>-<arch>.<ext>`, with `Roku-Dev-Studio-Setup-…` / `Roku-Dev-Studio-Portable-…` for the Windows installer / portable build; x64 appears as `amd64` in `.deb` and `x86_64` in `.AppImage` names.
+The **Downloads** table in the release body is **generated at release time from the assets actually uploaded** (one row per `.dmg` / `.zip` / `.exe` / `.deb` / `.AppImage`, grouped by platform), so it cannot drift from the real file names. Artifact file names come from `build.artifactName` in `apps/roku-dev-studio/package.json` (with `nsis` / `portable` overrides for the two Windows builds) — the single source of truth; `npm run verify:artifact-names -w roku-dev-studio` prints the exact names for every target and fails if two collide. Current scheme: `Roku-Dev-Studio-<version>-<arch>.<ext>`, with `Roku-Dev-Studio-Setup-…` / `Roku-Dev-Studio-Portable-…` for the Windows installer / portable build; x64 appears as `amd64` in `.deb` and `x86_64` in `.AppImage` names.
 
 ### Installation
 
@@ -218,12 +161,13 @@ electron-builder signs, notarizes via `notarytool` and staples the ticket itself
 2. Add to GitHub secrets:
    - `WIN_CSC_LINK` - Base64 encoded certificate
    - `WIN_CSC_KEY_PASSWORD` - Certificate password
+3. Map them into the build job: the workflow does not read `WIN_CSC_*` yet — add both to the `env:` block in `.github/workflows/release.yml`, scoped to the Windows leg the same way `CSC_*` are scoped to the mac leg.
 
 ## Quick Start Checklist
 
-- [ ] Create `assets/icon.icns` (macOS icon)
-- [ ] Create `assets/icon.ico` (Windows icon)
-- [ ] Create `entitlements.mac.plist`
+- [ ] Add the five macOS signing / notarization secrets (see [Code Signing](#code-signing))
+- [ ] Bump `version` in `apps/roku-dev-studio/package.json` (and in any package that changed); add the release notes to `CHANGELOG.md`
+- [ ] `npm run verify:artifact-names -w roku-dev-studio` passes
 - [ ] Push to GitHub
 - [ ] Create and push a version tag (e.g., `git tag 1.0.0 && git push origin 1.0.0`, or the v-prefixed `v1.0.0` form — both are accepted)
 - [ ] Check Actions tab for build progress

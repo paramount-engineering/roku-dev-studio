@@ -68,18 +68,6 @@ would any other dev channel (Dev App tab, or `rds sideload`).
 - **Sideload / Screenshot / Device Performance** — works like any other dev
   channel, no special wiring needed.
 
-## Regenerating the placeholder art
-
-```
-node roku-components/demo/generate-images.mjs
-```
-
-Reads titles from `docs/demo-catalog/catalog.json` (the same file the
-channel fetches at runtime) so the generated poster art never drifts out of
-sync with the catalog. Edit that JSON to change the demo content; then
-re-run the script and push to `main` so the new posters are live on GitHub
-Pages before the channel is relaunched.
-
 ## Default (bundled) catalog
 
 `data/catalog.json` ships inside the channel package (`pkg:/data/catalog.json`)

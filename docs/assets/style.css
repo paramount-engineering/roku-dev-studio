@@ -815,26 +815,67 @@ img:not(.brand-icon) { cursor: zoom-in; }
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   margin-bottom: 10px;
-  padding: 4px 16px;
+  overflow: hidden; /* keep the header strip inside the rounded corners */
 }
-.tool-item summary {
+/* Header: a tinted strip that reads the same whether the card is open or closed.
+   `>` keeps these off the nested .tool-raw summary. */
+.tool-item > summary {
   cursor: pointer;
-  padding: 12px 0;
+  padding: 12px 16px;
   display: flex;
   align-items: center;
   gap: 10px;
   flex-wrap: wrap;
   font-size: 0.95em;
+  background: var(--bg-code);
+  transition: background 120ms ease;
 }
-.tool-item summary code { font-weight: 700; }
+.tool-item > summary:hover { background: var(--accent-purple-dim); }
+.tool-item > summary:focus-visible { outline: 2px solid var(--accent-purple); outline-offset: -2px; }
+/* Open: a hairline separates the header strip from the (untinted) body. */
+.tool-item[open] > summary { border-bottom: 1px solid var(--border); }
+.tool-item > summary code { font-weight: 700; }
 .tool-item .tool-title { color: var(--text-secondary); font-weight: 400; }
 .tool-item .tool-badges { margin-left: auto; display: flex; gap: 6px; flex-wrap: wrap; }
-.tool-item-body { padding: 4px 0 16px; }
+.tool-item-body { padding: 14px 16px 16px; }
 .tool-item-body h4 { margin: 18px 0 6px; font-size: 0.85em; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); }
 .tool-item-body table { margin: 8px 0; font-size: 0.9em; }
 .tool-schema-note { color: var(--text-secondary); font-size: 0.9em; margin: 8px 0; }
-.tool-raw { margin-top: 10px; }
-.tool-raw summary { cursor: pointer; color: var(--text-muted); font-size: 0.85em; padding: 6px 0; }
+.tool-raw {
+  margin-top: 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden; /* the <pre> below shares these corners */
+}
+.tool-raw > summary {
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  color: var(--text-muted);
+  font-size: 0.85em;
+  background: var(--bg-code);
+  transition: color 120ms ease;
+}
+.tool-raw > summary:hover { color: var(--text-secondary); }
+.tool-raw > summary:focus-visible { outline: 2px solid var(--accent-purple); outline-offset: -2px; }
+/* Chevron: an SVG mask filled with currentColor, so it rotates about its own centre and stays
+   vertically aligned with the label in both states (a rotated bordered box shifts its centroid). */
+.tool-raw > summary::before {
+  content: '';
+  flex: none;
+  width: 12px;
+  height: 12px;
+  background: currentColor;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M4.5 2.5 8 6 4.5 9.5' fill='none' stroke='%23000' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M4.5 2.5 8 6 4.5 9.5' fill='none' stroke='%23000' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat;
+  transition: transform 120ms ease;
+}
+.tool-raw[open] > summary::before { transform: rotate(90deg); }
+.tool-raw[open] > summary { border-bottom: 1px solid var(--border); }
+/* The schema block grows out of the bar: no gap, no second border, no second set of corners. */
+.tool-raw > pre { margin: 0; border: 0; border-radius: 0; }
 .badge {
   display: inline-block;
   border-radius: 999px;
