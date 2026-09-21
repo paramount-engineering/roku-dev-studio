@@ -10,6 +10,7 @@
 
 import { showToast } from '../../modules/utils/ui.js';
 import { attachBackdropClickToClose } from '../../modules/utils/modal-backdrop-click.js';
+import { prepareModalOpenOrigin, playModalOpenMotion, closeModalWithOriginMotion } from '../../modules/utils/modal-origin-motion.js';
 import { registerRetranslate } from '../../modules/ui/retranslate-registry.js';
 import { S } from '@shared/strings/index.js';
 
@@ -239,48 +240,7 @@ function removeReleaseNotesModal(): void {
   if (existing) existing.remove();
 }
 
-/**
- * FLIP-animate the modal dialog so it appears to *expand* out of the notification banner:
- * the dialog is rendered at its final centered size, then we start it transformed down to the
- * banner's on-screen rect (position + size) and animate that transform away to identity, while
- * the backdrop blur/tint fades in. Reads as the banner growing into the modal rather than a
- * hard modal pop. No-op if the origin rect or Web Animations API is unavailable.
- */
-function animateModalExpandFrom(modal: HTMLElement, originRect: DOMRect): void {
-  const dialog = modal.querySelector('.rds-release-notes-dialog') as HTMLElement | null;
-  if (!dialog || typeof dialog.animate !== 'function') return;
-  const prefersReduced =
-    typeof window.matchMedia === 'function' &&
-    window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  if (prefersReduced) return;
-
-  const finalRect = dialog.getBoundingClientRect();
-  if (finalRect.width < 1 || finalRect.height < 1) return;
-
-  const sx = Math.max(0.05, originRect.width / finalRect.width);
-  const sy = Math.max(0.05, originRect.height / finalRect.height);
-  const tx = originRect.left - finalRect.left;
-  const ty = originRect.top - finalRect.top;
-
-  dialog.style.transformOrigin = 'top left';
-  dialog.animate(
-    [
-      { transform: `translate(${tx}px, ${ty}px) scale(${sx}, ${sy})`, opacity: 0.35, borderRadius: '12px' },
-      { transform: 'translate(0, 0) scale(1, 1)', opacity: 1, borderRadius: '16px' }
-    ],
-    { duration: 300, easing: 'cubic-bezier(0.16, 1, 0.3, 1)' }
-  );
-  // Fade the backdrop tint/blur in without touching the dialog's own opacity animation.
-  modal.animate(
-    [
-      { backgroundColor: 'rgba(0, 0, 0, 0)', backdropFilter: 'blur(0px)' },
-      { backgroundColor: 'rgba(0, 0, 0, 0.7)', backdropFilter: 'blur(4px)' }
-    ],
-    { duration: 260, easing: 'ease-out' }
-  );
-}
-
-function showReleaseNotesModal(opts: { originRect?: DOMRect } = {}): void {
+function showReleaseNotesModal(opts: { bannerOpener?: HTMLElement | null } = {}): void {
   removeReleaseNotesModal();
   const modal = document.createElement('div');
   modal.id = RELEASE_NOTES_MODAL_ID;
@@ -303,9 +263,13 @@ function showReleaseNotesModal(opts: { originRect?: DOMRect } = {}): void {
       <div class="rds-release-notes-content" id="rdsReleaseNotesContent"></div>
     </div>`;
 
+  // Capture the banner's rect (via the shared origin-motion dataset) BEFORE removing it, then
+  // remove it instantly — the modal grows from where the banner was rather than sitting behind it.
+  prepareModalOpenOrigin(modal, opts.bannerOpener ?? null);
+  opts.bannerOpener?.remove();
   document.body.appendChild(modal);
 
-  const close = () => removeReleaseNotesModal();
+  const close = () => closeModalWithOriginMotion(modal, removeReleaseNotesModal);
   attachBackdropClickToClose(modal, close);
   modal.querySelector('.rds-release-notes-close')?.addEventListener('click', close);
   document.getElementById('rdsReleaseNotesOpenPage')?.addEventListener('click', () => {
@@ -335,9 +299,10 @@ function showReleaseNotesModal(opts: { originRect?: DOMRect } = {}): void {
     content.innerHTML = `<div class="rds-release-notes-loading"><span class="rds-release-notes-spinner" aria-hidden="true"></span>${S.modals.loadingReleaseNotes}</div>`;
   }
 
-  // Smoothly expand out of the banner (if the caller passed its rect). Runs after content is
-  // set so the FLIP measures the dialog's real dimensions.
-  if (opts.originRect) animateModalExpandFrom(modal, opts.originRect);
+  // Runs after content is set so the motion measures the dialog's real (populated) dimensions —
+  // grows from the banner when one triggered this; a subtle center-zoom otherwise (e.g. a live
+  // locale switch re-rendering an already-open modal).
+  playModalOpenMotion(modal);
 
   // Cold open: fetch and fill in once the request resolves (modal is already open/expanded).
   if (!cachedLatestReleaseInfo) {
@@ -735,12 +700,10 @@ function renderManualDownloadBanner(banner: HTMLElement, iconSvg: string, versio
   prefetchLatestReleaseInfo();
   banner.querySelector('.rds-banner-dismiss')?.addEventListener('click', removeBanner);
   banner.querySelector('#rdsUpdateReleaseNotes')?.addEventListener('click', () => {
-    // Release Notes "expands" the notification into the modal: capture the banner's rect,
-    // remove it instantly (so the dialog morphs out of it rather than sitting behind), then
-    // grow the modal from that rect. Closing the modal doesn't restore the banner.
-    const originRect = banner.getBoundingClientRect();
-    banner.remove();
-    showReleaseNotesModal({ originRect });
+    // Release Notes "expands" the notification into the modal — the modal captures the banner's
+    // rect and removes it instantly (so the dialog morphs out of it rather than sitting behind).
+    // Closing the modal doesn't restore the banner.
+    showReleaseNotesModal({ bannerOpener: banner });
   });
   banner.querySelector('#rdsUpdateOpenLatest')?.addEventListener('click', () => {
     // Open the downloads (release) page and dismiss the notification.
@@ -797,12 +760,10 @@ function renderBanner(status: UpdaterStatus): void {
 
     banner.querySelector('.rds-banner-dismiss')?.addEventListener('click', removeBanner);
     banner.querySelector('#rdsUpdateReleaseNotes')?.addEventListener('click', () => {
-      // Release Notes "expands" the notification into the modal: capture the banner's rect,
-      // remove it instantly (so the dialog morphs out of it rather than sitting behind), then
-      // grow the modal from that rect. Closing the modal doesn't restore the banner.
-      const originRect = banner.getBoundingClientRect();
-      banner.remove();
-      showReleaseNotesModal({ originRect });
+      // Release Notes "expands" the notification into the modal — the modal captures the banner's
+      // rect and removes it instantly (so the dialog morphs out of it rather than sitting behind).
+      // Closing the modal doesn't restore the banner.
+      showReleaseNotesModal({ bannerOpener: banner });
     });
     banner.querySelector('#rdsUpdateDismiss')?.addEventListener('click', removeBanner);
     banner.querySelector('#rdsUpdateDownload')?.addEventListener('click', () => {

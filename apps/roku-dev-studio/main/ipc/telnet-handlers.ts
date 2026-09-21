@@ -11,9 +11,10 @@ import {
   scheduleCoalescedMapFlush,
   type TelnetIpcCoalesceState
 } from './telnet-log-ipc-coalesce.js';
-import { getPersistedTimingValue } from '../settings';
+import { getPersistedTimingValue, loadSettings } from '../settings';
 import { mainLog, mainWarn } from '../log.js';
 import { notifyDeviceConnectionSuspect } from '../device-connection-suspect';
+import { notifyDebuggerReattach, getDebugSessionController } from './debugger-handlers';
 
 const {
   connectRokuDebugTelnet,
@@ -83,6 +84,87 @@ function notifyTelnetDataSubscribers(ip: string, text: string): void {
       /* subscriber best-effort */
     }
   }
+}
+
+/**
+ * Regex-watch raw (unbuffered, not line-aligned) telnet chunks for `pattern`. Carries a short
+ * tail across chunks so a match spanning a chunk boundary can't be missed — shared by every
+ * main-process "watch the live 8085 feed for a one-shot marker" consumer (debugger reconnect
+ * detection here, the Sideload Relay's launch-complete detection in sideload-relay/service.ts)
+ * so both get the same chunk-boundary safety instead of each hand-rolling (or forgetting) it.
+ * Feed it consecutive chunks via `feed()`; a match clears the carry so the same physical
+ * occurrence can't re-fire on the next unrelated chunk.
+ */
+export function createTelnetMarkerWatcher(pattern: RegExp, carryLen = 120): { feed: (text: string) => boolean } {
+  let carry = '';
+  return {
+    feed(text: string): boolean {
+      const combined = carry + text;
+      if (pattern.test(combined)) {
+        carry = '';
+        return true;
+      }
+      carry = combined.slice(-carryLen);
+      return false;
+    }
+  };
+}
+
+/**
+ * Auto-reattach the debugger the moment a relaunched channel starts waiting for one on 8081, instead of
+ * silently falling back to Roku's local debugger after its ~10s timeout. Real on-device signature:
+ *   `[plg.dbg.conn.wait] Waiting for debugging connection`
+ *   `[plg.dbg.conn.wait] Waiting for debugger on 192.168.1.75:8081`
+ *   (then, if nothing attaches in time) `[plg.dbg.conn.timeout] Timeout waiting for connection: using local debugger`
+ *
+ * Gated on `sideload-debug-ips` (the same "Sideload with Debugging" opt-in every other auto-attach path
+ * in this codebase checks — see `computeSideloadDebugFlags` in dev-app-handlers.ts) so this only ever
+ * restores a session for a device the user already asked to debug; it never force-attaches a device that
+ * was never opted in. Reuses `notifyDebuggerReattach` (the same broadcast a normal post-sideload
+ * reattach fires) so the Telnet debug sidebar shows its familiar Attaching/Attached feedback instead of
+ * this happening silently.
+ */
+const DEBUGGER_WAITING_RE = /\[plg\.dbg\.conn\.wait\]\s*Waiting for debugger on/i;
+/** IPs already watched — the underlying regex-match subscription is registered once per IP and stays
+ *  live across every reconnect on that device (see `debuggerWaitConnectedAt` below for what DOES reset
+ *  per reconnect). */
+const debuggerWaitWatchedIps = new Set<string>();
+/** ip -> when its 8085 socket was (re)connected. Roku's debug console — like the Sideload Relay's own
+ *  faithful emulation of it, see the "replayed to clients that connect mid-run" gap buffer in
+ *  `sideload-relay/debug-endpoints.ts` — can flush a burst of recent console history to a freshly-opened
+ *  socket. Those bytes arrive via the same `socket.on('data', …)` event as genuinely new output, so a
+ *  match landing right after a (re)connect is untrustworthy: it may be a stale "Waiting for debugger" line
+ *  from an already-resolved earlier launch, not a live one worth reattaching for. */
+const debuggerWaitConnectedAt = new Map<string, number>();
+/** How long after a (re)connect a match is treated as possible backlog rather than a live event. Real
+ *  device backlog arrives in one immediate burst on connect, not trickled in over seconds, so this only
+ *  needs to clear that initial burst — confirmed against a real capture where a stale match landed 22ms
+ *  after reconnect and the genuine one landed 6.8s later. */
+const DEBUGGER_WAIT_SETTLE_MS = 3000;
+
+function isDebuggerAutoAttachEnabled(ip: string): boolean {
+  try {
+    const v = loadSettings()['sideload-debug-ips'];
+    return Array.isArray(v) && v.includes(ip);
+  } catch {
+    return false;
+  }
+}
+
+function watchForDebuggerWaiting(ip: string): void {
+  debuggerWaitConnectedAt.set(ip, Date.now()); // reset the settle window on every (re)connect
+  if (debuggerWaitWatchedIps.has(ip)) return; // the regex-match subscription itself only needs one registration
+  debuggerWaitWatchedIps.add(ip);
+  const watcher = createTelnetMarkerWatcher(DEBUGGER_WAITING_RE);
+  subscribeDebugTelnetData(ip, (text) => {
+    if (!watcher.feed(text)) return;
+    const connectedAt = debuggerWaitConnectedAt.get(ip) ?? 0;
+    if (Date.now() - connectedAt < DEBUGGER_WAIT_SETTLE_MS) return; // likely replayed backlog, not live
+    if (isDebuggerAutoAttachEnabled(ip) && !getDebugSessionController().isAttached(ip)) {
+      mainLog('[Telnet] device', ip, 'is waiting for a debugger on 8081 — reattaching automatically');
+      notifyDebuggerReattach(ip);
+    }
+  });
 }
 
 function addDebugTelnetHolder(ip: string, holder: string): void {
@@ -162,6 +244,7 @@ async function connectDebugTelnetInternal(ip: string): Promise<{ success: boolea
   });
   mainLog('[Telnet] connected to', ip, ':8085 (readyState=' + (socket as unknown as { readyState?: string }).readyState + ')');
   if (safeSend) safeSend(IPC.TelnetConnected, { ip, connectionId });
+  watchForDebuggerWaiting(ip);
 
   socket.on('data', (data: Buffer) => {
     const text = data.toString('utf8');

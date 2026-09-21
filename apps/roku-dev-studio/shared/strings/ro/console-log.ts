@@ -136,6 +136,20 @@ export const consoleLog = {
     return `+${n.toLocaleString()} ${useDe ? 'de ' : ''}${word} în plus`;
   },
 
+  sectionPerformance: 'Performanță',
+  beaconFlows: {
+    appLaunch: 'Lansare aplicație',
+    appDialog: 'Lansare dialog',
+    epgLaunch: 'Lansare EPG',
+    vodStart: 'Start video',
+    liveStart: 'Start live',
+    liveChannelChange: 'Schimbare canal',
+    appCompile: 'Compilare aplicație',
+    appExit: 'Ieșire canal',
+  },
+  beaconAdjustedNote: (ms: number): string => `excl. dialog: ${ms.toLocaleString()} ms`,
+  beaconCertWindowNote: 'peste fereastra de certificare EPG de 5 s',
+
   // ── BrightScript error catalog (brightscript-error-catalog.ts) ────────────────────────
   // Romanian copy for each catalog entry, keyed by the entry `id` (same ids/shape as the
   // English catalog). BrightScript/Roku technical tokens, code literals, API/type names and

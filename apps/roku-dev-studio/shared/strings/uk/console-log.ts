@@ -163,6 +163,20 @@ export const consoleLog = {
     return `+${n.toLocaleString()} ${phrase}`;
   },
 
+  sectionPerformance: 'Продуктивність',
+  beaconFlows: {
+    appLaunch: 'Запуск застосунку',
+    appDialog: 'Запуск діалогу',
+    epgLaunch: 'Запуск EPG',
+    vodStart: 'Старт відео',
+    liveStart: 'Старт прямого ефіру',
+    liveChannelChange: 'Зміна каналу',
+    appCompile: 'Компіляція застосунку',
+    appExit: 'Вихід із каналу',
+  },
+  beaconAdjustedNote: (ms: number): string => `без діалогу: ${ms.toLocaleString()} мс`,
+  beaconCertWindowNote: 'поза 5-секундним вікном сертифікації EPG',
+
   // ── BrightScript error catalog (brightscript-error-catalog.ts) ────────────────────────
   // Локалізований текст для кожного запису каталогу з ключем за `id`. Технічні токени
   // BrightScript/Roku (типи, API, оператори, сигнатури повідомлень) залишаються без змін.

@@ -95,6 +95,8 @@ var IPC = {
   ShellOpenExternal: "shell:open-external",
   IsDebugEnabled: "is-debug-enabled",
   OpenLogFile: "open-log-file",
+  /** Opens an arbitrary previously-saved file with the OS default app (toast "Open" button). */
+  OpenFile: "open-file",
   /** Diagnostic build only — opens the userData folder containing all log files. */
   IsDiagnosticBuild: "is-diagnostic-build",
   OpenDiagnosticLogFolder: "open-diagnostic-log-folder",
@@ -371,6 +373,7 @@ var IPC = {
   FiddleReady: "fiddle:ready",
   FiddleInit: "fiddle:init",
   FiddleLint: "fiddle:lint",
+  FiddleGetSymbols: "fiddle:get-symbols",
   FiddleRun: "fiddle:run",
   FiddleStop: "fiddle:stop",
   FiddleRunResult: "fiddle:run-result",

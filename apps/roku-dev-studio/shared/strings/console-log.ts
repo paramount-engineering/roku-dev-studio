@@ -114,6 +114,24 @@ export const consoleLog = {
   moreUniqueLines: (n: number): string =>
     `+${n.toLocaleString()} more unique line${n === 1 ? '' : 's'}`,
 
+  // Performance beacon timings (roku-beacons.ts) — Initiate/Complete durations from developer.roku.com's
+  // channel-performance beacons. Labels match the doc's own "Performance Metrics Reference" category
+  // names, not the raw beacon tokens, where they differ (Dialog Launch, Video Start, Channel Change,
+  // Channel Exit).
+  sectionPerformance: 'Performance',
+  beaconFlows: {
+    appLaunch: 'App Launch',
+    appDialog: 'Dialog Launch',
+    epgLaunch: 'EPG Launch',
+    vodStart: 'Video Start',
+    liveStart: 'Live Start',
+    liveChannelChange: 'Channel Change',
+    appCompile: 'App Compile',
+    appExit: 'Channel Exit',
+  },
+  beaconAdjustedNote: (ms: number): string => `excl. dialog: ${ms.toLocaleString()} ms`,
+  beaconCertWindowNote: 'beyond the 5s EPG certification window',
+
   // ── BrightScript error catalog (brightscript-error-catalog.ts) ────────────────────────
   // Localizable copy for each catalog entry, keyed by the entry `id`. English text is copied
   // VERBATIM from the catalog; the analytics modal prefers these and falls back to the entry

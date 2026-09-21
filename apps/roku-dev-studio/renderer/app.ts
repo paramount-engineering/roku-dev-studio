@@ -37,6 +37,10 @@ import { applyLocalePreference } from './modules/utils/locale-live.js';
 import { devLog } from './modules/utils/dev-log.js';
 import { makeAppIdDragSource } from './modules/utils/app-id-drag-drop.js';
 import { rendererWarn, rendererError } from './modules/utils/logger.js';
+import {
+  runTelnetSystemCommandSession,
+  type TelnetSystemRunApi
+} from './modules/utils/telnet-system-command-run.js';
 import { initDeeplinkMediaTypes } from './modules/deeplink/deeplink-media-types.js';
 import { initDeeplinkPresets } from './modules/deeplink/deeplink-presets.js';
 import { setupDeepLinkPanel } from './modules/deeplink/deeplink-panel.js';
@@ -4224,6 +4228,44 @@ function setupInnerTabs(panel) {
 // Remote Control
 // ============================================
 
+/** `fps_display` gets little or no reply — the default Query-tab thresholds (tuned for verbose
+ *  commands like `plugins`) would otherwise wait out the full connect timeout every toggle. */
+const FPS_DISPLAY_COMPLETE = {
+  substantialDataThreshold: 1,
+  minWaitTime: 0,
+  minDataAfterWait: 0,
+  maxDataLength: 200
+} as const;
+
+/**
+ * "Toggle FPS" button in the Remote card header — sends bare `fps_display` (no `0`/`1` argument)
+ * over the same port-8080 system telnet connection the Query tab's Plugins/Memory buttons use.
+ * The device flips its own current state, so there's nothing for us to track or remember here —
+ * no readback command exists anyway, so a stateful checkbox would only ever show a guess.
+ */
+function setupFpsDisplayToggle(panel: HTMLElement, telnetApi: TelnetSystemRunApi): void {
+  const btn = panel.querySelector<HTMLButtonElement>('[data-fps-display-toggle]');
+  if (!btn) return;
+  btn.addEventListener('click', async () => {
+    btn.disabled = true;
+    btn.classList.add('remote-fps-toggle-btn--busy');
+    try {
+      const session = await runTelnetSystemCommandSession(telnetApi, 'fps_display', {
+        completeThresholds: FPS_DISPLAY_COMPLETE,
+        postCompleteSettleMs: 0
+      });
+      if (!session.ok) {
+        showToast(S.app.actionFailed(S.app.toggleFps), 'error');
+      }
+    } catch (err: unknown) {
+      showToast(errMessage(err) || S.app.actionFailed(S.app.toggleFps), 'error');
+    } finally {
+      btn.disabled = false;
+      btn.classList.remove('remote-fps-toggle-btn--busy');
+    }
+  });
+}
+
 function setupRemoteControls(panel, device, api) {
   devLog('Setting up remote controls for:', api.ip, api.isRemote ? '(via relay)' : '(direct)');
 
@@ -4234,6 +4276,7 @@ function setupRemoteControls(panel, device, api) {
     developerEnabled: device.developerEnabled === true,
     deviceKey: metricsDeviceKey
   });
+  setupFpsDisplayToggle(panel, api as unknown as TelnetSystemRunApi);
 
   // Auto-screenshot elements and state
   const autoScreenshotCheckbox = panel.querySelector('.auto-screenshot-checkbox');
@@ -6703,7 +6746,7 @@ window.saveTrackerTask = async function() {
     // Request the TrackerTask content from main process
     const result = await window.roku.saveTrackerTask();
     if (result.success) {
-      showToast(S.app.trackerTaskSaved, 'success');
+      showToast(S.app.trackerTaskSaved, 'success', undefined, undefined, result.filePath);
     } else {
       showToast(S.app.failedToSaveTrackerTask + ' ' + (result.error || S.app.unknownError), 'error');
     }

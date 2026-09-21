@@ -163,7 +163,8 @@ async function main(): Promise<void> {
     const base = openScript ? `${openScript.name} ${S.actionScripts.viewerCopySuffix}`.trim() : '';
     const name = await promptSaveScriptName({
       defaultName: base,
-      savedNames: listSavedScripts().map((s) => s.name)
+      savedNames: listSavedScripts().map((s) => s.name),
+      opener: saveAsBtn
     });
     if (!name) return;
     try {

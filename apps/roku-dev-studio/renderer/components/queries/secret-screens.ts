@@ -41,6 +41,14 @@ const secretScreensOrdered = (): SecretScreenDef[] => [
     ]
   },
   {
+    id: 'issueReportTracker',
+    title: S.queries.issueReportTracker,
+    segments: [
+      { label: 'Home×5', keys: repeatKeys('Home', 5) },
+      { label: 'Back×5', keys: repeatKeys('Back', 5) }
+    ]
+  },
+  {
     id: 'secretScreen',
     title: S.queries.secretScreen,
     segments: [

@@ -13,6 +13,9 @@ contextBridge.exposeInMainWorld('fiddle', {
   lint: (code: string) =>
     ipcRenderer.invoke(IPC.FiddleLint, { code }),
 
+  getSymbols: (payload: { deviceId: string }) =>
+    ipcRenderer.invoke(IPC.FiddleGetSymbols, payload),
+
   run: (payload: { deviceId: string; code: string; password?: string }) =>
     ipcRenderer.invoke(IPC.FiddleRun, payload),
 

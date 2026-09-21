@@ -206,6 +206,9 @@ function setupDevAppHandlers(mainWindow: BrowserWindow | undefined, dialog: Dial
     const scan = require('roku-dev-studio-api/lib/debugger/scan-stops') as {
       rememberSideloadZip: (ip: string, p: string) => void;
     };
+    const scanSymbols = require('roku-dev-studio-api/lib/debugger/scan-symbols') as {
+      rememberAnySideloadZip: (ip: string, p: string) => void;
+    };
     const { debugEnabled, discovered } = computeSideloadDebugFlags(ip, serial, resolved, remoteDebug);
     const extraFields = debugEnabled ? [{ name: 'remotedebug', value: '1' }] : undefined;
     mainLog(`[sideload] ip=${ip} debugEnabled=${debugEnabled} discovered=${discovered} remotedebug=${debugEnabled ? '1' : '0'} file=${resolvedFile.fileName}`);
@@ -219,7 +222,16 @@ function setupDevAppHandlers(mainWindow: BrowserWindow | undefined, dialog: Dial
       cleanInstall: debugEnabled,
       ...(extraFields ? { extraFields } : {})
     });
-    if (debugEnabled && result && (result as { success?: boolean }).success !== false) {
+    const sideloadSucceeded = !!result && (result as { success?: boolean }).success !== false;
+    if (sideloadSucceeded) {
+      try {
+        // Remember the .zip for Fiddle's symbol-completion scan, regardless of debug mode.
+        scanSymbols.rememberAnySideloadZip(ip, resolved);
+      } catch {
+        /* best-effort */
+      }
+    }
+    if (debugEnabled && sideloadSucceeded) {
       try {
         // Remember the .zip for STOP scanning, and reattach the debugger to the fresh
         // run — passing the discovered count so the sidebar can toast it.

@@ -10,6 +10,7 @@
  */
 
 import { attachBackdropClickToClose } from '../../modules/utils/modal-backdrop-click.js';
+import { prepareModalOpenOrigin, playModalOpenMotion, closeModalWithOriginMotion } from '../../modules/utils/modal-origin-motion.js';
 import { deviceKey } from '@shared/platform/device-identity.js';
 import { S } from '@shared/strings/index.js';
 import { registerRetranslate } from '../../modules/ui/retranslate-registry.js';
@@ -512,12 +513,16 @@ function openSetupModal(): void {
   pwEditingKey = null;
   buildModalRows();
   renderModalTable();
+  prepareModalOpenOrigin(overlay, document.getElementById('srSetupBtn'));
   overlay.removeAttribute('hidden');
+  playModalOpenMotion(overlay);
   void scanDevices();
 }
 
 function closeSetupModal(): void {
-  document.getElementById('srSetupOverlay')?.setAttribute('hidden', '');
+  const overlay = document.getElementById('srSetupOverlay');
+  if (!overlay) return;
+  closeModalWithOriginMotion(overlay, () => overlay.setAttribute('hidden', ''));
 }
 
 /** Apply the modal's selections to the targets list, persist, and close. */

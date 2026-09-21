@@ -326,7 +326,7 @@ async function main() {
         monitorScanned = r.scannedLines ?? lineCount;
         openConsoleAnalyticsModal(
           () => ({
-            findings: monitorFindings ?? { totalIssues: 0, issueTypeCount: 0, byCategory: [], findings: [], crashes: [] },
+            findings: monitorFindings ?? { totalIssues: 0, issueTypeCount: 0, byCategory: [], findings: [], crashes: [], beacons: [] },
             scannedLines: monitorScanned,
             timeSpan: { first: null, last: null },
             meta: { bufferedCount: monitorScanned, totalCount: monitorScanned }
@@ -338,7 +338,8 @@ async function main() {
             const viewIndex = model.fileLineToViewIndex(fileLine);
             if (viewIndex === null) return;
             revealAndFlashLine(surface.view, viewIndex);
-          }
+          },
+          monitorBtn
         );
       })
       .finally(() => {

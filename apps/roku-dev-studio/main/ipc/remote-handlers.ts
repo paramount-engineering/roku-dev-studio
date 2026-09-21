@@ -985,7 +985,18 @@ function setupRemoteHandlers(mainWindow: BrowserWindow | undefined, safeSendToRe
     }).computeSideloadDebugFlags(ip, serial, resolved, remoteDebug);
     mainLog(`[remote sideload] server=${serverUrl} ip=${ip} debugEnabled=${debugEnabled} discovered=${discovered}`);
     const result = await sideloadFileToRemote(serverUrl, ip, resolved, password || '', debugEnabled);
-    if (debugEnabled && result && result.success !== false) {
+    const sideloadSucceeded = !!result && result.success !== false;
+    if (sideloadSucceeded) {
+      try {
+        // Remember the .zip for Fiddle's symbol-completion scan, regardless of debug mode.
+        (require('roku-dev-studio-api/lib/debugger/scan-symbols') as {
+          rememberAnySideloadZip: (ip: string, p: string) => void;
+        }).rememberAnySideloadZip(ip, resolved);
+      } catch {
+        /* best-effort */
+      }
+    }
+    if (debugEnabled && sideloadSucceeded) {
       try {
         (require('roku-dev-studio-api/lib/debugger/scan-stops') as {
           rememberSideloadZip: (ip: string, p: string) => void;

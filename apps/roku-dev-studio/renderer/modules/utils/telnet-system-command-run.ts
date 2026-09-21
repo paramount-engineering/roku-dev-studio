@@ -24,6 +24,10 @@ export interface TelnetSystemRunApi {
  */
 export interface TelnetCompleteThresholds {
   substantialDataThreshold: number;
+  /** Defaults to 3000ms (via `isTelnetOutputComplete`) if omitted — override for commands that
+   *  reply near-instantly or not at all, else the wait-enough fallback path is stuck behind a
+   *  stale 3s floor even with the other thresholds tuned down. */
+  minWaitTime?: number;
   minDataAfterWait: number;
   maxDataLength: number;
 }
@@ -34,6 +38,12 @@ export interface TelnetSystemRunOptions {
   shouldStop?: () => boolean;
   /** Override completion heuristic (defaults tuned for Query tab responses). */
   completeThresholds?: TelnetCompleteThresholds;
+  /** Local (non-remote) path only: extra settle time after `isTelnetOutputComplete` first says
+   *  done, before `outputComplete` actually flips. Defaults to 300ms — unexplained in history
+   *  (present unchanged since the initial commit, no comment), kept as the default so existing
+   *  callers keep today's behavior; override to 0 for a command known to have nothing further
+   *  to wait for. The remote (relay) path has no equivalent delay and is unaffected. */
+  postCompleteSettleMs?: number;
 }
 
 /** Defaults tuned for the Query tab (plugins list, free memory, etc.). */
@@ -114,6 +124,7 @@ export async function runTelnetSystemCommandSession(
   const onStatus = options?.onStatus;
   const shouldStop = options?.shouldStop;
   const completeThresholds = options?.completeThresholds ?? DEFAULT_COMPLETE;
+  const postCompleteSettleMs = options?.postCompleteSettleMs ?? 300;
 
   let allData = '';
   let commandSent = false;
@@ -196,9 +207,13 @@ export async function runTelnetSystemCommandSession(
             if (
               isTelnetOutputComplete(newData, trimmedNewData, timeSinceCommand, completeThresholds)
             ) {
-              setTimeout(() => {
+              if (postCompleteSettleMs > 0) {
+                setTimeout(() => {
+                  outputComplete = true;
+                }, postCompleteSettleMs);
+              } else {
                 outputComplete = true;
-              }, 300);
+              }
             }
           }
         }
@@ -229,7 +244,9 @@ export async function runTelnetSystemCommandSession(
         await api.telnetSystemDisconnect().catch(() => {});
         return { ok: false, error: S.utils.stopped, stopped: true };
       }
-      await new Promise((resolve) => setTimeout(resolve, 200));
+      // Just re-checking already-updated local state (outputComplete / shouldStop) each tick —
+      // no I/O of its own, so a tight interval is free. Bounded by `timeout` above regardless.
+      await new Promise((resolve) => setTimeout(resolve, 50));
     }
 
     if (dataCleanup) dataCleanup();

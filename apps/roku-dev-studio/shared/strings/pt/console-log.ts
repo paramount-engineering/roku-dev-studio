@@ -116,6 +116,20 @@ export const consoleLog = {
   moreUniqueLines: (n: number): string =>
     `+${n.toLocaleString()} linha${n === 1 ? '' : 's'} única${n === 1 ? '' : 's'} a mais`,
 
+  sectionPerformance: 'Desempenho',
+  beaconFlows: {
+    appLaunch: 'Início da app',
+    appDialog: 'Início do diálogo',
+    epgLaunch: 'Início da EPG',
+    vodStart: 'Início de vídeo',
+    liveStart: 'Início ao vivo',
+    liveChannelChange: 'Troca de canal',
+    appCompile: 'Compilação da app',
+    appExit: 'Saída do canal',
+  },
+  beaconAdjustedNote: (ms: number): string => `excl. diálogo: ${ms.toLocaleString()} ms`,
+  beaconCertWindowNote: 'além da janela de certificação de EPG de 5 s',
+
   // ── BrightScript error catalog (brightscript-error-catalog.ts) ────────────────────────
   // Cópia localizável de cada entrada do catálogo, com chave pelo `id` da entrada. Os tokens
   // técnicos do BrightScript/Roku são mantidos como estão.

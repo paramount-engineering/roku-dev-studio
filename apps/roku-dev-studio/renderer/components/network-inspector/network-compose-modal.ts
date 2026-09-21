@@ -14,6 +14,7 @@
 import type { ParsedNetworkEvent, ReplayHttpInput } from '@shared/network-inspector/types.js';
 import { escapeHtml } from '../../modules/utils/dom.js';
 import { attachBackdropClickToClose } from '../../modules/utils/modal-backdrop-click.js';
+import { openModalOverlayActiveFromOpener, closeModalWithOriginMotion } from '../../modules/utils/modal-origin-motion.js';
 import { S } from '@shared/strings/index.js';
 import { buildReplayInputFromEvent } from './network-export.js';
 import { prettyXml, prettyXmlLenient } from '../../modules/ui/structured-body.js';
@@ -179,6 +180,8 @@ export async function openComposeModal(opts: {
    *  renderer/app.ts) — routes the resend through the remote server instead of the local engine. */
   isRemote?: boolean;
   serverUrl?: string | null;
+  /** Button that triggered the open — the modal grows out of it and shrinks back on close. */
+  opener?: HTMLElement | null;
 }): Promise<void> {
   const api = (window as unknown as { roku?: RokuApi }).roku;
   const isRemote = !!(opts.isRemote && opts.serverUrl);
@@ -202,7 +205,7 @@ export async function openComposeModal(opts: {
 
   const overlay = document.createElement('div');
   // `.modal-overlay` is display:none until `.active` is added.
-  overlay.className = 'modal-overlay ni-compose-overlay active';
+  overlay.className = 'modal-overlay ni-compose-overlay';
   overlay.innerHTML = `
     <div class="ni-rules-modal ni-compose-modal" role="dialog" aria-modal="true" aria-label="${S.networkInspector.composeTitle}">
       <div class="ni-rules-header">
@@ -267,6 +270,7 @@ export async function openComposeModal(opts: {
     </div>`;
 
   document.body.appendChild(overlay);
+  openModalOverlayActiveFromOpener(overlay, opts.opener ?? null);
 
   const statusEl = overlay.querySelector('[data-compose-status]') as HTMLElement | null;
   const setStatus = (text: string, isError = false): void => {
@@ -276,8 +280,10 @@ export async function openComposeModal(opts: {
   };
 
   const close = (): void => {
-    overlay.remove();
-    document.removeEventListener('keydown', onKey);
+    closeModalWithOriginMotion(overlay, () => {
+      overlay.remove();
+      document.removeEventListener('keydown', onKey);
+    });
   };
   const onKey = (e: KeyboardEvent): void => {
     if (e.key === 'Escape') close();

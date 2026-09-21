@@ -15,6 +15,7 @@
  */
 import { escapeHtml } from '../../modules/utils/dom.js';
 import { attachBackdropClickToClose } from '../../modules/utils/modal-backdrop-click.js';
+import { openModalOverlayActiveFromOpener, closeModalWithOriginMotion } from '../../modules/utils/modal-origin-motion.js';
 import { S } from '@shared/strings/index.js';
 
 type ToolName = keyof typeof S.settings.mcpToolDescriptions;
@@ -119,7 +120,7 @@ function renderGroupsHtml(): string {
 }
 
 /** Open the "View MCP Tools" reference modal. Purely informational — no interaction beyond closing. */
-export function openMcpToolsModal(): void {
+export function openMcpToolsModal(opener?: HTMLElement | null): void {
   const overlay = document.createElement('div');
   overlay.className = 'mcp-tools-overlay';
 
@@ -135,10 +136,13 @@ export function openMcpToolsModal(): void {
       </div>
     </div>`;
   document.body.appendChild(overlay);
+  openModalOverlayActiveFromOpener(overlay, opener ?? null);
 
   const close = (): void => {
-    overlay.remove();
-    document.removeEventListener('keydown', onKey);
+    closeModalWithOriginMotion(overlay, () => {
+      overlay.remove();
+      document.removeEventListener('keydown', onKey);
+    });
   };
   const onKey = (e: KeyboardEvent): void => {
     if (e.key === 'Escape') close();

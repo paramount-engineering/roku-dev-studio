@@ -19,10 +19,11 @@
  */
 import { S } from '@shared/strings/index.js';
 import { showToast } from '../utils/ui.js';
-import { setDynamicText } from '../utils/dom.js';
+import { setDynamicText, escapeHtml, setSafeHTML } from '../utils/dom.js';
 import { getStoredPassword } from '../utils/storage.js';
 import { attachInstantTooltips } from '../utils/instant-tooltip.js';
 import { attachBackdropClickToClose } from '../utils/modal-backdrop-click.js';
+import { openModalOverlayActiveFromOpener, closeModalWithOriginMotion } from '../utils/modal-origin-motion.js';
 import { deviceKey } from '@shared/platform/device-identity.js';
 
 /**
@@ -341,10 +342,34 @@ export function setupTelnetDebugSidebar(panel: HTMLElement, ip: string, opts: Si
     whyBtn?.removeAttribute('hidden'); // surface an explicit "Why?" — clicking the dot alone isn't discoverable
   };
 
-  const openAttachErrorModal = (detail: string): void => {
+  /**
+   * The controller (debug-session-controller.ts) formats `detail` as blank-line-separated
+   * paragraphs: a lead sentence, an optional "Device: …" line, then `- `-prefixed remediation
+   * steps. Rendered here as a paragraph + a distinct device section + a bullet list instead of
+   * one text blob — kept as a single plain string upstream so other consumers (attach()'s
+   * `error` return, the MCP debugger_attach tool) still get the same text unchanged.
+   */
+  const renderAttachErrorDetail = (detail: string): string =>
+    detail
+      .split(/\n\n+/)
+      .map((para) => para.trim())
+      .filter(Boolean)
+      .map((para) => {
+        const lines = para.split('\n').map((l) => l.trim()).filter(Boolean);
+        if (lines.every((l) => l.startsWith('- '))) {
+          return `<ul class="telnet-debug-why-steps">${lines.map((l) => `<li>${escapeHtml(l.slice(2))}</li>`).join('')}</ul>`;
+        }
+        if (para.startsWith('Device:')) {
+          return `<div class="telnet-debug-why-device">${escapeHtml(para)}</div>`;
+        }
+        return `<p>${escapeHtml(para)}</p>`;
+      })
+      .join('');
+
+  const openAttachErrorModal = (detail: string, opener?: HTMLElement | null): void => {
     closeAttachErrorModal?.(); // never stack two; also releases the prior listener
     const overlay = document.createElement('div');
-    overlay.className = 'modal-overlay telnet-debug-why-overlay active';
+    overlay.className = 'modal-overlay telnet-debug-why-overlay';
     overlay.innerHTML = `
       <div class="telnet-debug-why-modal" role="dialog" aria-modal="true" aria-label="${S.debugger.attachErrorTitle}">
         <div class="telnet-debug-why-header">
@@ -354,16 +379,27 @@ export function setupTelnetDebugSidebar(panel: HTMLElement, ip: string, opts: Si
         <div class="telnet-debug-why-body"></div>
       </div>`;
     document.body.appendChild(overlay);
+    openModalOverlayActiveFromOpener(overlay, opener ?? null);
     const bodyEl = overlay.querySelector('.telnet-debug-why-body') as HTMLElement;
-    bodyEl.textContent = detail; // plain text; the controller builds a multi-sentence remediation
-    const close = (): void => { overlay.remove(); document.removeEventListener('keydown', onKey); closeAttachErrorModal = null; };
+    setSafeHTML(bodyEl, renderAttachErrorDetail(detail));
+    const close = (): void => {
+      closeModalWithOriginMotion(overlay, () => {
+        overlay.remove();
+        document.removeEventListener('keydown', onKey);
+        closeAttachErrorModal = null;
+      });
+    };
     const onKey = (e: KeyboardEvent): void => { if (e.key === 'Escape') close(); };
     closeAttachErrorModal = close;
     document.addEventListener('keydown', onKey);
     attachBackdropClickToClose(overlay, close);
     overlay.querySelector('.telnet-debug-why-close')?.addEventListener('click', close);
   };
-  const onStatusClick = (): void => { if (attachErrorDetail) openAttachErrorModal(attachErrorDetail); };
+  const onStatusClick = (e: MouseEvent): void => {
+    if (attachErrorDetail) {
+      openAttachErrorModal(attachErrorDetail, e.currentTarget instanceof HTMLElement ? e.currentTarget : null);
+    }
+  };
   statusDot?.addEventListener('click', onStatusClick);
   whyBtn?.addEventListener('click', onStatusClick);
 

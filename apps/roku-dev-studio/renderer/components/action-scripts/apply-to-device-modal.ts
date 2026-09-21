@@ -6,6 +6,7 @@
  */
 import { escapeHtml, setSafeHTML } from '../../modules/utils/index.js';
 import { attachBackdropClickToClose } from '../../modules/utils/modal-backdrop-click.js';
+import { openModalOverlayActiveFromOpener, closeModalWithOriginMotion } from '../../modules/utils/modal-origin-motion.js';
 import { S } from '@shared/strings/index.js';
 
 export type ApplyDeviceOption = { id: string; label: string };
@@ -16,7 +17,7 @@ export function openApplyToDeviceModal(opts: {
   onApply: (id: string) => void;
 }): void {
   const overlay = document.createElement('div');
-  overlay.className = 'modal-overlay active apply-to-device-overlay';
+  overlay.className = 'modal-overlay apply-to-device-overlay';
   setSafeHTML(
     overlay,
     `<div class="modal apply-to-device-modal" role="dialog" aria-modal="true" aria-label="${escapeHtml(S.actionScripts.viewerApplyToDevice)}">
@@ -41,8 +42,10 @@ export function openApplyToDeviceModal(opts: {
   const applyBtn = overlay.querySelector('.apply-to-device-apply') as HTMLButtonElement;
 
   const settle = (): void => {
-    document.removeEventListener('keydown', onKey);
-    overlay.remove();
+    closeModalWithOriginMotion(overlay, () => {
+      document.removeEventListener('keydown', onKey);
+      overlay.remove();
+    });
   };
   const onKey = (e: KeyboardEvent): void => {
     if (e.key === 'Escape') settle();
@@ -95,4 +98,7 @@ export function openApplyToDeviceModal(opts: {
   document.addEventListener('keydown', onKey);
 
   document.body.appendChild(overlay);
+  // Opened from a different BrowserWindow's request — no local button to grow from here, so this
+  // correctly falls back to the center-zoom (see modal-origin-motion.ts's no-opener path).
+  openModalOverlayActiveFromOpener(overlay, null);
 }

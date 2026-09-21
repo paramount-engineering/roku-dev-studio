@@ -16,6 +16,7 @@ import {
 import { initSideloadRelaySection } from './sideload-relay-section.js';
 import { openMcpToolsModal } from './mcp-tools-modal.js';
 import { attachBackdropClickToClose } from '../../modules/utils/modal-backdrop-click.js';
+import { prepareModalOpenOrigin, playModalOpenMotion, closeModalWithOriginMotion } from '../../modules/utils/modal-origin-motion.js';
 import { attachInstantTooltips } from '../../modules/utils/instant-tooltip.js';
 import { S, applyI18n, availableLocales, getLocale, matchLocale, localeLabel, setLocale, SYSTEM_LOCALE } from '@shared/strings/index.js';
 import { applyLocalePreference } from '../../modules/utils/locale-live.js';
@@ -1457,7 +1458,7 @@ if (btnResetActionScripts) {
 var btnViewMcpTools = el('btnViewMcpTools');
 if (btnViewMcpTools) {
   btnViewMcpTools.addEventListener('click', function () {
-    openMcpToolsModal();
+    openMcpToolsModal(btnViewMcpTools);
   });
 }
 var btnResetMcpServer = el('btnResetMcpServer');
@@ -1617,7 +1618,9 @@ function isNiSetupOpen() {
 function openNiSetup() {
   if (!niSetupModal) return;
   niSetupLastFocus = document.activeElement;
+  prepareModalOpenOrigin(niSetupModal, btnOpenNiSetup ?? null);
   niSetupModal.hidden = false;
+  playModalOpenMotion(niSetupModal);
   var closeBtn = el('niSetupModalClose');
   if (closeBtn) closeBtn.focus();
   if ((HOST_PLATFORM === 'darwin' || HOST_PLATFORM === 'linux') && api.getState) {
@@ -1629,11 +1632,13 @@ function openNiSetup() {
 }
 function closeNiSetup() {
   if (!niSetupModal) return;
-  niSetupModal.hidden = true;
-  if (niSetupLastFocus && typeof (niSetupLastFocus as HTMLElement).focus === 'function') {
-    (niSetupLastFocus as HTMLElement).focus();
-  }
-  niSetupLastFocus = null;
+  closeModalWithOriginMotion(niSetupModal, () => {
+    niSetupModal.hidden = true;
+    if (niSetupLastFocus && typeof (niSetupLastFocus as HTMLElement).focus === 'function') {
+      (niSetupLastFocus as HTMLElement).focus();
+    }
+    niSetupLastFocus = null;
+  });
 }
 var btnOpenNiSetup = el('btnOpenNiSetup');
 if (btnOpenNiSetup) btnOpenNiSetup.addEventListener('click', openNiSetup);
@@ -1652,7 +1657,9 @@ function isNiCaOpen() {
 function openNiCa() {
   if (!niCaModal) return;
   niCaLastFocus = document.activeElement;
+  prepareModalOpenOrigin(niCaModal, btnOpenNiCa ?? null);
   niCaModal.hidden = false;
+  playModalOpenMotion(niCaModal);
   var closeBtn = el('niCaModalClose');
   if (closeBtn) closeBtn.focus();
   // Fetch on open — this is the lazy trigger for getOrCreateCa()'s RSA keygen.
@@ -1660,11 +1667,13 @@ function openNiCa() {
 }
 function closeNiCa() {
   if (!niCaModal) return;
-  niCaModal.hidden = true;
-  if (niCaLastFocus && typeof (niCaLastFocus as HTMLElement).focus === 'function') {
-    (niCaLastFocus as HTMLElement).focus();
-  }
-  niCaLastFocus = null;
+  closeModalWithOriginMotion(niCaModal, () => {
+    niCaModal.hidden = true;
+    if (niCaLastFocus && typeof (niCaLastFocus as HTMLElement).focus === 'function') {
+      (niCaLastFocus as HTMLElement).focus();
+    }
+    niCaLastFocus = null;
+  });
 }
 var btnOpenNiCa = el('btnOpenNiCa');
 if (btnOpenNiCa) btnOpenNiCa.addEventListener('click', openNiCa);
