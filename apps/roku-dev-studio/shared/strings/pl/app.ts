@@ -329,11 +329,11 @@ WiFi MAC: ${d.wifiMac || 'N/D'}`,
   featureDeviceRemote: 'Pilot urządzenia',
   featureDeviceRemoteDesc: 'Pełny D-pad, sterowanie multimediami i wprowadzanie tekstu — jak prawdziwy pilot.',
   featureQueryDesc: 'Odpytuj informacje o urządzeniu, stan odtwarzacza multimediów i rejestr przez ECP.',
-  featureConsoleDesc: 'Wyświetlaj dane debugowania BrightScript przez Telnet, filtruj, wyszukuj i debuguj',
+  featureConsoleDesc: 'Wyświetlaj dane debugowania BrightScript przez Telnet i inne porty urządzenia.',
   featureActionScriptsDesc: 'Łącz naciśnięcia klawiszy, uruchomienia i wywołania RALE w zautomatyzowane scenariusze.',
   featureNetworkInspectorDesc: 'Analizuj ruch HTTP/HTTPS aplikacji Dev App za pomocą proxy MITM.',
   featureRemoteLocations: 'Zdalne lokalizacje',
-  featureRemoteLocationsDesc: 'Łącz się z urządzeniami Roku w dowolnym miejscu za pomocą serwerów przekazujących lub Roku Cloud Emulator.',
+  featureRemoteLocationsDesc: 'Łącz się z urządzeniami Roku przez serwery przekazujące lub Roku Cloud Emulator.',
 
   // Device-panel tabs
   tabRemote: 'Pilot',

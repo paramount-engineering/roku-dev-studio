@@ -324,11 +324,11 @@ MAC WiFi: ${d.wifiMac || 'N/A'}`,
   featureDeviceRemote: 'Controle do dispositivo',
   featureDeviceRemoteDesc: 'D-pad completo, controles de mídia e entrada de texto — como um controle de verdade.',
   featureQueryDesc: 'Consulte informações do dispositivo, o estado do reprodutor de mídia e o registro via ECP.',
-  featureConsoleDesc: 'Veja a saída de depuração do BrightScript via Telnet, filtre, pesquise e depure',
+  featureConsoleDesc: 'Veja a saída de depuração do BrightScript via Telnet e outras portas do dispositivo.',
   featureActionScriptsDesc: 'Encadeie toques de tecla, inicializações e chamadas RALE em fluxos automatizados.',
   featureNetworkInspectorDesc: 'Inspecione o tráfego HTTP/HTTPS do Dev App via um proxy MITM.',
   featureRemoteLocations: 'Locais remotos',
-  featureRemoteLocationsDesc: 'Conecte-se a dispositivos Roku em qualquer lugar via servidores de relay ou um Roku Cloud Emulator.',
+  featureRemoteLocationsDesc: 'Conecte-se a dispositivos Roku via servidores de relay ou um Roku Cloud Emulator.',
 
   // Device-panel tabs
   tabRemote: 'Remoto',

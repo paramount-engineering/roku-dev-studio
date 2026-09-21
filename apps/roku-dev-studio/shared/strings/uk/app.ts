@@ -345,11 +345,11 @@ WiFi MAC: ${d.wifiMac || 'Н/Д'}`,
   featureDeviceRemote: 'Пульт пристрою',
   featureDeviceRemoteDesc: 'Повноцінний D-pad, медіакерування та введення тексту — як справжній пульт.',
   featureQueryDesc: 'Робіть запити інформації про пристрій, стану медіапрогравача та реєстру через ECP.',
-  featureConsoleDesc: 'Переглядайте налагоджувальний вивід BrightScript через Telnet, фільтруйте, шукайте та налагоджуйте',
+  featureConsoleDesc: 'Переглядайте налагоджувальний вивід BrightScript через Telnet та інші порти пристрою.',
   featureActionScriptsDesc: 'Об’єднуйте натискання клавіш, запуски та виклики RALE в автоматизовані сценарії.',
   featureNetworkInspectorDesc: 'Аналізуйте HTTP/HTTPS-трафік Dev App через MITM-проксі.',
   featureRemoteLocations: 'Віддалені розташування',
-  featureRemoteLocationsDesc: 'Підключайтеся до пристроїв Roku будь-де через relay-сервери або Roku Cloud Emulator.',
+  featureRemoteLocationsDesc: 'Підключайтеся до пристроїв Roku через relay-сервери або Roku Cloud Emulator.',
 
   // Device-panel tabs
   tabRemote: 'Пульт',

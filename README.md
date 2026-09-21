@@ -101,7 +101,7 @@ Remote Control ([Floating Remote](FEATURES.md#remote-control)) · [Device Perfor
 
 ## Remote Server Setup
 
-Roku Dev Studio can control devices over the internet using a remote server bridge, so you can manage devices in Remote Locations without being on the same network as the desktop app. Run the relay (`npm run remote-server` from this repo, or `npm install -g roku-dev-studio-remote-server`), then add it via **Add Remote Location** in the device selector. The modal has two tabs: **RDS Relay** (relay server address + port) and **RCE** (a Roku Cloud Emulator account name + Personal Access Token). RCE devices list as shutdown / pending / running and must be started first (**Start**, with optional snapshot / firmware / Max Run Time options) — ECP, sideload and console only respond while a device is running.
+Roku Dev Studio can control devices over the internet using a remote server bridge, so you can manage devices in Remote Locations without being on the same network as the desktop app. Run the relay (`npm run remote-server` from this repo, or `npm install -g roku-dev-studio-remote-server`), then add it via **Add Remote Location** in the device selector. The modal has two tabs: **RDS Relay** (Relay Server address + port) and **RCE** (a Roku Cloud Emulator account name + Personal Access Token). RCE devices list as shutdown / pending / running and must be started first (**Start**, with optional snapshot / firmware / Max Run Time options) — ECP, sideload and console only respond while a device is running.
 
 Full setup (running the server as a service, network/firewall configuration, the HTTP/WebSocket API, and Swagger docs) lives in the **[remote server package README](packages/roku-dev-studio-remote-server/README.md)**.
 

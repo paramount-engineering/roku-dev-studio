@@ -125,13 +125,14 @@ export const modals = {
     },
     console: {
       blurb:
-        'Transmita en vivo la salida de depuración de BrightScript del Roku a través de Telnet, con filtrado y búsqueda para mostrar exactamente lo que importa, y adjunte un depurador completo de BrightScript cuando necesite recorrer el código paso a paso.',
+        'Transmita en vivo la salida de depuración de BrightScript del Roku a través de Telnet (puerto 8085), con filtrado y búsqueda para mostrar exactamente lo que importa; abra las demás consolas del dispositivo en la ventana de puertos y adjunte un depurador completo de BrightScript cuando necesite recorrer el código paso a paso.',
       points: [
-        'Flujo de registro en vivo por Telnet',
+        'Flujo de registro en vivo por Telnet: la consola de depuración de BrightScript en el puerto 8085',
         'Filtro y búsqueda de texto completo',
         'Haga clic en URL/JSON/XML para verlos con formato en una ventana modal',
         'Guarde el registro en un archivo',
-        'Adjunte un depurador: puntos de interrupción, variables, pila de llamadas y REPL',
+        'Ventana de puertos: la consola SceneGraph 8080, la consola del salvapantallas 8087, una traza en vivo del protocolo de depuración 8081 o un puerto personalizado (en dispositivos Cloud Emulator: 9999 o 49152–65535)',
+        'Adjunte un depurador por el puerto 8081: puntos de interrupción, variables, pila de llamadas y REPL',
       ],
     },
     actionScripts: {

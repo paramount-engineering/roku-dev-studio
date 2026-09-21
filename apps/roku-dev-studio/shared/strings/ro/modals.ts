@@ -125,13 +125,14 @@ export const modals = {
     },
     console: {
       blurb:
-        'Transmiteți în timp real BrightScript Debug Output de la Roku prin Telnet, cu filtrare și căutare pentru a scoate la iveală exact ce contează, și atașați un depanator BrightScript complet atunci când trebuie să parcurgeți codul pas cu pas.',
+        'Transmiteți în timp real BrightScript Debug Output de la Roku prin Telnet (portul 8085), cu filtrare și căutare pentru a scoate la iveală exact ce contează; deschideți celelalte console ale dispozitivului în fereastra de porturi și atașați un depanator BrightScript complet atunci când trebuie să parcurgeți codul pas cu pas.',
       points: [
-        'Flux de jurnal Telnet în timp real',
+        'Flux de jurnal Telnet în timp real — consola de depanare BrightScript pe portul 8085',
         'Filtrare și căutare în tot textul',
         'Faceți clic pe URL/JSON/XML pentru a le vizualiza formatat într-o fereastră modală',
         'Salvați jurnalul într-un fișier',
-        'Atașați un depanator — puncte de întrerupere, variabile, stivă de apeluri și REPL',
+        'Fereastra de porturi: consola SceneGraph 8080, consola screensaver 8087, o urmărire în timp real a protocolului de depanare 8081 sau un port personalizat (pe dispozitive Cloud Emulator: 9999 sau 49152–65535)',
+        'Atașați un depanator prin portul 8081 — puncte de întrerupere, variabile, stivă de apeluri și REPL',
       ],
     },
     actionScripts: {

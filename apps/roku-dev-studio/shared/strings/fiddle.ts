@@ -101,16 +101,16 @@ export const fiddle = {
   errNoPasswordProvided: 'No developer password provided.',
   errNoPasswordAvailable: 'No developer password available for this device.',
   errPackageFailed: (detail: string): string => `Failed to package snippet: ${detail}`,
-  errRemoteMissingServerUrl: 'Remote device is missing its relay server URL — cannot stream telnet logs.',
+  errRemoteMissingServerUrl: 'Remote device is missing its Relay Server URL — cannot stream telnet logs.',
   errSideloadFailed: 'Sideload failed',
   errDeviceNotFound: 'Device not found.',
   errNotFiddleChannel:
     "The dev channel currently installed is not a Fiddle channel — left it alone so your own app isn't removed.",
 
   // humanizeRemoteUploadError prose (remote relay upload failures)
-  errRemoteUnknown: 'Unknown error from the remote relay server.',
+  errRemoteUnknown: 'Unknown error from the remote Relay Server.',
   errRemoteNetworkBlip:
-    'Network blip between the relay server and the Roku (broken pipe). ' +
+    'Network blip between the Relay Server and the Roku (broken pipe). ' +
     'This usually resolves on retry — if it keeps happening, check that the relay ' +
     'host can reach the device over the LAN and that the Roku is not busy.',
   errRemoteCurl: (detail: string): string => `Remote relay curl error: ${detail}`,

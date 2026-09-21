@@ -125,13 +125,14 @@ export const modals = {
     },
     console: {
       blurb:
-        'Przesyłaj na żywo strumień BrightScript Debug Output z Roku przez Telnet, z filtrowaniem i wyszukiwaniem, aby wydobyć dokładnie to, co ważne, a także podłącz pełny debugger BrightScript, gdy musisz przejść przez kod krok po kroku.',
+        'Przesyłaj na żywo strumień BrightScript Debug Output z Roku przez Telnet (port 8085), z filtrowaniem i wyszukiwaniem, aby wydobyć dokładnie to, co ważne; otwieraj pozostałe konsole urządzenia w oknie portów i podłącz pełny debugger BrightScript, gdy musisz przejść przez kod krok po kroku.',
       points: [
-        'Strumień dziennika Telnet na żywo',
+        'Strumień dziennika Telnet na żywo — konsola debugowania BrightScript na porcie 8085',
         'Filtrowanie i wyszukiwanie pełnotekstowe',
         'Kliknij URL/JSON/XML, aby wyświetlić je w czytelnej formie w oknie modalnym',
         'Zapisz dziennik do pliku',
-        'Podłącz debugger — punkty przerwania, zmienne, stos wywołań i REPL',
+        'Okno portów: konsola SceneGraph 8080, konsola wygaszacza ekranu 8087, podgląd na żywo protokołu debugowania 8081 lub port własny (na urządzeniach Cloud Emulator: 9999 lub 49152–65535)',
+        'Podłącz debugger przez port 8081 — punkty przerwania, zmienne, stos wywołań i REPL',
       ],
     },
     actionScripts: {

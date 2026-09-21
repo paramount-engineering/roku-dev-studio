@@ -332,11 +332,11 @@ MAC WiFi: ${d.wifiMac || 'N/A'}`,
   featureDeviceRemote: 'Telecomandă dispozitiv',
   featureDeviceRemoteDesc: 'D-pad complet, comenzi media și introducere de text — ca o telecomandă reală.',
   featureQueryDesc: 'Interoghează informații despre dispozitiv, starea player-ului media și registrul prin ECP.',
-  featureConsoleDesc: 'Vezi ieșirea de depanare BrightScript prin Telnet, filtrează, caută și depanează',
+  featureConsoleDesc: 'Vezi ieșirea de depanare BrightScript prin Telnet și alte porturi ale dispozitivului.',
   featureActionScriptsDesc: 'Înlănțuie apăsări de taste, lansări și apeluri RALE în fluxuri automatizate.',
   featureNetworkInspectorDesc: 'Inspectează traficul HTTP/HTTPS al Dev App printr-un proxy MITM.',
   featureRemoteLocations: 'Locații la distanță',
-  featureRemoteLocationsDesc: 'Conectează-te la dispozitive Roku de oriunde prin servere releu sau un Roku Cloud Emulator.',
+  featureRemoteLocationsDesc: 'Conectează-te la dispozitive Roku prin servere releu sau un Roku Cloud Emulator.',
 
   // Device-panel tabs
   tabRemote: 'Telecomandă',

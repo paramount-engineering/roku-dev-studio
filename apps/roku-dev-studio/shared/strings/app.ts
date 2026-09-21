@@ -25,7 +25,7 @@ export const app = {
   serverInfoTitle: 'Server Info',
   deviceCount: (n: number): string => `${n} device${n !== 1 ? 's' : ''}`,
   scanningForDevices: 'Scanning for devices...',
-  connectingToRelayServer: 'Connecting to relay server...',
+  connectingToRelayServer: 'Connecting to Relay Server...',
   serverOffline: 'Server Offline',
   noRokuDevicesFound: 'No Roku devices found',
   confirmRemoveLocation: (name: string): string => `Remove location "${name}"?`,
@@ -36,8 +36,8 @@ export const app = {
   locationServerExists: (name: string): string =>
     `A location with this server address already exists ("${name}").`,
   unableToConnectRelay:
-    'Unable to connect to relay server. Please check the address and ensure the server is running.',
-  failedToConnectRelay: 'Failed to connect to relay server',
+    'Unable to connect to Relay Server. Please check the address and ensure the server is running.',
+  failedToConnectRelay: 'Failed to connect to Relay Server',
   addLocation: 'Add Location',
 
   // Add-location flow — RCE tab (errors surfaced via alert, same as the RDS Relay tab above)
@@ -336,11 +336,11 @@ WiFi MAC: ${d.wifiMac || 'N/A'}`,
   featureDeviceRemote: 'Device Remote',
   featureDeviceRemoteDesc: 'Full D-pad, media controls, and text input — like a real remote.',
   featureQueryDesc: 'Query device info, media-player state, and registry over ECP.',
-  featureConsoleDesc: 'View BrightScript Debug Output via Telnet, Filter, Search, and Debug',
+  featureConsoleDesc: 'View BrightScript Debug Output via Telnet, plus other device ports.',
   featureActionScriptsDesc: 'Chain key presses, launches, and RALE calls into automated flows.',
   featureNetworkInspectorDesc: 'Inspect Dev App HTTP/HTTPS traffic via a MITM proxy.',
   featureRemoteLocations: 'Remote Locations',
-  featureRemoteLocationsDesc: 'Connect to Roku devices anywhere — via relay servers or a Roku Cloud Emulator.',
+  featureRemoteLocationsDesc: 'Connect to Roku devices via Relay Servers or a Roku Cloud Emulator.',
 
   // Device-panel tabs
   tabRemote: 'Remote',

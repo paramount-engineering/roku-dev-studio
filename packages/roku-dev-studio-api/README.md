@@ -107,7 +107,7 @@ All exports are available from the package root: `require('roku-dev-studio-api')
 
 ### Shared defaults (`lib/shared-constants.js`)
 
-One set of values for the **npm package**, **`rds` CLI**, **remote relay server**, and **Roku Dev Studio (Electron)**: **`DEFAULT_RALE_PORT`**, **`QUERY_TIMEOUT`**, **`TELNET_TIMEOUT`** / **`DEFAULT_TELNET_CONNECT_TIMEOUT_MS`**, **`SCREENSHOT_DEBOUNCE_DELAY`**, **`SCREENSHOT_AFTER_LAUNCH_DELAY`**, **`CONNECTION_CHECK_INTERVAL`**, **`TOAST_DISPLAY_DURATION`**, **`STATUS_MESSAGE_DURATION`**, **`DEVICE_METRICS_SAMPLE_INTERVAL_MIN_MS`** (Device Performance sampling floor; also the relay's `/query/*` cache TTL), **`INPUT_TEXT_KEY_DELAY_MS`** / **`INPUT_TEXT_PER_KEY_TIMEOUT_MS`** (per-`Lit_` keypress pacing in `inputText`), **`INPUT_TEXT_RELAY_HTTP_MIN_TIMEOUT_MS`** / **`INPUT_TEXT_RELAY_HTTP_MAX_TIMEOUT_MS`** and **`computeInputTextRelayHttpTimeoutMs(text, opts?)`** (client-side HTTP timeout budget for relay `/input-text`, scaled by text length). The desktop renderer reads them via preload as **`window.rdsSharedConstants`**.
+One set of values for the **npm package**, **`rds` CLI**, **remote Relay Server**, and **Roku Dev Studio (Electron)**: **`DEFAULT_RALE_PORT`**, **`QUERY_TIMEOUT`**, **`TELNET_TIMEOUT`** / **`DEFAULT_TELNET_CONNECT_TIMEOUT_MS`**, **`SCREENSHOT_DEBOUNCE_DELAY`**, **`SCREENSHOT_AFTER_LAUNCH_DELAY`**, **`CONNECTION_CHECK_INTERVAL`**, **`TOAST_DISPLAY_DURATION`**, **`STATUS_MESSAGE_DURATION`**, **`DEVICE_METRICS_SAMPLE_INTERVAL_MIN_MS`** (Device Performance sampling floor; also the relay's `/query/*` cache TTL), **`INPUT_TEXT_KEY_DELAY_MS`** / **`INPUT_TEXT_PER_KEY_TIMEOUT_MS`** (per-`Lit_` keypress pacing in `inputText`), **`INPUT_TEXT_RELAY_HTTP_MIN_TIMEOUT_MS`** / **`INPUT_TEXT_RELAY_HTTP_MAX_TIMEOUT_MS`** and **`computeInputTextRelayHttpTimeoutMs(text, opts?)`** (client-side HTTP timeout budget for relay `/input-text`, scaled by text length). The desktop renderer reads them via preload as **`window.rdsSharedConstants`**.
 
 **`PACKAGE_VERSION`** — this package's semver string, generated from `package.json` at build time.
 
@@ -118,7 +118,7 @@ One set of values for the **npm package**, **`rds` CLI**, **remote relay server*
 | `runActionScript(script, options)` | Run Action Script JSON (same shape as Dev Studio). See `lib/script-runner.js` for `options`. |
 | `validateScriptStructure(script)` | **Sentence-form** offline validation; `{ valid, errors[] }`. Thin adapter over the canonical validator. |
 | `validateActionScript(script, opts?)` | **Canonical** validator: `{ ok, errors[], stepCounts }` with structured `{ path, code, expected[]?, stepIndex? }` errors. Used by every surface (MCP `validate_script`, the renderer Builder per-row hints, the `rds script validate` CLI). `opts`: `{ raleFunctions?, allowDevPassword? }` — `raleFunctions` is the channel's `getExternalControlFunctions` list, used to check `appFunction` names/params; `allowDevPassword: true` suppresses the `password_in_script` error for local-UI callers (Builder / Executor / Import) where a human-typed or remembered password never leaves the machine. MCP `validate_script` leaves it off. |
-| `raleWake`, `raleConnect`, `raleCommand`, `raleDisconnect`, `raleDisconnectAll`, `raleConnectionStatus` | Direct TCP RALE on LAN (same protocol as the relay server). Default port **`DEFAULT_RALE_PORT`** (shared-constants). |
+| `raleWake`, `raleConnect`, `raleCommand`, `raleDisconnect`, `raleDisconnectAll`, `raleConnectionStatus` | Direct TCP RALE on LAN (same protocol as the Relay Server). Default port **`DEFAULT_RALE_PORT`** (shared-constants). |
 | `raleRegisterSocket(connectionId, socket, opts?)` | Register an already-open socket (e.g. an RCE WebSocket tunnel) so `raleCommand` / `raleDisconnect` / `raleConnectionStatus` can drive it without `raleConnect`'s own TCP dial. |
 | `normalizeRaleFunctions(raw)` | Normalize `getExternalControlFunctions` entries to `{ name, params, description? }[]` (description preserved verbatim from the channel payload when present). |
 | `parseGetExternalControlFunctionsResponse(raleResult)` | Parse `raleCommand` result object into `{ ok, functions?, error?, raw? }`. |
@@ -160,7 +160,7 @@ The transport-agnostic op catalog. Every Roku side-effecting action is described
 | `MAIN_OPS`, `RENDERER_OPS` | Subsets keyed by where the op runs. |
 | `findOp(id)` | Lookup by id. |
 | `runOp(op, args, ctx)` | Execute an op programmatically. |
-| `runOpForHttp(op, body)` | HTTP-friendly wrapper used by the Dev Studio bridge and the relay server. |
+| `runOpForHttp(op, body)` | HTTP-friendly wrapper used by the Dev Studio bridge and the Relay Server. |
 | `opToMcpTool(op)` | Adapter that turns a descriptor into an MCP tool entry. |
 
 ### Errors

@@ -128,13 +128,14 @@ export const modals = {
     },
     console: {
       blurb:
-        "Stream the Roku's BrightScript Debug Output live over Telnet, with filtering and search to surface exactly what matters — and attach a full BrightScript debugger when you need to step through code.",
+        "Stream the Roku's BrightScript Debug Output live over Telnet (port 8085), with filtering and search to surface exactly what matters — open the device's other consoles in the Ports Window, and attach a full BrightScript debugger when you need to step through code.",
       points: [
-        'Live Telnet log stream',
+        'Live Telnet log stream — the BrightScript debug console on port 8085',
         'Filter and full-text search',
         'Click URL/JSON/XML to pretty-view them in a modal',
         'Save the log to a file',
-        'Attach a debugger — breakpoints, variables, call stack, and REPL',
+        'Ports Window: the 8080 SceneGraph console, the 8087 screensaver console, a live trace of the 8081 debug protocol, or a custom port (Cloud Emulator devices: 9999 or 49152–65535)',
+        'Attach a debugger over port 8081 — breakpoints, variables, call stack, and REPL',
       ],
     },
     actionScripts: {
@@ -158,9 +159,9 @@ export const modals = {
     },
     remoteLocations: {
       blurb:
-        "Connect to Roku devices that aren't on your local network — through a relay server at another site, or to cloud-hosted virtual Rokus from a Roku Cloud Emulator (RCE) account.",
+        "Connect to Roku devices that aren't on your local network — through a Relay Server at another site, or to cloud-hosted virtual Rokus from a Roku Cloud Emulator (RCE) account.",
       points: [
-        'Reach LAN devices at another site via a relay server',
+        'Reach LAN devices at another site via a Relay Server',
         'Add an RCE account with a Personal Access Token to list, start, and control its virtual devices',
         'Manage multiple Remote Locations',
         'Same tooling as local devices',
@@ -619,11 +620,11 @@ export const modals = {
     remoteLocationsListHtml: `
             <li><strong>Setup</strong> - Run the Roku Relay Server on a machine at the remote location</li>
             <li><strong>Add Location</strong> - Click "Add" in the Remote Locations section, then choose the <strong>RDS Relay</strong> or <strong>RCE</strong> tab</li>
-            <li><strong>Server Address</strong> - RDS Relay tab: enter the IP Address or Hostname of the relay server</li>
-            <li><strong>Default Port</strong> - The relay server runs on port <code>4951</code> by default</li>
+            <li><strong>Server Address</strong> - RDS Relay tab: enter the IP Address or Hostname of the Relay Server</li>
+            <li><strong>Default Port</strong> - The Relay Server runs on port <code>4951</code> by default</li>
             <li><strong>RCE Account</strong> - RCE tab: name the account and paste in its API token from Roku's Cloud Emulator dashboard</li>
           `,
-    remoteLocationsServerHtml: `The relay server can be found in the <code>remote-server</code> folder. See the README for setup instructions (macOS LaunchAgent, Linux systemd, Windows Task Scheduler).`,
+    remoteLocationsServerHtml: `The Relay Server can be found in the <code>remote-server</code> folder. See the README for setup instructions (macOS LaunchAgent, Linux systemd, Windows Task Scheduler).`,
     remoteLocationsTroubleshootHtml: `<strong>Sideload or screenshot fails via relay but ECP works?</strong> Update the relay host to the same <code>roku-dev-studio-api</code> version as this app. Check <code>GET /health</code> on the relay (<code>apiVersion</code> field) and ensure port <code>4951</code> is reachable through firewalls.`,
     remoteLocationsRceHtml: `<strong>RCE devices</strong> list as shutdown/pending/running. Start one from its card (or Roku's own Cloud Emulator dashboard) before connecting — ECP, sideload, and console only respond while running, and a device auto-stops after its own configured Max Run Time.`,
     remoteLocationsIntro: 'Control Roku devices at Remote Locations — either a Relay Server (LAN devices at another site) or a Roku Cloud Emulator (RCE) account:',
@@ -638,7 +639,7 @@ export const modals = {
     sideloadRelayPointHtml: `<strong>Point your IDE at RDS.</strong> With the relay enabled, RDS is discoverable over SSDP as <em>"Roku Dev Studio Relay"</em>, or you can set your build host to this machine's IP directly. On <em>Sideload</em> / <em>Debug: Launch</em>, the IDE uploads to RDS on port <code>80</code> and RDS handles the fan-out. A themed upload web page is also served at the relay address (<code>http://&lt;this-machine&gt;/</code>) for drag-and-drop <code>.zip</code> sideloads from a browser.`,
     sideloadRelayAutoConnectHtml: `<strong>Auto-connect.</strong> When a build lands successfully on a target, RDS opens that device as a connected tab and attaches its debug console automatically, so you see per-device output without extra clicks. Live fan-out progress also streams as a status console on telnet port <code>8085</code>.`,
     sideloadRelaySourceApprovalHtml: `<strong>Source approval.</strong> A sideload originating from this machine proceeds automatically. A sideload from a different machine holds the upload and shows an allow/deny prompt on the RDS host (auto-denies after 30s); browser uploads from a remote machine additionally require logging in with the Relay Dev Password.`,
-    sideloadRelayFooterHtml: `Requires the targeted devices to have Developer Mode enabled. See <strong>Remote Locations</strong> above for targeting devices at another site through a relay server.`,
+    sideloadRelayFooterHtml: `Requires the targeted devices to have Developer Mode enabled. See <strong>Remote Locations</strong> above for targeting devices at another site through a Relay Server.`,
 
     tipsHeading: 'Tips',
     tipDeveloperModeHtml: `Enable Developer Mode on your Roku: Go to Home, press <span class="help-kbd">Home</span> 3x, <span class="help-kbd">↑</span> 2x, <span class="help-kbd">→</span> <span class="help-kbd">←</span> <span class="help-kbd">→</span> <span class="help-kbd">←</span> <span class="help-kbd">→</span>`,
