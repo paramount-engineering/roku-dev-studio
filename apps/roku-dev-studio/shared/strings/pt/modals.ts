@@ -159,9 +159,10 @@ export const modals = {
     },
     remoteLocations: {
       blurb:
-        'Conecte-se a dispositivos Roku que não estão na sua rede local roteando por servidores de retransmissão.',
+        'Conecte-se a dispositivos Roku que não estão na sua rede local — por um servidor de retransmissão em outro local, ou a dispositivos Roku virtuais na nuvem de uma conta do Roku Cloud Emulator (RCE).',
       points: [
-        'Alcance dispositivos em qualquer lugar via um servidor de retransmissão',
+        'Alcance dispositivos da LAN em outro local via um servidor de retransmissão',
+        'Adicione uma conta RCE com um token de acesso pessoal para listar, iniciar e controlar seus dispositivos virtuais',
         'Gerencie várias localizações remotas',
         'As mesmas ferramentas dos dispositivos locais',
       ],

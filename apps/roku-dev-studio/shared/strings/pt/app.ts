@@ -328,7 +328,7 @@ MAC WiFi: ${d.wifiMac || 'N/A'}`,
   featureActionScriptsDesc: 'Encadeie toques de tecla, inicializações e chamadas RALE em fluxos automatizados.',
   featureNetworkInspectorDesc: 'Inspecione o tráfego HTTP/HTTPS do Dev App via um proxy MITM.',
   featureRemoteLocations: 'Locais remotos',
-  featureRemoteLocationsDesc: 'Conecte-se a dispositivos Roku em qualquer lugar via servidores de relay.',
+  featureRemoteLocationsDesc: 'Conecte-se a dispositivos Roku em qualquer lugar via servidores de relay ou um Roku Cloud Emulator.',
 
   // Device-panel tabs
   tabRemote: 'Remoto',

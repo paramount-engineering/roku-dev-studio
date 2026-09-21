@@ -333,7 +333,7 @@ WiFi MAC: ${d.wifiMac || 'N/D'}`,
   featureActionScriptsDesc: 'Łącz naciśnięcia klawiszy, uruchomienia i wywołania RALE w zautomatyzowane scenariusze.',
   featureNetworkInspectorDesc: 'Analizuj ruch HTTP/HTTPS aplikacji Dev App za pomocą proxy MITM.',
   featureRemoteLocations: 'Zdalne lokalizacje',
-  featureRemoteLocationsDesc: 'Łącz się z urządzeniami Roku w dowolnym miejscu za pomocą serwerów przekazujących.',
+  featureRemoteLocationsDesc: 'Łącz się z urządzeniami Roku w dowolnym miejscu za pomocą serwerów przekazujących lub Roku Cloud Emulator.',
 
   // Device-panel tabs
   tabRemote: 'Pilot',

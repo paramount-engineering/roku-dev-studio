@@ -336,7 +336,7 @@ MAC WiFi: ${d.wifiMac || 'N/A'}`,
   featureActionScriptsDesc: 'Înlănțuie apăsări de taste, lansări și apeluri RALE în fluxuri automatizate.',
   featureNetworkInspectorDesc: 'Inspectează traficul HTTP/HTTPS al Dev App printr-un proxy MITM.',
   featureRemoteLocations: 'Locații la distanță',
-  featureRemoteLocationsDesc: 'Conectează-te la dispozitive Roku de oriunde prin servere releu.',
+  featureRemoteLocationsDesc: 'Conectează-te la dispozitive Roku de oriunde prin servere releu sau un Roku Cloud Emulator.',
 
   // Device-panel tabs
   tabRemote: 'Telecomandă',

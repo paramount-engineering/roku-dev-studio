@@ -155,9 +155,10 @@ export const modals = {
     },
     remoteLocations: {
       blurb:
-        'Łącz się z urządzeniami Roku, które nie znajdują się w Twojej sieci lokalnej, kierując ruch przez serwery przekaźnikowe.',
+        'Łącz się z urządzeniami Roku, które nie znajdują się w Twojej sieci lokalnej — przez serwer przekaźnikowy w innej lokalizacji lub z wirtualnymi urządzeniami Roku w chmurze z konta Roku Cloud Emulator (RCE).',
       points: [
-        'Docieraj do urządzeń w dowolnym miejscu przez serwer przekaźnikowy',
+        'Docieraj do urządzeń w sieci LAN w innej lokalizacji przez serwer przekaźnikowy',
+        'Dodaj konto RCE z osobistym tokenem dostępu, aby wyświetlać, uruchamiać i sterować jego wirtualnymi urządzeniami',
         'Zarządzaj wieloma lokalizacjami zdalnymi',
         'Te same narzędzia co dla urządzeń lokalnych',
       ],

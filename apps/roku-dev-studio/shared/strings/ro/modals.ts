@@ -155,9 +155,10 @@ export const modals = {
     },
     remoteLocations: {
       blurb:
-        'Conectați-vă la dispozitive Roku care nu se află în rețeaua locală, direcționând traficul prin servere releu.',
+        'Conectați-vă la dispozitive Roku care nu se află în rețeaua locală — printr-un server releu dintr-o altă locație sau la dispozitive Roku virtuale găzduite în cloud dintr-un cont Roku Cloud Emulator (RCE).',
       points: [
-        'Ajungeți la dispozitive de oriunde printr-un server releu',
+        'Ajungeți la dispozitive LAN dintr-o altă locație printr-un server releu',
+        'Adăugați un cont RCE cu un token de acces personal pentru a lista, porni și controla dispozitivele sale virtuale',
         'Gestionați mai multe locații la distanță',
         'Aceleași instrumente ca pentru dispozitivele locale',
       ],

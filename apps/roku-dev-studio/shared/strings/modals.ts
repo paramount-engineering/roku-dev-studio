@@ -158,9 +158,10 @@ export const modals = {
     },
     remoteLocations: {
       blurb:
-        "Connect to Roku devices that aren't on your local network by routing through relay servers.",
+        "Connect to Roku devices that aren't on your local network — through a relay server at another site, or to cloud-hosted virtual Rokus from a Roku Cloud Emulator (RCE) account.",
       points: [
-        'Reach devices anywhere via a relay server',
+        'Reach LAN devices at another site via a relay server',
+        'Add an RCE account with a Personal Access Token to list, start, and control its virtual devices',
         'Manage multiple Remote Locations',
         'Same tooling as local devices',
       ],

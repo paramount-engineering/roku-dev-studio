@@ -349,7 +349,7 @@ WiFi MAC: ${d.wifiMac || 'Н/Д'}`,
   featureActionScriptsDesc: 'Об’єднуйте натискання клавіш, запуски та виклики RALE в автоматизовані сценарії.',
   featureNetworkInspectorDesc: 'Аналізуйте HTTP/HTTPS-трафік Dev App через MITM-проксі.',
   featureRemoteLocations: 'Віддалені розташування',
-  featureRemoteLocationsDesc: 'Підключайтеся до пристроїв Roku будь-де через relay-сервери.',
+  featureRemoteLocationsDesc: 'Підключайтеся до пристроїв Roku будь-де через relay-сервери або Roku Cloud Emulator.',
 
   // Device-panel tabs
   tabRemote: 'Пульт',
