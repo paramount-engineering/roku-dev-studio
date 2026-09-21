@@ -25,7 +25,7 @@
     "test": "tsx --test test/*.test.ts"
   },
   "dependencies": {
-    "adm-zip": "^0.6.0",
+    "adm-zip": "^0.6.1",
     "node-forge": "^1.4.0",
     "roku-dev-studio-api": "^1.0.0",
     "roku-dev-studio-platform": "^1.0.0"
