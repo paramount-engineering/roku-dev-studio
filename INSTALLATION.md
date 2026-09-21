@@ -70,25 +70,46 @@ Builds for macOS, Windows, and Linux simultaneously.
 
 ### macOS — code signing & notarization
 
-The `mac` block in `apps/roku-dev-studio/package.json` ships with `hardenedRuntime: true` and `notarize: false`. By default `electron-builder` produces a **signed-but-not-notarized** build if a Developer ID Application certificate is present in your login keychain, and an **ad-hoc-signed** build otherwise.
-
-If you ship a build without a Developer ID, end users have to clear quarantine before launching:
+`build.mac` in `apps/roku-dev-studio/package.json` ships with `hardenedRuntime: true` and `notarize: true`: electron-builder signs with the Developer ID Application identity it finds, submits the `.app` to Apple's `notarytool`, and staples the ticket before the DMG/zip are packed. Both steps are skipped (with a warning) when the inputs below are missing, leaving an ad-hoc-signed build whose users must clear quarantine before launching:
 
 ```bash
 xattr -cr "/Applications/Roku Dev Studio.app"
 ```
 
-To remove that step for end users, set up Apple Developer ID signing + notarization. The full one-time setup (cert generation, App Store Connect API key, GitHub Actions secrets, env-var contract) is captured in **[`.discussion-docs/macos-code-signing-and-notarization.md`](.discussion-docs/macos-code-signing-and-notarization.md)**. Once you have the cert and an `app-specific password` / API key, set:
+**1. Certificate.** A *Developer ID Application* `.p12` — not "Apple Development" or "Mac App Distribution", which notarization rejects. Import it once into your login keychain so electron-builder auto-discovers it:
 
 ```bash
-export APPLE_ID="you@example.com"
-export APPLE_APP_SPECIFIC_PASSWORD="xxxx-xxxx-xxxx-xxxx"
-export APPLE_TEAM_ID="ABCDE12345"
-# Then build:
-npm run build:mac
+security import ~/path/to/DeveloperID.p12 -k ~/Library/Keychains/login.keychain-db -P '<p12 password>' -T /usr/bin/codesign
+security find-identity -v -p codesigning   # expect: "Developer ID Application: <Name> (<TEAMID>)"
 ```
 
-`apps/roku-dev-studio/scripts/notarize.cjs` is the `afterSign` hook that runs `@electron/notarize` against your build.
+…or pass it per build, which uses a throwaway keychain (this is what CI does):
+
+```bash
+export CSC_LINK=~/path/to/DeveloperID.p12      # a file path, or the file's base64
+export CSC_KEY_PASSWORD='<p12 password>'
+```
+
+**2. notarytool credentials.** The certificate alone cannot notarize. You also need your Apple ID, an [app-specific password](https://appleid.apple.com/account/manage) (Sign-In and Security → App-Specific Passwords) and your 10-character Team ID (developer.apple.com → Membership details; it is also the `(…)` suffix on the identity above). Store them in the keychain once and point electron-builder at the profile:
+
+```bash
+xcrun notarytool store-credentials rds-notary --apple-id you@example.com --team-id ABCDE12345 --password xxxx-xxxx-xxxx-xxxx
+export APPLE_KEYCHAIN_PROFILE=rds-notary
+```
+
+Plain env vars work too — `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID` (what the release workflow uses), or an App Store Connect API key via `APPLE_API_KEY`, `APPLE_API_KEY_ID`, `APPLE_API_ISSUER`.
+
+**3. Build and verify.** Notarization adds roughly 1–5 minutes while Apple scans the upload.
+
+```bash
+npm run build:mac
+APP="apps/roku-dev-studio/dist/mac/arm64/Roku Dev Studio.app"
+codesign -dv --verbose=2 "$APP"       # Authority=Developer ID Application: …
+xcrun stapler validate "$APP"         # The validate action worked!
+spctl -a -vv -t exec "$APP"           # accepted  source=Notarized Developer ID
+```
+
+GitHub releases: the mac job in `.github/workflows/release.yml` reads the same values from repository secrets and fails fast if any are missing — see `RELEASE_SETUP.md` → Code Signing.
 
 #### Intel Mac builds (opt-in, deprecated)
 
