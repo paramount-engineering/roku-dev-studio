@@ -173,6 +173,57 @@ export function attachQuickRemoteKeys(
     );
   });
 
+  // RCE-only "Dev mode" quick action — not a keypress, so it isn't covered by the `.devapp-key`
+  // loop above. `api.devSettingsCombo` is only present on the RCE adapter (see dev-app-types.ts),
+  // and the button itself is only ever visible for kind:'rce' devices (dev-app/index.ts), but the
+  // optional-chaining guard keeps this safe regardless.
+  const devModeBtn = root.querySelector('.devapp-dev-mode-btn');
+  if (devModeBtn instanceof HTMLElement) {
+    devModeBtn.addEventListener(
+      'click',
+      async (e: Event) => {
+        (e as MouseEvent).stopPropagation();
+        devModeBtn.classList.add('pressed');
+        setTimeout(() => devModeBtn.classList.remove('pressed'), 150);
+        try {
+          const result = await api.devSettingsCombo?.();
+          if (result && result.success === false) {
+            rendererError('Dev mode combo failed:', result.error);
+          }
+        } catch (error) {
+          rendererError('Dev mode combo error:', error);
+        }
+      },
+      { signal }
+    );
+  }
+
+  // RCE-only "Wake device" quick action — not a single keypress, so (like Dev mode above) it
+  // isn't covered by the `.devapp-key` loop. Roku's own RCE web dashboard doesn't send any
+  // power/wake-specific command at all: reading its own minified bundle's click handler shows
+  // it fires two ordinary ECP keypresses, `Guide` then `Home` — any real key wakes an idle
+  // emulated device, and this pair reliably lands on the Home screen afterward. Match that exact
+  // sequence rather than a `PowerOn`/`PowerOff` guess (Roku's ECP has no `PowerOn` key at all).
+  const wakeBtn = root.querySelector('.devapp-wake-btn');
+  if (wakeBtn instanceof HTMLElement) {
+    wakeBtn.addEventListener(
+      'click',
+      async (e: Event) => {
+        (e as MouseEvent).stopPropagation();
+        wakeBtn.classList.add('pressed');
+        setTimeout(() => wakeBtn.classList.remove('pressed'), 150);
+        try {
+          await api.keypress('Guide');
+          await api.keypress('Home');
+          if (scheduleAutoScreenshot) scheduleAutoScreenshot();
+        } catch (error) {
+          rendererError('RCE wake device error:', error);
+        }
+      },
+      { signal }
+    );
+  }
+
   const textInput = root.querySelector('.devapp-text-input');
   const sendTextBtn = root.querySelector('.devapp-send-text-btn');
 

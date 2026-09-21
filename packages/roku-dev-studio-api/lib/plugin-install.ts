@@ -15,15 +15,24 @@ const {
 
 type LogFn = (msg: string) => void;
 
-interface SideloadChannelOpts {
+export interface SideloadChannelOpts {
   ip: string;
-  filePath: string;
+  /** Path to the .zip on this machine. Alternatively pass `zipData` (+ `filename`). */
+  filePath?: string;
+  /**
+   * The .zip bytes already in memory — e.g. the remote server forwarding a multipart upload
+   * straight to the device, without a temp-file round-trip through its disk (which failed with
+   * ENOENT whenever the host's tmp cleaner had pruned the upload directory).
+   */
+  zipData?: Buffer;
+  /** Archive filename sent to the device with `zipData` (sanitized; defaults to `channel.zip`). */
+  filename?: string;
   password: string;
   log?: LogFn;
   /**
    * Optional extra multipart form fields sent alongside `mysubmit` + `archive`
    * (e.g. `remotedebug=1`). The Dev App sideload and the Sideload Relay fan-out
-   * both forward this for "Sideload with Debugging" devices. Carried through every
+   * both forward this for "Enable Debugger" devices. Carried through every
    * attempt (Replace, Install, and the Delete+Install force-reload) so a debug
    * sideload keeps opening port 8081 on whichever path lands.
    */
@@ -84,8 +93,26 @@ function authFailureResult(statusCode: number, text: string): (DevRequestError &
   return null;
 }
 
+/**
+ * Roku's installer answers HTTP 200 with an HTML body even on failure, so the outcome is decided
+ * by these body phrases. Exported so roku-dev-studio-rce's `rce-sideload.ts` (same installer,
+ * different transport) matches the exact same replies.
+ */
+function isInstallSuccessReply(text: string): boolean {
+  return text.includes('Install Success') || text.includes('Application Received') || text.includes('Conversion complete');
+}
+
+/**
+ * Roku refuses to Replace a byte-identical build — it keeps the running instance and returns
+ * "Identical to previous version -- not replacing." (reads as success in the body, but nothing
+ * actually reloaded: the "didn't reload" symptom).
+ */
+function isIdenticalBuildReply(text: string): boolean {
+  return /identical to previous version/i.test(text);
+}
+
 function parsePluginInstallResponse(response: string): { success: true; message: string } | { success: false; error: string; authFailed?: boolean } {
-  if (response.includes('Install Success') || response.includes('Application Received') || response.includes('Conversion complete')) {
+  if (isInstallSuccessReply(response)) {
     return { success: true, message: 'Channel installed successfully!' };
   }
   if (response.includes('Install Failure')) {
@@ -131,37 +158,43 @@ async function postPluginInstall(
 /**
  * Sideload a channel package to a Roku device.
  */
-async function sideloadChannel({ ip, filePath, password, log = (_m: string) => undefined, extraFields = [], cleanInstall = false }: SideloadChannelOpts) {
+async function sideloadChannel({ ip, filePath, zipData, filename, password, log = (_m: string) => undefined, extraFields = [], cleanInstall = false }: SideloadChannelOpts) {
   const guard = validateDevRequest(ip, password);
   if (guard) return guard;
-  if (typeof filePath !== 'string' || !filePath.trim()) {
-    return { success: false, error: 'File path is required' };
-  }
-  const normalizedPath = path.normalize(filePath.trim());
-  // Reject only actual `..` path segments, not directory names that merely contain
-  // ".." (e.g. `/Users/x/my..app/chan.zip`). After normalize, a legit path has no
-  // standalone `..` segment, so this catches traversal without false-positives.
-  if (normalizedPath.split(path.sep).includes('..')) {
-    return { success: false, error: 'Invalid file path' };
-  }
-  if (!fs.existsSync(normalizedPath)) {
-    return { success: false, error: 'File not found' };
+  let normalizedPath = '';
+  if (zipData) {
+    if (!Buffer.isBuffer(zipData) || zipData.length === 0) {
+      return { success: false, error: 'Package data is empty' };
+    }
+  } else {
+    if (typeof filePath !== 'string' || !filePath.trim()) {
+      return { success: false, error: 'File path is required' };
+    }
+    normalizedPath = path.normalize(filePath.trim());
+    // Reject only actual `..` path segments, not directory names that merely contain
+    // ".." (e.g. `/Users/x/my..app/chan.zip`). After normalize, a legit path has no
+    // standalone `..` segment, so this catches traversal without false-positives.
+    if (normalizedPath.split(path.sep).includes('..')) {
+      return { success: false, error: 'Invalid file path' };
+    }
+    if (!fs.existsSync(normalizedPath)) {
+      return { success: false, error: 'File not found' };
+    }
   }
 
   const AUTH_FAIL = { success: false, error: 'Authentication failed. Check your developer password.', authFailed: true };
-  // Roku refuses to Replace a byte-identical build — it keeps the running instance
-  // and returns "Identical to previous version -- not replacing." (reads as success
-  // in the body, but nothing actually reloaded: the "didn't reload" symptom).
-  const isIdentical = (t: string) => /identical to previous version/i.test(t);
   // An explicit device-side failure (compile error / install failure). When we see
   // this we must NOT fall back to Delete+Install — that would wipe the working
   // channel and then fail to install the broken build.
   const isFailureBody = (t: string) => /Install Failure|Failure/i.test(t);
 
   try {
-    const fileData = fs.readFileSync(normalizedPath);
-    const filename = path.basename(normalizedPath);
-    const files = [{ name: 'archive', filename, data: fileData }];
+    const fileData: Buffer = zipData ?? fs.readFileSync(normalizedPath);
+    // An uploaded name is untrusted input headed into a multipart header — keep it to a safe charset.
+    const archiveName = zipData
+      ? (filename || '').replace(/[^A-Za-z0-9._-]/g, '') || 'channel.zip'
+      : path.basename(normalizedPath);
+    const files = [{ name: 'archive', filename: archiveName, data: fileData }];
     const postWith = (submit: string) =>
       postPluginInstall(ip, password, [{ name: 'mysubmit', value: submit }, ...extraFields], files, SIDELOAD_TIMEOUT_MS, log);
     const postDelete = () =>
@@ -219,7 +252,7 @@ async function sideloadChannel({ ip, filePath, password, log = (_m: string) => u
     // 2) "Identical -- not replacing": the device changed nothing and kept the OLD
     //    instance running. That's the "didn't reload" case — force a real reload
     //    instead of reporting the misleading success body.
-    const replaceIdentical = isIdentical(text);
+    const replaceIdentical = isIdenticalBuildReply(text);
     let parsed = parsePluginInstallResponse(text);
     logResp('Replace', statusCode, text, !replaceIdentical && parsed.success);
     if (replaceIdentical) return await deleteThenInstall('device reported an identical build');
@@ -231,7 +264,7 @@ async function sideloadChannel({ ip, filePath, password, log = (_m: string) => u
         logResp('Install', retry.statusCode, retry.text, false);
         return AUTH_FAIL;
       }
-      const retryIdentical = isIdentical(retry.text);
+      const retryIdentical = isIdenticalBuildReply(retry.text);
       const retryParsed = parsePluginInstallResponse(retry.text);
       logResp('Install', retry.statusCode, retry.text, !retryIdentical && retryParsed.success);
       statusCode = retry.statusCode;
@@ -383,4 +416,4 @@ async function checkForUpdate({ ip, password, log = (_m: string) => undefined }:
   }
 }
 
-module.exports = { sideloadChannel, deleteSideload, rebootDevice, checkForUpdate };
+module.exports = { sideloadChannel, deleteSideload, rebootDevice, checkForUpdate, isInstallSuccessReply, isIdenticalBuildReply };

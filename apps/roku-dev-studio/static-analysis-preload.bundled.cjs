@@ -84,6 +84,15 @@ var IPC = {
   RokuScreenshot: "roku:screenshot",
   RokuVerifyDevAuth: "roku:verify-dev-auth",
   RokuSaveScreenshot: "roku:save-screenshot",
+  /** Persists a renderer-held screenshot `data:` URL (canvas frame-grab / agent-driven capture —
+   *  paths with no device-written file already) to a temp file, so the session gallery can hold a
+   *  lightweight `file://` reference instead of the full base64 string for the life of the tab. */
+  PersistScreenshotDataUrl: "roku:persist-screenshot-data-url",
+  /** Deletes one screenshot temp file — used when a session-gallery entry is cleared (single/all)
+   *  or its device tab disconnects, so a capture's temp file doesn't outlive its own history entry.
+   *  Renderer-supplied path, so the handler restricts deletion to `os.tmpdir()` (see
+   *  `RokuSaveScreenshot`'s identical guard). */
+  DeleteScreenshotTempFile: "roku:delete-screenshot-temp-file",
   RokuRaleWake: "roku:rale-wake",
   RokuRaleConnect: "roku:rale-connect",
   RokuRaleCommand: "roku:rale-command",
@@ -220,7 +229,6 @@ var IPC = {
   RemoteGetIcon: "remote:get-icon",
   RemoteScreenshot: "remote:screenshot",
   RemoteVerifyDevAuth: "remote:verify-dev-auth",
-  RemoteSideload: "remote:sideload",
   RemoteSideloadUpload: "remote:sideload-upload",
   RemoteDeleteSideload: "remote:delete-sideload",
   RemoteRaleWake: "remote:rale-wake",
@@ -244,12 +252,34 @@ var IPC = {
   RemoteTelnetSystemDisconnect: "remote:telnet-system-disconnect",
   RemoteTelnetSystemSend: "remote:telnet-system-send",
   RemoteTelnetSystemStatus: "remote:telnet-system-status",
-  RemoteTelnetSystemPollData: "remote:telnet-system-poll-data",
+  // Telnet system consoles (port 8080 SceneGraph, 8087 Screensaver — `port` in the payload,
+  // default 8080). Local and remote share one main-side pool each; the Ports window connects with
+  // `holder: 'window'` and then owns the socket — one-shot consumers (Query tab, Action Scripts,
+  // Toggle FPS) reuse it and their disconnect is a no-op until the window releases it.
   TelnetSystemConnect: "telnet-system:connect",
   TelnetSystemDisconnect: "telnet-system:disconnect",
   TelnetSystemSend: "telnet-system:send",
   TelnetSystemStatus: "telnet-system:status",
+  /** Main → windows: `{ ip, port, connectionId, data, isRemote?, serverUrl? }` — pushed for local AND
+   *  remote (main polls the relay's buffer itself; the renderer never polls). */
   TelnetSystemData: "telnet-system:data",
+  /** Main → windows: the socket for `{ ip, port, connectionId }` closed (device drop, relay idle
+   *  sweep, explicit disconnect). */
+  TelnetSystemDisconnected: "telnet-system:disconnected",
+  // Ports window (main/port-terminal-window.ts) — one per device, opened from the Console header.
+  PortTerminalOpen: "port-terminal:open",
+  /** Window → main: `{ device, ports }` for this window's device (available ports honor the relay's
+   *  capabilities for remote devices). */
+  PortTerminalInfo: "port-terminal:info",
+  /** Window → main: open / release / write a text console (`{ port }`, `{ port, command }`) with
+   *  `holder: 'window'` semantics — routed to the local or relay pool by the window's device. */
+  PortTerminalConnect: "port-terminal:connect",
+  PortTerminalDisconnect: "port-terminal:disconnect",
+  PortTerminalSend: "port-terminal:send",
+  /** Window → main: hold / release the remote debugger SSE stream so a remote 8081 tab receives wire
+   *  frames even when no device panel holds the stream. */
+  PortTerminalDebuggerStreamHold: "port-terminal:debugger-stream-hold",
+  PortTerminalDebuggerStreamRelease: "port-terminal:debugger-stream-release",
   // BrightScript socket-based debugger (debug protocol, control port 8081).
   // Invoke (renderer → main):
   DebuggerAttach: "debugger:attach",
@@ -274,11 +304,15 @@ var IPC = {
   DebuggerStopped: "debugger:stopped",
   DebuggerOutput: "debugger:output",
   DebuggerRuntimeError: "debugger:runtime-error",
+  DebuggerExceptionBreakpointError: "debugger:exception-breakpoint-error",
   DebuggerCompileErrors: "debugger:compile-errors",
   /** Main → windows: breakpoints verified/errored by the device (async). */
   DebuggerBreakpoints: "debugger:breakpoints",
   /** Main → windows: a (debug-enabled) device was just (re)sideloaded — reattach. */
   DebuggerReattach: "debugger:reattach",
+  /** Main → Ports windows only: one decoded control-port (8081) frame of the live debugger session,
+   *  `{ ip, dir, name, requestId, bytes, at, errorCode?, detail?, isRemote?, serverUrl? }`. */
+  DebuggerWire: "debugger:wire",
   // Remote debugger — the session runs on the remote RDS server (real network access to the
   // device); these proxy each request over HTTP. Push events reuse the local Debugger* channels
   // above (tagged { isRemote: true, serverUrl } by the relay) rather than duplicating them.
@@ -379,6 +413,12 @@ var IPC = {
   FiddleRunResult: "fiddle:run-result",
   FiddleTerminalData: "fiddle:terminal-data",
   FiddleTerminalCleared: "fiddle:terminal-cleared",
+  /** Main → Fiddle window: our Fiddle channel was removed from `deviceId` by a main-side cleanup
+   *  (device tab closed, quit) — the window drops its active-run state. */
+  FiddleChannelRemoved: "fiddle:channel-removed",
+  /** Renderer → main (one-way): a device tab was closed. Per-device main-side cleanup hook —
+   *  today it removes our Fiddle channel from that device if it still has it. */
+  DeviceTabClosed: "device:tab-closed",
   FiddleDevicesUpdate: "fiddle:devices-update",
   FiddleRefreshDevices: "fiddle:refresh-devices",
   /** Main renderer pushes its current device snapshot to main (main re-broadcasts to fiddle windows). */
@@ -447,6 +487,16 @@ var IPC = {
   SideloadRelayValidatePassword: "sideload-relay:validate-password",
   /** Reveal the saved Relay Dev Password (for the settings "show password" eye toggle). */
   SideloadRelayRevealPassword: "sideload-relay:reveal-password",
+  /** Add or remove a single device from the relay's target list (the Device Info modal's shortcut — Settings' Setup Devices modal uses ApplySettings instead). */
+  SideloadRelayToggleDevice: "sideload-relay:toggle-device",
+  /** Main → renderer, broadcast to every window: config (targets/flags) changed, from
+   *  either save path (Settings' Setup Devices modal, or the Device Info modal's toggle) —
+   *  so whichever surface is open picks it up live instead of only on next open. */
+  SideloadRelayConfigChanged: "sideload-relay:config-changed",
+  /** Main → renderer, broadcast: a device was dropped from the relay's target list because
+   *  its dev password was just deleted (from ANY surface — Dev App, sideloading, Action
+   *  Scripts import, …), not just an explicit relay action. The main window toasts this. */
+  SideloadRelayDeviceRemoved: "sideload-relay:device-removed",
   /** Main → renderer: relay bind/lifecycle status changed. */
   SideloadRelayStatus: "sideload-relay:status",
   /** Main → renderer: a new upload was accepted and fan-out started. */
@@ -468,7 +518,106 @@ var IPC = {
   StaticAnalysisRunResult: "static-analysis:run-result",
   /** Files dropped onto the main window: open each in its associated viewer
    *  (Log Viewer / Network Session Viewer), skipping unsupported ones. */
-  OpenDroppedFiles: "main-window:open-dropped-files"
+  OpenDroppedFiles: "main-window:open-dropped-files",
+  /** Roku Cloud Emulator (RCE) — Core API account/device management. Phase 1 slice only: add an
+   *  account, list its devices. Device control/lifecycle channels land with later phases. */
+  RceValidateToken: "rce:validate-token",
+  RceAddAccount: "rce:add-account",
+  RceRemoveAccount: "rce:remove-account",
+  RceListAccounts: "rce:list-accounts",
+  /** User/org info + quota (`GET /user/me`) for the "User Info" button on an RCE location. */
+  RceGetUserInfo: "rce:get-user-info",
+  /** Billable instance-minutes for the User Info modal's usage chart — tries `GET /usage/owner`
+   *  (org-wide, needs owner permission) first, falls back to `GET /usage/user` (the caller's own
+   *  usage) on failure. */
+  RceGetUsage: "rce:get-usage",
+  RceListDevices: "rce:list-devices",
+  /** Single-device fetch — used at connect time to get a fresh `running_device.instanceApiUrl`
+   *  rather than trusting whatever `RceListDevices` last cached (unverified whether the list
+   *  endpoint populates instance info as fully as this one does). */
+  RceGetDevice: "rce:get-device",
+  RceStartDevice: "rce:start-device",
+  RceStopDevice: "rce:stop-device",
+  /** Backs the "Run device" modal's snapshot picker — `RceManagementClient.listSnapshots` was
+   *  already used server-side (`resolveStartParams`'s default-snapshot fallback) but never
+   *  exposed to the renderer until the picker needed real names/timestamps, not just an id. */
+  RceListSnapshots: "rce:list-snapshots",
+  /** Account-wide firmware list (all device types in one call) — fetched once per location on
+   *  connect and cached, backs the "Run device" modal's firmware picker and the stale-firmware
+   *  check on both that modal and the plain Start button. See `resolveStartParams`. */
+  RceListFirmwareVersions: "rce:list-firmware-versions",
+  // ECP over an RCE instance's Device API — powers the same Remote/Apps/Query/Deep-Link tabs a
+  // local device uses, via `RceEcpClient` in `roku-dev-studio-rce` (see `createRceApiAdapter` in
+  // renderer/app.ts). The BrightScript debugger and video are not wired yet — those tabs stay
+  // capability-gated off for `kind: 'rce'` devices until they land.
+  RceKeypress: "rce:keypress",
+  RceLaunch: "rce:launch",
+  RceQuery: "rce:query",
+  RcePost: "rce:post",
+  RceInputText: "rce:input-text",
+  RceDeeplink: "rce:deeplink",
+  RceGetIcon: "rce:get-icon",
+  /** Same UPnP `<iconList>`-then-fetch trick physical devices use (`RokuGetDeviceHardwareImage`),
+   *  over the port-8060 ECP proxy — powers the Device Info modal's photo for RCE devices. */
+  RceGetHardwareImage: "rce:get-hardware-image",
+  /** "Dev mode" quick action (Quick Remote / Floating Remote / Remote tab, RCE-only) — triggers the
+   *  on-device Developer Settings wizard screen. Not an ECP call; see
+   *  `RceEcpClient.devSettingsCombo`. "Wake device" needs no dedicated channel — it's two plain
+   *  `RceKeypress` calls, `Guide` then `Home` (matches Roku's own RCE dashboard). */
+  RceDevSettingsCombo: "rce:dev-settings-combo",
+  /** Classic `plugin_inspect`/Screenshot dev-web-installer flow, proxied through the RCE
+   *  instance's `/sideload` path — same mechanism as `RceSideload`, ported from the reference
+   *  `roku-deploy` implementation the RokuCommunity VS Code extension uses for RCE devices. */
+  RceScreenshot: "rce:screenshot",
+  RceVerifyDevAuth: "rce:verify-dev-auth",
+  // Telnet system console (port 8080 — plugins/free/etc., the Query tab's "Device Queries" telnet
+  // buttons), tunneled through the Device API's ports-bridge WebSocket via `RceSocket`. Pushes
+  // received data on the existing `TelnetSystemData` channel (keyed by the device's synthetic
+  // `ip`), so the renderer's local-device telnet listener picks it up with no changes.
+  RceTelnetSystemConnect: "rce:telnet-system-connect",
+  RceTelnetSystemDisconnect: "rce:telnet-system-disconnect",
+  RceTelnetSystemSend: "rce:telnet-system-send",
+  // BrightScript debug console (port 8085 — the Console tab), same ports-bridge tunnel. Pushes
+  // on the existing `TelnetConnected`/`TelnetData`/`TelnetDisconnected`/`TelnetError` channels,
+  // keyed by the device's synthetic `ip` — `debugTelnetConnectionId()` already falls through to
+  // plain `ip` for any device with a falsy `serverUrl`, which RCE's adapter always has.
+  RceTelnetConnect: "rce:telnet-connect",
+  RceTelnetDisconnect: "rce:telnet-disconnect",
+  // App Connector (RALE, port 49200), same ports-bridge tunnel — confirmed live 2026-09-12 the
+  // tunnel is binary-only (a text WS frame gets `1003`), which the shared `[start]/[end]` framing
+  // in roku-dev-studio-api's rale-direct.ts already satisfies (Node's Writable auto-converts a
+  // string `.write()` to a Buffer before RceSocket sees it). Only wake (ECP proxy) and connect
+  // (the RceSocket tunnel dial) are RCE-specific; once connected, the device's synthetic `ip` IS
+  // the connectionId, so RceRaleCommand/RceRaleDisconnect reuse RokuRaleCommand/RokuRaleDisconnect
+  // unchanged — those already only take a connectionId, no ip/port coupling.
+  RceRaleWake: "rce:rale-wake",
+  RceRaleConnect: "rce:rale-connect",
+  // Push-based device state (design doc §5) — `GET /devices/{id}/ws`, main-process-held per
+  // device, broadcast to every window. Replaces polling as the source of truth for whether a
+  // device has finished booting and can be connected to.
+  RceWatchDeviceState: "rce:watch-device-state",
+  RceUnwatchDeviceState: "rce:unwatch-device-state",
+  /** Main → renderer: a watched device's state changed. */
+  RceDeviceStateChanged: "rce:device-state-changed",
+  // Sideload — `POST /sideload/plugin_install` on the Device API (design doc §6 item 7), reusing
+  // the file-picker/path-validation IPC (RokuSelectSideloadFile/RokuResolveSideloadFile) shared
+  // with physical devices; only the actual upload call is RCE-specific.
+  RceSideload: "rce:sideload",
+  RceDeleteSideload: "rce:delete-sideload",
+  // Live video preview (Janus/WebRTC signaling, design doc §7). Signaling (the WebSocket to Janus)
+  // runs in main — a renderer WebSocket can't set the `Authorization: Bearer` handshake header —
+  // while the actual `RTCPeerConnection` lives in the renderer, which is Chromium and has one
+  // natively. These channels carry the SDP offer down and the answer/ICE candidates back up.
+  RceVideoStart: "rce:video-start",
+  RceVideoStop: "rce:video-stop",
+  RceVideoAnswer: "rce:video-answer",
+  RceVideoCandidate: "rce:video-candidate",
+  RceVideoCandidatesComplete: "rce:video-candidates-complete",
+  /** Main → renderer: the SDP offer + ICE server list for a `RceVideoStart` request. */
+  RceVideoOffer: "rce:video-offer",
+  /** Main → renderer: signaling lifecycle state (connecting/reconnecting/stopped/error) — not the
+   *  actual media/ICE connection state, which only the renderer's RTCPeerConnection knows. */
+  RceVideoStatus: "rce:video-status"
 };
 
 // static-analysis-preload.ts

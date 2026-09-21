@@ -4,15 +4,26 @@
 
 'use strict';
 
-import type { Socket } from 'net';
-
 const net = require('net');
 const crypto = require('crypto');
 const { ecpRequest } = require('../ecp');
 const { DEFAULT_RALE_PORT } = require('./shared-constants');
 const { errorMessage } = require('roku-dev-studio-platform');
 
-const connections = new Map<string, Socket>();
+/** Minimal duck-typed socket surface this module actually uses — satisfied by both a raw
+ *  `net.Socket` (physical/LAN devices, connected via `raleConnect` below) and an `RceSocket`
+ *  (RCE's WebSocket ports-bridge tunnel, see roku-dev-studio-rce/rce-socket.ts, connected
+ *  elsewhere and handed in via `raleRegisterSocket`) — so the `[start]/[end]` framing and
+ *  command-chain logic below serves both transports unchanged. */
+interface RaleSocketLike {
+  write(data: string | Buffer): boolean;
+  on(event: string, listener: (...args: any[]) => void): this;
+  removeListener(event: string, listener: (...args: any[]) => void): this;
+  destroy(): void;
+  destroyed: boolean;
+}
+
+const connections = new Map<string, RaleSocketLike>();
 // Per-connection serial queue: concurrent raleCommand() calls on the same socket
 // would attach multiple 'data' listeners with separate buffers and race on '[end]',
 // cross-contaminating responses. A chain-per-connection keeps commands sequential.
@@ -81,7 +92,7 @@ function raleConnect(
     socket.on('connect', () => {
       connected = true;
       socket.setTimeout(0);
-      connections.set(connectionId, socket);
+      raleRegisterSocket(connectionId, socket, connectOpts);
       if (!resolved) {
         resolved = true;
         resolve({ success: true, connectionId });
@@ -103,20 +114,51 @@ function raleConnect(
       }
     });
 
-    socket.on('close', () => {
-      connections.delete(connectionId);
-      commandChains.delete(connectionId);
-      recvBuffers.delete(connectionId);
-      if (onClose) {
-        try {
-          onClose(connectionId);
-        } catch (_) {}
-      }
-    });
-
     socket.setTimeout(10000);
     socket.connect(port, ip);
   });
+}
+
+/**
+ * Register an already-connected socket so `raleCommand`/`raleDisconnect`/`raleConnectionStatus`
+ * can use it, bypassing `raleConnect`'s own TCP dial. Used by RCE's App Connector wiring
+ * (`main/ipc/rce-handlers.ts`), which connects via `connectRceSocket` (a WebSocket ports-bridge
+ * tunnel) instead of a raw `net.Socket` — everything past "we have an open socket" is identical
+ * for both transports, so this is the one seam needed rather than duplicating the framing logic.
+ * @param {string} connectionId
+ * @param {RaleSocketLike} socket
+ * @param {{ onClose?: (connectionId: string) => void }} [connectOpts]
+ */
+function raleRegisterSocket(
+  connectionId: string,
+  socket: RaleSocketLike,
+  connectOpts: { onClose?: (connectionId: string) => void } = {}
+) {
+  const onClose =
+    connectOpts && typeof connectOpts.onClose === 'function' ? connectOpts.onClose : null;
+
+  const existing = connections.get(connectionId);
+  if (existing && existing !== socket) {
+    try {
+      existing.destroy();
+    } catch (_) {}
+  }
+  commandChains.delete(connectionId);
+  recvBuffers.delete(connectionId);
+  connections.set(connectionId, socket);
+
+  socket.on('close', () => {
+    connections.delete(connectionId);
+    commandChains.delete(connectionId);
+    recvBuffers.delete(connectionId);
+    if (onClose) {
+      try {
+        onClose(connectionId);
+      } catch (_) {}
+    }
+  });
+
+  return { success: true, connectionId };
 }
 
 /**
@@ -152,7 +194,7 @@ function raleCommand(
 }
 
 function runOne(
-  socket: Socket,
+  socket: RaleSocketLike,
   connectionId: string,
   command: string,
   args: unknown,
@@ -270,6 +312,7 @@ module.exports = {
   DEFAULT_RALE_PORT,
   raleWake,
   raleConnect,
+  raleRegisterSocket,
   raleCommand,
   raleDisconnect,
   raleDisconnectAll,

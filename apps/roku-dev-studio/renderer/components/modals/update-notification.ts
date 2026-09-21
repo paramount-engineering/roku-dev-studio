@@ -10,6 +10,7 @@
 
 import { showToast } from '../../modules/utils/ui.js';
 import { attachBackdropClickToClose } from '../../modules/utils/modal-backdrop-click.js';
+import { animateHeight } from '../../modules/utils/dom.js';
 import { prepareModalOpenOrigin, playModalOpenMotion, closeModalWithOriginMotion } from '../../modules/utils/modal-origin-motion.js';
 import { registerRetranslate } from '../../modules/ui/retranslate-registry.js';
 import { S } from '@shared/strings/index.js';
@@ -306,13 +307,18 @@ function showReleaseNotesModal(opts: { bannerOpener?: HTMLElement | null } = {})
 
   // Cold open: fetch and fill in once the request resolves (modal is already open/expanded).
   if (!cachedLatestReleaseInfo) {
-    fetchLatestReleaseInfo().then(applyInfo).catch((err) => {
-      if (!content) return;
-      content.innerHTML = `
-        <p>${S.modals.couldNotLoadReleaseNotes}</p>
-        <p class="rds-release-notes-fallback">${escapeHtml(String(err?.message || err || S.modals.unknownError))}</p>
-      `;
-    });
+    const dialog = modal.querySelector('.rds-release-notes-dialog');
+    fetchLatestReleaseInfo()
+      .then((info) => animateHeight(dialog, () => applyInfo(info)))
+      .catch((err) => {
+        if (!content) return;
+        animateHeight(dialog, () => {
+          content.innerHTML = `
+            <p>${S.modals.couldNotLoadReleaseNotes}</p>
+            <p class="rds-release-notes-fallback">${escapeHtml(String(err?.message || err || S.modals.unknownError))}</p>
+          `;
+        });
+      });
   }
 }
 

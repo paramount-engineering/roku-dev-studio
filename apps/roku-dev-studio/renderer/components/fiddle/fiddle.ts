@@ -15,6 +15,8 @@ import {
   type DebugTelnetDeviceRef
 } from '@shared/ipc/debug-telnet-connection-id.js';
 import { rendererWarn, rendererError } from '../../modules/utils/logger.js';
+import { attachInstantTooltips } from '../../modules/utils/instant-tooltip.js';
+import { setErrorLine } from '../../modules/utils/dom.js';
 import { S, applyI18n } from '@shared/strings/index.js';
 import { initLocaleForWindow } from '../../modules/utils/locale-live.js';
 import { installCrashCapture } from '../../modules/errors/install.js';
@@ -115,6 +117,7 @@ interface FiddleBridge {
   onDevicesUpdate: (cb: (data: { devices: FiddleDeviceEntry[] }) => void) => () => void;
   onTerminalData: (cb: (data: FiddleTerminalDataPayload) => void) => () => void;
   onTerminalCleared: (cb: () => void) => () => void;
+  onChannelRemoved: (cb: (data: { deviceId?: string }) => void) => () => void;
   onRunResult: (cb: (data: FiddleRunResultPayload) => void) => () => void;
   onScanStatus: (cb: (data: { scanning: boolean }) => void) => () => void;
   /** Resolves with the current Privacy Mode state. The same handler the main
@@ -709,8 +712,7 @@ function openPasswordModal(
     const onSubmit = () => {
       const pwd = input.value;
       if (!pwd) {
-        errorEl.hidden = false;
-        errorEl.textContent = S.fiddle.passwordRequired;
+        setErrorLine(modal.querySelector('.fiddle-modal'), errorEl, S.fiddle.passwordRequired);
         input.focus();
         return;
       }
@@ -869,9 +871,13 @@ async function handleStop(ctx: FiddleCtx): Promise<void> {
 
 function bindEvents(ctx: FiddleCtx): void {
   ctx.els.deviceSelect.addEventListener('change', () => {
+    const previousActive = ctx.hasActiveFiddle ? ctx.activeFiddleDeviceId : null;
     ctx.selectedDeviceId = ctx.els.deviceSelect.value || null;
     updateRunButton(ctx);
     void refreshSymbols(ctx);
+    // Switching target: the Fiddle channel never stays behind on the previous device (handleStop
+    // targets `activeFiddleDeviceId`, i.e. the device that still has it, not the new selection).
+    if (previousActive && previousActive !== ctx.selectedDeviceId) void handleStop(ctx);
   });
   ctx.els.runBtn.addEventListener('click', () => {
     void handleRun(ctx);
@@ -954,6 +960,16 @@ function bindEvents(ctx: FiddleCtx): void {
   });
   bridge.onTerminalCleared(() => {
     clearTerminal(ctx);
+  });
+  // Main removed our channel from a device behind this window's back (its tab was closed in the
+  // main window, or RDS is quitting) — drop the active-run state so Stop/Run reflect reality.
+  bridge.onChannelRemoved((payload) => {
+    if (!ctx.activeFiddleDeviceId || payload?.deviceId !== ctx.activeFiddleDeviceId) return;
+    ctx.hasActiveFiddle = false;
+    ctx.activeFiddleDeviceId = null;
+    ctx.currentRun = null;
+    setStatus(ctx, S.fiddle.channelRemoved, 'success');
+    updateRunButton(ctx);
   });
   bridge.onRunResult((payload) => {
     if (!payload) return;
@@ -1136,5 +1152,9 @@ async function main(): Promise<void> {
 
   bridge.ready();
 }
+
+// App-wide instant tooltip for every `[title]`/`[data-tip]`/`[data-tip-html]` in this window —
+// same rich `.rds-tip` popover the main window and Settings use instead of the slow native one.
+attachInstantTooltips(document.body);
 
 void main();

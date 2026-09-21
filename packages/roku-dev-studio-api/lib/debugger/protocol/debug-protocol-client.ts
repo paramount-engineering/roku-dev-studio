@@ -16,21 +16,21 @@
  * See https://developer.roku.com/dev/docs/socket-based-debugger.
  */
 import { EventEmitter } from 'events';
-import type { Socket } from 'net';
 import { CommandCode, DEBUG_CONTROL_PORT, DEBUGGER_MAGIC, ErrorCode, StepTypeCode } from './constants';
 import {
   encodeAddBreakpoints,
   encodeAddConditionalBreakpoints,
   encodeContinue,
   encodeExecute,
-  encodeExitChannel,
   encodeHandshake,
   encodeRemoveBreakpoints,
+  encodeSetExceptionBreakpoints,
   encodeStackTrace,
   encodeStep,
   encodeStop,
   encodeThreads,
-  encodeVariables
+  encodeVariables,
+  type ExceptionBreakpointSpec
 } from './encode';
 import {
   parseBreakpoints,
@@ -38,6 +38,7 @@ import {
   parseGeneric,
   parseHandshakeLegacy,
   parseHandshakeV3,
+  parseSetExceptionBreakpoints,
   parseStackTrace,
   parseThreads,
   parseUpdate,
@@ -49,9 +50,36 @@ import {
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const net = require('net') as typeof import('net');
 
+/** The minimal `net.Socket` surface this client actually uses — satisfied structurally by a real
+ *  `net.Socket` (the default, local/remote transport) or by an RCE `RceSocket` (a `stream.Duplex`
+ *  tunneled over the Device API's ports-bridge WebSocket), so `connectSocket` below can swap the
+ *  transport without either side needing to know about the other. */
+export interface DebugSocketLike {
+  on(event: 'data', listener: (data: Buffer) => void): unknown;
+  on(event: 'close', listener: () => void): unknown;
+  on(event: 'error', listener: (err: Error) => void): unknown;
+  once(event: 'error', listener: (err: Error) => void): unknown;
+  write(data: Buffer): boolean;
+  destroy(): void;
+  removeAllListeners(): unknown;
+}
+
 export interface DebugProtocolClientOptions {
   host: string;
   controlPort?: number;
+  /**
+   * Overrides how the control/IO sockets are opened — an RCE session passes a factory that tunnels
+   * through the Device API's ports-bridge (`wss://<instanceApiUrl>/api/v0/ports/<port>`, the same
+   * mechanism already used for the telnet consoles) instead of a raw TCP connect. Defaults to
+   * `net.Socket` against `host`, unchanged for local/LAN-relay devices.
+   */
+  connectSocket?: (port: number) => Promise<DebugSocketLike>;
+  /**
+   * Whether anyone is currently looking at the `'wire'` trace (the app passes "a Ports window is
+   * open"). While it returns false no frame summary is built or emitted — the trace is per-frame
+   * work with no consumer otherwise. Defaults to "yes whenever a 'wire' listener exists".
+   */
+  wireEnabled?: () => boolean;
 }
 
 interface AddBreakpointInput {
@@ -64,16 +92,48 @@ interface AddBreakpointInput {
 
 type AnyResult = ParseResult<Record<string, unknown>>;
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+/** Emitted as `'wire'` for every control-port frame — see {@link DebugProtocolClient.emitWire}. */
+export interface DebugWireFrame {
+  dir: 'in' | 'out';
+  /** `CommandCode` name for requests/responses, `UpdateTypeCode` name for device-initiated updates. */
+  name: string;
+  requestId: number;
+  bytes: number;
+  /** ms epoch */
+  at: number;
+  errorCode?: number;
+  detail?: string;
+}
+
+const WIRE_DETAIL_MAX = 400;
+const WIRE_HEADER_KEYS = new Set(['requestId', 'errorCode', 'packetLength', 'updateType']);
+
+/** Compact JSON of a decoded frame minus its header fields, truncated — enough to read what the
+ *  debugger asked/got without dumping a 200-variable snapshot into the trace. */
+function summarizeWireData(data: Record<string, unknown>): string | undefined {
+  const body: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(data)) {
+    if (WIRE_HEADER_KEYS.has(k) || v === undefined) continue;
+    body[k] = Array.isArray(v) && v.length > 5 ? `[${v.length} items]` : v;
+  }
+  if (Object.keys(body).length === 0) return undefined;
+  let text: string;
+  try {
+    text = JSON.stringify(body);
+  } catch {
+    return undefined;
+  }
+  return text.length > WIRE_DETAIL_MAX ? `${text.slice(0, WIRE_DETAIL_MAX)}…` : text;
 }
 
 export class DebugProtocolClient extends EventEmitter {
   private readonly host: string;
   private readonly controlPort: number;
+  private readonly wireEnabled?: () => boolean;
+  private readonly connectSocket?: (port: number) => Promise<DebugSocketLike>;
 
-  private controlSocket?: Socket;
-  private ioSocket?: Socket;
+  private controlSocket?: DebugSocketLike;
+  private ioSocket?: DebugSocketLike;
 
   /** Unconsumed bytes received on the control socket. */
   private buffer: Buffer = Buffer.alloc(0);
@@ -108,8 +168,10 @@ export class DebugProtocolClient extends EventEmitter {
 
   constructor(options: DebugProtocolClientOptions) {
     super();
+    this.wireEnabled = options.wireEnabled;
     this.host = options.host;
     this.controlPort = options.controlPort ?? DEBUG_CONTROL_PORT;
+    this.connectSocket = options.connectSocket;
   }
 
   // --- Connection ------------------------------------------------------------
@@ -122,31 +184,36 @@ export class DebugProtocolClient extends EventEmitter {
     return true;
   }
 
-  private establishControlConnection(): Promise<void> {
+  private async establishControlConnection(): Promise<void> {
+    const socket = await this.openSocket(this.controlPort);
+    this.controlSocket = socket;
+
+    socket.once('error', () => {
+      this.teardownControlSocket();
+      this.endSession('close');
+    });
+    socket.on('close', () => {
+      this.teardownControlSocket();
+      this.endSession('app-exit');
+    });
+    socket.on('data', (data: Buffer) => this.onData(data));
+  }
+
+  /** Opens a socket to `port` on this session's transport: the injected `connectSocket` factory
+   *  (RCE) if one was given, otherwise a raw `net.Socket` against `host` (local/LAN-relay,
+   *  unchanged behavior). Resolves only once actually connected; rejects on a refused/errored
+   *  connect attempt so the caller's retry loop sees it immediately. */
+  private openSocket(port: number): Promise<DebugSocketLike> {
+    if (this.connectSocket) return this.connectSocket(port);
     return new Promise((resolve, reject) => {
       const socket = new net.Socket({ allowHalfOpen: false });
-      this.controlSocket = socket;
       let connected = false;
-
       socket.once('error', (err: Error) => {
-        if (!connected) {
-          // Failure before we ever connected — surface it to the attach retry loop.
-          reject(err);
-          return;
-        }
-        this.teardownControlSocket();
-        this.endSession('close');
+        if (!connected) reject(err);
       });
-      socket.on('close', () => {
-        if (!connected) return; // connect rejection already handled it
-        this.teardownControlSocket();
-        this.endSession('app-exit');
-      });
-      socket.on('data', (data: Buffer) => this.onData(data));
-
-      socket.connect({ port: this.controlPort, host: this.host }, () => {
+      socket.connect({ port, host: this.host }, () => {
         connected = true;
-        resolve();
+        resolve(socket);
       });
     });
   }
@@ -159,8 +226,23 @@ export class DebugProtocolClient extends EventEmitter {
         reject(new Error('Control socket was closed before the handshake.'));
         return;
       }
-      this.controlSocket.write(encodeHandshake());
+      const hs = encodeHandshake();
+      this.emitWire('out', 'Handshake', 0, hs.length);
+      this.controlSocket.write(hs);
     });
+  }
+
+  /** One control-port frame, either direction, for read-only observers (the Ports window's 8081
+   *  tab). Names are the protocol's own command / update-type identifiers; `detail` is a compact,
+   *  truncated JSON of the decoded payload — the debugger's real traffic, not a second connection. */
+  private wireWanted(): boolean {
+    return this.listenerCount('wire') > 0 && this.wireEnabled?.() !== false;
+  }
+
+  private emitWire(dir: 'in' | 'out', name: string, requestId: number, bytes: number, extra?: { errorCode?: number; detail?: string }): void {
+    if (!this.wireWanted()) return;
+    const frame: DebugWireFrame = { dir, name, requestId, bytes, at: Date.now(), ...extra };
+    this.emit('wire', frame);
   }
 
   // --- Receive loop ----------------------------------------------------------
@@ -238,6 +320,7 @@ export class DebugProtocolClient extends EventEmitter {
     this.watchPacketLength = versionGte(this.protocolVersion, 3, 0, 0);
 
     const [major, minor, patch] = this.protocolVersion.split('.').map((n) => parseInt(n, 10) || 0);
+    this.emitWire('in', 'Handshake', 0, hs.readOffset, { detail: `protocol ${this.protocolVersion}` });
     this.emit('protocol-version', { major, minor, patch, version: this.protocolVersion });
 
     this.handshakeResolve?.();
@@ -261,6 +344,8 @@ export class DebugProtocolClient extends EventEmitter {
       case CommandCode.ListBreakpoints:
       case CommandCode.RemoveBreakpoints:
         return parseBreakpoints(buffer, watch) as AnyResult;
+      case CommandCode.SetExceptionBreakpoints:
+        return parseSetExceptionBreakpoints(buffer, watch) as AnyResult;
       default:
         // Stop / Continue / Step / ExitChannel / unknown: generic header only.
         return parseGeneric(buffer, watch) as AnyResult;
@@ -268,6 +353,16 @@ export class DebugProtocolClient extends EventEmitter {
   }
 
   private dispatch(result: AnyResult, requestId: number): void {
+    if (this.wireWanted()) {
+      const command = this.activeRequests.get(requestId);
+      const name = requestId !== 0
+        ? (command !== undefined ? CommandCode[command] : 'Response')
+        : String(result.data.updateType ?? 'Update');
+      this.emitWire('in', name, requestId, result.readOffset || 0, {
+        errorCode: result.data.errorCode as number,
+        detail: summarizeWireData(result.data)
+      });
+    }
     if (requestId !== 0) {
       const resolve = this.pending.get(requestId);
       if (resolve) {
@@ -302,6 +397,8 @@ export class DebugProtocolClient extends EventEmitter {
       if (Array.isArray(data.breakpoints) && data.breakpoints.length > 0) {
         this.emit('breakpoints-verified', data);
       }
+    } else if (type === 'ExceptionBreakpointError') {
+      this.emit('exception-breakpoint-error', data);
     }
   }
 
@@ -319,6 +416,7 @@ export class DebugProtocolClient extends EventEmitter {
       }
       this.activeRequests.set(requestId, command);
       this.pending.set(requestId, resolve);
+      this.emitWire('out', CommandCode[command], requestId, buffer.length);
       this.controlSocket.write(buffer);
     });
   }
@@ -361,11 +459,17 @@ export class DebugProtocolClient extends EventEmitter {
     if (!this.isStopped) return undefined;
     const id = this.nextId();
     const result = await this.send(CommandCode.Threads, id, encodeThreads(id));
-    const list = (result?.data.threads as Array<{ isPrimary?: boolean }>) ?? [];
-    for (let i = 0; i < list.length; i++) {
-      if (list[i].isPrimary) {
-        this.primaryThread = i;
-        break;
+    // Protocol <3.1.0 has a bug where the device's `isPrimary` flag is unreliable — trust
+    // the primaryThread already tracked from the AllThreadsStopped/ThreadAttached update
+    // (handleUpdate) instead of clobbering it here (mirrors roku-debug's thread-hopping
+    // workaround, `enableThreadHoppingWorkaround`).
+    if (versionGte(this.protocolVersion, 3, 1, 0)) {
+      const list = (result?.data.threads as Array<{ isPrimary?: boolean }>) ?? [];
+      for (let i = 0; i < list.length; i++) {
+        if (list[i].isPrimary) {
+          this.primaryThread = i;
+          break;
+        }
       }
     }
     return result;
@@ -377,24 +481,50 @@ export class DebugProtocolClient extends EventEmitter {
     return this.send(CommandCode.StackTrace, id, encodeStackTrace(id, threadIndex));
   }
 
+  private requestVariables(
+    variablePathEntries: string[],
+    stackFrameIndex: number,
+    threadIndex: number
+  ): Promise<AnyResult> {
+    const id = this.nextId();
+    return this.send(
+      CommandCode.Variables,
+      id,
+      encodeVariables(id, {
+        threadIndex,
+        stackFrameIndex,
+        variablePath: variablePathEntries,
+        enableForceCaseInsensitivity: versionGte(this.protocolVersion, 3, 1, 0),
+        getVirtualKeys: versionGte(this.protocolVersion, 3, 3, 0)
+      })
+    );
+  }
+
   async getVariables(
     variablePathEntries: string[] = [],
     stackFrameIndex = this.stackFrameIndex,
     threadIndex = this.primaryThread
   ): Promise<AnyResult | undefined> {
     if (!this.isStopped || !(threadIndex > -1)) return undefined;
-    const id = this.nextId();
-    const result = await this.send(
-      CommandCode.Variables,
-      id,
-      encodeVariables(id, {
-        threadIndex,
-        stackFrameIndex: stackFrameIndex ?? 0,
-        variablePath: variablePathEntries,
-        enableForceCaseInsensitivity: versionGte(this.protocolVersion, 3, 1, 0),
-        getVirtualKeys: versionGte(this.protocolVersion, 3, 3, 0)
-      })
-    );
+    const frameIndex = stackFrameIndex ?? 0;
+
+    // Protocol <3.1.0 predates per-entry case-insensitivity and has known device-side
+    // casing bugs — mirror roku-debug's workaround: lowercase the root path segment
+    // before asking, then retry the WHOLE path lowercased if the device still errors.
+    const legacyCasing = !versionGte(this.protocolVersion, 3, 1, 0);
+    const firstPath =
+      legacyCasing && variablePathEntries.length > 0
+        ? [variablePathEntries[0].toLowerCase(), ...variablePathEntries.slice(1)]
+        : variablePathEntries;
+
+    let result = await this.requestVariables(firstPath, frameIndex, threadIndex);
+    if (legacyCasing && (result?.data.errorCode as number) !== ErrorCode.OK) {
+      result = await this.requestVariables(
+        variablePathEntries.map((e) => e.toLowerCase()),
+        frameIndex,
+        threadIndex
+      );
+    }
     // If the path pointed at something missing/invalid, synthesize a friendly
     // placeholder variable rather than surfacing an empty/erroring response.
     const errorData = result?.data.errorData as { missingKeyIndex?: number; invalidPathIndex?: number } | undefined;
@@ -472,44 +602,54 @@ export class DebugProtocolClient extends EventEmitter {
     return this.send(CommandCode.RemoveBreakpoints, id, encodeRemoveBreakpoints(id, ids));
   }
 
+  /** Break on caught/uncaught BrightScript errors (device-wide filters, not tied to a
+   *  file:line). No-ops on firmware that predates the command (<3.3.0 / Roku OS 14.1). */
+  async setExceptionBreakpoints(filters: ExceptionBreakpointSpec[]): Promise<AnyResult | undefined> {
+    if (!versionGte(this.protocolVersion, 3, 3, 0)) return undefined;
+    const id = this.nextId();
+    return this.send(CommandCode.SetExceptionBreakpoints, id, encodeSetExceptionBreakpoints(id, filters ?? []));
+  }
+
   // --- IO port ---------------------------------------------------------------
 
   /** Connect to the device's read-only I/O port to stream the channel's print output. */
   private connectToIoPort(port: number): void {
     if (!port || port <= 0) return;
-    try {
-      const io = new net.Socket({ allowHalfOpen: false });
-      this.ioSocket = io;
-      io.connect({ port, host: this.host }, () => {
-        // connected; data handler streams output below
+    this.openSocket(port)
+      .then((io) => {
+        this.ioSocket = io;
+        io.on('data', (buf: Buffer) => {
+          const text = this.ioPartialLine + buf.toString('utf8');
+          const lastNl = text.lastIndexOf('\n');
+          if (lastNl >= 0) {
+            this.emit('io-output', text.slice(0, lastNl + 1));
+            this.ioPartialLine = text.slice(lastNl + 1);
+          } else {
+            this.ioPartialLine = text;
+          }
+        });
+        io.once('error', () => {
+          try {
+            io.destroy();
+          } catch {
+            /* best-effort */
+          }
+        });
+        io.on('close', () => {
+          // flush any trailing partial line
+          if (this.ioPartialLine) {
+            this.emit('io-output', this.ioPartialLine);
+            this.ioPartialLine = '';
+          }
+        });
+      })
+      .catch(() => {
+        // An IO-port connect failure only loses console-output streaming — the control session
+        // (breakpoints/stepping) stays alive. Matches the old raw-`net.Socket` behavior, where a
+        // connect error just destroyed this one socket via its 'error' event; don't emit
+        // 'app-exit' here or a transient hiccup (or an RCE ports-bridge tunnel blip) tears down
+        // the whole debug session over a lost print stream.
       });
-      io.on('data', (buf: Buffer) => {
-        const text = this.ioPartialLine + buf.toString('utf8');
-        const lastNl = text.lastIndexOf('\n');
-        if (lastNl >= 0) {
-          this.emit('io-output', text.slice(0, lastNl + 1));
-          this.ioPartialLine = text.slice(lastNl + 1);
-        } else {
-          this.ioPartialLine = text;
-        }
-      });
-      io.once('error', () => {
-        try {
-          io.destroy();
-        } catch {
-          /* best-effort */
-        }
-      });
-      io.on('close', () => {
-        // flush any trailing partial line
-        if (this.ioPartialLine) {
-          this.emit('io-output', this.ioPartialLine);
-          this.ioPartialLine = '';
-        }
-      });
-    } catch {
-      this.emit('app-exit');
-    }
   }
 
   // --- Teardown --------------------------------------------------------------
@@ -538,16 +678,12 @@ export class DebugProtocolClient extends EventEmitter {
     this.emit(evt);
   }
 
-  async destroy(immediate = false): Promise<void> {
-    // Politely ask the device to end the debug session (unless a hard/immediate kill).
-    if (this.controlSocket && !immediate) {
-      try {
-        const id = this.nextId();
-        await Promise.race([this.send(CommandCode.ExitChannel, id, encodeExitChannel(id)), sleep(1500)]);
-      } catch {
-        /* best-effort */
-      }
-    }
+  /**
+   * Hard-close the control + IO sockets and fail any in-flight requests. Idempotent. Never
+   * sends ExitChannel: that command exits the channel on the device, and every caller here is a
+   * detach/teardown that must leave the app running (see DebugSessionController.detach).
+   */
+  async destroy(): Promise<void> {
     this.ended = true;
     this.teardownControlSocket();
     if (this.ioSocket) {

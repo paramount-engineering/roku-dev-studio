@@ -12,6 +12,8 @@ import { setupSystemHandlers } from './system-handlers';
 import { setupNetworkInspectorHandlers } from './network-inspector-handlers';
 import { setupRelayHandlers } from './relay-handlers';
 import { setupDebuggerHandlers } from './debugger-handlers';
+import { setupRceHandlers } from './rce-handlers';
+import { setupRceVideoHandlers } from './rce-video-handlers';
 import { cleanupStaleTempFiles } from '../startup-temp-cleanup';
 
 type AppWindowState = {
@@ -54,6 +56,8 @@ function setupIpcHandlers(
   setupNetworkInspectorHandlers(mainWindow, safeSendToRenderer, dialog, app.getPath('userData'));
   setupRelayHandlers(mainWindow, safeSendToRenderer, state);
   setupDebuggerHandlers(mainWindow);
+  setupRceHandlers();
+  setupRceVideoHandlers();
 }
 
 export { setupIpcHandlers };

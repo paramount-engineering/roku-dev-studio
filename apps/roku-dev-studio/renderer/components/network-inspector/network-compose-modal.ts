@@ -12,7 +12,7 @@
  * free-text textarea produced, so the replay payload shape is unchanged.
  */
 import type { ParsedNetworkEvent, ReplayHttpInput } from '@shared/network-inspector/types.js';
-import { escapeHtml } from '../../modules/utils/dom.js';
+import { animateHeight, escapeHtml } from '../../modules/utils/dom.js';
 import { attachBackdropClickToClose } from '../../modules/utils/modal-backdrop-click.js';
 import { openModalOverlayActiveFromOpener, closeModalWithOriginMotion } from '../../modules/utils/modal-origin-motion.js';
 import { S } from '@shared/strings/index.js';
@@ -315,9 +315,11 @@ export async function openComposeModal(opts: {
   // `urlEl.value` above fires no `input` event, so these two directions can't loop.
   const syncParamsFromUrl = (): void => {
     if (!urlEl || !paramsRows) return;
-    paramsRows.innerHTML = queryToPairs(splitUrl(urlEl.value).query)
-      .map((p) => kvRowHtml(p, S.networkInspector.rwParamName))
-      .join('');
+    animateHeight(paramsRows.closest('.ni-compose-modal'), () => {
+      paramsRows.innerHTML = queryToPairs(splitUrl(urlEl.value).query)
+        .map((p) => kvRowHtml(p, S.networkInspector.rwParamName))
+        .join('');
+    });
   };
 
   /**
@@ -364,7 +366,9 @@ export async function openComposeModal(opts: {
       refreshMaster();
     });
     addBtn?.addEventListener('click', () => {
-      rows.insertAdjacentHTML('beforeend', kvRowHtml({ name: '', value: '', enabled: true }, namePlaceholder));
+      animateHeight(rows.closest('.ni-compose-modal'), () =>
+        rows.insertAdjacentHTML('beforeend', kvRowHtml({ name: '', value: '', enabled: true }, namePlaceholder))
+      );
       const nameInput = rows.querySelector(
         '[data-kv-row]:last-child [data-kv-name]'
       ) as HTMLInputElement | null;

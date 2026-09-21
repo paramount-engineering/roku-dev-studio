@@ -11,5 +11,5 @@
       "@shared/*": ["./shared/*"]
     }
   },
-  "include": ["main.ts", "preload.ts", "log-viewer-preload.ts", "main/**/*.ts", "shared/**/*.ts"]
+  "include": ["main.ts", "preload.ts", "log-viewer-preload.ts", "port-terminal-preload.ts", "main/**/*.ts", "shared/**/*.ts"]
 }

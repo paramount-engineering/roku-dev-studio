@@ -4,6 +4,10 @@ node_modules/
 # Build outputs
 dist/
 
+# Generated from packages/roku-dev-studio-mcp/src/tools.ts (npm run docs, or CI before Pages deploy)
+# — never hand-edit or commit; a stale committed copy would recreate the exact drift this exists to avoid.
+docs/mcp-tools.json
+
 
 # esbuild output (see apps/roku-dev-studio/scripts/bundle-electron.js); rebuilt by prepare / start / build:bundle
 apps/roku-dev-studio/preload-about.js
@@ -55,6 +59,8 @@ npm-debug.log*
 .discussion-docs/
 .cursor/
 CLAUDE.md
+apps/roku-dev-studio/port-terminal-preload.bundled.cjs
+
 # Code-signing material — never commit
 *.p12
 *.p8

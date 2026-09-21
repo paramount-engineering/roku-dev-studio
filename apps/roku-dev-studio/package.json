@@ -20,6 +20,9 @@
     "verify:main-window-file-drop": "cross-env TSX_TSCONFIG_PATH=./tsconfig.scripts.json tsx scripts/verify-main-window-file-drop.ts",
     "verify:log-file-window-chunking": "tsx scripts/verify-log-file-window-chunking.ts",
     "verify:i18n": "tsx scripts/verify-i18n-keys.ts",
+    "verify:telnet-single-flight": "tsx scripts/verify-telnet-single-flight.ts",
+    "verify:held-pool": "tsx scripts/verify-held-pool.ts",
+    "verify:debugger-enabled": "tsx scripts/verify-debugger-enabled.ts",
     "verify:mcp-tools": "tsx scripts/verify-mcp-tools-catalog.ts",
     "verify:artifact-names": "tsx scripts/verify-artifact-names.ts",
     "typecheck:scripts": "tsc --noEmit -p tsconfig.scripts.json",
@@ -60,6 +63,7 @@
     "roku-dev-studio-api": "file:../../packages/roku-dev-studio-api",
     "roku-dev-studio-mcp": "file:../../packages/roku-dev-studio-mcp",
     "roku-dev-studio-platform": "file:../../packages/roku-dev-studio-platform",
+    "roku-dev-studio-rce": "file:../../packages/roku-dev-studio-rce",
     "solid-js": "^1.9.14",
     "ws": "^8.21.0"
   },

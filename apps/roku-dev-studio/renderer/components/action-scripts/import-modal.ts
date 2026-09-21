@@ -5,6 +5,7 @@
  */
 
 import { attachBackdropClickToClose } from '../../modules/utils/modal-backdrop-click.js';
+import { animateHeight } from '../../modules/utils/dom.js';
 import { scriptHasSaveActions, scriptNeedsPassword, scriptNeedsRaleConnection } from './action-registry.js';
 import { parseAndValidateScript } from './validator.js';
 import { ensureRaleFunctionsWhenScriptNeedsRale } from './script-rale-validation.js';
@@ -151,32 +152,41 @@ export function setupImportModal(container, device, api, context) {
     return getDeviceSerial();
   }
 
+  const importBox = modalRoot.querySelector('.action-scripts-import-modal-box');
   function setImportError(msg) {
     if (importErrorEl) {
-      importErrorEl.textContent = msg || '';
-      importErrorEl.style.display = msg ? 'block' : 'none';
+      animateHeight(importBox, () => {
+        importErrorEl.textContent = msg || '';
+        importErrorEl.style.display = msg ? 'block' : 'none';
+      });
     }
+  }
+
+  /** Show/hide the Dev Password section (+ its "required" note) — one tween for both. */
+  function setDevPasswordVisible(section: boolean, requiredMsg: boolean): void {
+    if (!importDevPasswordSection) return;
+    animateHeight(importBox, () => {
+      importDevPasswordSection.style.display = section ? 'block' : 'none';
+      if (importDevPasswordRequiredMsg) importDevPasswordRequiredMsg.style.display = requiredMsg ? 'block' : 'none';
+    });
   }
 
   /** Show Dev Password section only when script needs password and none from cache or script. */
   function updateDevPasswordVisibility(raw) {
     if (!importDevPasswordSection) return;
     if (modalRoot._importTarget === 'builder') {
-      importDevPasswordSection.style.display = 'none';
-      if (importDevPasswordRequiredMsg) importDevPasswordRequiredMsg.style.display = 'none';
+      setDevPasswordVisible(false, false);
       return;
     }
     const text = (raw || '').trim();
     if (!text) {
-      importDevPasswordSection.style.display = 'none';
-      if (importDevPasswordRequiredMsg) importDevPasswordRequiredMsg.style.display = 'none';
+      setDevPasswordVisible(false, false);
       return;
     }
     try {
       const parsed = JSON.parse(text);
       if (!parsed || typeof parsed !== 'object' || !Array.isArray(parsed.steps)) {
-        importDevPasswordSection.style.display = 'none';
-        if (importDevPasswordRequiredMsg) importDevPasswordRequiredMsg.style.display = 'none';
+        setDevPasswordVisible(false, false);
         return;
       }
       const needsPassword = scriptNeedsPassword(parsed);
@@ -184,22 +194,18 @@ export function setupImportModal(container, device, api, context) {
       const cachedPassword = getStoredPassword(getImportDeviceSerialForModal());
       const hasPasswordFromCacheOrScript = !!cachedPassword || scriptHasPassword;
       if (needsPassword && !hasPasswordFromCacheOrScript) {
-        importDevPasswordSection.style.display = 'block';
-        if (importDevPasswordRequiredMsg) importDevPasswordRequiredMsg.style.display = 'block';
+        setDevPasswordVisible(true, true);
       } else {
-        importDevPasswordSection.style.display = 'none';
-        if (importDevPasswordRequiredMsg) importDevPasswordRequiredMsg.style.display = 'none';
+        setDevPasswordVisible(false, false);
       }
     } catch (_) {
-      importDevPasswordSection.style.display = 'none';
-      if (importDevPasswordRequiredMsg) importDevPasswordRequiredMsg.style.display = 'none';
+      setDevPasswordVisible(false, false);
     }
   }
 
   function showPasswordSectionAfterAuthFailure(showRequiredMsg = false) {
     if (importDevPasswordSection) {
-      importDevPasswordSection.style.display = 'block';
-      if (importDevPasswordRequiredMsg) importDevPasswordRequiredMsg.style.display = showRequiredMsg ? 'block' : 'none';
+      setDevPasswordVisible(true, showRequiredMsg);
       importDevPasswordSection.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }
   }

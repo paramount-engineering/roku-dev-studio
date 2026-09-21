@@ -52,6 +52,9 @@ export function extractIndexStyleToCss(rendererRoot: string, rendererDist: strin
   // The "View and Manage Action Scripts" window embeds the real Action Scripts builder, so it needs
   // the same full inline stylesheet (theme vars + all `.action-scripts-builder-*`/step/save rules).
   fs.writeFileSync(path.join(rendererDist, 'action-scripts-viewer.css'), header + match[1], 'utf-8');
+  // The Ports window mounts the shared console surface (.telnet-output / .telnet-log-line /
+  // .telnet-find-bar) and the .btn / .rds-tip primitives — same full stylesheet.
+  fs.writeFileSync(path.join(rendererDist, 'port-terminal.css'), header + match[1], 'utf-8');
 }
 
 /**
@@ -422,6 +425,7 @@ export function transpileRenderer(appDir: string): void {
     path.join(rendererRoot, 'components', 'about'),
     path.join(rendererRoot, 'components', 'settings'),
     path.join(rendererRoot, 'components', 'static-analysis'),
+    path.join(rendererRoot, 'components', 'port-terminal'),
   ];
   const entryPoints = roots.flatMap((r) => walkTsFiles(r));
   const appTs = path.join(rendererRoot, 'app.ts');

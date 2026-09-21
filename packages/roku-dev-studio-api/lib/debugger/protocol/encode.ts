@@ -28,10 +28,6 @@ export function encodeStop(requestId: number): Buffer {
   return frame(CommandCode.Stop, requestId, new BufWriter());
 }
 
-export function encodeExitChannel(requestId: number): Buffer {
-  return frame(CommandCode.ExitChannel, requestId, new BufWriter());
-}
-
 export function encodeListBreakpoints(requestId: number): Buffer {
   return frame(CommandCode.ListBreakpoints, requestId, new BufWriter());
 }
@@ -94,6 +90,23 @@ export function encodeAddConditionalBreakpoints(requestId: number, breakpoints: 
       .stringNT((bp.conditionalExpression ?? '').trim() || 'true');
   }
   return frame(CommandCode.AddConditionalBreakpoints, requestId, body);
+}
+
+export interface ExceptionBreakpointSpec {
+  filter: 'caught' | 'uncaught';
+  conditionExpression?: string;
+}
+
+/** Wire values for the `filter` field — matches roku-debug's `ExceptionBreakpointFilterType`. */
+const EXCEPTION_FILTER_CODE: Record<'caught' | 'uncaught', number> = { caught: 1, uncaught: 2 };
+
+export function encodeSetExceptionBreakpoints(requestId: number, filters: ExceptionBreakpointSpec[]): Buffer {
+  const list = filters ?? [];
+  const body = new BufWriter().u32(list.length);
+  for (const f of list) {
+    body.u32(EXCEPTION_FILTER_CODE[f.filter] ?? EXCEPTION_FILTER_CODE.uncaught).stringNT((f.conditionExpression ?? '').trim());
+  }
+  return frame(CommandCode.SetExceptionBreakpoints, requestId, body);
 }
 
 /** Bit flags for the VARIABLES request's leading uint8. */

@@ -105,4 +105,13 @@ export const sideloadRelay = {
   errValidationFailed: 'Falha na validação.',
   errCouldNotReadPassword: 'Não foi possível ler a senha salva.',
   errCouldNotWriteSettings: 'Não foi possível gravar o arquivo de configurações.',
+
+  // ── Linha do modal de Informações do Dispositivo (renderer/app.ts openDeviceHardwareImageModal) ──
+  deviceRowLabel: 'Sideload Relay',
+  deviceRowToggleAriaLabel: (name: string): string => `Sideload Relay para ${name}`,
+  deviceRowDisabledHint: 'Ative o Sideload Relay nas Configurações primeiro.',
+  deviceRowManageLinkText: 'Gerenciar em Configurações → Sideload Relay',
+  deviceRowToggleFailed: 'Não foi possível atualizar o destino do Sideload Relay.',
+  deviceRemovedToast: (name: string): string =>
+    `${name} foi removido do Sideload Relay — a senha de desenvolvedor não está mais verificada.`,
 };

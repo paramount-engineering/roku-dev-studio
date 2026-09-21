@@ -173,9 +173,11 @@ export const modals = {
   // add, clear, close).
 
   addLocation: {
-    title: '🌐 Dodaj lokalizację zdalną',
+    title: 'Dodaj lokalizację zdalną',
     intro:
-      'Łącz się z urządzeniami Roku w zdalnej lokalizacji za pośrednictwem Roku Relay Server działającego na Mac Mini lub innym komputerze.',
+      'Łącz się z urządzeniami Roku w zdalnej lokalizacji za pośrednictwem Roku Relay Server.',
+    tabRelay: 'Przekaźnik RDS',
+    tabRce: 'RCE',
     nameLabel: 'Nazwa lokalizacji',
     namePlaceholder: 'np. Laboratorium biurowe, Studio B',
     nameHint: 'Przyjazna nazwa pozwalająca zidentyfikować tę lokalizację',
@@ -184,7 +186,12 @@ export const modals = {
     hostHint: 'Adres IP lub nazwa hosta Relay Server',
     portLabel: 'Port',
     portHint: 'Domyślny port to 4951',
+    rceIntro: 'Połącz się z kontem Roku Cloud Emulator, aby wyświetlać, uruchamiać i kontrolować jego wirtualne urządzenia.',
+    tokenLabel: 'Token API',
+    tokenPlaceholder: 'Osobisty token dostępu',
+    tokenHint: 'Wygeneruj go w interfejsie internetowym Roku Cloud Emulator (karta Token)',
     addBtn: 'Dodaj lokalizację',
+    forgetOnQuit: 'Zapomnij przy zamknięciu aplikacji',
   },
 
   actionScriptsImport: {
@@ -606,14 +613,16 @@ export const modals = {
 
     remoteLocationsHeading: 'Lokalizacje zdalne',
     remoteLocationsListHtml: `
-            <li><strong>Konfiguracja</strong> - Uruchom Roku Relay Server na Mac Mini w lokalizacji zdalnej</li>
-            <li><strong>Dodaj lokalizację</strong> - Kliknij „Dodaj” w sekcji Lokalizacje zdalne, aby skonfigurować połączenie</li>
-            <li><strong>Adres serwera</strong> - Wprowadź adres IP lub nazwę hosta serwera przekaźnikowego</li>
+            <li><strong>Konfiguracja</strong> - Uruchom Roku Relay Server na komputerze w lokalizacji zdalnej</li>
+            <li><strong>Dodaj lokalizację</strong> - Kliknij „Dodaj” w sekcji Lokalizacje zdalne, a następnie wybierz kartę <strong>RDS Relay</strong> lub <strong>RCE</strong></li>
+            <li><strong>Adres serwera</strong> - Karta RDS Relay: wprowadź adres IP lub nazwę hosta serwera przekaźnikowego</li>
             <li><strong>Domyślny port</strong> - Serwer przekaźnikowy domyślnie działa na porcie <code>4951</code></li>
+            <li><strong>Konto RCE</strong> - Karta RCE: nadaj nazwę kontu i wklej jego token API z panelu Roku Cloud Emulator</li>
           `,
     remoteLocationsServerHtml: `Serwer przekaźnikowy znajduje się w folderze <code>remote-server</code>. Instrukcje konfiguracji znajdziesz w pliku README (macOS LaunchAgent, Linux systemd, Windows Task Scheduler).`,
     remoteLocationsTroubleshootHtml: `<strong>Wgrywanie lub zrzut ekranu przez przekaźnik zawodzi, ale ECP działa?</strong> Zaktualizuj host przekaźnika do tej samej wersji <code>roku-dev-studio-api</code> co ta aplikacja. Sprawdź <code>GET /health</code> na przekaźniku (pole <code>apiVersion</code>) i upewnij się, że port <code>4951</code> jest osiągalny przez zapory.`,
-    remoteLocationsIntro: 'Steruj urządzeniami Roku w lokalizacjach zdalnych za pośrednictwem Relay Server:',
+    remoteLocationsRceHtml: `<strong>Urządzenia RCE</strong> są wyświetlane jako wyłączone/oczekujące/uruchomione. Uruchom jedno z jego karty (lub z własnego panelu Roku Cloud Emulator) przed połączeniem — ECP, wgrywanie i konsola odpowiadają tylko wtedy, gdy urządzenie działa, a urządzenie zatrzymuje się automatycznie po upływie skonfigurowanego dla niego maksymalnego czasu działania.`,
+    remoteLocationsIntro: 'Steruj urządzeniami Roku w lokalizacjach zdalnych — za pośrednictwem Relay Server (urządzenia LAN w innej lokalizacji) lub konta Roku Cloud Emulator (RCE):',
 
     sideloadRelayHeading: 'Sideload Relay',
     sideloadRelayIntroHtml: `Wgraj jedną kompilację na <strong>wiele urządzeń jednocześnie</strong>. Gdy przekaźnik jest włączony, Roku Dev Studio rozgłasza się jako Roku w Twojej sieci: skieruj swoje IDE (VS Code BrightScript / roku-deploy / Eclipse) lub przeglądarkę na ten komputer, prześlij raz, a RDS rozprowadza kompilację — <em>instalacja → uruchomienie → konsola</em> — na każde docelowe urządzenie, lokalne lub w lokalizacji zdalnej.`,

@@ -12,9 +12,10 @@ export const debuggerStrings = {
   attach: 'Attach',
   detach: 'Detach',
 
-  // Sideload-for-debug (Dev App panel checkbox)
-  sideloadWithDebugging: 'Sideload with Debugging',
-  sideloadWithDebuggingTitle: 'Reinstall with the BrightScript debug protocol (port 8081) enabled, then open the debugger.',
+  // Per-device "Enable Debugger" flag (Dev App panel + Fiddle checkbox). It is not sideload-only:
+  // while on, the debugger also attaches whenever the running channel reports it is waiting for one.
+  enableDebugger: 'Enable Debugger',
+  enableDebuggerTitle: 'Sideload with the BrightScript debug protocol (port 8081) enabled and attach the debugger. While on, the debugger also attaches automatically whenever this device reports it is waiting for one.',
 
   // Shown (toggle disabled) when a remote-managed device's server reports `debugger: false`
   // from its /capabilities — an older or reduced-build remote server without the debug
@@ -95,9 +96,14 @@ export const debuggerStrings = {
 
   // Restart / relaunch
   restart: 'Restart',
+  /** Shown in place of the exec cluster while NOT attached — same re-sideload as Restart. */
+  relaunch: 'Relaunch',
+  relaunchTitle: 'Re-sideload the last debug build with the debugger enabled — a fresh run waits on 8081 and attaches',
   restartTitle: 'Re-sideload with debugging and reattach',
   restarting: 'Restarting…',
   restartNoPassword: 'Enter the developer password in the Dev App tab first, then Restart.',
+  errNoPreviousDebugSideload: 'No previous debug sideload to restart. Turn on Enable Debugger and sideload first.',
+  errPreviousDebugBuildMissing: 'The previous debug build is no longer on disk. Sideload again.',
 
   // Runtime / compile errors
   runtimeError: (msg: string): string => `Runtime error${msg ? `: ${msg}` : ''}`,

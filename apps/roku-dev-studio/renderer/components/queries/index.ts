@@ -135,9 +135,9 @@ export function setupQueries(panel: DevicePanelRoot, api: QueriesDeviceApi): voi
 
   setupPostButtons(panel, api, outputArea, removePluginSection);
 
-  setupTelnetCommands(panel, api, outputArea, removePluginSection);
+  const { runTelnetCommand } = setupTelnetCommands(panel, api, outputArea, removePluginSection);
 
   setupRemovePlugin(panel, api, outputArea);
 
-  setupCustomQuery(customQueryInput, runCustomQueryBtn, removePluginSection, runQuery);
+  setupCustomQuery(customQueryInput, runCustomQueryBtn, removePluginSection, runQuery, runTelnetCommand);
 }

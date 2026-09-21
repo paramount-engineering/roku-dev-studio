@@ -114,4 +114,13 @@ export const sideloadRelay = {
   errValidationFailed: 'Перевірку не пройдено.',
   errCouldNotReadPassword: 'Не вдалося прочитати збережений пароль.',
   errCouldNotWriteSettings: 'Не вдалося записати файл налаштувань.',
+
+  // ── Рядок у вікні інформації про пристрій (renderer/app.ts openDeviceHardwareImageModal) ──
+  deviceRowLabel: 'Sideload Relay',
+  deviceRowToggleAriaLabel: (name: string): string => `Sideload Relay для ${name}`,
+  deviceRowDisabledHint: 'Спочатку увімкніть Sideload Relay в Налаштуваннях.',
+  deviceRowManageLinkText: 'Керувати в Налаштування → Sideload Relay',
+  deviceRowToggleFailed: 'Не вдалося оновити ціль Sideload Relay.',
+  deviceRemovedToast: (name: string): string =>
+    `${name} видалено з Sideload Relay — пароль розробника більше не підтверджено.`,
 };

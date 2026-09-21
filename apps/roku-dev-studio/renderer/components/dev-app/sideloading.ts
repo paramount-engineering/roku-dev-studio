@@ -1,6 +1,6 @@
 // Sideloading functionality
 
-import { icon, escapeHtml, decodeHtmlEntities, setSafeHTML } from '../../modules/utils/index.js';
+import { icon, setSafeHTML } from '../../modules/utils/index.js';
 import { showStatusMessage } from '../../modules/utils/ui.js';
 import { savePassword, removePassword, getStoredPassword } from '../../modules/utils/storage.js';
 import { SCREENSHOT_AFTER_LAUNCH_DELAY } from '../../modules/utils/constants.js';
@@ -11,7 +11,11 @@ import {
   pollDevAppForegroundOnce
 } from './dev-app-foreground-sync.js';
 import { S } from '@shared/strings/index.js';
-import { deviceKey } from '@shared/platform/device-identity.js';
+import {
+  DEBUGGER_ENABLED_CHANGED_EVENT,
+  isPanelDebuggerEnabled,
+  setPanelDebuggerEnabled
+} from '../../modules/utils/device-debugger-flag.js';
 
 /**
  * Setup sideloading functionality
@@ -54,62 +58,22 @@ export function setupSideloading(
   
   let selectedFilePath = '';
 
-  // "Sideload with Debugging": persist the choice per device, keyed by device identity
-  // (serial preferred, else IP — see deviceKey()) so it survives launches AND network
-  // changes, AND so the main-process Sideload Relay can fan out this device with
-  // remotedebug=1. Setting key is allowlisted in main/settings.ts and read back in
-  // main/sideload-relay/service.ts / dev-app-handlers.ts — keep the literal in sync.
-  // Also checks/clears the pre-migration raw-IP entry so older saved prefs keep working.
-  const DEBUG_SIDELOAD_KEY = 'sideload-debug-ips';
+  // "Enable Debugger": the flag lives on the device (device.debuggerEnabled, stamped by
+  // modules/utils/device-debugger-flag.ts); this checkbox just mirrors it and writes through it.
   const debugCheckbox = panel.querySelector('.sideload-debug-checkbox') as HTMLInputElement | null;
-  const deviceIp = panel.dataset.ip || '';
-  // Live — see getSerialNumber's doc comment. Recomputed at each use rather than once at setup,
-  // so a serial that becomes known after a Sideload Relay auto-connect isn't missed.
-  const getDeviceKeyForIp = (): string => deviceKey({ serial: getSerialNumber(), ip: deviceIp });
   if (debugCheckbox && api.isRemote && api.debuggerSupported === false) {
     debugCheckbox.disabled = true;
     debugCheckbox.title = S.debugger.unsupportedByServerTitle;
   }
-  if (debugCheckbox && deviceIp) {
-    const readIps = async (): Promise<string[]> => {
-      const res = await window.roku.getSetting(DEBUG_SIDELOAD_KEY);
-      return res && res.success && Array.isArray(res.value) ? (res.value as string[]) : [];
-    };
-    // If the persisted preference was saved under the serial key from a prior session, but this
-    // panel's serial isn't known yet (Sideload Relay auto-connect), the initial read below would
-    // show unchecked even though a matching serial-keyed entry exists — re-read once the serial
-    // actually resolves (`device-info-refreshed`), not just on the checkbox's own change handler.
-    const loadCheckedState = async (): Promise<void> => {
-      try {
-        const ips = await readIps();
-        const deviceKeyForIp = getDeviceKeyForIp();
-        debugCheckbox.checked = ips.includes(deviceKeyForIp) || ips.includes(deviceIp);
-      } catch { /* default unchecked */ }
-    };
-    void loadCheckedState();
-    let resolvedSerialForCheckboxLoad = getSerialNumber();
-    panel.addEventListener('device-info-refreshed', (e: Event) => {
-      const ce = e as CustomEvent<{ device?: { serialNumber?: string } }>;
-      const nextSerial = ce.detail?.device?.serialNumber;
-      if (!nextSerial || nextSerial === resolvedSerialForCheckboxLoad) return;
-      resolvedSerialForCheckboxLoad = nextSerial;
-      void loadCheckedState();
+  if (debugCheckbox) {
+    debugCheckbox.checked = isPanelDebuggerEnabled(panel);
+    panel.addEventListener(DEBUGGER_ENABLED_CHANGED_EVENT, (e: Event) => {
+      debugCheckbox.checked = !!(e as CustomEvent<{ enabled?: boolean }>).detail?.enabled;
     });
     debugCheckbox.addEventListener('change', () => {
-      void (async () => {
-        try {
-          const ips = new Set(await readIps());
-          const deviceKeyForIp = getDeviceKeyForIp();
-          if (debugCheckbox.checked) {
-            ips.add(deviceKeyForIp);
-            if (deviceKeyForIp !== deviceIp) ips.delete(deviceIp);
-          } else {
-            ips.delete(deviceKeyForIp);
-            ips.delete(deviceIp);
-          }
-          await window.roku.setSetting(DEBUG_SIDELOAD_KEY, [...ips]);
-        } catch { /* best-effort persistence */ }
-      })();
+      void setPanelDebuggerEnabled(panel, debugCheckbox.checked).catch(() => {
+        /* best-effort persistence */
+      });
     });
   }
 

@@ -4,6 +4,7 @@ import { icon, setSafeHTML, escapeHtml } from '../../modules/utils/index.js';
 import { getStoredPassword, savePassword, removePassword } from '../../modules/utils/storage.js';
 import type { DevAppApi, DevicePanelRoot, PasswordAuthElements } from './dev-app-types.js';
 import { registerPanelRetranslate } from '../../modules/ui/retranslate-registry.js';
+import { registerPanelPasswordUpdate } from '../../modules/ui/password-update-registry.js';
 import { S } from '@shared/strings/index.js';
 
 /**
@@ -199,6 +200,17 @@ export function setupPasswordAuth(
   // "Authenticated" / "Not authenticated" label is set imperatively, so applyI18n can't reach it.
   // Re-render from the current auth state (a transient error detail, if any, is dropped on relabel).
   registerPanelRetranslate(panel, () => setAuthenticatedState(isAuthenticated));
+
+  // A password saved elsewhere (Settings' Sideload Relay Setup Devices modal, or the Device Info
+  // modal's inline relay password prompt) previously only reached this card on the next tab
+  // open, since `tryAutoloadStoredPassword` above only ever runs once per panel. Re-verify with
+  // the freshly-saved password immediately instead.
+  registerPanelPasswordUpdate(panel, (serial, password) => {
+    if (serial !== getSerialNumber()) return;
+    passwordInput.value = password;
+    if (rememberCheckbox) rememberCheckbox.checked = true;
+    void verifyPassword();
+  });
 
   return {
     isAuthenticated: () => isAuthenticated,

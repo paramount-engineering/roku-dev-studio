@@ -119,71 +119,7 @@
 
 <section class="doc-section" id="tools">
   <h2>Tool catalog</h2>
-  <!-- Count verified against packages/roku-dev-studio-mcp/src/tools.ts's TOOLS export (11 bespoke +
-       6 Network Inspector + 13 debugger + 21 op-backed from roku-dev-studio-api/lib/operations.ts's
-       ALL_OPS). Re-count from source, not this comment, if a tool is added/removed. -->
-  <p>51 tools across five categories. Every op below also accepts an optional <code>device</code> (IP or serial) — omit it and the tool targets whichever device tab is focused in the app.</p>
-
-  <h3>Discovery &amp; Scripting</h3>
-  <table>
-    <thead><tr><th>Tool</th><th>What it does</th></tr></thead>
-    <tbody>
-      <tr><td><code>list_action_types</code></td><td>Every Action Script step type, with labels and required/optional fields</td></tr>
-      <tr><td><code>get_action_schema</code></td><td>Full schema for one step type</td></tr>
-      <tr><td><code>get_capability_bundle</code></td><td>The complete static catalog + authoring contract in one call</td></tr>
-      <tr><td><code>validate_script</code></td><td>Validate an Action Script and return structured errors</td></tr>
-    </tbody>
-  </table>
-
-  <h3>Bridge &amp; Device</h3>
-  <table>
-    <thead><tr><th>Tool</th><th>What it does</th></tr></thead>
-    <tbody>
-      <tr><td><code>probe_bridge</code></td><td>Check whether Roku Dev Studio is up — call once per session first</td></tr>
-      <tr><td><code>get_selected_device</code> / <code>list_devices</code> / <code>connect_device</code></td><td>Read or change which device is targeted</td></tr>
-      <tr><td><code>list_app_connector_functions</code></td><td>The live RALE function list a channel exposes right now</td></tr>
-      <tr><td><code>rale_get_node_by_id</code></td><td>Read-only SceneGraph node lookup</td></tr>
-      <tr><td><code>send_script_to_builder</code></td><td>Validate + hand a script to the Builder UI for human review/run</td></tr>
-    </tbody>
-  </table>
-
-  <h3>Device Control &amp; App Connector</h3>
-  <table>
-    <thead><tr><th>Tool</th><th>What it does</th></tr></thead>
-    <tbody>
-      <tr><td><code>keypress</code> / <code>input_text</code> / <code>launch_app</code> / <code>deep_link</code></td><td>Remote control and app launching</td></tr>
-      <tr><td><code>ecp_query</code> / <code>ecp_post</code></td><td>Raw ECP reads and writes</td></tr>
-      <tr><td><code>sideload</code> / <code>delete_sideload</code> / <code>screenshot</code></td><td>Dev channel install/remove and screen capture</td></tr>
-      <tr><td><code>scan_devices</code> / <code>test_connection</code> / <code>get_app_icon</code></td><td>Discovery and diagnostics</td></tr>
-      <tr><td><code>rale_command</code> / <code>app_connector_connect</code> / <code>app_connector_disconnect</code></td><td>Any built-in RALE command, plus session control</td></tr>
-      <tr><td><code>app_function</code></td><td>Call one of your channel's own exported functions (call <code>list_app_connector_functions</code> first for exact names/params)</td></tr>
-      <tr><td><code>telnet_connect</code> / <code>telnet_disconnect</code> / <code>get_telnet_log</code> / <code>console_monitor_findings</code></td><td>Debug console access and recognized-issue parsing</td></tr>
-      <tr><td><code>device_performance_metrics</code></td><td>Time-series CPU / Memory / BrightScript Objects data over a requested window, with a decoding legend</td></tr>
-    </tbody>
-  </table>
-
-  <h3>Network Inspector <span style="font-weight:400; color:var(--text-secondary);">(requires the feature enabled in Settings)</span></h3>
-  <table>
-    <thead><tr><th>Tool</th><th>What it does</th></tr></thead>
-    <tbody>
-      <tr><td><code>network_inspector_status</code></td><td>Enabled/capturing state, connected devices, MITM state</td></tr>
-      <tr><td><code>network_inspector_list_events</code> / <code>network_inspector_get_event_detail</code></td><td>Captured traffic summaries and full request/response detail</td></tr>
-      <tr><td><code>network_inspector_find</code></td><td>Full-text search across captured URLs, headers, and bodies</td></tr>
-      <tr><td><code>network_inspector_analyze</code></td><td>Aggregate rollups — status classes, top hosts, content types, errors</td></tr>
-      <tr><td><code>network_inspector_get_ca_info</code></td><td>MITM CA fingerprint, proxy host:port, and the BrightScript trust snippet</td></tr>
-    </tbody>
-  </table>
-
-  <h3>BrightScript Debugger <span style="font-weight:400; color:var(--text-secondary);">(requires the channel launched with debugging enabled)</span></h3>
-  <table>
-    <thead><tr><th>Tool</th><th>What it does</th></tr></thead>
-    <tbody>
-      <tr><td><code>debugger_attach</code> / <code>debugger_detach</code> / <code>debugger_status</code></td><td>Open, close, and check a debug session</td></tr>
-      <tr><td><code>debugger_wait_for_stop</code> / <code>debugger_continue</code> / <code>debugger_pause</code> / <code>debugger_step</code></td><td>Execution control — halt, resume, and step (over/in/out)</td></tr>
-      <tr><td><code>debugger_get_callstack</code> / <code>debugger_get_variables</code> / <code>debugger_evaluate</code></td><td>Inspect state and evaluate BrightScript in the halted frame (REPL)</td></tr>
-      <tr><td><code>debugger_set_breakpoints</code> / <code>debugger_remove_breakpoints</code> / <code>debugger_list_breakpoints</code></td><td>Manage breakpoints</td></tr>
-    </tbody>
-  </table>
+  <p>Every op accepts an optional <code>device</code> (IP or serial) — omit it and the tool targets whichever device tab is focused in the app. For the full list with input/response schemas, see the <a href="mcp-tools.html"><strong>MCP Tool reference</strong></a> generated from it's package.</p>
 
   <p>Resources: <a href="https://github.com/paramount-engineering/roku-dev-studio/blob/main/packages/roku-dev-studio-mcp/src/prose/quick-start.md" target="_blank" rel="noopener noreferrer"><code>quick-start.md</code></a>, <a href="https://github.com/paramount-engineering/roku-dev-studio/blob/main/packages/roku-dev-studio-mcp/src/prose/action-script-contract.md" target="_blank" rel="noopener noreferrer"><code>action-script-contract.md</code></a>, <a href="https://github.com/paramount-engineering/roku-dev-studio/blob/main/packages/roku-dev-studio-mcp/src/resources.ts#L88" target="_blank" rel="noopener noreferrer"><code>capability-bundle.json</code></a>, <a href="https://github.com/paramount-engineering/roku-dev-studio/blob/main/packages/roku-dev-studio-api/lib/catalogs.ts#L364" target="_blank" rel="noopener noreferrer"><code>authoring-rules.json</code></a>.<br>
   Prompts: <a href="https://github.com/paramount-engineering/roku-dev-studio/blob/main/packages/roku-dev-studio-mcp/src/prose/prompts/one-shot-action.md" target="_blank" rel="noopener noreferrer"><code>roku-one-shot-action</code></a>, <a href="https://github.com/paramount-engineering/roku-dev-studio/blob/main/packages/roku-dev-studio-mcp/src/prose/prompts/action-script-quickstart.md" target="_blank" rel="noopener noreferrer"><code>roku-action-script-quickstart</code></a>, <a href="https://github.com/paramount-engineering/roku-dev-studio/blob/main/packages/roku-dev-studio-mcp/src/prose/prompts/debug-device.md" target="_blank" rel="noopener noreferrer"><code>roku-debug-device</code></a>.</p>

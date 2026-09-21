@@ -14,6 +14,10 @@ import type { IpcMain, IpcMainInvokeEvent } from 'electron';
 import { IPC } from '../../shared/ipc/channels';
 import { S } from '../../shared/strings/index';
 import { mainWarn } from '../log.js';
+import { resolveRceDeviceBySerial, resolveRceInstanceBySerial } from '../rce-device-registry';
+import { rceSideload } from 'roku-dev-studio-rce';
+import { notifyDebuggerReattach } from './debugger-handlers';
+import { computeSideloadDebugFlags } from './dev-app-handlers';
 
 const fs = require('fs');
 const path = require('path');
@@ -28,6 +32,7 @@ function errMsg(e: unknown): string {
 
 export interface DemoAppLaunchPayload {
   ip: string;
+  serial?: string;
   isRemote?: boolean;
   serverUrl?: string | null;
   password: string;
@@ -42,6 +47,7 @@ function sideloadRemoteUpload(opts: {
   ip: string;
   zipPath: string;
   password: string;
+  remoteDebug?: boolean;
 }): Promise<{ success: boolean; error?: string }> {
   const fileName = path.basename(opts.zipPath);
   return new Promise((resolve) => {
@@ -50,6 +56,9 @@ function sideloadRemoteUpload(opts: {
       const form = new FormData();
       form.append('file', fileBuffer, { filename: fileName, contentType: 'application/zip' });
       form.append('password', opts.password);
+      // Same `remotedebug` field relay-server.ts checks — see bs-fiddle-handlers.ts's identical
+      // comment for the convention this matches.
+      if (opts.remoteDebug) form.append('remotedebug', '1');
       const url = new URL(opts.serverUrl);
       const httpModule = require(url.protocol === 'https:' ? 'https' : 'http');
       const req = httpModule.request(
@@ -95,6 +104,15 @@ export function registerDemoAppIpc(ipcMain: IpcMain): void {
     if (!ip) return { success: false, error: S.tryDemoApp.errDeviceNotFound };
     if (!password) return { success: false, error: S.tryDemoApp.errNoPasswordAvailable };
 
+    // RCE devices are identified by serial, not IP (`ip` already *is* the serial for RCE — see
+    // normalizeRceDevice in renderer/app.ts). Resolved fresh, same as Sideload Relay/Fiddle — see
+    // [[device-identity-key-rule]] / rce-device-registry.ts.
+    const rceKnown = resolveRceDeviceBySerial(ip);
+    const rceInstance = rceKnown ? await resolveRceInstanceBySerial(ip) : null;
+    if (rceKnown && rceInstance && !rceInstance.success) {
+      return { success: false, error: rceInstance.error };
+    }
+
     let zipPath: string;
     try {
       const built = await buildDemoZip();
@@ -104,20 +122,42 @@ export function registerDemoAppIpc(ipcMain: IpcMain): void {
       return { success: false, error: S.tryDemoApp.errPackageFailed(errMsg(err)) };
     }
 
+    // "Enable Debugger" — no checkbox of its own here (nor in Fiddle): both read the same
+    // persisted per-device setting the Dev App tab's checkbox controls, via the exact
+    // persisted-setting + STOP-auto-detect logic that path already uses.
+    const { debugEnabled } = computeSideloadDebugFlags(ip, payload.serial, zipPath, undefined);
+
     let sideloadRes: { success: boolean; error?: string; authFailed?: boolean } = {
       success: false,
       error: 'unknown'
     };
     try {
-      if (payload.isRemote && payload.serverUrl) {
+      if (rceInstance?.success) {
+        const zipData = fs.readFileSync(zipPath);
+        sideloadRes = await rceSideload(
+          { instanceApiUrl: rceInstance.instance.instanceApiUrl, rceToken: rceInstance.instance.token, devPassword: password },
+          zipData,
+          path.basename(zipPath),
+          debugEnabled
+        );
+      } else if (payload.isRemote && payload.serverUrl) {
         sideloadRes = await sideloadRemoteUpload({
           serverUrl: payload.serverUrl,
           ip,
           zipPath,
-          password
+          password,
+          remoteDebug: debugEnabled
         });
       } else {
-        sideloadRes = await sideloadChannel({ ip, filePath: zipPath, password });
+        sideloadRes = await sideloadChannel({
+          ip,
+          filePath: zipPath,
+          password,
+          // Clean Delete+Install so remotedebug=1 actually takes on relaunch (Replace can drop
+          // it) — same reasoning dev-app-handlers.ts's sideload handler documents.
+          cleanInstall: debugEnabled,
+          ...(debugEnabled ? { extraFields: [{ name: 'remotedebug', value: '1' }] } : {})
+        });
       }
     } catch (err) {
       sideloadRes = { success: false, error: errMsg(err) };
@@ -132,6 +172,17 @@ export function registerDemoAppIpc(ipcMain: IpcMain): void {
         authFailed: !!sideloadRes.authFailed
       };
     }
+
+    // Debug port (8081) is now open — reattach the Telnet debug sidebar to this fresh run, same
+    // event the other sideload entry points fire.
+    if (debugEnabled) {
+      try {
+        notifyDebuggerReattach(ip, payload.isRemote && payload.serverUrl ? { isRemote: true, serverUrl: payload.serverUrl } : undefined);
+      } catch {
+        /* best-effort */
+      }
+    }
+
     return { success: true };
   });
 }

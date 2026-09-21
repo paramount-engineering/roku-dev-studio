@@ -1,0 +1,296 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; font-src 'self';" />
+  <title data-i18n="portTerminal.documentTitle">Ports</title>
+  <!-- Generated at build time from index.html's inline <style> so the console surface (.telnet-output,
+       .telnet-log-line, .telnet-find-bar, .rds-tip, theme vars) matches the main window exactly.
+       See scripts/build/transpile-renderer.ts. -->
+  <link rel="stylesheet" href="./dist/port-terminal.css" />
+  <style>
+    html, body { height: 100%; margin: 0; }
+    body { display: flex; flex-direction: column; overflow: hidden; background: var(--bg-primary, #0a0a12); color: var(--text-primary, #e5e5e5); }
+    .pt-root { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
+
+    /* Header: device label on the left, tab strip filling the middle, "+" on the right. */
+    .pt-header {
+      display: flex; align-items: stretch; gap: 8px; min-height: 42px;
+      padding: 0 8px 0 14px; border-bottom: 1px solid var(--border);
+      background: linear-gradient(135deg, rgba(139, 92, 246, 0.1) 0%, transparent 100%);
+    }
+    .pt-device { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; padding-right: 8px; border-right: 1px solid var(--border); font-size: 13px; }
+    .pt-device-name { font-weight: 600; }
+    .pt-device-ip { color: var(--text-muted); font-size: 12px; font-family: var(--font-mono, ui-monospace, Menlo, monospace); }
+    .pt-device-kind { display: inline-flex; align-items: center; }
+    .pt-device-kind[hidden] { display: none; }
+    .pt-tabs { display: flex; align-items: stretch; gap: 2px; flex: 1 1 auto; min-width: 0; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; }
+    .pt-tab--picker { color: var(--text-primary); font-weight: 500; }
+    .pt-tab--picker .pt-tab-dot { display: none; }
+    .pt-tab-close[hidden] { display: none; }
+    .pt-tabs::-webkit-scrollbar { display: none; }
+    .pt-tab {
+      display: inline-flex; align-items: center; gap: 7px; flex: 0 0 auto; padding: 0 10px 0 12px;
+      border: none; border-bottom: 2px solid transparent; background: transparent; color: var(--text-secondary, #aaa);
+      font: inherit; font-size: 13px; cursor: pointer; white-space: nowrap;
+    }
+    .pt-tab:hover { color: var(--text-primary); background: rgba(139, 92, 246, 0.08); }
+    .pt-tab.is-active { color: var(--text-primary); border-bottom-color: var(--accent-purple); }
+    .pt-tab-dot, .pt-status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--text-muted); flex: 0 0 auto; }
+    .is-connected > .pt-tab-dot, .pt-status.is-connected .pt-status-dot { background: var(--accent-green, #22c55e); }
+    .is-connecting > .pt-tab-dot, .pt-status.is-connecting .pt-status-dot { background: var(--accent-yellow, #eab308); }
+    .is-disconnected > .pt-tab-dot, .pt-status.is-disconnected .pt-status-dot { background: var(--accent-red, #ef4444); }
+    .pt-tab-close {
+      display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; border-radius: 4px;
+      color: var(--text-muted); opacity: 0.7;
+    }
+    .pt-tab-close:hover { background: rgba(239, 68, 68, 0.18); color: var(--accent-red, #ef4444); opacity: 1; }
+    .pt-tab-close .icon { width: 12px; height: 12px; }
+    .pt-new-tab {
+      display: inline-flex; align-items: center; justify-content: center; align-self: center; flex: 0 0 auto; width: 26px; height: 26px; margin-left: 6px;
+      border: 1px solid var(--border); border-radius: 6px; background: var(--bg-tertiary); color: var(--text-muted); cursor: pointer;
+    }
+    .pt-new-tab:hover { color: var(--accent-purple); border-color: var(--accent-purple); background: rgba(139, 92, 246, 0.18); }
+
+    .pt-main { position: relative; display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
+    .pt-panes { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
+
+    /* "Open a Port" tab body: centered cards, one per available port. */
+    .pt-pane--picker { align-items: center; justify-content: center; overflow: auto; padding: 24px; }
+    .pt-picker { display: flex; flex-direction: column; align-items: center; gap: 14px; width: 100%; }
+    .pt-picker h2 { margin: 0; font-size: 17px; font-weight: 600; letter-spacing: 0.01em; }
+    .pt-picker-hint { margin: 0; color: var(--text-muted); font-size: 13px; }
+    .pt-picker-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 280px)); gap: 12px; justify-content: center; width: 100%; max-width: 900px; margin-top: 6px; }
+    .pt-picker-card {
+      display: flex; flex-direction: column; gap: 6px; text-align: left; padding: 14px 16px;
+      border: 1px solid var(--border); border-radius: 10px; background: var(--bg-secondary); color: var(--text-primary);
+      font: inherit; cursor: pointer; transition: border-color 0.15s, background 0.15s, transform 0.1s;
+    }
+    .pt-picker-card:hover { border-color: var(--accent-purple); background: rgba(139, 92, 246, 0.1); transform: translateY(-1px); }
+    .pt-picker-card-title { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 14px; }
+    .pt-picker-card-port { margin-left: auto; font-family: var(--font-mono, ui-monospace, Menlo, monospace); font-size: 12px; color: var(--text-muted); }
+    .pt-picker-card-desc { color: var(--text-secondary, #aaa); font-size: 12.5px; line-height: 1.4; }
+    .pt-picker-badge { font-size: 10.5px; padding: 1px 6px; border-radius: 999px; background: rgba(34, 197, 94, 0.18); color: var(--accent-green, #22c55e); }
+    /* Taller than the port cards, so it always takes the second row, centred under the middle card. */
+    .pt-picker-card--custom { cursor: default; grid-row: 2; grid-column: 2; }
+    .pt-picker-card--custom:hover { transform: none; }
+    .pt-custom-row { display: flex; gap: 8px; margin-top: 4px; }
+    .pt-custom-input {
+      flex: 1 1 auto; min-width: 0; padding: 5px 9px; border: 1px solid var(--border); border-radius: 6px;
+      background: #0a0a0f; color: var(--text-primary); font-family: var(--font-mono, ui-monospace, Menlo, monospace); font-size: 12.5px;
+    }
+    .pt-custom-input:focus { outline: none; border-color: var(--accent-purple); }
+    .pt-custom-problem { font-size: 11.5px; color: var(--accent-red, #ef4444); }
+    .pt-custom-problem[hidden] { display: none; }
+
+    /* One pane per tab: toolbar → output → (console tabs only) input row. */
+    .pt-pane { display: none; flex-direction: column; flex: 1 1 auto; min-height: 0; }
+    .pt-pane.is-active { display: flex; }
+    .pt-toolbar { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-bottom: 1px solid var(--border); background: var(--bg-secondary); }
+    .pt-status { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; color: var(--text-secondary, #aaa); flex: 0 0 auto; white-space: nowrap; }
+    .pt-find-host { flex: 1 1 auto; min-width: 0; display: flex; justify-content: center; }
+    .pt-find-host .telnet-find-bar { max-width: 460px; width: 100%; }
+    .pt-toolbar-actions { display: flex; align-items: center; gap: 6px; flex: 0 0 auto; }
+    .pt-toolbar-actions .btn[hidden] { display: none; }
+    .pt-readonly { font-size: 11px; color: var(--text-muted); border: 1px solid var(--border); border-radius: 999px; padding: 1px 7px; }
+    .pt-pane .telnet-output-container { flex: 1 1 0; min-height: 0; }
+    /* 8081 tab: debugger sidebar (left, from the template) + protocol trace (right) — the same
+       `.telnet-body-split` row the Console tab uses, so its sidebar/resize/REPL CSS applies as-is. */
+    .pt-pane .telnet-body-split { flex: 1 1 0; min-height: 0; }
+    .pt-pane .telnet-body-split .telnet-output-container { flex: 1 1 0; min-width: 0; position: relative; }
+    .pt-input-row { display: flex; gap: 8px; padding: 8px 10px; border-top: 1px solid var(--border); background: var(--bg-secondary); }
+    .pt-input-row[hidden] { display: none; }
+    .pt-prompt { align-self: center; color: var(--accent-purple); font-family: var(--font-mono, ui-monospace, Menlo, monospace); }
+    .pt-input {
+      flex: 1 1 auto; min-width: 0; padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px;
+      background: #0a0a0f; color: var(--text-primary); font-family: var(--font-mono, ui-monospace, Menlo, monospace); font-size: 12.5px;
+    }
+    .pt-input:focus { outline: none; border-color: var(--accent-purple); }
+    .pt-input:disabled { opacity: 0.5; }
+  </style>
+</head>
+<body>
+  <!-- Icon sprite (subset of index.html's). -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+    <defs>
+      <symbol id="icon-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+      </symbol>
+      <symbol id="icon-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+      </symbol>
+      <symbol id="icon-chevron-up" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="18 15 12 9 6 15"/>
+      </symbol>
+      <symbol id="icon-chevron-down" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="6 9 12 15 18 9"/>
+      </symbol>
+      <symbol id="icon-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+      </symbol>
+      <symbol id="icon-download" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+      </symbol>
+      <symbol id="icon-clear-results" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+      </symbol>
+      <symbol id="icon-refresh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+      </symbol>
+      <symbol id="icon-terminal" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/>
+      </symbol>
+      <symbol id="icon-server" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect width="20" height="8" x="2" y="2" rx="2" ry="2"/><rect width="20" height="8" x="2" y="14" rx="2" ry="2"/><line x1="6" x2="6.01" y1="6" y2="6"/><line x1="6" x2="6.01" y1="18" y2="18"/>
+      </symbol>
+      <symbol id="icon-cloud" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/>
+      </symbol>
+      <symbol id="icon-play" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+        <polygon points="6 3 20 12 6 21 6 3"/>
+      </symbol>
+      <symbol id="icon-pause" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+        <rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/>
+      </symbol>
+      <symbol id="icon-stop" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+        <rect x="4" y="4" width="16" height="16" rx="2"/>
+      </symbol>
+      <symbol id="icon-debug-run" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="m8 2 1.88 1.88"/>
+        <path d="M14.12 3.88 16 2"/>
+        <path d="M9 7.13v-1a3.003 3.003 0 1 1 6 0v1"/>
+        <path d="M12 20c-3.3 0-6-2.7-6-6v-3a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v3c0 3.3-2.7 6-6 6"/>
+        <path d="M12 20v-9"/>
+        <path d="M6.53 9C4.6 8.8 3 7.1 3 5"/>
+        <path d="M6 13H2"/>
+        <path d="M3 21c0-2.1 1.7-3.9 3.8-4"/>
+        <path d="M20.97 5c0 2.1-1.6 3.8-3.5 4"/>
+        <path d="M22 13h-4"/>
+        <path d="M17.2 17c2.1.1 3.8 1.9 3.8 4"/>
+      </symbol>
+    </defs>
+  </svg>
+
+  <div class="pt-root">
+    <header class="pt-header">
+      <div class="pt-device">
+        <!-- Same kind icon as the device tab's header: cloud for RCE, server for a relay location. -->
+        <span class="pt-device-kind" id="ptDeviceKind" hidden></span>
+        <span class="pt-device-name" id="ptDeviceName"></span>
+        <span class="pt-device-ip" id="ptDeviceIp"></span>
+      </div>
+      <div class="pt-tabs" id="ptTabs" role="tablist">
+        <!-- Stays the LAST child: tabs are inserted before it, so it always trails the last tab. -->
+        <button type="button" class="pt-new-tab" id="ptNewTab" title="New Tab" data-i18n-title="portTerminal.newTab" aria-label="New Tab" data-i18n-aria-label="portTerminal.newTab">
+          <span class="icon icon-xs"><svg><use href="#icon-plus"/></svg></span>
+        </button>
+      </div>
+    </header>
+    <main class="pt-main">
+      <div id="ptPanes" class="pt-panes"></div>
+    </main>
+  </div>
+
+  <!-- "Open a Port" tab body: the default tab when nothing is open, and what "+" opens. -->
+  <template id="ptPickerTemplate">
+    <div class="pt-picker" aria-label="Open a Port" data-i18n-aria-label="portTerminal.pickerTitle">
+      <h2 data-i18n="portTerminal.pickerTitle">Open a Port</h2>
+      <p class="pt-picker-hint" data-i18n="portTerminal.pickerHint">Each port opens in its own tab. Pick one to start.</p>
+      <div class="pt-picker-grid"></div>
+    </div>
+  </template>
+
+  <!-- Debugger sidebar for the 8081 tab — the SAME markup as the Console tab's sidebar in
+       index.html (copied verbatim; `telnet-debug-sidebar.ts` drives both). The pane clones it next
+       to the protocol trace, plus the slide-up REPL bar under the trace. -->
+  <template id="ptDebugSidebarTemplate">
+              <aside class="telnet-debug-sidebar" data-telnet-debug-sidebar hidden>
+                <div class="telnet-debug-resize" data-debug-resize role="separator" aria-orientation="vertical" title="Drag to resize" data-i18n-title="debugger.dragToResize"></div>
+                <div class="telnet-debug-inner">
+                  <div class="telnet-debug-toolbar" data-debug-toolbar>
+                    <!-- Hidden while no session is attached (idle/connecting/error/disconnected) — these
+                         are meaningless without one, and showing them disabled alongside the status +
+                         Attach/Detach forced a wrap onto a second row. Shown (enabled per-state) once
+                         attached; see updateControls() in telnet-debug-sidebar.ts. -->
+                    <div class="telnet-debug-toolbar-exec" data-debug-exec-group hidden>
+                      <button type="button" class="telnet-debug-btn telnet-debug-iconbtn" data-debug-cmd="continue" title="Continue" data-i18n-title="debugger.continue" aria-label="Continue" data-i18n-aria-label="debugger.continue" disabled><span class="icon icon-xs"><svg><use href="#icon-play"/></svg></span></button>
+                      <button type="button" class="telnet-debug-btn telnet-debug-iconbtn" data-debug-cmd="pause" title="Pause" data-i18n-title="debugger.pause" aria-label="Pause" data-i18n-aria-label="debugger.pause" disabled><span class="icon icon-xs"><svg><use href="#icon-pause"/></svg></span></button>
+                      <span class="telnet-debug-toolbar-sep" aria-hidden="true"></span>
+                      <button type="button" class="telnet-debug-btn" data-debug-cmd="stepOver" title="Step Over" data-i18n-title="debugger.stepOver" data-i18n="debugger.stepOverShort" disabled>Over</button>
+                      <button type="button" class="telnet-debug-btn" data-debug-cmd="stepIn" title="Step In" data-i18n-title="debugger.stepIn" data-i18n="debugger.stepInShort" disabled>In</button>
+                      <button type="button" class="telnet-debug-btn" data-debug-cmd="stepOut" title="Step Out" data-i18n-title="debugger.stepOut" data-i18n="debugger.stepOutShort" disabled>Out</button>
+                      <button type="button" class="telnet-debug-btn telnet-debug-iconbtn" data-debug-cmd="restart" title="Restart" data-i18n-title="debugger.restartTitle" aria-label="Restart" data-i18n-aria-label="debugger.restart"><span class="icon icon-xs"><svg><use href="#icon-refresh"/></svg></span></button>
+                      <button type="button" class="telnet-debug-btn telnet-debug-iconbtn telnet-debug-btn--danger" data-debug-cmd="stop" title="Stop &amp; Exit App" data-i18n-title="debugger.stop" aria-label="Stop &amp; Exit App" data-i18n-aria-label="debugger.stop"><span class="icon icon-xs"><svg><use href="#icon-stop"/></svg></span></button>
+                    </div>
+                    <div class="telnet-debug-toolbar-right">
+                      <span class="telnet-debug-statustext" data-debug-statustext></span>
+                      <span class="telnet-debug-statusdot" data-debug-status role="img" aria-label="Debugger status"></span>
+                      <button type="button" class="telnet-debug-why" data-debug-why hidden title="Debugger Attach Failed" data-i18n-title="debugger.attachErrorTitle" data-i18n="debugger.attachWhy">Why?</button>
+                      <button type="button" class="telnet-debug-btn telnet-debug-btn--relaunch" data-debug-cmd="restart" data-debug-relaunch hidden title="Re-sideload the last debug build with the debugger enabled — a fresh run waits on 8081 and attaches" data-i18n-title="debugger.relaunchTitle" data-i18n="debugger.relaunch">Relaunch</button>
+                      <button type="button" class="telnet-debug-btn telnet-debug-btn--primary telnet-debug-btn--attach" data-debug-cmd="attach" data-i18n="debugger.attach">Attach</button>
+                    </div>
+                  </div>
+                  <div class="telnet-debug-section" data-debug-section="callstack" style="flex: 0 1 150px;">
+                    <div class="telnet-debug-section-header telnet-debug-section-header--row telnet-debug-section-header--drag" data-debug-section-header="callstack" title="Drag to resize" data-i18n-title="debugger.dragToResize">
+                      <span class="telnet-debug-section-title">
+                        <button type="button" class="telnet-debug-section-chevron" data-debug-collapse="callstack" title="Collapse" data-i18n-title="common.collapse" aria-label="Collapse" data-i18n-aria-label="common.collapse">▾</button>
+                        <span data-i18n="debugger.callStackTitle">Threads &amp; Call Stack</span>
+                      </span>
+                    </div>
+                    <div class="telnet-debug-section-body" data-debug-body="callstack"></div>
+                  </div>
+                  <div class="telnet-debug-section" data-debug-section="breakpoints" style="flex: 0 1 130px;">
+                    <div class="telnet-debug-section-header telnet-debug-section-header--row telnet-debug-section-header--drag" data-debug-section-header="breakpoints" title="Drag to resize" data-i18n-title="debugger.dragToResize">
+                      <span class="telnet-debug-section-title">
+                        <button type="button" class="telnet-debug-section-chevron" data-debug-collapse="breakpoints" title="Collapse" data-i18n-title="common.collapse" aria-label="Collapse" data-i18n-aria-label="common.collapse">▾</button>
+                        <span data-i18n="debugger.breakpointsTitle">Breakpoints</span>
+                      </span>
+                      <button type="button" class="telnet-debug-bp-add" data-debug-bp-add title="Add Breakpoint" data-i18n-title="debugger.addBreakpoint" aria-label="Add Breakpoint">+</button>
+                    </div>
+                    <div class="telnet-debug-bp-addrow" data-debug-bp-addrow hidden>
+                      <div class="telnet-debug-bp-fields">
+                        <input type="text" class="telnet-debug-bp-input" data-debug-bp-input placeholder="pkg:/source/main.brs:42" data-i18n-placeholder="debugger.breakpointPlaceholder" />
+                        <input type="text" class="telnet-debug-bp-input telnet-debug-bp-cond" data-debug-bp-cond placeholder="Condition (e.g. i = 500) — optional" data-i18n-placeholder="debugger.breakpointConditionPlaceholder" />
+                      </div>
+                      <button type="button" class="telnet-debug-bp-submit" data-debug-bp-submit data-i18n="common.add">Add</button>
+                    </div>
+                    <div class="telnet-debug-section-body" data-debug-body="breakpoints"></div>
+                  </div>
+                  <div class="telnet-debug-section" data-debug-section="watch" style="flex: 0 1 110px;">
+                    <div class="telnet-debug-section-header telnet-debug-section-header--row telnet-debug-section-header--drag" data-debug-section-header="watch" title="Drag to resize" data-i18n-title="debugger.dragToResize">
+                      <span class="telnet-debug-section-title">
+                        <button type="button" class="telnet-debug-section-chevron" data-debug-collapse="watch" title="Collapse" data-i18n-title="common.collapse" aria-label="Collapse" data-i18n-aria-label="common.collapse">▾</button>
+                        <span data-i18n="debugger.watchTitle">Watch</span>
+                      </span>
+                      <button type="button" class="telnet-debug-bp-add" data-debug-watch-add title="Add Watch" data-i18n-title="debugger.addWatch" aria-label="Add Watch">+</button>
+                    </div>
+                    <div class="telnet-debug-bp-addrow" data-debug-watch-addrow hidden>
+                      <div class="telnet-debug-bp-fields">
+                        <input type="text" class="telnet-debug-bp-input" data-debug-watch-input placeholder="Expression (e.g. m.top.count)" data-i18n-placeholder="debugger.watchPlaceholder" />
+                      </div>
+                      <button type="button" class="telnet-debug-bp-submit" data-debug-watch-submit data-i18n="common.add">Add</button>
+                    </div>
+                    <div class="telnet-debug-section-body" data-debug-body="watch"></div>
+                  </div>
+                  <div class="telnet-debug-section" data-debug-section="variables" style="flex: 1 1 0;">
+                    <div class="telnet-debug-section-header telnet-debug-section-header--row" data-debug-section-header="variables">
+                      <span class="telnet-debug-section-title">
+                        <button type="button" class="telnet-debug-section-chevron" data-debug-collapse="variables" title="Collapse" data-i18n-title="common.collapse" aria-label="Collapse" data-i18n-aria-label="common.collapse">▾</button>
+                        <span data-i18n="debugger.variablesTitle">Variables</span>
+                      </span>
+                    </div>
+                    <div class="telnet-debug-section-body" data-debug-body="variables"></div>
+                  </div>
+                </div>
+              </aside>
+  </template>
+  <template id="ptDebugReplTemplate">
+    <div class="telnet-debug-repl" data-debug-repl aria-hidden="true">
+      <span class="telnet-debug-repl-caret" aria-hidden="true">›</span>
+      <input type="text" class="telnet-debug-repl-input" data-debug-repl-input spellcheck="false" autocomplete="off" placeholder="Evaluate BrightScript in the current frame — e.g. print m.top" data-i18n-placeholder="debugger.replPlaceholder" aria-label="Debug Console" data-i18n-aria-label="debugger.replTitle" />
+    </div>
+  </template>
+
+  <script type="module" src="./dist/components/port-terminal/port-terminal.js"></script>
+</body>
+</html>

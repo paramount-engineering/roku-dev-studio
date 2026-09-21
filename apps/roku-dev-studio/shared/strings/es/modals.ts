@@ -173,9 +173,11 @@ export const modals = {
   // add, clear, close).
 
   addLocation: {
-    title: '🌐 Agregar ubicación remota',
+    title: 'Agregar ubicación remota',
     intro:
-      'Conéctese a dispositivos Roku en una ubicación remota a través del Roku Relay Server que se ejecuta en una Mac Mini u otra computadora.',
+      'Conéctese a dispositivos Roku en una ubicación remota a través del Roku Relay Server.',
+    tabRelay: 'Relay de RDS',
+    tabRce: 'RCE',
     nameLabel: 'Nombre de la ubicación',
     namePlaceholder: 'p. ej., Laboratorio de oficina, Estudio B',
     nameHint: 'Un nombre descriptivo para identificar esta ubicación',
@@ -184,7 +186,12 @@ export const modals = {
     hostHint: 'Dirección IP o nombre de host del Relay Server',
     portLabel: 'Puerto',
     portHint: 'El puerto predeterminado es 4951',
+    rceIntro: 'Conéctese a una cuenta de Roku Cloud Emulator para listar, iniciar y controlar sus dispositivos virtuales.',
+    tokenLabel: 'Token de API',
+    tokenPlaceholder: 'Token de acceso personal',
+    tokenHint: 'Genere uno desde la interfaz web de Roku Cloud Emulator (pestaña Token)',
     addBtn: 'Agregar ubicación',
+    forgetOnQuit: 'Olvidar al salir o cerrar la app',
   },
 
   actionScriptsImport: {
@@ -606,14 +613,16 @@ export const modals = {
 
     remoteLocationsHeading: 'Ubicaciones remotas',
     remoteLocationsListHtml: `
-            <li><strong>Configuración</strong> - Ejecute el Roku Relay Server en una Mac Mini en la ubicación remota</li>
-            <li><strong>Agregar ubicación</strong> - Haga clic en "Agregar" en la sección de Ubicaciones remotas para configurar una conexión</li>
-            <li><strong>Dirección del servidor</strong> - Ingrese la dirección IP o el nombre de host del servidor de relé</li>
+            <li><strong>Configuración</strong> - Ejecute el Roku Relay Server en una máquina en la ubicación remota</li>
+            <li><strong>Agregar ubicación</strong> - Haga clic en "Agregar" en la sección de Ubicaciones remotas y luego elija la pestaña <strong>RDS Relay</strong> o <strong>RCE</strong></li>
+            <li><strong>Dirección del servidor</strong> - Pestaña RDS Relay: ingrese la dirección IP o el nombre de host del servidor de relé</li>
             <li><strong>Puerto predeterminado</strong> - El servidor de relé se ejecuta en el puerto <code>4951</code> de forma predeterminada</li>
+            <li><strong>Cuenta de RCE</strong> - Pestaña RCE: asigne un nombre a la cuenta y pegue su token de API del panel de Roku Cloud Emulator</li>
           `,
     remoteLocationsServerHtml: `El servidor de relé se encuentra en la carpeta <code>remote-server</code>. Consulte el README para las instrucciones de configuración (LaunchAgent en macOS, systemd en Linux, Task Scheduler en Windows).`,
     remoteLocationsTroubleshootHtml: `<strong>¿El sideload o la captura de pantalla fallan a través del relé pero ECP funciona?</strong> Actualice el host del relé a la misma versión de <code>roku-dev-studio-api</code> que esta app. Verifique <code>GET /health</code> en el relé (campo <code>apiVersion</code>) y asegúrese de que el puerto <code>4951</code> sea accesible a través de los firewalls.`,
-    remoteLocationsIntro: 'Controle dispositivos Roku en ubicaciones remotas a través de un Relay Server:',
+    remoteLocationsRceHtml: `<strong>Los dispositivos RCE</strong> aparecen como apagados/pendientes/en ejecución. Inicie uno desde su tarjeta (o desde el propio panel de Roku Cloud Emulator) antes de conectarse — ECP, sideload y consola solo responden mientras está en ejecución, y el dispositivo se detiene automáticamente al alcanzar su propio Tiempo máximo de ejecución configurado.`,
+    remoteLocationsIntro: 'Controle dispositivos Roku en Ubicaciones remotas — mediante un Relay Server (dispositivos LAN en otro sitio) o una cuenta de Roku Cloud Emulator (RCE):',
 
     sideloadRelayHeading: 'Sideload Relay',
     sideloadRelayIntroHtml: `Haga sideload de una compilación a <strong>muchos dispositivos a la vez</strong>. Cuando el relé está activado, Roku Dev Studio se anuncia como un Roku en su red: apunte su IDE (VS Code BrightScript / roku-deploy / Eclipse) o un navegador a esta máquina, suba una vez y RDS distribuye la compilación — <em>instalar → iniciar → consola</em> — a cada dispositivo de destino, local o en una ubicación remota.`,

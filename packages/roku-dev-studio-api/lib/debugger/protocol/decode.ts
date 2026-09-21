@@ -352,6 +352,29 @@ export interface BreakpointResult {
   ignoreCount?: number;
 }
 
+export interface ExceptionBreakpointResult {
+  filter: number;
+  errorCode: number;
+}
+
+export function parseSetExceptionBreakpoints(
+  buffer: Buffer,
+  watchPacketLength: boolean
+): ParseResult<{ breakpoints: ExceptionBreakpointResult[] } & CommonResponse> {
+  return run<{ breakpoints: ExceptionBreakpointResult[] } & CommonResponse>(buffer, watchPacketLength ? 12 : 8, (r, data) => {
+    readCommonResponse(r, data, watchPacketLength);
+    const num = r.u32();
+    const breakpoints: ExceptionBreakpointResult[] = [];
+    for (let i = 0; i < num; i++) {
+      const filter = r.u32();
+      const errorCode = r.u32();
+      breakpoints.push({ filter, errorCode });
+    }
+    (data as { breakpoints: ExceptionBreakpointResult[] }).breakpoints = breakpoints;
+    return breakpoints.length === num;
+  });
+}
+
 export function parseBreakpoints(buffer: Buffer, watchPacketLength: boolean): ParseResult<{ breakpoints: BreakpointResult[] } & CommonResponse> {
   return run<{ breakpoints: BreakpointResult[] } & CommonResponse>(buffer, watchPacketLength ? 12 : 8, (r, data) => {
     readCommonResponse(r, data, watchPacketLength);
@@ -425,9 +448,19 @@ export function parseUpdate(buffer: Buffer, watchPacketLength: boolean): ParseRe
         data.breakpoints = breakpoints;
         break;
       }
+      case 'ExceptionBreakpointError': {
+        r.u32(); // flags (reserved)
+        data.filterId = r.u32();
+        data.compileErrors = readStringList(r);
+        data.runtimeErrors = readStringList(r);
+        data.otherErrors = readStringList(r);
+        data.lineNumber = r.i32();
+        data.filePath = r.stringNT();
+        break;
+      }
       default:
-        // ProtocolError / ExceptionBreakpointError / Undefined: header only; the
-        // packet_length (v3) lets us skip the unknown remainder cleanly.
+        // ProtocolError / Undefined: header only; the packet_length (v3) lets us
+        // skip the unknown remainder cleanly.
         break;
     }
     return true;

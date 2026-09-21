@@ -14,7 +14,10 @@ import type { BrowserWindow, IpcMainInvokeEvent } from 'electron';
 import { IPC } from '../../shared/ipc/channels';
 import { DebugSessionController, DEBUGGER_EVENTS, type DebuggerEventKind } from 'roku-dev-studio-api/lib/debugger/debug-session-controller';
 import { getScannedStops } from 'roku-dev-studio-api/lib/debugger/scan-stops';
+import { createRceDebugSocketFactory } from 'roku-dev-studio-rce';
+import { resolveRceDeviceBySerial, resolveRceInstanceBySerial } from '../rce-device-registry';
 import { mainError } from '../log.js';
+import { broadcastToPortTerminals, hasPortTerminalWindows } from '../port-terminal-broadcast';
 
 /** Maps the controller's transport-agnostic event kinds onto this app's concrete IPC channels. */
 const EVENT_TO_IPC_CHANNEL: Record<DebuggerEventKind, string> = {
@@ -22,8 +25,10 @@ const EVENT_TO_IPC_CHANNEL: Record<DebuggerEventKind, string> = {
   [DEBUGGER_EVENTS.Stopped]: IPC.DebuggerStopped,
   [DEBUGGER_EVENTS.Output]: IPC.DebuggerOutput,
   [DEBUGGER_EVENTS.RuntimeError]: IPC.DebuggerRuntimeError,
+  [DEBUGGER_EVENTS.ExceptionBreakpointError]: IPC.DebuggerExceptionBreakpointError,
   [DEBUGGER_EVENTS.CompileErrors]: IPC.DebuggerCompileErrors,
-  [DEBUGGER_EVENTS.Breakpoints]: IPC.DebuggerBreakpoints
+  [DEBUGGER_EVENTS.Breakpoints]: IPC.DebuggerBreakpoints,
+  [DEBUGGER_EVENTS.Wire]: IPC.DebuggerWire
 };
 
 interface IpPayload { ip?: string }
@@ -47,9 +52,39 @@ let mainWindowRef: BrowserWindow | undefined;
 
 /** Send a debug event to the main window (the Telnet Console sidebar lives there). */
 function broadcastDebugEvent(channel: string, payload: unknown): void {
+  // Per-frame control-port traffic is only for the Ports window's read-only 8081 tab — the main
+  // window has no listener for it, so don't push a message per frame through its IPC.
+  if (channel === IPC.DebuggerWire) {
+    broadcastToPortTerminals(channel, payload);
+    return;
+  }
   if (mainWindowRef && !mainWindowRef.isDestroyed()) {
     mainWindowRef.webContents.send(channel, payload);
   }
+  // The Ports window's 8081 tab hosts the same debugger sidebar as the Console tab, driven by the
+  // same events (each window filters by device).
+  broadcastToPortTerminals(channel, payload);
+  // While a debugger is attached, Roku routes the channel's print output to the debugger's IO port
+  // instead of 8085 — the Fiddle terminal (fed from telnet chunks) went blank the moment its run
+  // attached (a per-device "Enable Debugger" now does that for every Fiddle run). Fan the output
+  // out to Fiddle windows as terminal data; local + RCE sessions use connectionId = ip, matching
+  // what rce-handlers/telnet forwarding already send. Lazy require: fiddle-window → remote-handlers
+  // → this module would otherwise be an import cycle.
+  if (channel === IPC.DebuggerOutput) {
+    const p = payload as { ip?: unknown; text?: unknown } | null;
+    if (p && typeof p.ip === 'string' && typeof p.text === 'string') {
+      (require('../fiddle-window') as typeof import('../fiddle-window')).broadcastFiddleTerminalData({ ip: p.ip, data: p.text, connectionId: p.ip });
+    }
+  }
+}
+
+/** Every field a `DebuggerReattach` broadcast can carry beyond `ip` — call sites used to
+ *  hand-declare their own (incompatible) subset of this via a `require(...) as {...}` cast;
+ *  `import type` this instead so a signature change here is caught at every call site. */
+export interface DebuggerReattachExtra {
+  discovered?: number;
+  isRemote?: boolean;
+  serverUrl?: string;
 }
 
 /**
@@ -57,7 +92,7 @@ function broadcastDebugEvent(channel: string, payload: unknown): void {
  * debug sidebar reattaches to the fresh run. Called from the normal sideload
  * handler and the Sideload Relay fan-out.
  */
-export function notifyDebuggerReattach(ip: string, extra?: { discovered?: number }): void {
+export function notifyDebuggerReattach(ip: string, extra?: DebuggerReattachExtra): void {
   if (ip) broadcastDebugEvent(IPC.DebuggerReattach, { ip, ...(extra ?? {}) });
 }
 
@@ -65,9 +100,13 @@ export function notifyDebuggerReattach(ip: string, extra?: { discovered?: number
 let controllerSingleton: DebugSessionController | null = null;
 function getController(): DebugSessionController {
   if (!controllerSingleton) {
-    controllerSingleton = new DebugSessionController((event, payload) => {
-      broadcastDebugEvent(EVENT_TO_IPC_CHANNEL[event], payload);
-    });
+    controllerSingleton = new DebugSessionController(
+      (event, payload) => {
+        broadcastDebugEvent(EVENT_TO_IPC_CHANNEL[event], payload);
+      },
+      // The per-frame 8081 trace only feeds Ports windows — don't summarise frames while none is open.
+      { wireEnabled: hasPortTerminalWindows }
+    );
   }
   return controllerSingleton;
 }
@@ -112,7 +151,19 @@ export function setupDebuggerHandlers(mainWindow: BrowserWindow | undefined): vo
 
   // Session lifecycle.
   ipcMain.handle(IPC.DebuggerAttach, async (_e: IpcMainInvokeEvent, payload: IpPayload): Promise<Result> => {
-    const res = await controller.attach(reqIp(payload));
+    const ip = reqIp(payload);
+    // `ip` doubles as the device serial for an RCE device (see [[device-identity-key-rule]] /
+    // rce-device-registry.ts) — resolved fresh here, same as telnet/sideload/Fiddle, since a
+    // cached instanceApiUrl 404s outright across a restart rather than degrading like a stale IP.
+    const rceKnown = resolveRceDeviceBySerial(ip);
+    if (rceKnown) {
+      const instance = await resolveRceInstanceBySerial(ip);
+      if (!instance.success) return { ok: false, error: instance.error };
+      const connectSocket = createRceDebugSocketFactory({ instanceApiUrl: instance.instance.instanceApiUrl, token: instance.instance.token });
+      const res = await controller.attach(ip, { connectSocket });
+      return res.ok ? { ok: true } : { ok: false, error: res.error || 'Attach failed.' };
+    }
+    const res = await controller.attach(ip);
     return res.ok ? { ok: true } : { ok: false, error: res.error || 'Attach failed.' };
   });
   ipcMain.handle(IPC.DebuggerDetach, guard('detach', async (p: IpPayload) => controller.detach(reqIp(p))));

@@ -8,7 +8,7 @@
  * the proxy (and therefore the conflict) is global, so only one modal is ever shown. Re-opening with
  * the same conflict is a no-op while it's already showing.
  */
-import { escapeHtml } from '../../modules/utils/dom.js';
+import { animateHeight, escapeHtml } from '../../modules/utils/dom.js';
 import { attachBackdropClickToClose } from '../../modules/utils/modal-backdrop-click.js';
 import { S } from '@shared/strings/index.js';
 
@@ -126,11 +126,14 @@ function showResolvedState(): void {
     icon.innerHTML = '<span class="icon icon-sm"><svg><use href="#icon-check"/></svg></span>';
   }
   if (title) title.textContent = S.networkInspector.portResolvedTitle;
-  if (body) {
-    body.innerHTML =
-      `<p class="ni-port-modal-msg ni-port-modal-msg-ok">${S.networkInspector.portResolvedMsg}</p>`;
-  }
-  footer?.remove();
+  // The resolved state is much shorter (one line, no footer) — tween the dialog down to it.
+  animateHeight(overlay.querySelector('.ni-port-modal'), () => {
+    if (body) {
+      body.innerHTML =
+        `<p class="ni-port-modal-msg ni-port-modal-msg-ok">${S.networkInspector.portResolvedMsg}</p>`;
+    }
+    footer?.remove();
+  });
 
   autoDismissTimer = setTimeout(() => closeInternal(), AUTO_DISMISS_MS);
 }
@@ -209,7 +212,7 @@ export function showPortConflictModal(conflict: PortConflictInfo, opts?: { force
           return;
         }
         currentKey = conflictKey(next as PortConflictInfo);
-        if (bodyEl) bodyEl.innerHTML = bodyHtml(next as PortConflictInfo);
+        if (bodyEl) animateHeight(overlay.querySelector('.ni-port-modal'), () => { bodyEl.innerHTML = bodyHtml(next as PortConflictInfo); });
       } catch {
         /* ignore — the background poll will reconcile */
       } finally {

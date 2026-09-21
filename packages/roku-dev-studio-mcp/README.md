@@ -224,7 +224,7 @@ For tools that need live RALE / App Connector / Builder access, the bridge IPCs 
 
 | Request | Result | Used for |
 | --- | --- | --- |
-| `McpBridgeReportState` | (renderer → main only) | Renderer pushes `{ selectedDevice, connectedDevices, knownDevices, appConnector }` whenever they change. The bridge serves the latest snapshot to GET endpoints. |
+| `McpBridgeReportState` | (renderer → main only) | Renderer pushes `{ selectedDevice, knownDevices, appConnector }` whenever they change — `knownDevices` covers connected, discovered, and remembered devices, each tagged `isTabOpen`/`isTabFocused`/`isReachable`. The bridge serves the latest snapshot to GET endpoints. |
 | `McpBridgeFunctionsRequest/Result` | – | Live App Connector Function list. |
 | `McpBridgeRaleRequest/Result` | – | Read-only RALE `getNodeById` (legacy single-purpose). |
 | `McpBridgeToolRequest/Result` | – | Generic dispatch for renderer-owned tools (full `rale_command` writes, `app_connector_connect`/`disconnect`, telnet). |

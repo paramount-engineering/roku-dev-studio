@@ -255,7 +255,7 @@ Most ECP calls resolve to an object:
 | API | Signature |
 |-----|-----------|
 | `captureRokuScreenshot` | `({ ip, password, exec?, waitAfterTriggerMs?, retryWaitMs?, maxRetries?, minValidBytes?, log? })` |
-| `sideloadChannel` | `({ ip, filePath, password, log? })` |
+| `sideloadChannel` | `({ ip, filePath? \| zipData? (+ filename?), password, log?, extraFields?, cleanInstall? })` |
 | `deleteSideload` | `({ ip, password, log? })` |
 
 ---
@@ -282,7 +282,7 @@ Most ECP calls resolve to an object:
 | `getIcon(deviceIp, appId)` | | |
 | `deleteSideload(deviceIp, password)` | | |
 | `screenshot(deviceIp, { password, waitAfterTriggerMs? })` | | Relay returns JSON; success often includes **`url`** (`data:image/...;base64,...`). |
-| `sideload(deviceIp, { file?, filePath?, password, fileName? })` | | **`file`** (Buffer or local path string) → multipart upload to relay. Falls back to JSON with **`filePath`** on relay host when `file` is omitted. `fileName` is optional (derived from path or defaults to `"package.zip"`). Uses `uploadTimeout`. |
+| `sideload(deviceIp, { file, password, fileName? })` | | **`file`** (Buffer or local path string) → multipart upload to relay; required. `fileName` is optional (derived from path or defaults to `"package.zip"`). Uses `uploadTimeout`. |
 | `raleWake(deviceIp, port?)` | | Default port **49200**. |
 | `raleConnect(deviceIp, port?)` | | Returns `{ success, connectionId }`; socket stays on relay host. |
 | `raleCommand(deviceIp, { connectionId, command, args })` | | Long timeout (up to 120 s). |
@@ -401,12 +401,6 @@ async function relayExample() {
     file: zipBuf,
     password: 'your-dev-password',
     fileName: 'channel.zip',   // optional; defaults to "package.zip"
-  });
-
-  // Path already on the relay host (JSON body, no upload):
-  await relay.sideload(deviceIp, {
-    filePath: '/path/on/relay/host/pkg.zip',
-    password: 'your-dev-password',
   });
 }
 

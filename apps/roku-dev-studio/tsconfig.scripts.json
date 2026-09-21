@@ -23,5 +23,5 @@
     "renderer/vendor/tanstack-virtual-core.d.ts",
     "renderer/vendor/tanstack-virtual-core.d.mts"
   ],
-  "exclude": ["scripts/verify-structured-pills.ts"]
+  "exclude": ["scripts/verify-structured-pills.ts", "scripts/verify-telnet-single-flight.ts"]
 }

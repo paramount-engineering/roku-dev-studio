@@ -23,7 +23,10 @@
  */
 import { apiError, apiLog } from '../log';
 import { DEBUG_CONTROL_PORT } from './protocol/constants';
-import { DebugProtocolClient } from './protocol/debug-protocol-client';
+import { DebugProtocolClient, type DebugSocketLike } from './protocol/debug-protocol-client';
+import type { ExceptionBreakpointSpec } from './protocol/encode';
+
+const { singleFlight } = require('roku-dev-studio-platform/async-patterns');
 
 /** Total budget to keep retrying attach after a debug sideload (8081 opens a beat late). */
 const PORT_WAIT_MS = 20000;
@@ -46,7 +49,11 @@ export const DEBUGGER_EVENTS = {
   Output: 'output',
   RuntimeError: 'runtime-error',
   CompileErrors: 'compile-errors',
-  Breakpoints: 'breakpoints'
+  Breakpoints: 'breakpoints',
+  ExceptionBreakpointError: 'exception-breakpoint-error',
+  /** One decoded control-port frame (either direction) — a read-only trace of the live 8081
+   *  session for the Ports window. Payload: `{ ip } & DebugWireFrame`. */
+  Wire: 'wire'
 } as const;
 
 export type DebuggerEventKind = (typeof DEBUGGER_EVENTS)[keyof typeof DEBUGGER_EVENTS];
@@ -95,7 +102,11 @@ export class DebugSessionController {
    *  8081 port (see `attach()`). */
   private attaching = new Map<string, Promise<{ ok: boolean; error?: string }>>();
 
-  constructor(private readonly emit: Emit) {}
+  constructor(
+    private readonly emit: Emit,
+    /** `wireEnabled`: gate for the per-frame 8081 trace — see DebugProtocolClientOptions.wireEnabled. */
+    private readonly options: { wireEnabled?: () => boolean } = {}
+  ) {}
 
   private setState(session: DebugSession, state: SessionState, extra?: Record<string, unknown>): void {
     session.state = state;
@@ -120,8 +131,13 @@ export class DebugSessionController {
    * that IP is already up. Otherwise tears down any existing (stale/errored)
    * session first (the control port is single-client) and reconnects. Resolves
    * once the handshake completes or rejects with an actionable message.
+   *
+   * `connectSocket`, when given, tunnels the control/IO sockets through an RCE
+   * instance's ports-bridge instead of a raw TCP connect to `ip` — see
+   * {@link DebugSocketLike}. `ip` is still the map key either way (for an RCE
+   * device it's the device's serial, per the app's device-identity convention).
    */
-  async attach(ip: string): Promise<{ ok: boolean; error?: string }> {
+  async attach(ip: string, opts?: { connectSocket?: (port: number) => Promise<DebugSocketLike> }): Promise<{ ok: boolean; error?: string }> {
     const clean = (ip || '').trim();
     if (!clean) return { ok: false, error: 'A device IP is required to attach.' };
 
@@ -139,19 +155,10 @@ export class DebugSessionController {
     // second auto-reattach while a manual Attach click is still connecting) would otherwise fight
     // over the single-client 8081 port, and one side always loses with a misleading "port
     // closed"/"handshake never completed" error against a session that's actually fine.
-    const inFlight = this.attaching.get(clean);
-    if (inFlight) return inFlight;
-
-    const attempt = this.runAttach(clean);
-    this.attaching.set(clean, attempt);
-    try {
-      return await attempt;
-    } finally {
-      this.attaching.delete(clean);
-    }
+    return singleFlight(this.attaching, clean, () => this.runAttach(clean, opts?.connectSocket));
   }
 
-  private async runAttach(clean: string): Promise<{ ok: boolean; error?: string }> {
+  private async runAttach(clean: string, connectSocket?: (port: number) => Promise<DebugSocketLike>): Promise<{ ok: boolean; error?: string }> {
     await this.detach(clean); // single-client control port — never stack sessions
 
     // Surface "connecting" immediately; the port can take a beat to open after a
@@ -172,7 +179,7 @@ export class DebugSessionController {
       attempt++;
       let client: DebugProtocolClient;
       try {
-        client = new DebugProtocolClient({ host: clean, controlPort: DEBUG_CONTROL_PORT });
+        client = new DebugProtocolClient({ host: clean, controlPort: DEBUG_CONTROL_PORT, connectSocket, wireEnabled: this.options.wireEnabled });
       } catch (e) {
         return { ok: false, error: e instanceof Error ? e.message : String(e) };
       }
@@ -194,7 +201,7 @@ export class DebugSessionController {
         return { ok: true };
       } catch (e) {
         lastError = e instanceof Error ? e.message : String(e);
-        try { await client.destroy(true); } catch { /* best-effort teardown before retry */ }
+        try { await client.destroy(); } catch { /* best-effort teardown before retry */ }
         if (Date.now() >= deadline) break;
         await sleep(PROBE_INTERVAL_MS);
       }
@@ -217,9 +224,10 @@ export class DebugSessionController {
     const deviceParagraph = desc ? `\n\n${desc}` : '';
     const detail = refused
       ? `Debug port ${DEBUG_CONTROL_PORT} is closed on ${clean} (connection refused). The running channel was NOT launched with debugging.${deviceParagraph}\n\n` +
-        `- Re-sideload with "Sideload with Debugging" enabled (or drop a STOP in your code — that auto-enables it).\n` +
+        `- Re-sideload with "Enable Debugger" checked (or drop a STOP in your code — that auto-enables it).\n` +
         `- A plain sideload, a Replace/reload without the debug flag, or an app relaunch does not open the debug port.\n` +
-        `- If the console shows the Micro Debugger "Thread selected…" text, the socket protocol is NOT active for this run.\n` +
+        `- If the console showed "Waiting for debugger" followed by "remote debugger connected", a debugger already used this run and left — 8081 does not reopen for the same launch; relaunch (Restart) to debug again.\n` +
+        `- If the console shows "BrightScript Micro Debugger" / "Suspending threads…" banners, STOPs are falling into the on-device 8085 debugger and the socket protocol is not active.\n` +
         `- Confirm Settings → System → Advanced system settings → "Control by mobile apps" is Enabled or Permissive.`
       : `Connected to debug port ${DEBUG_CONTROL_PORT} on ${clean} but the debug handshake never completed.${deviceParagraph}\n\n` +
         `- The port may be held by another debugger (a VS Code BrightScript session or a second RDS window), or the running channel is not a debug build.\n` +
@@ -230,11 +238,13 @@ export class DebugSessionController {
   }
 
   /**
-   * Close and forget the session for `ip` (idempotent). Releases any halted thread and asks
-   * the device to exit cleanly before closing the socket — a hard kill (the previous
-   * `destroy(true)`) skips both, so a thread paused at a breakpoint/STOP stayed halted
-   * forever once the only debugger that could resume it was gone, freezing the channel
-   * on-device (e.g. pressing the sidebar's Stop/Detach while stopped at a breakpoint).
+   * Close and forget the session for `ip` (idempotent). Releases any halted thread first —
+   * without it a thread paused at a breakpoint/STOP stayed halted forever once the only
+   * debugger that could resume it was gone, freezing the channel on-device — then hard-closes
+   * the sockets. Deliberately does NOT send the protocol's ExitChannel command: that terminates
+   * the channel on the device, and detaching (sidebar Detach, tab close, app quit, the teardown
+   * before a re-attach) must leave the app running. Exiting the app is the sidebar's separate
+   * Stop action (detach + Home keypress).
    */
   async detach(ip: string): Promise<void> {
     const s = this.sessions.get(ip);
@@ -248,9 +258,7 @@ export class DebugSessionController {
       /* best-effort */
     }
     try {
-      // destroy(false) sends the protocol's ExitChannel command and waits briefly for it,
-      // instead of the previous immediate hard socket kill with no handshake at all.
-      await s.client.destroy(false);
+      await s.client.destroy();
     } catch (e) {
       apiError('[debugger] destroy error:', ip, e instanceof Error ? e.message : String(e));
     }
@@ -419,6 +427,13 @@ export class DebugSessionController {
     return { removed: ids.length };
   }
 
+  /** Break on caught/uncaught BrightScript errors device-wide (not tied to a file:line).
+   *  A no-op on firmware that predates the command — see `DebugProtocolClient.setExceptionBreakpoints`. */
+  async setExceptionBreakpoints(ip: string, filters: ExceptionBreakpointSpec[]): Promise<unknown> {
+    const res = await this.require(ip).setExceptionBreakpoints(filters);
+    return plain((res as { data?: { breakpoints?: unknown } } | undefined)?.data?.breakpoints ?? res);
+  }
+
   // --- Event wiring ----------------------------------------------------------
 
   private wireEvents(session: DebugSession): void {
@@ -429,6 +444,10 @@ export class DebugSessionController {
       const text = typeof arg === 'string' ? arg : safeText(arg);
       if (!text) return;
       this.emit(DEBUGGER_EVENTS.Output, { ip, text });
+    });
+
+    client.on('wire', (frame) => {
+      this.emit(DEBUGGER_EVENTS.Wire, { ip, ...(frame as Record<string, unknown>) });
     });
 
     client.on('protocol-version', (arg) => {
@@ -462,6 +481,11 @@ export class DebugSessionController {
     client.on('breakpoint-error', (arg) => {
       this.emit(DEBUGGER_EVENTS.Breakpoints, { ip, error: plain(arg) });
     });
+    // Device rejected an exception-breakpoint filter (e.g. a bad conditionExpression) —
+    // distinct from a line breakpoint error, so it gets its own event kind.
+    client.on('exception-breakpoint-error', (arg) => {
+      this.emit(DEBUGGER_EVENTS.ExceptionBreakpointError, { ip, error: plain(arg) });
+    });
 
     const end = (): void => {
       if (this.sessions.get(ip) === session) this.sessions.delete(ip);
@@ -470,8 +494,8 @@ export class DebugSessionController {
       // (channel exit, or a control-socket error while the app is still printing) leaves
       // the io socket live, emitting ghost output for a session we've marked
       // disconnected — and a later re-attach can't clean it up (detach() early-returns
-      // once the session is gone). destroy(true) is idempotent (guards on `ended`).
-      void session.client.destroy(true);
+      // once the session is gone). destroy() is idempotent (guards on `ended`).
+      void session.client.destroy();
       this.emit(DEBUGGER_EVENTS.State, { ip, state: 'disconnected' });
     };
     client.on('app-exit', end);

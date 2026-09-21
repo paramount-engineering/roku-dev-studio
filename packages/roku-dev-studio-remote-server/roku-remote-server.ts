@@ -1,9 +1,10 @@
 /**
  * Roku Remote Server
  * 
- * This server runs on a remote Mac Mini and provides a REST API to control
- * Roku devices on the local network. It acts as a bridge between the
- * Roku Dev Studio desktop app and Roku devices at a remote location.
+ * This server runs on a machine at a remote location (macOS, Linux, or Windows)
+ * and provides a REST API to control Roku devices on the local network. It
+ * acts as a bridge between the Roku Dev Studio desktop app and Roku devices
+ * at a remote location.
  * 
  * Usage:
  *   node roku-remote-server.js [port]
@@ -39,9 +40,10 @@ const { exec } = require('child_process');
 const { promisify } = require('util');
 const fs = require('fs');
 const path = require('path');
-const { resolveUnderBase, isPathUnderOneOf, resolveUserPathUnderOneOf } = require('roku-dev-studio-platform/path-safe');
+const { resolveUnderBase, isPathUnderOneOf } = require('roku-dev-studio-platform/path-safe');
 const { serverLog } = require('./log');
 import { TtlCache } from 'roku-dev-studio-platform/ttl-cache';
+import { SERVER_PACKAGE_VERSION } from './package-version';
 
 const execPromise = promisify(exec);
 
@@ -74,7 +76,7 @@ const {
   raleDisconnect,
   raleDisconnectAll,
   connectRokuDebugTelnet,
-  connectRokuSystemTelnet,
+  connectRokuTcp,
   writeRokuTelnetLine,
   DEVICE_METRICS_SAMPLE_INTERVAL_MIN_MS
 } = api;
@@ -309,8 +311,20 @@ try {
 // Store active Telnet sessions: sessionId -> { socket, wsClients, deviceIP, buffer, lastActivity }
 const telnetSessions = new Map();
 
-// Store active Telnet System connections (port 8080): deviceIP -> { socket, buffer, listeners, lastActivity }
+// Store active Telnet System connections: `${deviceIP}:${port}` -> { socket, buffer, listeners, lastActivity }
 const telnetSystemConnections = new Map();
+/** Roku text consoles the /telnet-system/* routes will dial: 8080 (SceneGraph) and 8087 (Screensaver). */
+const TELNET_SYSTEM_PORTS = [8080, 8087];
+function telnetSystemKey(deviceIP, port) {
+  return `${deviceIP}:${port}`;
+}
+/** `?port=` from the request, default 8080; null when outside the allowlist. */
+function parseTelnetSystemPort(parsedUrl) {
+  const raw = parsedUrl.searchParams.get('port');
+  if (raw === null || raw === '') return 8080;
+  const port = parseInt(raw, 10);
+  return TELNET_SYSTEM_PORTS.includes(port) ? port : null;
+}
 
 // Cached devices (refreshed on discovery)
 let cachedDevices = new Map();
@@ -503,10 +517,35 @@ function parseMultipart(buffer, boundary) {
   return parts;
 }
 
-// Create temp directory for uploads (path under tmp only)
+// Temp directory for the pcap / CA-cert exports (path under tmp only; sideload uploads no longer
+// touch the disk). Re-ensured before every write: the host's tmp cleaner can prune it while the
+// server is up (it sits empty between requests), after which every write failed with a bare
+// `ENOENT … open '/tmp/roku-relay-uploads/…'` until the process was restarted.
 const TEMP_DIR = resolveUnderBase(os.tmpdir(), 'roku-relay-uploads') || path.join(os.tmpdir(), 'roku-relay-uploads');
-if (!fs.existsSync(TEMP_DIR)) {
+function ensureTempDir(): void {
   fs.mkdirSync(TEMP_DIR, { recursive: true });
+}
+ensureTempDir();
+
+/**
+ * The network-inspector export APIs are disk-oriented (matching the desktop app's native
+ * save-dialog flow): run `fn` against a fresh temp path, read the bytes back, always delete the
+ * file. `buf` is null when the export reported failure or wrote nothing.
+ */
+async function withTempExport<R extends { success: boolean }>(
+  prefix: string,
+  ext: string,
+  fn: (tempPath: string) => R | Promise<R>
+): Promise<{ result: R; buf: Buffer | null }> {
+  const tempPath =
+    resolveUnderBase(TEMP_DIR, `${prefix}-${nodeCrypto.randomUUID()}.${ext}`) || path.join(TEMP_DIR, `${prefix}-${Date.now()}.${ext}`);
+  try {
+    ensureTempDir();
+    const result = await fn(tempPath);
+    return { result, buf: result.success && fs.existsSync(tempPath) ? fs.readFileSync(tempPath) : null };
+  } finally {
+    try { fs.unlinkSync(tempPath); } catch { /* best-effort */ }
+  }
 }
 
 // ============================================
@@ -964,25 +1003,25 @@ const staleSessionCleanupInterval = setInterval(() => {
  * @param {string} deviceIP - Roku device IP
  * @returns {Promise<{success: boolean, error?: string}>}
  */
-async function telnetSystemConnect(deviceIP) {
-  if (telnetSystemConnections.has(deviceIP)) {
+async function telnetSystemConnect(deviceIP, port = 8080) {
+  if (telnetSystemConnections.has(telnetSystemKey(deviceIP, port))) {
     log(`Telnet System: Closing existing connection for ${deviceIP}`);
-    const oldConn = telnetSystemConnections.get(deviceIP);
+    const oldConn = telnetSystemConnections.get(telnetSystemKey(deviceIP, port));
     if (oldConn.socket && !oldConn.socket.destroyed) {
       oldConn.socket.destroy();
     }
-    telnetSystemConnections.delete(deviceIP);
+    telnetSystemConnections.delete(telnetSystemKey(deviceIP, port));
   }
 
-  log(`Telnet System: Connecting to ${deviceIP}:8080`);
+  log(`Telnet System: Connecting to ${deviceIP}:${port}`);
 
-  const conn = await connectRokuSystemTelnet(deviceIP);
+  const conn = await connectRokuTcp(deviceIP, port);
   if (!conn.success) {
     return { success: false, error: conn.error };
   }
 
   const socket = conn.socket;
-  log(`Telnet System: Connected to ${deviceIP}:8080`);
+  log(`Telnet System: Connected to ${deviceIP}:${port}`);
 
   const connection = {
     socket,
@@ -991,11 +1030,11 @@ async function telnetSystemConnect(deviceIP) {
     lastActivity: Date.now()
   };
 
-  telnetSystemConnections.set(deviceIP, connection);
+  telnetSystemConnections.set(telnetSystemKey(deviceIP, port), connection);
 
   socket.on('data', (data) => {
     const text = data.toString();
-    const c = telnetSystemConnections.get(deviceIP);
+    const c = telnetSystemConnections.get(telnetSystemKey(deviceIP, port));
     if (c) {
       c.lastActivity = Date.now();
       c.buffer += text;
@@ -1016,12 +1055,12 @@ async function telnetSystemConnect(deviceIP) {
 
   socket.on('error', (error) => {
     log(`Telnet System: Socket error for ${deviceIP}: ${errMsg(error)}`);
-    telnetSystemDisconnect(deviceIP);
+    telnetSystemDisconnect(deviceIP, port);
   });
 
   socket.on('close', (hadError) => {
     log(`Telnet System: Socket closed for ${deviceIP}, hadError: ${hadError}`);
-    telnetSystemConnections.delete(deviceIP);
+    telnetSystemConnections.delete(telnetSystemKey(deviceIP, port));
   });
 
   return { success: true };
@@ -1032,14 +1071,14 @@ async function telnetSystemConnect(deviceIP) {
  * @param {string} deviceIP - Roku device IP
  * @returns {Promise<{success: boolean}>}
  */
-function telnetSystemDisconnect(deviceIP) {
-  const connection = telnetSystemConnections.get(deviceIP);
+function telnetSystemDisconnect(deviceIP, port = 8080) {
+  const connection = telnetSystemConnections.get(telnetSystemKey(deviceIP, port));
   if (connection) {
     log(`Telnet System: Disconnecting from ${deviceIP}`);
     if (connection.socket && !connection.socket.destroyed) {
       connection.socket.destroy();
     }
-    telnetSystemConnections.delete(deviceIP);
+    telnetSystemConnections.delete(telnetSystemKey(deviceIP, port));
   }
   return Promise.resolve({ success: true });
 }
@@ -1050,8 +1089,8 @@ function telnetSystemDisconnect(deviceIP) {
  * @param {string} command - Command to send
  * @returns {Promise<{success: boolean, error?: string}>}
  */
-function telnetSystemSend(deviceIP, command) {
-  const connection = telnetSystemConnections.get(deviceIP);
+function telnetSystemSend(deviceIP, command, port = 8080) {
+  const connection = telnetSystemConnections.get(telnetSystemKey(deviceIP, port));
   
   if (!connection || !connection.socket || connection.socket.destroyed) {
     return Promise.resolve({ success: false, error: 'Not connected' });
@@ -1073,8 +1112,8 @@ function telnetSystemSend(deviceIP, command) {
  * @param {string} deviceIP - Roku device IP
  * @returns {Promise<{connected: boolean}>}
  */
-function telnetSystemStatus(deviceIP) {
-  const connection = telnetSystemConnections.get(deviceIP);
+function telnetSystemStatus(deviceIP, port = 8080) {
+  const connection = telnetSystemConnections.get(telnetSystemKey(deviceIP, port));
   if (!connection) {
     return Promise.resolve({ connected: false });
   }
@@ -1093,8 +1132,8 @@ function telnetSystemStatus(deviceIP) {
  * @param {Function} listener - Callback function(data)
  * @returns {Function} Cleanup function
  */
-function telnetSystemAddListener(deviceIP, listener) {
-  const connection = telnetSystemConnections.get(deviceIP);
+function telnetSystemAddListener(deviceIP, listener, port = 8080) {
+  const connection = telnetSystemConnections.get(telnetSystemKey(deviceIP, port));
   if (connection) {
     connection.listeners.add(listener);
     return () => {
@@ -1180,10 +1219,13 @@ async function handleRequest(req, res) {
 
     // Health check
     if (pathname === '/health' && method === 'GET') {
-      return sendJson(res, { 
-        success: true, 
+      return sendJson(res, {
+        success: true,
         status: 'ok',
         apiVersion: api.PACKAGE_VERSION || 'unknown',
+        // This server's own release version — distinct from `apiVersion` (the roku-dev-studio-api
+        // version it bundles), which can differ from this on its own release cadence.
+        serverVersion: SERVER_PACKAGE_VERSION || 'unknown',
         hostname: os.hostname(),
         platform: os.platform(),
         uptime: process.uptime(),
@@ -1196,7 +1238,10 @@ async function handleRequest(req, res) {
     if (pathname === '/capabilities' && method === 'GET') {
       return sendJson(res, {
         success: true,
-        version: '1.0.0',
+        // Kept for backward compatibility — this is actually the roku-dev-studio-api version this
+        // server bundles, not the server's own release version. See `serverVersion` for that.
+        version: api.PACKAGE_VERSION || 'unknown',
+        serverVersion: SERVER_PACKAGE_VERSION || 'unknown',
         capabilities: {
           // Core features
           remote: true,           // Remote control (keypress, text input)
@@ -1210,6 +1255,9 @@ async function handleRequest(req, res) {
           
           // Debug features
           console: true,          // Telnet debug console (port 8085)
+          // Text consoles the /telnet-system/* routes will dial (`?port=`; 8080 when absent). The
+          // desktop app hides ports missing here (an older server that predates this key → 8080 only).
+          telnetSystemPorts: TELNET_SYSTEM_PORTS,
           // BrightScript socket debugger (control port 8081) — a REAL check (unlike the other
           // booleans here): false when debug-session-controller failed to load/construct at
           // startup (see DEBUGGER_ENDPOINTS_AVAILABLE above), so an older/reduced-build server
@@ -1382,38 +1430,29 @@ async function handleRequest(req, res) {
       return sendJson(res, { success: true });
     }
 
-    // Raw-packet export — the engine's API is disk-oriented (matching the desktop app's native
-    // save-dialog flow), so this writes to a temp file, streams the bytes back, then cleans up.
+    // Raw-packet export — written to a temp file and streamed back (see withTempExport).
     if (pathname === '/network/export-pcap' && method === 'GET') {
       const deviceIpsRaw = parsedUrl.searchParams.get('deviceIps') || '';
       const deviceIps = deviceIpsRaw.split(',').map((ip) => ip.trim()).filter(Boolean);
-      const tempPath =
-        resolveUnderBase(TEMP_DIR, `pcap-${nodeCrypto.randomUUID()}.pcap`) ||
-        path.join(TEMP_DIR, `pcap-${Date.now()}.pcap`);
-      try {
-        const result = await networkInspector.exportPcap(tempPath, deviceIps.length > 0 ? deviceIps : undefined);
-        if (!result.success || !fs.existsSync(tempPath)) {
-          return sendError(res, result.error || 'Export failed', 400);
-        }
-        const buf = fs.readFileSync(tempPath);
-        const pcapHeaders: Record<string, string> = {
-          'Content-Type': 'application/vnd.tcpdump.pcap',
-          'Content-Disposition': 'attachment; filename="capture.pcap"',
-          'X-Packets-Written': String(result.packetsWritten ?? 0)
-        };
-        if (res._corsOrigin) pcapHeaders['Access-Control-Allow-Origin'] = res._corsOrigin;
-        res.writeHead(200, pcapHeaders);
-        res.end(buf);
-        return;
-      } finally {
-        try { fs.unlinkSync(tempPath); } catch { /* best-effort */ }
-      }
+      const { result, buf } = await withTempExport('pcap', 'pcap', (tempPath) =>
+        networkInspector.exportPcap(tempPath, deviceIps.length > 0 ? deviceIps : undefined)
+      );
+      if (!buf) return sendError(res, result.error || 'Export failed', 400);
+      const pcapHeaders: Record<string, string> = {
+        'Content-Type': 'application/vnd.tcpdump.pcap',
+        'Content-Disposition': 'attachment; filename="capture.pcap"',
+        'X-Packets-Written': String(result.packetsWritten ?? 0)
+      };
+      if (res._corsOrigin) pcapHeaders['Access-Control-Allow-Origin'] = res._corsOrigin;
+      res.writeHead(200, pcapHeaders);
+      res.end(buf);
+      return;
     }
 
     // MITM CA certificate — metadata, then downloadable PEM/CRT so a Roku (or a browser) can trust
     // THIS server's proxy cert. There's no native save dialog on a headless server, so these just
-    // serve the bytes directly (a temp file is still the engine's only export API, so write-then-
-    // stream-then-delete same as the pcap route above).
+    // serve the bytes directly (a temp file is still the engine's only export API — withTempExport,
+    // same as the pcap route above).
     if (pathname === '/network/ca/info' && method === 'GET') {
       return sendJson(res, {
         success: true,
@@ -1423,47 +1462,29 @@ async function handleRequest(req, res) {
     }
 
     if (pathname === '/network/ca/pem' && method === 'GET') {
-      const tempPath =
-        resolveUnderBase(TEMP_DIR, `ca-${nodeCrypto.randomUUID()}.pem`) || path.join(TEMP_DIR, `ca-${Date.now()}.pem`);
-      try {
-        const result = networkInspector.exportCaPem(tempPath);
-        if (!result.success || !fs.existsSync(tempPath)) {
-          return sendError(res, result.error || 'Export failed', 400);
-        }
-        const buf = fs.readFileSync(tempPath);
-        const pemHeaders: Record<string, string> = {
-          'Content-Type': 'application/x-pem-file',
-          'Content-Disposition': 'attachment; filename="rds-network-inspector-ca.pem"'
-        };
-        if (res._corsOrigin) pemHeaders['Access-Control-Allow-Origin'] = res._corsOrigin;
-        res.writeHead(200, pemHeaders);
-        res.end(buf);
-        return;
-      } finally {
-        try { fs.unlinkSync(tempPath); } catch { /* best-effort */ }
-      }
+      const { result, buf } = await withTempExport('ca', 'pem', (tempPath) => networkInspector.exportCaPem(tempPath));
+      if (!buf) return sendError(res, result.error || 'Export failed', 400);
+      const pemHeaders: Record<string, string> = {
+        'Content-Type': 'application/x-pem-file',
+        'Content-Disposition': 'attachment; filename="rds-network-inspector-ca.pem"'
+      };
+      if (res._corsOrigin) pemHeaders['Access-Control-Allow-Origin'] = res._corsOrigin;
+      res.writeHead(200, pemHeaders);
+      res.end(buf);
+      return;
     }
 
     if (pathname === '/network/ca/cert' && method === 'GET') {
-      const tempPath =
-        resolveUnderBase(TEMP_DIR, `ca-${nodeCrypto.randomUUID()}.crt`) || path.join(TEMP_DIR, `ca-${Date.now()}.crt`);
-      try {
-        const result = networkInspector.exportCaCert(tempPath);
-        if (!result.success || !fs.existsSync(tempPath)) {
-          return sendError(res, result.error || 'Export failed', 400);
-        }
-        const buf = fs.readFileSync(tempPath);
-        const crtHeaders: Record<string, string> = {
-          'Content-Type': 'application/x-x509-ca-cert',
-          'Content-Disposition': 'attachment; filename="rds-network-inspector-ca.crt"'
-        };
-        if (res._corsOrigin) crtHeaders['Access-Control-Allow-Origin'] = res._corsOrigin;
-        res.writeHead(200, crtHeaders);
-        res.end(buf);
-        return;
-      } finally {
-        try { fs.unlinkSync(tempPath); } catch { /* best-effort */ }
-      }
+      const { result, buf } = await withTempExport('ca', 'crt', (tempPath) => networkInspector.exportCaCert(tempPath));
+      if (!buf) return sendError(res, result.error || 'Export failed', 400);
+      const crtHeaders: Record<string, string> = {
+        'Content-Type': 'application/x-x509-ca-cert',
+        'Content-Disposition': 'attachment; filename="rds-network-inspector-ca.crt"'
+      };
+      if (res._corsOrigin) crtHeaders['Access-Control-Allow-Origin'] = res._corsOrigin;
+      res.writeHead(200, crtHeaders);
+      res.end(buf);
+      return;
     }
 
     // Live event/status stream (Server-Sent Events). The app subscribes here for the remote
@@ -1652,7 +1673,9 @@ async function handleRequest(req, res) {
       if (!isValidIp(deviceIP)) {
         return sendError(res, 'Invalid device IP', 400);
       }
-      const result = await telnetSystemConnect(deviceIP);
+      const port = parseTelnetSystemPort(parsedUrl);
+      if (port === null) return sendError(res, 'Unsupported port', 400);
+      const result = await telnetSystemConnect(deviceIP, port);
       return sendJson(res, result);
     }
     
@@ -1663,7 +1686,9 @@ async function handleRequest(req, res) {
       if (!isValidIp(deviceIP)) {
         return sendError(res, 'Invalid device IP', 400);
       }
-      const result = await telnetSystemDisconnect(deviceIP);
+      const port = parseTelnetSystemPort(parsedUrl);
+      if (port === null) return sendError(res, 'Unsupported port', 400);
+      const result = await telnetSystemDisconnect(deviceIP, port);
       return sendJson(res, result);
     }
     
@@ -1681,7 +1706,9 @@ async function handleRequest(req, res) {
         return sendError(res, 'Missing command parameter', 400);
       }
       
-      const result = await telnetSystemSend(deviceIP, params.command);
+      const port = parseTelnetSystemPort(parsedUrl);
+      if (port === null) return sendError(res, 'Unsupported port', 400);
+      const result = await telnetSystemSend(deviceIP, params.command, port);
       return sendJson(res, result);
     }
     
@@ -1692,7 +1719,9 @@ async function handleRequest(req, res) {
       if (!isValidIp(deviceIP)) {
         return sendError(res, 'Invalid device IP', 400);
       }
-      const result = await telnetSystemStatus(deviceIP);
+      const port = parseTelnetSystemPort(parsedUrl);
+      if (port === null) return sendError(res, 'Unsupported port', 400);
+      const result = await telnetSystemStatus(deviceIP, port);
       return sendJson(res, result);
     }
     
@@ -1700,7 +1729,9 @@ async function handleRequest(req, res) {
     const telnetSystemDataMatch = pathname.match(/^\/device\/([^\/]+)\/telnet-system\/data$/);
     if (telnetSystemDataMatch && method === 'GET') {
       const deviceIP = telnetSystemDataMatch[1];
-      const connection = telnetSystemConnections.get(deviceIP);
+      const port = parseTelnetSystemPort(parsedUrl);
+      if (port === null) return sendError(res, 'Unsupported port', 400);
+      const connection = telnetSystemConnections.get(telnetSystemKey(deviceIP, port));
       
       if (!connection) {
         return sendJson(res, { success: false, error: 'Not connected' });
@@ -1859,15 +1890,14 @@ async function handleRequest(req, res) {
         return;
       }
 
-      // Sideload (requires password) - supports both file upload and filePath
+      // Sideload (requires password) — multipart upload only (the .zip bytes go straight to the device)
       if (subPath === '/sideload' && method === 'POST') {
         const contentType = req.headers['content-type'] || '';
-        let filePath = null;
+        let zipData: Buffer | null = null;
+        let uploadName = '';
         let password = null;
-        let tempFile = null;
         let remoteDebugFlag = false;
 
-        // Handle multipart file upload
         if (contentType.includes('multipart/form-data')) {
           const boundaryMatch = contentType.match(/boundary=([^;]+)/);
           if (!boundaryMatch) {
@@ -1888,35 +1918,20 @@ async function handleRequest(req, res) {
           remoteDebugFlag = parts.remotedebug === '1' || parts.remotedebug === 'true';
 
           if (parts.file && parts.file.data) {
-            // Save uploaded file to temp location (extension only, no path from filename)
-            const ext = (path.extname(parts.file.filename) || '.zip').replace(/[^a-zA-Z0-9.]/g, '') || '.zip';
-            const safeTempName = `upload-${Date.now()}${ext}`;
-            tempFile = resolveUnderBase(TEMP_DIR, safeTempName) || path.join(TEMP_DIR, safeTempName);
-            fs.writeFileSync(tempFile, parts.file.data);
-            filePath = tempFile;
-            log(`Sideload: Saved uploaded file: ${parts.file.filename} -> ${tempFile} (${parts.file.data.length} bytes)`);
+            // Forward the uploaded bytes straight to the device. They used to be written under
+            // TEMP_DIR only so the path-based sideloadChannel could read them back (then deleted) —
+            // a disk round-trip that failed every sideload with ENOENT once the host's tmp cleaner
+            // had pruned the directory.
+            const uploaded: Buffer = parts.file.data;
+            zipData = uploaded;
+            uploadName = String(parts.file.filename || '');
+            log(`Sideload: Received upload ${uploadName || '(unnamed)'} (${uploaded.length} bytes)`);
           } else {
             log(`Sideload: No file data found. Parts: ${JSON.stringify(Object.keys(parts))}`);
           }
-        } else {
-          // JSON body: filePath must be under TEMP_DIR
-          const body = await readBody(req);
-          const params = parseJson(body);
-          if (params) {
-            if (params.filePath && typeof params.filePath === 'string') {
-              const resolvedTempPath = resolveUserPathUnderOneOf([TEMP_DIR], params.filePath);
-              if (!resolvedTempPath) {
-                return sendError(res, 'Invalid file path', 400);
-              }
-              filePath = resolvedTempPath;
-            }
-            password = params.password;
-            remoteDebugFlag = params.remotedebug === '1' || params.remotedebug === true;
-          }
         }
-        
-        if (!filePath || !password) {
-          if (tempFile && fs.existsSync(tempFile)) fs.unlinkSync(tempFile);
+
+        if (!zipData || !password) {
           return sendError(res, 'Missing file or password', 400);
         }
 
@@ -1925,18 +1940,14 @@ async function handleRequest(req, res) {
           // remotedebug=1 (a Replace can drop it), matching the local app's sideload handler.
           const result = await sideloadChannel({
             ip,
-            filePath,
+            zipData,
+            filename: uploadName,
             password,
             log: (msg) => log(msg),
             ...(remoteDebugFlag ? { cleanInstall: true, extraFields: [{ name: 'remotedebug', value: '1' }] } : {})
           });
-          if (tempFile && fs.existsSync(tempFile)) {
-            fs.unlinkSync(tempFile);
-            log(`Cleaned up temp file: ${tempFile}`);
-          }
           return sendJson(res, result);
         } catch (error) {
-          if (tempFile && fs.existsSync(tempFile)) fs.unlinkSync(tempFile);
           return sendJson(res, { success: false, error: `Upload failed: ${errMsg(error)}` });
         }
       }

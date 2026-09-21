@@ -115,4 +115,13 @@ export const sideloadRelay = {
   errValidationFailed: 'Validarea a eșuat.',
   errCouldNotReadPassword: 'Nu s-a putut citi parola salvată.',
   errCouldNotWriteSettings: 'Nu s-a putut scrie fișierul de setări.',
+
+  // ── Rândul din modalul Informații dispozitiv (renderer/app.ts openDeviceHardwareImageModal) ──
+  deviceRowLabel: 'Sideload Relay',
+  deviceRowToggleAriaLabel: (name: string): string => `Sideload Relay pentru ${name}`,
+  deviceRowDisabledHint: 'Activați mai întâi Sideload Relay în Setări.',
+  deviceRowManageLinkText: 'Gestionați în Setări → Sideload Relay',
+  deviceRowToggleFailed: 'Nu s-a putut actualiza ținta Sideload Relay.',
+  deviceRemovedToast: (name: string): string =>
+    `${name} a fost eliminat din Sideload Relay — parola de dezvoltator nu mai este verificată.`,
 };

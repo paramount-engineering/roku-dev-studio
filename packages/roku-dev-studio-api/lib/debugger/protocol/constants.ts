@@ -26,8 +26,7 @@ export enum CommandCode {
   RemoveBreakpoints = 9,
   Execute = 10,
   AddConditionalBreakpoints = 11,
-  SetExceptionBreakpoints = 12,
-  ExitChannel = 122
+  SetExceptionBreakpoints = 12
 }
 
 /** Step granularity (the `step_type` field of a STEP request). */

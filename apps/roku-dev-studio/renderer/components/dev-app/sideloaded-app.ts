@@ -1,6 +1,6 @@
 // Sideloaded app display and management
 
-import { icon, escapeHtml, decodeHtmlEntities, setSafeHTML } from '../../modules/utils/index.js';
+import { icon, escapeHtml, setSafeHTML } from '../../modules/utils/index.js';
 import { SCREENSHOT_AFTER_LAUNCH_DELAY } from '../../modules/utils/constants.js';
 import type {
   DevAppApi,
@@ -8,9 +8,15 @@ import type {
   InnertabSwitchDetail,
   SideloadedAppElements
 } from './dev-app-types.js';
-import { pollDevAppForegroundAfterLaunch, pollDevAppForegroundOnce } from './dev-app-foreground-sync.js';
+import { pollDevAppForegroundAfterHome, pollDevAppForegroundAfterLaunch, pollDevAppForegroundOnce } from './dev-app-foreground-sync.js';
 import { rendererError } from '../../modules/utils/logger.js';
 import { S } from '@shared/strings/index.js';
+import {
+  loadAppsAndInputs,
+  onAppsAndInputsResolved,
+  type AppsAndInputsResult,
+  type AppsAndInputsFailure
+} from './apps-and-inputs.js';
 
 /**
  * Setup sideloaded app display
@@ -35,96 +41,89 @@ export function setupSideloadedApp(
     launchSideloadBtn
   } = elements;
   
-  // Check sideloaded app
+  function renderNoChannel(): void {
+    sideloadedAppCard.style.display = 'block';
+    setSafeHTML(sideloadedAppDetails, `<div class="sideloaded-none">${S.devApp.noChannelSideloaded}</div>`);
+    if (deleteBtn) deleteBtn.style.display = 'none';
+    if (launchSideloadBtn) launchSideloadBtn.style.display = 'none';
+    if (setDevAppAllowsCapture) setDevAppAllowsCapture(false);
+    panel.dispatchEvent(new CustomEvent('dev-app-sideload-state', { detail: { installed: false } }));
+  }
+
+  function renderInstalled(appName: string, version: string): void {
+    sideloadedAppCard.style.display = 'block';
+    setSafeHTML(sideloadedAppDetails, `
+      <div style="display: flex; align-items: center; gap: 12px;">
+        <div class="sideloaded-app-icon-wrapper loading" style="width:80px;height:45px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:24px;overflow:hidden;">
+          <img class="sideloaded-app-icon" style="width:100%;height:100%;object-fit:cover;display:none;">
+          <span class="sideloaded-icon-placeholder">${icon('tv', 'icon-lg', 'icon-muted')}</span>
+        </div>
+        <div>
+          <div class="sideloaded-app-name">${escapeHtml(appName)}</div>
+          <div class="sideloaded-app-meta">
+            <span>${S.devApp.versionLabel} ${escapeHtml(version)}</span>
+          </div>
+        </div>
+      </div>
+    `);
+
+    // Load icon
+    const iconImg = sideloadedAppDetails.querySelector('.sideloaded-app-icon');
+    const iconPlaceholder = sideloadedAppDetails.querySelector('.sideloaded-icon-placeholder');
+    const iconWrapper = sideloadedAppDetails.querySelector('.sideloaded-app-icon-wrapper');
+
+    if (
+      iconImg instanceof HTMLImageElement &&
+      iconPlaceholder instanceof HTMLElement &&
+      iconWrapper instanceof HTMLElement
+    ) {
+      api.getIcon('dev').then((result: { success?: boolean; dataUrl?: string }) => {
+        if (result.success && result.dataUrl) {
+          iconImg.src = result.dataUrl;
+          iconImg.style.display = 'block';
+          iconPlaceholder.style.display = 'none';
+          iconWrapper.classList.remove('loading');
+        } else {
+          iconWrapper.classList.remove('loading');
+        }
+      }).catch(() => {
+        iconWrapper.classList.remove('loading');
+      });
+    }
+
+    if (deleteBtn) deleteBtn.style.display = 'inline-flex';
+    checkIfDevAppActive();
+    panel.dispatchEvent(new CustomEvent('dev-app-sideload-state', { detail: { installed: true } }));
+  }
+
+  // Single render path for every source — the initial/refresh checks below, or a notification that
+  // some OTHER tab (Apps, Remote) triggered a reload of the shared apps+inputs fetch.
+  function applyAppsAndInputsResult(result: AppsAndInputsResult | AppsAndInputsFailure): void {
+    const devApp = result.success ? result.apps.find((a) => a.id === 'dev') : undefined;
+    if (devApp) {
+      renderInstalled(devApp.name, devApp.version || S.devApp.unknown);
+    } else {
+      renderNoChannel();
+    }
+  }
+
+  // Every result reaches this card through this subscription — whether this card, the Apps tab
+  // or the Remote tab triggered the fetch — so one fetch renders once. (Applying the awaited value
+  // in `checkSideloadedApp` as well rendered every check twice: two icon fetches, two
+  // active-app polls, two sideload-state events.)
+  onAppsAndInputsResolved(api, applyAppsAndInputsResult);
+
+  // Check sideloaded app. Joins the Apps tab's `/query/apps` fetch (or triggers it, whichever
+  // runs first) via the shared `loadAppsAndInputs` in-flight join instead of firing an independent
+  // ECP call — see that function's doc comment for why (both used to race the same device on every
+  // connect). `loadAppsAndInputs` reports fetch failures as a result (rendered above as
+  // "no channel"); the catch is for a throwing subscriber.
   async function checkSideloadedApp() {
     try {
-      const result = await api.query('/query/apps');
-      
-      if (result.success && result.data) {
-        const devAppMatch = result.data.match(/<app id="dev"[^>]*>([^<]*)<\/app>/);
-        
-        if (devAppMatch) {
-          const appName = decodeHtmlEntities(devAppMatch[1]);
-          const versionMatch = result.data.match(/<app id="dev"[^>]*version="([^"]*)"[^>]*>/);
-          const version = versionMatch ? versionMatch[1] : S.devApp.unknown;
-          
-          sideloadedAppCard.style.display = 'block';
-          setSafeHTML(sideloadedAppDetails, `
-            <div style="display: flex; align-items: center; gap: 12px;">
-              <div class="sideloaded-app-icon-wrapper loading" style="width:80px;height:45px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:24px;overflow:hidden;">
-                <img class="sideloaded-app-icon" style="width:100%;height:100%;object-fit:cover;display:none;">
-                <span class="sideloaded-icon-placeholder">${icon('tv', 'icon-lg', 'icon-muted')}</span>
-              </div>
-              <div>
-                <div class="sideloaded-app-name">${escapeHtml(appName)}</div>
-                <div class="sideloaded-app-meta">
-                  <span>${S.devApp.versionLabel} ${escapeHtml(version)}</span>
-                </div>
-              </div>
-            </div>
-          `);
-          
-          // Load icon
-          const iconImg = sideloadedAppDetails.querySelector('.sideloaded-app-icon');
-          const iconPlaceholder = sideloadedAppDetails.querySelector('.sideloaded-icon-placeholder');
-          const iconWrapper = sideloadedAppDetails.querySelector('.sideloaded-app-icon-wrapper');
-
-          if (
-            iconImg instanceof HTMLImageElement &&
-            iconPlaceholder instanceof HTMLElement &&
-            iconWrapper instanceof HTMLElement
-          ) {
-            api.getIcon('dev').then((result: { success?: boolean; dataUrl?: string }) => {
-              if (result.success && result.dataUrl) {
-                iconImg.src = result.dataUrl;
-                iconImg.style.display = 'block';
-                iconPlaceholder.style.display = 'none';
-                iconWrapper.classList.remove('loading');
-              } else {
-                iconWrapper.classList.remove('loading');
-              }
-            }).catch(() => {
-              iconWrapper.classList.remove('loading');
-            });
-          }
-          
-          if (deleteBtn) deleteBtn.style.display = 'inline-flex';
-          checkIfDevAppActive();
-          panel.dispatchEvent(
-            new CustomEvent('dev-app-sideload-state', { detail: { installed: true } })
-          );
-        } else {
-          sideloadedAppCard.style.display = 'block';
-          setSafeHTML(sideloadedAppDetails, `<div class="sideloaded-none">${S.devApp.noChannelSideloaded}</div>`);
-          if (deleteBtn) deleteBtn.style.display = 'none';
-          if (launchSideloadBtn) launchSideloadBtn.style.display = 'none';
-          if (setDevAppAllowsCapture) setDevAppAllowsCapture(false);
-          panel.dispatchEvent(
-            new CustomEvent('dev-app-sideload-state', { detail: { installed: false } })
-          );
-        }
-      } else {
-        // `/query/apps` itself failed — reset the card too, so we don't show a
-        // stale "installed" state while other listeners have been told installed=false.
-        sideloadedAppCard.style.display = 'block';
-        setSafeHTML(sideloadedAppDetails, `<div class="sideloaded-none">${S.devApp.noChannelSideloaded}</div>`);
-        if (deleteBtn) deleteBtn.style.display = 'none';
-        if (launchSideloadBtn) launchSideloadBtn.style.display = 'none';
-        if (setDevAppAllowsCapture) setDevAppAllowsCapture(false);
-        panel.dispatchEvent(
-          new CustomEvent('dev-app-sideload-state', { detail: { installed: false } })
-        );
-      }
+      await loadAppsAndInputs(api);
     } catch (e) {
       rendererError('Failed to check sideloaded app:', e);
-      sideloadedAppCard.style.display = 'block';
-      setSafeHTML(sideloadedAppDetails, `<div class="sideloaded-none">${S.devApp.noChannelSideloaded}</div>`);
-      if (deleteBtn) deleteBtn.style.display = 'none';
-      if (launchSideloadBtn) launchSideloadBtn.style.display = 'none';
-      if (setDevAppAllowsCapture) setDevAppAllowsCapture(false);
-      panel.dispatchEvent(
-        new CustomEvent('dev-app-sideload-state', { detail: { installed: false } })
-      );
+      renderNoChannel();
     }
   }
   
@@ -148,7 +147,8 @@ export function setupSideloadedApp(
   // Initial check
   checkSideloadedApp();
   
-  // Listen for tab switch
+  // Listen for tab switch — re-checks so switching back to this tab catches a sideload/uninstall
+  // that happened elsewhere (relay, CLI) while it was in the background.
   panel.addEventListener('innertabswitch', (e: Event) => {
     const ce = e as CustomEvent<InnertabSwitchDetail>;
     if (ce.detail.tab === 'devapp') {
@@ -156,9 +156,13 @@ export function setupSideloadedApp(
     }
   });
   
-  // Listen for Home button press to check if dev app exited
+  // Listen for Home button press to check if dev app exited. A single immediate query races the
+  // device's own state transition — usually wins against a physical device's near-instant LAN
+  // ECP response, but an RCE device's extra ports-bridge/HTTPS hop loses that race often enough to
+  // leave Launch (Dev App tab and Floating Remote alike) stuck hidden until some unrelated refresh
+  // — so this polls a few times instead of checking once (see pollDevAppForegroundAfterHome).
   panel.addEventListener('homePressed', () => {
-    checkIfDevAppActive();
+    void pollDevAppForegroundAfterHome(panel, api);
   });
 
   /** Periodic device active check: refresh Launch + screenshot gate from /query/active-app */
@@ -169,7 +173,7 @@ export function setupSideloadedApp(
   });
   
   if (refreshSideloadedBtn) {
-    refreshSideloadedBtn.addEventListener('click', checkSideloadedApp);
+    refreshSideloadedBtn.addEventListener('click', () => checkSideloadedApp());
   }
   
   if (launchSideloadBtn) {

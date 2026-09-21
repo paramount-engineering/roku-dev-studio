@@ -20,6 +20,7 @@ import type {
   SafeSendFn
 } from '../../shared/ipc/payloads';
 import { IPC } from '../../shared/ipc/channels';
+import { debugTelnetConnectionId } from '../../shared/ipc/debug-telnet-connection-id';
 import {
   appendCoalescedText,
   createTelnetIpcCoalesceState,
@@ -31,6 +32,11 @@ import { mainLog } from '../log.js';
 import { isSafeRelayUrl, remoteHttpRequest, remoteHttpRequestBinary } from '../remote-http';
 import { recordRemoteDeviceSeen } from '../remote-device-registry';
 import { S } from '../../shared/strings/index';
+import { notifyDebuggerReattach } from './debugger-handlers';
+import { SYSTEM_TELNET_DEFAULT_PORT, normalizeSystemTelnetPort, systemTelnetConnectionId } from './telnet-handlers';
+import { createHeldPool, type SystemTelnetConnectResult, type SystemTelnetHolder } from './held-console-pool';
+import { broadcastToPortTerminals } from '../port-terminal-broadcast';
+import { recallDebugZip, rememberDebugZip } from '../debug-sideload-memory';
 
 const { computeInputTextRelayHttpTimeoutMs } = require('roku-dev-studio-api');
 const WebSocket = require('ws');
@@ -210,10 +216,45 @@ function tagSseFramePayload(payload: unknown, tag: { isRemote: true; serverUrl: 
  * directly too since the two IPC handler pairs below each have their own slightly different
  * holder-vs-no-holder semantics.
  */
-function createSseRelay(path: string, eventChannelMap: Record<string, string>, logLabel: string) {
+function createSseRelay(
+  path: string,
+  eventChannelMap: Record<string, string>,
+  logLabel: string,
+  onFrame?: (frame: { type: string; payload: unknown }, serverUrl: string) => void
+) {
   const connections = new Map<string, SseRelayConn>();
+  // Server URLs that should stay connected: `establish` adds, `close` removes. A stream the SERVER
+  // ends (redeploy / restart) is re-opened with a capped backoff while its URL is still wanted —
+  // without this, one lab-server restart froze every open remote tab's debugger sidebar at
+  // "Connecting…" until RDS itself was restarted. The server re-sends a state snapshot on connect,
+  // so reconnecting is all it takes to resync.
+  const wantOpen = new Set<string>();
+  const reconnectAttempts = new Map<string, number>();
+  const reconnectTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+  function scheduleReconnect(serverUrl: string): void {
+    if (!wantOpen.has(serverUrl) || reconnectTimers.has(serverUrl)) return;
+    const attempt = reconnectAttempts.get(serverUrl) ?? 0;
+    reconnectAttempts.set(serverUrl, attempt + 1);
+    const delay = Math.min(30_000, 1000 * 2 ** attempt);
+    mainLog(`${logLabel} stream ${serverUrl} reconnecting in ${delay}ms`);
+    reconnectTimers.set(
+      serverUrl,
+      setTimeout(() => {
+        reconnectTimers.delete(serverUrl);
+        if (wantOpen.has(serverUrl)) establish(serverUrl);
+      }, delay)
+    );
+  }
 
   function close(serverUrl: string): void {
+    wantOpen.delete(serverUrl);
+    reconnectAttempts.delete(serverUrl);
+    const timer = reconnectTimers.get(serverUrl);
+    if (timer) {
+      clearTimeout(timer);
+      reconnectTimers.delete(serverUrl);
+    }
     const conn = connections.get(serverUrl);
     if (!conn) return;
     connections.delete(serverUrl);
@@ -228,6 +269,7 @@ function createSseRelay(path: string, eventChannelMap: Record<string, string>, l
 
   function establish(serverUrl: string): { success: boolean; error?: string } {
     if (!isSafeRelayUrl(serverUrl)) return { success: false, error: 'Invalid relay server URL' };
+    wantOpen.add(serverUrl);
     if (connections.has(serverUrl)) return { success: true };
 
     const safeSendToRenderer: SafeSendFn = (channel, payload) =>
@@ -248,6 +290,7 @@ function createSseRelay(path: string, eventChannelMap: Record<string, string>, l
       (res: IncomingMessage) => {
         if ((res.statusCode ?? 0) >= 400) {
           mainLog(`${logLabel} stream ${serverUrl} responded ${res.statusCode}`);
+          connections.delete(serverUrl); // the server refused — no reconnect loop against a 4xx/5xx
           req.destroy();
           return;
         }
@@ -257,7 +300,9 @@ function createSseRelay(path: string, eventChannelMap: Record<string, string>, l
           if (!conn) return; // holder released mid-flight; drop stray data
           const { frames, rest } = drainSseRecords(conn.buffer + chunk);
           conn.buffer = rest;
+          if (frames.length > 0) reconnectAttempts.delete(serverUrl); // live again — reset the backoff
           for (const frame of frames) {
+            onFrame?.(frame, serverUrl);
             const channel = eventChannelMap[frame.type];
             if (!channel) continue;
             safeSendToRenderer(channel, tagSseFramePayload(frame.payload, { isRemote: true, serverUrl }));
@@ -266,12 +311,14 @@ function createSseRelay(path: string, eventChannelMap: Record<string, string>, l
         res.on('end', () => {
           mainLog(`${logLabel} stream ${serverUrl} ended`);
           connections.delete(serverUrl);
+          scheduleReconnect(serverUrl);
         });
       }
     );
     req.on('error', (err: Error) => {
       mainLog(`${logLabel} stream ${serverUrl} error:`, errMsg(err));
       connections.delete(serverUrl);
+      scheduleReconnect(serverUrl);
     });
     req.end();
 
@@ -283,7 +330,29 @@ function createSseRelay(path: string, eventChannelMap: Record<string, string>, l
 }
 
 const networkStreamRelay = createSseRelay('/network/stream', NETWORK_STREAM_EVENT_CHANNEL, '[Remote Network Inspector]');
-const debuggerStreamRelay = createSseRelay('/debugger/stream', DEBUGGER_STREAM_EVENT_CHANNEL, '[Remote Debugger]');
+// While a debugger is attached, Roku routes the channel's print output to the debugger's IO port
+// instead of 8085 — the Fiddle terminal (fed from telnet chunks) went blank the moment its run
+// attached. Fan a remote session's `output` frames out to Fiddle windows as terminal data, tagged
+// with the remote connectionId the Fiddle already filters on. Lazy require: fiddle-window imports
+// this module (holder release on window close), so a top-level import would be a cycle.
+const debuggerStreamRelay = createSseRelay('/debugger/stream', DEBUGGER_STREAM_EVENT_CHANNEL, '[Remote Debugger]', (frame, serverUrl) => {
+  // The Ports window's read-only 8081 tab: every decoded control-port frame, plus session state so
+  // the tab can say attached / not attached. Neither is in DEBUGGER_STREAM_EVENT_CHANNEL for `wire`
+  // (the main window has no use for per-frame traffic).
+  // The Ports window's 8081 tab hosts the Console tab's debugger sidebar plus a protocol trace, so
+  // it gets every mapped frame (the main window has no listener for `wire`, hence not in the map).
+  const portsChannel = frame.type === 'wire' ? IPC.DebuggerWire : DEBUGGER_STREAM_EVENT_CHANNEL[frame.type];
+  if (portsChannel) broadcastToPortTerminals(portsChannel, tagSseFramePayload(frame.payload, { isRemote: true, serverUrl }));
+  if (frame.type !== 'output') return;
+  const p = frame.payload as { ip?: unknown; text?: unknown } | null;
+  if (!p || typeof p.ip !== 'string' || typeof p.text !== 'string') return;
+  (require('../fiddle-window') as typeof import('../fiddle-window')).broadcastFiddleTerminalData({
+    ip: p.ip,
+    data: p.text,
+    isRemote: true,
+    connectionId: debugTelnetConnectionId({ ip: p.ip, isRemote: true, serverUrl })
+  });
+});
 
 /** Translate the remote server's `{ success, data, error }` envelope to the `{ ok, data,
  *  error }` shape the renderer's debug sidebar already expects from the local IPC surface
@@ -663,6 +732,116 @@ export async function launchOnRemote(
 /**
  * Setup remote server IPC handlers
  */
+// ── Remote telnet system console pool (8080 / 8087) ───────────────────────────────────────────
+// The socket lives on the relay server; this side tracks which `${serverUrl}|${ip}:${port}` it has
+// asked the relay to open, and runs ONE poll loop per connection that drains the relay's
+// return-and-clear buffer and pushes it on the same `TelnetSystemData` channel the local pool uses.
+// Exactly one poller matters: the Ports window and a Query command polling separately would steal
+// each other's bytes.
+
+type RemoteSystemTelnetConn = {
+  serverUrl: string;
+  ip: string;
+  port: number;
+  heldByWindow: boolean;
+  timer: ReturnType<typeof setTimeout> | null;
+  stopped: boolean;
+};
+
+const REMOTE_SYSTEM_TELNET_POLL_MS = 200;
+const remoteSystemPool = createHeldPool<RemoteSystemTelnetConn>();
+const remoteSystemTelnetConnections = remoteSystemPool.entries;
+
+function remoteSystemTelnetKey(serverUrl: string, ip: string, port: number): string {
+  return `${serverUrl}|${systemTelnetConnectionId(ip, port)}`;
+}
+
+/** `/device/<ip>/telnet-system/<op>?port=<port>` — the relay defaults to 8080 when absent, so older
+ *  relays keep working for 8080 (they ignore the query string). */
+function systemTelnetPath(ip: string, op: string, port: number): string {
+  return devicePath(ip, `${op}?port=${port}`);
+}
+
+function emitRemoteSystemTelnet(channel: string, conn: RemoteSystemTelnetConn, extra: Record<string, unknown>): void {
+  const payload = {
+    ip: conn.ip,
+    port: conn.port,
+    connectionId: systemTelnetConnectionId(conn.ip, conn.port),
+    isRemote: true,
+    serverUrl: conn.serverUrl,
+    ...extra
+  };
+  moduleSafeSendToRenderer?.(channel, payload);
+  broadcastToPortTerminals(channel, payload);
+}
+
+function stopRemoteSystemTelnet(conn: RemoteSystemTelnetConn, announce: boolean): void {
+  if (conn.stopped) return;
+  conn.stopped = true;
+  if (conn.timer) clearTimeout(conn.timer);
+  conn.timer = null;
+  const key = remoteSystemTelnetKey(conn.serverUrl, conn.ip, conn.port);
+  if (remoteSystemTelnetConnections.get(key) === conn) remoteSystemTelnetConnections.delete(key);
+  if (announce) emitRemoteSystemTelnet(IPC.TelnetSystemDisconnected, conn, { hadError: false });
+}
+
+async function pollRemoteSystemTelnet(conn: RemoteSystemTelnetConn): Promise<void> {
+  if (conn.stopped) return;
+  const r = await remoteHttpRequest(conn.serverUrl, systemTelnetPath(conn.ip, '/telnet-system/data', conn.port), 'GET', null, 5000);
+  if (conn.stopped) return;
+  if (r && r.success) {
+    if (typeof r.data === 'string' && r.data) emitRemoteSystemTelnet(IPC.TelnetSystemData, conn, { data: r.data });
+  } else if (r && r.error === 'Not connected') {
+    // The relay dropped the Roku socket (device reboot, its 30-min idle sweep) — surface it as a
+    // disconnect so the Ports window offers Reconnect and one-shot consumers dial fresh next time.
+    mainLog('[Remote Telnet System] relay reports not connected:', conn.ip, conn.port);
+    stopRemoteSystemTelnet(conn, true);
+    return;
+  }
+  // Any other failure is a transient relay/network blip — keep polling.
+  conn.timer = setTimeout(() => void pollRemoteSystemTelnet(conn), REMOTE_SYSTEM_TELNET_POLL_MS);
+}
+
+/** Remote twin of `connectSystemTelnet` (telnet-handlers.ts): same pool contract; the entry is a
+ *  poll loop against the relay, which holds the actual Roku socket. */
+export function connectRemoteSystemTelnet(serverUrl: string, ip: string, port: number, holder?: SystemTelnetHolder): Promise<SystemTelnetConnectResult> {
+  return remoteSystemPool.connect(remoteSystemTelnetKey(serverUrl, ip, port), holder, {
+    connectionId: systemTelnetConnectionId(ip, port),
+    healthy: (e) => !e.stopped,
+    dial: async () => {
+      const r = await remoteHttpRequest(serverUrl, systemTelnetPath(ip, '/telnet-system/connect', port), 'POST');
+      if (!r || !r.success) return { success: false, error: (r && r.error) || 'Failed to connect' };
+      const conn: RemoteSystemTelnetConn = { serverUrl, ip, port, heldByWindow: false, timer: null, stopped: false };
+      conn.timer = setTimeout(() => void pollRemoteSystemTelnet(conn), REMOTE_SYSTEM_TELNET_POLL_MS);
+      return { success: true, entry: conn };
+    }
+  });
+}
+
+export function disconnectRemoteSystemTelnet(serverUrl: string, ip: string, port: number, holder?: SystemTelnetHolder): Promise<{ success: true; held?: boolean }> {
+  return remoteSystemPool.disconnect(remoteSystemTelnetKey(serverUrl, ip, port), holder, async (conn) => {
+    stopRemoteSystemTelnet(conn, false);
+    await remoteHttpRequest(serverUrl, systemTelnetPath(ip, '/telnet-system/disconnect', port), 'POST');
+    emitRemoteSystemTelnet(IPC.TelnetSystemDisconnected, conn, { hadError: false });
+  });
+}
+
+export async function sendRemoteSystemTelnet(serverUrl: string, ip: string, port: number, command: string): Promise<{ success: boolean; error?: string }> {
+  return await remoteHttpRequest(serverUrl, systemTelnetPath(ip, '/telnet-system/send', port), 'POST', { command });
+}
+
+/** Lease the server-wide debugger SSE stream for a Ports window's 8081 tab, so wire frames flow
+ *  even when no device panel for that server is open. Same holder ref-count the panels use. */
+export function holdRemoteDebuggerStream(serverUrl: string, holder: string): { success: boolean; error?: string } {
+  const res = debuggerStreamRelay.connections.has(serverUrl) ? { success: true } : debuggerStreamRelay.establish(serverUrl);
+  if (res.success) debuggerStreamRelay.addHolder(serverUrl, holder);
+  return res;
+}
+
+export function releaseRemoteDebuggerStream(serverUrl: string, holder: string): void {
+  void debuggerStreamRelay.removeHolder(serverUrl, holder);
+}
+
 function setupRemoteHandlers(mainWindow: BrowserWindow | undefined, safeSendToRenderer: SafeSendFn) {
   const { ipcMain, dialog, BrowserWindow } = require('electron') as typeof import('electron');
   moduleMainWindow = mainWindow;
@@ -961,12 +1140,6 @@ function setupRemoteHandlers(mainWindow: BrowserWindow | undefined, safeSendToRe
     return await remoteHttpRequest(serverUrl, devicePath(ip, '/verify-dev-auth'), 'POST', { password });
   });
 
-  // Sideload via remote server (file must be on remote server)
-  ipcMain.handle(IPC.RemoteSideload, async (_event: IpcMainInvokeEvent, payload: RemoteSideloadPayload) => {
-    const { serverUrl, ip, filePath, password } = payload;
-    return await remoteHttpRequest(serverUrl, devicePath(ip, '/sideload'), 'POST', { filePath, password });
-  });
-
   // Sideload via remote server with file upload from local machine. filePath must be under allowed dirs.
   ipcMain.handle(IPC.RemoteSideloadUpload, async (_event: IpcMainInvokeEvent, payload: RemoteSideloadPayload) => {
     const { serverUrl, ip, filePath, password, remoteDebug, serial } = payload;
@@ -998,12 +1171,8 @@ function setupRemoteHandlers(mainWindow: BrowserWindow | undefined, safeSendToRe
     }
     if (debugEnabled && sideloadSucceeded) {
       try {
-        (require('roku-dev-studio-api/lib/debugger/scan-stops') as {
-          rememberSideloadZip: (ip: string, p: string) => void;
-        }).rememberSideloadZip(ip, resolved);
-        (require('./debugger-handlers') as {
-          notifyDebuggerReattach: (ip: string, extra?: { discovered?: number; isRemote?: boolean; serverUrl?: string }) => void;
-        }).notifyDebuggerReattach(ip, { discovered, isRemote: true, serverUrl });
+        rememberDebugZip(ip, resolved);
+        notifyDebuggerReattach(ip, { discovered, isRemote: true, serverUrl });
       } catch {
         /* best-effort */
       }
@@ -1017,21 +1186,14 @@ function setupRemoteHandlers(mainWindow: BrowserWindow | undefined, safeSendToRe
   ipcMain.handle(IPC.RemoteDebuggerRestart, async (_event: IpcMainInvokeEvent, payload: { serverUrl: string; ip: string; password?: string }) => {
     const { serverUrl, ip, password } = payload;
     if (!isSafeRelayUrl(serverUrl)) return { success: false, error: 'Invalid relay server URL' };
-    const scan = require('roku-dev-studio-api/lib/debugger/scan-stops') as {
-      getRememberedZip: (ip: string) => string | undefined;
-      rememberSideloadZip: (ip: string, p: string) => void;
-    };
-    const zip = scan.getRememberedZip(ip);
-    if (!zip) return { success: false, error: 'No previous debug sideload to restart. Sideload with Debugging first.' };
-    if (!fs.existsSync(zip)) return { success: false, error: 'The previous debug build is no longer on disk. Sideload again.' };
+    const zip = recallDebugZip(ip);
+    if (!zip) return { success: false, error: S.debugger.errNoPreviousDebugSideload };
+    if (!fs.existsSync(zip)) return { success: false, error: S.debugger.errPreviousDebugBuildMissing };
     mainLog(`[remote sideload] restart server=${serverUrl} ip=${ip} remotedebug=1`);
     const result = await sideloadFileToRemote(serverUrl, ip, zip, password || '', true);
     if (result && result.success !== false) {
       try {
-        scan.rememberSideloadZip(ip, zip);
-        (require('./debugger-handlers') as {
-          notifyDebuggerReattach: (ip: string, extra?: { isRemote?: boolean; serverUrl?: string }) => void;
-        }).notifyDebuggerReattach(ip, { isRemote: true, serverUrl });
+        notifyDebuggerReattach(ip, { isRemote: true, serverUrl }); // zip already remembered under the device key
       } catch {
         /* best-effort */
       }
@@ -1211,36 +1373,38 @@ function setupRemoteHandlers(mainWindow: BrowserWindow | undefined, safeSendToRe
     return await remoteHttpRequest(serverUrl, devicePath(ip, '/telnet/clear-buffer'), 'POST');
   });
 
-  // ============================================
-  // Remote Telnet System Commands (Port 8080)
-  // ============================================
 
-  // Connect to remote telnet system (port 8080)
-  ipcMain.handle(IPC.RemoteTelnetSystemConnect, async (_event: IpcMainInvokeEvent, { serverUrl, ip }: RemoteDevicePayload) => {
-    return await remoteHttpRequest(serverUrl, devicePath(ip, '/telnet-system/connect'), 'POST');
+  // ============================================
+  // Remote Telnet System Consoles (8080 / 8087)
+  // ============================================
+  // One-shot consumer entry points — same reuse/no-op-disconnect contract as the local pool in
+  // telnet-handlers.ts. Data is pushed (main polls the relay's buffer itself, see
+  // `connectRemoteSystemTelnet`); the renderer never polls.
+
+  ipcMain.handle(IPC.RemoteTelnetSystemConnect, async (_event: IpcMainInvokeEvent, { serverUrl, ip, port }: RemoteDevicePayload & { port?: number }) => {
+    const p = normalizeSystemTelnetPort(port);
+    if (p === null) return { success: false, error: 'Unsupported port' };
+    return connectRemoteSystemTelnet(serverUrl, ip, p);
   });
 
-  // Disconnect from remote telnet system
-  ipcMain.handle(IPC.RemoteTelnetSystemDisconnect, async (_event: IpcMainInvokeEvent, { serverUrl, ip }: RemoteDevicePayload) => {
-    return await remoteHttpRequest(serverUrl, devicePath(ip, '/telnet-system/disconnect'), 'POST');
+  ipcMain.handle(IPC.RemoteTelnetSystemDisconnect, async (_event: IpcMainInvokeEvent, { serverUrl, ip, port }: RemoteDevicePayload & { port?: number }) => {
+    const p = normalizeSystemTelnetPort(port);
+    if (p === null) return { success: false, error: 'Unsupported port' };
+    return disconnectRemoteSystemTelnet(serverUrl, ip, p);
   });
 
-  // Send command to remote telnet system
   ipcMain.handle(IPC.RemoteTelnetSystemSend, async (
     _event: IpcMainInvokeEvent,
-    { serverUrl, ip, command }: RemoteDevicePayload & { command: string }
+    { serverUrl, ip, port, command }: RemoteDevicePayload & { port?: number; command: string }
   ) => {
-    return await remoteHttpRequest(serverUrl, devicePath(ip, '/telnet-system/send'), 'POST', { command });
+    const p = normalizeSystemTelnetPort(port);
+    if (p === null) return { success: false, error: 'Unsupported port' };
+    return sendRemoteSystemTelnet(serverUrl, ip, p, command);
   });
 
-  // Get remote telnet system status
-  ipcMain.handle(IPC.RemoteTelnetSystemStatus, async (_event: IpcMainInvokeEvent, { serverUrl, ip }: RemoteDevicePayload) => {
-    return await remoteHttpRequest(serverUrl, devicePath(ip, '/telnet-system/status'), 'GET');
-  });
-
-  // Poll data from remote telnet system
-  ipcMain.handle(IPC.RemoteTelnetSystemPollData, async (_event: IpcMainInvokeEvent, { serverUrl, ip }: RemoteDevicePayload) => {
-    return await remoteHttpRequest(serverUrl, devicePath(ip, '/telnet-system/data'), 'GET');
+  ipcMain.handle(IPC.RemoteTelnetSystemStatus, async (_event: IpcMainInvokeEvent, { serverUrl, ip, port }: RemoteDevicePayload & { port?: number }) => {
+    const p = normalizeSystemTelnetPort(port) ?? SYSTEM_TELNET_DEFAULT_PORT;
+    return await remoteHttpRequest(serverUrl, systemTelnetPath(ip, '/telnet-system/status', p), 'GET');
   });
 }
 

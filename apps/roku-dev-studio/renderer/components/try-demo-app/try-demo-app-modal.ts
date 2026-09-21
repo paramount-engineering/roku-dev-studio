@@ -7,7 +7,7 @@
  * in-process (this modal lives in the main window, not a separate one), so
  * `rescan` is synchronous rather than an async IPC round-trip.
  */
-import { escapeHtml, setSafeHTML } from '../../modules/utils/index.js';
+import { escapeHtml, setErrorLine, setSafeHTML } from '../../modules/utils/index.js';
 import { attachBackdropClickToClose } from '../../modules/utils/modal-backdrop-click.js';
 import {
   prepareModalOpenOrigin,
@@ -21,6 +21,7 @@ export interface TryDemoAppDeviceOption {
   id: string;
   label: string;
   ip: string;
+  serial?: string;
   isRemote: boolean;
   serverUrl?: string | null;
   password?: string;
@@ -80,15 +81,9 @@ export function openTryDemoAppModal(opts: {
     if (e.key === 'Escape') settle();
   };
 
-  function showError(message: string): void {
-    errorEl.textContent = message;
-    errorEl.hidden = false;
-  }
-
-  function clearError(): void {
-    errorEl.hidden = true;
-    errorEl.textContent = '';
-  }
+  const dialog = overlay.querySelector('.try-demo-app-modal');
+  const showError = (message: string): void => setErrorLine(dialog, errorEl, message);
+  const clearError = (): void => setErrorLine(dialog, errorEl, '');
 
   function render(next: TryDemoAppDeviceOption[]): void {
     devices = next;
@@ -131,6 +126,7 @@ export function openTryDemoAppModal(opts: {
     try {
       const result = await window.roku.launchDemoApp({
         ip: device.ip,
+        serial: device.serial,
         isRemote: device.isRemote,
         serverUrl: device.serverUrl,
         password: device.password || ''

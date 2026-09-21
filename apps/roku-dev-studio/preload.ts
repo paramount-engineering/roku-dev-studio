@@ -1,5 +1,6 @@
 import type { IpcRendererEvent } from 'electron';
 import { IPC } from './shared/ipc/channels';
+import { debuggerBridge } from './shared/ipc/debugger-bridge';
 import type { ActionScriptWriteFilePayload } from './shared/ipc/payloads';
 
 const { contextBridge, ipcRenderer, webUtils } = require('electron');
@@ -116,7 +117,7 @@ contextBridge.exposeInMainWorld('roku', {
     ipcRenderer.invoke(IPC.RokuSideload, { ip, filePath, password, remoteDebug, serial }),
   deleteSideload: (ip: string, password: string | undefined) =>
     ipcRenderer.invoke(IPC.RokuDeleteSideload, { ip, password }),
-  launchDemoApp: (payload: { ip: string; isRemote?: boolean; serverUrl?: string | null; password: string }) =>
+  launchDemoApp: (payload: { ip: string; serial?: string; isRemote?: boolean; serverUrl?: string | null; password: string }) =>
     ipcRenderer.invoke(IPC.DemoAppLaunch, payload),
   /** The Settings window's "Demo App" button asked main to open the picker here. */
   onDemoAppOpenRequested: (callback: () => void) => {
@@ -136,9 +137,14 @@ contextBridge.exposeInMainWorld('roku', {
     ipcRenderer.invoke(IPC.RokuScreenshot, { ip, password, waitAfterTriggerMs: options?.waitAfterTriggerMs }),
   verifyDevAuth: (ip: string, password: string | undefined) =>
     ipcRenderer.invoke(IPC.RokuVerifyDevAuth, { ip, password }),
-  saveScreenshot: (tempFile: string, dataUrl: string) => 
+  saveScreenshot: (tempFile: string, dataUrl: string) =>
     ipcRenderer.invoke(IPC.RokuSaveScreenshot, { tempFile, dataUrl }),
-  
+  // Session-gallery screenshot storage — persists a capture that has no device-written file of
+  // its own (canvas frame-grab / agent-driven) to a temp file, and deletes a temp file once its
+  // history entry is cleared or its device tab disconnects. See screenshots.ts.
+  persistScreenshotDataUrl: (dataUrl: string) => ipcRenderer.invoke(IPC.PersistScreenshotDataUrl, { dataUrl }),
+  deleteScreenshotTempFile: (tempFile: string) => ipcRenderer.invoke(IPC.DeleteScreenshotTempFile, { tempFile }),
+
   // Deep link to content
   deeplink: (ip: string, appId: string, contentId: string, mediaType?: string, params?: Record<string, string>) =>
     ipcRenderer.invoke(IPC.RokuDeeplink, { ip, appId, contentId, mediaType, params }),
@@ -301,8 +307,132 @@ contextBridge.exposeInMainWorld('roku', {
     ipcRenderer.invoke(IPC.RemoteHealth, { serverUrl }),
 
   // Get server capabilities/features
-  remoteCapabilities: (serverUrl: string) => 
+  remoteCapabilities: (serverUrl: string) =>
     ipcRenderer.invoke(IPC.RemoteCapabilities, { serverUrl }),
+
+  // Roku Cloud Emulator (RCE) — Phase 1: account add/validate, device listing.
+  rceValidateToken: (token: string) => ipcRenderer.invoke(IPC.RceValidateToken, { token }),
+  rceAddAccount: (name: string, token: string) => ipcRenderer.invoke(IPC.RceAddAccount, { name, token }),
+  rceRemoveAccount: (name: string) => ipcRenderer.invoke(IPC.RceRemoveAccount, { name }),
+  rceListAccounts: () => ipcRenderer.invoke(IPC.RceListAccounts),
+  // User/org info + quota (GET /user/me) for the "User Info" button on an RCE location.
+  rceGetUserInfo: (name: string) => ipcRenderer.invoke(IPC.RceGetUserInfo, { name }),
+  rceGetUsage: (name: string, start: string, end: string, interval: '1h' | '24h' | '1w' | '1mo') =>
+    ipcRenderer.invoke(IPC.RceGetUsage, { name, start, end, interval }),
+  rceListDevices: (name: string) => ipcRenderer.invoke(IPC.RceListDevices, { name }),
+  rceGetDevice: (name: string, deviceId: number) => ipcRenderer.invoke(IPC.RceGetDevice, { name, deviceId }),
+  rceStartDevice: (
+    name: string,
+    deviceId: number,
+    hint?: {
+      deviceType?: string | null;
+      /** Explicit pick from the "Run device" modal's snapshot dropdown — overrides the default. */
+      snapshotId?: number | null;
+      /** Explicit pick from the "Run device" modal's firmware dropdown — overrides deriving it
+       *  from the chosen snapshot, since a snapshot's own recorded firmware can be retired
+       *  entirely (not just mismatched) on Roku's side. */
+      firmwareVersionId?: string | null;
+      /** Explicit pick from the "Run device" modal's Max Run Time fields, in seconds. */
+      maxRuntimeSeconds?: number | null;
+    }
+  ) => ipcRenderer.invoke(IPC.RceStartDevice, { name, deviceId, ...hint }),
+  rceStopDevice: (name: string, deviceId: number) => ipcRenderer.invoke(IPC.RceStopDevice, { name, deviceId }),
+  // "Run device" modal's snapshot dropdown (GET /devices/{id}/snapshots).
+  rceListSnapshots: (name: string, deviceId: number) => ipcRenderer.invoke(IPC.RceListSnapshots, { name, deviceId }),
+  // Account-wide firmware list, all device types in one call — fetched once per location on
+  // connect (renderer's refreshRceLocation) and cached, not per-device like snapshots.
+  rceListFirmwareVersions: (name: string) => ipcRenderer.invoke(IPC.RceListFirmwareVersions, { name }),
+
+  // ECP over an RCE instance's Device API — see rce-handlers.ts for why `instanceApiUrl` travels
+  // with every call instead of being cached main-process-side.
+  rceKeypress: (name: string, instanceApiUrl: string, key: string) =>
+    ipcRenderer.invoke(IPC.RceKeypress, { name, instanceApiUrl, key }),
+  rceDevSettingsCombo: (name: string, instanceApiUrl: string) =>
+    ipcRenderer.invoke(IPC.RceDevSettingsCombo, { name, instanceApiUrl }),
+  rceLaunch: (name: string, instanceApiUrl: string, appId: string, params?: string) =>
+    ipcRenderer.invoke(IPC.RceLaunch, { name, instanceApiUrl, appId, params }),
+  rceQuery: (name: string, instanceApiUrl: string, endpoint: string) =>
+    ipcRenderer.invoke(IPC.RceQuery, { name, instanceApiUrl, endpoint }),
+  rcePost: (name: string, instanceApiUrl: string, endpoint: string) =>
+    ipcRenderer.invoke(IPC.RcePost, { name, instanceApiUrl, endpoint }),
+  rceInputText: (name: string, instanceApiUrl: string, text: string) =>
+    ipcRenderer.invoke(IPC.RceInputText, { name, instanceApiUrl, text }),
+  rceDeeplink: (name: string, instanceApiUrl: string, appId: string, contentId?: string, mediaType?: string, params?: Record<string, string>) =>
+    ipcRenderer.invoke(IPC.RceDeeplink, { name, instanceApiUrl, appId, contentId, mediaType, params }),
+  rceGetIcon: (name: string, instanceApiUrl: string, appId: string) =>
+    ipcRenderer.invoke(IPC.RceGetIcon, { name, instanceApiUrl, appId }),
+  rceGetHardwareImage: (name: string, instanceApiUrl: string) =>
+    ipcRenderer.invoke(IPC.RceGetHardwareImage, { name, instanceApiUrl }),
+  rceScreenshot: (name: string, instanceApiUrl: string, password: string | undefined, options: { waitAfterTriggerMs?: number } | undefined) =>
+    ipcRenderer.invoke(IPC.RceScreenshot, { name, instanceApiUrl, password, waitAfterTriggerMs: options?.waitAfterTriggerMs }),
+  rceVerifyDevAuth: (name: string, instanceApiUrl: string, password: string | undefined) =>
+    ipcRenderer.invoke(IPC.RceVerifyDevAuth, { name, instanceApiUrl, password }),
+
+  // Telnet system console (port 8080) via the Device API's ports-bridge. Data arrives on the
+  // existing `onTelnetSystemData` listener (below) — no separate RCE listener needed.
+  rceTelnetSystemConnect: (name: string, instanceApiUrl: string, ip: string) =>
+    ipcRenderer.invoke(IPC.RceTelnetSystemConnect, { name, instanceApiUrl, ip }),
+  rceTelnetSystemDisconnect: (ip: string) =>
+    ipcRenderer.invoke(IPC.RceTelnetSystemDisconnect, { ip }),
+  rceTelnetSystemSend: (ip: string, command: string) =>
+    ipcRenderer.invoke(IPC.RceTelnetSystemSend, { ip, command }),
+
+  // BrightScript debug console (port 8085) via the same ports-bridge. Data arrives on the
+  // existing `onTelnetData`/`onTelnetConnected`/`onTelnetDisconnected`/`onTelnetError` listeners
+  // the Console tab already uses for physical/LAN devices — no separate RCE listener needed.
+  rceTelnetConnect: (name: string, instanceApiUrl: string, ip: string) =>
+    ipcRenderer.invoke(IPC.RceTelnetConnect, { name, instanceApiUrl, ip }),
+  rceTelnetDisconnect: (ip: string) => ipcRenderer.invoke(IPC.RceTelnetDisconnect, { ip }),
+
+  // App Connector (RALE, port 49200) via the same ports-bridge. Wake and connect are RCE-specific;
+  // once connected, the device's synthetic `ip` IS the connectionId, so raleCommand/raleDisconnect
+  // above (the local-device RALE IPC, already connectionId-generic) are reused unchanged.
+  rceRaleWake: (name: string, instanceApiUrl: string, port: number) =>
+    ipcRenderer.invoke(IPC.RceRaleWake, { name, instanceApiUrl, port }),
+  rceRaleConnect: (name: string, instanceApiUrl: string, ip: string, port: number) =>
+    ipcRenderer.invoke(IPC.RceRaleConnect, { name, instanceApiUrl, ip, port }),
+
+  // Sideload (design doc §6 item 7) — POST /sideload/plugin_install on the Device API.
+  rceSideload: (name: string, instanceApiUrl: string, filePath: string, password: string, remoteDebug?: boolean, ip?: string) =>
+    ipcRenderer.invoke(IPC.RceSideload, { name, instanceApiUrl, filePath, password, remoteDebug, ip }),
+  rceDeleteSideload: (name: string, instanceApiUrl: string, password: string) =>
+    ipcRenderer.invoke(IPC.RceDeleteSideload, { name, instanceApiUrl, password }),
+
+  // Live video preview (Janus/WebRTC signaling, design doc §7). The offer/status arrive on the
+  // onRceVideoOffer/onRceVideoStatus listeners below; the renderer's RTCPeerConnection answers
+  // back through rceVideoAnswer/rceVideoCandidate/rceVideoCandidatesComplete.
+  rceVideoStart: (name: string, deviceId: number) => ipcRenderer.invoke(IPC.RceVideoStart, { name, deviceId }),
+  rceVideoStop: (name: string, deviceId: number) => ipcRenderer.invoke(IPC.RceVideoStop, { name, deviceId }),
+  rceVideoAnswer: (name: string, deviceId: number, answer: { type: string; sdp: string }) =>
+    ipcRenderer.invoke(IPC.RceVideoAnswer, { name, deviceId, answer }),
+  rceVideoCandidate: (name: string, deviceId: number, candidate: unknown) =>
+    ipcRenderer.invoke(IPC.RceVideoCandidate, { name, deviceId, candidate }),
+  rceVideoCandidatesComplete: (name: string, deviceId: number) =>
+    ipcRenderer.invoke(IPC.RceVideoCandidatesComplete, { name, deviceId }),
+  onRceVideoOffer: (
+    callback: (payload: { name: string; deviceId: number; offer: { type: string; sdp: string }; iceServers: unknown[] }) => void
+  ) => {
+    const handler = (
+      _event: IpcRendererEvent,
+      payload: { name: string; deviceId: number; offer: { type: string; sdp: string }; iceServers: unknown[] }
+    ) => callback(payload);
+    ipcRenderer.on(IPC.RceVideoOffer, handler);
+    return () => ipcRenderer.removeListener(IPC.RceVideoOffer, handler);
+  },
+  onRceVideoStatus: (callback: (payload: { name: string; deviceId: number; status: string; error?: string }) => void) => {
+    const handler = (_event: IpcRendererEvent, payload: { name: string; deviceId: number; status: string; error?: string }) => callback(payload);
+    ipcRenderer.on(IPC.RceVideoStatus, handler);
+    return () => ipcRenderer.removeListener(IPC.RceVideoStatus, handler);
+  },
+
+  // Push-based RCE device state (design doc §5)
+  rceWatchDeviceState: (name: string, deviceId: number) => ipcRenderer.invoke(IPC.RceWatchDeviceState, { name, deviceId }),
+  rceUnwatchDeviceState: (name: string, deviceId: number) => ipcRenderer.invoke(IPC.RceUnwatchDeviceState, { name, deviceId }),
+  onRceDeviceStateChanged: (callback: (payload: { name: string; deviceId: number; stateVersion: number; device: unknown }) => void) => {
+    const handler = (_event: IpcRendererEvent, payload: { name: string; deviceId: number; stateVersion: number; device: unknown }) => callback(payload);
+    ipcRenderer.on(IPC.RceDeviceStateChanged, handler);
+    return () => ipcRenderer.removeListener(IPC.RceDeviceStateChanged, handler);
+  },
 
   // Remote Network Inspector (proxies the server's /network/* endpoints)
   remoteNetworkStatus: (serverUrl: string) =>
@@ -386,13 +516,9 @@ contextBridge.exposeInMainWorld('roku', {
   remoteVerifyDevAuth: (serverUrl: string, ip: string, password: string | undefined) =>
     ipcRenderer.invoke(IPC.RemoteVerifyDevAuth, { serverUrl, ip, password }),
 
-  // Sideload via remote server (file must be on remote server)
-  remoteSideload: (serverUrl: string, ip: string, filePath: string, password: string | undefined) => 
-    ipcRenderer.invoke(IPC.RemoteSideload, { serverUrl, ip, filePath, password }),
-  
   // Sideload via remote server with file upload from local machine. remoteDebug/serial
   // mirror the local `sideload(ip, filePath, password, remoteDebug, serial)` signature —
-  // previously dropped here, which silently prevented "Sideload with Debugging" from
+  // previously dropped here, which silently prevented "Enable Debugger" from
   // ever opening port 8081 on a remote-managed device.
   remoteSideloadUpload: (serverUrl: string, ip: string, filePath: string, password: string | undefined, remoteDebug?: boolean, serial?: string) =>
     ipcRenderer.invoke(IPC.RemoteSideloadUpload, { serverUrl, ip, filePath, password, remoteDebug, serial }),
@@ -426,6 +552,8 @@ contextBridge.exposeInMainWorld('roku', {
   
   // Disconnect local telnet
   telnetDisconnect: (ip: string) => ipcRenderer.invoke(IPC.TelnetDisconnect, { ip }),
+  /** One-way: a device tab was closed — main runs its per-device cleanup (removes our Fiddle channel). */
+  deviceTabClosed: (ip: string) => ipcRenderer.send(IPC.DeviceTabClosed, { ip }),
   
   // Send command to local telnet
   telnetSend: (ip: string, command: string) => ipcRenderer.invoke(IPC.TelnetSend, { ip, command }),
@@ -456,22 +584,19 @@ contextBridge.exposeInMainWorld('roku', {
   remoteTelnetClearBuffer: (serverUrl: string, ip: string) =>
     ipcRenderer.invoke(IPC.RemoteTelnetClearBuffer, { serverUrl, ip }),
   
-  // Telnet System Commands (port 8080) - Remote via IPC
-  remoteTelnetSystemConnect: (serverUrl: string, ip: string) => 
-    ipcRenderer.invoke(IPC.RemoteTelnetSystemConnect, { serverUrl, ip }),
-  
-  remoteTelnetSystemDisconnect: (serverUrl: string, ip: string) => 
-    ipcRenderer.invoke(IPC.RemoteTelnetSystemDisconnect, { serverUrl, ip }),
-  
-  remoteTelnetSystemSend: (serverUrl: string, ip: string, command: string) => 
-    ipcRenderer.invoke(IPC.RemoteTelnetSystemSend, { serverUrl, ip, command }),
-  
-  remoteTelnetSystemStatus: (serverUrl: string, ip: string) => 
-    ipcRenderer.invoke(IPC.RemoteTelnetSystemStatus, { serverUrl, ip }),
-  
-  // Poll for telnet system data (remote devices use polling instead of events)
-  remoteTelnetSystemPollData: (serverUrl: string, ip: string) => 
-    ipcRenderer.invoke(IPC.RemoteTelnetSystemPollData, { serverUrl, ip }),
+  // Telnet system consoles (8080 default / 8087) — Remote via IPC. Data is pushed on the same
+  // `onTelnetSystemData` listener local devices use (main polls the relay's buffer itself).
+  remoteTelnetSystemConnect: (serverUrl: string, ip: string, port?: number) =>
+    ipcRenderer.invoke(IPC.RemoteTelnetSystemConnect, { serverUrl, ip, port }),
+
+  remoteTelnetSystemDisconnect: (serverUrl: string, ip: string, port?: number) =>
+    ipcRenderer.invoke(IPC.RemoteTelnetSystemDisconnect, { serverUrl, ip, port }),
+
+  remoteTelnetSystemSend: (serverUrl: string, ip: string, command: string, port?: number) =>
+    ipcRenderer.invoke(IPC.RemoteTelnetSystemSend, { serverUrl, ip, command, port }),
+
+  remoteTelnetSystemStatus: (serverUrl: string, ip: string, port?: number) =>
+    ipcRenderer.invoke(IPC.RemoteTelnetSystemStatus, { serverUrl, ip, port }),
   
   // Listen for telnet events
   onTelnetConnected: (callback: (data: unknown) => void) => {
@@ -505,120 +630,43 @@ contextBridge.exposeInMainWorld('roku', {
   },
 
   // ============================================
-  // BrightScript Debugger (debug protocol, port 8081)
+  // BrightScript Debugger (debug protocol, port 8081) — local + remote session control, push events
   // ============================================
-  debuggerAttach: (ip: string) => ipcRenderer.invoke(IPC.DebuggerAttach, { ip }),
-  debuggerDetach: (ip: string) => ipcRenderer.invoke(IPC.DebuggerDetach, { ip }),
-  debuggerStatus: (ip: string) => ipcRenderer.invoke(IPC.DebuggerStatus, { ip }),
-  debuggerScanStops: (ip: string) => ipcRenderer.invoke(IPC.DebuggerScanStops, { ip }),
-  debuggerRestart: (ip: string, password: string) => ipcRenderer.invoke(IPC.DebuggerRestart, { ip, password }),
-  debuggerContinue: (ip: string) => ipcRenderer.invoke(IPC.DebuggerContinue, { ip }),
-  debuggerPause: (ip: string) => ipcRenderer.invoke(IPC.DebuggerPause, { ip }),
-  debuggerStepOver: (ip: string, threadIndex?: number) => ipcRenderer.invoke(IPC.DebuggerStepOver, { ip, threadIndex }),
-  debuggerStepIn: (ip: string, threadIndex?: number) => ipcRenderer.invoke(IPC.DebuggerStepIn, { ip, threadIndex }),
-  debuggerStepOut: (ip: string, threadIndex?: number) => ipcRenderer.invoke(IPC.DebuggerStepOut, { ip, threadIndex }),
-  debuggerStackTrace: (ip: string, threadIndex?: number) => ipcRenderer.invoke(IPC.DebuggerStackTrace, { ip, threadIndex }),
-  debuggerVariables: (ip: string, opts?: { threadIndex?: number; stackFrameIndex?: number; variablePath?: string[] }) =>
-    ipcRenderer.invoke(IPC.DebuggerVariables, { ip, ...(opts || {}) }),
-  debuggerAddBreakpoints: (ip: string, breakpoints: unknown) => ipcRenderer.invoke(IPC.DebuggerAddBreakpoints, { ip, breakpoints }),
-  debuggerRemoveBreakpointsByLocation: (ip: string, locations: Array<{ filePath: string; lineNumber: number }>) =>
-    ipcRenderer.invoke(IPC.DebuggerRemoveBreakpointsByLocation, { ip, locations }),
-  debuggerExecute: (ip: string, sourceCode: string, opts?: { threadIndex?: number; stackFrameIndex?: number }) =>
-    ipcRenderer.invoke(IPC.DebuggerExecute, { ip, sourceCode, ...(opts || {}) }),
-  // Event subscriptions (each returns an unsubscribe fn).
-  onDebuggerState: (callback: (data: unknown) => void) => {
-    const handler = (_event: IpcRendererEvent, data: unknown) => callback(data);
-    ipcRenderer.on(IPC.DebuggerState, handler);
-    return () => ipcRenderer.removeListener(IPC.DebuggerState, handler);
-  },
-  onDebuggerStopped: (callback: (data: unknown) => void) => {
-    const handler = (_event: IpcRendererEvent, data: unknown) => callback(data);
-    ipcRenderer.on(IPC.DebuggerStopped, handler);
-    return () => ipcRenderer.removeListener(IPC.DebuggerStopped, handler);
-  },
-  onDebuggerOutput: (callback: (data: unknown) => void) => {
-    const handler = (_event: IpcRendererEvent, data: unknown) => callback(data);
-    ipcRenderer.on(IPC.DebuggerOutput, handler);
-    return () => ipcRenderer.removeListener(IPC.DebuggerOutput, handler);
-  },
-  onDebuggerRuntimeError: (callback: (data: unknown) => void) => {
-    const handler = (_event: IpcRendererEvent, data: unknown) => callback(data);
-    ipcRenderer.on(IPC.DebuggerRuntimeError, handler);
-    return () => ipcRenderer.removeListener(IPC.DebuggerRuntimeError, handler);
-  },
-  onDebuggerCompileErrors: (callback: (data: unknown) => void) => {
-    const handler = (_event: IpcRendererEvent, data: unknown) => callback(data);
-    ipcRenderer.on(IPC.DebuggerCompileErrors, handler);
-    return () => ipcRenderer.removeListener(IPC.DebuggerCompileErrors, handler);
-  },
-  onDebuggerBreakpoints: (callback: (data: unknown) => void) => {
-    const handler = (_event: IpcRendererEvent, data: unknown) => callback(data);
-    ipcRenderer.on(IPC.DebuggerBreakpoints, handler);
-    return () => ipcRenderer.removeListener(IPC.DebuggerBreakpoints, handler);
-  },
-  onDebuggerReattach: (callback: (data: unknown) => void) => {
-    const handler = (_event: IpcRendererEvent, data: unknown) => callback(data);
-    ipcRenderer.on(IPC.DebuggerReattach, handler);
-    return () => ipcRenderer.removeListener(IPC.DebuggerReattach, handler);
-  },
-
-  // ============================================
-  // BrightScript Debugger via remote server — the session runs on the remote
-  // server (real network access to the device); push events reuse the local
-  // onDebugger* listeners above (tagged { isRemote: true, serverUrl } by the relay).
-  // No remote equivalent for debuggerScanStops — it reads the local sideload .zip,
-  // identical for a local or remote sideload target.
-  // ============================================
-  remoteDebuggerAttach: (serverUrl: string, ip: string) => ipcRenderer.invoke(IPC.RemoteDebuggerAttach, { serverUrl, ip }),
-  remoteDebuggerDetach: (serverUrl: string, ip: string) => ipcRenderer.invoke(IPC.RemoteDebuggerDetach, { serverUrl, ip }),
-  remoteDebuggerStatus: (serverUrl: string, ip: string) => ipcRenderer.invoke(IPC.RemoteDebuggerStatus, { serverUrl, ip }),
-  remoteDebuggerRestart: (serverUrl: string, ip: string, password: string) =>
-    ipcRenderer.invoke(IPC.RemoteDebuggerRestart, { serverUrl, ip, password }),
-  remoteDebuggerContinue: (serverUrl: string, ip: string) => ipcRenderer.invoke(IPC.RemoteDebuggerContinue, { serverUrl, ip }),
-  remoteDebuggerPause: (serverUrl: string, ip: string) => ipcRenderer.invoke(IPC.RemoteDebuggerPause, { serverUrl, ip }),
-  remoteDebuggerStepOver: (serverUrl: string, ip: string, threadIndex?: number) =>
-    ipcRenderer.invoke(IPC.RemoteDebuggerStepOver, { serverUrl, ip, threadIndex }),
-  remoteDebuggerStepIn: (serverUrl: string, ip: string, threadIndex?: number) =>
-    ipcRenderer.invoke(IPC.RemoteDebuggerStepIn, { serverUrl, ip, threadIndex }),
-  remoteDebuggerStepOut: (serverUrl: string, ip: string, threadIndex?: number) =>
-    ipcRenderer.invoke(IPC.RemoteDebuggerStepOut, { serverUrl, ip, threadIndex }),
-  remoteDebuggerStackTrace: (serverUrl: string, ip: string, threadIndex?: number) =>
-    ipcRenderer.invoke(IPC.RemoteDebuggerStackTrace, { serverUrl, ip, threadIndex }),
-  remoteDebuggerVariables: (serverUrl: string, ip: string, opts?: { threadIndex?: number; stackFrameIndex?: number; variablePath?: string[] }) =>
-    ipcRenderer.invoke(IPC.RemoteDebuggerVariables, { serverUrl, ip, ...(opts || {}) }),
-  remoteDebuggerAddBreakpoints: (serverUrl: string, ip: string, breakpoints: unknown) =>
-    ipcRenderer.invoke(IPC.RemoteDebuggerAddBreakpoints, { serverUrl, ip, breakpoints }),
-  remoteDebuggerRemoveBreakpointsByLocation: (serverUrl: string, ip: string, locations: Array<{ filePath: string; lineNumber: number }>) =>
-    ipcRenderer.invoke(IPC.RemoteDebuggerRemoveBreakpointsByLocation, { serverUrl, ip, locations }),
-  remoteDebuggerExecute: (serverUrl: string, ip: string, sourceCode: string, opts?: { threadIndex?: number; stackFrameIndex?: number }) =>
-    ipcRenderer.invoke(IPC.RemoteDebuggerExecute, { serverUrl, ip, sourceCode, ...(opts || {}) }),
+  // One shared definition for both windows that host the debug sidebar (see shared/ipc/debugger-bridge.ts).
+  ...debuggerBridge(ipcRenderer),
+  // Remote server debugger event stream lease (device panels hold it while open):
   remoteDebuggerStreamConnect: (serverUrl: string, holder?: string) =>
     ipcRenderer.invoke(IPC.RemoteDebuggerStreamConnect, { serverUrl, holder }),
   remoteDebuggerStreamDisconnect: (serverUrl: string, holder?: string) =>
     ipcRenderer.invoke(IPC.RemoteDebuggerStreamDisconnect, { serverUrl, holder }),
 
   // ============================================
-  // Telnet System Commands (Port 8080)
+  // Telnet System Consoles (8080 default / 8087)
   // ============================================
-  
-  // Connect to local device telnet system (port 8080)
-  telnetSystemConnect: (ip: string) => ipcRenderer.invoke(IPC.TelnetSystemConnect, { ip }),
-  
-  // Disconnect local telnet system
-  telnetSystemDisconnect: (ip: string) => ipcRenderer.invoke(IPC.TelnetSystemDisconnect, { ip }),
-  
-  // Send command to local telnet system
-  telnetSystemSend: (ip: string, command: string) => ipcRenderer.invoke(IPC.TelnetSystemSend, { ip, command }),
-  
-  // Check local telnet system status
-  telnetSystemStatus: (ip: string) => ipcRenderer.invoke(IPC.TelnetSystemStatus, { ip }),
-  
-  // Listen for telnet system data events
+
+  // Connect to a local device text console. `{ reused: true }` means the Ports window already holds
+  // the socket (no banner follows).
+  telnetSystemConnect: (ip: string, port?: number) => ipcRenderer.invoke(IPC.TelnetSystemConnect, { ip, port }),
+
+  // Disconnect — a no-op (`{ held: true }`) while the Ports window owns the socket.
+  telnetSystemDisconnect: (ip: string, port?: number) => ipcRenderer.invoke(IPC.TelnetSystemDisconnect, { ip, port }),
+
+  // Send a command line
+  telnetSystemSend: (ip: string, command: string, port?: number) => ipcRenderer.invoke(IPC.TelnetSystemSend, { ip, command, port }),
+
+  // Check local console status
+  telnetSystemStatus: (ip: string, port?: number) => ipcRenderer.invoke(IPC.TelnetSystemStatus, { ip, port }),
+
+  // Listen for console data events — `{ ip, port, connectionId, data, isRemote?, serverUrl? }`, local and remote alike
   onTelnetSystemData: (callback: (data: unknown) => void) => {
     const handler = (_event: IpcRendererEvent, data: unknown) => callback(data);
     ipcRenderer.on(IPC.TelnetSystemData, handler);
     return () => ipcRenderer.removeListener(IPC.TelnetSystemData, handler);
   },
+
+  // Open (or focus) the Ports window for one device — the Console card header's pop-out button.
+  openPortTerminal: (device: { ip: string; kind?: 'local' | 'remote' | 'rce'; serverUrl?: string | null; accountName?: string; name?: string; serialNumber?: string; locationName?: string; debuggerSupported?: boolean }) =>
+    ipcRenderer.invoke(IPC.PortTerminalOpen, device),
 
   // ============================================
   // Settings Storage (file-based)
@@ -806,10 +854,37 @@ contextBridge.exposeInMainWorld('roku', {
     ipcRenderer.invoke(IPC.SideloadRelayApplySettings, payload),
   sideloadRelaySeedTargets: (includeSubnetScan?: boolean) =>
     ipcRenderer.invoke(IPC.SideloadRelaySeedTargets, { includeSubnetScan }),
+  sideloadRelayValidatePassword: (payload: {
+    ip: string;
+    serial?: string;
+    remote?: boolean;
+    serverUrl?: string;
+    password: string;
+  }) => ipcRenderer.invoke(IPC.SideloadRelayValidatePassword, payload),
+  sideloadRelayToggleDevice: (payload: {
+    ip: string;
+    serial?: string;
+    name?: string;
+    location?: string;
+    remote?: boolean;
+    serverUrl?: string;
+    locationId?: string;
+    enabled: boolean;
+  }) => ipcRenderer.invoke(IPC.SideloadRelayToggleDevice, payload),
   onSideloadRelayStatus: (callback: (status: unknown) => void) => {
     const handler = (_event: IpcRendererEvent, status: unknown) => callback(status);
     ipcRenderer.on(IPC.SideloadRelayStatus, handler);
     return () => ipcRenderer.removeListener(IPC.SideloadRelayStatus, handler);
+  },
+  onSideloadRelayConfigChanged: (callback: (config: unknown) => void) => {
+    const handler = (_event: IpcRendererEvent, config: unknown) => callback(config);
+    ipcRenderer.on(IPC.SideloadRelayConfigChanged, handler);
+    return () => ipcRenderer.removeListener(IPC.SideloadRelayConfigChanged, handler);
+  },
+  onSideloadRelayDeviceRemoved: (callback: (payload: { name: string }) => void) => {
+    const handler = (_event: IpcRendererEvent, payload: { name: string }) => callback(payload);
+    ipcRenderer.on(IPC.SideloadRelayDeviceRemoved, handler);
+    return () => ipcRenderer.removeListener(IPC.SideloadRelayDeviceRemoved, handler);
   },
   onSideloadRelayRunStarted: (callback: (run: unknown) => void) => {
     const handler = (_event: IpcRendererEvent, run: unknown) => callback(run);

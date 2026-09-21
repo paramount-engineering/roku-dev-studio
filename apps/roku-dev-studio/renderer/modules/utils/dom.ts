@@ -132,3 +132,20 @@ export function icon(name: string, sizeClass = 'icon-sm', colorClass = ''): stri
   const classes = ['icon', safeSize, safeColor].filter(Boolean).join(' ');
   return `<span class="${classes}"><svg><use href="#icon-${safeName}"/></svg></span>`;
 }
+
+/**
+ * Show (`message`) or clear (`''`) an inline error / feedback line that is toggled with the `hidden`
+ * attribute, tweening the dialog `surface` around the change (see {@link animateHeight}). Clearing an
+ * already-hidden line only resets its text — no measure, no tween.
+ */
+export function setErrorLine(surface: Element | null | undefined, el: HTMLElement | null | undefined, message: string): void {
+  if (!el) return;
+  if (!message && el.hidden) {
+    el.textContent = '';
+    return;
+  }
+  animateHeight(surface, () => {
+    el.textContent = message;
+    el.hidden = !message;
+  });
+}

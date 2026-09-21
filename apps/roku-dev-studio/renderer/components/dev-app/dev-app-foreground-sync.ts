@@ -49,6 +49,25 @@ export async function pollDevAppForegroundOnce(
   }
 }
 
+/** Shared retry loop behind both `...AfterLaunch` and `...AfterHome` below — a state transition
+ *  just got triggered (launch, or a Home keypress) and real foreground status lags behind it by an
+ *  unknown amount, so a single immediate query is a race, not a check. Polls until `/query/active-app`
+ *  reports the expected state or attempts run out. */
+async function pollUntilForegroundState(
+  panel: DevicePanelRoot,
+  api: DevAppApi,
+  targetActive: boolean,
+  attempts: number,
+  intervalMs: number
+): Promise<boolean> {
+  for (let i = 0; i < attempts; i++) {
+    if (i > 0) await new Promise((r) => setTimeout(r, intervalMs));
+    const active = await pollDevAppForegroundOnce(panel, api);
+    if (active === targetActive) return true;
+  }
+  return false;
+}
+
 const DEFAULT_AFTER_LAUNCH = { attempts: 8, intervalMs: 450 } as const;
 
 /**
@@ -60,12 +79,25 @@ export async function pollDevAppForegroundAfterLaunch(
   api: DevAppApi,
   opts?: { attempts?: number; intervalMs?: number }
 ): Promise<boolean> {
-  const attempts = opts?.attempts ?? DEFAULT_AFTER_LAUNCH.attempts;
-  const intervalMs = opts?.intervalMs ?? DEFAULT_AFTER_LAUNCH.intervalMs;
-  for (let i = 0; i < attempts; i++) {
-    if (i > 0) await new Promise((r) => setTimeout(r, intervalMs));
-    const active = await pollDevAppForegroundOnce(panel, api);
-    if (active === true) return true;
-  }
-  return false;
+  return pollUntilForegroundState(panel, api, true, opts?.attempts ?? DEFAULT_AFTER_LAUNCH.attempts, opts?.intervalMs ?? DEFAULT_AFTER_LAUNCH.intervalMs);
+}
+
+const DEFAULT_AFTER_HOME = { attempts: 6, intervalMs: 350 } as const;
+
+/**
+ * After Home is pressed, the dev channel takes a moment to actually drop out of foreground —
+ * the same lag `pollDevAppForegroundAfterLaunch` accounts for, just waiting for `active` to flip
+ * to `false` instead of `true`. The previous single-shot check (`pollDevAppForegroundOnce` alone)
+ * mostly got away with it against a physical device's near-instant LAN ECP response, but an RCE
+ * device's extra ports-bridge/HTTPS hop makes that race lose often enough to matter in practice —
+ * Home would exit the channel for real, but the Floating Remote's Launch button (and the Dev App
+ * tab's own) stayed hidden until some unrelated refresh (e.g. a tab switch) happened to re-check.
+ * @returns whether dev was confirmed backgrounded during polling
+ */
+export async function pollDevAppForegroundAfterHome(
+  panel: DevicePanelRoot,
+  api: DevAppApi,
+  opts?: { attempts?: number; intervalMs?: number }
+): Promise<boolean> {
+  return pollUntilForegroundState(panel, api, false, opts?.attempts ?? DEFAULT_AFTER_HOME.attempts, opts?.intervalMs ?? DEFAULT_AFTER_HOME.intervalMs);
 }

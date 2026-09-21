@@ -59,6 +59,40 @@ const ACTIVE_APP_XML =
   '<?xml version="1.0" encoding="UTF-8" ?>\n<active-app>\n' +
   '    <app id="dev">Sideloaded Dev Channel</app>\n</active-app>';
 
+/**
+ * `query/app-state/<id>` — polled every 200ms by roku-debug's `ensureAppIsInactive()` on every
+ * Debug: Restart, until it sees `state=inactive` or the launch config's `exitAppTimeout` elapses.
+ * The emulator never actually runs the sideloaded app itself, so `inactive` is simply true and
+ * answering it immediately (rather than 404ing, which threw and made every restart eat the full
+ * timeout) lets the restart proceed at once.
+ */
+const APP_STATE_XML =
+  '<?xml version="1.0" encoding="UTF-8" ?>\n<app-state>\n' +
+  '    <app-id>dev</app-id>\n' +
+  '    <app-title>Sideloaded Dev Channel</app-title>\n' +
+  '    <state>inactive</state>\n' +
+  '</app-state>';
+
+/** `query/sgrendezvous` — polled to read current rendezvous-tracking state. */
+const SGRENDEZVOUS_XML =
+  '<?xml version="1.0" encoding="UTF-8" ?>\n<sgrendezvous>\n' +
+  '    <data>\n        <tracking-enabled>false</tracking-enabled>\n    </data>\n</sgrendezvous>';
+
+/**
+ * `sgrendezvous/track|untrack` — toggled unconditionally at the start of every debug session
+ * (unless the launch config sets `"rendezvousTracking": false`). No real device to actually
+ * track, so echo back "disabled" either way; roku-debug treats a false result as "not supported,
+ * fall back to telnet" and moves on rather than erroring.
+ */
+const SGRENDEZVOUS_TOGGLE_XML =
+  '<?xml version="1.0" encoding="UTF-8" ?>\n<sgrendezvous>\n    <tracking-enabled>false</tracking-enabled>\n</sgrendezvous>';
+
+/** `query/registry/<id>` — manual "Show Registry" command; empty registry is a valid answer. */
+const REGISTRY_XML =
+  '<?xml version="1.0" encoding="UTF-8" ?>\n<plugin-registry>\n' +
+  '    <registry>\n        <space-available>0</space-available>\n    </registry>\n' +
+  '    <status>OK</status>\n</plugin-registry>';
+
 function rootDescriptionXml(location: string): string {
   return [
     '<?xml version="1.0" encoding="UTF-8" ?>',
@@ -153,6 +187,12 @@ export class RokuEmulator {
     if (path === '/query/apps') return this.send(res, APPS_XML);
     if (path === '/query/active-app') return this.send(res, ACTIVE_APP_XML);
     if (path.startsWith('/query/icon/')) return this.send(res, ONE_PX_PNG, 200, 'image/png');
+    if (path.startsWith('/query/app-state/')) return this.send(res, APP_STATE_XML);
+    if (path === '/query/sgrendezvous') return this.send(res, SGRENDEZVOUS_XML);
+    if (path.startsWith('/query/registry/')) return this.send(res, REGISTRY_XML);
+    if (path === '/sgrendezvous/track' || path === '/sgrendezvous/untrack') {
+      return this.send(res, SGRENDEZVOUS_TOGGLE_XML);
+    }
 
     // Side-effecting commands: ACK like a real Roku, but do NOT drive the real
     // devices — the IDE must not control the fleet once a build is handed over.

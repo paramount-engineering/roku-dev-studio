@@ -648,8 +648,15 @@
       align-items: center;
       gap: 12px;
       margin-top: 6px;
-      /* Align with first-row title (status dot + gap) */
-      padding-left: calc(var(--device-section-inset) + 10px + 8px);
+      /* Left edge matches the title text above (status dot 10px + its 8px gap) — NOT also
+       * adding --device-section-inset, since this row already sits inside .location-header's own
+       * padding same as .location-header-top does; adding it again over-indented this row by a
+       * full --device-section-inset versus the title. */
+      padding-left: calc(10px + 8px);
+      /* Right edge reserves the same width the trailing toggle chevron + its gap occupy in the
+       * top row (8px gap + 22px chevron: 14px icon-sm + 4px×2 padding), so .location-device-count's
+       * margin-left:auto below lands its right edge under the delete button's right edge above it. */
+      padding-right: calc(8px + 22px);
     }
     
     .location-server-url {
@@ -709,6 +716,14 @@
       flex-shrink: 0;
     }
     
+    /* Remote/RCE locations' bottom row (device-count is its own only child, or the second child
+     * after the IP:port span) — push it to the row's reserved right edge regardless of whether the
+     * IP:port span precedes it, rather than the Local section's top-row instance below (which sits
+     * snugly next to the name via its own, unrelated layout rules). */
+    .location-header-bottom .location-device-count {
+      margin-left: auto;
+    }
+
     .location-device-count {
       font-size: 11px;
       padding: 4px 10px;
@@ -874,7 +889,7 @@
     .location-empty .empty-icon .icon { display: inline-block; }
     .location-empty.scanning .empty-icon .icon { animation: spin 1s linear infinite; }
     .location-empty p { font-size: 11px; line-height: 1.4; }
-    
+
     /* Device cards within locations */
     .device-list {
       flex: 1;
@@ -1001,6 +1016,12 @@
       padding: 2px;
       box-sizing: border-box;
     }
+    .device-card-thumb--clickable {
+      cursor: pointer;
+    }
+    .device-card-thumb--clickable:hover {
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 0 0 2px var(--accent-cyan);
+    }
     .device-card-thumb .icon {
       color: #ffffff;
     }
@@ -1025,6 +1046,9 @@
     .dev-badge { font-size: 9px; font-weight: 600; padding: 3px 6px; border-radius: 4px; white-space: nowrap; }
     .dev-badge.enabled { background: var(--accent-green-dim); color: var(--accent-green); }
     .dev-badge.disabled { background: var(--accent-amber-dim); color: var(--accent-amber); }
+    /* RCE device status badge — running reuses .enabled's green as-is. */
+    .rce-status-badge--pending { background: var(--accent-amber-dim); color: var(--accent-amber); }
+    .rce-status-badge--shutdown { background: var(--bg-tertiary); color: var(--text-muted); }
     .ecp-badge { font-size: 9px; font-weight: 600; padding: 3px 6px; border-radius: 4px; white-space: nowrap; background: rgba(59, 130, 246, 0.15); color: #3b82f6; }
     .ecp-badge-limited { background: rgba(59, 130, 246, 0.2); color: #2563eb; }
     
@@ -1071,7 +1095,7 @@
     }
     
     .device-detail { display: flex; gap: 8px; align-items: center; }
-    .device-detail .label { color: var(--text-muted); width: 42px; flex-shrink: 0; }
+    .device-detail .label { color: var(--text-muted); width: 60px; flex-shrink: 0; overflow: hidden; text-overflow: ellipsis; }
     .device-detail .value { color: var(--text-secondary); flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     
     .device-actions { margin-top: 10px; }
@@ -1173,6 +1197,7 @@
     }
     
     .tab-item {
+      position: relative;
       display: flex;
       align-items: center;
       gap: 8px;
@@ -1189,7 +1214,28 @@
       max-width: 180px;
       min-width: 100px;
     }
-    
+
+    /* Chrome-style divider between adjacent device tabs — a thin centered line at each tab's
+       leading edge, hidden whenever it would touch the active/hovered tab's rounded shape on
+       either side (this tab or the one right before it). */
+    .tab-item:not(:first-child)::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 1px;
+      height: 20px;
+      background: var(--border);
+      transition: background 0.15s;
+    }
+    .tab-item.active::before,
+    .tab-item:hover::before,
+    .tab-item.active + .tab-item::before,
+    .tab-item:hover + .tab-item::before {
+      background: transparent;
+    }
+
     .tab-item:hover { color: var(--text-secondary); background: var(--bg-secondary); }
     .tab-item.active { color: var(--text-primary); background: var(--bg-deep); border: 1px solid var(--border); border-bottom-color: var(--bg-deep); margin-bottom: -1px; }
     
@@ -3119,7 +3165,9 @@
     /* Uniform square icon buttons, flex-centered so the glyph sits dead-center
        and the group lines up vertically with the title and Capture button.
        !important overrides the base .btn-icon padding/font-size (also !important). */
-    .devapp-col-right .screenshot-actions .btn-icon {
+    .devapp-col-right .screenshot-actions .btn-icon,
+    .devapp-col-right .rce-video-controls .btn-icon,
+    .floating-remote-video-slot .rce-video-controls .btn-icon {
       width: 26px;
       height: 26px;
       padding: 0 !important;
@@ -4621,7 +4669,52 @@
       object-fit: contain;
       display: block;
     }
-    
+
+    /* RCE live video (design doc §7/§8) — same fill/contain behavior as the screenshot image,
+       occupying the same card slot for `kind: 'rce'` devices. */
+    .screenshot-container .rce-video-stream {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      display: block;
+      background: #000;
+    }
+    /* Mute button + volume slider, in the Screenshot card header's left slot (replacing
+       Copy/Save/Clear for RCE devices — see the markup comment). `flex-shrink: 0` so the header's
+       flex layout can never compress or stretch this into the space meant for the centered
+       `.screenshot-status` message — it stays a small, fixed-size control, not header-width. */
+    .rce-video-controls {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-shrink: 0;
+    }
+    .rce-video-controls .rce-video-volume {
+      width: 60px;
+      flex: 0 0 auto;
+      accent-color: var(--accent-purple);
+    }
+    /* Always shown, both here and in the floating remote (which borrows this same node — see
+       floating-remote.ts) — a fixed width reserved up front so the value appearing/disappearing
+       never shifts the slider next to it. */
+    .rce-video-controls .rce-video-volume-value {
+      display: inline-block;
+      min-width: 34px;
+      flex: 0 0 auto;
+      font-size: 10px;
+      color: var(--text-muted);
+      font-variant-numeric: tabular-nums;
+      text-align: right;
+    }
+    /* Muted: dim the slider + value rather than change their text, so the numeric readout still
+       shows what unmuting will restore. */
+    .rce-video-controls.is-muted .rce-video-volume {
+      opacity: 0.4;
+    }
+    .rce-video-controls.is-muted .rce-video-volume-value {
+      opacity: 0.5;
+    }
+
     .screenshot-placeholder {
       display: flex;
       flex-direction: column;
@@ -4729,6 +4822,43 @@
       display: flex;
       gap: 10px;
       justify-content: center;
+    }
+
+    /* "Wake Device" / "Dev Mode" are longer two-word labels than this row's siblings (Back/Home,
+       Options/Replay), and this row also has to fit inside the Floating Remote's 220px-wide clone
+       (20px card padding either side leaves ~190px for the whole row) — the shared `.devapp-side-btn`
+       sizing wraps the label to two lines at that width. Smaller padding/font/icon (plus
+       `white-space: nowrap`) makes both fit on one line within the shell — but sized to each
+       button's OWN content (`flex: 0 1 auto`, not `flex: 1`): "Wake Device" is objectively longer
+       than "Dev Mode", so forcing them to an even 50/50 split gave Wake Device the same cramped
+       width Dev Mode fits fine in, overflowing its text past the button. Auto-sizing lets Dev Mode
+       stay compact and Wake Device take the room it actually needs — both together still comfortably
+       under the row's budget. Also given a distinct purple-tinted treatment (reusing the exact
+       accent tint this shell's own drag handle already uses) so these read as RCE-specific actions,
+       not just more remote keys. */
+    .devapp-rce-actions-row {
+      display: flex;
+      gap: 8px;
+      justify-content: center;
+    }
+    /* display:flex above otherwise beats the `hidden` attribute (same gotcha as
+       .remote-inputs-panel[hidden] nearby) — this is what actually keeps Wake Device /
+       Dev Mode RCE-only for Local and Remote devices. */
+    .devapp-rce-actions-row[hidden] {
+      display: none;
+    }
+    .devapp-rce-actions-row .devapp-side-btn {
+      flex: 0 1 auto;
+      white-space: nowrap;
+      padding: 6px 8px;
+      font-size: 11px;
+      background: rgba(124, 58, 237, 0.15);
+      border-color: rgba(124, 58, 237, 0.4);
+      color: var(--accent-purple, #7c3aed);
+    }
+    .devapp-rce-actions-row .devapp-side-btn:hover {
+      background: rgba(124, 58, 237, 0.28);
+      border-color: var(--accent-purple, #7c3aed);
     }
     
     .devapp-text-section {
@@ -6134,6 +6264,20 @@
       gap: 8px;
     }
 
+    /* Ports window opener — a `.remote-chart-export-btn` strip, but this header pads its content
+       itself (.card-header: 4px 16px), so cancel that padding to sit flush on the right edge and
+       stretch to the full header height. Connection-gated like every other live control. */
+    .telnet-header .telnet-ports-btn {
+      align-self: stretch;
+      margin: -4px -16px -4px 0;
+      width: 32px;
+    }
+    .telnet-header .telnet-ports-btn.is-connection-gated,
+    .telnet-header .telnet-ports-btn.disabled {
+      opacity: 0.45;
+      pointer-events: none;
+    }
+
     /* Split-button controls — relay devices only (chevron hidden for local tabs). */
     .telnet-split-control {
       position: relative;
@@ -7245,6 +7389,10 @@
       opacity: 0; visibility: hidden; transition: opacity 0.08s ease; white-space: normal;
     }
     .rds-tip--visible { opacity: 1; visibility: visible; }
+    .rds-tip code {
+      font-family: 'JetBrains Mono', monospace; font-size: 10.5px;
+      background: rgba(255, 255, 255, 0.1); padding: 1px 4px; border-radius: 3px;
+    }
     .telnet-debug-bp-badge--scanned { color: #93c5fd; border-color: #3b5b8c; }
     .telnet-debug-bp-badge--hit { color: #fbbf24; border-color: #8c6d3b; }
     .telnet-debug-bp-badge--managed { color: #a78bfa; border-color: #5b45b8; }
@@ -7940,6 +8088,142 @@
       box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
       overflow: hidden;
     }
+    /* Device Info panel present (see openDeviceHardwareImageModal). `.device-hardware-image-modal-left`
+       is everything that used to be the whole modal's flex-column content — it keeps driving the
+       modal's height in normal flow exactly like before this panel existed (same min/max-width as
+       the base rule, just moved onto this column). The info panel does NOT share a row/track with
+       it (a shared grid row let the panel's own, often much longer, content inflate the *whole*
+       modal's height — that's the bug this replaced): it's absolutely positioned over a reserved
+       strip on the right of `.device-hardware-image-modal-content-row`, so it can only ever match
+       whatever height the left column already resolved to, and scrolls internally past that. */
+    .device-hardware-image-modal--with-info {
+      min-width: min(760px, 94vw);
+      max-width: min(1320px, 96vw);
+    }
+    .device-hardware-image-modal-content-row {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
+    /* Reserve a fixed strip for the info panel — everything else (the left column's own width,
+       the existing `.rce-info-row`s, footer/actions rows, all of it) stays exactly as wide as it
+       always was. A 50/50 split here previously squeezed those existing rows into half their
+       normal width and broke their layout — the left side must never be resized to accommodate
+       the panel; only the reserved strip's own width changes. */
+    .device-hardware-image-modal--with-info .device-hardware-image-modal-content-row {
+      padding-right: 360px;
+    }
+    .device-hardware-image-modal-left {
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+      overflow-y: auto;
+    }
+    /* Plain flex column, not a scroll container itself — the title is a normal (non-sticky, non-
+       scrolling) header, and only `.device-hardware-image-modal-info-panel-body` below it scrolls.
+       Deliberately not `position: sticky` inside a scrolling container: that combination flickered
+       on window focus changes (e.g. clicking the macOS menu bar while this modal was open) — a
+       known Chromium repaint quirk with sticky positioning alongside this overlay's backdrop-filter
+       blur. A fixed header + independently scrolling body via plain flex sizing avoids the whole
+       class of bug and is the more standard pattern for this shape anyway. */
+    .device-hardware-image-modal-info-panel {
+      position: absolute;
+      top: 0;
+      right: 0;
+      bottom: 0;
+      width: 360px;
+      display: flex;
+      flex-direction: column;
+      border-left: 1px solid var(--border);
+    }
+    .device-hardware-image-modal-info-panel-title {
+      position: relative;
+      flex: none;
+      padding: 10px 10px 12px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(139, 92, 246, 0.08);
+      text-align: center;
+      font-family: system-ui, -apple-system, sans-serif;
+      font-weight: 700;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--accent-purple);
+    }
+    /* Anchored to the title bar (not a flex sibling of the centered text) so the "DEVICE INFO"
+       label stays visually centered regardless of the button's own width. */
+    .device-hardware-image-modal-info-panel-refresh {
+      position: absolute;
+      right: 10px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 22px;
+      height: 22px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: transparent;
+      border: none;
+      border-radius: 5px;
+      color: var(--accent-purple);
+      cursor: pointer;
+      transition: background 0.15s, opacity 0.15s;
+    }
+    .device-hardware-image-modal-info-panel-refresh:hover {
+      background: rgba(139, 92, 246, 0.16);
+    }
+    .device-hardware-image-modal-info-panel-refresh:disabled {
+      opacity: 0.5;
+      cursor: progress;
+    }
+    .device-hardware-image-modal-info-panel-refresh.is-busy .icon {
+      animation: spin 1s linear infinite;
+    }
+    .device-hardware-image-modal-info-panel-body {
+      flex: 1 1 auto;
+      min-height: 0;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      padding: 14px 16px;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+    /* Fills the body's own available space (its parent is already a flex column) and centers the
+       spinner + label within it, instead of the plain "Loading…" text sitting flush under the
+       header like just another row. */
+    .device-hardware-image-modal-info-panel-loading {
+      flex: 1 1 auto;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+    }
+    .device-info-panel-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 12px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--border);
+    }
+    .device-info-panel-row:last-child {
+      border-bottom: none;
+      padding-bottom: 0;
+    }
+    .device-info-panel-label {
+      color: var(--text-secondary);
+      flex-shrink: 0;
+    }
+    .device-info-panel-value {
+      color: var(--text-primary);
+      font-family: 'JetBrains Mono', monospace;
+      text-align: right;
+      word-break: break-word;
+    }
     .device-hardware-image-modal-header {
       display: flex;
       align-items: center;
@@ -8035,7 +8319,9 @@
       text-align: center;
     }
     .device-hardware-image-modal-footer {
-      padding: 12px 18px 16px;
+      padding: 10px 18px;
+      height: 64px;
+      box-sizing: border-box;
       border-top: 1px solid var(--border);
       flex-shrink: 0;
       font-size: 13px;
@@ -8044,6 +8330,7 @@
       font-family: 'JetBrains Mono', monospace;
       display: flex;
       flex-wrap: wrap;
+      align-items: center;
       gap: 6px 32px;
     }
     .device-hardware-image-modal-footer-item {
@@ -8071,6 +8358,8 @@
        remaining left-space), right 25% (restart button centered). */
     .device-hardware-image-modal-actions {
       padding: 10px 18px;
+      height: 64px;
+      box-sizing: border-box;
       border-top: 1px solid var(--border);
       flex-shrink: 0;
       display: grid;
@@ -8126,6 +8415,189 @@
     .device-hardware-image-modal-action-btn.is-busy {
       opacity: 0.7;
       cursor: progress;
+    }
+    /* Sideload Relay row reuses `.device-hardware-image-modal-actions` (same class, applied
+       directly) for its padding/height/border, so it's pixel-identical to the OS Version &
+       Build row above — its grid-template-columns is overridden below. The "Manage in
+       Settings" link (standing in for a value line) needs its own look, since
+       `.device-hardware-image-modal-footer-value` alone is muted/monospace. */
+    .device-hardware-image-modal-footer-value.help-settings-link {
+      display: inline-block;
+      background: none;
+      border: none;
+      padding: 0;
+      font: inherit;
+      font-family: system-ui, -apple-system, sans-serif;
+      font-size: 12px;
+      color: var(--accent-purple);
+      cursor: pointer;
+      text-decoration: underline;
+    }
+    /* Override the shared 75%/25% grid: the label cell shrinks to fit its text (the
+       "Manage in Settings" link, its widest line) instead of always claiming 75%. The
+       control cell stays the same `25%` width as the OS Version row's own right column —
+       `justify-content: space-between` puts all the space cell 1 gave up between the two
+       cells instead of after the second one, so the control cell still lands flush at the
+       row's right edge. Same width + same edge + the same inherited `place-items:center`
+       as the OS Version row's cell ⇒ the toggle centers at the exact same x-position as
+       the restart button, not just "close enough". `min-width: 0` keeps the cell itself
+       from being forced wider than 25% by the input's own default auto-sizing. */
+    .device-hardware-image-modal-relay-actions {
+      grid-template-columns: max-content 25%;
+      justify-content: space-between;
+      column-gap: 16px;
+      /* Containing block for the password field's `position: absolute` below — anchoring
+         it to the row directly sidesteps every grid-track-sizing interaction (this exact
+         "wider replacement content in a narrow cell" case has repeatedly fought back
+         against `justify-self`/`min-width` fixes; absolute positioning has no track to
+         fight with). */
+      position: relative;
+    }
+    .device-hardware-image-modal-relay-actions .device-hardware-image-modal-actions-right {
+      min-width: 0;
+      border-left: none;
+    }
+    /* RCE's boxed info rows (`.rce-info-row(s)`, shared with the standalone RCE User
+       Info modal — unscoped there, so this override only applies here) otherwise land their label
+       text at 20px (wrapper) + 12px (row) = 32px from the edge, 14px further in than the flat
+       Sideload Relay/OS Version rows below them, which sit at a flush 18px (their own padding,
+       no wrapper). Trimming the wrapper's inset to 6px re-lands the pill's internal 12px padding
+       on that same 18px — left-edge text now lines up between the two row styles. */
+    .device-hardware-image-modal .rce-info-rows {
+      padding: 16px 6px;
+    }
+    .device-hardware-image-modal-relay-toggle-wrap {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      cursor: pointer;
+    }
+    .device-hardware-image-modal-relay-toggle-input {
+      position: absolute;
+      opacity: 0;
+      width: 0;
+      height: 0;
+      margin: 0;
+    }
+    .device-hardware-image-modal-relay-toggle-ui {
+      display: block;
+      width: 40px;
+      height: 22px;
+      border-radius: 11px;
+      background: #3f3f4e;
+      transition: background 0.2s ease;
+      position: relative;
+      box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.35);
+    }
+    .device-hardware-image-modal-relay-toggle-ui::after {
+      content: '';
+      position: absolute;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: #f4f4f5;
+      top: 2px;
+      left: 2px;
+      transition: transform 0.2s ease;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+    }
+    .device-hardware-image-modal-relay-toggle-input:checked + .device-hardware-image-modal-relay-toggle-ui {
+      background: var(--accent-purple);
+    }
+    .device-hardware-image-modal-relay-toggle-input:checked + .device-hardware-image-modal-relay-toggle-ui::after {
+      transform: translateX(18px);
+    }
+    .device-hardware-image-modal-relay-toggle-input:focus-visible + .device-hardware-image-modal-relay-toggle-ui {
+      outline: 2px solid var(--accent-purple);
+      outline-offset: 3px;
+    }
+    .device-hardware-image-modal-relay-toggle-input:disabled + .device-hardware-image-modal-relay-toggle-ui {
+      opacity: 0.55;
+      cursor: default;
+    }
+    /* Inline password prompt — replaces the toggle in the row's control slot when this
+       device needs a validated dev password before it can be enabled. Input, validate, and
+       cancel all live inside one bordered pill (matching Settings' Setup Devices modal's own
+       inline password editor) instead of three separate boxes side by side. */
+    .device-hardware-image-modal-relay-pw-field {
+      /* Anchored to the row (see `.device-hardware-image-modal-relay-actions`'s
+         `position: relative`), not a grid item of the 25% control cell — it's wider than
+         that cell (unlike the small toggle it replaces), so it grows left from a fixed
+         right edge instead of overflowing past the modal's edge. `18px` matches the row's
+         own right padding, so its right edge lines up with the row's content edge exactly
+         like the restart button's column does. */
+      position: absolute;
+      right: 18px;
+      top: 50%;
+      transform: translateY(-50%);
+      display: flex;
+      align-items: center;
+      background: var(--bg-primary);
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      padding-left: 8px;
+      transition: border-color 0.12s;
+    }
+    .device-hardware-image-modal-relay-pw-field:focus-within {
+      border-color: var(--accent-purple);
+    }
+    .device-hardware-image-modal-relay-pw-input {
+      flex: 1;
+      min-width: 0;
+      width: 100px;
+      background: transparent;
+      border: 0;
+      outline: none;
+      color: var(--text-primary);
+      font-size: 12px;
+      padding: 6px 2px;
+    }
+    .device-hardware-image-modal-relay-pw-validate {
+      flex: none;
+      background: transparent;
+      border: 0;
+      color: #4ade80;
+      font-size: 13px;
+      font-weight: 700;
+      line-height: 1;
+      cursor: pointer;
+      padding: 4px 8px;
+      border-radius: 5px;
+    }
+    .device-hardware-image-modal-relay-pw-validate:hover {
+      background: rgba(74, 222, 128, 0.16);
+    }
+    .device-hardware-image-modal-relay-pw-validate:disabled {
+      opacity: 0.55;
+      cursor: default;
+    }
+    .device-hardware-image-modal-relay-pw-cancel {
+      flex: none;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: transparent;
+      border: 0;
+      color: var(--text-secondary);
+      cursor: pointer;
+      padding: 4px 6px;
+      margin-right: 2px;
+      border-radius: 5px;
+    }
+    .device-hardware-image-modal-relay-pw-cancel:hover {
+      color: var(--text-primary);
+      background: rgba(255, 255, 255, 0.06);
+    }
+    /* Failed-validation message — its own line below the whole row (not squeezed into the
+       control cell next to the input), self-clearing after a few seconds. Takes no space
+       at all while empty, so it doesn't reserve a permanent blank line. */
+    .device-hardware-image-modal-relay-error-row {
+      padding: 0 18px 10px;
+      font-size: 12px;
+      color: var(--accent-red);
+    }
+    .device-hardware-image-modal-relay-error-row:empty {
+      display: none;
     }
 
     .device-panel-info h2,
@@ -12145,6 +12617,11 @@
     }
     
     .card-icon { font-size: 18px; display: inline-flex; align-items: center; }
+    /* icon-tv sits slightly off the Screen Relay title's vertical center (asymmetric shape — a
+       screen rect + stand inside its 24x24 viewBox). translateY(1px) (down) made it worse — it
+       needed to go up, not down. Interim flip pending an exact getBoundingClientRect() measurement;
+       scoped to this one glyph so the default camera-icon case is untouched. */
+    .card-icon--tv { transform: translateY(-1px); }
     .card-title { font-size: 12px; font-weight: 600; line-height: 1.35; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); display: inline-flex; align-items: center; gap: 6px; }
     
     .card-body { padding: 18px; }
@@ -13296,6 +13773,102 @@
      * hover (see attachInstantTooltips), so a `[title]` selector would stop matching after that. */
     .bitmaps-modal-table th.bitmaps-modal-col-bpp { cursor: help; }
 
+    /* Post-capture fly animation (programmatic; screenshot-fly-animation.ts) — a cloned thumbnail
+       flown from the capture button to a transient top-right hold point, then into the gallery
+       button, replacing the old per-capture preview modal entirely (no overlay/backdrop; not part
+       of the shared modal-motion system, see that file's header comment). */
+    .screenshot-fly-thumb {
+      position: fixed;
+      z-index: 2100;
+      width: 160px;
+      height: 100px;
+      border-radius: 8px;
+      border: 2px solid rgba(255, 255, 255, 0.18);
+      background-size: cover;
+      background-position: center;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+      pointer-events: none;
+      will-change: transform, opacity;
+    }
+    /* Only clickable during the held-in-corner phase (screenshot-fly-animation.ts removes this
+       class the instant it starts flying into the gallery button, click or timeout alike). */
+    .screenshot-fly-thumb-clickable {
+      pointer-events: auto;
+      cursor: pointer;
+    }
+    .screenshot-fly-thumb-clickable:hover {
+      border-color: rgba(255, 255, 255, 0.4);
+    }
+
+    /* RCE session screenshot gallery (programmatic; rce-screenshot-gallery-modal.ts) */
+    .rce-gallery-modal { width: min(960px, 92vw); max-width: 960px; }
+    .rce-gallery-modal-body {
+      max-height: 70vh;
+      overflow-y: auto;
+    }
+    .rce-gallery-empty {
+      margin: 24px 0;
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 13px;
+    }
+    /* One large shot per row (not a multi-column thumbnail wall) — easier to actually read the
+       captured screen, matching the live feed's own size instead of a tiny preview. */
+    .rce-gallery-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 16px;
+    }
+    .rce-gallery-item {
+      background: var(--bg-tertiary);
+      border-radius: 6px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      outline: 2px solid transparent;
+      transition: outline-color 0.3s ease;
+    }
+    /* Briefly highlights the shot the fly-thumbnail landed on when it opened this modal itself
+       (screenshot-fly-animation.ts / rce-screenshot-gallery-modal.ts's `focusShotId`). */
+    .rce-gallery-item-focused {
+      outline-color: var(--accent-blue, #3b82f6);
+    }
+    .rce-gallery-thumb {
+      width: 100%;
+      max-height: 60vh;
+      aspect-ratio: 16 / 9;
+      object-fit: contain;
+      background: #000;
+      display: block;
+    }
+    .rce-gallery-item-meta {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 6px 8px;
+    }
+    .rce-gallery-item-time {
+      font-size: 11px;
+      color: var(--text-muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .rce-gallery-item-actions {
+      display: flex;
+      gap: 4px;
+      flex-shrink: 0;
+    }
+    .rce-gallery-modal-footer {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      padding-top: 12px;
+      margin-top: 4px;
+      border-top: 1px solid var(--border);
+    }
+
     /* Save Action Script modal (programmatic; save-script-modal.ts) */
     .action-scripts-save-modal { width: min(460px, 92vw); max-width: 460px; }
     .action-scripts-save-modal .modal-body { display: flex; flex-direction: column; gap: 18px; }
@@ -13992,33 +14565,69 @@
       display: flex;
     }
     
+    /* The dialog surface (also what modal-origin-motion animates). Same chrome as `.modal`; the
+       shared .modal-header / .modal-body / .modal-footer bands inside carry the padding. */
     .add-location-form {
       background: var(--bg-secondary);
       border: 1px solid var(--border);
       border-radius: 16px;
-      padding: 24px;
-      width: 400px;
+      width: 440px;
       max-width: 90%;
-    }
-    
-    .add-location-header {
+      max-height: 85vh;
       display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding-bottom: 16px;
+      flex-direction: column;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+    }
+    .add-location-form .modal-body { min-height: 0; }
+    .add-location-tab-panel .form-group:last-child { margin-bottom: 0; }
+
+    .add-location-tabs {
+      display: flex;
+      gap: 4px;
       margin-bottom: 16px;
       border-bottom: 1px solid var(--border);
     }
 
-    .add-location-form h3 {
-      font-size: 18px;
-      font-weight: 600;
-      margin: 0;
-      display: flex;
-      align-items: center;
-      gap: 10px;
+    .rds-tab {
+      appearance: none;
+      background: none;
+      border: none;
+      border-bottom: 2px solid transparent;
+      color: var(--text-secondary);
+      font-size: 13px;
+      font-weight: 500;
+      font-family: inherit;
+      cursor: pointer;
     }
-    
+
+    .rds-tab:hover {
+      color: var(--text-primary);
+    }
+
+    .rds-tab.active {
+      color: var(--accent-cyan);
+      border-bottom-color: var(--accent-cyan);
+    }
+
+    .add-location-tab {
+      padding: 8px 4px;
+    }
+
+    .add-location-intro {
+      font-size: 12px;
+      color: var(--text-secondary);
+      margin-bottom: 16px;
+      line-height: 1.5;
+    }
+
+    /* Footer band: forget-on-quit checkbox on the left, Add Location on the right. The row rules must
+       outrank the generic `.add-location-form input { width:100% }` / `label { display:block }` rules below. */
+    .add-location-form .add-location-footer { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+    .add-location-form .add-location-forget-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
+    .add-location-form .add-location-forget-row input[type="checkbox"] { width: auto; flex: 0 0 auto; margin: 0; padding: 0; cursor: pointer; accent-color: var(--accent-purple); }
+    .add-location-form .add-location-forget-row label { display: inline; margin: 0; cursor: pointer; white-space: nowrap; font-size: 13px; color: var(--text-primary); }
+    .location-ephemeral { display: inline-flex; align-items: center; }
+
     .add-location-form .form-group {
       margin-bottom: 16px;
     }
@@ -14055,13 +14664,6 @@
       font-size: 11px;
       color: var(--text-muted);
       margin-top: 4px;
-    }
-    
-    .add-location-form .form-actions {
-      display: flex;
-      gap: 10px;
-      justify-content: flex-end;
-      margin-top: 20px;
     }
     
     .location-empty-state {
@@ -14153,6 +14755,12 @@
       color: var(--text-muted);
     }
     
+    .server-version-group {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
     .server-version {
       font-size: 11px;
       color: var(--text-muted);
@@ -14161,6 +14769,358 @@
       border-radius: 4px;
     }
     
+    .rce-info-brand {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--accent-purple);
+    }
+
+    .rce-info-brand-logo {
+      height: 16px;
+      width: auto;
+      display: block;
+    }
+
+    .rce-info-brand-cloud {
+      font-size: 16px;
+      color: #6c3c97;
+    }
+
+    .rce-info-tabs {
+      display: flex;
+      gap: 4px;
+      padding: 8px 20px 0;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .rce-info-tab {
+      padding: 10px 4px;
+    }
+
+    .rce-info-rows {
+      padding: 16px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .rce-info-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 12px;
+      background: var(--bg-secondary);
+      border-radius: 6px;
+      font-size: 13px;
+    }
+
+    .rce-info-label {
+      color: var(--text-muted);
+    }
+
+    .rce-info-value {
+      font-weight: 600;
+    }
+
+    /* Elapsed/maxRuntime bar (no label — the two side numbers already say what it is), reusing
+       `.progress-bar`/`.progress-fill`'s track look/gradient without that class's indeterminate
+       pulse animation (this is a known percentage, not an in-progress unknown one). The bar itself
+       (not the row) stretches to fill the full row width between the two numbers. */
+    .rce-info-row--runtime { gap: 12px; }
+    .rce-info-runtime-bar {
+      flex: 1;
+      min-width: 0;
+      height: 6px;
+      background: var(--bg-tertiary);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+    .rce-info-runtime-fill {
+      display: block;
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent-purple), var(--accent-cyan));
+      border-radius: 3px;
+    }
+    .rce-info-runtime-text {
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    .rce-info-loading {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 24px 20px;
+      color: var(--text-muted);
+      font-size: 13px;
+    }
+
+    .rce-info-spinner {
+      flex-shrink: 0;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      border: 2px solid var(--border);
+      border-top-color: var(--accent-purple);
+      animation: rce-start-modal-spin 0.7s linear infinite;
+    }
+
+    .rce-info-error {
+      margin: 0;
+      padding: 16px 20px;
+      color: var(--accent-red);
+      font-size: 13px;
+    }
+
+    .rce-usage-section {
+      margin: 4px 20px 16px;
+      padding: 16px;
+      background: var(--bg-secondary);
+      border-radius: 6px;
+    }
+
+    .rce-usage-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      /* A full-height bar's native `title` tooltip renders just above the cursor, right at the top
+         of the chart — 14px left it overlapping this header's text (confirmed live). */
+      margin-bottom: 32px;
+    }
+
+    .rce-usage-title {
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+
+    .rce-usage-total {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--accent-purple);
+    }
+
+    .rce-usage-chart {
+      display: flex;
+      align-items: flex-end;
+      gap: 10px;
+      height: 100px;
+    }
+
+    .rce-usage-bar-col {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-end;
+      height: 100%;
+      gap: 6px;
+      cursor: default;
+    }
+
+    .rce-usage-bar {
+      width: 100%;
+      max-width: 28px;
+      min-height: 2px;
+      background: var(--accent-purple);
+      border-radius: 3px 3px 0 0;
+    }
+
+    /* A day with zero usage should render as no bar at all, not the same 2px sliver a tiny-but-real
+       amount of usage gets — otherwise an idle day looks indistinguishable from "some usage". */
+    .rce-usage-bar.zero {
+      min-height: 0;
+    }
+
+    .rce-usage-bar-label {
+      font-size: 10px;
+      color: var(--text-muted);
+    }
+
+    /* Start button split-button caret (device card) — opens the "Start device" modal below.
+       Mirrors the Action Scripts "Save ▾" split button's glued-buttons pattern. */
+    .rce-start-split { display: flex; width: 100%; }
+    .rce-start-split .connect-btn { width: auto; }
+    .rce-start-split .rce-start-btn {
+      flex: 1 1 auto;
+      border-top-right-radius: 0;
+      border-bottom-right-radius: 0;
+    }
+    .rce-start-split .rce-start-caret {
+      flex: 0 0 auto;
+      min-width: 30px;
+      padding: 0 7px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-top-left-radius: 0;
+      border-bottom-left-radius: 0;
+      border-left: 1px solid rgba(255, 255, 255, 0.25);
+    }
+
+    /* "Start device" modal (RCE Start button's caret — POST /devices/{id}/start options). */
+    .rce-start-modal {
+      width: min(420px, 92vw);
+      background: var(--bg-secondary);
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      overflow: hidden;
+    }
+    .rce-start-modal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--border);
+    }
+    .rce-start-modal-title {
+      margin: 0;
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+    .rce-start-modal-body {
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .rce-start-modal-field-group { display: flex; flex-direction: column; gap: 6px; }
+    .rce-start-modal-label { font-size: 12px; font-weight: 600; color: var(--text-secondary); }
+    .rce-start-modal-runtime-row { display: flex; gap: 10px; }
+    .rce-start-modal-runtime-field {
+      flex: 1 1 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 10px;
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+    }
+    .rce-start-modal-runtime-field input {
+      flex: 1 1 auto;
+      min-width: 0;
+      background: none;
+      border: none;
+      color: var(--text-primary);
+      font-family: inherit;
+      font-size: 13px;
+    }
+    .rce-start-modal-runtime-field input:focus { outline: none; }
+    .rce-start-modal-unit { font-size: 12px; color: var(--text-muted); white-space: nowrap; }
+    .rce-start-modal-hint { margin: 0; font-size: 11px; color: var(--text-muted); }
+    /* Standalone field (no checkbox sibling like the snapshot row), so full corner radius rather
+       than the snapshot select's one-sided radius. */
+    .rce-start-modal-firmware-select {
+      padding: 8px 10px;
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text-primary);
+      font-family: inherit;
+      font-size: 13px;
+    }
+    .rce-start-modal-firmware-select:disabled { color: var(--text-muted); cursor: not-allowed; }
+    .rce-start-modal-firmware-error { margin: 0; font-size: 11px; color: var(--accent-red); }
+    /* Checkbox integrated directly into the snapshot row — checking it enables the <select>
+       right next to it, rather than a separate toggle row above a separate field below. */
+    /* Segmented-control look — same technique as the Inspector's function-info-button +
+       dropdown (`.rale-func-select-row`): the checkbox cell and the select share one background/
+       border color and meet at a seam (cell drops its right border, select squares off its left
+       corners), so they read as one control instead of two separate elements with a gap. */
+    .rce-start-modal-snapshot-row { display: flex; align-items: stretch; gap: 0; }
+    .rce-start-modal-snapshot-checkbox-cell {
+      width: 38px;
+      min-width: 38px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border);
+      border-right: none;
+      border-radius: 6px 0 0 6px;
+    }
+    .rce-start-modal-use-snapshot { width: 16px; height: 16px; cursor: pointer; }
+    .rce-start-modal-snapshot-select {
+      flex: 1 1 auto;
+      min-width: 0;
+      padding: 8px 10px;
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border);
+      border-radius: 0 6px 6px 0;
+      color: var(--text-primary);
+      font-family: inherit;
+      font-size: 13px;
+    }
+    .rce-start-modal-snapshot-select:disabled { color: var(--text-muted); cursor: not-allowed; }
+    .rce-start-modal-snapshot-spinner {
+      flex-shrink: 0;
+      width: 16px;
+      height: 16px;
+      margin-left: 8px;
+      align-self: center;
+      border-radius: 50%;
+      border: 2px solid var(--border);
+      border-top-color: var(--accent-purple);
+      animation: rce-start-modal-spin 0.7s linear infinite;
+    }
+    @keyframes rce-start-modal-spin { to { transform: rotate(360deg); } }
+    .rce-start-modal-snapshot-error { margin: 0; font-size: 11px; color: var(--accent-red); }
+    /* Selected-snapshot detail rows — reuses the existing `.rce-info-row` pill look (RCE
+       User Info / Device Info modals) so this doesn't need its own visual language. Height
+       change between empty/populated is animated via `animateHeight` on the modal body. */
+    .rce-start-modal-snapshot-details {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      margin-top: 8px;
+    }
+    .rce-start-modal-snapshot-details[hidden] { display: none; }
+    .rce-start-modal-snapshot-details .rce-info-row { font-size: 12px; padding: 8px 10px; }
+    /* Note is free-text (can wrap to multiple lines), not a short value — stacked label-above/
+       text-below instead of the KV rows' label-left/value-right, which overlapped once the note
+       wrapped past one line. */
+    .rce-start-modal-snapshot-note {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      /* Matches `.rce-info-row`'s own 10px horizontal padding above, so the label and the
+         code block's edges line up with "Created"/"Started"/etc. instead of sitting flush left. */
+      padding: 0 10px;
+      font-size: 12px;
+    }
+    .rce-start-modal-snapshot-note-label { color: var(--text-muted); }
+    /* Code-block look — free-text notes read as verbatim/quoted content, not a plain value, so it
+       gets its own monospace, darker-than-the-surrounding-card box instead of inline bold text. */
+    .rce-start-modal-snapshot-note-text {
+      margin: 0;
+      padding: 8px 10px;
+      background: var(--bg-primary);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text-primary);
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-weight: 400;
+      line-height: 1.5;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .rce-start-modal-footer {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 8px;
+      padding: 12px 16px;
+      border-top: 1px solid var(--border);
+    }
+    .rce-start-modal-status {
+      margin-right: auto;
+      font-size: 12px;
+      color: var(--accent-red);
+    }
+
     .server-capabilities {
       padding: 16px 20px;
     }
@@ -14731,6 +15691,44 @@
       background: rgba(255, 255, 255, 0.08);
     }
 
+    /* RCE only — the Dev App tab's real `.rce-video-stream`/`.rce-video-controls` nodes are moved
+       here (not cloned; see floating-remote.ts's module doc comment) while the floater is bound to
+       an RCE device. Hidden/empty for every other device kind. */
+    .floating-remote-video-slot {
+      display: none;
+      flex-direction: column;
+      width: 100%;
+      background: #000;
+      border-bottom: 1px solid var(--border);
+    }
+    .floating-remote-video-slot--active {
+      display: flex;
+    }
+    .floating-remote-video-slot .rce-video-stream {
+      width: 100%;
+      aspect-ratio: 16 / 9;
+      object-fit: contain;
+      display: block;
+      background: #000;
+    }
+    .floating-remote-video-slot .rce-video-controls {
+      padding: 6px 10px;
+      background: rgba(0, 0, 0, 0.28);
+    }
+    /* The base `.rce-video-volume` rule keeps the slider a fixed 60px so it fits next to the
+       Capture/mute buttons in the Dev App tab's tight card header — but nothing else shares this
+       row in the floater, so let it grow to fill the width instead of sitting stub-short, with the
+       mute button on one side and the (now always-visible, fixed-width) percentage on the other. */
+    .floating-remote-video-slot .rce-video-controls .rce-video-volume {
+      flex: 1 1 auto;
+      width: auto;
+    }
+    /* A bit more breathing room than the Dev App header's tighter 34px — this row has nothing else
+       competing for space, so the percentage can sit comfortably instead of hugging the slider. */
+    .floating-remote-video-slot .rce-video-controls .rce-video-volume-value {
+      min-width: 40px;
+    }
+
     .floating-remote-shell-body {
       padding: 0;
     }
@@ -15114,6 +16112,9 @@
     <symbol id="icon-server" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <rect width="20" height="8" x="2" y="2" rx="2" ry="2"/><rect width="20" height="8" x="2" y="14" rx="2" ry="2"/><line x1="6" x2="6.01" y1="6" y2="6"/><line x1="6" x2="6.01" y1="18" y2="18"/>
     </symbol>
+    <symbol id="icon-cloud" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/>
+    </symbol>
     <!-- Official Model Context Protocol logo (Wikimedia Commons). stroke=currentColor so it tints with the surrounding text/icon color. -->
     <symbol id="icon-mcp" viewBox="0 0 180 180" fill="none" stroke="currentColor" stroke-width="12" stroke-linecap="round" stroke-linejoin="round">
       <path d="M18 84.8528L85.8822 16.9706C95.2548 7.59798 110.451 7.59798 119.823 16.9706V16.9706C129.196 26.3431 129.196 41.5391 119.823 50.9117L68.5581 102.177"/>
@@ -15150,8 +16151,17 @@
     <symbol id="icon-image" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/>
     </symbol>
+    <symbol id="icon-images" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M18 22H4a2 2 0 0 1-2-2V6"/><path d="m22 13-1.9-1.9a2 2 0 0 0-2.8 0L11 17.4"/><circle cx="12" cy="8" r="2"/><rect width="16" height="16" x="6" y="2" rx="2"/>
+    </symbol>
     <symbol id="icon-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>
+    </symbol>
+    <symbol id="icon-volume" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
+    </symbol>
+    <symbol id="icon-volume-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="22" x2="16" y1="9" y2="15"/><line x1="16" x2="22" y1="9" y2="15"/>
     </symbol>
     <symbol id="icon-save" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7"/><path d="M7 3v4a1 1 0 0 0 1 1h7"/>
@@ -15228,8 +16238,10 @@
     <symbol id="icon-replay" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/>
     </symbol>
+    <!-- Asterisk (6-point star), matching the physical Roku remote's "*" Options button — not a
+         3-dot kebab menu, which is a desktop-app convention this button never actually was. -->
     <symbol id="icon-options" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/>
+      <path d="M12 4v16"/><path d="M5.1 8l13.8 8"/><path d="M18.9 8l-13.8 8"/>
     </symbol>
     <symbol id="icon-send" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/>
@@ -15385,6 +16397,9 @@
     </symbol>
     <symbol id="icon-eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"/><line x1="2" x2="22" y1="2" y2="22"/>
+    </symbol>
+    <symbol id="icon-open-window" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="8" y="3" width="13" height="13" rx="1.5"/><path d="M16 21H4.5A1.5 1.5 0 0 1 3 19.5V8"/><path d="M12 12l5-5"/><path d="M13.5 7H17v3.5"/>
     </symbol>
     <symbol id="icon-external-link" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
@@ -16433,9 +17448,9 @@
                   </div>
                   <input type="hidden" class="sideload-file-path">
                   <button class="btn btn-primary sideload-btn" style="width: 100%; padding: 8px 10px; font-size: 10px;" disabled data-i18n="app.install"><span class="icon icon-xs"><svg><use href="#icon-rocket"/></svg></span> Install</button>
-                  <label class="checkbox-label sideload-debug-row" style="font-size: 10px; display: flex; align-items: center; gap: 6px; justify-content: center; margin-top: 6px;" data-i18n-title="debugger.sideloadWithDebuggingTitle" title="Reinstall with the BrightScript debug protocol (port 8081) enabled, then open the debugger.">
+                  <label class="checkbox-label sideload-debug-row" style="font-size: 10px; display: flex; align-items: center; gap: 6px; justify-content: center; margin-top: 6px;" data-i18n-title="debugger.enableDebuggerTitle" title="Sideload with the BrightScript debug protocol (port 8081) enabled and attach the debugger. While on, the debugger also attaches automatically whenever this device reports it is waiting for one.">
                     <input type="checkbox" class="sideload-debug-checkbox">
-                    <span data-i18n="debugger.sideloadWithDebugging">Sideload with Debugging</span>
+                    <span data-i18n="debugger.enableDebugger">Enable Debugger</span>
                   </label>
                   <div class="sideload-status" style="font-size: 9px; margin-top: 4px;"></div>
                   <div class="sideload-progress" style="display: none; margin-top: 4px;">
@@ -16476,6 +17491,13 @@
                     <button class="devapp-v-media-btn play devapp-key" data-key="Play"><span class="icon icon-md"><svg><use href="#icon-play"/></svg></span></button>
                     <button class="devapp-v-media-btn devapp-key" data-key="Fwd"><span class="icon icon-md"><svg><use href="#icon-fast-forward"/></svg></span></button>
                   </div>
+                  <!-- RCE-only device actions ("Wake Device" / "Dev Mode", mirroring Roku's own RCE
+                       dashboard quick actions) — hidden by default, revealed in dev-app/index.ts for
+                       kind:'rce' devices only. Sits just above the text box per design decision. -->
+                  <div class="devapp-rce-actions-row" data-requires-connection hidden>
+                    <button class="devapp-side-btn devapp-wake-btn" data-i18n="app.rceWakeDevice"><span class="icon icon-xs"><svg><use href="#icon-zap"/></svg></span> Wake Device</button>
+                    <button class="devapp-side-btn devapp-dev-mode-btn" data-i18n="app.rceDevMode"><span class="icon icon-xs"><svg><use href="#icon-wrench"/></svg></span> Dev Mode</button>
+                  </div>
                   <div class="devapp-text-section" data-requires-connection>
                     <input type="text" class="devapp-text-input" placeholder="Type Text..." data-i18n-placeholder="app.typeTextShortPlaceholder">
                     <button class="devapp-send-text-btn" data-i18n="app.send"><span class="icon icon-sm"><svg><use href="#icon-send"/></svg></span> Send</button>
@@ -16500,16 +17522,26 @@
                   <button class="btn btn-secondary btn-icon save-screenshot-btn" title="Download Screenshot" data-i18n-title="app.downloadScreenshot" aria-label="Download Screenshot" data-i18n-aria-label="app.downloadScreenshot" style="display: none;"><span class="icon icon-xs"><svg><use href="#icon-download"/></svg></span></button>
                   <button class="btn btn-secondary btn-icon clear-screenshot-btn" title="Clear Screenshot" data-i18n-title="app.clearScreenshot" aria-label="Clear Screenshot" data-i18n-aria-label="app.clearScreenshot" style="display: none;"><span class="icon icon-xs"><svg><use href="#icon-clear-results"/></svg></span></button>
                 </div>
+                <!-- RCE only — mute toggle + volume slider, in place of the Copy/Save/Clear group
+                     above (design discussion: those don't apply to a live feed; per-shot actions
+                     moved into the session gallery instead). -->
+                <div class="rce-video-controls" style="display: none;">
+                  <button class="btn btn-secondary btn-icon rce-video-mute-btn" title="Mute" data-i18n-title="devApp.rceMuteLabel" aria-label="Mute" data-i18n-aria-label="devApp.rceMuteLabel"><span class="icon icon-xs"><svg><use href="#icon-volume"/></svg></span></button>
+                  <input type="range" class="rce-video-volume" min="0" max="100" value="100" aria-label="Volume" data-i18n-aria-label="devApp.rceVolumeLabel">
+                  <span class="rce-video-volume-value">100%</span>
+                </div>
                 <!-- Capture status: centered in the header, fills the space between the
                      left actions and the Capture button (in flow, so it never overlaps them). -->
                 <div class="screenshot-status"></div>
                 <div class="card-header-actions">
+                  <button class="btn btn-secondary btn-icon rce-gallery-btn" title="Screenshots" data-i18n-title="devApp.rceGalleryButton" aria-label="Screenshots" data-i18n-aria-label="devApp.rceGalleryButton"><span class="icon icon-xs"><svg><use href="#icon-images"/></svg></span></button>
                   <button class="btn btn-primary screenshot-btn" style="padding: 5px 10px; font-size: 10px;" data-i18n="app.capture"><span class="icon icon-xs"><svg><use href="#icon-camera"/></svg></span> Capture</button>
                 </div>
               </div>
               <div class="card-body">
                 <div class="screenshot-container">
                   <img class="screenshot-image" alt="Roku Screenshot" data-i18n-alt="app.screenshotAlt" style="display: none;">
+                  <video class="rce-video-stream" autoplay playsinline style="display: none;"></video>
                   <div class="screenshot-placeholder">
                     <div style="opacity: 0.3;"><span class="icon icon-3xl"><svg><use href="#icon-image"/></svg></span></div>
                     <p style="margin: 8px 0 0; font-size: 11px; color: var(--text-muted);" data-i18n="app.clickCapture">Click Capture</p>
@@ -16628,7 +17660,7 @@
                 <div class="query-dev-cell">
                   <div class="query-section-label" data-i18n="app.qsCustom">Custom</div>
                   <div class="custom-query-row">
-                    <input type="text" class="custom-query-input" placeholder="e.g. /query/device-info" data-i18n-placeholder="app.customQueryPlaceholder">
+                    <input type="text" class="custom-query-input" placeholder="e.g. /query/device-info or free" data-i18n-placeholder="app.customQueryPlaceholder">
                     <button class="btn btn-primary run-custom-query-btn" data-i18n="app.run">Run</button>
                   </div>
                 </div>
@@ -16734,6 +17766,12 @@
                   <span class="icon icon-xs"><svg><use href="#icon-x"/></svg></span><span class="telnet-btn-label" data-i18n="common.disconnect">Disconnect</span>
                 </button>
               </div>
+              <!-- Full-height strip on the header's right edge (same idiom as the Device Performance
+                   `.remote-chart-export-btn`): opens this device's Ports window (8080 / 8081 / 8087 tabs).
+                   Local + relay devices only — app.ts removes it for RCE. -->
+              <button type="button" class="remote-chart-export-btn telnet-ports-btn" data-requires-connection title="Open Ports Window" data-i18n-title="portTerminal.openButtonTitle" aria-label="Open Ports Window" data-i18n-aria-label="portTerminal.openButtonTitle">
+                <span class="icon icon-xs"><svg><use href="#icon-open-window"/></svg></span>
+              </button>
             </div>
             <div class="card-body telnet-body">
               <div class="telnet-body-split">
@@ -16780,6 +17818,7 @@
                       <span class="telnet-debug-statustext" data-debug-statustext></span>
                       <span class="telnet-debug-statusdot" data-debug-status role="img" aria-label="Debugger status"></span>
                       <button type="button" class="telnet-debug-why" data-debug-why hidden title="Debugger Attach Failed" data-i18n-title="debugger.attachErrorTitle" data-i18n="debugger.attachWhy">Why?</button>
+                      <button type="button" class="telnet-debug-btn telnet-debug-btn--relaunch" data-debug-cmd="restart" data-debug-relaunch hidden title="Re-sideload the last debug build with the debugger enabled — a fresh run waits on 8081 and attaches" data-i18n-title="debugger.relaunchTitle" data-i18n="debugger.relaunch">Relaunch</button>
                       <button type="button" class="telnet-debug-btn telnet-debug-btn--primary telnet-debug-btn--attach" data-debug-cmd="attach" data-i18n="debugger.attach">Attach</button>
                     </div>
                   </div>
@@ -17295,11 +18334,6 @@
     hidden
   >
     <ul class="titlebar-hamburger-menu-list" role="menu">
-      <li role="none"><button type="button" class="titlebar-hamburger-menu-item" role="menuitemcheckbox" data-menu-action="toggle-developer" aria-checked="false" data-i18n="app.developerMode">Developer Mode</button></li>
-      <li role="none"><button type="button" class="titlebar-hamburger-menu-item" role="menuitemcheckbox" data-menu-action="toggle-privacy" aria-checked="false" data-i18n="app.privacyMode">Privacy Mode</button></li>
-      <li role="none"><button type="button" class="titlebar-hamburger-menu-item" role="menuitemcheckbox" data-menu-action="toggle-debug-logging" aria-checked="false" data-i18n="app.debugLogging">Debug Logging</button></li>
-      <li role="none" id="titlebarDiagnosticLogFolderItem" hidden><button type="button" class="titlebar-hamburger-menu-item" role="menuitem" data-menu-action="open-diagnostic-log-folder" data-i18n="app.openDiagnosticLogsFolder"><span class="titlebar-hamburger-menu-icon icon icon-sm" aria-hidden="true"><svg><use href="#icon-folder"/></svg></span>Open Diagnostic Logs Folder</button></li>
-      <li class="titlebar-hamburger-menu-sep" role="separator" aria-hidden="true"></li>
       <li role="none"><button type="button" class="titlebar-hamburger-menu-item" role="menuitem" data-menu-action="open-log-file" data-i18n="app.openLogFile"><span class="titlebar-hamburger-menu-icon icon icon-sm" aria-hidden="true"><svg><use href="#icon-file-text"/></svg></span>Open Log File</button></li>
       <li role="none"><button type="button" class="titlebar-hamburger-menu-item" role="menuitem" data-menu-action="open-fiddle" data-i18n="app.openFiddle"><span class="titlebar-hamburger-menu-icon icon icon-sm" aria-hidden="true"><svg><use href="#icon-code"/></svg></span>Open Fiddle</button></li>
       <li role="none"><button type="button" class="titlebar-hamburger-menu-item" role="menuitem" data-menu-action="settings" data-i18n="app.settings"><span class="titlebar-hamburger-menu-icon icon icon-sm" aria-hidden="true"><svg><use href="#icon-settings"/></svg></span>Settings</button></li>
@@ -17315,6 +18349,11 @@
       </li>
       <li class="titlebar-hamburger-menu-sep" role="separator" aria-hidden="true"></li>
       <li role="none"><button type="button" class="titlebar-hamburger-menu-item" role="menuitem" data-menu-action="about" data-i18n="app.aboutRokuDevStudio"><span class="titlebar-hamburger-menu-icon icon icon-sm" aria-hidden="true"><svg><use href="#icon-info"/></svg></span>About Roku Dev Studio</button></li>
+      <li class="titlebar-hamburger-menu-sep" role="separator" aria-hidden="true"></li>
+      <li role="none"><button type="button" class="titlebar-hamburger-menu-item" role="menuitemcheckbox" data-menu-action="toggle-developer" aria-checked="false" data-i18n="app.developerMode">Developer Mode</button></li>
+      <li role="none"><button type="button" class="titlebar-hamburger-menu-item" role="menuitemcheckbox" data-menu-action="toggle-privacy" aria-checked="false" data-i18n="app.privacyMode">Privacy Mode</button></li>
+      <li role="none"><button type="button" class="titlebar-hamburger-menu-item" role="menuitemcheckbox" data-menu-action="toggle-debug-logging" aria-checked="false" data-i18n="app.debugLogging">Debug Logging</button></li>
+      <li role="none" id="titlebarDiagnosticLogFolderItem" hidden><button type="button" class="titlebar-hamburger-menu-item" role="menuitem" data-menu-action="open-diagnostic-log-folder" data-i18n="app.openDiagnosticLogsFolder"><span class="titlebar-hamburger-menu-icon icon icon-sm" aria-hidden="true"><svg><use href="#icon-folder"/></svg></span>Open Diagnostic Logs Folder</button></li>
       <li class="titlebar-hamburger-menu-sep" role="separator" aria-hidden="true"></li>
       <li role="none"><button type="button" class="titlebar-hamburger-menu-item" role="menuitem" data-menu-action="quit" data-i18n="app.quitRokuDevStudio"><span class="titlebar-hamburger-menu-icon icon icon-sm" aria-hidden="true"><svg><use href="#icon-x"/></svg></span>Quit Roku Dev Studio</button></li>
     </ul>

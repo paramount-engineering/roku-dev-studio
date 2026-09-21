@@ -8,6 +8,7 @@ import { createRelayIpcListener } from './electron-ipc-listener';
 import type { RemoteFanoutOps } from './fanout';
 import type { RelayBootConfig } from '../../shared/sideload-relay/types';
 import { sideloadFileToRemote, ensureRemoteTelnetConnected } from '../ipc/remote-handlers';
+import { remoteHttpRequest } from '../remote-http';
 import { S } from '../../shared/strings/index';
 
 const { mainLog } = require('../log');
@@ -15,7 +16,13 @@ const { mainLog } = require('../log');
 /** Remote-server ops for fanning a build out to remote-location devices. */
 const remoteFanoutOps: RemoteFanoutOps = {
   sideload: sideloadFileToRemote,
-  ensureConsole: ensureRemoteTelnetConnected
+  ensureConsole: ensureRemoteTelnetConnected,
+  // Same `/health` the sidebar's location card polls; 3 s is generous for a LAN relay and short
+  // enough that an offline lab server no longer stalls the whole run.
+  isReachable: (serverUrl) =>
+    remoteHttpRequest(serverUrl, '/health', 'GET', null, 3000)
+      .then((r) => !!(r && r.success))
+      .catch(() => false)
 };
 
 type SafeSendFn = (channel: string, data: unknown) => void;

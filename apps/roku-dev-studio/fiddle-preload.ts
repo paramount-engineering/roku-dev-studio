@@ -46,6 +46,11 @@ contextBridge.exposeInMainWorld('fiddle', {
     ipcRenderer.on(IPC.FiddleTerminalCleared, handler);
     return () => ipcRenderer.removeListener(IPC.FiddleTerminalCleared, handler);
   },
+  onChannelRemoved: (callback: (data: unknown) => void) => {
+    const handler = (_event: unknown, data: unknown) => callback(data);
+    ipcRenderer.on(IPC.FiddleChannelRemoved, handler);
+    return () => ipcRenderer.removeListener(IPC.FiddleChannelRemoved, handler);
+  },
 
   onRunResult: (callback: (data: unknown) => void) => {
     const handler = (_event: IpcRendererEvent, data: unknown) => callback(data);

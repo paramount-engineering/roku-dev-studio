@@ -13,7 +13,6 @@ import {
   closeModalWithOriginMotion
 } from '../../modules/utils/modal-origin-motion.js';
 import { attachBackdropClickToClose, attachEscToClose } from '../../modules/utils/modal-backdrop-click.js';
-import { attachInstantTooltips } from '../../modules/utils/instant-tooltip.js';
 import { rendererWarn } from '../../modules/utils/logger.js';
 import { S } from '@shared/strings/index.js';
 
@@ -70,10 +69,6 @@ export function openBitmapsModal(
 
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay bitmaps-modal-overlay';
-  // Native `title` tooltips are slow and pair with a "?" help cursor that reads as "no tooltip"
-  // (see instant-tooltip.ts) — this modal is appended straight to `document.body`, outside the
-  // Remote Section's own `attachInstantTooltips(wrap)` subtree, so it needs its own.
-  const detachTooltips = attachInstantTooltips(overlay);
 
   const modal = document.createElement('div');
   modal.className = 'modal bitmaps-modal';
@@ -243,7 +238,6 @@ export function openBitmapsModal(
     closed = true;
     activeTeardowns.delete(overlay);
     clearInterval(updatedTimer);
-    detachTooltips();
     overlay.remove();
     detachEsc();
     onClose && onClose();

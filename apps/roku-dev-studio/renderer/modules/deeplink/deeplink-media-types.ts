@@ -1,7 +1,7 @@
 /**
  * Global Deep Link media types: built-in defaults plus user-added entries persisted in app settings.
  */
-import { escapeHtml } from '../utils/dom.js';
+import { animateHeight, escapeHtml, setErrorLine } from '../utils/dom.js';
 import { rendererError } from '../utils/logger.js';
 import { attachBackdropClickToClose } from '../utils/modal-backdrop-click.js';
 import {
@@ -231,14 +231,7 @@ async function tryDeleteCustomMediaType(index: number, opener?: HTMLElement | nu
 
 function setModalError(message: string): void {
   const el = document.getElementById('deeplinkMediaTypesError');
-  if (!el) return;
-  if (message) {
-    el.textContent = message;
-    el.hidden = false;
-  } else {
-    el.textContent = '';
-    el.hidden = true;
-  }
+  setErrorLine(el?.closest('.deeplink-media-types-modal-box'), el, message);
 }
 
 function customEntryRowHtml(entry: MediaTypeEntry, index: number): string {
@@ -285,16 +278,18 @@ function renderCustomEntriesList(): void {
   const list = document.getElementById('deeplinkMediaTypesCustomList');
   if (!list) return;
 
-  if (customTypes.length === 0) {
-    list.innerHTML = `<p class="deeplink-media-types-empty">${S.deeplink.noCustomMediaTypes}</p>`;
-    return;
-  }
-
-  list.innerHTML = customTypes
-    .map((entry, index) =>
-      editingIndex === index ? editEntryRowHtml(entry, index) : customEntryRowHtml(entry, index)
-    )
-    .join('');
+  // Add / remove / edit-in-place all change the list's height — tween the dialog with it.
+  animateHeight(list.closest('.deeplink-media-types-modal-box'), () => {
+    if (customTypes.length === 0) {
+      list.innerHTML = `<p class="deeplink-media-types-empty">${S.deeplink.noCustomMediaTypes}</p>`;
+      return;
+    }
+    list.innerHTML = customTypes
+      .map((entry, index) =>
+        editingIndex === index ? editEntryRowHtml(entry, index) : customEntryRowHtml(entry, index)
+      )
+      .join('');
+  });
 }
 
 function resetAddForm(): void {

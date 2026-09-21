@@ -55,6 +55,7 @@ const htmlFiles = [
   'renderer/about.html',
   'renderer/log-file-viewer.html',
   'renderer/static-analysis.html',
+  'renderer/port-terminal.html',
   ...readdirSync(fragmentsDir)
     .filter((f) => f.endsWith('.html'))
     .map((f) => path.join('renderer/components/modals/fragments', f)),

@@ -32,6 +32,7 @@ const PRELOAD_ENTRIES: ReadonlyArray<readonly [string, string]> = [
   ['fiddle-preload.ts', 'fiddle-preload.bundled.cjs'],
   ['network-session-viewer-preload.ts', 'network-session-viewer-preload.bundled.cjs'],
   ['static-analysis-preload.ts', 'static-analysis-preload.bundled.cjs'],
+  ['port-terminal-preload.ts', 'port-terminal-preload.bundled.cjs'],
 ];
 
 /**
