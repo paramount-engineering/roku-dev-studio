@@ -227,7 +227,7 @@ describe('DebugProtocolClient connectSocket injection', () => {
       return s;
     };
 
-    const client = new DebugProtocolClient({ host: 'XY0200WN2DN4', connectSocket });
+    const client = new DebugProtocolClient({ host: 'XY02EX9Q4M7N', connectSocket });
     const ok = await client.connect(true);
     assert.equal(ok, true);
     assert.equal(client.protocolVersion, '3.2.0');
@@ -255,7 +255,7 @@ describe('DebugProtocolClient connectSocket injection', () => {
       return s;
     };
 
-    const client = new DebugProtocolClient({ host: 'XY0200WN2DN4', connectSocket });
+    const client = new DebugProtocolClient({ host: 'XY02EX9Q4M7N', connectSocket });
     const ok = await client.connect(true);
     assert.equal(ok, true);
 
@@ -280,7 +280,7 @@ describe('DebugProtocolClient connectSocket injection', () => {
     const socket = new FakeSocket();
     const connectSocket = async () => socket;
 
-    const client = new DebugProtocolClient({ host: 'XY0200WN2DN4', connectSocket });
+    const client = new DebugProtocolClient({ host: 'XY02EX9Q4M7N', connectSocket });
     socket.reply = fx('handshakeV3_300');
     await client.connect(true);
     assert.equal(client.protocolVersion, '3.0.0');
@@ -301,7 +301,7 @@ describe('DebugProtocolClient connectSocket injection', () => {
     const socket = new FakeSocket();
     const connectSocket = async () => socket;
 
-    const client = new DebugProtocolClient({ host: 'XY0200WN2DN4', connectSocket });
+    const client = new DebugProtocolClient({ host: 'XY02EX9Q4M7N', connectSocket });
     socket.reply = fx('handshakeV3'); // 3.2.0
     await client.connect(true);
 
@@ -317,7 +317,7 @@ describe('DebugProtocolClient connectSocket injection', () => {
     const socket = new FakeSocket();
     const connectSocket = async () => socket;
 
-    const client = new DebugProtocolClient({ host: 'XY0200WN2DN4', connectSocket });
+    const client = new DebugProtocolClient({ host: 'XY02EX9Q4M7N', connectSocket });
     socket.reply = fx('handshakeV3_300'); // 3.0.0 — predates per-entry case-insensitivity
     await client.connect(true);
     socket.emit('data', fx('allThreadsStopped'));

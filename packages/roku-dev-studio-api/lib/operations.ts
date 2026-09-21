@@ -1398,7 +1398,7 @@ function agentFacingSchema(schema: JsonSchemaObject): JsonSchemaObject {
     props.device = {
       type: 'string',
       description:
-        'Target device — IP (e.g. "192.168.1.154") or serial (e.g. "X00046N6S6F"). Omit to use the focused device.'
+        'Target device — IP (e.g. "192.168.1.137") or serial (e.g. "X0004EX9Q7M"). Omit to use the focused device.'
     };
   }
   const required = (schema.required || []).filter((r) => r !== 'ip');

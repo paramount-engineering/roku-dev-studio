@@ -11,7 +11,7 @@ Node.js package for Roku **discovery** (SSDP / subnet scan), **ECP** (keypress, 
 
 **Requirements**
 
-- **Node.js** ≥ 18
+- **Node.js** ≥ 24.17.0
 - **curl** on `PATH` for `captureRokuScreenshot`, `sideloadChannel`, and `deleteSideload` (direct mode only; relay runs these on the server host).
 
 **Install**
@@ -48,7 +48,11 @@ rds device info --ip 192.168.1.10
 rds ecp query /query/media-player --ip 192.168.1.10
 rds keypress Home --ip 192.168.1.10
 rds launch dev --ip 192.168.1.10
+rds deeplink dev --content-id some-id --media-type movie --ip 192.168.1.10
+rds input-text "hello" --ip 192.168.1.10
+rds test-connection --ip 192.168.1.10
 rds ecp query /query/apps --ip 192.168.1.10
+rds ecp post /keypress/Home --ip 192.168.1.10
 export ROKU_DEV_PASSWORD='your-dev-password'
 rds sideload ./out/channel.zip --ip 192.168.1.10
 rds screenshot ./screen.jpg --ip 192.168.1.10
@@ -103,7 +107,9 @@ All exports are available from the package root: `require('roku-dev-studio-api')
 
 ### Shared defaults (`lib/shared-constants.js`)
 
-One set of values for the **npm package**, **`rds` CLI**, **remote relay server**, and **Roku Dev Studio (Electron)**: **`DEFAULT_RALE_PORT`**, **`QUERY_TIMEOUT`**, **`TELNET_TIMEOUT`** / **`DEFAULT_TELNET_CONNECT_TIMEOUT_MS`**, **`SCREENSHOT_DEBOUNCE_DELAY`**, **`SCREENSHOT_AFTER_LAUNCH_DELAY`**, **`CONNECTION_CHECK_INTERVAL`**, **`TOAST_DISPLAY_DURATION`**, **`STATUS_MESSAGE_DURATION`**. The desktop renderer reads them via preload as **`window.rdsSharedConstants`**.
+One set of values for the **npm package**, **`rds` CLI**, **remote relay server**, and **Roku Dev Studio (Electron)**: **`DEFAULT_RALE_PORT`**, **`QUERY_TIMEOUT`**, **`TELNET_TIMEOUT`** / **`DEFAULT_TELNET_CONNECT_TIMEOUT_MS`**, **`SCREENSHOT_DEBOUNCE_DELAY`**, **`SCREENSHOT_AFTER_LAUNCH_DELAY`**, **`CONNECTION_CHECK_INTERVAL`**, **`TOAST_DISPLAY_DURATION`**, **`STATUS_MESSAGE_DURATION`**, **`DEVICE_METRICS_SAMPLE_INTERVAL_MIN_MS`** (Device Performance sampling floor; also the relay's `/query/*` cache TTL), **`INPUT_TEXT_KEY_DELAY_MS`** / **`INPUT_TEXT_PER_KEY_TIMEOUT_MS`** (per-`Lit_` keypress pacing in `inputText`), **`INPUT_TEXT_RELAY_HTTP_MIN_TIMEOUT_MS`** / **`INPUT_TEXT_RELAY_HTTP_MAX_TIMEOUT_MS`** and **`computeInputTextRelayHttpTimeoutMs(text, opts?)`** (client-side HTTP timeout budget for relay `/input-text`, scaled by text length). The desktop renderer reads them via preload as **`window.rdsSharedConstants`**.
+
+**`PACKAGE_VERSION`** — this package's semver string, generated from `package.json` at build time.
 
 ### Action scripts & RALE (programmatic)
 
@@ -111,8 +117,9 @@ One set of values for the **npm package**, **`rds` CLI**, **remote relay server*
 |--------|--------|
 | `runActionScript(script, options)` | Run Action Script JSON (same shape as Dev Studio). See `lib/script-runner.js` for `options`. |
 | `validateScriptStructure(script)` | **Sentence-form** offline validation; `{ valid, errors[] }`. Thin adapter over the canonical validator. |
-| `validateActionScript(script, opts?)` | **Canonical** validator: `{ ok, errors[], stepCounts }` with structured `{ path, code, expected[]?, stepIndex? }` errors. Used by every surface (MCP `validate_script`, the renderer Builder per-row hints, the `rds script validate` CLI). |
+| `validateActionScript(script, opts?)` | **Canonical** validator: `{ ok, errors[], stepCounts }` with structured `{ path, code, expected[]?, stepIndex? }` errors. Used by every surface (MCP `validate_script`, the renderer Builder per-row hints, the `rds script validate` CLI). `opts`: `{ raleFunctions?, allowDevPassword? }` — `raleFunctions` is the channel's `getExternalControlFunctions` list, used to check `appFunction` names/params; `allowDevPassword: true` suppresses the `password_in_script` error for local-UI callers (Builder / Executor / Import) where a human-typed or remembered password never leaves the machine. MCP `validate_script` leaves it off. |
 | `raleWake`, `raleConnect`, `raleCommand`, `raleDisconnect`, `raleDisconnectAll`, `raleConnectionStatus` | Direct TCP RALE on LAN (same protocol as the relay server). Default port **`DEFAULT_RALE_PORT`** (shared-constants). |
+| `raleRegisterSocket(connectionId, socket, opts?)` | Register an already-open socket (e.g. an RCE WebSocket tunnel) so `raleCommand` / `raleDisconnect` / `raleConnectionStatus` can drive it without `raleConnect`'s own TCP dial. |
 | `normalizeRaleFunctions(raw)` | Normalize `getExternalControlFunctions` entries to `{ name, params, description? }[]` (description preserved verbatim from the channel payload when present). |
 | `parseGetExternalControlFunctionsResponse(raleResult)` | Parse `raleCommand` result object into `{ ok, functions?, error?, raw? }`. |
 
@@ -168,6 +175,7 @@ The transport-agnostic op catalog. Every Roku side-effecting action is described
 
 | Export | Notes |
 |--------|--------|
+| `connectRokuTcp(ip, port, opts?)` | Low-level: open a raw TCP socket to any device port; `{ success, socket }` or `{ success: false, error }`. `opts`: `{ connectTimeoutMs? }`. |
 | `connectRokuDebugTelnet(ip, opts?)` | Open the BrightScript debug stream on `ROKU_DEBUG_TELNET_PORT` (`8085`). |
 | `connectRokuSystemTelnet(ip, opts?)` | Open the dev system command stream on `ROKU_SYSTEM_TELNET_PORT` (`8080`). |
 | `writeRokuTelnetLine(socket, line)` | Send a system command line. |
@@ -187,6 +195,17 @@ The transport-agnostic op catalog. Every Roku side-effecting action is described
 |--------|--------|
 | `buildFiddleZip(userCode)` | Wraps a BrightScript snippet into a sideload-ready zip using the `roku-components/fiddle/` scaffold. The desktop app uses this for the Fiddle window's *Run*. |
 | `userCodeDefinesInit(code)` | Detects whether the user already wrote an `init()` so the wrapper doesn't double-define it. |
+| `buildDemoZip({ tmpDir? })` | Builds the static "Roku Dev Studio Showcase" demo channel zip (the app's *Try Demo App*). |
+
+### Debugger helpers (`lib/debugger/`)
+
+Not on the package root, but reachable through the `./lib/*` exports map (`require('roku-dev-studio-api/lib/debugger/scan-stops')`). These back Roku Dev Studio's main process and are not a stable public API:
+
+| Module | Exports | Notes |
+|--------|---------|-------|
+| `scan-stops` | `scanZipForStops(zipPath)`, `rememberSideloadZip(ip, zipPath)`, `getRememberedZip(ip)`, `getScannedStops(ip)`, `stripStringsAndComment(line)` | Lists bare `STOP` statements in a sideloaded `.zip` so the Breakpoints panel can show them before they hit. Keeps the last **debug**-sideloaded zip per IP in memory. |
+| `scan-symbols` | `scanZipForSymbols(zipPath)`, `rememberAnySideloadZip(ip, zipPath)`, `getAnyRememberedZip(ip)` | Collects `function` / `sub` declarations from a sideloaded `.zip` for Fiddle autocomplete. Keeps the last sideloaded zip of **any** kind per IP (deliberately separate from `scan-stops`). |
+| `debug-session-controller`, `protocol/` | — | The in-house BrightScript debug-protocol (port 8081) session controller used by the desktop debugger and the MCP `debugger_*` tools. |
 
 ### Response shapes (ECP helpers)
 
@@ -207,6 +226,7 @@ Most ECP calls resolve to an object:
 |-----|-----------|---------|
 | `ssdpDiscover` | `(opts?)` | `Promise<Device[]>` |
 | `subnetScan` | `(opts?)` | `Promise<Device[]>` |
+| `resolveDeviceIp` | `(serial, fallbackIp)` | The most recently discovered IP for `serial` this run, else `fallbackIp` — for per-device state keyed by serial when IPs change. |
 
 **`opts` (optional):** `onDeviceFound(device)`, `log(msg)`, `timeout`, `earlyFinishMs`, `sendCount`, `sendInterval` (SSDP); `requestTimeout`, `concurrency` (subnet).
 
@@ -221,6 +241,9 @@ Most ECP calls resolve to an object:
 | `getDeviceId` | `(deviceInfo)` | Stable id (serial) or `null` (caller may use IP). |
 | `normalizeEcpSettingMode` | `(raw)` | `"Disabled"` \| `"Limited"` \| `"Permissive"` \| `"Enabled"`. |
 | `isIpOnSameSubnet` | `(deviceIp)` | `boolean` — useful for ECP “Permissive” hints. |
+| `getDeviceImageUrl` | `(ip, opts?)` | `Promise<string \| null>` — absolute URL of the device's hardware photo from its UPnP `iconList` (port 8060). `opts`: `{ port?, timeout? }`. |
+| `fetchDeviceHardwareImage` | `(ip, opts?)` | Fetches the image bytes: `{ success, buffer, contentType }` or `{ success: false, error, statusCode? }`. Used by the relay proxy. `opts`: `{ port?, rootTimeout?, imageTimeout? }`. |
+| `getDeviceHardwareImage` | `(ip, opts?)` | Same fetch, returned as `{ success, dataUrl }` for a sandboxed renderer `<img src>`. |
 
 ---
 
@@ -257,6 +280,9 @@ Most ECP calls resolve to an object:
 | `captureRokuScreenshot` | `({ ip, password, exec?, waitAfterTriggerMs?, retryWaitMs?, maxRetries?, minValidBytes?, log? })` |
 | `sideloadChannel` | `({ ip, filePath? \| zipData? (+ filename?), password, log?, extraFields?, cleanInstall? })` |
 | `deleteSideload` | `({ ip, password, log? })` |
+| `verifyDeveloperDigestAuth` | `({ ip, password })` — checks dev credentials via HTTP Digest against the device web UI (pure Node, no curl); `{ success }` or `{ success: false, error, authFailed? }`. |
+| `rebootDevice` | `({ ip, password, log? })` — reboot via the Developer Application Installer. |
+| `checkForUpdate` | `({ ip, password, log? })` — ask the device to check for a software update via the Developer Application Installer. |
 
 ---
 
@@ -417,5 +443,6 @@ Released under the [MIT License](./LICENSE).
 
 | Library | Purpose | Licence |
 |---------|---------|---------|
+| [adm-zip](https://github.com/cthackers/adm-zip) | Reading sideloaded `.zip` sources (`lib/debugger/scan-stops`, `scan-symbols`) | [MIT](https://opensource.org/licenses/MIT) |
 | [archiver](https://github.com/archiverjs/node-archiver) | Building sideload `.zip` packages | [MIT](https://opensource.org/licenses/MIT) |
 | [commander](https://github.com/tj/commander.js) | `rds` CLI argument parsing | [MIT](https://opensource.org/licenses/MIT) |
