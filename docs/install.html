@@ -85,14 +85,14 @@
   <pre><code>npm run build:mac</code></pre>
   <p>Creates, under <code>apps/roku-dev-studio/dist/</code>:</p>
   <ul>
-    <li><code>mac/arm64/Roku Dev Studio-{version}-arm64.dmg</code> — Apple Silicon installer</li>
-    <li><code>mac/arm64/Roku Dev Studio-{version}-arm64-mac.zip</code> — portable Apple Silicon app</li>
+    <li><code>mac/arm64/*.dmg</code> — Apple Silicon installer</li>
+    <li><code>mac/arm64/*.zip</code> — Apple Silicon app bundle used by the in-app updater</li>
   </ul>
   <p>Intel Mac builds are no longer produced by default; build locally (deprecated) with <code>npm run build:mac:intel</code>.</p>
 
   <h3>Windows</h3>
   <pre><code>npm run build:win</code></pre>
-  <p>Creates a Windows installer (<code>Roku Dev Studio Setup {version}.exe</code>) and a portable executable, both x64.</p>
+  <p>Creates, under <code>windows/x64/</code>, the NSIS installer (<code>…-Setup-…-x64.exe</code>) and a portable executable (<code>…-Portable-…-x64.exe</code>). File names for every platform come from <code>build.artifactName</code> in <code>apps/roku-dev-studio/package.json</code>; <code>npm run verify:artifact-names</code> prints them.</p>
 
   <h3>Linux</h3>
   <pre><code>npm run build:linux</code></pre>

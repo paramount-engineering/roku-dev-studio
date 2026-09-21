@@ -159,24 +159,18 @@ Each release will include the artifacts listed in the **Downloads** table below.
 
 ### Downloads
 
-| Platform | Intel/x64 | ARM64/Apple Silicon |
-|----------|-----------|----------------------|
-| **macOS** | — (Intel builds disabled by default; `npm run build:mac:intel` locally) | Roku Dev Studio-VERSION-arm64.dmg |
-| **Windows** | Roku Dev Studio Setup VERSION.exe, Roku Dev Studio VERSION.exe (portable) | - |
-| **Linux** | roku-dev-studio_VERSION_amd64.deb, Roku Dev Studio-VERSION-x86_64.AppImage | roku-dev-studio_VERSION_arm64.deb, Roku Dev Studio-VERSION-arm64.AppImage |
-
-*(VERSION is replaced automatically in the release body; in this doc it just shows the naming pattern.)*
+The **Downloads** table in the release body is **generated at release time from the assets actually uploaded** (one row per `.dmg` / `.zip` / `.exe` / `.deb` / `.AppImage`, grouped by platform), so it cannot drift from the real file names. Artifact file names come from `build.artifactName` in `apps/roku-dev-studio/package.json` (with `nsis` / `portable` overrides for the two Windows builds) — the single source of truth; `npm run verify:artifact-names` prints the exact names for every target and fails if two collide. Current scheme: `Roku-Dev-Studio-<version>-<arch>.<ext>`, with `Roku-Dev-Studio-Setup-…` / `Roku-Dev-Studio-Portable-…` for the Windows installer / portable build; x64 appears as `amd64` in `.deb` and `x86_64` in `.AppImage` names.
 
 ### Installation
 
 **macOS**
-1. Download the `-arm64.dmg` file (Apple Silicon)
+1. Download the `.dmg` file (Apple Silicon)
 2. Open the disk image
 3. Drag the app to your Applications folder
 4. Open the app — it is signed with a Developer ID certificate and notarized by Apple, so Gatekeeper opens it without any override.
 
 **Windows**
-1. Download the Setup `.exe` file
+1. Download the **Setup** `.exe` file
 2. Run the installer
 3. If you see "Windows protected your PC":
    - Click "More info"
@@ -215,7 +209,7 @@ Each release will include the artifacts listed in the **Downloads** table below.
    - `CSC_KEY_PASSWORD` - the `.p12` password
    - `APPLE_ID` - your Apple ID email
    - `APPLE_APP_SPECIFIC_PASSWORD` - the app-specific password
-   - `APPLE_TEAM_ID` - 10-character Team ID (developer.apple.com → Membership details)
+   - `APPLE_TEAM_ID` - 10-character Team ID (developer.apple.com → Membership details; also in the certificate's parentheses)
 
 electron-builder signs, notarizes via `notarytool` and staples the ticket itself (`build.mac.notarize: true`); there is no hook code. Local setup: `INSTALLATION.md` → macOS.
 

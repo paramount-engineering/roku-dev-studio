@@ -34,9 +34,7 @@ Always run **`npm install` from the repository root** so workspaces link correct
 ```bash
 npm run build:mac
 ```
-This creates (under `apps/roku-dev-studio/dist/`):
-- `apps/roku-dev-studio/dist/mac/arm64/Roku Dev Studio-{version}-arm64.dmg` — Apple Silicon installer
-- `apps/roku-dev-studio/dist/mac/arm64/Roku Dev Studio-{version}-arm64-mac.zip` — portable Apple Silicon app
+This creates, under `apps/roku-dev-studio/dist/mac/arm64/`, a `.dmg` installer and a `.zip` (consumed by the in-app updater), both for Apple Silicon. Artifact file names come from `build.artifactName` in `apps/roku-dev-studio/package.json` (with `nsis` / `portable` overrides for the two Windows builds) — the single source of truth; `npm run verify:artifact-names` prints the exact names for every target and fails if two collide.
 
 Intel Mac builds are no longer produced by default. To build them locally (deprecated):
 
@@ -48,17 +46,13 @@ npm run build:mac:intel
 ```bash
 npm run build:win
 ```
-This creates (under `apps/roku-dev-studio/dist/`):
-- `apps/roku-dev-studio/dist/win/Roku Dev Studio Setup {version}.exe` - Windows installer (x64)
-- `apps/roku-dev-studio/dist/win/Roku Dev Studio {version}.exe` - Portable Windows app (x64)
+This creates, under `apps/roku-dev-studio/dist/windows/x64/`, the NSIS installer (`…-Setup-…-x64.exe`) and the portable app (`…-Portable-…-x64.exe`). The two Windows targets have their own `artifactName` overrides so they can never resolve to the same file name.
 
 ### For Linux:
 ```bash
 npm run build:linux
 ```
-This creates (under `apps/roku-dev-studio/dist/`):
-- `apps/roku-dev-studio/dist/linux/Roku Dev Studio-{version}.deb` - Debian package (x64 & arm64)
-- `apps/roku-dev-studio/dist/linux/Roku Dev Studio-{version}-{arch}.AppImage` - AppImage (x64 & arm64)
+This creates, under `apps/roku-dev-studio/dist/linux/{x64,arm64}/`, a `.deb` and an `.AppImage` per architecture. electron-builder spells x64 as `amd64` in `.deb` names and `x86_64` in `.AppImage` names.
 
 ### For All Platforms:
 ```bash
@@ -83,6 +77,8 @@ security import ~/path/to/DeveloperID.p12 -k ~/Library/Keychains/login.keychain-
 security find-identity -v -p codesigning   # expect: "Developer ID Application: <Name> (<TEAMID>)"
 ```
 
+If that reports 0 *valid* identities, the p12 did not bundle Apple's intermediate — import https://www.apple.com/certificateauthority/DeveloperIDG2CA.cer into the same keychain and re-check.
+
 …or pass it per build, which uses a throwaway keychain (this is what CI does):
 
 ```bash
@@ -90,10 +86,10 @@ export CSC_LINK=~/path/to/DeveloperID.p12      # a file path, or the file's base
 export CSC_KEY_PASSWORD='<p12 password>'
 ```
 
-**2. notarytool credentials.** The certificate alone cannot notarize. You also need your Apple ID, an [app-specific password](https://appleid.apple.com/account/manage) (Sign-In and Security → App-Specific Passwords) and your 10-character Team ID (developer.apple.com → Membership details; it is also the `(…)` suffix on the identity above). Store them in the keychain once and point electron-builder at the profile:
+**2. notarytool credentials.** The certificate alone cannot notarize. You also need an Apple ID that is a member of the *same team* as the certificate (the Team ID in its parentheses), an [app-specific password](https://appleid.apple.com/account/manage) for it (Sign-In and Security → App-Specific Passwords), and that Team ID. Store them in the keychain once and point electron-builder at the profile:
 
 ```bash
-xcrun notarytool store-credentials rds-notary --apple-id you@example.com --team-id ABCDE12345 --password xxxx-xxxx-xxxx-xxxx
+xcrun notarytool store-credentials rds-notary --apple-id you@example.com --team-id ABCDE12345
 export APPLE_KEYCHAIN_PROFILE=rds-notary
 ```
 
