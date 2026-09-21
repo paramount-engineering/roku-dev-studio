@@ -9,7 +9,8 @@ device through the Roku Dev Studio desktop app and exposes **two surfaces**:
    `delete_sideload`, `test_connection`, `scan_devices`,
    `get_app_icon`, `app_connector_connect` /
    `app_connector_disconnect`, `rale_get_node_by_id`,
-   `telnet_connect` / `telnet_disconnect` / `get_telnet_log`.
+   `telnet_connect` / `telnet_disconnect` / `get_telnet_log`,
+   `console_monitor_findings`, `device_performance_metrics`.
    Two of these (`sideload`, `delete_sideload`) do **not** work against a
    Roku Cloud Emulator (`rce`) device — see §4 for the three device kinds
    and which tools each one supports.
@@ -243,7 +244,50 @@ reporting "no logs". Connecting may displace another client (e.g. a
 BrightScript IDE) that currently holds 8085; surface that to the user when
 relevant.
 
-## 9. Tools are tagged
+## 9. BrightScript debugger (control port 8081)
+
+Stateful — attach once, then most verbs only work while the channel is
+**halted**. Call `debugger_status` first: if it already reports
+`attached` / `running` / `stopped`, skip `debugger_attach`.
+
+```
+debugger_status({ device? })                 → { state } without blocking
+debugger_attach({ device? })                 → open the 8081 session (no-op if one is healthy)
+debugger_set_breakpoints({ breakpoints: [{ path: "pkg:/components/Main.brs", line: 12 }] })
+debugger_wait_for_stop({ timeoutMs? })       → blocks until a halt; returns the stop snapshot
+debugger_get_callstack({}) / debugger_get_variables({ stackFrameIndex?, variablePath? })
+debugger_continue({}) / debugger_step({ kind: "over" | "in" | "out" })
+debugger_detach({})
+```
+
+The port is only open when the channel was launched **with debugging**
+(sideload "with Debugging", or a `STOP` in the source); a plain sideload
+does not open it, and `debugger_attach` returns an actionable error.
+Breakpoints added while the channel is running come back `pending: true`
+and register at the next stop.
+
+## 10. Network Inspector (captured device traffic)
+
+Call `network_inspector_status` first. `ready` is true once packet capture
+**or** the MITM proxy is active; if false, relay its `notice` /
+`remediation` to the user (enable the feature, grant capture access, connect
+the Roku to this machine's hotspot) — reads return nothing until then.
+`status.mitmActive` says whether HTTPS is being decrypted; without it only
+DNS / TLS / TCP metadata and plain-HTTP transactions are visible.
+
+```
+network_inspector_status({})                        → { status, ready, notice?, remediation? }
+network_inspector_analyze({ device?, ...filters })  → rollups: status classes, top hosts, errors
+network_inspector_list_events({ host?, statusClass?, errorsOnly?, limit? })
+                                                    → lightweight summaries with an `id` each
+network_inspector_get_event_detail({ id })          → full headers + body (capped; `includeFullBody`)
+network_inspector_find({ query, regex?, scopes? })  → full-text search across URLs / headers / bodies
+```
+
+Orient with `analyze`, narrow with `list_events`, drill in with
+`get_event_detail`; use `find` for "which requests contain X".
+
+## 11. Tools are tagged
 
 Every tool carries MCP `annotations`:
 - `readOnlyHint` — safe to call without confirmation

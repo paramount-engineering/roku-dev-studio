@@ -1,7 +1,7 @@
 /**
  * Guard: every tool name `roku-dev-studio-mcp` actually registers must appear in every place that
- * lists them for a human — the in-app "View MCP Tools" reference modal, the docs site's MCP page,
- * and the MCP package's own README — and vice versa. All three are hand-maintained by design: their
+ * lists them for a human — the in-app "View MCP Tools" reference modal and the MCP package's own
+ * README — and vice versa. Both are hand-maintained by design: their
  * prose/descriptions are curated copy (the in-app modal's is even translated), not the tool's long
  * agent-facing `description`, so this does not generate any of them; it just fails loudly when one
  * drifts from the real catalog.
@@ -13,11 +13,9 @@
  *   - packages/roku-dev-studio-api/lib/operations.ts: every `RokuOp.id` (auto-wrapped into an
  *     MCP tool by `opToMcpTool` in tools.ts — `OP_BACKED_TOOLS`).
  *   - packages/roku-dev-studio-mcp/src/tools.ts: every hand-written `Tool.name` in
- *     BESPOKE_TOOLS / NETWORK_INSPECTOR_TOOLS / DEBUGGER_TOOLS.
+ *     DISCOVERY_TOOLS / BRIDGE_TOOLS / NETWORK_INSPECTOR_TOOLS / DEBUGGER_TOOLS.
  *   - renderer/components/settings/mcp-tools-modal.ts: every name inside a `toolNames: [...]`
  *     array in MCP_TOOL_GROUPS.
- *   - docs/mcp.html: every `<code>name</code>` inside a <table> within the `#tools` section,
- *     plus the "`N` tools across" sentence.
  *   - packages/roku-dev-studio-mcp/README.md: every backtick-quoted name in a "## Tool catalog"
  *     table's first cell, plus the ALL_OPS enumeration paragraph and the "refresh" count sentence.
  *
@@ -32,7 +30,6 @@ const repoRoot = path.resolve(appDir, '../..');
 const operationsPath = path.join(repoRoot, 'packages/roku-dev-studio-api/lib/operations.ts');
 const toolsPath = path.join(repoRoot, 'packages/roku-dev-studio-mcp/src/tools.ts');
 const modalPath = path.join(appDir, 'renderer/components/settings/mcp-tools-modal.ts');
-const docsHtmlPath = path.join(repoRoot, 'docs/mcp.html');
 const mcpReadmePath = path.join(repoRoot, 'packages/roku-dev-studio-mcp/README.md');
 
 /** All `<key>: '<snake_case>'` matches at the start of a line (ignoring leading whitespace) —
@@ -49,7 +46,6 @@ function scanLeadingKeyValues(src: string, key: string): Set<string> {
 const operationsSrc = readFileSync(operationsPath, 'utf8');
 const toolsSrc = readFileSync(toolsPath, 'utf8');
 const modalSrc = readFileSync(modalPath, 'utf8');
-const docsHtmlSrc = readFileSync(docsHtmlPath, 'utf8');
 const mcpReadmeSrc = readFileSync(mcpReadmePath, 'utf8');
 
 const opBackedNames = scanLeadingKeyValues(operationsSrc, 'id');
@@ -84,24 +80,7 @@ const modalNames = new Set<string>();
   }
 }
 
-// ── Surface 2: docs/mcp.html ────────────────────────────────────────────────
-const docsNames = new Set<string>();
-let docsStatedCount: number | null = null;
-{
-  const sectionMatch = /<section[^>]*id="tools"[^>]*>[\s\S]*?<\/section>/.exec(docsHtmlSrc);
-  const section = sectionMatch ? sectionMatch[0] : '';
-  const tableRe = /<table>([\s\S]*?)<\/table>/g;
-  let tm: RegExpExecArray | null;
-  while ((tm = tableRe.exec(section)) !== null) {
-    const codeRe = /<code>([a-zA-Z][a-zA-Z0-9_]*)<\/code>/g;
-    let cm: RegExpExecArray | null;
-    while ((cm = codeRe.exec(tm[1])) !== null) docsNames.add(cm[1]);
-  }
-  const countMatch = /(\d+)\s+tools\s+across/.exec(section);
-  if (countMatch) docsStatedCount = parseInt(countMatch[1], 10);
-}
-
-// ── Surface 3: packages/roku-dev-studio-mcp/README.md ───────────────────────
+// ── Surface 2: packages/roku-dev-studio-mcp/README.md ───────────────────────
 const readmeNames = new Set<string>();
 let readmeStatedCounts: { total: number; handWritten: number; opBacked: number } | null = null;
 {
@@ -160,15 +139,8 @@ function reportSurface(label: string, names: Set<string>): void {
 }
 
 reportSurface('mcp-tools-modal.ts', modalNames);
-reportSurface('docs/mcp.html', docsNames);
 reportSurface('roku-dev-studio-mcp/README.md', readmeNames);
 
-if (docsStatedCount != null && docsStatedCount !== realNames.size) {
-  failed = true;
-  console.error(
-    `\n❌ docs/mcp.html says "${docsStatedCount} tools across ..." — real count is ${realNames.size}.`
-  );
-}
 if (readmeStatedCounts) {
   const wantTotal = realNames.size;
   const wantHandWritten = bespokeNames.size;

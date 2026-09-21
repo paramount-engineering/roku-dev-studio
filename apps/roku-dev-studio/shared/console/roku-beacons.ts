@@ -31,7 +31,7 @@
  * The line a debug-enabled channel prints at launch while it waits (~10 s) for a socket debugger on
  * 8081 before falling back to the on-device micro debugger — the cue for the Console's debug sidebar
  * to attach (telnet-console-panel.ts → telnet-debug-sidebar.ts). Real on-device signature:
- *   `09-16 19:31:39.077 sdkl [plg.dbg.conn.wait] Waiting for debugger on 10.136.216.75:8081`
+ *   `09-16 19:31:39.077 sdkl [plg.dbg.conn.wait] Waiting for debugger on 10.20.30.40:8081`
  */
 /**
  * How long after a fresh 8085 connect Roku's replay of recent console history can still be

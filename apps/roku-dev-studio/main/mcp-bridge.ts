@@ -735,7 +735,7 @@ function resolveIp(target: TargetRef | null): string | null {
 }
 
 /**
- * Human-friendly device label for toasts ("Roku Ultra (192.168.1.182)").
+ * Human-friendly device label for toasts ("Roku Ultra (192.168.1.164)").
  */
 function deviceLabel(ip: string | null): string {
   if (!ip) return 'selected device';

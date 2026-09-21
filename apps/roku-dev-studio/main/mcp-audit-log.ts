@@ -14,7 +14,7 @@
  *   {
  *     "ts": "2026-05-08T14:22:09.118Z",
  *     "op": "launch_app",         // op id, tool name, or pathname:method for the back-compat aliases
- *     "device": "192.168.1.182",  // resolved IP, or null for non-device ops (scan, builder drop)
+ *     "device": "192.168.1.164",  // resolved IP, or null for non-device ops (scan, builder drop)
  *     "durationMs": 142,
  *     "status": 200,              // HTTP status the bridge returned
  *     "ok": true,                 // status in [200, 300)

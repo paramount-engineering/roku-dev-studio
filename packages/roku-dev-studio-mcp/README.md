@@ -1,6 +1,6 @@
 # roku-dev-studio-mcp
 
-Model Context Protocol (MCP) server that lets AI agents (Cursor, Claude Desktop, VS Code, …) drive a Roku from inside their chat. Ships bundled with the Roku Dev Studio Electron app. Users do not install it directly — they enable it from **Settings → MCP Server** in Dev Studio, which writes the launch config (`command`, `args`, `cwd`) into the supported client app(s).
+Model Context Protocol (MCP) server that lets AI agents (Cursor, Claude Desktop, VS Code, …) drive a Roku from inside their chat. Ships bundled with the Roku Dev Studio Electron app. Users do not install it directly — they enable it from **Settings → MCP Server** in Dev Studio, which writes the launch config (`command`, `args`, `env`) into the supported client app(s).
 
 > Part of [Roku Dev Studio](https://paramount-engineering.github.io/roku-dev-studio/) — see the [main repo](https://github.com/paramount-engineering/roku-dev-studio) for the desktop app and the rest of the monorepo. Also listed on [Glama](https://glama.ai/mcp/servers/paramount-engineering/roku-dev-studio) and [MCP Market](https://mcpmarket.com/server/roku-dev-studio).
 
@@ -13,7 +13,7 @@ Each row is one supported host (Cursor, Claude Desktop, VS Code, Visual Studio C
 The server exposes **two surfaces** so the agent can pick the right tool for the job, not be forced to wrap everything in a script:
 
 1. **Direct device ops** — one-shot tools that do exactly one thing and return immediately:
-   `keypress`, `launch_app`, `input_text`, `deep_link`, `ecp_query`, `ecp_post`, `rale_command`, `app_function`, `screenshot`, `sideload`, `delete_sideload`, `test_connection`, `scan_devices`, `get_app_icon`, `app_connector_connect`, `app_connector_disconnect`, `telnet_connect`, `get_telnet_log`, `telnet_disconnect`, plus bespoke helpers (`connect_device`, `rale_get_node_by_id`).
+   `keypress`, `launch_app`, `input_text`, `deep_link`, `ecp_query`, `ecp_post`, `rale_command`, `app_function`, `screenshot`, `sideload`, `delete_sideload`, `test_connection`, `scan_devices`, `get_app_icon`, `app_connector_connect`, `app_connector_disconnect`, `telnet_connect`, `get_telnet_log`, `telnet_disconnect`, `console_monitor_findings`, `device_performance_metrics`, plus bespoke helpers (`connect_device`, `rale_get_node_by_id`).
 2. **Action Scripts** — `validate_script` + `send_script_to_builder`. The script lands in the Action Scripts Builder for the human to review and run; nothing executes automatically.
 
 The picker rule (lives in the server's `instructions`, in the `roku-dev-studio://quick-start.md` resource, and in the `roku-action-script-quickstart` prompt): **single deterministic action → direct op**; **multi-step / conditional / polling / saved-or-reviewed flow → Action Script**.
@@ -79,12 +79,14 @@ The contract on each hop:
 ```
 src/
 ├── index.ts                ← stdio JSON-RPC 2.0 transport + dispatch
-├── tools.ts                ← tool catalog (BESPOKE_TOOLS + auto-generated OP_BACKED_TOOLS)
+├── tools.ts                ← tool catalog (DISCOVERY_TOOLS, BRIDGE_TOOLS, NETWORK_INSPECTOR_TOOLS, DEBUGGER_TOOLS + auto-generated OP_BACKED_TOOLS)
 ├── resources.ts            ← MCP resources (quick-start.md, action-script-contract.md, capability-bundle.json, authoring-rules.json)
 ├── prompts.ts              ← MCP prompts + tiny `{{var}}` renderer
 ├── agent-contract.ts       ← re-exports the script-authoring contract string
 ├── validator.ts            ← Action Script validator (mirrors roku-dev-studio-api)
 ├── bridge-client.ts        ← HTTP client for the Dev Studio bridge (token + descriptor lookup)
+├── log.ts                  ← stderr-only logger (stdout is the JSON-RPC stream); `RDS_MCP_DEBUG=1` for verbose
+├── output-schema-validator.ts ← warn-only check of op responses against their `outputSchema`
 ├── prose/                  ← all long-form prose lives here, NOT inline in TS
 │   ├── server-instructions.md
 │   ├── action-script-contract.md
@@ -96,6 +98,8 @@ src/
 └── prose.d.ts              ← `declare module '*.md'` so TS types `.md` imports as string
 
 build.mjs                   ← esbuild bundle (CJS, single file, .md inlined via text loader)
+scripts/gen-docs.mjs        ← bundles + runs gen-docs-entry.ts → docs/mcp-tools.json (the docs site's tool reference)
+scripts/gen-docs-entry.ts
 dist/index.cjs              ← what ships and what hosts spawn
 ```
 
@@ -160,7 +164,7 @@ Every tool ships with `annotations` so hosts can make safe-by-default UI decisio
 | `idempotentHint: true` | Same args produce the same result. |
 | `openWorldHint: true` | Touches an external device or the network. |
 
-For op-backed tools these come straight from the op's `destructive` flag. For bespoke tools they're set inline in `tools.ts`.
+For op-backed tools `readOnlyHint` and `idempotentHint` come from the op's `readOnly` axis and `destructiveHint` from its `destructive` flag (`openWorldHint` is always true). For bespoke tools they're set inline in `tools.ts`.
 
 ## Resources
 
@@ -211,9 +215,13 @@ Per-launch token. Removed on shutdown. `userData` matches Electron's `app.getPat
 | `/devices` | GET | `list_devices` | Connected + known + selected serial. |
 | `/app-connector/functions` | GET | `list_app_connector_functions` | Borrows a renderer fetch (`McpBridgeFunctionsRequest`); returns `{ status, functions, fetchedAt }`. |
 | `/op/<id>` | POST | every main-direct op tool | Generic dispatcher: looks up the op via `roku-dev-studio-api.findOp`, resolves `device` → `ip`, fills password from renderer if needed, runs `runOpForHttp`. |
-| `/tool` | POST | renderer-routed tools (full `rale_command`, `app_connector_*`, telnet send) | Round-trips to the active renderer via `McpBridgeToolRequest/Result`. |
+| `/tool` | POST | every `runIn: 'renderer'` op (`rale_command`, `app_connector_connect` / `app_connector_disconnect`, `app_function`, `get_telnet_log`, `telnet_connect` / `telnet_disconnect`, `console_monitor_findings`, `device_performance_metrics`) | Round-trips to the active renderer via `McpBridgeToolRequest/Result`. |
 | `/connect-device` | POST | `connect_device` | Round-trips to the renderer to open / focus a tab. Idempotent. |
 | `/builder/drop-script` | POST | `send_script_to_builder` | Round-trips to the renderer; Builder opens with the script staged. |
+| `/network-inspector/status` | GET | `network_inspector_status` | Capture / MITM state, `ready`, `prerequisites[]`. |
+| `/network-inspector/events`, `/network-inspector/event-detail`, `/network-inspector/analyze`, `/network-inspector/find` | POST | `network_inspector_list_events` / `_get_event_detail` / `_analyze` / `_find` | Read the captured-event buffer held in main. |
+| `/network-inspector/ca-info` | GET | `network_inspector_get_ca_info` | MITM CA fingerprint + proxy info. |
+| `/debugger/<verb>` | POST | every `debugger_*` tool | One verb per tool (`attach`, `status`, `wait-for-stop`, `callstack`, …) against the main-process debug session controller. Unknown verb → 404; no session yet → 409 ("attach first"). |
 | `/ecp-query`, `/keypress`, `/launch`, `/input-text`, `/deep-link`, `/ecp-post`, `/sideload`, `/delete-sideload`, `/screenshot`, `/scan-devices`, `/get-app-icon`, `/test-connection`, `/rale/get-node-by-id` | POST | back-compat | Older per-op aliases kept for stability. New code should prefer `/op/<id>`. |
 
 Every request requires `Authorization: Bearer <token>`. Anything else returns `401 Unauthorized`.
@@ -249,7 +257,12 @@ npm install
 npm run typecheck            # tsc --noEmit
 
 # Bundle.
-npm run build                # node build.mjs → dist/index.cjs (≈143 KB)
+npm run build                # node build.mjs → dist/index.cjs (≈287 KB)
+
+# Regenerate the docs site's tool reference data.
+npm run docs                 # node scripts/gen-docs.mjs → docs/mcp-tools.json
+# Op-backed tools' description/outputSchema are read from roku-dev-studio-api's *built* dist,
+# not its .ts source — run `npm run build -w roku-dev-studio-api` first after editing operations.ts.
 
 # Manual smoke test against the bundle.
 node dist/index.cjs <<EOF
@@ -275,21 +288,21 @@ Most hosts expect a JSON config block like:
 }
 ```
 
-Dev Studio's **Settings → MCP Server** writes this for you (with the correct absolute path) into Cursor, Claude Desktop, and VS Code config files.
+Dev Studio's **Settings → MCP Server** writes this for you into each supported host's config file — ChatGPT Desktop, Claude Desktop, Cursor, VS Code, VS Code Insiders, VSCodium, Windsurf (`MCP_CLIENT_IDS` in `apps/roku-dev-studio/main/mcp-clients.ts`). The written entry differs from the snippet above: `command` is the bundled Electron binary (not `node`), `args` is the absolute path to `dist/index.cjs`, and `env` sets `ELECTRON_RUN_AS_NODE=1` so the app's own runtime runs the server with no separate Node install.
 
 ### Postman collection
 
-`postman/roku-dev-studio-mcp.postman_collection.json` exercises every bridge endpoint with example bodies. Useful for diffing wire shape after a refactor.
+`postman/roku-dev-studio-mcp.postman_collection.json` exercises the core bridge endpoints with example bodies. Useful for diffing wire shape after a refactor.
 
 ## Adding things
 
 ### A new direct op
 
-Almost always: just add the descriptor to `roku-dev-studio-api/lib/operations.ts` and the bridge handler logic in `apps/roku-dev-studio/main/mcp-bridge.ts` (if it's not already covered by `/op/<id>`'s generic dispatcher). The MCP server picks the new op up automatically — `OP_BACKED_TOOLS` reads `ALL_OPS` at module load, the agent-facing schema rewrite happens for free, and the annotations come from the op's `destructive` flag.
+Almost always: just add the descriptor to `roku-dev-studio-api/lib/operations.ts` and the bridge handler logic in `apps/roku-dev-studio/main/mcp-bridge.ts` (if it's not already covered by `/op/<id>`'s generic dispatcher). The MCP server picks the new op up automatically — `OP_BACKED_TOOLS` reads `ALL_OPS` at module load, the agent-facing schema rewrite happens for free, and the annotations come from the op's `readOnly` / `destructive` axes.
 
 ### A new bespoke tool
 
-Add an entry to `BESPOKE_TOOLS` in `src/tools.ts` with `name`, `title`, `description`, `inputSchema`, `annotations`, and `handler`. Keep the description short and steer agents toward direct ops where appropriate (see the existing `validate_script` / `send_script_to_builder` descriptions for the picker-rule pattern).
+Add an entry to the matching category array in `src/tools.ts` — `DISCOVERY_TOOLS`, `BRIDGE_TOOLS`, `NETWORK_INSPECTOR_TOOLS`, or `DEBUGGER_TOOLS` — with `name`, `title`, `description`, `inputSchema`, `annotations`, and `handler`. `registerTools(array, category)` at the bottom of the file assigns the docs category automatically. Keep the description short and steer agents toward direct ops where appropriate (see the existing `validate_script` / `send_script_to_builder` descriptions for the picker-rule pattern).
 
 ### A new prompt
 
