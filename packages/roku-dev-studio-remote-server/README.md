@@ -6,7 +6,7 @@ A lightweight Node.js server that runs on a computer at a remote location so the
 
 ## Requirements
 
-- Node.js 18 or higher
+- Node.js 24.17 or higher
 - Network access to Roku devices on the server's local network
 - Port 4951 (default) reachable from wherever the Roku Dev Studio app is running
 
@@ -28,6 +28,15 @@ cd roku-dev-studio
 npm install
 npm run remote-server       # root script — listens on 4951 by default
 ```
+
+**Option C — Self-contained copy for a machine without repo or registry access:**
+
+```bash
+# from the repo root
+npm run deploy:remote-server   # writes ~/Desktop/RDS-Remote-Server-Copy (recreated every run)
+```
+
+`scripts/prepare-remote-server-deploy.mjs` rebuilds `roku-dev-studio-api` and this package, packs the api into a local tarball, copies the server's runtime files (`roku-remote-server.js`, `swagger.json`, `swagger-ui.html`, the plist/systemd starters) and writes a `package.json` whose `dependencies` point at that tarball with `devDependencies` stripped — so `npm install --omit=dev` on the remote box only reaches the public registry for the api's own real dependencies and never 404s on the unpublished workspace packages. Copy the folder over and follow the `README.txt` inside it.
 
 ## Installation as a Service (macOS)
 
@@ -159,7 +168,8 @@ The Swagger UI provides:
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/health` | GET | Server health check |
+| `/health` | GET | Server health check — `apiVersion`, `serverVersion`, `hostname`, `uptime`, `deviceCount`, `telnetSessions` (the one route that stays open when [auth](#security-considerations) is on) |
+| `/capabilities` | GET | Feature flags the desktop app gates on: `remote`, `apps`, `query`, `devApp`, `screenshot`, `verifyDevAuth`, `console`, `telnetSystemPorts` (`[8080, 8087]`), `debugger`, `appConnector`, `deepLink`, `networkInspector` (static support + live MITM state), plus `version` (bundled api), `serverVersion`, `serverInfo` |
 | `/api-docs` | GET | Swagger UI documentation |
 | `/devices` | GET | Discover all Roku devices (full scan) |
 | `/devices/cached` | GET | Get cached devices (fast) |
@@ -185,9 +195,11 @@ All device endpoints use the pattern: `/device/:ip/...`
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/device/:ip/sideload` | POST | Sideload a channel package |
-| `/device/:ip/delete-sideload` | POST | Delete sideloaded channel |
-| `/device/:ip/screenshot` | POST | Take screenshot |
+| `/device/:ip/sideload` | POST | Sideload a channel package — `multipart/form-data` **only** (a JSON body gets `400 Missing file or password`): `file` (binary, required), `password` (required), `remotedebug` (`"1"`/`"true"` → clean Delete+Install with `remotedebug=1` so the channel relaunches debuggable) |
+| `/device/:ip/delete-sideload` | POST | Delete sideloaded channel (`{ "password" }`) |
+| `/device/:ip/screenshot` | POST | Take screenshot (`{ "password" }`) |
+| `/device/:ip/verify-dev-auth` | POST | Check a developer password via Digest auth against port 80 without taking a screenshot (`{ "password" }`) |
+| `/device/:ip/hardware-image` | GET | The Roku's own UPnP device image (box/stick artwork, not an app icon) as raw image bytes; upstream failures come back as that status or 502 |
 
 ### RALE (App Connector)
 
@@ -197,6 +209,33 @@ All device endpoints use the pattern: `/device/:ip/...`
 | `/device/:ip/rale/connect` | POST | Connect to TrackerTask |
 | `/device/:ip/rale/command` | POST | Send RALE command |
 | `/device/:ip/rale/disconnect` | POST | Disconnect |
+
+### Telnet — BrightScript debug console (port 8085)
+
+One relay session per device; the server keeps the Roku socket open and buffers output between WebSocket clients.
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/device/:ip/telnet/connect` | POST | Open (or reuse) the 8085 session for a device → `{ success, sessionId, reused? }`, or `{ success: false, error }` |
+| `/telnet/connect` | POST | Same, with the IP in a JSON body: `{ "deviceIP" }` |
+| `/device/:ip/telnet/disconnect` | POST | Close the device's session → `{ success: true }` (plus a `message` when there was none) |
+| `/telnet/disconnect` | POST | Close a session by id: `{ "sessionId" }` → `{ success: true }` |
+| `/device/:ip/telnet/clear-buffer` | POST | Drop the relay's buffered backlog without closing the Roku socket → `{ success, sessionId, clearedBytes }` |
+| `/telnet/status/:sessionId` | GET | `{ connected, deviceIP, clients, lastActivity }` — `{ connected: false }` for an unknown id |
+| `/telnet/sessions` | GET | `{ sessions: [{ sessionId, deviceIP, connected, clients, lastActivity }] }` |
+| `/telnet/stream/:sessionId` | WS | WebSocket upgrade that replays the buffered backlog then streams live output as `{ "type": "log", "data" }` frames (also `disconnected` / `error`); a JSON frame `{ "command": "..." }` from the client is written to the Roku console (non-JSON frames are ignored). `?skipBuffer=1` skips the replay and leaves the backlog on the server. Unknown id → plain HTTP 404 |
+
+### Telnet — system consoles (ports 8080 / 8087)
+
+Poll-based (no WebSocket): connect, then read `/data`. All five routes take `?port=8080` (SceneGraph console, default) or `?port=8087` (screensaver console); any other value → `400 Unsupported port`. `GET /capabilities` advertises the allowlist as `telnetSystemPorts`.
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/device/:ip/telnet-system/connect` | POST | Open the console socket → `{ success }`; replaces any existing connection for that ip:port |
+| `/device/:ip/telnet-system/disconnect` | POST | Close it → `{ success: true }` |
+| `/device/:ip/telnet-system/send` | POST | Write one line: `{ "command": "chanperf" }` → `{ success }`, or `{ success: false, error: "Not connected" }` |
+| `/device/:ip/telnet-system/status` | GET | `{ connected, lastActivity }` |
+| `/device/:ip/telnet-system/data` | GET | Drain and return output buffered since the last poll → `{ success, data }`; `{ success: false, error: "Not connected" }` without a socket |
 
 ### Network Inspector (MITM capture)
 
@@ -223,6 +262,25 @@ curl http://<relay-host>:4951/network/status | jq '{enabled, mitmEnabled, mitmAc
 ```
 
 **MITM capture requires the sideloaded dev channel to route its own HTTPS traffic through the proxy** — Roku has no device-wide proxy setting. The channel's BrightScript must prefix outgoing request URLs, e.g. `http://<relay-host>:8888/;https://example.com/api`, and the device must trust the RDS CA certificate (`/network/ca/pem` / `/network/ca/cert`). Without both of those, `mitmActive: true` (the proxy really is listening) but zero captured traffic is expected — not a bug.
+
+### BrightScript Debugger (socket debug protocol, control port 8081)
+
+The debug session lives on the relay host; events fan out to every `/debugger/stream` subscriber. Every route here (the stream included) returns `503 BrightScript Debugger is not available on this server` when the debug-session controller failed to load at startup — `GET /capabilities` reports the same thing as `debugger: false`, so check that first. Controller rejections (e.g. "No debug session for 192.168.1.20. Attach first.") come back as `200 { success: false, error }`, not 500. Request bodies are JSON.
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/debugger/stream` | GET | Server-Sent-Events stream of `{ "type", "payload" }` frames (state changes, stopped snapshots, console output, runtime/compile errors, breakpoint updates) across all attached devices |
+| `/device/:ip/debugger/attach` | POST | Open a debug-protocol session on port 8081 (tears down any existing one for that IP) → `{ success }` / `{ success: false, error }` |
+| `/device/:ip/debugger/detach` | POST | Close the session → `{ success: true }` |
+| `/device/:ip/debugger/status` | GET | `{ success, data: { ip, state, protocolVersion } }` |
+| `/device/:ip/debugger/continue` | POST | Resume execution |
+| `/device/:ip/debugger/pause` | POST | Suspend execution |
+| `/device/:ip/debugger/step-over` · `step-in` · `step-out` | POST | Step; optional `{ "threadIndex" }` |
+| `/device/:ip/debugger/stack-trace` | POST | Optional `{ "threadIndex" }` → `{ success, data }` |
+| `/device/:ip/debugger/variables` | POST | `{ "threadIndex", "stackFrameIndex", "variablePath" }` → `{ success, data }` |
+| `/device/:ip/debugger/execute` | POST | Evaluate BrightScript in a frame: `{ "sourceCode", "threadIndex"?, "stackFrameIndex"? }` → `{ success, data }`; `400 Missing sourceCode` |
+| `/device/:ip/debugger/add-breakpoints` | POST | `{ "breakpoints": [{ filePath, lineNumber, conditionalExpression?, hitCount? }] }` → `{ success, data }` (queued as pending while the device is running) |
+| `/device/:ip/debugger/remove-breakpoints-by-location` | POST | `{ "locations": [...] }` → `{ success, data }` |
 
 ## Example Usage
 
@@ -293,7 +351,12 @@ sudo ufw allow 4951/tcp
 
 1. **Network Security**: This server should only be accessible from trusted networks. Consider using a VPN or SSH tunnel for remote access.
 
-2. **Authentication**: The server currently does not require authentication. For production use, consider adding API key authentication.
+2. **Authentication**: Optional shared-secret bearer token. Start the server with `RDS_RELAY_TOKEN=<secret>` in its environment and every route except `GET /health` (left open for uptime probes) — including the `/telnet/stream` WebSocket upgrade — requires `Authorization: Bearer <secret>`, or `?token=<secret>` for clients that can't set headers on an upgrade (browsers). The comparison is constant-time; a missing or wrong token gets `401 {"success": false, "error": "Unauthorized"}` (a bare `HTTP/1.1 401` on the WebSocket upgrade). With the variable unset the server stays fully open for backward compatibility and prints a prominent warning at startup — CORS only constrains browsers and is **not** authentication.
+
+   ```bash
+   RDS_RELAY_TOKEN=my-secret roku-remote-server
+   curl -H "Authorization: Bearer my-secret" http://<relay-host>:4951/devices
+   ```
 
 3. **Developer Passwords**: Developer passwords are sent in API requests. Ensure the connection is secure (use HTTPS or VPN).
 

@@ -3,7 +3,7 @@
   "info": {
     "title": "Roku Remote Server API",
     "description": "REST API for controlling Roku devices remotely via the Roku Dev Studio remote server. This server runs on a machine at a remote location and exposes Roku ECP (External Control Protocol) functionality over HTTP, along with telnet debug console and telnet system console streaming, a remote Network Inspector (MITM capture/replay/traffic rules), and a remote BrightScript socket debugger, both of which also stream live events over Server-Sent Events (SSE).",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "contact": {
       "name": "Roku Dev Studio"
     },
@@ -11,6 +11,11 @@
       "name": "MIT"
     }
   },
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
   "servers": [
     {
       "url": "http://localhost:4951",
@@ -32,6 +37,10 @@
     }
   ],
   "tags": [
+    {
+      "name": "Documentation",
+      "description": "Swagger UI and this OpenAPI spec"
+    },
     {
       "name": "Health",
       "description": "Server health and status endpoints"
@@ -74,7 +83,7 @@
     },
     {
       "name": "Telnet System",
-      "description": "System console (telnet port 8080) command relay - separate from the BrightScript debug console (port 8085)"
+      "description": "System console command relay over telnet port 8080 (SceneGraph console) or 8087 (screensaver console), selected per request with ?port= - separate from the BrightScript debug console (port 8085)"
     },
     {
       "name": "Network Inspector",
@@ -86,6 +95,72 @@
     }
   ],
   "paths": {
+    "/api-docs": {
+      "get": {
+        "tags": ["Documentation"],
+        "summary": "Swagger UI",
+        "description": "Interactive HTML documentation for this API (also served at /api-docs/).",
+        "operationId": "getApiDocs",
+        "responses": {
+          "200": {
+            "description": "Swagger UI page",
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "description": "Swagger UI not found (swagger-ui.html missing next to the server)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api-docs/swagger.json": {
+      "get": {
+        "tags": ["Documentation"],
+        "summary": "OpenAPI spec",
+        "description": "This OpenAPI 3.0 document as JSON. servers[0].url is rewritten per request from the Host (and X-Forwarded-Proto) headers so Try-it-out targets the server you loaded it from.",
+        "operationId": "getSwaggerJson",
+        "responses": {
+          "200": {
+            "description": "OpenAPI 3.0 specification",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "description": "Swagger spec not found (swagger.json missing next to the server)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/health": {
       "get": {
         "tags": ["Health"],
@@ -103,6 +178,8 @@
                 "example": {
                   "success": true,
                   "status": "ok",
+                  "apiVersion": "1.1.1",
+                  "serverVersion": "1.1.0",
                   "hostname": "mac-mini.local",
                   "platform": "darwin",
                   "uptime": 3600.5,
@@ -130,7 +207,8 @@
                 },
                 "example": {
                   "success": true,
-                  "version": "1.0.0",
+                  "version": "1.1.1",
+                  "serverVersion": "1.1.0",
                   "capabilities": {
                     "remote": true,
                     "apps": true,
@@ -139,6 +217,7 @@
                     "screenshot": true,
                     "verifyDevAuth": true,
                     "console": true,
+                    "telnetSystemPorts": [8080, 8087],
                     "debugger": true,
                     "appConnector": true,
                     "deepLink": true,
@@ -146,7 +225,7 @@
                       "supported": true,
                       "requiresRoot": true,
                       "isRoot": true,
-                      "mitmPort": 8443,
+                      "mitmPort": 8888,
                       "enabled": true,
                       "mitmEnabled": true,
                       "mitmActive": true
@@ -155,11 +234,14 @@
                   "serverInfo": {
                     "hostname": "mac-mini.local",
                     "platform": "darwin",
-                    "nodeVersion": "v20.10.0"
+                    "nodeVersion": "v24.17.0"
                   }
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
           }
         }
       }
@@ -180,6 +262,9 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
           }
         }
       }
@@ -200,6 +285,9 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
           }
         }
       }
@@ -235,6 +323,9 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
           }
         }
       }
@@ -282,6 +373,9 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
           }
         }
       }
@@ -321,6 +415,9 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
           }
         }
       }
@@ -346,6 +443,9 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
           }
         }
       }
@@ -371,6 +471,9 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
           }
         }
       }
@@ -396,6 +499,9 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
           }
         }
       }
@@ -421,6 +527,9 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
           }
         }
       }
@@ -446,6 +555,9 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
           }
         }
       }
@@ -471,6 +583,9 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
           }
         }
       }
@@ -496,6 +611,9 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
           }
         }
       }
@@ -521,6 +639,9 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
           }
         }
       }
@@ -566,6 +687,9 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
           }
         }
       }
@@ -622,6 +746,9 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
           }
         }
       }
@@ -669,6 +796,9 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
           }
         }
       }
@@ -677,7 +807,7 @@
       "post": {
         "tags": ["Developer"],
         "summary": "Sideload a channel",
-        "description": "Install a development channel package (.zip or .pkg) on the Roku device. Upload the file directly or provide a server file path.",
+        "description": "Install a development channel package (.zip or .pkg) on the Roku device. multipart/form-data only - the uploaded bytes are forwarded straight to the device; a JSON body is rejected with 400 'Missing file or password'.",
         "operationId": "sideload",
         "parameters": [
           {
@@ -704,8 +834,8 @@
                   },
                   "remotedebug": {
                     "type": "string",
-                    "enum": ["0", "1"],
-                    "description": "When '1', forces a clean Delete+Install with remotedebug=1 so the channel relaunches with debugging enabled (a plain Replace can drop the flag)"
+                    "enum": ["0", "1", "true"],
+                    "description": "When '1' or 'true', forces a clean Delete+Install with remotedebug=1 so the channel relaunches with debugging enabled (a plain Replace can drop the flag)"
                   }
                 }
               }
@@ -722,6 +852,9 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
           }
         }
       }
@@ -765,6 +898,9 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
           }
         }
       }
@@ -820,6 +956,9 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
           }
         }
       }
@@ -861,6 +1000,9 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
           }
         }
       }
@@ -915,6 +1057,9 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
           }
         }
       }
@@ -1004,6 +1149,9 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
           }
         }
       }
@@ -1046,6 +1194,9 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
           }
         }
       }
@@ -1085,6 +1236,9 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
           }
         }
       }
@@ -1110,6 +1264,9 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
           }
         }
       }
@@ -1152,6 +1309,9 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
           }
         }
       }
@@ -1213,6 +1373,9 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
           }
         }
       }
@@ -1260,6 +1423,9 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
           }
         }
       }
@@ -1296,6 +1462,9 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
           }
         }
       }
@@ -1331,6 +1500,9 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
           }
         }
       }
@@ -1339,7 +1511,7 @@
       "get": {
         "tags": ["Console"],
         "summary": "Telnet log WebSocket stream",
-        "description": "WebSocket upgrade (not a plain HTTP response) that streams buffered + live BrightScript console output for a session created via /telnet/connect or /device/{ip}/telnet/connect. Connect with a ws:// (or wss://) client, not a REST call.",
+        "description": "WebSocket upgrade (not a plain HTTP response) that streams buffered + live BrightScript console output for a session created via /telnet/connect or /device/{ip}/telnet/connect. Connect with a ws:// (or wss://) client, not a REST call. When RDS_RELAY_TOKEN is set the upgrade is gated too; browsers can't set an Authorization header on a WebSocket, so pass ?token=<token> instead.",
         "operationId": "telnetStreamWebSocket",
         "parameters": [
           {
@@ -1368,6 +1540,9 @@
           },
           "404": {
             "description": "No session with this ID (plain HTTP 404, not an upgrade)"
+          },
+          "401": {
+            "description": "Unauthorized (plain HTTP 401, not an upgrade) - RDS_RELAY_TOKEN is set and no valid Bearer/?token= was supplied"
           }
         }
       }
@@ -1404,6 +1579,9 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
           }
         }
       }
@@ -1447,6 +1625,9 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
           }
         }
       }
@@ -1455,11 +1636,14 @@
       "post": {
         "tags": ["Telnet System"],
         "summary": "Connect to system console",
-        "description": "Open a telnet connection to port 8080 (the Roku system console, distinct from the BrightScript debug console on 8085).",
+        "description": "Open a telnet connection to the Roku system console on port 8080, or 8087 (screensaver console) via ?port= - distinct from the BrightScript debug console on 8085. Replaces any existing connection for the same ip:port.",
         "operationId": "telnetSystemConnect",
         "parameters": [
           {
             "$ref": "#/components/parameters/DeviceIP"
+          },
+          {
+            "$ref": "#/components/parameters/TelnetSystemPort"
           }
         ],
         "responses": {
@@ -1472,6 +1656,9 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
           }
         }
       }
@@ -1480,11 +1667,14 @@
       "post": {
         "tags": ["Telnet System"],
         "summary": "Disconnect from system console",
-        "description": "Close the port-8080 system console connection for this device.",
+        "description": "Close this device's system console connection on port 8080, or 8087 (screensaver console) via ?port=.",
         "operationId": "telnetSystemDisconnect",
         "parameters": [
           {
             "$ref": "#/components/parameters/DeviceIP"
+          },
+          {
+            "$ref": "#/components/parameters/TelnetSystemPort"
           }
         ],
         "responses": {
@@ -1497,6 +1687,9 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
           }
         }
       }
@@ -1505,11 +1698,14 @@
       "post": {
         "tags": ["Telnet System"],
         "summary": "Send a system console command",
-        "description": "Send a command string to the port-8080 system console.",
+        "description": "Send a command string to the system console on port 8080, or 8087 (screensaver console) via ?port=. Returns { success: false, error: 'Not connected' } when no socket is open for that ip:port.",
         "operationId": "telnetSystemSend",
         "parameters": [
           {
             "$ref": "#/components/parameters/DeviceIP"
+          },
+          {
+            "$ref": "#/components/parameters/TelnetSystemPort"
           }
         ],
         "requestBody": {
@@ -1551,6 +1747,9 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
           }
         }
       }
@@ -1559,11 +1758,14 @@
       "get": {
         "tags": ["Telnet System"],
         "summary": "Get system console connection status",
-        "description": "Check whether this device currently has an open port-8080 system console connection.",
+        "description": "Check whether this device currently has an open system console connection on port 8080, or 8087 (screensaver console) via ?port=. Returns { connected, lastActivity }.",
         "operationId": "telnetSystemStatus",
         "parameters": [
           {
             "$ref": "#/components/parameters/DeviceIP"
+          },
+          {
+            "$ref": "#/components/parameters/TelnetSystemPort"
           }
         ],
         "responses": {
@@ -1576,6 +1778,9 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
           }
         }
       }
@@ -1584,11 +1789,14 @@
       "get": {
         "tags": ["Telnet System"],
         "summary": "Get buffered system console data",
-        "description": "Poll for buffered output from the port-8080 system console since the last call; the buffer is drained (cleared) on read.",
+        "description": "Poll for buffered output from the system console on port 8080, or 8087 (screensaver console) via ?port=, since the last call; the buffer is drained (cleared) on read. There is no WebSocket/SSE for these consoles - poll this route.",
         "operationId": "telnetSystemData",
         "parameters": [
           {
             "$ref": "#/components/parameters/DeviceIP"
+          },
+          {
+            "$ref": "#/components/parameters/TelnetSystemPort"
           }
         ],
         "responses": {
@@ -1614,6 +1822,9 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
           }
         }
       }
@@ -1642,6 +1853,9 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
           }
         }
       }
@@ -1673,6 +1887,9 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
           }
         }
       },
@@ -1711,6 +1928,9 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
           }
         }
       },
@@ -1749,6 +1969,9 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
           }
         }
       }
@@ -1811,6 +2034,9 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
           }
         }
       }
@@ -1849,6 +2075,9 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
           }
         }
       }
@@ -1894,6 +2123,9 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
           }
         }
       }
@@ -1938,6 +2170,9 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
           }
         }
       }
@@ -1959,6 +2194,9 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
           }
         }
       }
@@ -1990,6 +2228,9 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
           }
         }
       }
@@ -2037,6 +2278,9 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
           }
         }
       },
@@ -2082,6 +2326,9 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
           }
         }
       }
@@ -2171,6 +2418,9 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
           }
         }
       }
@@ -2253,6 +2503,9 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
           }
         }
       }
@@ -2294,6 +2547,9 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
           }
         }
       }
@@ -2336,6 +2592,9 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
           }
         }
       }
@@ -2367,6 +2626,9 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
           }
         }
       }
@@ -2398,6 +2660,9 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
           }
         }
       }
@@ -2429,6 +2694,9 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
           }
         }
       }
@@ -2437,7 +2705,7 @@
       "get": {
         "tags": ["Network Inspector"],
         "summary": "Live Network Inspector event stream (SSE)",
-        "description": "Server-Sent Events stream of status updates and new event batches. Bodies are NOT included on the wire - fetch a specific event's full detail on demand via GET /network/event/{eventId}.",
+        "description": "Server-Sent Events stream of status updates and new event batches. Bodies are NOT included on the wire - fetch a specific event's full detail on demand via GET /network/event/{eventId}. The server sends no `retry:` hint and drops SSE clients silently on close, so clients must re-dial with capped backoff after a server restart (the desktop app does).",
         "operationId": "streamNetworkEvents",
         "responses": {
           "200": {
@@ -2449,6 +2717,9 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
           }
         }
       }
@@ -2457,7 +2728,7 @@
       "get": {
         "tags": ["BrightScript Debugger"],
         "summary": "Live debugger event stream (SSE)",
-        "description": "Server-Sent Events stream of debugger session events (state changes, stopped/suspended snapshots, console output, runtime errors, compile errors, breakpoint updates) across all attached devices. Returns 503 when the debug-session controller failed to load on this server.",
+        "description": "Server-Sent Events stream of debugger session events (state changes, stopped/suspended snapshots, console output, runtime errors, compile errors, breakpoint updates) across all attached devices. Returns 503 when the debug-session controller failed to load on this server. The server sends no `retry:` hint and drops SSE clients silently on close, so clients must re-dial with capped backoff after a server restart (the desktop app does).",
         "operationId": "streamDebuggerEvents",
         "responses": {
           "200": {
@@ -2479,6 +2750,9 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
           }
         }
       }
@@ -2512,6 +2786,9 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
           }
         }
       }
@@ -2537,6 +2814,9 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
           }
         }
       }
@@ -2570,6 +2850,9 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
           }
         }
       }
@@ -2603,6 +2886,9 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
           }
         }
       }
@@ -2636,6 +2922,9 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
           }
         }
       }
@@ -2683,6 +2972,9 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
           }
         }
       }
@@ -2730,6 +3022,9 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
           }
         }
       }
@@ -2777,6 +3072,9 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
           }
         }
       }
@@ -2829,6 +3127,9 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
           }
         }
       }
@@ -2891,6 +3192,9 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
           }
         }
       }
@@ -2961,6 +3265,9 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
           }
         }
       }
@@ -3030,6 +3337,9 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
           }
         }
       }
@@ -3094,6 +3404,9 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
           }
         }
       }
@@ -3111,6 +3424,40 @@
           "format": "ipv4"
         },
         "example": "192.168.1.100"
+      },
+      "TelnetSystemPort": {
+        "name": "port",
+        "in": "query",
+        "required": false,
+        "description": "Which Roku text console to dial: 8080 (SceneGraph system console, default) or 8087 (screensaver console). Any other value is rejected with 400 'Unsupported port'. Advertised as capabilities.telnetSystemPorts.",
+        "schema": {
+          "type": "integer",
+          "enum": [8080, 8087],
+          "default": 8080
+        }
+      }
+    },
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Optional shared secret. Only enforced when the server was started with RDS_RELAY_TOKEN=<secret>; then every route except GET /health, plus the /telnet/stream WebSocket upgrade, requires 'Authorization: Bearer <secret>' (or ?token=<secret>, mainly for WebSocket clients that can't set headers). Compared in constant time. With the variable unset the server is fully open and logs a startup warning."
+      }
+    },
+    "responses": {
+      "Unauthorized": {
+        "description": "RDS_RELAY_TOKEN is set and the request carried no valid Bearer token / ?token=",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            },
+            "example": {
+              "success": false,
+              "error": "Unauthorized"
+            }
+          }
+        }
       }
     },
     "schemas": {
@@ -3177,6 +3524,16 @@
             "type": "string",
             "example": "ok"
           },
+          "apiVersion": {
+            "type": "string",
+            "description": "Version of the roku-dev-studio-api package this server bundles ('unknown' if unavailable)",
+            "example": "1.1.1"
+          },
+          "serverVersion": {
+            "type": "string",
+            "description": "This server's own release version (roku-dev-studio-remote-server), independent of apiVersion",
+            "example": "1.1.0"
+          },
           "hostname": {
             "type": "string",
             "example": "mac-mini.local"
@@ -3211,8 +3568,13 @@
           },
           "version": {
             "type": "string",
-            "description": "Server API version",
-            "example": "1.0.0"
+            "description": "Version of the bundled roku-dev-studio-api package (kept under this key for backward compatibility - not the server's own release version, see serverVersion)",
+            "example": "1.1.1"
+          },
+          "serverVersion": {
+            "type": "string",
+            "description": "This server's own release version (roku-dev-studio-remote-server)",
+            "example": "1.1.0"
           },
           "capabilities": {
             "type": "object",
@@ -3241,6 +3603,14 @@
               "console": {
                 "type": "boolean",
                 "description": "Telnet debug console (port 8085)"
+              },
+              "telnetSystemPorts": {
+                "type": "array",
+                "description": "Text-console ports the /telnet-system/* routes accept via ?port= (8080 is used when the query is absent). Older servers omit this key - treat that as [8080]",
+                "items": {
+                  "type": "integer"
+                },
+                "example": [8080, 8087]
               },
               "appConnector": {
                 "type": "boolean",
