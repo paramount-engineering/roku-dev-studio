@@ -72,6 +72,16 @@ jobs:
               apps/roku-dev-studio/dist/*.AppImage
               apps/roku-dev-studio/dist/linux/**/*.deb
               apps/roku-dev-studio/dist/linux/**/*.AppImage
+    env:
+      # macOS code signing + notarization — electron-builder reads these natively
+      # (`build.mac.notarize: true` in apps/roku-dev-studio/package.json). CSC_* are scoped to
+      # the mac leg because electron-builder also treats CSC_LINK as the Windows Authenticode
+      # fallback and would try to sign the .exe with the Apple certificate.
+      CSC_LINK: ${{ matrix.build-cmd == 'build:mac' && secrets.CSC_LINK || '' }}
+      CSC_KEY_PASSWORD: ${{ matrix.build-cmd == 'build:mac' && secrets.CSC_KEY_PASSWORD || '' }}
+      APPLE_ID: ${{ secrets.APPLE_ID }}
+      APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
     steps:
       - name: Checkout code
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6.0.3
@@ -87,6 +97,15 @@ jobs:
 
       - name: Build mcp (its CI-guarded prepare did not run)
         run: npm run build -w roku-dev-studio-mcp
+
+      - name: Require macOS signing + notarization secrets
+        # Without these electron-builder silently emits an ad-hoc-signed, un-notarized app while
+        # the release body below promises a notarized one. See RELEASE_SETUP.md → Code Signing.
+        if: runner.os == 'macOS'
+        run: |
+          for v in CSC_LINK CSC_KEY_PASSWORD APPLE_ID APPLE_APP_SPECIFIC_PASSWORD APPLE_TEAM_ID; do
+            [ -n "${!v}" ] || { echo "::error::Missing repository secret: $v"; exit 1; }
+          done
 
       - name: Build desktop app
         # `build:mac|win|linux` chains build:bundle (transpile
@@ -183,11 +202,7 @@ jobs:
             1. Download the `-arm64.dmg` file (Apple Silicon)
             2. Open the disk image
             3. Drag the app to your Applications folder
-            4. **IMPORTANT - Before first launch:**
-              - Use Terminal: `xattr -cr "/Applications/Roku Dev Studio.app"`
-              - Then open the app.
-
-            **Note for macOS:** The app is not code-signed. macOS Gatekeeper will block it. The command above removes quarantine attributes.
+            4. Open the app — it is signed with a Developer ID certificate and notarized by Apple, so Gatekeeper opens it without any override.
 
             **Windows**
             1. Download the Setup `.exe` file

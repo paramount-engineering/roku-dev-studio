@@ -60,3 +60,7 @@ npm-debug.log*
 .cursor/
 CLAUDE.md
 apps/roku-dev-studio/port-terminal-preload.bundled.cjs
+
+# Code-signing material — never commit
+*.p12
+*.p8
