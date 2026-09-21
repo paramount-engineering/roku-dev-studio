@@ -35,6 +35,7 @@ import {
 import { errMessage } from '@shared/platform/err-util.js';
 import { deviceKey } from '@shared/platform/device-identity.js';
 import { singleFlight } from '@shared/platform/single-flight.js';
+import { RememberedDeviceStore } from '@shared/auto-connect-store.js';
 import { S, applyI18n, setLocale } from '@shared/strings/index.js';
 import { applyLocalePreference } from './modules/utils/locale-live.js';
 import { devLog } from './modules/utils/dev-log.js';
@@ -997,8 +998,15 @@ type AutoConnectDeviceEntry = {
 let startupLocalScanComplete = false;
 let startupRemoteScanComplete = false;
 let autoConnectLastDeviceAttempted = false;
-/** `undefined` = not read yet */
-let cachedRememberedDeviceList: AutoConnectDeviceEntry[] | undefined = undefined;
+/** Who asked for a connection. Auto-connect passes `'auto'`: a device it opens is already remembered, so
+ *  it must not re-add it (that re-add is what used to resurrect an entry the user had just removed). */
+type ConnectOrigin = { origin?: 'auto' | 'user' };
+/** The remembered list + the session "dismissed" set — see shared/auto-connect-store.ts. */
+const rememberedDevices = new RememberedDeviceStore<AutoConnectDeviceEntry>(autoConnectEntryKey, {
+  load: async () => parseRememberedDeviceList((await window.roku.getSetting(AUTO_CONNECT_DEVICE_LIST_KEY))?.value),
+  persist: (list) => window.roku.setSetting(AUTO_CONNECT_DEVICE_LIST_KEY, list),
+  onError: (e) => rendererError('[Auto-connect] remembered device list:', e)
+});
 
 /** v2: default is sidebar expanded when key is absent (v1 often stayed `'1'` and felt like the app “auto-collapsed”). */
 const RDS_SIDEBAR_COLLAPSED_KEY = 'rds-sidebar-collapsed-v2';
@@ -2782,15 +2790,15 @@ const RCE_CAPABILITY_INFO = {
  * (design doc §5/§10: an RCE device has no ECP surface at all until it's actually booted, unlike
  * a LAN device which is either reachable or not regardless of a "started" concept).
  */
-function connectRceDevice(device, locationId): Promise<void> {
+function connectRceDevice(device, locationId, opts?: ConnectOrigin): Promise<void> {
   // Single-flight per device: the connect awaits a network fetch between its "already connected?"
   // check and creating the tab, so two overlapping callers (startup auto-connect + a relay run, a
   // card click during either) would otherwise both pass the check and open two tabs.
-  return singleFlight(rceConnectInFlight, `${locationId}:${device.ip}`, () => connectRceDeviceNow(device, locationId));
+  return singleFlight(rceConnectInFlight, `${locationId}:${device.ip}`, () => connectRceDeviceNow(device, locationId, opts));
 }
 const rceConnectInFlight = new Map<string, Promise<void>>();
 
-async function connectRceDeviceNow(device, locationId): Promise<void> {
+async function connectRceDeviceNow(device, locationId, opts?: ConnectOrigin): Promise<void> {
   if (device.status !== 'running') return;
   const location = state.remoteLocations.get(locationId);
   if (!location) {
@@ -2858,8 +2866,9 @@ async function connectRceDeviceNow(device, locationId): Promise<void> {
   renderRemoteLocations();
   pushDeviceListToMcpBridge();
 
-  if (AUTO_CONNECT_LAST_DEVICE_ENABLED) {
-    void addRememberedDeviceToListIfEnabled(
+  if (AUTO_CONNECT_LAST_DEVICE_ENABLED && opts?.origin !== 'auto') {
+    rememberedDevices.undismiss(`${locationId}:${device.ip}`);
+    addRememberedDeviceToListIfEnabled(
       { ip: freshDevice.ip, serialNumber: freshDevice.serialNumber, accountName: location.accountName },
       'rce',
       locationId
@@ -2889,7 +2898,7 @@ function resolveRemoteLocationId(hint: { locationId?: string; serverUrl?: string
   return null;
 }
 
-function connectRemoteDevice(device, locationId) {
+function connectRemoteDevice(device, locationId, opts?: ConnectOrigin) {
   const deviceKey = `${locationId}:${device.ip}`;
 
   // Unknown location = refuse, even when the caller supplied a serverUrl: a tab keyed on an id no
@@ -2945,8 +2954,9 @@ function connectRemoteDevice(device, locationId) {
 
   pushDeviceListToMcpBridge();
 
-  if (AUTO_CONNECT_LAST_DEVICE_ENABLED) {
-    void addRememberedDeviceToListIfEnabled(device, 'remote', locationId);
+  if (AUTO_CONNECT_LAST_DEVICE_ENABLED && opts?.origin !== 'auto') {
+    rememberedDevices.undismiss(deviceKey);
+    addRememberedDeviceToListIfEnabled(device, 'remote', locationId);
   }
 }
 
@@ -3105,45 +3115,26 @@ function autoConnectEntryKeyFromConnection(conn: {
   return autoConnectEntryKey(buildAutoConnectEntry(conn.device, 'local', null));
 }
 
-async function addRememberedDeviceToListIfEnabled(
+function addRememberedDeviceToListIfEnabled(
   device: { ip: string; serialNumber?: string; serverUrl?: string; accountName?: string },
   kind: 'local' | 'remote' | 'rce',
   locationId: string | null
-) {
-  if (!AUTO_CONNECT_LAST_DEVICE_ENABLED || !window.roku?.getSetting || !window.roku?.setSetting) return;
+): void {
+  if (!AUTO_CONNECT_LAST_DEVICE_ENABLED) return;
   // Session-only ("Forget it on App Quit/Close") location: its tabs must never be remembered.
   if (locationId && state.remoteLocations.get(locationId)?.forgetOnQuit) return;
-  const entry = buildAutoConnectEntry(device, kind, locationId);
-  const key = autoConnectEntryKey(entry);
-  try {
-    const res = await window.roku.getSetting(AUTO_CONNECT_DEVICE_LIST_KEY);
-    const list = parseRememberedDeviceList(res?.value);
-    if (list.some((x) => autoConnectEntryKey(x) === key)) return;
-    list.push(entry);
-    await window.roku.setSetting(AUTO_CONNECT_DEVICE_LIST_KEY, list);
-    cachedRememberedDeviceList = list;
-  } catch (e) {
-    rendererError('[Auto-connect] Failed to update remembered device list:', e);
-  }
+  rememberedDevices.add(buildAutoConnectEntry(device, kind, locationId));
 }
 
-async function removeRememberedDeviceFromListIfEnabled(conn: {
+function removeRememberedDeviceFromListIfEnabled(conn: {
   device: { ip: string; serialNumber?: string };
   isRemote?: boolean;
   locationId?: string;
   kind?: string;
   accountName?: string;
-}) {
-  if (!AUTO_CONNECT_LAST_DEVICE_ENABLED || !window.roku?.getSetting || !window.roku?.setSetting) return;
-  const removeKey = autoConnectEntryKeyFromConnection(conn);
-  try {
-    const res = await window.roku.getSetting(AUTO_CONNECT_DEVICE_LIST_KEY);
-    const list = parseRememberedDeviceList(res?.value).filter((x) => autoConnectEntryKey(x) !== removeKey);
-    await window.roku.setSetting(AUTO_CONNECT_DEVICE_LIST_KEY, list);
-    cachedRememberedDeviceList = list;
-  } catch (e) {
-    rendererError('[Auto-connect] Failed to remove from remembered device list:', e);
-  }
+}): void {
+  if (!AUTO_CONNECT_LAST_DEVICE_ENABLED) return;
+  rememberedDevices.remove(autoConnectEntryKeyFromConnection(conn));
 }
 
 /** Trimmed-serial match first, else ip match. */
@@ -3193,10 +3184,15 @@ function connectRememberedListMatches(list: AutoConnectDeviceEntry[]): { count: 
   for (const entry of list) {
     if (isLocalDevice(entry)) {
       const device = findLocalDeviceMatchingProfile(entry);
-      if (device && !state.connectedDevices.has(device.ip) && !attempted.has(device.ip)) {
+      if (
+        device &&
+        !state.connectedDevices.has(device.ip) &&
+        !attempted.has(device.ip) &&
+        !rememberedDevices.isDismissed(device.ip)
+      ) {
         attempted.add(device.ip);
         const label = device.deviceName || device.modelName || device.ip;
-        connectDevice(device);
+        connectDevice(device, { origin: 'auto' });
         count++;
         singleLabel = label;
       }
@@ -3205,9 +3201,9 @@ function connectRememberedListMatches(list: AutoConnectDeviceEntry[]): { count: 
       if (!found) continue;
       const { device, locationId } = found;
       const deviceKey = `${locationId}:${device.ip}`;
-      if (state.connectedDevices.has(deviceKey) || attempted.has(deviceKey)) continue;
+      if (state.connectedDevices.has(deviceKey) || attempted.has(deviceKey) || rememberedDevices.isDismissed(deviceKey)) continue;
       attempted.add(deviceKey);
-      void connectRceDevice(device, locationId);
+      void connectRceDevice(device, locationId, { origin: 'auto' });
       count++;
       singleLabel = device.deviceName || device.name || device.ip;
     } else {
@@ -3215,9 +3211,9 @@ function connectRememberedListMatches(list: AutoConnectDeviceEntry[]): { count: 
       if (!found) continue;
       const { device, locationId } = found;
       const deviceKey = `${locationId}:${device.ip}`;
-      if (state.connectedDevices.has(deviceKey) || attempted.has(deviceKey)) continue;
+      if (state.connectedDevices.has(deviceKey) || attempted.has(deviceKey) || rememberedDevices.isDismissed(deviceKey)) continue;
       attempted.add(deviceKey);
-      connectRemoteDevice(device, locationId);
+      connectRemoteDevice(device, locationId, { origin: 'auto' });
       count++;
       singleLabel = device.deviceName || device.modelName || device.ip;
     }
@@ -3225,16 +3221,8 @@ function connectRememberedListMatches(list: AutoConnectDeviceEntry[]): { count: 
   return { count, singleLabel };
 }
 
-async function loadRememberedDeviceList(): Promise<AutoConnectDeviceEntry[]> {
-  if (cachedRememberedDeviceList === undefined) {
-    try {
-      const res = await window.roku.getSetting(AUTO_CONNECT_DEVICE_LIST_KEY);
-      cachedRememberedDeviceList = parseRememberedDeviceList(res?.value);
-    } catch {
-      cachedRememberedDeviceList = [];
-    }
-  }
-  return cachedRememberedDeviceList ?? [];
+function loadRememberedDeviceList(): Promise<AutoConnectDeviceEntry[]> {
+  return rememberedDevices.list();
 }
 
 function announceAutoConnected({ count, singleLabel }: { count: number; singleLabel: string }): void {
@@ -3274,9 +3262,7 @@ async function maybeAutoConnectLastDevice() {
   // `connectRememberedListMatches` skips entries that are already open.
   if (!startupLocalScanComplete) return;
 
-  await loadRememberedDeviceList();
-
-  const list = cachedRememberedDeviceList ?? [];
+  const list = await loadRememberedDeviceList();
   // RCE locations refresh through the same `refreshAllRemoteLocations` pass as relay locations
   // (it dispatches to `refreshRceLocation` internally per-location), so `startupRemoteScanComplete`
   // already covers both kinds — no separate readiness flag needed for 'rce' entries.
@@ -3291,8 +3277,7 @@ async function maybeAutoConnectLastDevice() {
 
 async function tryAutoConnectRememberedMatchesAfterUserScan() {
   if (!AUTO_CONNECT_LAST_DEVICE_ENABLED) return;
-  await loadRememberedDeviceList();
-  const list = cachedRememberedDeviceList ?? [];
+  const list = await loadRememberedDeviceList();
   if (list.length === 0) return;
   announceAutoConnected(connectRememberedListMatches(list));
 }
@@ -3828,7 +3813,7 @@ function formatDeviceDetails(device) {
 // Device Connection & Tab Management
 // ============================================
 
-function connectDevice(device) {
+function connectDevice(device, opts?: ConnectOrigin) {
   if (state.connectedDevices.has(device.ip)) {
     // Already connected, just activate the tab
     const connection = state.connectedDevices.get(device.ip);
@@ -3857,8 +3842,9 @@ function connectDevice(device) {
 
   pushDeviceListToMcpBridge();
 
-  if (AUTO_CONNECT_LAST_DEVICE_ENABLED) {
-    void addRememberedDeviceToListIfEnabled(device, 'local', null);
+  if (AUTO_CONNECT_LAST_DEVICE_ENABLED && opts?.origin !== 'auto') {
+    rememberedDevices.undismiss(device.ip);
+    addRememberedDeviceToListIfEnabled(device, 'local', null);
   }
 }
 
@@ -3868,7 +3854,10 @@ function disconnectDevice(deviceKey) {
   if (!connection) return;
 
   if (AUTO_CONNECT_LAST_DEVICE_ENABLED) {
-    void removeRememberedDeviceFromListIfEnabled(connection);
+    // The user closed this tab: forget the device now (in memory, before the setting write lands —
+    // a discovery pass may run in between) and keep auto-connect from reopening it this session.
+    rememberedDevices.dismiss(deviceKey);
+    removeRememberedDeviceFromListIfEnabled(connection);
   }
 
   const { tabId, isRemote, locationId } = connection;
@@ -8108,7 +8097,7 @@ async function init() {
   // longer race on N parallel reloads.
   let wasRememberEnabledBeforeUpdate = REMEMBER_SIDEBAR_TOGGLE;
   onAppSettingsChanged(() => {
-    cachedRememberedDeviceList = undefined;
+    rememberedDevices.reset();
     cancelPostStartupSidebarGraceTimer();
     refreshAllNetworkTabVisibility();
     updateTryDemoAppButtonVisibility();
@@ -8212,7 +8201,7 @@ async function init() {
   startupLocalScanComplete = false;
   startupRemoteScanComplete = false;
   autoConnectLastDeviceAttempted = false;
-  cachedRememberedDeviceList = undefined;
+  rememberedDevices.reset();
 
   // Start fresh - clear any cached devices
   localStorage.removeItem('roku-devices');

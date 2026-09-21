@@ -122,7 +122,7 @@ export function mountFloatingRemote(): void {
     <div class="floating-remote-shell" role="dialog" aria-label="${S.floatingRemote.dialogAriaLabel}">
       <div class="floating-remote-shell-handle" aria-hidden="false">
         <span class="floating-remote-shell-title">
-          <span class="icon icon-sm" aria-hidden="true"><svg><use href="#icon-gamepad"/></svg></span>
+          <span class="icon icon-sm" aria-hidden="true"><svg><use href="#icon-remote"/></svg></span>
           ${S.floatingRemote.shellTitle}
         </span>
         <button type="button" class="floating-remote-shell-close" title="${S.floatingRemote.hide}" aria-label="${S.floatingRemote.hide}">

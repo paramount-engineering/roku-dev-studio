@@ -25,6 +25,7 @@
     "verify:debugger-enabled": "tsx scripts/verify-debugger-enabled.ts",
     "verify:mcp-tools": "tsx scripts/verify-mcp-tools-catalog.ts",
     "verify:artifact-names": "tsx scripts/verify-artifact-names.ts",
+    "verify:auto-connect-store": "tsx scripts/verify-auto-connect-store.ts",
     "typecheck:scripts": "tsc --noEmit -p tsconfig.scripts.json",
     "dev:solid": "tsx scripts/build/index.ts && concurrently -k \"npm run renderer:solid:dev\" \"wait-on tcp:127.0.0.1:5173 && cross-env RDS_SOLID_RENDERER=1 tsx scripts/run-electron.ts\"",
     "build:desktop": "tsx scripts/build/index.ts",

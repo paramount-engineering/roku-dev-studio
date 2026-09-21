@@ -34,7 +34,7 @@ export function remoteHttpRequest(
 ): Promise<any> {
   return new Promise((resolve) => {
     if (!isSafeRelayUrl(serverUrl)) {
-      resolve({ success: false, error: 'Invalid relay server URL' });
+      resolve({ success: false, error: 'Invalid Relay Server URL' });
       return;
     }
     const url = new URL(pathStr, serverUrl);
@@ -109,7 +109,7 @@ export function remoteHttpRequestBinary(
 ): Promise<{ success: boolean; buffer?: Buffer; contentType?: string; headers?: Record<string, string | string[] | undefined>; error?: string }> {
   return new Promise((resolve) => {
     if (!isSafeRelayUrl(serverUrl)) {
-      resolve({ success: false, error: 'Invalid relay server URL' });
+      resolve({ success: false, error: 'Invalid Relay Server URL' });
       return;
     }
     const url = new URL(pathStr, serverUrl);

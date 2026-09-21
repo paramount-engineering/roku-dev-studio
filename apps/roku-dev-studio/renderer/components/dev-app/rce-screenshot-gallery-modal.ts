@@ -103,7 +103,7 @@ export function openRceScreenshotGalleryModal(
   const clearAllBtn = document.createElement('button');
   clearAllBtn.type = 'button';
   clearAllBtn.className = 'btn btn-secondary';
-  setSafeHTML(clearAllBtn, icon('clear-results', 'icon-xs') + ' ' + escapeHtml(S.devApp.clearAll));
+  setSafeHTML(clearAllBtn, icon('clear-screenshot', 'icon-xs') + ' ' + escapeHtml(S.devApp.clearAll));
   clearAllBtn.addEventListener('click', () => {
     onRemoveAll();
     render();
@@ -172,7 +172,7 @@ export function openRceScreenshotGalleryModal(
       clearBtn.type = 'button';
       clearBtn.className = 'btn btn-secondary btn-icon';
       clearBtn.title = S.devApp.clearScreenshot;
-      setSafeHTML(clearBtn, icon('clear-results', 'icon-xs'));
+      setSafeHTML(clearBtn, icon('clear-screenshot', 'icon-xs'));
       clearBtn.addEventListener('click', () => {
         onRemove(shot.id);
         render();
