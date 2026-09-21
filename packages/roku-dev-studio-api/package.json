@@ -55,7 +55,7 @@
     "@types/adm-zip": "0.5.8",
     "@types/archiver": "8.0.0",
     "@types/node": "22.19.17",
-    "esbuild": "0.28.1",
+    "esbuild": "0.28.2",
     "typescript": "5.9.3",
     "roku-dev-studio-platform": "^1.0.0"
   },
