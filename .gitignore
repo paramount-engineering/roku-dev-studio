@@ -55,3 +55,6 @@ npm-debug.log*
 .discussion-docs/
 .cursor/
 CLAUDE.md
+# Code-signing material — never commit
+*.p12
+*.p8

@@ -66,7 +66,6 @@
     "cap": "^0.2.1"
   },
   "devDependencies": {
-    "@electron/notarize": "2.5.0",
     "@types/adm-zip": "0.5.8",
     "@types/jsdom": "28.0.3",
     "@types/node": "22.20.3",
@@ -97,7 +96,6 @@
       "owner": "paramount-engineering",
       "repo": "roku-dev-studio"
     },
-    "afterSign": "./scripts/notarize.cjs",
     "afterAllArtifactBuild": "./scripts/build-hooks-entry.cjs",
     "files": [
       "**/*",
@@ -175,10 +173,7 @@
       "icon": "assets/icon.icns",
       "hardenedRuntime": true,
       "gatekeeperAssess": false,
-      "notarize": false,
-      "signIgnore": [
-        "node_modules"
-      ],
+      "notarize": true,
       "entitlements": "entitlements.mac.plist",
       "entitlementsInherit": "entitlements.mac.plist",
       "extendInfo": {
@@ -199,8 +194,7 @@
         "!assets/icon.icns",
         "!assets/icon.iconset/**",
         "!assets/ico-parts/**",
-        "!entitlements.mac.plist",
-        "!scripts/notarize.cjs"
+        "!entitlements.mac.plist"
       ],
       "target": [
         {
@@ -223,8 +217,7 @@
         "!assets/icon.icns",
         "!assets/icon.ico",
         "!assets/icon.iconset/**",
-        "!entitlements.mac.plist",
-        "!scripts/notarize.cjs"
+        "!entitlements.mac.plist"
       ],
       "target": [
         {
