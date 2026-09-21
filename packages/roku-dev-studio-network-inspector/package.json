@@ -1,6 +1,6 @@
 {
   "name": "roku-dev-studio-network-inspector",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Roku Dev Studio Network Inspector engine — hotspot packet capture (DNS/SNI/HTTP) + local MITM proxy, transport-agnostic so it runs in the desktop app and the remote server.",
   "main": "index.ts",
   "types": "index.ts",

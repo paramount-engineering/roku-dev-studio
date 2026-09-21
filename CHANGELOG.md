@@ -6,6 +6,38 @@ tags in [Releases](https://github.com/paramount-engineering/roku-dev-studio/rele
 
 ## [Unreleased]
 
+## [1.2.1]
+
+### Added
+- **Device Performance** — a System / Graphics memory mode with live texture and system graphics series, a bitmaps (`r2d2`) modal, chart history with process snapshots, CSV / JSON / image export of any chart, and a per-chart explanatory info modal. Also exposed to agents as the `device_performance_metrics` MCP tool (chart selection, time window, downsampling).
+- **Console Monitor** — now tracks Roku launch/performance beacons alongside BrightScript errors, with analytics surfaced in the telnet console.
+- **Debugger** — the debugger API scans channel sources for symbols and `stop` statements and feeds them to the debug session controller for richer inspection.
+- **MCP** — `network_inspector_find` for full-content search across captured requests and responses; `status` / `statusClass` / `contentType` OR-filters on the list and analyze tools; and a **View MCP Tools** modal in Settings that groups every exposed tool by capability area.
+- **Hardware images** — device photos are fetched through the main process, the device details modal always opens, and a placeholder is shown when no photo resolves.
+- An **Open** action on file-related toasts launches the file through the OS.
+- New UI strings for all of the above are translated in the ES / PL / PT / RO / UK catalogs.
+
+### Changed
+- **Official macOS builds are signed and notarized.** The DMG and zip on GitHub Releases now carry a Developer ID signature and an Apple notarization ticket, so Gatekeeper opens the app directly — the `xattr -cr` step is gone from the install instructions. electron-builder handles signing, `notarytool` submission and stapling natively; the release job fails fast if the signing secrets are missing rather than shipping an unsigned build. **Upgrading from 1.2.0 on macOS is a one-time manual download:** the in-app updater cannot replace the unsigned 1.2.0 with a signed build (Squirrel.Mac requires the update to match the running app's signature), so 1.2.0 will report an update error — download the 1.2.1 `.dmg` once, and auto-update works from there on.
+- Live-only device controls are disabled while a device is unreachable, while already-captured content (network events, console scrollback, saved screenshots) stays fully usable.
+- Modal open/close animations are unified on a shared origin-aware motion system (dialogs grow from the button that opened them and shrink back into it).
+- Fiddle, Dev App, Remote, Log Viewer and Query workflows refined, including device metrics and secret-screen handling; Settings relay controls updated; telnet and system-command IPC consolidated with consistent error handling.
+- Release artifacts use one naming scheme across platforms (`Roku-Dev-Studio-<version>-<arch>.<ext>`, with `-Setup-` / `-Portable-` variants for the two Windows builds, which previously would have resolved to the same file name). The release notes' Downloads table is now generated from the uploaded assets, and `npm run verify:artifact-names` guards the naming templates against collisions.
+- Dependency housekeeping: esbuild 0.28.2, vite 8.2.2, tsx 4.23.13, concurrently 10.0.5, `@tanstack/virtual-core` 3.17.8, `@types/node` 22.20.3, pinned type definitions, refreshed Node and Dockerfile digests.
+
+### Fixed
+- **Check for Updates** works again: the 1.2.0 release shipped without its `latest-*.yml` publish metadata because `build.publish: null` suppressed it, so `checkForUpdates()` threw `ENOENT`. Metadata generation is restored (uploads still go only through the release workflow), a missing `app-update.yml` is now handled as gracefully as a missing `latest-*.yml`, and the updater falls back to a manual-download banner when a release asset is unreachable.
+- **Windows and Linux auto-update** can now find releases: the release workflow only ever attached `latest-mac.yml`, so electron-updater on Windows (`latest.yml`) and Linux (`latest-linux.yml` / `latest-linux-arm64.yml`) always reported the channel file missing and fell back to the manual-download banner. Those files, plus the Windows differential `.exe.blockmap`, now ship with every release, making 1.2.1 the first version those platforms can update *from* automatically.
+- Debugger: attaching to a device that already has a healthy session is a no-op instead of a reconnect; continue/step no longer clobber a stop that arrives before the command is acknowledged; session lifecycle hardened against stale sessions and invalid state transitions.
+- The file-drop overlay no longer sticks open after an interrupted or cancelled OS drag, and remote-control shortcuts are suppressed while it is visible.
+- Chromium's benign `ResizeObserver` warnings no longer trigger the crash-report modal (#66).
+- Action Scripts: the Builder, Executor and Import flows can validate scripts that include or resolve a dev password; MCP and remote authoring keep the strict rejection.
+- MCP: readiness is reported when the MITM proxy is active even without raw packet capture, and the app name is set before single-instance/userData resolution so settings never land in the wrong folder and the MCP descriptor no longer drifts.
+
+### Security
+- adm-zip updated to 0.6.1 for [CVE-2026-77301](https://github.com/advisories/GHSA-7q85-xj36-vmfc); sharp updated to 0.35.4 (security advisory).
+- Certificate and API-key material (`*.p12`, `*.p8`) is git-ignored so local signing credentials cannot enter the repository.
+
 ## [1.2.0]
 
 ### Added
@@ -56,7 +88,8 @@ tags in [Releases](https://github.com/paramount-engineering/roku-dev-studio/rele
 ### Added
 - Initial public release: Remote Control, Device Discovery, Sideload, RALE / App Connector, Network Inspector, Action Scripts, MCP server for AI agents, and the `rds` CLI.
 
-[Unreleased]: https://github.com/paramount-engineering/roku-dev-studio/compare/v1.2.0...HEAD
+[Unreleased]: https://github.com/paramount-engineering/roku-dev-studio/compare/v1.2.1...HEAD
+[1.2.1]: https://github.com/paramount-engineering/roku-dev-studio/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/paramount-engineering/roku-dev-studio/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/paramount-engineering/roku-dev-studio/compare/1.0.0...1.1.0
 [1.0.0]: https://github.com/paramount-engineering/roku-dev-studio/releases/tag/1.0.0
