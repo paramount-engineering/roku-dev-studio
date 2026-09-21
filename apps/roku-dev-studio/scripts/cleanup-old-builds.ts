@@ -23,6 +23,14 @@ if (!fs.existsSync(distDir)) {
   process.exit(0);
 }
 
+/**
+ * electron-updater channel files (`latest-mac.yml`, `latest.yml`, `latest-linux*.yml`) carry no version
+ * in their name, so the version-based sweep below never removed them and a stale descriptor from an
+ * older build could linger under dist/<platform>/ next to fresh artifacts. They are regenerated on
+ * every build, so always clear them.
+ */
+const isUpdaterChannelFile = (name: string): boolean => /^latest(-[a-z0-9-]+)?\.yml$/i.test(name);
+
 function cleanupVersionFiles(dir: string, versionStr: string): { count: number; size: number } {
   let deletedCount = 0;
   let deletedSize = 0;
@@ -40,7 +48,7 @@ function cleanupVersionFiles(dir: string, versionStr: string): { count: number; 
       if (entry.isDirectory()) {
         processDirectory(fullPath);
       } else if (entry.isFile()) {
-        if (entry.name.includes(versionStr)) {
+        if (entry.name.includes(versionStr) || isUpdaterChannelFile(entry.name)) {
           try {
             const stats = fs.statSync(fullPath);
             fs.unlinkSync(fullPath);
@@ -102,7 +110,7 @@ if (fs.existsSync(distDir)) {
   try {
     rootFiles = fs
       .readdirSync(distDir, { withFileTypes: true })
-      .filter((entry) => entry.isFile() && entry.name.includes(version))
+      .filter((entry) => entry.isFile() && (entry.name.includes(version) || isUpdaterChannelFile(entry.name)))
       .map((entry) => resolveUnderBase(distDir, entry.name) || path.join(distDir, entry.name));
   } catch {
     // Ignore errors reading directory

@@ -43,11 +43,46 @@ interface DirectoryMove {
   isRootApp?: boolean;
 }
 
-interface FilePatternConfig {
-  pattern: RegExp;
-  platform: string;
-  arch: string | null;
-  excludeIf?: (file: string) => boolean;
+export type ArtifactPlatform = 'mac' | 'linux' | 'windows';
+export interface ArtifactClass {
+  platform: ArtifactPlatform;
+  arch: 'x64' | 'arm64' | null;
+}
+
+/** Arch tokens electron-builder emits via `${arch}` (see builder-util `getArtifactArchName`). */
+const ARCH_TOKEN = /(?:^|[-_ .])(x64|amd64|x86_64|arm64|aarch64)(?=$|[-_ .])/i;
+const ARCH_ALIAS: Record<string, 'x64' | 'arm64'> = {
+  x64: 'x64',
+  amd64: 'x64',
+  x86_64: 'x64',
+  arm64: 'arm64',
+  aarch64: 'arm64'
+};
+
+/**
+ * Classify an electron-builder artifact by platform/arch from its *extension and arch token only* —
+ * never from the full filename template. The template (`build.artifactName` plus the `nsis` /
+ * `portable` overrides in package.json) is the single source of truth for names; this stays valid
+ * whether it produces today's `Roku-Dev-Studio-<version>-<arch>.<ext>` or the pre-1.2.1 default
+ * shapes (`Roku Dev Studio-1.2.0-arm64-mac.zip`, `roku-dev-studio_1.2.0_amd64.deb`,
+ * `Roku Dev Studio Setup 1.2.0.exe`). `scripts/verify-artifact-names.ts` pins the two together.
+ * A name without an arch token is x64: electron-builder's legacy templates omit the default arch.
+ */
+export function classifyArtifact(fileName: string): ArtifactClass | null {
+  if (fileName === 'latest-mac.yml') return { platform: 'mac', arch: null };
+  if (fileName === 'latest.yml') return { platform: 'windows', arch: null };
+  if (fileName === 'latest-linux.yml') return { platform: 'linux', arch: 'x64' };
+  if (fileName === 'latest-linux-arm64.yml') return { platform: 'linux', arch: 'arm64' };
+  const ext = fileName
+    .replace(/\.blockmap$/, '')
+    .match(/\.(dmg|zip|exe|deb|AppImage)$/i)?.[1]
+    ?.toLowerCase();
+  if (!ext) return null;
+  const token = fileName.match(ARCH_TOKEN)?.[1]?.toLowerCase();
+  const arch = token ? ARCH_ALIAS[token] : 'x64';
+  if (ext === 'dmg' || ext === 'zip') return { platform: 'mac', arch };
+  if (ext === 'exe') return { platform: 'windows', arch };
+  return { platform: 'linux', arch };
 }
 
 /**
@@ -61,7 +96,7 @@ interface FilePatternConfig {
  *
  * `buildResult.platformToTargets` (`app-builder-lib`) tells us which
  * platforms the current run actually built — `Platform.name` is one of
- * `'mac' | 'linux' | 'windows'`, the same strings used in `filePatterns`.
+ * `'mac' | 'linux' | 'windows'`, the same strings `classifyArtifact()` returns.
  */
 function organizeDistFiles(allowedPlatforms: ReadonlySet<string>): void {
   if (allowedPlatforms.has('windows')) {
@@ -174,27 +209,6 @@ function organizeDistFiles(allowedPlatforms: ReadonlySet<string>): void {
 
   const dirsMoved = organizeDirectories();
 
-  const filePatterns: FilePatternConfig[] = [
-    { pattern: /-arm64-mac\.zip\.blockmap$/, platform: 'mac', arch: 'arm64' },
-    { pattern: /-arm64-mac\.zip$/, platform: 'mac', arch: 'arm64' },
-    { pattern: /-arm64\.dmg$/, platform: 'mac', arch: 'arm64' },
-    { pattern: /\.dmg$/, platform: 'mac', arch: 'x64', excludeIf: (file) => file.includes('-arm64') },
-    { pattern: /-mac\.zip$/, platform: 'mac', arch: 'x64', excludeIf: (file) => file.includes('-arm64') },
-    { pattern: /-mac\.zip\.blockmap$/, platform: 'mac', arch: 'x64', excludeIf: (file) => file.includes('-arm64') },
-    { pattern: /^latest-mac\.yml$/, platform: 'mac', arch: null },
-
-    { pattern: /-arm64\.AppImage$/, platform: 'linux', arch: 'arm64' },
-    { pattern: /_arm64\.deb$/, platform: 'linux', arch: 'arm64' },
-    { pattern: /^latest-linux-arm64\.yml$/, platform: 'linux', arch: 'arm64' },
-    { pattern: /-x86_64\.AppImage$/, platform: 'linux', arch: 'x64' },
-    { pattern: /_amd64\.deb$/, platform: 'linux', arch: 'x64' },
-    { pattern: /^latest-linux\.yml$/, platform: 'linux', arch: 'x64' },
-
-    { pattern: /\.exe\.blockmap$/, platform: 'windows', arch: 'x64' },
-    { pattern: /\.exe$/, platform: 'windows', arch: 'x64' },
-    { pattern: /^latest\.yml$/, platform: 'windows', arch: null },
-  ];
-
   function reorganizeMisplacedFiles(): number {
     let movedCount = 0;
     const platformDirs = ['mac', 'linux', 'windows', 'win'].filter((p) => {
@@ -221,31 +235,18 @@ function organizeDistFiles(allowedPlatforms: ReadonlySet<string>): void {
         } else if (entry.isFile()) {
           const fileName = entry.name;
 
-          for (const patternConfig of filePatterns) {
-            const { pattern, platform, arch, excludeIf } = patternConfig;
-
-            if (!allowedPlatforms.has(platform)) {
-              continue;
-            }
-
-            if (pattern.test(fileName)) {
-              if (excludeIf && excludeIf(fileName)) {
-                continue;
-              }
-
-              const correctDestDir = arch
-                ? resolveUnderBase(distDir, platform, arch) || path.join(distDir, platform, arch)
-                : resolveUnderBase(distDir, platform) || path.join(distDir, platform);
-              const correctDestPath =
-                resolveUnderBase(correctDestDir, fileName) || path.join(correctDestDir, fileName);
-              if (fullPath === correctDestPath) {
-                break;
-              }
-
+          const hit = classifyArtifact(fileName);
+          if (hit && allowedPlatforms.has(hit.platform)) {
+            const { platform, arch } = hit;
+            const correctDestDir = arch
+              ? resolveUnderBase(distDir, platform, arch) || path.join(distDir, platform, arch)
+              : resolveUnderBase(distDir, platform) || path.join(distDir, platform);
+            const correctDestPath =
+              resolveUnderBase(correctDestDir, fileName) || path.join(correctDestDir, fileName);
+            if (fullPath !== correctDestPath) {
               if (!fs.existsSync(correctDestDir)) {
                 fs.mkdirSync(correctDestDir, { recursive: true });
               }
-
               if (fs.existsSync(correctDestPath)) {
                 try {
                   fs.unlinkSync(fullPath);
@@ -263,7 +264,6 @@ function organizeDistFiles(allowedPlatforms: ReadonlySet<string>): void {
                   console.error(`  Error moving ${relativeFilePath}: ${msg}`);
                 }
               }
-              break;
             }
           }
         }

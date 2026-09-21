@@ -61,17 +61,31 @@ jobs:
             # dist/windows/**/*.exe because dist/windows/unpacked/ contains
             # the Electron app's unpacked tree with `Roku Dev Studio.exe` and
             # dozens of node_modules .exe files we don't want in the release.
+            # `latest.yml` (+ the NSIS `.exe.blockmap`) is what lets electron-updater on Windows see a
+            # release at all — without it every Windows install falls back to the manual-download banner.
+            # The build hook files them under dist/windows/ (yml) and dist/windows/x64/ (blockmap); the
+            # flat dist/ paths are the fallback if the hook didn't run.
             artifact-paths: |
               apps/roku-dev-studio/dist/windows/x64/*.exe
+              apps/roku-dev-studio/dist/windows/x64/*.blockmap
+              apps/roku-dev-studio/dist/*.blockmap
+              apps/roku-dev-studio/dist/latest.yml
+              apps/roku-dev-studio/dist/windows/**/latest.yml
           - label: Linux
             os: ubuntu-latest
             build-cmd: build:linux
             artifact-name: linux-builds
+            # `latest-linux.yml` / `latest-linux-arm64.yml` are electron-updater's channel files for the
+            # AppImage builds — same story as Windows above.
             artifact-paths: |
               apps/roku-dev-studio/dist/*.deb
               apps/roku-dev-studio/dist/*.AppImage
+              apps/roku-dev-studio/dist/latest-linux*.yml
+              apps/roku-dev-studio/dist/*.blockmap
               apps/roku-dev-studio/dist/linux/**/*.deb
               apps/roku-dev-studio/dist/linux/**/*.AppImage
+              apps/roku-dev-studio/dist/linux/**/latest-linux*.yml
+              apps/roku-dev-studio/dist/linux/**/*.blockmap
     env:
       # macOS code signing + notarization — electron-builder reads these natively
       # (`build.mac.notarize: true` in apps/roku-dev-studio/package.json). CSC_* are scoped to
@@ -173,6 +187,65 @@ jobs:
           echo "TAG_NAME=$TAG_NAME" >> "$GITHUB_OUTPUT"
           echo "IS_PRERELEASE=$IS_PRERELEASE" >> "$GITHUB_OUTPUT"
 
+      - name: Compose release body from the uploaded artifacts
+        # The Downloads table is generated from the files actually attached to this release, so it
+        # can never drift from electron-builder's `build.artifactName` templates in
+        # apps/roku-dev-studio/package.json — the single source of truth for artifact names
+        # (`npm run verify:artifact-names` prints them and guards against collisions).
+        env:
+          VERSION: ${{ steps.get_version.outputs.VERSION }}
+        run: |
+          # shellcheck disable=SC2016  # the backticks in printf's format are literal markdown, not expansion
+          {
+            echo "## Roku Dev Studio v${VERSION}"
+            echo
+            echo "### Downloads"
+            echo
+            echo "| Platform | File |"
+            echo "|----------|------|"
+            while IFS= read -r f; do
+              case "$f" in
+                ./artifacts/mac-builds/*)     p="macOS" ;;
+                ./artifacts/windows-builds/*) p="Windows" ;;
+                ./artifacts/linux-builds/*)   p="Linux" ;;
+                *)                            p="Other" ;;
+              esac
+              printf '| **%s** | `%s` |\n' "$p" "$(basename "$f")"
+            done < <(for d in mac-builds windows-builds linux-builds; do
+              [ -d "./artifacts/$d" ] && find "./artifacts/$d" -type f \( -name '*.dmg' -o -name '*.zip' -o -name '*.exe' -o -name '*.deb' -o -name '*.AppImage' \) | sort
+            done)
+            echo
+            cat <<'EOF'
+          Which file: the `.dmg` is for Apple Silicon Macs (Intel builds are not produced by default; run `npm run build:mac:intel` locally if needed). On Windows, the **Setup** `.exe` is the installer and the **Portable** `.exe` runs without installing. Linux `.deb` / `.AppImage` files come in `amd64` / `x86_64` (Intel/AMD) and `arm64` flavours. The `.zip` and `.blockmap` files are used by the in-app updater.
+
+          ### What's New
+          See [CHANGELOG.md](https://github.com/paramount-engineering/roku-dev-studio/blob/main/CHANGELOG.md) for a curated summary, or "What's Changed" below for the full commit list.
+
+          ### Installation
+
+          **macOS**
+          1. Download the `.dmg` file
+          2. Open the disk image
+          3. Drag the app to your Applications folder
+          4. Open the app — it is signed with a Developer ID certificate and notarized by Apple, so Gatekeeper opens it without any override.
+
+          **Windows**
+          1. Download the **Setup** `.exe` file
+          2. Run the installer
+          3. If you see "Windows protected your PC":
+            - Click "More info"
+            - Click "Run anyway"
+          4. Follow the installation wizard
+
+          **Note for Windows:** The app is not code-signed. Windows SmartScreen will show a warning initially.
+
+          **Linux**
+          - **Debian/Ubuntu:** Download the `.deb` file and install with `sudo dpkg -i filename.deb`
+          - **Other distros:** Download the `.AppImage` file, make it executable (`chmod +x filename.AppImage`), and run it
+          EOF
+          } > release-body.md
+          cat release-body.md
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@718ea10b132b3b2eba29c1007bb80653f286566b  # v3.0.1
         with:
@@ -182,41 +255,7 @@ jobs:
           # tag) after the body below — supplements the curated CHANGELOG.md entry rather than
           # replacing the templated downloads/install instructions.
           generate_release_notes: true
-          body: |
-            ## Roku Dev Studio v${{ steps.get_version.outputs.VERSION }}
-
-            ### Downloads
-
-            | Platform | Intel/x64 | ARM64/Apple Silicon |
-            |----------|-----------|----------------------|
-            | **macOS** | — (Intel builds disabled by default; run `npm run build:mac:intel` locally if needed) | Roku Dev Studio-${{ steps.get_version.outputs.VERSION }}-arm64.dmg |
-            | **Windows** | Roku Dev Studio Setup ${{ steps.get_version.outputs.VERSION }}.exe, Roku Dev Studio ${{ steps.get_version.outputs.VERSION }}.exe (portable) | - |
-            | **Linux** | roku-dev-studio_${{ steps.get_version.outputs.VERSION }}_amd64.deb, Roku Dev Studio-${{ steps.get_version.outputs.VERSION }}-x86_64.AppImage | roku-dev-studio_${{ steps.get_version.outputs.VERSION }}_arm64.deb, Roku Dev Studio-${{ steps.get_version.outputs.VERSION }}-arm64.AppImage |
-
-            ### What's New
-            See [CHANGELOG.md](https://github.com/paramount-engineering/roku-dev-studio/blob/main/CHANGELOG.md) for a curated summary, or "What's Changed" below for the full commit list.
-
-            ### Installation
-
-            **macOS**
-            1. Download the `-arm64.dmg` file (Apple Silicon)
-            2. Open the disk image
-            3. Drag the app to your Applications folder
-            4. Open the app — it is signed with a Developer ID certificate and notarized by Apple, so Gatekeeper opens it without any override.
-
-            **Windows**
-            1. Download the Setup `.exe` file
-            2. Run the installer
-            3. If you see "Windows protected your PC":
-              - Click "More info"
-              - Click "Run anyway"
-            4. Follow the installation wizard
-
-            **Note for Windows:** The app is not code-signed. Windows SmartScreen will show a warning initially.
-
-            **Linux**
-            - **Debian/Ubuntu:** Download the `.deb` file and install with `sudo dpkg -i filename.deb`
-            - **Other distros:** Download the `.AppImage` file, make it executable (`chmod +x filename.AppImage`), and run it
+          body_path: release-body.md
           draft: false
           prerelease: ${{ steps.get_version.outputs.IS_PRERELEASE == 'true' }}
           files: |
@@ -225,7 +264,11 @@ jobs:
             ./artifacts/mac-builds/**/latest-mac.yml
             ./artifacts/mac-builds/**/*.blockmap
             ./artifacts/windows-builds/**/*.exe
+            ./artifacts/windows-builds/**/*.blockmap
+            ./artifacts/windows-builds/**/latest.yml
             ./artifacts/linux-builds/**/*.deb
             ./artifacts/linux-builds/**/*.AppImage
+            ./artifacts/linux-builds/**/*.blockmap
+            ./artifacts/linux-builds/**/latest-linux*.yml
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
