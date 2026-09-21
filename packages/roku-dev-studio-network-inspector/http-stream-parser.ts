@@ -122,7 +122,7 @@ function decodeChunked(buf: Buffer, bodyStart: number, bodyEnd: number): Buffer 
 /**
  * Some hotspot/captive-portal forward proxies rewrite the request target to carry the real
  * destination as a semicolon "matrix param" after their own path, e.g.
- * `http://192.168.11.105:8080/;https://real-target.example/path`. Passive (non-MITM) hotspot
+ * `http://192.168.11.34:8080/;https://real-target.example/path`. Passive (non-MITM) hotspot
  * capture sees the proxy as the literal TCP peer, which then surfaces as the "Remote Address" for
  * every UI reader of `httpRequest.url` — unwrap back to the real target here, once, upstream of
  * all of them.

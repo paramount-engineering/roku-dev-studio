@@ -13,7 +13,7 @@ import * as assert from 'node:assert/strict';
 import { feedTcpStream, resetHttpStreams } from '../http-stream-parser';
 
 const DEVICE_IP = '10.0.0.5';
-const PROXY_IP = '192.168.11.105';
+const PROXY_IP = '192.168.11.34';
 
 function crlf(lines: string[]): Buffer {
   return Buffer.from(lines.join('\r\n'), 'utf8');
@@ -57,8 +57,8 @@ describe('feedTcpStream — proxy-embedded target unwrap', () => {
       'console.log()'
     ]);
     const { reqEvents, resEvents } = runTransaction(
-      'GET http://192.168.11.105:8080/;https://tags.tiqcdn.com/utag/cbsi/pplusintl-roku/dev/utag.js HTTP/1.1',
-      ['Host: 192.168.11.105:8080'],
+      'GET http://192.168.11.34:8080/;https://tags.tiqcdn.com/utag/cbsi/pplusintl-roku/dev/utag.js HTTP/1.1',
+      ['Host: 192.168.11.34:8080'],
       response
     );
     assert.equal(reqEvents.length, 0); // queued — pairing completes on the response
