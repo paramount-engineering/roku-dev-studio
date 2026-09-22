@@ -1856,25 +1856,54 @@ const BRIDGE_TOOLS: Tool[] = [
 // Public registry: bespoke + auto-generated, deduped by name.
 // Op-backed tools should win when there's overlap so new catalog additions
 // propagate automatically. In practice there's no overlap today.
-//
-// `TOOL_CATEGORIES` is derived from which array a tool is defined in — not a separately
-// hand-maintained lookup — so docs/assets/mcp-tools.js's grouping can never drift from this
-// registry: adding a tool to (e.g.) DEBUGGER_TOOLS categorizes it correctly with no extra step.
-export const TOOL_CATEGORIES: Record<string, string> = {};
 const byName: Map<string, Tool> = new Map();
-function registerTools(tools: Tool[], category: string): void {
-  for (const t of tools) {
-    byName.set(t.name, t);
-    TOOL_CATEGORIES[t.name] = category;
-  }
+function registerTools(tools: Tool[]): void {
+  for (const t of tools) byName.set(t.name, t);
 }
-registerTools(DISCOVERY_TOOLS, 'Discovery & Scripting');
-registerTools(BRIDGE_TOOLS, 'Bridge & Device');
-registerTools(NETWORK_INSPECTOR_TOOLS, 'Network Inspector');
-registerTools(DEBUGGER_TOOLS, 'BrightScript Debugger');
-registerTools(OP_BACKED_TOOLS, 'Device Control & App Connector');
+registerTools(DISCOVERY_TOOLS);
+registerTools(BRIDGE_TOOLS);
+registerTools(NETWORK_INSPECTOR_TOOLS);
+registerTools(DEBUGGER_TOOLS);
+registerTools(OP_BACKED_TOOLS);
 
 export const TOOLS: Tool[] = Array.from(byName.values());
+
+// Human-facing catalog groups, as rendered by the docs site (scripts/gen-docs-entry.ts →
+// docs/mcp-tools.json → docs/assets/mcp-tools.js). Keyed by tool name rather than derived from
+// the source arrays above because those don't map to how a person browses capabilities —
+// OP_BACKED_TOOLS alone spans remote control, sideloading, telnet and RALE. Mirrors the in-app
+// "View MCP Tools" modal (apps/roku-dev-studio/renderer/components/settings/mcp-tools-modal.ts,
+// MCP_TOOL_GROUPS) group-for-group and in the same order: `npm run verify:mcp-tools` (in
+// apps/roku-dev-studio) fails when the two drift, and gen-docs fails on any tool missing here.
+export const TOOL_CATEGORY_GROUPS: Record<string, readonly string[]> = {
+  'Device Connection & Discovery': [
+    'probe_bridge', 'scan_devices', 'list_devices', 'connect_device', 'test_connection', 'get_selected_device'
+  ],
+  'Remote Control & ECP': [
+    'keypress', 'input_text', 'launch_app', 'deep_link', 'ecp_query', 'ecp_post', 'screenshot', 'get_app_icon',
+    'device_performance_metrics'
+  ],
+  Sideloading: ['sideload', 'delete_sideload'],
+  'Telnet & Console': ['telnet_connect', 'telnet_disconnect', 'get_telnet_log', 'console_monitor_findings'],
+  'App Connector & RALE': [
+    'app_connector_connect', 'app_connector_disconnect', 'app_function', 'list_app_connector_functions', 'rale_command',
+    'rale_get_node_by_id'
+  ],
+  Debugger: [
+    'debugger_attach', 'debugger_status', 'debugger_set_breakpoints', 'debugger_list_breakpoints', 'debugger_remove_breakpoints',
+    'debugger_pause', 'debugger_continue', 'debugger_step', 'debugger_wait_for_stop', 'debugger_get_callstack',
+    'debugger_get_variables', 'debugger_evaluate', 'debugger_detach'
+  ],
+  'Network Inspector': [
+    'network_inspector_status', 'network_inspector_list_events', 'network_inspector_get_event_detail', 'network_inspector_find',
+    'network_inspector_analyze', 'network_inspector_get_ca_info'
+  ],
+  'Action Scripts': ['list_action_types', 'get_action_schema', 'get_capability_bundle', 'validate_script', 'send_script_to_builder']
+};
+export const TOOL_CATEGORIES: Record<string, string> = {};
+for (const [category, names] of Object.entries(TOOL_CATEGORY_GROUPS)) {
+  for (const name of names) TOOL_CATEGORIES[name] = category;
+}
 
 export function findTool(name: string): Tool | undefined {
   return byName.get(name);

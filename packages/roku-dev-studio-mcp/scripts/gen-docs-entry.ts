@@ -11,7 +11,23 @@
  */
 import * as fs from 'fs';
 import * as path from 'path';
-import { TOOLS, TOOL_CATEGORIES } from '../src/tools.js';
+import { TOOLS, TOOL_CATEGORIES, TOOL_CATEGORY_GROUPS } from '../src/tools.js';
+
+// Fail loudly rather than emit an "Other" bucket: TOOL_CATEGORY_GROUPS is hand-keyed by name,
+// so a new tool nobody categorized (or a renamed one left behind) must break this build.
+{
+  const realNames = new Set(TOOLS.map((t) => t.name));
+  const uncategorized = TOOLS.filter((t) => !TOOL_CATEGORIES[t.name]).map((t) => t.name);
+  const stale = Object.values(TOOL_CATEGORY_GROUPS)
+    .flat()
+    .filter((n) => !realNames.has(n));
+  if (uncategorized.length || stale.length) {
+    throw new Error(
+      `[gen-docs] TOOL_CATEGORY_GROUPS drifted from TOOLS — uncategorized: [${uncategorized.join(', ')}], ` +
+        `stale: [${stale.join(', ')}]`
+    );
+  }
+}
 
 // Every Tool (bespoke or op-backed) now carries its own `outputSchema` directly — op-backed
 // ones get it copied from roku-dev-studio-api/lib/operations.ts inside opToMcpTool. Docs/
@@ -27,7 +43,7 @@ const tools = TOOLS.map((t) => ({
   name: t.name,
   title: t.title ?? null,
   description: t.description,
-  category: TOOL_CATEGORIES[t.name] || 'Other',
+  category: TOOL_CATEGORIES[t.name],
   inputSchema: t.inputSchema,
   outputSchema: t.outputSchema ?? null,
   annotations: t.annotations ?? null
@@ -36,6 +52,8 @@ const tools = TOOLS.map((t) => ({
 const payload = {
   generatedAt: new Date().toISOString(),
   count: tools.length,
+  // Display order for the docs page — the order TOOL_CATEGORY_GROUPS declares.
+  categories: Object.keys(TOOL_CATEGORY_GROUPS),
   tools
 };
 

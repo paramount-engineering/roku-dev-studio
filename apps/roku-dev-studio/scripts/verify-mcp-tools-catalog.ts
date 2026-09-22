@@ -19,6 +19,10 @@
  *   - packages/roku-dev-studio-mcp/README.md: every backtick-quoted name in a "## Tool catalog"
  *     table's first cell, plus the ALL_OPS enumeration paragraph and the "refresh" count sentence.
  *
+ * It also pins the two human GROUPINGS together: the modal's MCP_TOOL_GROUPS (labels from
+ * S.settings.mcpToolCategories) must equal tools.ts's TOOL_CATEGORY_GROUPS (what the docs site
+ * renders via docs/mcp-tools.json) — same groups, same order, same members.
+ *
  *   cd apps/roku-dev-studio && npm run verify:mcp-tools
  */
 import { readFileSync } from 'fs';
@@ -31,6 +35,7 @@ const operationsPath = path.join(repoRoot, 'packages/roku-dev-studio-api/lib/ope
 const toolsPath = path.join(repoRoot, 'packages/roku-dev-studio-mcp/src/tools.ts');
 const modalPath = path.join(appDir, 'renderer/components/settings/mcp-tools-modal.ts');
 const mcpReadmePath = path.join(repoRoot, 'packages/roku-dev-studio-mcp/README.md');
+const settingsStringsPath = path.join(appDir, 'shared/strings/settings.ts');
 
 /** All `<key>: '<snake_case>'` matches at the start of a line (ignoring leading whitespace) —
  *  matches how every `RokuOp.id` / hand-written `Tool.name` is declared: one per line, as the
@@ -156,6 +161,49 @@ if (readmeStatedCounts) {
         `"${readmeStatedCounts.total} tools (${readmeStatedCounts.handWritten} bespoke + ${readmeStatedCounts.opBacked} op-backed)" ` +
         `— real is "${wantTotal} tools (${wantHandWritten} bespoke + ${wantOpBacked} op-backed)".`
     );
+  }
+}
+
+// ── Grouping parity: in-app modal ↔ tools.ts TOOL_CATEGORY_GROUPS (docs site) ─────────────
+{
+  type Group = { label: string; names: string[] };
+  const namesIn = (src: string): string[] => {
+    const out: string[] = [];
+    const re = /'([a-zA-Z][a-zA-Z0-9_]*)'/g;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(src)) !== null) out.push(m[1]);
+    return out;
+  };
+
+  const settingsSrc = readFileSync(settingsStringsPath, 'utf8');
+  const labelByKey = new Map<string, string>();
+  const catBlock = /mcpToolCategories:\s*\{([\s\S]*?)\n\s*\}/.exec(settingsSrc)?.[1] ?? '';
+  const labelRe = /^\s*([a-zA-Z]+):\s*'([^']*)'/gm;
+  let lm: RegExpExecArray | null;
+  while ((lm = labelRe.exec(catBlock)) !== null) labelByKey.set(lm[1], lm[2]);
+
+  const modalGroups: Group[] = [];
+  const modalRe = /categoryKey:\s*'([a-zA-Z]+)',\s*toolNames:\s*\[([\s\S]*?)\]/g;
+  let mm: RegExpExecArray | null;
+  while ((mm = modalRe.exec(modalSrc)) !== null) {
+    modalGroups.push({ label: labelByKey.get(mm[1]) ?? `<${mm[1]}: no label in settings.ts>`, names: namesIn(mm[2]) });
+  }
+
+  const docsGroups: Group[] = [];
+  const groupsBlock = /TOOL_CATEGORY_GROUPS[^=]*=\s*\{([\s\S]*?)\n\};/.exec(toolsSrc)?.[1] ?? '';
+  // Keys are either quoted ('Telnet & Console') or bare identifiers (Sideloading).
+  const docsRe = /(?:'([^']+)'|([A-Za-z]+)):\s*\[([\s\S]*?)\]/g;
+  let dm: RegExpExecArray | null;
+  while ((dm = docsRe.exec(groupsBlock)) !== null) docsGroups.push({ label: dm[1] ?? dm[2], names: namesIn(dm[3]) });
+
+  const fmt = (g: Group[]): string => g.map((x) => `${x.label}: ${x.names.join(', ')}`).join('\n     ');
+  if (modalGroups.length === 0 || JSON.stringify(modalGroups) !== JSON.stringify(docsGroups)) {
+    failed = true;
+    console.error('\n❌ Grouping drift between mcp-tools-modal.ts MCP_TOOL_GROUPS and tools.ts TOOL_CATEGORY_GROUPS (docs site).');
+    console.error('   modal:\n     ' + fmt(modalGroups));
+    console.error('   tools.ts:\n     ' + fmt(docsGroups));
+  } else {
+    console.log(`✅ grouping: ${docsGroups.length} groups identical between the in-app modal and the docs site.`);
   }
 }
 
