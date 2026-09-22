@@ -384,7 +384,6 @@ pre code { background: none; padding: 0; color: var(--text); }
 .section-lead {
   font-size: 1.05em;
   color: var(--text-secondary);
-  max-width: 700px;
   margin: 0 0 32px;
 }
 
@@ -742,6 +741,8 @@ th { color: var(--text-muted); text-transform: uppercase; font-size: 0.78em; let
 .footer-org { font-weight: 700; font-size: 1.05em; color: var(--text); }
 .footer-org:hover { color: var(--accent-purple); }
 .footer-sub { color: var(--text-muted); }
+/* Right-hand footer column (package links): same stacked layout as .footer-brand, right-aligned. */
+.footer-packages { align-items: flex-end; text-align: right; }
 
 /* ---------- Image lightbox (assets/nav.js) ---------- */
 /* Every screenshot on the site is clickable except the small header logo (.brand-icon),
@@ -928,9 +929,6 @@ img:not(.brand-icon) { cursor: zoom-in; }
    six cards fill two even rows instead of four-plus-two. */
 .feature-grid--even { grid-auto-rows: 1fr; }
 .feature-grid--cols-3 { grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
-/* Inside a doc section (tab-panel intros) the lead runs the full content width like the
-   lists and cards under it; the 700px cap is only for the page hero. */
-.doc-section .section-lead { max-width: none; }
 
 /* Stacked collapsible panels (remote-server.html, Step 1 options): native <details> joined into
    one bordered group. Each panel toggles independently — Retype's stacked Panel behaviour. */
