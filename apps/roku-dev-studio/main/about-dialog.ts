@@ -10,6 +10,7 @@ import { isMacOS, platformLabel } from 'roku-dev-studio-platform';
 import { mainError } from './log.js';
 import { S } from '../shared/strings/index';
 
+const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const { BrowserWindow: BrowserWindowConstructor, dialog } = require('electron');
@@ -29,10 +30,18 @@ function buildAboutInfo() {
   } catch {
     // Dependency missing or resolution failed (e.g. broken install)
   }
+  let buildTime: string | null = null;
+  try {
+    const parsed = JSON.parse(fs.readFileSync(path.join(__dirname, 'build-info.json'), 'utf8')) as { buildTime?: unknown };
+    if (typeof parsed.buildTime === 'string' && !Number.isNaN(Date.parse(parsed.buildTime))) buildTime = parsed.buildTime;
+  } catch {
+    // No build-info.json (bundle predates the stamp, or an unusual layout): the row shows "—".
+  }
   const iconPath = path.join(__dirname, 'assets', 'icon-256.png');
   const iconUrl = `file://${iconPath.replace(/\\/g, '/')}`;
   return {
     appVersion,
+    buildTime,
     rokuDevStudioApiVersion,
     electronVersion: process.versions.electron,
     nodeVersion: process.versions.node,

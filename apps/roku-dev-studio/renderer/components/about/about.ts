@@ -5,6 +5,8 @@ import { buildGithubIssueUrl } from '../../modules/errors/crash-report.js';
 
 type AboutInfo = {
   appVersion: string;
+  /** ISO timestamp stamped by the bundle build (build-info.json); null when unavailable. */
+  buildTime: string | null;
   rokuDevStudioApiVersion: string;
   electronVersion: string;
   nodeVersion: string;
@@ -39,6 +41,7 @@ function setText(id: string, text: string): void {
 function versionInfoText(info: AboutInfo): string {
   return [
     S.about.copyAppVersion(info.appVersion),
+    S.about.copyBuildTime(info.buildTime ?? '—'),
     S.about.copyApiVersion(info.rokuDevStudioApiVersion),
     S.about.copyElectronVersion(info.electronVersion),
     S.about.copyNodeVersion(info.nodeVersion),
@@ -91,6 +94,16 @@ if (!api?.getInfo) {
     }
 
     setText('appVersion', S.about.versionLabel(info.appVersion));
+    // Build time sits beside the version: locale-formatted for the eye, ISO in the tooltip and in
+    // the copied/issue text; hidden entirely when the build wrote no stamp.
+    const buildTimeEl = document.getElementById('buildTime');
+    if (buildTimeEl) {
+      buildTimeEl.hidden = !info.buildTime;
+      if (info.buildTime) {
+        buildTimeEl.textContent = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(info.buildTime));
+        buildTimeEl.setAttribute('title', info.buildTime);
+      }
+    }
     setText('rdsApiVersion', info.rokuDevStudioApiVersion);
     setText('electronVersion', info.electronVersion);
     setText('nodeVersion', info.nodeVersion);
@@ -133,9 +146,23 @@ if (!api?.getInfo) {
       logo.addEventListener('error', () => resolve(), { once: true });
       setTimeout(resolve, 300);
     });
+    // Intro geometry: how far the icon must start to the right to sit at the centre alone, and how
+    // far the text must start to the left to be hidden behind it. Both depend on the rendered text
+    // width, so they are measured once fonts/logo have settled and handed to the CSS keyframes.
+    const startHeaderIntro = (): void => {
+      const header = document.querySelector<HTMLElement>('.header');
+      const text = document.querySelector<HTMLElement>('.header-text');
+      if (!header || !text) return;
+      const gap = parseFloat(getComputedStyle(header).columnGap) || 0;
+      const iconWidth = logo?.getBoundingClientRect().width ?? 0;
+      const textWidth = text.getBoundingClientRect().width;
+      header.style.setProperty('--intro-logo-shift', `${(textWidth + gap) / 2}px`);
+      header.style.setProperty('--intro-text-shift', `${-(iconWidth + gap) / 2}px`);
+      header.classList.add('is-ready');
+    };
     Promise.all([logoSettled, document.fonts?.ready ?? Promise.resolve()])
-      .then(() => requestAnimationFrame(fitWindowToContent))
-      .catch(fitWindowToContent);
+      .then(() => requestAnimationFrame(() => { startHeaderIntro(); fitWindowToContent(); }))
+      .catch(() => { startHeaderIntro(); fitWindowToContent(); });
     api!.onLocaleChanged?.(() => requestAnimationFrame(fitWindowToContent));
 
     // "Check for Updates": the same check the Help menu runs; while it runs the button says

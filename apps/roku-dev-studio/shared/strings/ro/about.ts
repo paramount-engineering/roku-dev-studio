@@ -14,6 +14,7 @@ export const about = {
 
   // Clipboard block assembled by "Copy"
   copyAppVersion: (v: string): string => `Versiune Roku Dev Studio: ${v}`,
+  copyBuildTime: (v: string): string => `Ora compilării: ${v}`,
   copyApiVersion: (v: string): string => `Versiune API Roku Dev Studio: ${v}`,
   copyElectronVersion: (v: string): string => `Versiune Electron: ${v}`,
   copyNodeVersion: (v: string): string => `Versiune Node.js: ${v}`,
