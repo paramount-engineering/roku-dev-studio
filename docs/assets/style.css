@@ -970,3 +970,76 @@ img:not(.brand-icon) { cursor: zoom-in; }
 .panel-body { padding: 14px 16px 16px; }
 .panel-body pre { margin: 0 0 12px; }
 .panel-body > :last-child { margin-bottom: 0; }
+
+/* ---------- MCP intro: lead text beside a tool-catalog card (title / rows / footer) ---------- */
+.intro-split { display: grid; grid-template-columns: minmax(0, 1fr) 420px; gap: 40px; align-items: center; margin-bottom: 32px; }
+.intro-split .section-lead { margin-bottom: 0; }
+@media (max-width: 900px) { .intro-split { grid-template-columns: 1fr; gap: 24px; } }
+.tool-card {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+  font-size: 0.9em;
+  display: flex;
+  flex-direction: column;
+}
+/* Wide layout: the card matches the lead column's height and only its rows scroll (header + footer
+   stay put). `height: 0` keeps the card's own content out of the grid row's sizing, so the text sets
+   the row; `min-height: 100%` then stretches the card to it. Stacked layout lets it flow — no nested
+   scroller on touch. */
+@media (min-width: 901px) {
+  .intro-split { align-items: stretch; }
+  .tool-card { height: 0; min-height: 100%; }
+}
+.tool-card-head, .tool-card-foot { flex: none; }
+.tool-card-body { overflow-y: auto; min-height: 0; scrollbar-gutter: stable; scrollbar-width: thin; scrollbar-color: var(--border-strong) transparent; }
+.tool-card-body::-webkit-scrollbar { width: 8px; }
+.tool-card-body::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 4px; }
+.intro-points { margin: 18px 0 0; padding-left: 20px; color: var(--text-secondary); font-size: 0.95em; }
+.intro-points li { margin-bottom: 8px; }
+.intro-points strong { color: var(--text); }
+.tool-card-head { display: flex; align-items: center; gap: 10px; padding: 14px 18px 12px; }
+.tool-card-head .icon { width: 1.1em; height: 1.1em; color: var(--accent-purple); flex: none; }
+.tool-card-head h3 { margin: 0; font-size: 1em; }
+.tool-card-head span { margin-left: auto; color: var(--text-muted); font-size: 0.85em; white-space: nowrap; }
+.tool-card-head span:empty { display: none; }
+.tool-card-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 2px 12px;
+  padding: 9px 18px;
+  border-top: 1px solid var(--border);
+  color: inherit;
+}
+.tool-card-row:hover { background: var(--accent-purple-dim); text-decoration: none; }
+.tool-card-row strong { grid-column: 1; grid-row: 1; color: var(--text); font-size: 0.95em; }
+.tool-card-row small { grid-column: 1; grid-row: 2; color: var(--text-secondary); font-size: 0.86em; line-height: 1.4; }
+.tool-card-count {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  align-self: center;
+  min-width: 2em;
+  text-align: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--accent-purple-dim);
+  color: var(--accent-purple);
+  font-weight: 700;
+  font-size: 0.82em;
+  font-variant-numeric: tabular-nums;
+}
+.tool-card-count:empty { display: none; }
+.tool-card-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 18px;
+  border-top: 1px solid var(--border);
+  background: var(--bg-alt);
+  color: var(--text-muted);
+  font-size: 0.88em;
+}
+.tool-card-foot a { font-weight: 700; white-space: nowrap; }

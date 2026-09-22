@@ -118,6 +118,8 @@
   // Display order comes from the generator (`categories` = the order TOOL_CATEGORY_GROUPS declares
   // in tools.ts, which mirrors the in-app "View MCP Tools" modal). Anything unrecognized is
   // appended alphabetically rather than dropped.
+  function slug(s) { return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''); }
+
   function groupByCategory(tools, order) {
     var byCategory = {};
     tools.forEach(function (t) {
@@ -221,7 +223,7 @@
       listEl.innerHTML = groupByCategory(data.tools, data.categories || [])
         .map(function (group) {
           return (
-            '<section class="tool-group">' +
+            '<section class="tool-group" id="cat-' + slug(group.category) + '">' +
             '<h3 class="tool-group-title">' + escapeHtml(group.category) + ' <span class="tool-group-count">(' + group.tools.length + ')</span></h3>' +
             group.tools.map(toolCard).join('') +
             '</section>'
@@ -231,6 +233,8 @@
       renderChips();
       searchEl.addEventListener('input', applyFilter);
       applyFilter();
+      // mcp.html's intro card links to #cat-<group>; the groups only exist after this render.
+      if (location.hash) { var target = document.getElementById(location.hash.slice(1)); if (target) target.scrollIntoView(); }
     })
     .catch(function (err) {
       leadEl.textContent = 'Could not load the tool catalog (' + err.message + ').';

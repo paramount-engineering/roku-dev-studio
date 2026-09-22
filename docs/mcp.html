@@ -72,9 +72,32 @@
 </header>
 
 <section class="section container" style="padding-bottom: 0;">
+  <div class="intro-split">
+    <div>
   <div class="section-title-eyebrow">AI agents, real devices</div>
   <h1 class="section-heading">MCP Server</h1>
   <p class="section-lead">Roku Dev Studio bundles a Model Context Protocol (MCP) server so Cursor, Claude Desktop, VS Code, and other MCP clients can drive a real Roku device from inside a chat — remote control, sideload, App Connector, Network Inspector, and BrightScript debugging, all as callable tools.</p>
+      <ul class="intro-points">
+        <li><strong>Local by design.</strong> Agent ↔ server over stdio, server ↔ app over loopback with a per-launch token — <a href="#security">security notes</a>.</li>
+        <li><strong>One-toggle setup.</strong> Settings → MCP Server writes the entry into Cursor, Claude Desktop, VS Code, Windsurf, or ChatGPT Desktop for you — <a href="#setup">setup</a>.</li>
+        <li><strong>Humans stay in the loop.</strong> Direct ops run one action at a time; multi-step Action Scripts only land in the Builder for you to review and run — <a href="#two-surfaces">two surfaces</a>.</li>
+      </ul>
+    </div>
+    <aside class="tool-card" aria-labelledby="tool-card-title">
+      <div class="tool-card-head"><svg class="icon" width="16" height="16"><use href="assets/icons.svg#icon-mcp"></use></svg><h3 id="tool-card-title">Tool catalog</h3><span data-tool-total></span></div>
+      <div class="tool-card-body">
+      <a class="tool-card-row" href="mcp-tools.html#cat-device-connection-discovery"><strong>Device Connection &amp; Discovery</strong><span class="tool-card-count" data-cat="device-connection-discovery"></span><small>Find devices, connect, and probe the app bridge.</small></a>
+      <a class="tool-card-row" href="mcp-tools.html#cat-remote-control-ecp"><strong>Remote Control &amp; ECP</strong><span class="tool-card-count" data-cat="remote-control-ecp"></span><small>Keypresses, launch, deep links, ECP queries, screenshots, performance metrics.</small></a>
+      <a class="tool-card-row" href="mcp-tools.html#cat-sideloading"><strong>Sideloading</strong><span class="tool-card-count" data-cat="sideloading"></span><small>Install or remove a dev channel.</small></a>
+      <a class="tool-card-row" href="mcp-tools.html#cat-telnet-console"><strong>Telnet &amp; Console</strong><span class="tool-card-count" data-cat="telnet-console"></span><small>Stream the debug console and read Console Monitor findings.</small></a>
+      <a class="tool-card-row" href="mcp-tools.html#cat-app-connector-rale"><strong>App Connector &amp; RALE</strong><span class="tool-card-count" data-cat="app-connector-rale"></span><small>Call channel functions and walk the SceneGraph node tree.</small></a>
+      <a class="tool-card-row" href="mcp-tools.html#cat-debugger"><strong>Debugger</strong><span class="tool-card-count" data-cat="debugger"></span><small>Breakpoints, stepping, call stack, variables, evaluate.</small></a>
+      <a class="tool-card-row" href="mcp-tools.html#cat-network-inspector"><strong>Network Inspector</strong><span class="tool-card-count" data-cat="network-inspector"></span><small>List, inspect, search, and analyze captured traffic.</small></a>
+      <a class="tool-card-row" href="mcp-tools.html#cat-action-scripts"><strong>Action Scripts</strong><span class="tool-card-count" data-cat="action-scripts"></span><small>Author, validate, and stage multi-step scripts in the Builder.</small></a>
+      </div>
+      <div class="tool-card-foot"><span>Schemas for every tool</span><a href="mcp-tools.html">Browse the Tool Reference →</a></div>
+    </aside>
+  </div>
 </section>
 
 <div class="container">
@@ -158,5 +181,17 @@
 </footer>
 
 <script src="assets/nav.js?v=11"></script>
+<script>
+(function () {
+  // Live per-group counts for the intro card, from the same generated catalog the Tool Reference renders.
+  var slug = function (s) { return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''); };
+  fetch('mcp-tools.json').then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); }).then(function (d) {
+    var counts = {};
+    d.tools.forEach(function (t) { var k = slug(t.category || 'Other'); counts[k] = (counts[k] || 0) + 1; });
+    document.querySelectorAll('[data-cat]').forEach(function (el) { el.textContent = counts[el.dataset.cat] || ''; });
+    document.querySelector('[data-tool-total]').textContent = d.count + ' tools · ' + Object.keys(counts).length + ' groups';
+  }).catch(function () {});
+})();
+</script>
 </body>
 </html>
