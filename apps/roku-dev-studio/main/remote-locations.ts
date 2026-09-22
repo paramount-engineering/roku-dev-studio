@@ -15,7 +15,8 @@
  */
 
 import { loadSettings, saveSettings } from './settings';
-import { deleteRceAccount } from './rce-account-store';
+import { deleteRceAccount, getRceAccountNames } from './rce-account-store';
+import { orphanedRceAccounts } from './rce-account-orphans';
 import { resolveRceDeviceBySerial } from './rce-device-registry';
 import { mainLog, mainWarn } from './log';
 
@@ -96,6 +97,28 @@ export function forgetEphemeralRemoteLocations(): number {
     return gone.length;
   } catch (e) {
     mainWarn('[Remote Locations] forget-on-quit sweep failed:', e);
+    return 0;
+  }
+}
+
+/**
+ * Delete stored RCE accounts (token + user id) that no `remote-locations` entry references any
+ * more — see main/rce-account-orphans.ts for why they arise. The `remote-locations` setting owns
+ * RCE account lifecycle: main/settings.ts runs this after every renderer write of that key, so
+ * deleting a location deletes its token in the same IPC call; startup runs it too for crash
+ * safety and for data left by builds that predate the cascade. Idempotent, never throws.
+ * @returns number of accounts pruned.
+ */
+export function pruneOrphanedRceAccounts(): number {
+  try {
+    const orphans = orphanedRceAccounts(getRceAccountNames(), loadSettings()['remote-locations']);
+    for (const name of orphans) deleteRceAccount(name);
+    if (orphans.length > 0) {
+      mainLog(`[Remote Locations] pruned ${orphans.length} orphaned RCE account(s): ${orphans.join(', ')}`);
+    }
+    return orphans.length;
+  } catch (err) {
+    mainWarn('[Remote Locations] orphaned RCE account prune failed:', err);
     return 0;
   }
 }

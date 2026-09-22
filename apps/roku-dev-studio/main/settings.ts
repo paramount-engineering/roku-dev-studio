@@ -91,6 +91,19 @@ function saveSettings(settings: Record<string, unknown>) {
 }
 
 /**
+ * Side effects owed to other stores when the renderer writes a settings key. Today just one:
+ * `remote-locations` owns the lifecycle of RCE accounts, whose Personal Access Tokens live in the
+ * secret store (never in this JSON). Removing/replacing the locations list therefore drops the
+ * tokens of any account no `kind: 'rce'` entry names any more — one write, both stores.
+ * Lazy require: remote-locations imports this module for load/save.
+ */
+function cascadeSettingWrite(key: string): void {
+  if (key !== 'remote-locations') return;
+  const { pruneOrphanedRceAccounts } = require('./remote-locations') as typeof import('./remote-locations');
+  pruneOrphanedRceAccounts();
+}
+
+/**
  * Allowlist of keys the renderer is permitted to write via the generic settings:set /
  * settings:delete IPC. Keeping this strict prevents a compromised or buggy renderer
  * from overwriting structured/main-owned keys in `app-settings.json`.
@@ -175,6 +188,7 @@ function registerSettingsIpc(ipcMain: IpcMain) {
     settings[key] = value;
     const saved = saveSettings(settings);
     mainLog('[Settings] Set:', key, '-> saved:', saved);
+    cascadeSettingWrite(key);
     return { success: saved };
   });
 
@@ -188,6 +202,7 @@ function registerSettingsIpc(ipcMain: IpcMain) {
     delete settings[key];
     const saved = saveSettings(settings);
     mainLog('[Settings] Delete:', key, '-> saved:', saved);
+    cascadeSettingWrite(key);
     return { success: saved };
   });
 }

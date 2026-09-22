@@ -313,7 +313,6 @@ contextBridge.exposeInMainWorld('roku', {
   // Roku Cloud Emulator (RCE) — Phase 1: account add/validate, device listing.
   rceValidateToken: (token: string) => ipcRenderer.invoke(IPC.RceValidateToken, { token }),
   rceAddAccount: (name: string, token: string) => ipcRenderer.invoke(IPC.RceAddAccount, { name, token }),
-  rceRemoveAccount: (name: string) => ipcRenderer.invoke(IPC.RceRemoveAccount, { name }),
   rceListAccounts: () => ipcRenderer.invoke(IPC.RceListAccounts),
   // User/org info + quota (GET /user/me) for the "User Info" button on an RCE location.
   rceGetUserInfo: (name: string) => ipcRenderer.invoke(IPC.RceGetUserInfo, { name }),

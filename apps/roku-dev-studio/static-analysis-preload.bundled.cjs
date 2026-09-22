@@ -12,6 +12,8 @@ var IPC = {
   UpdaterStatus: "updater:status",
   // About
   AboutGetInfo: "about:getInfo",
+  /** Renderer → main (send): the About page's rendered content height, so the fixed-size window can fit it. */
+  AboutFitHeight: "about:fitHeight",
   AboutCopy: "about:copy",
   AboutOpenExternal: "about:openExternal",
   // Settings window (modal)
@@ -523,7 +525,6 @@ var IPC = {
    *  account, list its devices. Device control/lifecycle channels land with later phases. */
   RceValidateToken: "rce:validate-token",
   RceAddAccount: "rce:add-account",
-  RceRemoveAccount: "rce:remove-account",
   RceListAccounts: "rce:list-accounts",
   /** User/org info + quota (`GET /user/me`) for the "User Info" button on an RCE location. */
   RceGetUserInfo: "rce:get-user-info",

@@ -25,8 +25,7 @@ import {
   findRceAccountByToken,
   findRceAccountByUserId,
   setRceAccount,
-  setRceAccountUserId,
-  deleteRceAccount
+  setRceAccountUserId
 } from '../rce-account-store';
 import { recordRceDeviceSeen } from '../rce-device-registry';
 import { systemTelnetConnectionId } from './telnet-handlers';
@@ -297,12 +296,6 @@ export function setupRceHandlers(): void {
     }
     setRceAccount(trimmedName, trimmedToken, userId);
     return { success: true, name: trimmedName };
-  });
-
-  ipcMain.handle(IPC.RceRemoveAccount, async (_event: IpcMainInvokeEvent, { name }: { name: string }) => {
-    if (typeof name !== 'string' || !name) return { success: false, error: S.app.rceNameRequired };
-    deleteRceAccount(name);
-    return { success: true };
   });
 
   ipcMain.handle(IPC.RceListAccounts, async () => {

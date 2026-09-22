@@ -142,7 +142,7 @@ const { registerSettingsWindowIpc } = require('./main/settings-window-ipc');
 const { initSettings, loadSettings, saveSettings, registerSettingsIpc } = require('./main/settings');
 const secretStore = require('./main/secret-store') as typeof import('./main/secret-store');
 const { dropRelayTargetIfPasswordRemoved } = require('./main/ipc/relay-handlers') as typeof import('./main/ipc/relay-handlers');
-const { forgetEphemeralRemoteLocations } = require('./main/remote-locations') as typeof import('./main/remote-locations');
+const { forgetEphemeralRemoteLocations, pruneOrphanedRceAccounts } = require('./main/remote-locations') as typeof import('./main/remote-locations');
 const { startMcpBridge } = require('./main/mcp-bridge');
 const { getDeviceInfo, getDeviceId } = require('roku-dev-studio-api');
 const { mainLog, mainWarn, mainError } = require('./main/log');
@@ -827,6 +827,10 @@ app.whenReady().then(() => {
   // Startup sweep of "Forget it on App Quit/Close" locations (crash safety — a hard kill skips
   // before-quit). Needs the secret store up: an RCE location's stored token goes with it.
   forgetEphemeralRemoteLocations();
+  // Then drop RCE account tokens whose location is gone — normally the settings:set cascade keeps
+  // the two stores in step (main/settings.ts); this catches a crash mid-write and data left by
+  // builds that predate the cascade. See main/rce-account-orphans.ts.
+  pruneOrphanedRceAccounts();
   registerAboutIpc(ipcMain, clipboard, shell);
   updaterControls = setupAutoUpdater(app, ipcMain, () => mainWindow);
   registerLogViewerIpc(ipcMain);

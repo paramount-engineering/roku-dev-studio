@@ -24,6 +24,7 @@
     "verify:held-pool": "tsx scripts/verify-held-pool.ts",
     "verify:debugger-enabled": "tsx scripts/verify-debugger-enabled.ts",
     "verify:mcp-tools": "tsx scripts/verify-mcp-tools-catalog.ts",
+    "verify:rce-account-prune": "tsx scripts/verify-rce-account-prune.ts",
     "verify:artifact-names": "tsx scripts/verify-artifact-names.ts",
     "verify:auto-connect-store": "tsx scripts/verify-auto-connect-store.ts",
     "typecheck:scripts": "tsc --noEmit -p tsconfig.scripts.json",
