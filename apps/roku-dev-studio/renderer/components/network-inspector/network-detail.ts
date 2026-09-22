@@ -8,6 +8,7 @@ import {
 import { MAX_STRUCTURED_BYTES, renderStructuredInto } from '../../modules/ui/structured-body.js';
 import { renderResponseCookiesPane } from './network-parsed-tables.js';
 import { S } from '@shared/strings/index.js';
+import { textBodyOf } from '@shared/network-inspector/body-text.js';
 
 export type BodyFormatMode = 'auto' | 'json' | 'xml' | 'raw';
 export type RequestPaneTab = 'overview' | 'headers' | 'body';
@@ -162,8 +163,13 @@ function bodyByteSize(msg: NetworkHttpMessage | undefined): number {
   return msg.bodyBytes ?? 0;
 }
 
-// Renders a preview for binary (base64) bodies: <img>/<video>/<audio> for media types,
-// otherwise a "not previewable" note. Returns null for text bodies so callers fall through.
+// The Auto-mode note for a genuinely binary, non-media body.
+function binaryBodyNote(msg: NetworkHttpMessage): string {
+  return `<div class="ni-pane-empty">${S.networkInspector.binaryNotPreviewable(escapeHtml(mediaMime(msg) || S.networkInspector.mimeUnknownType), formatBytes(bodyByteSize(msg)))}</div>`;
+}
+
+// Renders a preview for binary (base64) media bodies: <img>/<video>/<audio> by MIME type (or the
+// truncated-capture note). Returns null for text bodies and non-media binary so callers fall through.
 function renderMediaPreview(msg: NetworkHttpMessage | undefined): string | null {
   if (msg?.bodyEncoding !== 'base64' || !msg.body) return null;
   const mime = mediaMime(msg);
@@ -182,7 +188,7 @@ function renderMediaPreview(msg: NetworkHttpMessage | undefined): string | null 
   if (mime.startsWith('audio/')) {
     return `<div class="ni-media-wrap"><audio class="ni-media-audio" src="${dataUrl}" controls preload="metadata"></audio>${caption}</div>`;
   }
-  return `<div class="ni-pane-empty">${S.networkInspector.binaryNotPreviewable(escapeHtml(mime || S.networkInspector.mimeUnknownType), formatBytes(approxBytes))}</div>`;
+  return null;
 }
 
 // Very large bodies are split into line-chunks so the browser can paint only the
@@ -254,30 +260,43 @@ function renderBodyContent(
   if (!msg?.body?.trim()) {
     return `<div class="ni-pane-empty">${escapeHtml(fallback)}</div>`;
   }
-  // Media (<img>/<video>/<audio>) previews are an Auto-mode affordance only. When the
-  // user explicitly picks Raw/JSON/XML they want the underlying bytes (e.g. the base64
-  // string for binary payloads), not the rendered asset.
-  if (mode === 'auto') {
-    const media = renderMediaPreview(msg);
-    if (media) return media;
+  let body = msg.body;
+  if (msg.bodyEncoding === 'base64') {
+    // Media (<img>/<video>/<audio>) previews are an Auto-mode affordance only. When the
+    // user explicitly picks Raw/JSON/XML they want the underlying bytes (e.g. the base64
+    // string for binary payloads), not the rendered asset.
+    if (mode === 'auto') {
+      const media = renderMediaPreview(msg);
+      if (media) return media;
+    }
+    // A base64 body that is really text (HAR exporters wrap everything; an unfamiliar MIME was
+    // tagged binary) renders as text through the normal JSON/XML/raw pipeline in every mode — the
+    // base64 wrapper is a transport artefact, not the payload. Genuine binary keeps the "not
+    // previewable" note in Auto and the base64 string in Raw/JSON/XML.
+    const text = textBodyOf(msg, contentType(msg));
+    if (text?.trim()) {
+      body = text;
+      msg = { ...msg, body: text, bodyEncoding: 'text' };
+    }
+    else if (mode === 'auto') return binaryBodyNote(msg);
   }
   // Note: the "body truncated during capture" indicator is surfaced as a centered badge in the
   // pane header (toggled by network-tab from `bodyTruncated`), not inline here, so it stays visible
   // regardless of how far the body is scrolled.
-  if (msg.body.length > MAX_FORMAT_BYTES) {
+  if (body.length > MAX_FORMAT_BYTES) {
     // We already hold the whole captured body, so show ALL of it — never a truncated head. Only the
     // expensive structured rendering (JSON.parse + syntax highlight + fold tree, which can explode
     // into millions of DOM nodes) is skipped above this size; the full body is rendered as raw text
     // with embedded JSON/XML fragments still made clickable. The "large body" notice is surfaced as
     // a header badge by network-tab (via `getLargeBodyKb`), not inline here.
     largeBody[pane] = {
-      kb: Math.round(msg.body.length / 1024),
+      kb: Math.round(body.length / 1024),
       // Only a *downgrade* when we'd otherwise have built a JSON/XML tree (auto-detected structured,
       // or the user explicitly picked JSON/XML). A natively-raw body (JS/CSS/text, or Raw mode) loses
       // nothing to size, so the badge must not claim a performance trade-off for it.
       downgraded: resolveBodyFormat(mode, msg) !== 'raw'
     };
-    return renderRawBody(msg.body, pane);
+    return renderRawBody(body, pane);
   }
   const resolved = resolveBodyFormat(mode, msg);
   // For JSON/XML (already gated to ≤256 KB above), emit a placeholder carrying the RAW body. A
@@ -286,13 +305,13 @@ function renderBodyContent(
   // the same renderer the Console viewer and ECP/App Connector use. (The whole body is the
   // structure here, so no embedded-fragment highlighting applies.)
   if (resolved === 'json') {
-    return structuredBodyHtml('json', msg.body);
+    return structuredBodyHtml('json', body);
   }
   if (resolved === 'xml') {
-    return structuredBodyHtml('xml', msg.body);
+    return structuredBodyHtml('xml', body);
   }
   // Plain text body: highlight any JSON/XML nested inside it.
-  return renderRawBody(msg.body, pane);
+  return renderRawBody(body, pane);
 }
 
 function renderHeadersTable(msg: NetworkHttpMessage | undefined): string {
@@ -607,6 +626,18 @@ export function renderResponsePane(
  * Network Inspector and the standalone Session Viewer call this, so it lives here next to the
  * placeholder producer.
  */
+/** Find only makes sense for text bodies. Image/video/audio previews and empty/placeholder states have
+ *  nothing to search — so the body find bar stays hidden there (but appears for the same binary body
+ *  when viewed as Raw, which renders the bytes as text). Shared by the live tab and the Session Viewer. */
+export function bodyIsSearchable(bodyEl: Element | null): boolean {
+  if (!(bodyEl instanceof HTMLElement)) return false;
+  if (bodyEl.querySelector('.ni-media-wrap')) return false;
+  if (bodyEl.children.length === 1 && bodyEl.firstElementChild?.classList.contains('ni-pane-empty')) {
+    return false;
+  }
+  return (bodyEl.textContent?.trim().length ?? 0) > 0;
+}
+
 export function upgradeStructuredBodies(bodyEl: Element | null): void {
   if (!(bodyEl instanceof HTMLElement)) return;
   bodyEl.querySelectorAll('[data-ni-fold]').forEach((el) => {

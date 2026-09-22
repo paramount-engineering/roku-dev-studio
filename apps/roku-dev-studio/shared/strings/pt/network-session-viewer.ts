@@ -40,11 +40,11 @@ export const networkSessionViewer = {
   clearFilter: 'Limpar filtro',
   filterHelpTitle: 'Ajuda de filtragem e sintaxe suportada',
   filterHelpAria: 'Ajuda de filtragem',
-  filterResizeTitle: 'Arraste para redimensionar o filtro (clique duplo para redefinir)',
   // Layout toggle + sidebar options
   layoutToggleTitle: 'Empilhar requisição e resposta verticalmente',
   layoutToggleAria: 'Alternar layout de detalhes',
   collapseGroups: 'Recolher todos os grupos',
   groupByHostTitle: 'Agrupar sessões por nome de host',
   groupByHost: 'Agrupar por host',
+  noDecryptedSessions: 'Não há pedidos desencriptados (proxy) nesta sessão. Desmarque «Proxied» para mostrar tudo.',
 };

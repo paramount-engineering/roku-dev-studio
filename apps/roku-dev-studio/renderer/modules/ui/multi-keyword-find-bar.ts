@@ -173,7 +173,14 @@ export function createMultiFindBar(opts: MultiFindOptions): MultiFindHandle | nu
   let segmentsDirty = true;
 
   // ---- text index (mirrors find-bar.ts) ------------------------------------------------------
+  // Callers re-render the body (innerHTML) and don't always tell us before the next search, so watch
+  // it: any mutation drops the text index. takeRecords() makes that check synchronous for a search that
+  // runs in the same task as the re-render (before the observer callback would fire) — otherwise the
+  // index would still point at detached nodes: invisible highlights, dead prev/next.
+  const bodyObserver = new MutationObserver(() => { segmentsDirty = true; });
+  bodyObserver.observe(bodyEl, { childList: true, subtree: true, characterData: true });
   function ensureSegments(): void {
+    if (!segmentsDirty && bodyObserver.takeRecords().length > 0) segmentsDirty = true;
     if (!segmentsDirty) return;
     segmentsDirty = false;
     segments = [];
@@ -548,8 +555,11 @@ export function createMultiFindBar(opts: MultiFindOptions): MultiFindHandle | nu
     getKeywords: () =>
       keywords.map((k) => ({ text: k.text, color: k.color, regex: k.regex, caseSensitive: k.caseSensitive })),
     refresh() {
-      if (!visible || keywords.length === 0) return;
+      // The body under us was re-rendered: the text index is stale no matter what, so drop it BEFORE
+      // the early return. Otherwise a later setKeywords() (e.g. re-seeding after a visit to a request
+      // with no chips) searches detached nodes — no highlights, dead prev/next.
       segmentsDirty = true;
+      if (!visible || keywords.length === 0) return;
       runSearch(false);
       if (matchOffsets.length > 0) {
         currentIndex = 0;
@@ -559,6 +569,7 @@ export function createMultiFindBar(opts: MultiFindOptions): MultiFindHandle | nu
     },
     clear: () => doClear(false),
     dispose() {
+      bodyObserver.disconnect();
       clearTimeout(debounce);
       inputEl.removeEventListener('input', onInput);
       inputEl.removeEventListener('keydown', onKeydown);

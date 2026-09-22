@@ -11,11 +11,12 @@
  * Pure + isomorphic: no Node or DOM APIs, so it runs in the Electron main process (over disk-backed
  * detail) and in the renderer (over the viewer's in-memory events) unchanged.
  *
- * Bodies stored as base64 (`bodyEncoding === 'base64'`) are binary/media payloads and are NOT
- * searched — decoding them here would pull in Buffer/atob (breaking isomorphism) and searching binary
- * as text is meaningless. Text bodies (the common JSON/text/XML/form case) are searched in full.
+ * Bodies stored as base64 (`bodyEncoding === 'base64'`) are searched only when they decode to text
+ * (`textBodyOf` in body-text.ts — HAR exporters wrap plain JSON that way); genuine binary/media
+ * payloads are skipped, since searching bytes as text is meaningless.
  */
 import type { NetworkHttpMessage, ParsedNetworkEvent } from './types';
+import { textBodyOf } from './body-text';
 import { MAX_FIND_QUERY_LENGTH, compileGlobalSearchRegex } from 'roku-dev-studio-platform/text-match';
 
 /** The distinct parts of a transaction that Find can search. */
@@ -192,11 +193,9 @@ function headerText(msg: NetworkHttpMessage | undefined): string {
   return lines.join('\n');
 }
 
-/** Searchable body text, or '' for absent/binary(base64) bodies (see file header). */
+/** Searchable body text, or '' for absent / genuinely binary bodies (see file header). */
 function bodyText(msg: NetworkHttpMessage | undefined): string {
-  if (!msg?.body) return '';
-  if (msg.bodyEncoding === 'base64') return '';
-  return msg.body;
+  return textBodyOf(msg) ?? '';
 }
 
 /** The searchable "URL" of a request: the request line URL plus the resolved hostname / SNI. */

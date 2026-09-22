@@ -42,11 +42,11 @@ export const networkSessionViewer = {
   clearFilter: 'Golește filtrul',
   filterHelpTitle: 'Ajutor pentru filtrare și sintaxă acceptată',
   filterHelpAria: 'Ajutor pentru filtrare',
-  filterResizeTitle: 'Trage pentru a redimensiona filtrul (dublu-clic pentru resetare)',
   // Layout toggle + sidebar options
   layoutToggleTitle: 'Stivuiește cererea și răspunsul vertical',
   layoutToggleAria: 'Comută aspectul detaliilor',
   collapseGroups: 'Restrânge toate grupurile',
   groupByHostTitle: 'Grupează sesiunile după numele hostului',
   groupByHost: 'Grupează după host',
+  noDecryptedSessions: 'Nu există cereri decriptate (proxy) în această sesiune. Debifează „Proxied” pentru a afișa tot.',
 };

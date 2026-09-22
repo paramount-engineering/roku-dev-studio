@@ -1,7 +1,5 @@
 import type { ParsedNetworkEvent } from '@shared/network-inspector/types';
 import { escapeHtml } from '../../modules/utils/dom.js';
-import { attachBackdropClickToClose } from '../../modules/utils/modal-backdrop-click.js';
-import { openModalOverlayActiveFromOpener, closeModalWithOriginMotion } from '../../modules/utils/modal-origin-motion.js';
 import {
   renderSidebarSequence,
   renderSidebarRows,
@@ -16,6 +14,7 @@ import {
   renderResponsePane,
   getLargeBodyKb,
   getLargeBodyDowngraded,
+  bodyIsSearchable,
   upgradeStructuredBodies,
   type BodyFormatMode,
   type RequestPaneTab,
@@ -61,13 +60,20 @@ import {
   type MkwKeyword
 } from '../../modules/ui/multi-keyword-find-bar.js';
 import { createPaneFindStore, sameKeywordTexts } from '../../modules/ui/pane-find-store.js';
-import {
-  supportsCssHighlights,
-  ensureFindHighlightStyles,
-  paintMatchHighlights,
-  clearFindHighlights
-} from '../../modules/ui/find-highlight.js';
+import { clearFindHighlights } from '../../modules/ui/find-highlight.js';
 import { createNetworkFindModal, type FindModalHandle } from './network-find-modal.js';
+import {
+  bindListKeyboardNav as bindListKeyboardNavShared,
+  focusListForKeyboard as focusListForKeyboardShared,
+  makeListFocusable,
+  navigableEventIds as navigableEventIdsShared,
+  scrollRowWithinWrap,
+  updateSelectionHighlight as updateSelectionHighlightShared,
+  type ListNavHost
+} from './network-list-nav.js';
+import { bindMediaContextMenu } from './network-media-menu.js';
+import { setFormatInfo, wireFormatInfoButton } from './network-large-body.js';
+import { SEED_HL_REQUEST, SEED_HL_RESPONSE, syncPaneSeedHighlight as syncPaneSeedHighlightShared } from './network-seed-highlight.js';
 import { paneBodyText, flashCopied } from './network-copy.js';
 import type { NetworkFindMatch } from '@shared/network-inspector/content-search';
 import {
@@ -76,7 +82,7 @@ import {
   type FindTermInfo
 } from './network-find-decorations.js';
 import { applyFocusDecorations } from './network-focus-decorations.js';
-import { attachFoldToggle, MAX_STRUCTURED_BYTES } from '../../modules/ui/structured-body.js';
+import { attachFoldToggle } from '../../modules/ui/structured-body.js';
 import { attachSelectAll } from '../../modules/ui/select-all.js';
 import { registerPanelRetranslate } from '../../modules/ui/retranslate-registry.js';
 import { S } from '@shared/strings/index.js';
@@ -171,45 +177,6 @@ function isHotspotClientIp(ip: string): boolean {
     /^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(ip) ||
     /^172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}$/.test(ip)
   );
-}
-
-/**
- * Explainer for the "shown as raw text" case: a JSON/XML body too large to render as a collapsible
- * tree. Opened from the small amber "i" beside the Format selector (set by `setFormatInfo`), so it
- * only ever appears for a genuine structured→raw downgrade — never for natively-raw bodies. Reuses
- * the filter-help modal's shell styling for consistency.
- */
-function openLargeBodyInfoModal(kb: number, opener?: HTMLElement | null): void {
-  const overlay = document.createElement('div');
-  overlay.className = 'modal-overlay ni-filter-help-overlay ni-large-body-overlay';
-  const sizeLabel = kb > 0 ? `${kb.toLocaleString()} KB` : S.networkInspector.thisBody;
-  const limitKb = Math.round(MAX_STRUCTURED_BYTES / 1024).toLocaleString();
-  overlay.innerHTML = `
-    <div class="ni-filter-help-modal" role="dialog" aria-modal="true" aria-label="${S.networkInspector.shownAsRawText}">
-      <div class="ni-filter-help-header">
-        <h3>${S.networkInspector.shownAsRawText}</h3>
-        <button type="button" class="modal-close ni-large-body-close" title="${S.common.close}" aria-label="${S.common.close}"><span class="icon icon-sm"><svg><use href="#icon-x"/></svg></span></button>
-      </div>
-      <div class="ni-filter-help-body">
-        <p class="ni-filter-help-intro">${S.networkInspector.largeBodyIntro(escapeHtml(sizeLabel), escapeHtml(limitKb))}</p>
-        <p class="ni-filter-help-note">${S.networkInspector.largeBodyNote}</p>
-      </div>
-    </div>`;
-  document.body.appendChild(overlay);
-  openModalOverlayActiveFromOpener(overlay, opener ?? null);
-
-  const close = (): void => {
-    closeModalWithOriginMotion(overlay, () => {
-      overlay.remove();
-      document.removeEventListener('keydown', onKey);
-    });
-  };
-  const onKey = (e: KeyboardEvent): void => {
-    if (e.key === 'Escape') close();
-  };
-  document.addEventListener('keydown', onKey);
-  attachBackdropClickToClose(overlay, close);
-  overlay.querySelector('.ni-large-body-close')?.addEventListener('click', close);
 }
 
 function eventMatchesTab(ev: ParsedNetworkEvent, state: NetworkTabState): boolean {
@@ -481,18 +448,12 @@ export function setupNetworkTab(
           storageKey: filterWidthKey('ni', device.ip || 'unknown'),
           leftGroupSelector: '.ni-header-start',
           rightGroupSelector: '.ni-header-controls',
-          minWidthPx: 280
+          minWidthPx: 280,
+          // Anchor the handle to the filter box's right edge (its `right:-9px` is relative to the
+          // position:relative `.ni-filter-wrap`), not after the session count at the slot's edge.
+          handleHost: niHeaderCenter.querySelector<HTMLElement>('.ni-filter-wrap')
         })
       : null;
-  // The resize handle is created at the right edge of the whole centered slot, which also holds the
-  // session count — so it lands to the right of the count. Reparent it into the filter box so it
-  // anchors to the text box's right edge instead (its `right:-9px` is relative to `.ni-filter-wrap`,
-  // which is position:relative), sitting directly beside the input.
-  if (niHeaderCenter instanceof HTMLElement) {
-    const resizeHandle = niHeaderCenter.querySelector(':scope > .hdr-search-resize');
-    const filterWrap = niHeaderCenter.querySelector('.ni-filter-wrap');
-    if (resizeHandle && filterWrap instanceof HTMLElement) filterWrap.appendChild(resizeHandle);
-  }
   const portBadgeBtn = panel.querySelector('[data-ni-port-badge]') as HTMLElement | null;
   // Tracks whether the Network inner tab is the foreground tab in this device panel, so the global
   // port-conflict modal only auto-pops when the user is actually looking at the Network tab.
@@ -599,35 +560,7 @@ export function setupNetworkTab(
   }
 
   function updateSelectionHighlight(): void {
-    if (!(sessionListEl instanceof HTMLElement)) return;
-    sessionListEl
-      .querySelectorAll(
-        '.ni-sidebar-row-selected, .ni-seq-row-selected, .ni-struct-leaf-selected, .ni-struct-host-row-selected'
-      )
-      .forEach((el) => {
-        el.classList.remove(
-          'ni-sidebar-row-selected',
-          'ni-seq-row-selected',
-          'ni-struct-leaf-selected',
-          'ni-struct-host-row-selected'
-        );
-      });
-    if (!state.selectedEventId) return;
-    const row = sessionListEl.querySelector(
-      `[data-event-id="${CSS.escape(state.selectedEventId)}"]`
-    ) as HTMLElement | null;
-    if (!row) return;
-    if (row.classList.contains('ni-sidebar-row')) row.classList.add('ni-sidebar-row-selected');
-    else if (row.classList.contains('ni-seq-row')) row.classList.add('ni-seq-row-selected');
-    else if (row.classList.contains('ni-struct-leaf')) {
-      row.classList.add('ni-struct-leaf-selected');
-      // If the leaf's group is collapsed, the leaf itself is hidden — surface
-      // the selection on the (visible) group header instead/as well.
-      const host = row.closest('.ni-struct-host');
-      if (host?.classList.contains('ni-struct-host-collapsed')) {
-        host.querySelector(':scope > .ni-struct-host-row')?.classList.add('ni-struct-host-row-selected');
-      }
-    }
+    if (sessionListEl instanceof HTMLElement) updateSelectionHighlightShared(sessionListEl, state.selectedEventId);
   }
 
   function listScrollWrap(): HTMLElement | null {
@@ -636,8 +569,7 @@ export function setupNetworkTab(
   }
 
   function focusListForKeyboard(): void {
-    const wrap = listScrollWrap();
-    if (wrap) wrap.focus({ preventScroll: true });
+    focusListForKeyboardShared(listScrollWrap());
   }
 
   function captureListScroll(): { scrollTop: number; atBottom: boolean } {
@@ -645,14 +577,6 @@ export function setupNetworkTab(
     if (!wrap) return { scrollTop: 0, atBottom: true };
     const atBottom = wrap.scrollHeight - wrap.scrollTop - wrap.clientHeight < 8;
     return { scrollTop: wrap.scrollTop, atBottom };
-  }
-
-  function scrollRowWithinWrap(wrap: HTMLElement, row: HTMLElement): void {
-    const wr = wrap.getBoundingClientRect();
-    const rr = row.getBoundingClientRect();
-    if (rr.top >= wr.top && rr.bottom <= wr.bottom) return;
-    if (rr.top < wr.top) wrap.scrollTop += rr.top - wr.top;
-    else if (rr.bottom > wr.bottom) wrap.scrollTop += rr.bottom - wr.bottom;
   }
 
   function restoreListScroll(saved: { scrollTop: number; atBottom: boolean }): void {
@@ -719,30 +643,29 @@ export function setupNetworkTab(
   }
 
   function navigableEventIds(): string[] {
-    if (!(sessionListEl instanceof HTMLElement)) return [];
-    if (state.viewMode === 'structure') {
-      return Array.from(sessionListEl.querySelectorAll('.ni-struct-leaf[data-event-id]'))
-        .filter((el) => (el as HTMLElement).offsetParent !== null)
-        .map((el) => (el as HTMLElement).dataset.eventId)
-        .filter((id): id is string => !!id);
-    }
-    // Non-focused rows only dim (never hide), so every filtered session stays arrow-navigable.
-    return filteredSessions().map((s) => s.eventId);
+    return navigableEventIdsShared({
+      viewMode: state.viewMode,
+      listEl: sessionListEl instanceof HTMLElement ? sessionListEl : null,
+      sequenceIds: filteredSessions().map((s) => s.eventId)
+    });
   }
 
-  function selectSessionByOffset(delta: number): void {
-    const ids = navigableEventIds();
-    if (ids.length === 0) return;
-    let idx = state.selectedEventId ? ids.indexOf(state.selectedEventId) : -1;
-    if (idx < 0) idx = delta > 0 ? -1 : ids.length;
-    const next = Math.max(0, Math.min(ids.length - 1, idx + delta));
-    if (next === idx) return;
-    state.selectedEventId = ids[next];
-    updateSelectionHighlight();
-    lastListSignature = listSignature(filteredSessions());
-    renderDetail('both');
-    scrollSelectedRowIntoView();
-  }
+  /** Host for the shared list keyboard navigation (↑/↓, Home/End, Shift+↑/↓ across Find matches). */
+  const listNavHost: ListNavHost = {
+    navigableIds: navigableEventIds,
+    selectedId: () => state.selectedEventId,
+    select: (id) => {
+      state.selectedEventId = id;
+      updateSelectionHighlight();
+      lastListSignature = listSignature(filteredSessions());
+      renderDetail('both');
+      scrollSelectedRowIntoView();
+    },
+    findActive: () => !!findModal?.isActive(),
+    findNext: () => findModal?.next(),
+    findPrev: () => findModal?.prev()
+  };
+
 
   /** Select an event by id (used by Find navigation): render its detail + scroll it into view. */
   /** In Group-by-Host view, expand the host group that contains `id` if it's collapsed (so a Find
@@ -854,19 +777,6 @@ export function setupNetworkTab(
     }
   }
 
-  /** Show/hide the small amber "i" beside the Format selector. It appears ONLY when a JSON/XML body
-   *  was too large to render as a collapsible tree and is shown as raw text instead (`downgraded`) —
-   *  i.e. the one case where "why is this raw?" needs explaining. Natively-raw bodies (JS/CSS/text)
-   *  get no affordance, since raw is their expected rendering. The KB size is stashed on the button
-   *  for the click-opened explainer modal. */
-  function setFormatInfo(btnEl: Element | null, kb: number, downgraded: boolean): void {
-    if (!(btnEl instanceof HTMLElement)) return;
-    const show = kb > 0 && downgraded;
-    btnEl.hidden = !show;
-    if (show) btnEl.dataset.kb = String(kb);
-    else delete btnEl.dataset.kb;
-  }
-
   function syncPaneChrome(which: 'request' | 'response' | 'both' = 'both'): void {
     if (which !== 'response') {
       panel.querySelectorAll('[data-ni-req-tab]').forEach((btn) => {
@@ -917,18 +827,6 @@ export function setupNetworkTab(
     }
   }
 
-  /** Find only makes sense for text bodies. Image/video/audio previews and empty/placeholder
-   *  states have nothing to search — so the bar stays hidden there (but appears for the same
-   *  binary body when viewed as Raw, which renders the bytes as text). */
-  function bodyIsSearchable(bodyEl: Element | null): boolean {
-    if (!(bodyEl instanceof HTMLElement)) return false;
-    if (bodyEl.querySelector('.ni-media-wrap')) return false;
-    if (bodyEl.children.length === 1 && bodyEl.firstElementChild?.classList.contains('ni-pane-empty')) {
-      return false;
-    }
-    return (bodyEl.textContent?.trim().length ?? 0) > 0;
-  }
-
   /** After a body render: upgrade any fold tree, then show/hide + refresh the find bar based on the
    *  active tab AND whether the rendered content is searchable text. */
   function afterBodyRender(which: 'request' | 'response' | 'both'): void {
@@ -947,55 +845,15 @@ export function setupNetworkTab(
     seedDetailFind(which);
   }
 
-  // Standalone highlight of the Find term on the NON-body tabs (Overview URL, Headers). The Body tab
-  // has its own find bar (with a count); everywhere else we just paint the match with the same amber
-  // tint so a hit in the URL or a header is visible. Separate highlight-registry ids per pane so the
-  // two panes (and the body find bars, which use `ni-find-*`) never clobber each other.
-  const SEED_HL_REQUEST = 'ni-detail-seed-request';
-  const SEED_HL_RESPONSE = 'ni-detail-seed-response';
-  const SEED_HL_CAP = 2000;
-
-  function paintSeedInPane(el: HTMLElement, id: string, keywords: string[]): void {
-    ensureFindHighlightStyles(id);
-    clearFindHighlights(id);
-    const needles = keywords.map((k) => k.toLowerCase()).filter((n) => n.length > 0);
-    if (needles.length === 0 || !supportsCssHighlights) return;
-    const ranges: Range[] = [];
-    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
-    let node: Node | null;
-    while ((node = walker.nextNode()) && ranges.length < SEED_HL_CAP) {
-      const text = node.nodeValue ?? '';
-      if (!text) continue;
-      const hay = text.toLowerCase();
-      for (const needle of needles) {
-        let idx = hay.indexOf(needle);
-        while (idx !== -1 && ranges.length < SEED_HL_CAP) {
-          const range = document.createRange();
-          try {
-            range.setStart(node, idx);
-            range.setEnd(node, idx + needle.length);
-            ranges.push(range);
-          } catch {
-            /* ignore an un-rangeable node */
-          }
-          idx = hay.indexOf(needle, idx + needle.length);
-        }
-      }
-    }
-    paintMatchHighlights(id, ranges);
-  }
-
-  /** Paint (or clear) the seed-keyword highlight for one pane's non-body tabs. */
+  /** Paint (or clear) the Find-term highlight on one pane's non-body tabs (shared painter). */
   function syncPaneSeedHighlight(which: 'request' | 'response'): void {
-    const el = which === 'request' ? requestBodyEl : responseBodyEl;
-    const tab = which === 'request' ? state.requestTab : state.responseTab;
-    const id = which === 'request' ? SEED_HL_REQUEST : SEED_HL_RESPONSE;
-    const keywords = currentSeedKeywords().map((k) => k.text);
-    if (!(el instanceof HTMLElement) || tab === 'body' || !selectedIsFindMatch() || keywords.length === 0) {
-      clearFindHighlights(id);
-      return;
-    }
-    paintSeedInPane(el, id, keywords);
+    syncPaneSeedHighlightShared({
+      el: which === 'request' ? requestBodyEl : responseBodyEl,
+      tab: which === 'request' ? state.requestTab : state.responseTab,
+      id: which === 'request' ? SEED_HL_REQUEST : SEED_HL_RESPONSE,
+      keywords: currentSeedKeywords().map((k) => k.text),
+      isMatch: selectedIsFindMatch()
+    });
   }
 
   /** True when the currently-selected request is a Find match (so its detail should show the terms). */
@@ -1386,10 +1244,7 @@ export function setupNetworkTab(
     }
 
     const wrap = listScrollWrap();
-    if (wrap && !wrap.hasAttribute('tabindex')) {
-      wrap.tabIndex = 0;
-      wrap.setAttribute('aria-label', S.networkInspector.sessionListAria);
-    }
+    if (wrap) makeListFocusable(wrap, S.networkInspector.sessionListAria);
     bindListKeyboardNav();
 
     renderDetail('both');
@@ -1448,46 +1303,7 @@ export function setupNetworkTab(
 
   function bindListKeyboardNav(): void {
     const wrap = listScrollWrap();
-    if (!wrap || wrap.dataset.niKeybound === '1') return;
-    wrap.dataset.niKeybound = '1';
-    wrap.addEventListener('keydown', (e) => {
-      // Shift+↑/↓ jumps across Find matches only (plain ↑/↓ still step through every request).
-      if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && e.shiftKey && findModal?.isActive()) {
-        e.preventDefault();
-        if (e.key === 'ArrowDown') findModal.next();
-        else findModal.prev();
-        return;
-      }
-      if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        selectSessionByOffset(1);
-      } else if (e.key === 'ArrowUp') {
-        e.preventDefault();
-        selectSessionByOffset(-1);
-      } else if (e.key === 'Home') {
-        e.preventDefault();
-        const ids = navigableEventIds();
-        if (ids.length === 0) return;
-        const first = ids[0];
-        if (state.selectedEventId === first) return;
-        state.selectedEventId = first;
-        updateSelectionHighlight();
-        lastListSignature = listSignature(filteredSessions());
-        renderDetail('both');
-        scrollSelectedRowIntoView();
-      } else if (e.key === 'End') {
-        e.preventDefault();
-        const ids = navigableEventIds();
-        if (ids.length === 0) return;
-        const last = ids[ids.length - 1];
-        if (state.selectedEventId === last) return;
-        state.selectedEventId = last;
-        updateSelectionHighlight();
-        lastListSignature = listSignature(filteredSessions());
-        renderDetail('both');
-        scrollSelectedRowIntoView();
-      }
-    }, listenerOpts);
+    if (wrap) bindListKeyboardNavShared(wrap, listNavHost, listenerOpts);
   }
 
   function syncDetailLayout(): void {
@@ -1546,55 +1362,6 @@ export function setupNetworkTab(
       requestWrap: state.requestBodyWrap,
       responseWrap: state.responseBodyWrap
     });
-  }
-
-  // Map a media MIME to a sensible download extension.
-  function mimeToExt(mime: string): string {
-    const map: Record<string, string> = {
-      'image/jpeg': 'jpg',
-      'image/jpg': 'jpg',
-      'image/png': 'png',
-      'image/gif': 'gif',
-      'image/webp': 'webp',
-      'image/svg+xml': 'svg',
-      'image/bmp': 'bmp',
-      'video/mp4': 'mp4',
-      'video/webm': 'webm',
-      'audio/mpeg': 'mp3',
-      'audio/mp4': 'm4a',
-      'audio/wav': 'wav',
-      'audio/ogg': 'ogg'
-    };
-    return map[mime] || mime.split('/')[1]?.replace(/[^a-z0-9]/gi, '') || 'bin';
-  }
-
-  /** Native right-click menu for a media preview: Copy Image (images) + Save File… The raw
-   *  bytes/base64 are available via the Raw format view, so there's no Copy-as-Data-URL item. */
-  async function showMediaContextMenu(dataUrl: string, isImage: boolean): Promise<void> {
-    const api = window.roku;
-    if (!api?.showContextMenu) return;
-    const match = /^data:([^;,]*)[^,]*,(.*)$/s.exec(dataUrl);
-    const mime = match?.[1] || 'application/octet-stream';
-    const base64 = match?.[2] || '';
-    const items: Array<Record<string, unknown>> = [];
-    if (isImage) items.push({ label: S.networkInspector.copyImage, action: 'ni-copy-image' });
-    items.push({ label: isImage ? S.networkInspector.saveImageAs : S.networkInspector.saveFile, action: 'ni-save-media' });
-    let res: { action?: string } | null = null;
-    try {
-      res = (await api.showContextMenu(items)) as { action?: string } | null;
-    } catch {
-      return;
-    }
-    if (!res) return;
-    if (res.action === 'ni-copy-image') {
-      await api.copyImage?.({ dataUrl });
-    } else if (res.action === 'ni-save-media') {
-      await api.saveBinaryFile?.({
-        base64,
-        defaultName: `response-${Date.now()}.${mimeToExt(mime)}`,
-        dialogTitle: isImage ? S.networkInspector.saveImageDialog : S.networkInspector.saveFileDialog
-      });
-    }
   }
 
   async function copyPaneContent(btn: HTMLElement, which: string): Promise<void> {
@@ -2535,17 +2302,8 @@ export function setupNetworkTab(
 
   // Right-click on a media preview (image/video/audio) → native menu to copy the actual picture
   // or save the file, instead of the text-only Copy button. The element's `src` is the data URL.
-  detailPane?.addEventListener('contextmenu', (e) => {
-    const target = e.target as HTMLElement | null;
-    const mediaEl = target?.closest('.ni-media-img, .ni-media-el, .ni-media-audio') as
-      | HTMLImageElement
-      | HTMLMediaElement
-      | null;
-    const dataUrl = mediaEl?.getAttribute('src') || '';
-    if (!dataUrl.startsWith('data:')) return;
-    e.preventDefault();
-    void showMediaContextMenu(dataUrl, mediaEl instanceof HTMLImageElement);
-  }, listenerOpts);
+  // Right-click a media preview → Copy Image / Save File… (shared with the Session Viewer).
+  if (detailPane instanceof HTMLElement) bindMediaContextMenu(detailPane, () => window.roku, listenerOpts);
 
   // Collapsible JSON/XML fold twisties in the body panes (delegated; shared helper).
   if (detailPane instanceof HTMLElement) {
@@ -2598,16 +2356,8 @@ export function setupNetworkTab(
 
   // The amber "i" beside each Format selector explains the structured→raw downgrade for a too-large
   // body. Visibility is driven by `setFormatInfo`; the click just opens the explainer with the size.
-  requestFormatInfoEl?.addEventListener('click', () => {
-    if (requestFormatInfoEl instanceof HTMLElement) {
-      openLargeBodyInfoModal(Number(requestFormatInfoEl.dataset.kb) || getLargeBodyKb('request'), requestFormatInfoEl);
-    }
-  }, listenerOpts);
-  responseFormatInfoEl?.addEventListener('click', () => {
-    if (responseFormatInfoEl instanceof HTMLElement) {
-      openLargeBodyInfoModal(Number(responseFormatInfoEl.dataset.kb) || getLargeBodyKb('response'), responseFormatInfoEl);
-    }
-  }, listenerOpts);
+  wireFormatInfoButton(requestFormatInfoEl, 'request', listenerOpts);
+  wireFormatInfoButton(responseFormatInfoEl, 'response', listenerOpts);
 
   function resetEventsState(): void {
     state.events = [];

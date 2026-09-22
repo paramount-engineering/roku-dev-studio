@@ -11234,6 +11234,7 @@
        A chip-input variant of the find bar: several colored keyword chips + an add input, seeded
        from the Find modal's non-regex entries. Match highlights reuse the shared amber tint. */
     .mkw-bar { display: flex; padding: 6px 8px; flex-shrink: 0; border-bottom: 1px solid var(--border); background: var(--bg-tertiary); }
+    .mkw-bar[hidden] { display: none !important; } /* setVisible(false) — the author display:flex above would otherwise beat [hidden] */
     .mkw-bar-count { font-size: 11px; color: var(--text-muted); font-variant-numeric: tabular-nums; padding: 0 3px; white-space: nowrap; flex-shrink: 0; }
     .mkw-bar.mkw-bar-empty .mkw-bar-count { color: var(--accent-amber); }
     /* Discoverability hint: only while there's an uncommitted draft in the input. */

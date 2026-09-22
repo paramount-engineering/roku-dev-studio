@@ -16,6 +16,7 @@ import { animateHeight, escapeHtml } from '../../modules/utils/dom.js';
 import { attachBackdropClickToClose } from '../../modules/utils/modal-backdrop-click.js';
 import { openModalOverlayActiveFromOpener, closeModalWithOriginMotion } from '../../modules/utils/modal-origin-motion.js';
 import { S } from '@shared/strings/index.js';
+import { textBodyOf } from '@shared/network-inspector/body-text.js';
 import { buildReplayInputFromEvent } from './network-export.js';
 import { prettyXml, prettyXmlLenient } from '../../modules/ui/structured-body.js';
 
@@ -186,7 +187,9 @@ export async function openComposeModal(opts: {
   const api = (window as unknown as { roku?: RokuApi }).roku;
   const isRemote = !!(opts.isRemote && opts.serverUrl);
   const prefill = buildReplayInputFromEvent(opts.event);
-  const isBinary = prefill.bodyEncoding === 'base64';
+  // A base64 body that is really text is edited as text; only genuine binary stays read-only.
+  const prefillText = textBodyOf(prefill);
+  const isBinary = prefill.bodyEncoding === 'base64' && prefillText === null;
   const currentMethod = (prefill.method || 'GET').toUpperCase();
   // A non-standard captured method is added so it isn't silently changed on resend.
   const extraMethod = (HTTP_METHODS as readonly string[]).includes(currentMethod)
@@ -201,7 +204,7 @@ export async function openComposeModal(opts: {
   const paramsRowsHtml = initialParams.map((p) => kvRowHtml(p, S.networkInspector.rwParamName)).join('');
   const headersRowsHtml = initialHeaders.map((h) => kvRowHtml(h, S.networkInspector.rwHeaderName)).join('');
   // Auto pretty-print the prefilled body by content-type (JSON/XML); binary bodies stay empty/read-only.
-  const bodyText = isBinary ? '' : formatBodyForEditing(prefill.body || '', contentTypeOf(prefill.headers));
+  const bodyText = isBinary ? '' : formatBodyForEditing(prefillText ?? '', contentTypeOf(prefill.headers));
 
   const overlay = document.createElement('div');
   // `.modal-overlay` is display:none until `.active` is added.

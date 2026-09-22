@@ -42,11 +42,11 @@ export const networkSessionViewer = {
   clearFilter: 'Очистити фільтр',
   filterHelpTitle: 'Довідка з фільтрування та підтримуваний синтаксис',
   filterHelpAria: 'Довідка з фільтрування',
-  filterResizeTitle: 'Перетягніть, щоб змінити розмір фільтра (подвійне клацання для скидання)',
   // Layout toggle + sidebar options
   layoutToggleTitle: 'Розташувати запит і відповідь вертикально',
   layoutToggleAria: 'Перемкнути компонування деталей',
   collapseGroups: 'Згорнути всі групи',
   groupByHostTitle: 'Групувати сесії за іменем хоста',
   groupByHost: 'Групувати за хостом',
+  noDecryptedSessions: 'У цьому сеансі немає розшифрованих (проксі) запитів. Зніміть позначку «Proxied», щоб показати все.',
 };

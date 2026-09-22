@@ -134,7 +134,14 @@ export function createFindBar(opts: FindBarOptions): FindBarHandle | null {
     clearFindHighlights(highlightId);
   }
 
+  // Callers re-render the body (innerHTML) and don't always tell us before the next search, so watch
+  // it: any mutation drops the text index. takeRecords() makes that check synchronous for a search that
+  // runs in the same task as the re-render (before the observer callback would fire) — otherwise the
+  // index would still point at detached nodes: invisible highlights, dead prev/next.
+  const bodyObserver = new MutationObserver(() => { segmentsDirty = true; });
+  bodyObserver.observe(bodyEl, { childList: true, subtree: true, characterData: true });
   function ensureSegments(): void {
+    if (!segmentsDirty && bodyObserver.takeRecords().length > 0) segmentsDirty = true;
     if (!segmentsDirty) return;
     segmentsDirty = false;
     segments = [];
@@ -397,10 +404,11 @@ export function createFindBar(opts: FindBarOptions): FindBarHandle | null {
       if (visible) runSearch(jumpToFirst);
     },
     refresh() {
-      if (!visible || !query) return;
-      // Content changed under us; rebuild segments + matches without yanking the scroll, then
-      // re-anchor the current match in place.
+      // Content changed under us: the text index is stale even when there's nothing to search yet, so
+      // drop it before the early return (a later setQuery() must not match against detached nodes).
       segmentsDirty = true;
+      if (!visible || !query) return;
+      // Rebuild segments + matches without yanking the scroll, then re-anchor the current match in place.
       runSearch(false);
       if (matchOffsets.length > 0) {
         currentIndex = 0;
@@ -410,6 +418,7 @@ export function createFindBar(opts: FindBarOptions): FindBarHandle | null {
     },
     clear: doClear,
     dispose() {
+      bodyObserver.disconnect();
       clearTimeout(debounce);
       inputEl.removeEventListener('input', onInput);
       inputEl.removeEventListener('keydown', onKeydown);

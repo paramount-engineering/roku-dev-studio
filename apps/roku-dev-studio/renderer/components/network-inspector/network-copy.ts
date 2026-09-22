@@ -4,11 +4,13 @@
  * stay identical.
  */
 import type { ParsedNetworkEvent } from '@shared/network-inspector/types';
+import { textBodyOf } from '@shared/network-inspector/body-text.js';
 
 /**
  * Text to copy for a request/response pane. On the Body tab, prefer the event's full RAW body so
  * Copy yields the complete, un-truncated/un-formatted payload (returning `''` when the body is empty,
- * so a placeholder like "(no request body)" is never copied). Otherwise fall back to the pane's
+ * so a placeholder like "(no request body)" is never copied); a base64 body that is really text
+ * copies as that text, genuine binary copies as its base64. Otherwise fall back to the pane's
  * visible rendered text (Overview/Headers, which have no single source string).
  */
 export function paneBodyText(
@@ -18,8 +20,8 @@ export function paneBodyText(
   bodyEl: Element | null
 ): string {
   if (ev && showingBody) {
-    const raw = which === 'request' ? ev.httpRequest?.body : ev.httpResponse?.body;
-    if (raw != null) return raw;
+    const msg = which === 'request' ? ev.httpRequest : ev.httpResponse;
+    if (msg?.body != null) return textBodyOf(msg) ?? msg.body;
   }
   return bodyEl instanceof HTMLElement ? (bodyEl.innerText || bodyEl.textContent || '').trim() : '';
 }

@@ -15,42 +15,6 @@
     .nsv-root .network-inspector-card { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; border: none; border-radius: 0; margin: 0; }
     .nsv-root .ni-detail-workspace { flex: 1 1 auto; min-height: 0; }
     .nsv-notice { padding: 6px 12px; font-size: 12px; color: var(--text-secondary, #aaa); }
-    /* Single header row: the filter is an IN-FLOW, drag-resizable field — NOT the live tab's absolutely
-       centered slot, which wraps to a second row when the title/side groups leave no centered room.
-       An in-flow flex item can't wrap to another row. Width is driven by --nsv-filter-w (drag handle). */
-    .nsv-root .ni-card-header { flex-wrap: nowrap; }
-    .nsv-root .ni-header-center {
-      position: static;
-      transform: none;
-      left: auto;
-      top: auto;
-      width: auto;
-      max-width: none;
-      flex: 0 1 var(--nsv-filter-w, 380px);
-      min-width: 240px;
-      pointer-events: auto;
-      gap: 8px;
-    }
-    .nsv-root .nsv-filter-resize {
-      flex: 0 0 auto;
-      align-self: stretch;
-      width: 10px;
-      margin-left: 2px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      cursor: col-resize;
-      background: transparent;
-    }
-    .nsv-root .nsv-filter-resize::before {
-      content: "";
-      width: 2px;
-      height: 16px;
-      border-radius: 2px;
-      background: var(--border-hover);
-    }
-    .nsv-root .nsv-filter-resize:hover::before,
-    .nsv-root .nsv-filter-resize.is-dragging::before { background: var(--accent-purple); }
   </style>
 </head>
 <body>
@@ -140,7 +104,6 @@
                 <span class="icon icon-xs"><svg><use href="#icon-info"/></svg></span>
               </button>
             </div>
-            <div class="nsv-filter-resize" data-nsv-filter-resize role="separator" aria-orientation="vertical" title="Drag to resize the filter (double-click to reset)" data-i18n-title="networkSessionViewer.filterResizeTitle"></div>
             <span class="ni-session-count" data-ni-session-count>0</span>
           </div>
           <div class="ni-header-tools">
@@ -162,6 +125,10 @@
                 <label class="ni-sidebar-option" title="Group Sessions by Hostname" data-i18n-title="networkSessionViewer.groupByHostTitle">
                   <span class="ni-sidebar-option-label" data-i18n="networkSessionViewer.groupByHost">Group by Host</span>
                   <input type="checkbox" data-ni-group-by-host />
+                </label>
+                <label class="ni-sidebar-option" data-ni-proxied-filter title="Show Only Requests Proxied Through RDS (Full Headers + Body), Hiding Hotspot-capture SNI/DNS Metadata" data-i18n-title="app.niProxiedTitle">
+                  <span class="ni-sidebar-option-label" data-i18n="app.niProxied">Proxied</span>
+                  <input type="checkbox" data-ni-decrypted-only />
                 </label>
               </div>
             </div>

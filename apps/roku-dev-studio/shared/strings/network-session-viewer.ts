@@ -40,11 +40,11 @@ export const networkSessionViewer = {
   clearFilter: 'Clear filter',
   filterHelpTitle: 'Filtering Help & Supported Syntax',
   filterHelpAria: 'Filtering help',
-  filterResizeTitle: 'Drag to resize the filter (double-click to reset)',
   // Layout toggle + sidebar options
   layoutToggleTitle: 'Stack Request and Response Vertically',
   layoutToggleAria: 'Toggle Detail Layout',
   collapseGroups: 'Collapse all groups',
   groupByHostTitle: 'Group Sessions by Hostname',
   groupByHost: 'Group by Host',
+  noDecryptedSessions: 'No proxied (decrypted) requests in this session. Uncheck Proxied to show everything.',
 } as const;

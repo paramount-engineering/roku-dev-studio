@@ -200,6 +200,9 @@ export function makeCenteredSearchResizable(
     header?: HTMLElement | null;
     minWidthPx?: number;
     maxDefaultWidth?: number;
+    /** Element to append the handle to (default: the bar itself). Pass the search box's wrapper when the
+     *  slot also holds trailing controls (e.g. a session count) so the handle anchors to the box's edge. */
+    handleHost?: HTMLElement | null;
   }
 ): { dispose: () => void } | null {
   const header = opts.header ?? barEl.closest('.card-header');
@@ -209,7 +212,7 @@ export function makeCenteredSearchResizable(
   handle.setAttribute('role', 'separator');
   handle.setAttribute('aria-orientation', 'vertical');
   handle.title = S.ui.resizeSearchTitle;
-  barEl.appendChild(handle);
+  (opts.handleHost ?? barEl).appendChild(handle);
   return attachHeaderSearchResize({
     slot: barEl,
     handle,
