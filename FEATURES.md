@@ -103,7 +103,7 @@
 ### 🪟 Ports Window
 - **Standalone per-device window:** Open it from the Console card header (**Open Ports Window**); one tab per port
 - **Built-in tabs:** **8080** SceneGraph console (`plugins`, `free`, `sgnodes`, `fps_display`, …), **8087** screensaver console, and **8081** debug protocol — debugger controls with a live trace of the protocol traffic
-- **Custom Port:** Open any other tunneled port as a text console (`9999` or `49152–65535`)
+- **Custom Port:** Open any other port as a text console (Cloud Emulator devices tunnel `9999` and `49152–65535`)
 - **The window holds the socket:** One-shot consumers in the main window (Query tab, Action Scripts, Toggle FPS) reuse the port it has open instead of dialing their own; everything is released when the window closes
 
 <a id="console-monitor"></a>
