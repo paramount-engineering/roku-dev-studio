@@ -622,7 +622,6 @@ export const modals = {
             <li><strong>Cont RCE</strong> - Fila RCE: denumiți contul și lipiți token-ul său API din panoul Roku Cloud Emulator</li>
           `,
     remoteLocationsServerHtml: `Serverul releu poate fi găsit în folderul <code>remote-server</code>. Consultați README pentru instrucțiuni de configurare (LaunchAgent pe macOS, systemd pe Linux, Task Scheduler pe Windows).`,
-    remoteLocationsTroubleshootHtml: `<strong>Sideload-ul sau captura de ecran eșuează prin releu, dar ECP funcționează?</strong> Actualizați gazda releu la aceeași versiune <code>roku-dev-studio-api</code> ca această aplicație. Verificați <code>GET /health</code> pe releu (câmpul <code>apiVersion</code>) și asigurați-vă că portul <code>4951</code> este accesibil prin firewalluri.`,
     remoteLocationsRceHtml: `<strong>Dispozitivele RCE</strong> apar ca oprite/în așteptare/pornite. Porniți unul din cardul său (sau din propriul panou Roku Cloud Emulator) înainte de a vă conecta — ECP, sideload și consola răspund doar cât timp este pornit, iar dispozitivul se oprește automat după propriul Timp maxim de rulare configurat.`,
     remoteLocationsIntro: 'Controlați dispozitive Roku din Locații la distanță — printr-un Relay Server (dispozitive LAN dintr-o altă locație) sau printr-un cont Roku Cloud Emulator (RCE):',
 

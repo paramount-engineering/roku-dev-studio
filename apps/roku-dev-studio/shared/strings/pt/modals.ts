@@ -626,7 +626,6 @@ export const modals = {
             <li><strong>Conta RCE</strong> - Aba RCE: dê um nome à conta e cole o token de API do painel do Roku Cloud Emulator</li>
           `,
     remoteLocationsServerHtml: `O servidor de retransmissão pode ser encontrado na pasta <code>remote-server</code>. Consulte o README para instruções de configuração (LaunchAgent no macOS, systemd no Linux, Agendador de Tarefas no Windows).`,
-    remoteLocationsTroubleshootHtml: `<strong>O sideload ou a captura de tela falham via retransmissão, mas o ECP funciona?</strong> Atualize o host de retransmissão para a mesma versão do <code>roku-dev-studio-api</code> deste app. Verifique <code>GET /health</code> na retransmissão (campo <code>apiVersion</code>) e garanta que a porta <code>4951</code> esteja acessível através dos firewalls.`,
     remoteLocationsRceHtml: `<strong>Dispositivos RCE</strong> aparecem como desligado/pendente/em execução. Inicie um a partir do seu cartão (ou do próprio painel do Roku Cloud Emulator) antes de conectar — ECP, sideload e console só respondem enquanto estiver em execução, e o dispositivo para automaticamente após seu próprio Tempo máximo de execução configurado.`,
     remoteLocationsIntro: 'Controle dispositivos Roku em Localizações remotas — por meio de um Relay Server (dispositivos LAN em outro site) ou de uma conta Roku Cloud Emulator (RCE):',
 

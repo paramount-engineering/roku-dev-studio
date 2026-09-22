@@ -622,7 +622,6 @@ export const modals = {
             <li><strong>Konto RCE</strong> - Karta RCE: nadaj nazwę kontu i wklej jego token API z panelu Roku Cloud Emulator</li>
           `,
     remoteLocationsServerHtml: `Serwer przekaźnikowy znajduje się w folderze <code>remote-server</code>. Instrukcje konfiguracji znajdziesz w pliku README (macOS LaunchAgent, Linux systemd, Windows Task Scheduler).`,
-    remoteLocationsTroubleshootHtml: `<strong>Wgrywanie lub zrzut ekranu przez przekaźnik zawodzi, ale ECP działa?</strong> Zaktualizuj host przekaźnika do tej samej wersji <code>roku-dev-studio-api</code> co ta aplikacja. Sprawdź <code>GET /health</code> na przekaźniku (pole <code>apiVersion</code>) i upewnij się, że port <code>4951</code> jest osiągalny przez zapory.`,
     remoteLocationsRceHtml: `<strong>Urządzenia RCE</strong> są wyświetlane jako wyłączone/oczekujące/uruchomione. Uruchom jedno z jego karty (lub z własnego panelu Roku Cloud Emulator) przed połączeniem — ECP, wgrywanie i konsola odpowiadają tylko wtedy, gdy urządzenie działa, a urządzenie zatrzymuje się automatycznie po upływie skonfigurowanego dla niego maksymalnego czasu działania.`,
     remoteLocationsIntro: 'Steruj urządzeniami Roku w lokalizacjach zdalnych — za pośrednictwem Relay Server (urządzenia LAN w innej lokalizacji) lub konta Roku Cloud Emulator (RCE):',
 

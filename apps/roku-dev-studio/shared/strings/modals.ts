@@ -625,7 +625,6 @@ export const modals = {
             <li><strong>RCE Account</strong> - RCE tab: name the account and paste in its API token from Roku's Cloud Emulator dashboard</li>
           `,
     remoteLocationsServerHtml: `The Relay Server can be found in the <code>remote-server</code> folder. See the README for setup instructions (macOS LaunchAgent, Linux systemd, Windows Task Scheduler).`,
-    remoteLocationsTroubleshootHtml: `<strong>Sideload or screenshot fails via relay but ECP works?</strong> Update the relay host to the same <code>roku-dev-studio-api</code> version as this app. Check <code>GET /health</code> on the relay (<code>apiVersion</code> field) and ensure port <code>4951</code> is reachable through firewalls.`,
     remoteLocationsRceHtml: `<strong>RCE devices</strong> list as shutdown/pending/running. Start one from its card (or Roku's own Cloud Emulator dashboard) before connecting — ECP, sideload, and console only respond while running, and a device auto-stops after its own configured Max Run Time.`,
     remoteLocationsIntro: 'Control Roku devices at Remote Locations — either a Relay Server (LAN devices at another site) or a Roku Cloud Emulator (RCE) account:',
 

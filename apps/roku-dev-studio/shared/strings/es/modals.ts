@@ -622,7 +622,6 @@ export const modals = {
             <li><strong>Cuenta de RCE</strong> - Pestaña RCE: asigne un nombre a la cuenta y pegue su token de API del panel de Roku Cloud Emulator</li>
           `,
     remoteLocationsServerHtml: `El servidor de relé se encuentra en la carpeta <code>remote-server</code>. Consulte el README para las instrucciones de configuración (LaunchAgent en macOS, systemd en Linux, Task Scheduler en Windows).`,
-    remoteLocationsTroubleshootHtml: `<strong>¿El sideload o la captura de pantalla fallan a través del relé pero ECP funciona?</strong> Actualice el host del relé a la misma versión de <code>roku-dev-studio-api</code> que esta app. Verifique <code>GET /health</code> en el relé (campo <code>apiVersion</code>) y asegúrese de que el puerto <code>4951</code> sea accesible a través de los firewalls.`,
     remoteLocationsRceHtml: `<strong>Los dispositivos RCE</strong> aparecen como apagados/pendientes/en ejecución. Inicie uno desde su tarjeta (o desde el propio panel de Roku Cloud Emulator) antes de conectarse — ECP, sideload y consola solo responden mientras está en ejecución, y el dispositivo se detiene automáticamente al alcanzar su propio Tiempo máximo de ejecución configurado.`,
     remoteLocationsIntro: 'Controle dispositivos Roku en Ubicaciones remotas — mediante un Relay Server (dispositivos LAN en otro sitio) o una cuenta de Roku Cloud Emulator (RCE):',
 

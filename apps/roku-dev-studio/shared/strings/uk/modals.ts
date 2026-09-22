@@ -622,7 +622,6 @@ export const modals = {
             <li><strong>Обліковий запис RCE</strong> - Вкладка RCE: назвіть обліковий запис і вставте його токен API з панелі Roku Cloud Emulator</li>
           `,
     remoteLocationsServerHtml: `Сервер-ретранслятор можна знайти в папці <code>remote-server</code>. Див. README для інструкцій із налаштування (macOS LaunchAgent, Linux systemd, Windows Task Scheduler).`,
-    remoteLocationsTroubleshootHtml: `<strong>Sideload або знімок екрана не працює через ретранслятор, але ECP працює?</strong> Оновіть хост ретранслятора до тієї самої версії <code>roku-dev-studio-api</code>, що й цей застосунок. Перевірте <code>GET /health</code> на ретрансляторі (поле <code>apiVersion</code>) і переконайтеся, що порт <code>4951</code> доступний через брандмауери.`,
     remoteLocationsRceHtml: `<strong>Пристрої RCE</strong> відображаються як вимкнені/очікують/запущені. Запустіть пристрій з його картки (або з власної панелі Roku Cloud Emulator) перед підключенням — ECP, sideload і консоль реагують, лише коли пристрій запущено, а пристрій автоматично зупиняється після власного налаштованого максимального часу роботи.`,
     remoteLocationsIntro: 'Керуйте пристроями Roku у віддалених розташуваннях — через Relay Server (пристрої в локальній мережі в іншому місці) або обліковий запис Roku Cloud Emulator (RCE):',
 
