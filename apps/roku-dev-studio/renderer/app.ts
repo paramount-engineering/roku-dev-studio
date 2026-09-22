@@ -1436,11 +1436,10 @@ function removeRemoteLocation(locationId) {
     }
   });
 
-  // RCE: also drop the stored account token — otherwise it lingers in the secret store,
-  // orphaned, after the location itself is gone from the UI. Fire-and-forget: a failure here
-  // just leaves a recoverable stale token, not worth blocking location removal on.
+  // RCE: the stored account token goes with the location automatically — main prunes secret-store
+  // accounts that no saved location names whenever `remote-locations` is written (see
+  // `saveRemoteLocations` above → settings:set → main/remote-locations.ts pruneOrphanedRceAccounts).
   if (isRceDevice(location) && location.accountName) {
-    void window.roku.rceRemoveAccount(location.accountName);
     // Stop the push-based state watches (design doc §5) too — otherwise main keeps a WebSocket
     // open per device for an account the UI no longer shows at all.
     for (const device of location.devices.values()) {
