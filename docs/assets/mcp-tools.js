@@ -115,25 +115,18 @@
     return badges.join(' ');
   }
 
-  // Display order only — falls back to appending anything unrecognized (e.g. a future "Other"
-  // bucket from the generator) after these, alphabetically, rather than dropping it.
-  var CATEGORY_ORDER = [
-    'Discovery & Scripting',
-    'Bridge & Device',
-    'Device Control & App Connector',
-    'Network Inspector',
-    'BrightScript Debugger'
-  ];
-
-  function groupByCategory(tools) {
+  // Display order comes from the generator (`categories` = the order TOOL_CATEGORY_GROUPS declares
+  // in tools.ts, which mirrors the in-app "View MCP Tools" modal). Anything unrecognized is
+  // appended alphabetically rather than dropped.
+  function groupByCategory(tools, order) {
     var byCategory = {};
     tools.forEach(function (t) {
       var key = t.category || 'Other';
       (byCategory[key] = byCategory[key] || []).push(t);
     });
-    var known = CATEGORY_ORDER.filter(function (c) { return byCategory[c]; });
+    var known = order.filter(function (c) { return byCategory[c]; });
     var rest = Object.keys(byCategory)
-      .filter(function (c) { return CATEGORY_ORDER.indexOf(c) === -1; })
+      .filter(function (c) { return order.indexOf(c) === -1; })
       .sort();
     return known.concat(rest).map(function (category) {
       return { category: category, tools: byCategory[category] };
@@ -225,7 +218,7 @@
     .then(function (data) {
       leadEl.textContent =
         data.count + ' tools, reference documentation generated straight from the MCP Tools package.';
-      listEl.innerHTML = groupByCategory(data.tools)
+      listEl.innerHTML = groupByCategory(data.tools, data.categories || [])
         .map(function (group) {
           return (
             '<section class="tool-group">' +
