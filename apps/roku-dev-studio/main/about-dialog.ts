@@ -3,7 +3,7 @@
  * Uses preload for getInfo/copy/openExternal; no Node in renderer.
  */
 
-import type { BrowserWindow, Clipboard, IpcMain, IpcMainInvokeEvent, Shell } from 'electron';
+import type { BrowserWindow, Clipboard, IpcMain, IpcMainEvent, IpcMainInvokeEvent, Shell } from 'electron';
 import { IPC } from '../shared/ipc/channels';
 import { openExternalUrl } from './open-external-url';
 import { isMacOS, platformLabel } from 'roku-dev-studio-platform';
@@ -13,6 +13,12 @@ import { S } from '../shared/strings/index';
 const path = require('path');
 const os = require('os');
 const { BrowserWindow: BrowserWindowConstructor, dialog } = require('electron');
+
+/** About windows that have painted / that the page has fitted — shown only when both are true. */
+const aboutReadyToShow = new WeakSet<BrowserWindow>();
+const aboutFitted = new WeakSet<BrowserWindow>();
+/** If the page never reports a height (e.g. it failed to load), show anyway after this long. */
+const ABOUT_SHOW_FALLBACK_MS = 400;
 
 function buildAboutInfo() {
   const packageJson = require('../package.json');
@@ -38,6 +44,7 @@ function buildAboutInfo() {
     iconUrl,
     repoUrl: 'https://github.com/paramount-engineering/roku-dev-studio',
     authorUrl: packageJson.author?.url || 'https://github.com/hdonapati',
+    siteUrl: 'https://paramount-engineering.github.io/roku-dev-studio/',
   };
 }
 
@@ -45,6 +52,19 @@ function buildAboutInfo() {
  * Register IPC handlers for the About dialog (getInfo, copy, openExternal).
  */
 function registerAboutIpc(ipcMain: IpcMain, clipboard: Clipboard, shell: Shell) {
+  // The window is not user-resizable and its content height varies by locale (and grows when rows are
+  // added), so the page reports its rendered height and we fit the content area to it — no dead space
+  // under the buttons, no scrollbar. Clamped so a runaway value can't produce an absurd window.
+  ipcMain.on(IPC.AboutFitHeight, (event: IpcMainEvent, contentHeight: unknown) => {
+    const win = BrowserWindowConstructor.fromWebContents(event.sender);
+    if (!win || win.isDestroyed() || typeof contentHeight !== 'number' || !Number.isFinite(contentHeight)) return;
+    const [width, current] = win.getContentSize();
+    const target = Math.round(Math.min(Math.max(contentHeight, 320), 800));
+    if (Math.abs(target - current) >= 2) win.setContentSize(width, target, false);
+    aboutFitted.add(win);
+    // Reveal only now: the user never sees the pre-fit height (a scrollbar flashing, then a jump).
+    if (aboutReadyToShow.has(win) && !win.isVisible()) win.show();
+  });
   ipcMain.handle(IPC.AboutGetInfo, (_event: IpcMainInvokeEvent) => {
     return buildAboutInfo();
   });
@@ -70,7 +90,9 @@ function showAboutDialog(mainWindow: BrowserWindow) {
 
   const aboutWindow = new BrowserWindowConstructor({
     width: 500,
-    height: 520,
+    // Content-area size; the page then reports its exact rendered height (IPC.AboutFitHeight).
+    height: 470,
+    useContentSize: true,
     resizable: false,
     minimizable: false,
     maximizable: false,
@@ -89,7 +111,16 @@ function showAboutDialog(mainWindow: BrowserWindow) {
   });
 
   aboutWindow.once('ready-to-show', () => {
-    aboutWindow.show();
+    aboutReadyToShow.add(aboutWindow);
+    if (aboutFitted.has(aboutWindow)) {
+      aboutWindow.show();
+      return;
+    }
+    // Normally the fit message (IPC.AboutFitHeight) shows the window a few ms from now; this only
+    // guards against a page that never reports (load failure), so it can't stay invisible.
+    setTimeout(() => {
+      if (!aboutWindow.isDestroyed() && !aboutWindow.isVisible()) aboutWindow.show();
+    }, ABOUT_SHOW_FALLBACK_MS);
   });
 
   try {

@@ -42,4 +42,10 @@ export const about = {
   v8VersionLabel: 'Версія V8:',
   osLabel: 'Операційна система:',
   builtBy: 'Розроблено',
+  appDetails: 'Відомості про застосунок',
+  submitIssue: 'Повідомити про проблему',
+  checkingForUpdates: 'Перевірка…',
+  issueTitle: (v: string): string => `Roku Dev Studio v${v}: `,
+  issueBody: (details: string): string =>
+    `### Відомості про застосунок\n\n\`\`\`\n${details}\n\`\`\`\n\n### Що сталося\n\n_Опишіть проблему та як її відтворити._\n`,
 };

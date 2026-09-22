@@ -10,6 +10,8 @@ contextBridge.exposeInMainWorld('aboutApi', {
   getInfo: () => ipcRenderer.invoke('about:getInfo'),
   copy: (text: string) => ipcRenderer.invoke('about:copy', text),
   openExternal: (url: string) => ipcRenderer.invoke('about:openExternal', url),
+  fitHeight: (contentHeight: number) => ipcRenderer.send(IPC.AboutFitHeight, contentHeight),
+  checkForUpdates: () => ipcRenderer.invoke(IPC.UpdaterCheck),
   // Crash-report modal: read the enable/disable setting + environment info.
   getSetting: (key: string) => ipcRenderer.invoke(IPC.SettingsGet, key),
   getAppInfo: () => ipcRenderer.invoke(IPC.GetAppInfo),

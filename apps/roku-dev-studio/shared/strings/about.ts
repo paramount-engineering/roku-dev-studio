@@ -42,4 +42,12 @@ export const about = {
   v8VersionLabel: 'V8 Version:',
   osLabel: 'Operating System:',
   builtBy: 'Built by',
+  appDetails: 'App Details',
+  submitIssue: 'Submit an Issue',
+  checkingForUpdates: 'Checking…',
+  /** Prefilled GitHub issue title; the user completes it after the colon. */
+  issueTitle: (v: string): string => `Roku Dev Studio v${v}: `,
+  /** Prefilled GitHub issue body — the App Details table in a code fence plus a prompt to describe the problem. */
+  issueBody: (details: string): string =>
+    `### App Details\n\n\`\`\`\n${details}\n\`\`\`\n\n### What happened\n\n_Describe the problem and how to reproduce it._\n`,
 } as const;
