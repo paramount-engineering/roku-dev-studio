@@ -21,7 +21,7 @@
 <link rel="icon" href="images/icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/style.css?v=13">
+<link rel="stylesheet" href="assets/style.css?v=17">
 <script>(function(){try{var t=localStorage.getItem("rds-docs-theme");if(t)document.documentElement.setAttribute("data-theme",t);}catch(e){}})();</script>
 <script type="application/ld+json">
 {
@@ -99,7 +99,8 @@
     <a href="#log-file-viewer" data-feature="log-file-viewer" class="features-nav-link"><svg class="icon" width="16" height="16"><use href="assets/icons.svg#icon-book"></use></svg><span>Log File Viewer</span></a>
     <a href="#static-channel-analysis" data-feature="static-channel-analysis" class="features-nav-link"><svg class="icon" width="16" height="16"><use href="assets/icons.svg#icon-file-text"></use></svg><span>Static Channel Analysis</span></a>
     <a href="#rds-cli" data-feature="rds-cli" class="features-nav-link"><svg class="icon" width="16" height="16"><use href="assets/icons.svg#icon-terminal"></use></svg><span>rds CLI (terminal)</span></a>
-    <a href="#remote-server-support" data-feature="remote-server-support" class="features-nav-link"><svg class="icon" width="16" height="16"><use href="assets/icons.svg#icon-server"></use></svg><span>Remote Server Support</span></a>
+    <a href="#remote-server-support" data-feature="remote-server-support" class="features-nav-link"><svg class="icon" width="16" height="16"><use href="assets/icons.svg#icon-server"></use></svg><span>Remote Server</span></a>
+    <a href="#roku-cloud-emulator" data-feature="roku-cloud-emulator" class="features-nav-link"><svg class="icon" width="16" height="16"><use href="assets/icons.svg#icon-cloud"></use></svg><span>Roku Cloud Emulator</span></a>
     <a href="#settings" data-feature="settings" class="features-nav-link"><svg class="icon" width="16" height="16"><use href="assets/icons.svg#icon-settings"></use></svg><span>Settings</span></a>
     <a href="#language-switching" data-feature="language-switching" class="features-nav-link"><svg class="icon" width="16" height="16"><use href="assets/icons.svg#icon-globe"></use></svg><span>Language Switching</span></a>
     <a href="#crash-reporting" data-feature="crash-reporting" class="features-nav-link"><svg class="icon" width="16" height="16"><use href="assets/icons.svg#icon-x"></use></svg><span>Crash Reporting</span></a>
@@ -367,19 +368,34 @@
 </section>
 
 <section class="doc-section" id="remote-server-support" data-feature-panel>
-  <h2><svg class="icon" width="16" height="16"><use href="assets/icons.svg#icon-server"></use></svg> Remote Server Support</h2>
+  <h2><svg class="icon" width="16" height="16"><use href="assets/icons.svg#icon-server"></use></svg> Remote Server</h2>
+  <p class="doc-kicker">Run the RDS Relay Server on a machine at another site to reach the real Roku devices on its LAN</p>
   <ul>
-    <li><strong>Internet Bridge:</strong> Control Roku devices over the internet via remote server</li>
-    <li><strong>Full ECP Proxy:</strong> Complete ECP protocol implementation through server</li>
-    <li><strong>Device Discovery:</strong> Automatically discovers all Roku devices on remote network</li>
+    <li><strong>Internet Bridge:</strong> Control Roku devices over the internet via a Relay Server</li>
+    <li><strong>Full ECP Proxy:</strong> Complete ECP protocol implementation through the Relay Server</li>
+    <li><strong>Device Discovery:</strong> Automatically discovers all Roku devices on the remote network</li>
     <li><strong>All Features Supported:</strong> Remote control, queries, sideloading, console, and RALE work remotely</li>
-    <li><strong>Swagger API:</strong> Interactive API documentation for remote server</li>
-    <li><strong>Two kinds of location:</strong> Add Location offers two tabs — RDS Relay (a Relay Server address) and RCE (a Roku Cloud Emulator account + Personal Access Token)</li>
-    <li><strong>Roku Cloud Emulator devices:</strong> List as shutdown / pending / running and must be started (Start, with optional snapshot / firmware / Max Run Time options) before ECP, sideload or console respond</li>
-    <li><strong>Forget it on App Quit/Close:</strong> A location added with the box ticked is dropped when the app quits and again at next startup (crash safety), along with its RCE token and any Sideload Relay targets pointing at it; its device tabs are never remembered for auto-connect</li>
+    <li><strong>Swagger API:</strong> Interactive API documentation for the Relay Server</li>
+    <li><strong>Add Location → RDS Relay:</strong> Enter the Relay Server's address and port (4951 by default)</li>
+    <li><strong>Forget it on App Quit/Close:</strong> A location added with the box ticked is dropped when the app quits and again at next startup (crash safety), along with any Sideload Relay targets pointing at it; its device tabs are never remembered for auto-connect</li>
   </ul>
   <img src="images/REMOTE_SERVER_SWAGGER.png" alt="Remote server Swagger UI at /api-docs">
-  <p>Full setup lives on the <a href="remote-server.html">Remote Server</a> page.</p>
+  <p>Setup lives on the <a href="remote-server.html#relay-server">Remote Server &amp; Cloud Emulator</a> page.</p>
+</section>
+
+<section class="doc-section" id="roku-cloud-emulator" data-feature-panel>
+  <h2><svg class="icon" width="16" height="16"><use href="assets/icons.svg#icon-cloud"></use></svg> Roku Cloud Emulator</h2>
+  <p class="doc-kicker">Cloud-hosted virtual Rokus from your Roku Cloud Emulator (RCE) account — nothing to install or run at the other end</p>
+  <ul>
+    <li><strong>Add Location → RCE:</strong> An account name plus a Personal Access Token from the RCE web UI's Token tab; a User Info view shows the organization, user, and device / snapshot counts</li>
+    <li><strong>Device lifecycle:</strong> Devices list as shutdown / pending / running. Start one with an optional snapshot, firmware version, and Max Run Time (up to 48 hours); Stop it when done</li>
+    <li><strong>Same tabs as a real device:</strong> Remote and ECP queries, sideloading and screenshots, the Telnet console, App Connector (RALE), and the BrightScript Debugger all run over the cloud device's ports bridge</li>
+    <li><strong>Screen Relay:</strong> Live video of the device screen in the Dev App tab, with volume and mute, plus a Session Screenshots gallery</li>
+    <li><strong>Wake &amp; Dev Mode:</strong> A Wake Device button and a Dev Mode status indicator for the running device</li>
+    <li><strong>Custom console ports:</strong> The Ports Window accepts an RCE port (9999 or 49152–65535) alongside the standard 8080 / 8085 / 8087</li>
+    <li><strong>Forget it on App Quit/Close:</strong> Drops the account together with its token, the same way as a relay location</li>
+  </ul>
+  <p>Setup lives on the <a href="remote-server.html#roku-cloud-emulator">Remote Server &amp; Cloud Emulator</a> page.</p>
 </section>
 
 <section class="doc-section" id="settings" data-feature-panel>

@@ -9,10 +9,10 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   }
 
-  // Features page: left-sidebar navigation with a single visible panel at a time — a plain
-  // hash-routed show/hide, no page reload. Only runs on features.html (guarded by the sidebar's
-  // presence) so this is a no-op on every other page.
-  var featuresSidebar = document.querySelector('.features-sidebar');
+  // Hash-routed show/hide of one visible [data-feature-panel] at a time, no page reload. Drives
+  // the features page's left sidebar (.features-sidebar) and any horizontal [data-feature-nav]
+  // tab strip (remote-server.html). No-op on pages that have neither.
+  var featuresSidebar = document.querySelector('.features-sidebar, [data-feature-nav]');
   if (featuresSidebar) {
     var featureLinks = Array.prototype.slice.call(featuresSidebar.querySelectorAll('[data-feature]'));
     var featurePanels = Array.prototype.slice.call(document.querySelectorAll('[data-feature-panel]'));
