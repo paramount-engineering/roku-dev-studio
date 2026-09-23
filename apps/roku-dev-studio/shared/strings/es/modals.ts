@@ -39,8 +39,22 @@ export const modals = {
   updateError: 'Error de actualización',
   updateCheckFailed: 'Falló la búsqueda de actualizaciones.',
 
+  // Update banner — classified failures
+  updateDownloadFailedTitle: 'Falló la descarga de la actualización',
+  updateCheckFailedTitle: 'No se pudo buscar actualizaciones',
+  updateErrorAssetMissing: (version?: string): string =>
+    `El archivo de la actualización ${version ? `v${version} ` : ''}no está disponible en GitHub. Descárguelo desde la página de la versión.`,
+  updateErrorHttp: (status: number): string =>
+    `GitHub devolvió HTTP ${status} al descargar la actualización. Reintente o descárguela desde la página de la versión.`,
+  updateErrorChecksum: 'La actualización descargada no coincide con su suma de verificación publicada y fue descartada. Reintente o descárguela desde la página de la versión.',
+  updateErrorOffline: 'No se puede acceder a GitHub en este momento. Revise su conexión a internet y reintente.',
+  updateErrorNoRelease: 'No se encontró ninguna versión publicada en GitHub. Reintente más tarde o abra la página de la versión.',
+  updateErrorGithubUnavailable: 'GitHub no está respondiendo como se esperaba en este momento. Revise su conexión o proxy, o reintente más tarde.',
+  copyDetails: 'Copiar detalles',
+
   // "Check for Updates" — no update found toast
   upToDate: (version?: string): string => `Está actualizado${version ? ` (v${version})` : ''}.`,
+  aheadOfLatest: (current: string, latest: string): string => `Está en la v${current}, por delante de la última versión publicada (v${latest}).`,
 
   // Welcome-screen feature detail modals — longer blurb + capability bullets per tile.
   // (Keyed by the feature title so the component can look each up by the tile's live title.)

@@ -43,8 +43,22 @@ export const modals = {
   updateError: 'Erro de atualização',
   updateCheckFailed: 'A verificação de atualização falhou.',
 
+  // Update banner — classified failures
+  updateDownloadFailedTitle: 'Falha ao baixar a atualização',
+  updateCheckFailedTitle: 'Não foi possível verificar atualizações',
+  updateErrorAssetMissing: (version?: string): string =>
+    `O arquivo da atualização ${version ? `v${version} ` : ''}não está disponível no GitHub. Baixe-o na página da versão.`,
+  updateErrorHttp: (status: number): string =>
+    `O GitHub retornou HTTP ${status} ao baixar a atualização. Tente novamente ou baixe-a na página da versão.`,
+  updateErrorChecksum: 'A atualização baixada não corresponde à soma de verificação publicada e foi descartada. Tente novamente ou baixe-a na página da versão.',
+  updateErrorOffline: 'Não é possível acessar o GitHub no momento. Verifique sua conexão com a internet e tente novamente.',
+  updateErrorNoRelease: 'Nenhuma versão publicada foi encontrada no GitHub. Tente novamente mais tarde ou abra a página da versão.',
+  updateErrorGithubUnavailable: 'O GitHub não está respondendo como esperado no momento. Verifique sua conexão ou proxy, ou tente novamente mais tarde.',
+  copyDetails: 'Copiar detalhes',
+
   // "Check for Updates" — no update found toast
   upToDate: (version?: string): string => `Você está atualizado${version ? ` (v${version})` : ''}.`,
+  aheadOfLatest: (current: string, latest: string): string => `Você está na v${current}, à frente da versão mais recente publicada (v${latest}).`,
 
   // Welcome-screen feature detail modals — longer blurb + capability bullets per tile.
   // (Keyed by the feature title so the component can look each up by the tile's live title.)

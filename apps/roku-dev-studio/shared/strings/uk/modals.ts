@@ -39,8 +39,22 @@ export const modals = {
   updateError: 'Помилка оновлення',
   updateCheckFailed: 'Не вдалося перевірити оновлення.',
 
+  // Update banner — classified failures
+  updateDownloadFailedTitle: 'Не вдалося завантажити оновлення',
+  updateCheckFailedTitle: 'Не вдалося перевірити оновлення',
+  updateErrorAssetMissing: (version?: string): string =>
+    `Файл оновлення ${version ? `v${version} ` : ''}недоступний на GitHub. Завантажте його зі сторінки випуску.`,
+  updateErrorHttp: (status: number): string =>
+    `GitHub повернув HTTP ${status} під час завантаження оновлення. Спробуйте ще раз або завантажте його зі сторінки випуску.`,
+  updateErrorChecksum: 'Завантажене оновлення не збігається з опублікованою контрольною сумою і було відхилено. Спробуйте ще раз або завантажте його зі сторінки випуску.',
+  updateErrorOffline: 'GitHub зараз недоступний. Перевірте підключення до інтернету та спробуйте ще раз.',
+  updateErrorNoRelease: 'На GitHub не знайдено опублікованого випуску. Спробуйте пізніше або відкрийте сторінку випуску.',
+  updateErrorGithubUnavailable: 'GitHub зараз відповідає неочікувано. Перевірте підключення або проксі, або спробуйте пізніше.',
+  copyDetails: 'Копіювати деталі',
+
   // "Check for Updates" — no update found toast
   upToDate: (version?: string): string => `У вас найновіша версія${version ? ` (v${version})` : ''}.`,
+  aheadOfLatest: (current: string, latest: string): string => `У вас v${current} — новіша за останній опублікований випуск (v${latest}).`,
 
   // Welcome-screen feature detail modals — longer blurb + capability bullets per tile.
   // (Keyed by the feature title so the component can look each up by the tile's live title.)

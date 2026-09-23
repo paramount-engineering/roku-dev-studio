@@ -10,12 +10,16 @@
 import type { App, BrowserWindow, IpcMain } from 'electron';
 import { autoUpdater } from 'electron-updater';
 import { IPC } from '../shared/ipc/channels';
+import { classifyUpdaterError, isMissingMetadataError, type UpdaterErrorReason } from '../shared/updater-errors';
 import { mainError, mainWarn } from './log.js';
 
 const path = require('path');
 const GITHUB_OWNER = 'paramount-engineering';
 const GITHUB_REPO = 'roku-dev-studio';
 const LATEST_RELEASE_API_URL = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/releases/latest`;
+// Dev-only (see setupAutoUpdater): lets a local test server stand in for the GitHub API so the
+// "release has no updater metadata" fallback can be exercised end to end. Packaged builds ignore it.
+let latestReleaseApiUrl = LATEST_RELEASE_API_URL;
 const MANUAL_UPDATE_MESSAGE = 'New update is available. Please download the latest release to update.';
 
 /**
@@ -50,6 +54,18 @@ export interface UpdaterStatus {
   /** Set only when a *user-initiated* check finds no update, so the renderer can toast
    *  "you're up to date" (the automatic startup check leaves this unset to stay silent). */
   notifyNoUpdate?: boolean;
+  /** For `not-available`: the running build's version, and whether it is AHEAD of `version`
+   *  (the latest published release) — e.g. a 1.3.0 build checking against v1.2.0. */
+  currentVersion?: string;
+  ahead?: boolean;
+  /** Set when the error is one the renderer can phrase for a human (see shared/updater-errors.ts);
+   *  unset errors fall back to showing `message` verbatim. */
+  reason?: UpdaterErrorReason;
+  httpStatus?: number;
+  /** Raw electron-updater error (code + stack), for the banner's Copy Details button. */
+  detail?: string;
+  /** Which step failed — decides whether "Retry" re-runs the check or the download. */
+  stage?: 'check' | 'download';
 }
 
 /**
@@ -65,22 +81,8 @@ export interface AutoUpdaterControls {
 
 let currentStatus: UpdaterStatus = { type: 'idle' };
 
-function isMissingMetadataUpdaterError(errorLike: unknown): boolean {
-  const maybeObj = errorLike as { message?: unknown; code?: unknown } | undefined;
-  const msg = String(maybeObj?.message ?? errorLike ?? '');
-  const code = String(maybeObj?.code ?? '');
-  return (
-    code === 'ERR_UPDATER_CHANNEL_FILE_NOT_FOUND' ||
-    // Per-platform channel files hosted on the release: latest-mac.yml (macOS),
-    // latest.yml (Windows), latest-linux.yml (Linux). `app-update.yml` is the sibling
-    // metadata file bundled *inside* the app itself (Resources/app-update.yml) — both
-    // come from the same electron-builder `publish` config and go missing together
-    // (e.g. a build made with `publish: null`), surfacing as a plain ENOENT for
-    // whichever one electron-updater reaches for first. The generic phrases catch
-    // wording variants across electron-updater versions/platforms.
-    /latest(-mac|-linux)?\.yml|app-update\.yml|release artifacts|cannot find\s+latest/i.test(msg)
-  );
-}
+/** See shared/updater-errors.ts — kept as a local alias so the call sites below read the same. */
+const isMissingMetadataUpdaterError = isMissingMetadataError;
 
 function toUpdaterMessage(errorLike: unknown): string {
   if (isMissingMetadataUpdaterError(errorLike)) return MANUAL_UPDATE_MESSAGE;
@@ -124,17 +126,29 @@ function isStrictlyNewer(latest: string, current: string): boolean {
   return false;
 }
 
-/** Latest published release version from the GitHub API, or undefined if it can't be read. */
-async function fetchLatestReleaseVersion(): Promise<string | undefined> {
+/**
+ * Latest published release version from the GitHub API. A failure is returned, not swallowed: the
+ * caller must be able to tell "no newer release" from "could not ask", because the latter is a
+ * failed check and must never be reported as "you're up to date".
+ */
+async function fetchLatestReleaseVersion(): Promise<{ version?: string; error?: unknown }> {
   try {
-    const response = await fetch(LATEST_RELEASE_API_URL, {
+    const response = await fetch(latestReleaseApiUrl, {
       headers: { Accept: 'application/vnd.github+json' }
     });
-    if (!response.ok) return undefined;
+    if (!response.ok) {
+      return {
+        error: Object.assign(new Error(`GitHub API returned ${response.status} for ${latestReleaseApiUrl}`), {
+          code: `HTTP_ERROR_${response.status}`,
+          statusCode: response.status
+        })
+      };
+    }
     const json = (await response.json()) as { tag_name?: string; name?: string };
-    return normalizeVersion(json?.tag_name) ?? normalizeVersion(json?.name);
-  } catch {
-    return undefined;
+    const version = normalizeVersion(json?.tag_name) ?? normalizeVersion(json?.name);
+    return version ? { version } : { error: new Error(`GitHub API response for ${latestReleaseApiUrl} had no usable tag_name`) };
+  } catch (e) {
+    return { error: e };
   }
 }
 
@@ -184,6 +198,7 @@ export function setupAutoUpdater(
     } catch {
       // semver not available — skip version override
     }
+    if (process.env.RDS_UPDATER_API_URL) latestReleaseApiUrl = process.env.RDS_UPDATER_API_URL;
     const devConfigPath = path.join(__dirname, 'dev-app-update.yml');
     (autoUpdater as any).updateConfigPath = devConfigPath;
     (autoUpdater as any).forceDevUpdateConfig = true;
@@ -207,6 +222,45 @@ export function setupAutoUpdater(
   // Guards against the error event and the checkForUpdates() rejection both triggering a
   // GitHub round-trip for the same failed check.
   let manualCheckInFlight = false;
+
+  // The step currently running, stamped on error statuses so the renderer's Retry knows what to redo.
+  let stage: 'check' | 'download' = 'check';
+  // Whether the check currently running was asked for by the user. A failed AUTOMATIC check (startup)
+  // is logged but never shown: the user did nothing, and for a build that is already current there is
+  // nothing to do about GitHub being down or the network being offline. Download failures always show.
+  let currentCheckUserInitiated = false;
+  function errorStatus(err: unknown): UpdaterStatus {
+    const c = classifyUpdaterError(err);
+    const e = err as { code?: unknown; stack?: unknown; message?: unknown } | undefined;
+    const raw = String(e?.stack ?? e?.message ?? err ?? '');
+    return {
+      type: 'error',
+      message: toUpdaterMessage(err),
+      needsManualDownload: false,
+      version: c?.version ?? extractVersionFromUpdaterError(err),
+      reason: c?.reason,
+      httpStatus: c?.httpStatus,
+      stage,
+      detail: `${e?.code ? `${String(e.code)} — ` : ''}${raw}`.slice(0, 4000)
+    };
+  }
+  /** "No update": also says whether this build is ahead of the latest release (dev / pre-release builds). */
+  function notAvailableStatus(latest: string, notifyNoUpdate: boolean): UpdaterStatus {
+    const currentVersion = getCurrentVersion();
+    return { type: 'not-available', version: latest, currentVersion, ahead: isStrictlyNewer(currentVersion, latest), notifyNoUpdate };
+  }
+  /** Surface a check/download failure — or swallow it (log only) when a background check failed. */
+  function reportError(err: unknown, extra?: Partial<UpdaterStatus>): void {
+    const status = { ...errorStatus(err), ...extra };
+    if (stage === 'check' && !currentCheckUserInitiated) {
+      mainWarn(
+        `Auto-updater background check failed (not shown to the user): ${status.reason ?? 'unclassified'} — ${status.message?.slice(0, 300)}`
+      );
+      applyStatus({ type: 'idle' }, broadcast);
+      return;
+    }
+    applyStatus(status, broadcast);
+  }
 
   // True while a check the user explicitly asked for is running. Consumed by the terminal
   // outcome (available / not-available / error) to decide whether a "no update" result should
@@ -232,16 +286,25 @@ export function setupAutoUpdater(
     const userInitiated = consumeUserInitiated();
     try {
       const current = getCurrentVersion();
-      const latest = normalizeVersion(versionFromError) ?? (await fetchLatestReleaseVersion());
-      if (latest && isStrictlyNewer(latest, current)) {
+      let latest = normalizeVersion(versionFromError);
+      if (!latest) {
+        const probe = await fetchLatestReleaseVersion();
+        if (!probe.version) {
+          // We could not learn what the latest release is, so we cannot claim "up to date": report it
+          // like any other failed check (quiet for the background check, a banner for a manual one).
+          reportError(probe.error);
+          return;
+        }
+        latest = probe.version;
+      }
+      if (isStrictlyNewer(latest, current)) {
         applyStatus(
           { type: 'error', message: MANUAL_UPDATE_MESSAGE, needsManualDownload: true, version: latest },
           broadcast
         );
       } else {
-        // Already current (or the latest version couldn't be determined) — don't nag,
-        // but confirm to the user if they asked for the check themselves.
-        applyStatus({ type: 'not-available', version: latest ?? current, notifyNoUpdate: userInitiated }, broadcast);
+        // Already current (or ahead) — don't nag, but confirm to the user if they asked for the check.
+        applyStatus(notAvailableStatus(latest, userInitiated), broadcast);
       }
     } finally {
       manualCheckInFlight = false;
@@ -262,7 +325,7 @@ export function setupAutoUpdater(
   });
 
   autoUpdater.on('update-not-available', (info) => {
-    applyStatus({ type: 'not-available', version: String(info.version), notifyNoUpdate: consumeUserInitiated() }, broadcast);
+    applyStatus(notAvailableStatus(normalizeVersion(info.version) ?? String(info.version), consumeUserInitiated()), broadcast);
   });
 
   autoUpdater.on('download-progress', (progress) => {
@@ -284,10 +347,7 @@ export function setupAutoUpdater(
     }
     consumeUserInitiated();
     mainError('Auto-updater error:', err);
-    applyStatus(
-      { type: 'error', message: toUpdaterMessage(err), needsManualDownload: false, version: extractVersionFromUpdaterError(err) },
-      broadcast
-    );
+    reportError(err);
   });
 
   // Shared check flow used by the renderer's UpdaterCheck IPC, the "Check for
@@ -297,6 +357,8 @@ export function setupAutoUpdater(
   // `userInitiated` marks explicit user checks so a "no update" result can be toasted.
   async function runCheckForUpdates(opts?: { userInitiated?: boolean }): Promise<{ success: boolean; error?: string }> {
     pendingUserInitiated = !!opts?.userInitiated;
+    currentCheckUserInitiated = !!opts?.userInitiated;
+    stage = 'check';
     try {
       await autoUpdater.checkForUpdates();
       return { success: true };
@@ -307,12 +369,7 @@ export function setupAutoUpdater(
         // apply a manual-download status here or we'd flash the banner before the check.
         void surfaceManualUpdateIfNewer(extractVersionFromUpdaterError(e));
       } else {
-        applyStatus({
-          type: 'error',
-          message: msg,
-          needsManualDownload: false,
-          version: extractVersionFromUpdaterError(e)
-        }, broadcast);
+        reportError(e);
       }
       return { success: false, error: msg };
     }
@@ -321,17 +378,13 @@ export function setupAutoUpdater(
   ipcMain.handle(IPC.UpdaterCheck, () => runCheckForUpdates({ userInitiated: true }));
 
   ipcMain.handle(IPC.UpdaterDownload, async () => {
+    stage = 'download';
     try {
       await autoUpdater.downloadUpdate();
       return { success: true };
     } catch (e: any) {
       const msg = toUpdaterMessage(e);
-      applyStatus({
-        type: 'error',
-        message: msg,
-        needsManualDownload: isMissingMetadataUpdaterError(e),
-        version: extractVersionFromUpdaterError(e)
-      }, broadcast);
+      reportError(e, { needsManualDownload: isMissingMetadataUpdaterError(e) });
       return { success: false, error: msg };
     }
   });
@@ -380,13 +433,11 @@ export function setupAutoUpdater(
 
   // Auto-check 12 seconds after the app is ready so it doesn't slow launch.
   setTimeout(() => {
-    autoUpdater.checkForUpdates().catch((e) => {
-      if (isMissingMetadataUpdaterError(e)) {
-        mainWarn('Auto-updater background check requires manual download (missing release metadata).');
-      } else {
-        mainError('Auto-updater background check failed:', e);
-      }
-    });
+    stage = 'check';
+    currentCheckUserInitiated = false;
+    // Failures are already handled by the 'error' event: metadata-missing → version-gated manual
+    // banner, everything else → reportError (log-only for this background check).
+    autoUpdater.checkForUpdates().catch(() => undefined);
   }, 12000);
 
   return { checkForUpdates: runCheckForUpdates };

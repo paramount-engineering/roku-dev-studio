@@ -42,8 +42,22 @@ export const modals = {
   updateError: 'Update Error',
   updateCheckFailed: 'Update check failed.',
 
+  // Update banner — classified failures (main names the reason; see shared/updater-errors.ts)
+  updateDownloadFailedTitle: 'Update Download Failed',
+  updateCheckFailedTitle: "Couldn't Check for Updates",
+  updateErrorAssetMissing: (version?: string): string =>
+    `The ${version ? `v${version} ` : ''}update file isn't available on GitHub. Download it from the release page instead.`,
+  updateErrorHttp: (status: number): string =>
+    `GitHub returned HTTP ${status} while downloading the update. Retry, or download it from the release page.`,
+  updateErrorChecksum: "The downloaded update didn't match its published checksum and was discarded. Retry, or download it from the release page.",
+  updateErrorOffline: "GitHub can't be reached right now. Check your internet connection and retry.",
+  updateErrorNoRelease: 'No published release was found on GitHub. Retry later, or open the release page.',
+  updateErrorGithubUnavailable: "GitHub isn't responding as expected right now. Check your connection or proxy, or retry later.",
+  copyDetails: 'Copy Details',
+
   // "Check for Updates" — no update found toast
   upToDate: (version?: string): string => `You're up to date${version ? ` (v${version})` : ''}.`,
+  aheadOfLatest: (current: string, latest: string): string => `You're on v${current}, ahead of the latest release (v${latest}).`,
 
   // Welcome-screen feature detail modals — longer blurb + capability bullets per tile.
   // (Keyed by the feature title so the component can look each up by the tile's live title.)

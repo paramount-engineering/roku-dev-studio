@@ -39,8 +39,22 @@ export const modals = {
   updateError: 'Eroare de actualizare',
   updateCheckFailed: 'Verificarea actualizărilor a eșuat.',
 
+  // Update banner — classified failures
+  updateDownloadFailedTitle: 'Descărcarea actualizării a eșuat',
+  updateCheckFailedTitle: 'Nu s-au putut verifica actualizările',
+  updateErrorAssetMissing: (version?: string): string =>
+    `Fișierul actualizării ${version ? `v${version} ` : ''}nu este disponibil pe GitHub. Descărcați-l din pagina versiunii.`,
+  updateErrorHttp: (status: number): string =>
+    `GitHub a returnat HTTP ${status} la descărcarea actualizării. Reîncercați sau descărcați-o din pagina versiunii.`,
+  updateErrorChecksum: 'Actualizarea descărcată nu corespunde sumei de control publicate și a fost eliminată. Reîncercați sau descărcați-o din pagina versiunii.',
+  updateErrorOffline: 'GitHub nu poate fi accesat momentan. Verificați conexiunea la internet și reîncercați.',
+  updateErrorNoRelease: 'Nu s-a găsit nicio versiune publicată pe GitHub. Reîncercați mai târziu sau deschideți pagina versiunii.',
+  updateErrorGithubUnavailable: 'GitHub nu răspunde așa cum ar trebui momentan. Verificați conexiunea sau proxy-ul, ori reîncercați mai târziu.',
+  copyDetails: 'Copiază detaliile',
+
   // "Check for Updates" — no update found toast
   upToDate: (version?: string): string => `Sunteți la zi${version ? ` (v${version})` : ''}.`,
+  aheadOfLatest: (current: string, latest: string): string => `Folosiți v${current}, mai nouă decât ultima versiune publicată (v${latest}).`,
 
   // Welcome-screen feature detail modals — longer blurb + capability bullets per tile.
   // (Keyed by the feature title so the component can look each up by the tile's live title.)

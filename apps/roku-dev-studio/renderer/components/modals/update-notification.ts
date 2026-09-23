@@ -23,6 +23,12 @@ interface UpdaterStatus {
   message?: string;
   needsManualDownload?: boolean;
   notifyNoUpdate?: boolean;
+  currentVersion?: string;
+  ahead?: boolean;
+  reason?: 'asset-missing' | 'http' | 'checksum' | 'offline' | 'no-release' | 'github-unavailable';
+  httpStatus?: number;
+  stage?: 'check' | 'download';
+  detail?: string;
 }
 
 const BANNER_ID = 'rds-update-banner';
@@ -40,10 +46,6 @@ let cachedLatestReleaseInfo: LatestReleaseInfo | null = null;
 // In-flight fetch so a prefetch (when the banner appears) and a click-open share
 // one request, and so the modal can await the same promise instead of re-fetching.
 let latestReleaseInfoPromise: Promise<LatestReleaseInfo> | null = null;
-
-function isMissingReleaseMetadataError(message: string): boolean {
-  return /latest-mac\.yml|release artifacts|cannot find\s+latest/i.test(message);
-}
 
 function formatBytes(bps: number): string {
   if (bps > 1024 * 1024) return `${(bps / 1024 / 1024).toFixed(1)} MB/s`;
@@ -353,7 +355,7 @@ function ensureBannerStyles(): void {
       box-shadow: 0 8px 32px rgba(0,0,0,0.5);
       padding: 14px 16px;
       min-width: 280px;
-      max-width: 340px;
+      max-width: 380px;
       font-family: inherit;
       font-size: 13px;
       color: var(--text-primary);
@@ -399,6 +401,9 @@ function ensureBannerStyles(): void {
       color: var(--text-secondary);
       font-size: 11.5px;
     }
+    .rds-banner-icon-error { background: rgba(239, 68, 68, 0.14); color: var(--accent-red, #ef4444); }
+    /* Raw updater messages can be one unbroken URL/hash — never let them escape the banner. */
+    .rds-banner-error { overflow-wrap: anywhere; }
     .rds-banner-dismiss {
       margin-left: auto;
       width: 24px;
@@ -427,7 +432,7 @@ function ensureBannerStyles(): void {
       flex-wrap: wrap;
     }
     .rds-banner-btn {
-      padding: 5px 14px;
+      padding: 5px 10px;
       border-radius: 6px;
       font-size: 12px;
       font-weight: 500;
@@ -437,6 +442,9 @@ function ensureBannerStyles(): void {
       transition: background 0.15s, opacity 0.15s;
     }
     .rds-banner-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    /* Icon-only utility action (Copy Details): same height as the text buttons, square-ish. */
+    .rds-banner-btn-icon { display: inline-flex; align-items: center; justify-content: center; padding: 5px 8px; }
+    .rds-banner-btn-icon svg { width: 14px; height: 14px; display: block; }
     .rds-banner-btn-primary {
       background: var(--accent-purple);
       color: #fff;
@@ -698,7 +706,7 @@ function renderManualDownloadBanner(banner: HTMLElement, iconSvg: string, versio
     </div>
     <div class="rds-banner-actions">
       <button class="rds-banner-btn rds-banner-btn-ghost" id="rdsUpdateReleaseNotes">${S.modals.releaseNotes}</button>
-      <button class="rds-banner-btn rds-banner-btn-primary" id="rdsUpdateOpenLatest">${S.modals.download}</button>
+      <button class="rds-banner-btn rds-banner-btn-primary" id="rdsUpdateOpenLatest">${S.modals.openReleasePage}</button>
     </div>`;
 
   document.body.appendChild(banner);
@@ -713,6 +721,84 @@ function renderManualDownloadBanner(banner: HTMLElement, iconSvg: string, versio
   });
   banner.querySelector('#rdsUpdateOpenLatest')?.addEventListener('click', () => {
     // Open the downloads (release) page and dismiss the notification.
+    removeBanner();
+    (window as any).roku?.openExternal?.(LATEST_RELEASE_URL)?.catch?.(() => undefined);
+  });
+}
+
+/**
+ * A failure the main process could name (see shared/updater-errors.ts): plain-language title +
+ * explanation from the catalog and the actions that actually help — Retry re-runs whichever step
+ * failed; Open Release Page is the manual way out. A missing asset gets no Retry (it is a
+ * publishing problem, the same URL will 404 again) and an offline error gets no release link.
+ */
+/** Everything a bug report needs: the reason we showed, the step, and electron-updater's raw error. */
+function errorDetailsText(status: UpdaterStatus): string {
+  const head = [
+    status.reason && `reason: ${status.reason}`,
+    status.stage && `stage: ${status.stage}`,
+    status.version && `version: ${status.version}`,
+    status.httpStatus && `http: ${status.httpStatus}`
+  ].filter(Boolean).join('\n');
+  return `${head}\n\n${status.detail ?? status.message ?? ''}`.trim();
+}
+
+function copyDetailsButtonHtml(): string {
+  // Icon-only so three actions always fit one row; the label lives in the tooltip + aria-label.
+  const label = S.modals.copyDetails;
+  return `<button class="rds-banner-btn rds-banner-btn-ghost rds-banner-btn-icon" id="rdsUpdateCopyDetails" title="${label}" aria-label="${label}">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+  </button>`;
+}
+
+function wireCopyDetails(banner: HTMLElement, status: UpdaterStatus): void {
+  banner.querySelector('#rdsUpdateCopyDetails')?.addEventListener('click', () => {
+    navigator.clipboard.writeText(errorDetailsText(status))
+      .then(() => showToast(S.common.copied, 'success'))
+      .catch(() => undefined);
+  });
+}
+
+function renderClassifiedErrorBanner(banner: HTMLElement, iconSvg: string, status: UpdaterStatus): void {
+  const reason = status.reason!;
+  const downloadFailed = reason === 'asset-missing' || reason === 'checksum' || reason === 'http' || status.stage === 'download';
+  const title = downloadFailed ? S.modals.updateDownloadFailedTitle : S.modals.updateCheckFailedTitle;
+  const detail =
+    reason === 'asset-missing' ? S.modals.updateErrorAssetMissing(status.version) :
+    reason === 'http' ? S.modals.updateErrorHttp(status.httpStatus ?? 0) :
+    reason === 'checksum' ? S.modals.updateErrorChecksum :
+    reason === 'offline' ? S.modals.updateErrorOffline :
+    reason === 'github-unavailable' ? S.modals.updateErrorGithubUnavailable :
+    S.modals.updateErrorNoRelease;
+  const canRetry = reason !== 'asset-missing';
+  // No release link when the problem is reaching GitHub at all — the browser would hit the same wall.
+  const showReleases = reason !== 'offline' && reason !== 'github-unavailable';
+  banner.innerHTML = `
+    <div class="rds-banner-header">
+      <div class="rds-banner-icon rds-banner-icon-error">${iconSvg}</div>
+      <div class="rds-banner-text">
+        <div class="rds-banner-title">${title}</div>
+        <div class="rds-banner-subtitle">${detail}</div>
+      </div>
+      <button class="rds-banner-dismiss" aria-label="${S.modals.dismiss}">×</button>
+    </div>
+    <div class="rds-banner-actions">
+      ${copyDetailsButtonHtml()}
+      ${canRetry ? `<button class="rds-banner-btn ${showReleases ? 'rds-banner-btn-ghost' : 'rds-banner-btn-primary'}" id="rdsUpdateRetry">${S.common.retry}</button>` : ''}
+      ${showReleases ? `<button class="rds-banner-btn rds-banner-btn-primary" id="rdsUpdateOpenLatest">${S.modals.openReleasePage}</button>` : ''}
+    </div>`;
+
+  document.body.appendChild(banner);
+  banner.querySelector('.rds-banner-dismiss')?.addEventListener('click', removeBanner);
+  wireCopyDetails(banner, status);
+  banner.querySelector('#rdsUpdateRetry')?.addEventListener('click', () => {
+    const btn = banner.querySelector('#rdsUpdateRetry') as HTMLButtonElement | null;
+    if (btn) btn.disabled = true;
+    const updater = (window as any).rdsUpdater;
+    const run = status.stage === 'download' ? updater?.download() : updater?.check();
+    run?.catch?.(() => undefined);
+  });
+  banner.querySelector('#rdsUpdateOpenLatest')?.addEventListener('click', () => {
     removeBanner();
     (window as any).roku?.openExternal?.(LATEST_RELEASE_URL)?.catch?.(() => undefined);
   });
@@ -818,9 +904,16 @@ function renderBanner(status: UpdaterStatus): void {
     });
 
   } else if (status.type === 'error') {
+    // The main process decides what kind of failure this is (needsManualDownload / reason); the
+    // renderer only renders. It used to re-derive "metadata missing" from the message text, which
+    // turned a plain 503 on the manifest URL into a "download manually" banner.
     const msg = status.message ?? S.modals.updateCheckFailed;
-    if (status.needsManualDownload || isMissingReleaseMetadataError(msg)) {
+    if (status.needsManualDownload) {
       renderManualDownloadBanner(banner, iconSvg, status.version);
+      return;
+    }
+    if (status.reason) {
+      renderClassifiedErrorBanner(banner, iconSvg, status);
       return;
     }
 
@@ -832,10 +925,12 @@ function renderBanner(status: UpdaterStatus): void {
           <div class="rds-banner-error">${msg.length > 120 ? msg.slice(0, 120) + '…' : msg}</div>
         </div>
         <button class="rds-banner-dismiss" aria-label="${S.modals.dismiss}">×</button>
-      </div>`;
+      </div>
+      <div class="rds-banner-actions">${copyDetailsButtonHtml()}</div>`;
 
     document.body.appendChild(banner);
     banner.querySelector('.rds-banner-dismiss')?.addEventListener('click', removeBanner);
+    wireCopyDetails(banner, status);
   }
 }
 
@@ -852,7 +947,14 @@ export function mountUpdateNotification(): void {
     // A user-initiated "Check for Updates" that found nothing surfaces a brief,
     // auto-dismissing confirmation toast (the automatic startup check stays silent).
     if (status?.type === 'not-available' && status.notifyNoUpdate) {
-      showToast(S.modals.upToDate(status.version), 'success');
+      // Say which build the user is on; a dev / pre-release build ahead of the latest release is told so.
+      const running = status.currentVersion ?? status.version;
+      showToast(
+        status.ahead && status.currentVersion && status.version
+          ? S.modals.aheadOfLatest(status.currentVersion, status.version)
+          : S.modals.upToDate(running),
+        'success'
+      );
     }
     renderBanner(status);
   });
