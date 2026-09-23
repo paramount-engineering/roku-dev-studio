@@ -178,7 +178,7 @@
                 "example": {
                   "success": true,
                   "status": "ok",
-                  "apiVersion": "1.1.1",
+                  "apiVersion": "1.2.0",
                   "serverVersion": "1.1.0",
                   "hostname": "mac-mini.local",
                   "platform": "darwin",
@@ -207,7 +207,7 @@
                 },
                 "example": {
                   "success": true,
-                  "version": "1.1.1",
+                  "version": "1.2.0",
                   "serverVersion": "1.1.0",
                   "capabilities": {
                     "remote": true,
@@ -3527,7 +3527,7 @@
           "apiVersion": {
             "type": "string",
             "description": "Version of the roku-dev-studio-api package this server bundles ('unknown' if unavailable)",
-            "example": "1.1.1"
+            "example": "1.2.0"
           },
           "serverVersion": {
             "type": "string",
@@ -3569,7 +3569,7 @@
           "version": {
             "type": "string",
             "description": "Version of the bundled roku-dev-studio-api package (kept under this key for backward compatibility - not the server's own release version, see serverVersion)",
-            "example": "1.1.1"
+            "example": "1.2.0"
           },
           "serverVersion": {
             "type": "string",

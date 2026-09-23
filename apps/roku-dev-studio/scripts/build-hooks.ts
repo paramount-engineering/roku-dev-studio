@@ -63,7 +63,7 @@ const ARCH_ALIAS: Record<string, 'x64' | 'arm64'> = {
  * Classify an electron-builder artifact by platform/arch from its *extension and arch token only* —
  * never from the full filename template. The template (`build.artifactName` plus the `nsis` /
  * `portable` overrides in package.json) is the single source of truth for names; this stays valid
- * whether it produces today's `Roku-Dev-Studio-<version>-<arch>.<ext>` or the pre-1.2.1 default
+ * whether it produces today's `Roku-Dev-Studio-<version>-<arch>.<ext>` or the pre-1.3.0 default
  * shapes (`Roku Dev Studio-1.2.0-arm64-mac.zip`, `roku-dev-studio_1.2.0_amd64.deb`,
  * `Roku Dev Studio Setup 1.2.0.exe`). `scripts/verify-artifact-names.ts` pins the two together.
  * A name without an arch token is x64: electron-builder's legacy templates omit the default arch.

@@ -1,6 +1,6 @@
 {
   "name": "roku-dev-studio",
-  "version": "1.2.1",
+  "version": "1.3.0",
   "description": "Roku Dev Studio - Control your Roku device over the local network",
   "homepage": "https://github.com/paramount-engineering/roku-dev-studio",
   "main": "main.bundled.cjs",
@@ -27,6 +27,8 @@
     "verify:rce-account-prune": "tsx scripts/verify-rce-account-prune.ts",
     "verify:artifact-names": "tsx scripts/verify-artifact-names.ts",
     "verify:auto-connect-store": "tsx scripts/verify-auto-connect-store.ts",
+    "verify:doc-versions": "tsx scripts/verify-doc-versions.ts",
+    "verify:updater-errors": "tsx scripts/verify-updater-errors.ts",
     "typecheck:scripts": "tsc --noEmit -p tsconfig.scripts.json",
     "dev:solid": "tsx scripts/build/index.ts && concurrently -k \"npm run renderer:solid:dev\" \"wait-on tcp:127.0.0.1:5173 && cross-env RDS_SOLID_RENDERER=1 tsx scripts/run-electron.ts\"",
     "build:desktop": "tsx scripts/build/index.ts",

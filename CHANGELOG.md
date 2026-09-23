@@ -6,20 +6,26 @@ tags in [Releases](https://github.com/paramount-engineering/roku-dev-studio/rele
 
 ## [Unreleased]
 
-## [1.2.1]
+## [1.3.0]
+
+**Upgrading from 1.2.0 is a one-time manual download on every platform.** macOS 1.2.0 finds 1.3.0 but its download fails with a 404 (its manifest names a file that does not exist on the release, see *Fixed*), and Squirrel.Mac cannot replace the unsigned 1.2.0 with the signed 1.3.0 anyway. Windows and Linux 1.2.0 never see any update (their channel files were never published). Install 1.3.0 from the [release page](https://github.com/paramount-engineering/roku-dev-studio/releases/latest); from 1.3.0 on, in-app updates work on all three platforms.
 
 ### Added
+- **Roku Cloud Emulator (RCE) support** — **Add Location** gains an **RCE** tab: sign in with a Personal Access Token to list, start (with optional snapshot / firmware / max-runtime) and stop Roku's cloud-hosted virtual devices, then work with them like any other device — remote control, ECP queries, the Console, sideload, screenshots, App Connector and the debugger all run through the emulator's ports bridge. RCE devices are visible to the MCP tools and the Remote Server flows too. Ships as the new `roku-dev-studio-rce` package.
+- **Ports Window** — a standalone per-device window (Console header → **Open Ports Window**) with one tab per port: the **8080** SceneGraph console, the **8087** screensaver console, and the **8081** debug protocol with the debugger controls, REPL and a live wire trace, plus a **Custom Port** tab (Cloud Emulator devices tunnel 9999 and 49152–65535). The window holds the socket, so one-shot consumers in the main window (Query tab, Action Scripts, Toggle FPS) reuse it instead of dialing their own. Works for local, lab-server and Cloud Emulator devices.
+- **Sideload Relay** — per-device relay controls with a dev-password flow in the device panel; relay and Dev App actions follow the live device state.
 - **Device Performance** — a System / Graphics memory mode with live texture and system graphics series, a bitmaps (`r2d2`) modal, chart history with process snapshots, CSV / JSON / image export of any chart, and a per-chart explanatory info modal. Also exposed to agents as the `device_performance_metrics` MCP tool (chart selection, time window, downsampling).
 - **Console Monitor** — now tracks Roku launch/performance beacons alongside BrightScript errors, with analytics surfaced in the telnet console.
 - **Debugger** — the debugger API scans channel sources for symbols and `stop` statements and feeds them to the debug session controller for richer inspection.
 - **MCP** — `network_inspector_find` for full-content search across captured requests and responses; `status` / `statusClass` / `contentType` OR-filters on the list and analyze tools; and a **View MCP Tools** modal in Settings that groups every exposed tool by capability area.
-- **Hardware images** — device photos are fetched through the main process, the device details modal always opens, and a placeholder is shown when no photo resolves.
+- **Device modal** — a live **Device Info** panel (localized), device photos fetched through the main process so the modal always opens, and a placeholder when no photo resolves.
 - An **Open** action on file-related toasts launches the file through the OS.
 - New UI strings for all of the above are translated in the ES / PL / PT / RO / UK catalogs.
 - Add Location has a "Forget it on App Quit/Close" checkbox (RDS Relay and RCE). Such a location is dropped when the app quits and again at the next startup (crash safety), together with its RCE token and any Sideload Relay targets that pointed at it. RCE relay targets are matched through the in-memory device registry, so they are dropped at quit only. Device tabs opened at such a location are never remembered for auto-connect.
 
 ### Changed
-- **Official macOS builds are signed and notarized.** The DMG and zip on GitHub Releases now carry a Developer ID signature and an Apple notarization ticket, so Gatekeeper opens the app directly — the `xattr -cr` step is gone from the install instructions. electron-builder handles signing, `notarytool` submission and stapling natively; the release job fails fast if the signing secrets are missing rather than shipping an unsigned build. **Upgrading from 1.2.0 on macOS is a one-time manual download:** the in-app updater cannot replace the unsigned 1.2.0 with a signed build (Squirrel.Mac requires the update to match the running app's signature), so 1.2.0 will report an update error — download the 1.2.1 `.dmg` once, and auto-update works from there on.
+- **Network Session Viewer** now matches the live Network tab: ↑/↓ and Home/End keyboard navigation, the **Proxied** (decrypted-only) filter, the Large Body explainer, right-click **Copy Image / Save File** on media previews, Cmd/Ctrl+A scoped to a body pane, Escape closes the copy menu, and the same drag-resizable filter (shared modules, no duplicated glue).
+- **Official macOS builds are signed and notarized.** The DMG and zip on GitHub Releases now carry a Developer ID signature and an Apple notarization ticket, so Gatekeeper opens the app directly — the `xattr -cr` step is gone from the install instructions. electron-builder handles signing, `notarytool` submission and stapling natively; the release job fails fast if the signing secrets are missing rather than shipping an unsigned build. Squirrel.Mac requires an update to match the running app's signature, so the unsigned 1.2.0 cannot be replaced in-app (see the upgrade note at the top of this release).
 - Live-only device controls are disabled while a device is unreachable, while already-captured content (network events, console scrollback, saved screenshots) stays fully usable.
 - Modal open/close animations are unified on a shared origin-aware motion system (dialogs grow from the button that opened them and shrink back into it).
 - Fiddle, Dev App, Remote, Log Viewer and Query workflows refined, including device metrics and secret-screen handling; Settings relay controls updated; telnet and system-command IPC consolidated with consistent error handling.
@@ -30,10 +36,21 @@ tags in [Releases](https://github.com/paramount-engineering/roku-dev-studio/rele
 - Debugger: the per-device "Sideload with Debugging" checkbox (Dev App tab, Fiddle) is now "Enable Debugger", because it governs more than sideloads: while on, the debugger also attaches automatically whenever the running channel reports it is waiting for one on port 8081 — a launch from the Roku remote, the Apps tab, or an IDE, on local, lab-server and Cloud Emulator devices alike. A stale "waiting" line replayed by Roku when the Console connects is tried and dropped quietly. Existing per-device choices are carried over automatically (the stored setting key changed).
 - Sideload Relay: every target's device tab and Console now open at the start of a run, and the console connects before the install, so a target whose install fails is still connected and visible, and the Console is already listening when the channel compiles. Local targets get a transparent console reconnect after install (some firmware unbinds the previous console client on install). The debugger still attaches after install, since its port only opens on a debug launch.
 - Remote Server: sideload uploads are forwarded to the device straight from memory instead of being written to and read back from a temp file; the temp directory is now used only for pcap and CA-certificate exports.
+- **About dialog** reworked: icon-left header, an **App Details** table with a one-click copy button, **Submit an Issue** (opens a GitHub issue with the app details prefilled), **Check for Updates** and **Close** actions, and a link to the docs site; the window sizes itself to its content, in every locale, with no scrollbar.
+- Welcome tiles: **Remote Locations** now describes relay servers and Roku Cloud Emulator; **Console** lists the 8085 console plus the 8080 / 8087 / 8081 ports.
+- Documentation: README, FEATURES and the docs site cover the Ports Window, Roku Cloud Emulator, Device Performance and MCP additions; the Remote Server README and OpenAPI spec now document every route (telnet, debugger, bearer auth); the new `roku-dev-studio-rce` package has a README; install and release guides describe the signed, notarized pipeline and its secrets.
 
 ### Fixed
-- **Check for Updates** works again: the 1.2.0 release shipped without its `latest-*.yml` publish metadata because `build.publish: null` suppressed it, so `checkForUpdates()` threw `ENOENT`. Metadata generation is restored (uploads still go only through the release workflow), a missing `app-update.yml` is now handled as gracefully as a missing `latest-*.yml`, and the updater falls back to a manual-download banner when a release asset is unreachable.
-- **Windows and Linux auto-update** can now find releases: the release workflow only ever attached `latest-mac.yml`, so electron-updater on Windows (`latest.yml`) and Linux (`latest-linux.yml` / `latest-linux-arm64.yml`) always reported the channel file missing and fell back to the manual-download banner. Those files, plus the Windows differential `.exe.blockmap`, now ship with every release, making 1.2.1 the first version those platforms can update *from* automatically.
+- **Auto-updater: every failure is explained in plain language, with the action that helps.**
+  - A missing release file, a bad checksum, another HTTP error, being offline, "no published release" and "GitHub isn't responding" (outages, rate limits, proxy or captive-portal pages) each get their own title and copy in all six locales, replacing electron-updater's raw exception text. Actions are consistent across every banner: a copy-icon **Copy Details** button (reason, step and raw error for bug reports), **Retry** (re-runs the step that failed), **Open Release Page** (the browser), and **Download** now means the in-app download only. Actions always fit one row, and a long raw message can no longer overflow the banner.
+  - The automatic startup check is quiet when it merely could not reach GitHub or found no stable release: those failures are logged, and only a user-initiated **Check for Updates** shows them. Download failures always show, since the user asked for the download.
+  - The "You're up to date" toast names the running build and says when it is ahead of the latest release (dev and pre-release builds).
+  - A release without updater metadata combined with an unreachable GitHub API is reported as GitHub trouble instead of "up to date", and a 503 or a proxy page on the manifest URL is no longer mistaken for "the release has no metadata" (it used to produce a "please download manually" banner).
+- **Network Inspector:** base64-encoded bodies that are really text (JSON/XML from HAR exporters, or an unfamiliar MIME tagged binary) now render, copy, search and edit as text instead of a "binary — not previewable" note; genuine binary keeps the note.
+- **Network Session Viewer:** selecting a request no longer scrolls the list back to the top (the list was rebuilt on every click).
+- **Network Inspector Find:** body highlights and ↑/↓ match cycling survive leaving and returning to a matched request (the find bar re-indexes whenever the body re-renders); the Find term is tinted in the Overview URL and headers on both surfaces; the body find bar no longer sits on the Overview/Headers tabs showing "0".
+- **The in-app update download from 1.2.0 failed with a 404.** electron-builder's default artifact name contained spaces (`Roku Dev Studio-1.2.0-arm64-mac.zip`); the manifest recorded it with hyphens while GitHub stored the uploaded asset with periods, so `latest-mac.yml` pointed at a file that did not exist. 1.3.0 uses the space-free artifact name (see *Changed*), so manifest and assets always agree, and `npm run verify:artifact-names` guards it. The updater also HEAD-checks the asset before offering **Download** and falls back to the manual-download banner when it is unreachable. A missing bundled `app-update.yml` (1.1.0 builds were made with `publish: null` and have no update metadata at all) is handled as gracefully as a missing `latest-*.yml`.
+- **Windows and Linux auto-update** can now find releases: the release workflow only ever attached `latest-mac.yml`, so electron-updater on Windows (`latest.yml`) and Linux (`latest-linux.yml` / `latest-linux-arm64.yml`) always reported the channel file missing and fell back to the manual-download banner. Those files, plus the Windows differential `.exe.blockmap`, now ship with every release, making 1.3.0 the first version those platforms can update *from* automatically.
 - Debugger: attaching to a device that already has a healthy session is a no-op instead of a reconnect; continue/step no longer clobber a stop that arrives before the command is acknowledged; session lifecycle hardened against stale sessions and invalid state transitions.
 - The file-drop overlay no longer sticks open after an interrupted or cancelled OS drag, and remote-control shortcuts are suppressed while it is visible.
 - Chromium's benign `ResizeObserver` warnings no longer trigger the crash-report modal (#66).
@@ -59,10 +76,10 @@ tags in [Releases](https://github.com/paramount-engineering/roku-dev-studio/rele
 - Startup: the remembered-devices auto-connect no longer skips itself when some tab is already open by the time the startup scans finish (a Sideload Relay run during startup opened its targets first, and the remaining remembered tabs never came back). Entries in the remembered list that resolve to the same device are connected once.
 - RCE devices: the Device Info panel and Organization row in the device modal no longer go blank ("Device info unavailable.", "N/A") after the first device-state push, which was nulling the device's account name; the name is now stamped at every normalization site.
 - Add Location: adding an RDS Relay location no longer fails with a TypeError once an RCE account exists (the host dedupe skips RCE entries). Adding an RCE account now rejects a PAT that is already stored (no API call) and a different PAT for the same RCE user (compares the `GET /user/me` id, recorded alongside each stored token and backfilled once for older accounts). A rejected PAT now reads "Unauthorized — invalid or missing RCE token." instead of a JSON parse error from the plain-text 401 body.
+- **Auto Connect:** closing a device tab while a scan is still running no longer reconnects it. The closed device is forgotten immediately and stays dismissed for the session, and remembered-list writes are serialized, so a just-removed device can no longer be resurrected by a concurrent auto-connect and come back on the next launch.
 
 ### Security
 - adm-zip updated to 0.6.1 for [CVE-2026-77301](https://github.com/advisories/GHSA-7q85-xj36-vmfc); sharp updated to 0.35.4 (security advisory).
-- Certificate and API-key material (`*.p12`, `*.p8`) is git-ignored so local signing credentials cannot enter the repository.
 
 ## [1.2.0]
 
@@ -98,6 +115,11 @@ tags in [Releases](https://github.com/paramount-engineering/roku-dev-studio/rele
 - Hardened external-open handling, sideload HTTP digest auth, and the remote-server API with optional bearer-token auth.
 - Dependency security updates: esbuild, ws, form-data, adm-zip, electron.
 
+### Known issues (fixed in 1.3.0)
+- **macOS: the in-app update download fails with a 404.** The release's `latest-mac.yml` names `Roku-Dev-Studio-1.2.0-arm64-mac.zip`, but the asset GitHub stored is `Roku.Dev.Studio-1.2.0-arm64-mac.zip`. Update checks succeed; the download cannot. Install 1.3.0 manually once.
+- **Windows and Linux: no update is ever detected.** Only `latest-mac.yml` was published with this release, so `latest.yml` / `latest-linux*.yml` are missing and those builds always show the manual-download banner.
+- **macOS build is unsigned.** The signed, notarized 1.3.0 cannot be installed over it by the in-app updater; download the 1.3.0 `.dmg` once and auto-update works from there.
+
 ## [1.1.0]
 
 ### Added
@@ -114,8 +136,8 @@ tags in [Releases](https://github.com/paramount-engineering/roku-dev-studio/rele
 ### Added
 - Initial public release: Remote Control, Device Discovery, Sideload, RALE / App Connector, Network Inspector, Action Scripts, MCP server for AI agents, and the `rds` CLI.
 
-[Unreleased]: https://github.com/paramount-engineering/roku-dev-studio/compare/v1.2.1...HEAD
-[1.2.1]: https://github.com/paramount-engineering/roku-dev-studio/compare/v1.2.0...v1.2.1
+[Unreleased]: https://github.com/paramount-engineering/roku-dev-studio/compare/v1.3.0...HEAD
+[1.3.0]: https://github.com/paramount-engineering/roku-dev-studio/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/paramount-engineering/roku-dev-studio/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/paramount-engineering/roku-dev-studio/compare/1.0.0...1.1.0
 [1.0.0]: https://github.com/paramount-engineering/roku-dev-studio/releases/tag/1.0.0

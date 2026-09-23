@@ -30,7 +30,7 @@
     "rds": "node packages/roku-dev-studio-api/dist/cli.js",
     "ci:api": "node -e \"require('roku-dev-studio-api'); console.log('roku-dev-studio-api ok')\" && node packages/roku-dev-studio-api/dist/cli.js --help >/dev/null",
     "ci:remote-check": "npm run build -w roku-dev-studio-remote-server && node --check packages/roku-dev-studio-remote-server/roku-remote-server.js",
-    "ci:app-check": "npx tsx apps/roku-dev-studio/scripts/build/index.ts && node --check apps/roku-dev-studio/main.bundled.cjs && npm run verify:artifact-names -w roku-dev-studio && npm run verify:auto-connect-store -w roku-dev-studio && npm run verify:rce-account-prune -w roku-dev-studio",
+    "ci:app-check": "npx tsx apps/roku-dev-studio/scripts/build/index.ts && node --check apps/roku-dev-studio/main.bundled.cjs && npm run verify:artifact-names -w roku-dev-studio && npm run verify:auto-connect-store -w roku-dev-studio && npm run verify:rce-account-prune -w roku-dev-studio && npm run verify:doc-versions -w roku-dev-studio && npm run verify:updater-errors -w roku-dev-studio",
     "typecheck:platform": "npm run typecheck -w roku-dev-studio-platform",
     "typecheck:api": "npm run typecheck -w roku-dev-studio-api",
     "typecheck:mcp": "npm run typecheck -w roku-dev-studio-mcp",
