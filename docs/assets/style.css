@@ -1043,3 +1043,34 @@ img:not(.brand-icon) { cursor: zoom-in; }
   font-size: 0.88em;
 }
 .tool-card-foot a { font-weight: 700; white-space: nowrap; }
+
+/* Tool reference (mcp-tools.html): icon-only copy buttons (tool name in the header row, the
+   Example block, the MCP definition bar) and related-tool links. */
+.tool-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  vertical-align: middle;
+}
+.tool-icon-btn:hover { color: var(--accent-purple); background: var(--accent-purple-dim); }
+.tool-icon-btn:focus-visible { outline: 2px solid var(--accent-purple); outline-offset: 1px; }
+.tool-icon-btn .icon { display: block; }
+.tool-icon-btn .icon-check { display: none; color: var(--accent-green, #10b981); }
+.tool-icon-btn.is-copied .icon-copy { display: none; }
+.tool-icon-btn.is-copied .icon-check { display: block; }
+.tool-item > summary .tool-icon-btn { margin-left: -4px; }
+.tool-example { position: relative; }
+.tool-example pre { margin: 0; padding-right: 48px; }
+.tool-example .tool-icon-btn { position: absolute; top: 8px; right: 8px; }
+.tool-raw > summary .tool-icon-btn { margin-left: auto; }
+.tool-related { margin: 6px 0 0; display: flex; gap: 8px; flex-wrap: wrap; }
+.tool-related a { text-decoration: none; }
+.tool-related a:hover code { color: var(--accent-purple); border-color: var(--accent-purple); }

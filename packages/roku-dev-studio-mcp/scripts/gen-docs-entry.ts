@@ -12,6 +12,11 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { TOOLS, TOOL_CATEGORIES, TOOL_CATEGORY_GROUPS } from '../src/tools.js';
+import { TOOL_EXAMPLES } from '../src/tool-examples.js';
+
+const fail = (msg: string): never => {
+  throw new Error(`[gen-docs] ${msg}`);
+};
 
 // Fail loudly rather than emit an "Other" bucket: TOOL_CATEGORY_GROUPS is hand-keyed by name,
 // so a new tool nobody categorized (or a renamed one left behind) must break this build.
@@ -22,11 +27,64 @@ import { TOOLS, TOOL_CATEGORIES, TOOL_CATEGORY_GROUPS } from '../src/tools.js';
     .flat()
     .filter((n) => !realNames.has(n));
   if (uncategorized.length || stale.length) {
-    throw new Error(
-      `[gen-docs] TOOL_CATEGORY_GROUPS drifted from TOOLS — uncategorized: [${uncategorized.join(', ')}], ` +
-        `stale: [${stale.join(', ')}]`
-    );
+    fail(`TOOL_CATEGORY_GROUPS drifted from TOOLS — uncategorized: [${uncategorized.join(', ')}], stale: [${stale.join(', ')}]`);
   }
+}
+
+// Every tool must spell out all four MCP annotation hints. A missing `destructiveHint` is not
+// "unknown" to a client — the spec default is `true` — while the docs page only shows a badge for
+// an explicit value, so a partial object silently tells humans and agents different things.
+{
+  const HINTS = ['readOnlyHint', 'destructiveHint', 'idempotentHint', 'openWorldHint'] as const;
+  const partial = TOOLS.filter((t) => HINTS.some((h) => typeof t.annotations?.[h] !== 'boolean')).map((t) => t.name);
+  if (partial.length) fail(`tools with incomplete annotations (all four hints required): ${partial.join(', ')}`);
+}
+
+// Every tool needs a hand-authored example (src/tool-examples.ts) that is valid against its input
+// schema: known keys only, every required key, exactly one `oneOf` branch, enum members, and the
+// right primitive type. `{}` is only acceptable for a tool with no parameters at all.
+type Prop = { type?: string | string[]; enum?: unknown[] };
+function jsType(v: unknown): string {
+  if (Array.isArray(v)) return 'array';
+  if (v === null) return 'null';
+  return typeof v === 'number' && Number.isInteger(v) ? 'integer' : typeof v;
+}
+function typeMatches(declared: string | string[] | undefined, v: unknown): boolean {
+  if (!declared) return true;
+  const allowed = Array.isArray(declared) ? declared : [declared];
+  const actual = jsType(v);
+  return allowed.some((t) => t === actual || (t === 'number' && actual === 'integer'));
+}
+{
+  const problems: string[] = [];
+  const realNames = new Set(TOOLS.map((t) => t.name));
+  for (const name of Object.keys(TOOL_EXAMPLES)) if (!realNames.has(name)) problems.push(`${name}: example for a tool that no longer exists`);
+  for (const t of TOOLS) {
+    const example = TOOL_EXAMPLES[t.name];
+    const schema = t.inputSchema as { properties?: Record<string, Prop>; required?: string[]; oneOf?: Array<{ required: string[] }> };
+    const props = schema.properties ?? {};
+    if (!example) {
+      problems.push(`${t.name}: no example`);
+      continue;
+    }
+    const keys = Object.keys(example);
+    if (keys.length === 0 && Object.keys(props).length > 0) problems.push(`${t.name}: example is {} but the tool has parameters`);
+    for (const k of keys) {
+      if (!(k in props)) {
+        problems.push(`${t.name}: example key "${k}" is not a parameter`);
+        continue;
+      }
+      const p = props[k];
+      if (p.enum && !p.enum.includes(example[k])) problems.push(`${t.name}.${k}: ${JSON.stringify(example[k])} is not one of ${JSON.stringify(p.enum)}`);
+      else if (!typeMatches(p.type, example[k])) problems.push(`${t.name}.${k}: expected ${JSON.stringify(p.type)}, got ${jsType(example[k])}`);
+    }
+    for (const r of schema.required ?? []) if (!(r in example)) problems.push(`${t.name}: required "${r}" missing from example`);
+    if (schema.oneOf) {
+      const satisfied = schema.oneOf.filter((b) => b.required.every((r) => r in example)).length;
+      if (satisfied !== 1) problems.push(`${t.name}: example must satisfy exactly one oneOf branch (satisfies ${satisfied})`);
+    }
+  }
+  if (problems.length) fail(`tool examples invalid:\n  - ${problems.join('\n  - ')}`);
 }
 
 // Every Tool (bespoke or op-backed) now carries its own `outputSchema` directly — op-backed
@@ -44,6 +102,7 @@ const tools = TOOLS.map((t) => ({
   title: t.title ?? null,
   description: t.description,
   category: TOOL_CATEGORIES[t.name],
+  example: TOOL_EXAMPLES[t.name],
   inputSchema: t.inputSchema,
   outputSchema: t.outputSchema ?? null,
   annotations: t.annotations ?? null

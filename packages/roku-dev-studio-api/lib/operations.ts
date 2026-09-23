@@ -157,6 +157,12 @@ interface JsonSchemaObject {
   type: 'object';
   properties?: Record<string, JsonSchemaProperty>;
   required?: string[];
+  /**
+   * Conditional requirement for mutually exclusive inputs (sideload: `filePath` XOR
+   * `contentBase64`), which a flat `required` list cannot express. Each branch names the
+   * field(s) that branch requires. Passed through to the MCP tool definition and the docs.
+   */
+  oneOf?: Array<{ required: string[] }>;
   additionalProperties?: boolean;
 }
 
@@ -199,6 +205,13 @@ interface RokuOp<P extends Record<string, unknown> = Record<string, unknown>, R 
    * read-only and confuses agents/hosts about side effects).
    */
   readOnly: boolean;
+  /**
+   * Repeating the call with the same input leaves the same end state (a connect that is a no-op
+   * when already connected, a delete that still ends with nothing installed, a screenshot that just
+   * returns the current frame). Drives MCP `idempotentHint`; defaults to `readOnly` (reads are
+   * inherently idempotent) so mutating ops must opt in explicitly.
+   */
+  idempotent?: boolean;
   /** JSON Schema describing the input object. Used by MCP tool definitions. */
   inputSchema: JsonSchemaObject;
   /**
@@ -667,6 +680,9 @@ const SIDELOAD: RokuOp<
       }
     },
     required: ['ip'],
+    // Exactly one payload form — the handler enforces it at runtime; declaring it here lets agents
+    // (and the docs page's example/required column) see the requirement instead of an all-optional input.
+    oneOf: [{ required: ['filePath'] }, { required: ['contentBase64'] }],
     additionalProperties: false
   },
   readOnly: false,
@@ -793,6 +809,7 @@ const DELETE_SIDELOAD: RokuOp<{ ip: string; password?: string }, unknown> = {
   runIn: 'main',
   destructive: true,
   readOnly: false,
+  idempotent: true,
   inputSchema: {
     type: 'object',
     properties: {
@@ -837,11 +854,13 @@ const SCREENSHOT: RokuOp<
     'Password is optional when Dev Studio has remembered it for this device.'
   ],
   runIn: 'main',
-  // destructive:true is conservative — capturing triggers a device-side write
-  // of dev.jpg — but it takes no user-visible action; readOnly stays false to
-  // match, and the op is idempotent (re-capturing just returns the new frame).
-  destructive: true,
+  // Mutating but not destructive: capturing makes the device write a dev.jpg (an additive
+  // temp file), so readOnly stays false — but nothing is removed or overwritten, which is
+  // what `destructiveHint` means in MCP. Same axis as keypress / launch_app, and unlike
+  // sideload / delete_sideload. Re-capturing just returns the new frame.
+  destructive: false,
   readOnly: false,
+  idempotent: true,
   inputSchema: {
     type: 'object',
     properties: {
@@ -1006,6 +1025,7 @@ const APP_CONNECTOR_CONNECT: RokuOp<{ device?: string }, unknown> = {
   runIn: 'renderer',
   destructive: false,
   readOnly: false,
+  idempotent: true,
   inputSchema: {
     type: 'object',
     properties: {
@@ -1028,6 +1048,7 @@ const APP_CONNECTOR_DISCONNECT: RokuOp<{ device?: string }, unknown> = {
   runIn: 'renderer',
   destructive: false,
   readOnly: false,
+  idempotent: true,
   inputSchema: {
     type: 'object',
     properties: {
@@ -1136,6 +1157,7 @@ const TELNET_CONNECT: RokuOp<{ device?: string }, unknown> = {
   runIn: 'renderer',
   destructive: false,
   readOnly: false,
+  idempotent: true,
   inputSchema: {
     type: 'object',
     properties: { device: { type: 'string', description: 'Optional target device (IP or serial). Omit to use the focused tab.' } },
@@ -1165,6 +1187,7 @@ const TELNET_DISCONNECT: RokuOp<{ device?: string }, unknown> = {
   runIn: 'renderer',
   destructive: false,
   readOnly: false,
+  idempotent: true,
   inputSchema: {
     type: 'object',
     properties: { device: { type: 'string', description: 'Optional target device (IP or serial). Omit to use the focused tab.' } },

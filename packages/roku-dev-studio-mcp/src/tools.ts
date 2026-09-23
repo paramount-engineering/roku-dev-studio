@@ -56,6 +56,8 @@ type RokuOpDescriptor = {
    * `idempotentHint` — do NOT fall back to `!destructive` here.
    */
   readOnly: boolean;
+  /** Mutating ops that leave the same end state on repeat opt in here; drives `idempotentHint`. */
+  idempotent?: boolean;
   inputSchema: ToolInputSchema;
   /**
    * Each op declares the JSON-Schema shape of its 2xx response body.
@@ -81,6 +83,8 @@ export type ToolInputSchema = {
   type: 'object';
   properties?: Record<string, unknown>;
   required?: string[];
+  /** Mutually exclusive inputs: each branch lists what it requires (see JsonSchemaObject in operations.ts). */
+  oneOf?: Array<{ required: string[] }>;
   additionalProperties?: boolean;
 };
 
@@ -261,6 +265,7 @@ function agentFacingSchema(schema: ToolInputSchema): ToolInputSchema {
     type: 'object',
     properties: props,
     ...(required.length > 0 ? { required } : {}),
+    ...(schema.oneOf ? { oneOf: schema.oneOf } : {}),
     additionalProperties: schema.additionalProperties ?? false
   };
 }
@@ -276,12 +281,12 @@ function opToMcpTool(op: RokuOpDescriptor): Tool {
   // input_text, deep_link) is `readOnly: false, destructive: false` — deriving
   // the hint from `!destructive` would mislabel it read-only and contradict its
   // description. Per MCP semantics `destructiveHint`/`idempotentHint` are only
-  // meaningful when `readOnlyHint` is false; reads are inherently idempotent,
-  // and for writes we don't claim idempotency here (safe under-claim).
+  // meaningful when `readOnlyHint` is false; reads are inherently idempotent, and a
+  // mutating op only claims it via its explicit `idempotent` axis (see RokuOp).
   const annotations: ToolAnnotations = {
     readOnlyHint: op.readOnly,
     destructiveHint: op.destructive,
-    idempotentHint: op.readOnly,
+    idempotentHint: op.idempotent ?? op.readOnly,
     openWorldHint: true
   };
   return {
@@ -690,7 +695,7 @@ const NETWORK_INSPECTOR_TOOLS: Tool[] = [
       required: ['status', 'ready'],
       additionalProperties: false
     },
-    annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     handler: async () => networkInspectorStatusTool()
   },
   {
@@ -735,7 +740,7 @@ const NETWORK_INSPECTOR_TOOLS: Tool[] = [
       required: ['events', 'count', 'deviceIp'],
       additionalProperties: false
     },
-    annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     handler: async (args) => networkInspectorListEventsTool(args)
   },
   {
@@ -766,7 +771,7 @@ const NETWORK_INSPECTOR_TOOLS: Tool[] = [
       required: ['event', 'warnings'],
       additionalProperties: false
     },
-    annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     handler: async (args) => networkInspectorGetEventDetailTool(args)
   },
   {
@@ -853,7 +858,7 @@ const NETWORK_INSPECTOR_TOOLS: Tool[] = [
       required: ['analysis', 'deviceIp'],
       additionalProperties: false
     },
-    annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     handler: async (args) => networkInspectorAnalyzeTool(args)
   },
   {
@@ -915,7 +920,7 @@ const NETWORK_INSPECTOR_TOOLS: Tool[] = [
       required: ['matches', 'count', 'deviceIp'],
       additionalProperties: false
     },
-    annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     handler: async (args) => networkInspectorFindTool(args)
   },
   {
@@ -948,7 +953,7 @@ const NETWORK_INSPECTOR_TOOLS: Tool[] = [
       required: ['caInfo', 'mitmEnabled', 'mitmActive'],
       additionalProperties: false
     },
-    annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     handler: async () => networkInspectorGetCaInfoTool()
   }
 ];
@@ -1041,7 +1046,7 @@ const DEBUGGER_TOOLS: Tool[] = [
       required: ['ip', 'state', 'attached'],
       additionalProperties: false
     },
-    annotations: { readOnlyHint: false, idempotentHint: true, openWorldHint: true },
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     handler: async (args) => debuggerCall('attach', 'debugger_attach', args)
   },
   {
@@ -1059,7 +1064,7 @@ const DEBUGGER_TOOLS: Tool[] = [
       required: ['ip', 'detached'],
       additionalProperties: false
     },
-    annotations: { readOnlyHint: false, idempotentHint: true, openWorldHint: true },
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     handler: async (args) => debuggerCall('detach', 'debugger_detach', args)
   },
   {
@@ -1081,7 +1086,7 @@ const DEBUGGER_TOOLS: Tool[] = [
       required: ['ip', 'state'],
       additionalProperties: false
     },
-    annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     handler: async (args) => debuggerCall('status', 'debugger_status', args)
   },
   {
@@ -1120,7 +1125,7 @@ const DEBUGGER_TOOLS: Tool[] = [
       required: ['stopped', 'state'],
       additionalProperties: false
     },
-    annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     handler: async (args) => debuggerCall('wait-for-stop', 'debugger_wait_for_stop', args)
   },
   {
@@ -1138,7 +1143,7 @@ const DEBUGGER_TOOLS: Tool[] = [
       required: ['ip', 'state'],
       additionalProperties: false
     },
-    annotations: { readOnlyHint: false, idempotentHint: false, openWorldHint: true },
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
     handler: async (args) => debuggerCall('continue', 'debugger_continue', args)
   },
   {
@@ -1156,7 +1161,7 @@ const DEBUGGER_TOOLS: Tool[] = [
       required: ['ip', 'requested'],
       additionalProperties: false
     },
-    annotations: { readOnlyHint: false, idempotentHint: false, openWorldHint: true },
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
     handler: async (args) => debuggerCall('pause', 'debugger_pause', args)
   },
   {
@@ -1183,7 +1188,7 @@ const DEBUGGER_TOOLS: Tool[] = [
       required: ['ip', 'stepped'],
       additionalProperties: false
     },
-    annotations: { readOnlyHint: false, idempotentHint: false, openWorldHint: true },
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
     handler: async (args) => debuggerCall('step', 'debugger_step', args)
   },
   {
@@ -1211,7 +1216,7 @@ const DEBUGGER_TOOLS: Tool[] = [
       required: ['frames'],
       additionalProperties: false
     },
-    annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     handler: async (args) => debuggerCall('callstack', 'debugger_get_callstack', args)
   },
   {
@@ -1249,7 +1254,7 @@ const DEBUGGER_TOOLS: Tool[] = [
       required: ['variables'],
       additionalProperties: false
     },
-    annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     handler: async (args) => debuggerCall('variables', 'debugger_get_variables', args)
   },
   {
@@ -1302,7 +1307,7 @@ const DEBUGGER_TOOLS: Tool[] = [
       },
       additionalProperties: false
     },
-    annotations: { readOnlyHint: false, idempotentHint: false, openWorldHint: true },
+    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },
     handler: async (args) => debuggerCall('evaluate', 'debugger_evaluate', args)
   },
   {
@@ -1348,7 +1353,7 @@ const DEBUGGER_TOOLS: Tool[] = [
       required: ['breakpoints'],
       additionalProperties: false
     },
-    annotations: { readOnlyHint: false, idempotentHint: true, openWorldHint: true },
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     handler: async (args) => debuggerCall('set-breakpoints', 'debugger_set_breakpoints', args)
   },
   {
@@ -1387,7 +1392,7 @@ const DEBUGGER_TOOLS: Tool[] = [
       required: ['removed'],
       additionalProperties: false
     },
-    annotations: { readOnlyHint: false, idempotentHint: true, openWorldHint: true },
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     handler: async (args) => debuggerCall('remove-breakpoints', 'debugger_remove_breakpoints', args)
   },
   {
@@ -1422,7 +1427,7 @@ const DEBUGGER_TOOLS: Tool[] = [
       required: ['breakpoints'],
       additionalProperties: false
     },
-    annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     handler: async (args) => debuggerCall('list-breakpoints', 'debugger_list_breakpoints', args)
   }
 ];
@@ -1480,7 +1485,7 @@ const DISCOVERY_TOOLS: Tool[] = [
       required: ['scriptVersions', 'actions'],
       additionalProperties: false
     },
-    annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     handler: async () => listActionTypes()
   },
   {
@@ -1516,7 +1521,7 @@ const DISCOVERY_TOOLS: Tool[] = [
       required: ['type', 'label', 'description', 'required', 'optional'],
       additionalProperties: false
     },
-    annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     handler: async (args) => getActionSchema(args)
   },
   {
@@ -1562,7 +1567,7 @@ const DISCOVERY_TOOLS: Tool[] = [
       ],
       additionalProperties: false
     },
-    annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     handler: async () => getCapabilityBundle()
   },
   {
@@ -1613,7 +1618,7 @@ const DISCOVERY_TOOLS: Tool[] = [
       required: ['ok', 'errors', 'stepCounts', 'humanSummary', 'referenceTools'],
       additionalProperties: false
     },
-    annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     handler: async (args) => validateScriptTool(args)
   }
 ];
@@ -1639,7 +1644,7 @@ const BRIDGE_TOOLS: Tool[] = [
       required: ['live'],
       additionalProperties: false
     },
-    annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     handler: async () => probeBridge()
   },
   {
@@ -1656,7 +1661,7 @@ const BRIDGE_TOOLS: Tool[] = [
       properties: { ...DEVICE_SNAPSHOT_PROPERTIES, observedAt: { type: 'string' } },
       additionalProperties: false
     },
-    annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     handler: async () => getSelectedDevice()
   },
   {
@@ -1685,7 +1690,7 @@ const BRIDGE_TOOLS: Tool[] = [
       required: ['devices'],
       additionalProperties: false
     },
-    annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     handler: async () => listDevices()
   },
   {
@@ -1722,7 +1727,7 @@ const BRIDGE_TOOLS: Tool[] = [
       required: ['already'],
       additionalProperties: false
     },
-    annotations: { readOnlyHint: false, idempotentHint: true, openWorldHint: true },
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     handler: async (args) => connectDeviceTool(args)
   },
   {
@@ -1777,7 +1782,7 @@ const BRIDGE_TOOLS: Tool[] = [
       required: ['status', 'functions'],
       additionalProperties: false
     },
-    annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     handler: async (args) => listAppConnectorFunctions(args)
   },
   {
@@ -1808,7 +1813,7 @@ const BRIDGE_TOOLS: Tool[] = [
     // rale_command's own outputSchema in operations.ts — this stays a permissive object rather
     // than pretending to enumerate every possible node shape.
     outputSchema: { type: 'object', additionalProperties: true },
-    annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     handler: async (args) => raleGetNodeByIdTool(args)
   },
   {
@@ -1848,7 +1853,7 @@ const BRIDGE_TOOLS: Tool[] = [
       required: ['delivered', 'note', 'bridge', 'inputReminder'],
       additionalProperties: false
     },
-    annotations: { readOnlyHint: false, idempotentHint: true, openWorldHint: true },
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     handler: async (args) => sendScriptToBuilder(args)
   }
 ];

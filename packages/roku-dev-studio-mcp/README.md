@@ -164,7 +164,7 @@ Every tool ships with `annotations` so hosts can make safe-by-default UI decisio
 | `idempotentHint: true` | Same args produce the same result. |
 | `openWorldHint: true` | Touches an external device or the network. |
 
-For op-backed tools `readOnlyHint` and `idempotentHint` come from the op's `readOnly` axis and `destructiveHint` from its `destructive` flag (`openWorldHint` is always true). For bespoke tools they're set inline in `tools.ts`.
+For op-backed tools `readOnlyHint` comes from the op's `readOnly` axis, `destructiveHint` from its `destructive` flag, and `idempotentHint` from its explicit `idempotent` axis (falling back to `readOnly`, since reads are inherently idempotent — a mutating op such as `telnet_connect` or `delete_sideload` opts in) (`openWorldHint` is always true). For bespoke tools they're set inline in `tools.ts`.
 
 ## Resources
 

@@ -57,6 +57,12 @@
     var props = schema.properties && typeof schema.properties === 'object' ? schema.properties : null;
     if (!props) return;
     var required = Array.isArray(schema.required) ? schema.required : [];
+    // `oneOf: [{required:[a]},{required:[b]}]` = exactly one of a/b must be present (sideload's
+    // filePath vs contentBase64). Such fields are neither plainly required nor optional — the
+    // Required column marks them "one of" and names the group.
+    var oneOfGroup = Array.isArray(schema.oneOf)
+      ? schema.oneOf.reduce(function (acc, branch) { return acc.concat(Array.isArray(branch.required) ? branch.required : []); }, [])
+      : [];
     Object.keys(props).forEach(function (key) {
       var p = props[key] || {};
       var path = prefix + key;
@@ -66,6 +72,7 @@
         type: describeType(p),
         enumValues: Array.isArray(p.enum) ? p.enum : null,
         required: required.indexOf(key) !== -1,
+        oneOf: oneOfGroup.indexOf(key) !== -1 ? oneOfGroup : null,
         description: p.description || ''
       });
       if (hasType(p.type, 'object') && p.properties) {
@@ -74,6 +81,15 @@
         collectSchemaRows(p.items, path + '[].', depth + 1, out);
       }
     });
+  }
+
+  function requiredCell(row) {
+    if (row.required) return '<span class="req-icon req-yes" title="Required" aria-label="Required">&#10003;</span>';
+    if (row.oneOf) {
+      var label = 'Required — exactly one of: ' + row.oneOf.join(', ');
+      return '<span class="req-icon req-one" title="' + escapeHtml(label) + '" aria-label="' + escapeHtml(label) + '">&#10003;<sup>1</sup></span>';
+    }
+    return '<span class="req-icon req-no" title="Optional" aria-label="Optional">&#8211;</span>';
   }
 
   function schemaTable(schema, emptyMessage) {
@@ -90,9 +106,7 @@
           '<tr>' +
           '<td' + indent + '><code>' + escapeHtml(row.path) + '</code></td>' +
           '<td>' + typeHtml + '</td>' +
-          '<td>' + (row.required
-            ? '<span class="req-icon req-yes" title="Required" aria-label="Required">&#10003;</span>'
-            : '<span class="req-icon req-no" title="Optional" aria-label="Optional">&#8211;</span>') + '</td>' +
+          '<td>' + requiredCell(row) + '</td>' +
           '<td>' + renderInlineMarkdown(row.description) + '</td>' +
           '</tr>'
         );
@@ -135,53 +149,144 @@
     });
   }
 
-  // Tool.description is authored as a single string or an array of discrete points (see the
-  // Tool type in tools.ts) — render points as a bullet list; a plain string stays one paragraph.
-  function descriptionHtml(description) {
-    if (Array.isArray(description)) {
-      return '<ul class="tool-description-points">' + description.map(function (point) { return '<li>' + renderInlineMarkdown(point) + '</li>'; }).join('') + '</ul>';
-    }
-    return '<p>' + renderInlineMarkdown(description) + '</p>';
+  // Tool.description is an array of discrete points (see the Tool type in tools.ts). Points that
+  // read as guidance — when to reach for the tool, what to prefer or avoid, ordering ("Call this
+  // after…") — are pulled out under their own "When to use" heading; the rest stay as the
+  // description. A plain heuristic on the leading words: the source text is unchanged, this only
+  // decides which of the two lists a point is shown in.
+  var WHEN_TO_USE_RE = /^(Use |Prefer |Call |Only |Do (not|NOT)\b|Don['’]t |Avoid |Never |Always |Start with|Requires |Idempotent)/i;
+  function splitDescription(description) {
+    var points = Array.isArray(description) ? description : [description || ''];
+    var when = [], rest = [];
+    points.forEach(function (p) { (WHEN_TO_USE_RE.test(p) ? when : rest).push(p); });
+    return { description: rest, whenToUse: when };
+  }
+
+  function pointsHtml(points, className) {
+    return '<ul class="' + className + '">' + points.map(function (point) { return '<li>' + renderInlineMarkdown(point) + '</li>'; }).join('') + '</ul>';
   }
 
   function descriptionSearchText(description) {
     return (Array.isArray(description) ? description.join(' ') : description || '').toLowerCase();
   }
 
-  function toolCard(tool) {
-    var titleText = tool.title ? escapeHtml(tool.title) : '';
+  // "Related tools" = every other tool this one's description names. Derived from the prose the
+  // authors already write ("run list_devices first", "prefer rale_get_node_by_id") — nothing to
+  // maintain by hand, and a wrong link is impossible: only real catalog names match.
+  var allToolNames = [];
+  function relatedTools(tool) {
+    var text = descriptionSearchText(tool.description);
+    return allToolNames.filter(function (n) {
+      return n !== tool.name && new RegExp('(^|[^a-z0-9_])' + n + '($|[^a-z0-9_])').test(text);
+    });
+  }
+
+  // The call example is authored per tool in the MCP package (src/tool-examples.ts) and shipped in
+  // the JSON as `example`; the generator validates it against the schema. The derivation below is
+  // only a fallback for a JSON produced by an older generator: required parameters (plus the first
+  // `oneOf` branch) with a value that type-checks.
+  function exampleValue(schema) {
+    if (!schema) return null;
+    if (Array.isArray(schema.enum) && schema.enum.length) return schema.enum[0];
+    var t = Array.isArray(schema.type) ? schema.type[0] : schema.type;
+    if (t === 'string') return '';
+    if (t === 'number' || t === 'integer') return 0;
+    if (t === 'boolean') return false;
+    if (t === 'array') return [];
+    if (t === 'object') return {};
+    return null;
+  }
+  function exampleCall(tool) {
+    if (tool.example && typeof tool.example === "object") return tool.name + "(" + JSON.stringify(tool.example, null, 2) + ")";
+    var schema = tool.inputSchema || {};
+    var props = schema.properties || {};
+    var firstBranch = Array.isArray(schema.oneOf) && schema.oneOf[0] && Array.isArray(schema.oneOf[0].required) ? schema.oneOf[0].required : [];
+    var args = {};
+    (Array.isArray(schema.required) ? schema.required : []).concat(firstBranch).forEach(function (key) {
+      args[key] = exampleValue(props[key]);
+    });
+    return tool.name + '(' + JSON.stringify(args, null, 2) + ')';
+  }
+
+  // The tool exactly as the MCP server declares it — Swagger's "definition" view. `description`
+  // is the raw authored points, `outputSchema` is docs/validation-only (never on the wire).
+  function mcpDefinition(tool) {
+    return {
+      name: tool.name,
+      title: tool.title,
+      description: tool.description,
+      inputSchema: tool.inputSchema,
+      outputSchema: tool.outputSchema,
+      annotations: tool.annotations
+    };
+  }
+
+  // Icon-only copy button. Shows the copy glyph; `.is-copied` (set for a moment after a click)
+  // swaps it for the check. Sits inside <summary> elements too — the click handler below stops
+  // the event so the disclosure doesn't toggle.
+  function copyButton(label, payload) {
     return (
-      '<details class="tool-item" data-name="' + escapeHtml(tool.name.toLowerCase()) + '" data-desc="' +
-      escapeHtml(descriptionSearchText(tool.description)) + '" data-readonly="' + (tool.annotations && tool.annotations.readOnlyHint ? '1' : '0') + '">' +
-      '<summary><code>' + escapeHtml(tool.name) + '</code> <span class="tool-title">' + titleText + '</span>' +
-      '<span class="tool-badges">' + annotationBadges(tool.annotations) + '</span></summary>' +
+      '<button type="button" class="tool-icon-btn tool-copy" data-copy="' + escapeHtml(payload) + '" title="' + label + '" aria-label="' + label + '">' +
+      '<svg class="icon icon-copy" width="14" height="14" aria-hidden="true"><use href="assets/icons.svg#icon-copy"></use></svg>' +
+      '<svg class="icon icon-check" width="14" height="14" aria-hidden="true"><use href="assets/icons.svg#icon-check"></use></svg>' +
+      '</button>'
+    );
+  }
+
+  function toolCard(tool) {
+    var a = tool.annotations || {};
+    var titleText = tool.title ? escapeHtml(tool.title) : '';
+    var parts = splitDescription(tool.description);
+    var related = relatedTools(tool);
+    var example = exampleCall(tool);
+    var definition = JSON.stringify(mcpDefinition(tool), null, 2);
+    return (
+      '<details class="tool-item" id="tool-' + escapeHtml(tool.name) + '" data-name="' + escapeHtml(tool.name.toLowerCase()) + '" data-desc="' +
+      escapeHtml(descriptionSearchText(tool.description)) + '" data-readonly="' + (a.readOnlyHint ? '1' : '0') +
+      '" data-destructive="' + (a.destructiveHint ? '1' : '0') + '" data-idempotent="' + (a.idempotentHint ? '1' : '0') + '">' +
+      '<summary><code>' + escapeHtml(tool.name) + '</code>' + copyButton('Copy tool name', tool.name) + ' <span class="tool-title">' + titleText + '</span>' +
+      '<span class="tool-badges">' + annotationBadges(a) + '</span></summary>' +
       '<div class="tool-item-body">' +
-      descriptionHtml(tool.description) +
+      (parts.description.length ? pointsHtml(parts.description, 'tool-description-points') : '') +
+      (parts.whenToUse.length ? '<h4>When to use</h4>' + pointsHtml(parts.whenToUse, 'tool-description-points') : '') +
+      '<h4>Example</h4><div class="tool-example"><pre><code>' + escapeHtml(example) + '</code></pre>' + copyButton('Copy example', example) + '</div>' +
       '<h4>Input</h4>' +
       schemaTable(tool.inputSchema, 'No parameters.') +
       '<h4>Response</h4>' +
       (tool.outputSchema
-        ? schemaTable(tool.outputSchema, 'Declared as a permissive object — see the raw schema below.')
+        ? schemaTable(tool.outputSchema, 'Declared as a permissive object — see the MCP definition below.')
         : '<p class="tool-schema-note">No declared response schema — this tool returns unstructured text/JSON content.</p>') +
-      '<details class="tool-raw"><summary>Raw JSON schema</summary><pre><code>' +
-      escapeHtml(JSON.stringify({ inputSchema: tool.inputSchema, outputSchema: tool.outputSchema }, null, 2)) +
+      (related.length
+        ? '<h4>Related tools</h4><p class="tool-related">' + related.map(function (n) {
+            return '<a href="#tool-' + escapeHtml(n) + '"><code>' + escapeHtml(n) + '</code></a>';
+          }).join(' ') + '</p>'
+        : '') +
+      '<details class="tool-raw"><summary>MCP definition' + copyButton('Copy JSON', definition) + '</summary><pre><code>' +
+      escapeHtml(definition) +
       '</code></pre></details>' +
       '</div>' +
       '</details>'
     );
   }
 
+  var FILTERS = {
+    all: function () { return true; },
+    readonly: function (d) { return d.readonly === '1'; },
+    mutating: function (d) { return d.readonly === '0'; },
+    destructive: function (d) { return d.destructive === '1'; },
+    idempotent: function (d) { return d.idempotent === '1'; }
+  };
+
   function applyFilter() {
     var query = (searchEl.value || '').trim().toLowerCase();
     var activeChip = filtersEl.querySelector('.chip.active');
-    var mode = activeChip ? activeChip.dataset.filter : 'all';
+    var matchesMode = FILTERS[activeChip ? activeChip.dataset.filter : 'all'] || FILTERS.all;
     var visibleCount = 0;
     listEl.querySelectorAll('.tool-group').forEach(function (group) {
       var groupVisible = 0;
       group.querySelectorAll('.tool-item').forEach(function (item) {
         var matchesQuery = !query || item.dataset.name.indexOf(query) !== -1 || item.dataset.desc.indexOf(query) !== -1;
-        var matchesMode = mode === 'all' || (mode === 'readonly' && item.dataset.readonly === '1') || (mode === 'mutating' && item.dataset.readonly === '0');
-        var visible = matchesQuery && matchesMode;
+        var visible = matchesQuery && matchesMode(item.dataset);
         item.hidden = !visible;
         if (visible) groupVisible++;
       });
@@ -196,7 +301,9 @@
     var chips = [
       { key: 'all', label: 'All' },
       { key: 'readonly', label: 'Read-only' },
-      { key: 'mutating', label: 'Mutating' }
+      { key: 'mutating', label: 'Mutating' },
+      { key: 'destructive', label: 'Destructive' },
+      { key: 'idempotent', label: 'Idempotent' }
     ];
     filtersEl.innerHTML = chips
       .map(function (c, i) {
@@ -212,15 +319,49 @@
     });
   }
 
+  // Copy buttons: one delegated listener. Stop the event so a button inside a <summary> copies
+  // without toggling the disclosure; the glyph flips to a check for a moment as confirmation.
+  listEl.addEventListener('click', function (e) {
+    var btn = e.target.closest('.tool-copy');
+    if (!btn) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (!navigator.clipboard) return;
+    navigator.clipboard.writeText(btn.dataset.copy).then(function () {
+      btn.classList.add('is-copied');
+      setTimeout(function () { btn.classList.remove('is-copied'); }, 1200);
+    });
+  });
+
+  // #tool-<name> deep links (Related tools, or a shared URL): open that tool and scroll to it.
+  // #cat-<group> (mcp.html's intro card) just scrolls.
+  function revealHash() {
+    if (!location.hash) return;
+    var target = document.getElementById(location.hash.slice(1));
+    if (!target) return;
+    if (target.classList.contains('tool-item')) {
+      target.hidden = false;
+      target.open = true;
+    }
+    target.scrollIntoView({ block: 'start' });
+  }
+
+  function generatedLabel(iso) {
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return '';
+    return ' · generated ' + d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+  }
+
   fetch('mcp-tools.json')
     .then(function (res) {
       if (!res.ok) throw new Error('HTTP ' + res.status);
       return res.json();
     })
     .then(function (data) {
-      leadEl.textContent =
-        data.count + ' tools, reference documentation generated straight from the MCP Tools package.';
-      listEl.innerHTML = groupByCategory(data.tools, data.categories || [])
+      allToolNames = data.tools.map(function (t) { return t.name; });
+      var groups = groupByCategory(data.tools, data.categories || []);
+      leadEl.textContent = data.count + ' tools · ' + groups.length + ' categories' + generatedLabel(data.generatedAt) + ' — straight from the MCP Tools package.';
+      listEl.innerHTML = groups
         .map(function (group) {
           return (
             '<section class="tool-group" id="cat-' + slug(group.category) + '">' +
@@ -233,8 +374,8 @@
       renderChips();
       searchEl.addEventListener('input', applyFilter);
       applyFilter();
-      // mcp.html's intro card links to #cat-<group>; the groups only exist after this render.
-      if (location.hash) { var target = document.getElementById(location.hash.slice(1)); if (target) target.scrollIntoView(); }
+      revealHash();
+      window.addEventListener('hashchange', revealHash);
     })
     .catch(function (err) {
       leadEl.textContent = 'Could not load the tool catalog (' + err.message + ').';
