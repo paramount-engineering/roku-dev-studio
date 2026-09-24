@@ -1651,7 +1651,7 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
       const result = await rokuApi.sideloadChannel({ ip, filePath, password });
       notifyAgentAction({
         level: 'destructive',
-        summary: `AI agent sideloaded "${filePath.split('/').pop()}" on ${deviceLabel(ip)}`
+        summary: `AI agent sideloaded "${path.basename(filePath)}" on ${deviceLabel(ip)}`
       });
       sendJson(res, result.success ? 200 : 502, { ip, filePath, ...result });
     } catch (e) {

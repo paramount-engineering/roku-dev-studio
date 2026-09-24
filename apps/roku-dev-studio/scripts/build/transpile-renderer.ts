@@ -395,7 +395,12 @@ function rewriteSharedAlias(rendererDist: string): void {
   for (const file of walkJsFiles(rendererDist)) {
     const code = fs.readFileSync(file, 'utf-8');
     if (!code.includes('@shared/')) continue;
-    let rel = path.relative(path.dirname(file), sharedDir);
+
+    // Import specifiers are URLs, so they need `/` on every OS.
+    // Mac/Linux use `/`
+    // Windows: converts `\` to `/`
+    // (otherwise `\` is treated as escape string).
+    let rel = path.relative(path.dirname(file), sharedDir).split(path.sep).join('/');
     if (!rel.startsWith('.')) rel = `./${rel}`;
     // Match the specifier in both quote styles esbuild may emit (e.g. `from"@shared/x.js"`).
     fs.writeFileSync(file, code.replace(/(["'])@shared\//g, `$1${rel}/`), 'utf-8');
