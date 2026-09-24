@@ -122,6 +122,30 @@ function existsAny(paths: string[]): boolean {
 }
 
 /**
+ * MSIX-packaged apps (e.g. Claude's own Windows installer) keep per-user data under
+ * `%LOCALAPPDATA%\Packages\<name>_<publisherHash>`.
+ * Matched by prefix so the publisher hash isn't hard-coded.
+ */
+function findMsixPackageDir(namePrefix: string): string {
+  const packagesDir = path.join(process.env.LOCALAPPDATA || '', 'Packages');
+  try {
+    const match = fs.readdirSync(packagesDir).find((name: string) => name.startsWith(`${namePrefix}_`));
+    return match ? path.join(packagesDir, match) : '';
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * MSIX redirects the app's `%APPDATA%` writes into its package
+ * Claude reads its config from there rather than the real `%APPDATA%\Claude`.
+ */
+function getClaudeMsixAppDataDir(): string {
+  const pkg = findMsixPackageDir('Claude');
+  return pkg ? path.join(pkg, 'LocalCache', 'Roaming', 'Claude') : '';
+}
+
+/**
  * Per-OS install candidates. We accept any of these as "installed".
  * For Linux we also accept the per-user config directory existing, since
  * AppImage / Flatpak users may not have a stable executable path.
@@ -191,7 +215,8 @@ function getInstallCandidates(id: McpClientId): string[] {
       return [
         path.join(localAppData, 'AnthropicClaude', 'Claude.exe'),
         path.join(localAppData, 'Programs', 'Claude', 'Claude.exe'),
-        path.join(appData, 'Claude')
+        path.join(appData, 'Claude'),
+        getClaudeMsixAppDataDir()
       ];
     }
     if (id === 'cursor') {
@@ -321,7 +346,8 @@ function getConfigPath(id: McpClientId): string {
       return path.join(home, 'Library', 'Application Support', 'Claude', 'claude_desktop_config.json');
     }
     if (process.platform === 'win32') {
-      return path.join(appData, 'Claude', 'claude_desktop_config.json');
+      const claudeAppData = getClaudeMsixAppDataDir() || path.join(appData, 'Claude');
+      return path.join(claudeAppData, 'claude_desktop_config.json');
     }
     return path.join(home, '.config', 'Claude', 'claude_desktop_config.json');
   }
