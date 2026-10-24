@@ -52,9 +52,9 @@
     "commander": "^15.0.0"
   },
   "devDependencies": {
-    "@types/adm-zip": "0.5.8",
+    "@types/adm-zip": "0.6.0",
     "@types/archiver": "8.0.0",
-    "@types/node": "22.20.3",
+    "@types/node": "22.20.5",
     "esbuild": "0.28.2",
     "typescript": "5.9.3",
     "roku-dev-studio-platform": "^1.0.0"
