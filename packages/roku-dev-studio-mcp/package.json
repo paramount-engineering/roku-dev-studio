@@ -29,7 +29,7 @@
     "roku-dev-studio-platform": "file:../roku-dev-studio-platform"
   },
   "devDependencies": {
-    "@types/node": "22.20.3",
+    "@types/node": "22.20.5",
     "esbuild": "0.28.2",
     "typescript": "5.9.3"
   },
